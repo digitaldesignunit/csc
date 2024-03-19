@@ -1,0 +1,15 @@
+name: csc
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9.18
+  - pip
+  - pip:
+    - fastapi
+    - pymongo
+    - motor
+    - uvicorn
+    - gunicorn
+    - uvloop
+    - httptools

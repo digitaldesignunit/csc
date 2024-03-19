@@ -8,7 +8,10 @@ import json
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 
 from fastapi import FastAPI
-import pymongo
+from motor.motor_asyncio import AsyncIOMotorClient
+
+
+from apps.catalogue.routers import router as catalogue_router
 
 
 # UTILITY ---------------------------------------------------------------------
@@ -27,11 +30,9 @@ _CONFIGFILE = sanitize_path(os.path.join(_HERE, "dbconfig.json"))
 """str: Default configuration file."""
 
 
-# create fastapi instance
-api = FastAPI()
+# UTILITY ---------------------------------------------------------------------
 
-
-def _get_db_connectionstring():
+def __get_db_connectionstring():
     with open(_CONFIGFILE, 'r') as configfile:
         # Reading from json file
         dbconfig = json.load(configfile)
@@ -43,16 +44,28 @@ def _get_db_connectionstring():
     return cstr
 
 
-@api.get('/')
-def get_all_components():
-    # Replace the placeholder with your Atlas connection string
-    client = pymongo.MongoClient(_get_db_connectionstring())
-    # get database
-    db = client.csc
-    # get sheets collection
-    db_sheets = db.sheets
-    # find all documents and return their ids
-    alldocs = []
-    for doc in db_sheets.find():
-        alldocs.append(doc)
-    return alldocs
+# FASTAPI INSTANCE ------------------------------------------------------------
+
+app = FastAPI(
+    title='Catalogue of Second Chances API',
+    description='CSC API to handle MongoDB stuff',
+    version='0.0.1'
+)
+
+
+# EVENTS ----------------------------------------------------------------------
+
+@app.on_event('startup')
+async def startup_db_client():
+    app.mongodb_client = AsyncIOMotorClient(__get_db_connectionstring())
+    app.mongodb = app.mongodb_client['csc']
+
+
+@app.on_event('shutdown')
+async def shutdown_db_client():
+    app.mongodb_client.close()
+
+
+# ROUTER ----------------------------------------------------------------------
+
+app.include_router(catalogue_router, tags=['catalogue'], prefix='')

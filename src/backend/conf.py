@@ -2,7 +2,7 @@ import os
 app_path = os.environ['HOME'] + '/csc/backend'
 
 # Gunicorn configuration
-wsgi_app = 'main:api'
+wsgi_app = 'main:app'
 bind = ':8000'
 chdir = app_path
 workers = 4
