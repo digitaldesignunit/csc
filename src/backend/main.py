@@ -8,6 +8,7 @@ import json
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 
 
@@ -52,6 +53,22 @@ app = FastAPI(
     version='0.0.1'
 )
 
+origins = [
+    'http://ddu.uber.space',
+    'http://localhost:3000',
+    'http://0.0.0.0:3000',
+    'localhost:3000',
+    '0.0.0.0:3000'
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*']
+)
+
 
 # EVENTS ----------------------------------------------------------------------
 
@@ -59,6 +76,8 @@ app = FastAPI(
 async def startup_db_client():
     app.mongodb_client = AsyncIOMotorClient(__get_db_connectionstring())
     app.mongodb = app.mongodb_client['csc']
+    app.mongodb_components = app.mongodb['components']
+    app.mongodb_users = app.mongodb['users']
 
 
 @app.on_event('shutdown')

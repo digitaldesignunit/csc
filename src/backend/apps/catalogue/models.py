@@ -12,6 +12,7 @@ class ComponentModel(BaseModel):
     # boundingbox: Tuple[float, float, float] = Field(...)
 
     class Config:
+        extra = 'allow'
         populate_by_name = True
         schema_extra = {
             'example': {
@@ -46,6 +47,7 @@ class UpdateComponentModel(BaseModel):
     geometry: Optional[List[List[float]]]
 
     class Config:
+        extra = 'allow'
         schema_extra = {
             'example': {
                 'componenttype': 'AnotherComponentType',
