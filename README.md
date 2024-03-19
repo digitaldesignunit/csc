@@ -84,3 +84,16 @@ autorestart=true
 environment=NODE_ENV=production
 ```
 
+## NEXT.js
+
+### Update NPM
+
+```
+npm install -g npm
+```
+
+### Create new Project
+
+```
+npx create-next-app@latest frontend --use-npm --example "https://github.com/vercel/next-learn/tree/main/dashboard/starter-example"
+```
