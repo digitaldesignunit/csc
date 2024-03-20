@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.9
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
+
 import os
 import json
 
@@ -11,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 
+
+# LOCAL MODULE IMPORTS --------------------------------------------------------
 
 from apps.catalogue.routers import router as catalogue_router
 
