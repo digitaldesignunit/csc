@@ -1,5 +1,3 @@
-'use client';
-
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
 
 // Fetch data from api using async function
