@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button"
 
 export default function Home() {
   return <div>
-    <DataFetch/>
-    <Button variant="outline">Click Me!</Button>
+    <Button variant="outline">This is the Home button .. boring...</Button>
   </div>;
 }
