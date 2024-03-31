@@ -7,4 +7,6 @@ bind = ':8000'
 chdir = app_path
 workers = 4
 worker_class = 'uvicorn.workers.UvicornWorker'
+timeout = 600
+loglevel = 'debug'
 errorlog = app_path + '/errors.log'
