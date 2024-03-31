@@ -53,11 +53,14 @@ def __get_db_connectionstring():
 app = FastAPI(
     title='Catalogue of Second Chances API',
     description='CSC API to handle MongoDB stuff',
-    version='0.0.1'
+    version='0.0.2'
 )
 
 origins = [
+    'ddu.uber.space',
     'http://ddu.uber.space',
+    'https://ddu.uber.space',
+    'ddu.uber.space/:1',
     'http://localhost:3000',
     'http://0.0.0.0:3000',
     'localhost:3000',
