@@ -1,4 +1,4 @@
-'use client';
+'use client'
 
 import { Bell, FileLock, Inbox, ReceiptText, ScrollText, Settings, User } from "lucide-react";
 import { Command, CommandGroup, CommandItem, CommandList } from "./ui/command";
