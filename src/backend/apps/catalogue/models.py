@@ -8,6 +8,7 @@ class ComponentModel(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias='_id')
     componenttype: str = Field(alias='type')
     material: str = Field(...)
+    materialthickness: float = Field(...)
     geometry: List[List[float]] = Field(...)
     # boundingbox: Tuple[float, float, float] = Field(...)
 
@@ -19,6 +20,7 @@ class ComponentModel(BaseModel):
                 'id': 'bd5432e7-c332-4b1b-a898-b3e4296071e0',
                 'componenttype': 'sheet',
                 'material': 'corian',
+                'materialthickness': 12.0,
                 'geometry': [
                     [679.2203210442758, 516.7578056094549],
                     [678.6911271829246, 517.2869994708061],
@@ -52,6 +54,7 @@ class UpdateComponentModel(BaseModel):
             'example': {
                 'componenttype': 'AnotherComponentType',
                 'material': 'SuddenlyOtherMaterial',
+                'materialthickness': 14.2,
                 'geometry': [
                     [796.9659551949196, 991.97389310284],
                     [800.6703122243781, 993.0322808255423],

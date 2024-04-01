@@ -87,9 +87,19 @@ def plot_polyline_to_html(coordinates,
 router = APIRouter()
 
 
-# DEFINE ROUTES ---------------------------------------------------------------
+# MAIN ROUTES -----------------------------------------------------------------
 
-@router.post('/', response_description='Add new component')
+@router.get('/',
+            response_description='Retrieve all components')
+async def get_all_components_base(request: Request):
+    components = []
+    # loop over all components in async loop to avoid to_list call with limit
+    async for doc in request.app.mongodb_components.find().sort('_id', 1):
+        components.append(doc)
+    return components
+
+
+@router.post('/', response_description='Add one new component')
 async def create_component(request: Request,
                            component: ComponentModel = Body(...)):
     component = jsonable_encoder(component)
@@ -102,13 +112,37 @@ async def create_component(request: Request,
                         content=created_component)
 
 
-@router.get('/', response_description='Retrieve all components')
-async def get_all_components(request: Request):
-    components = []
-    async for doc in request.app.mongodb_components.find():
-        components.append(doc)
-    return components
+@router.get('/components/{component_id}',
+            response_description='Retrieve one component by id')
+async def get_component(request: Request, component_id: str):
+    collection = request.app.mongodb_components
+    component = await collection.find_one({'_id': component_id})
+    return JSONResponse(component)
 
+
+@router.get('/components',
+            response_description='Retrieve all components')
+async def get_all_components(request: Request,
+                             page: int = 0,
+                             size: int = 0):
+    if not page and not size:
+        components = []
+        # loop over all components in async loop
+        # to avoid to_list call with limit
+        async for doc in request.app.mongodb_components.find().sort('_id', 1):
+            components.append(doc)
+        return components
+    else:
+        return (
+            await request.app.mongodb_components.find()
+            .sort('_id', 1)
+            .skip((page - 1) * size)
+            .limit(size)
+            .to_list(size)
+        )
+
+
+# UTILITY ROUTES --------------------------------------------------------------
 
 @router.get('/errorlog',
             response_description='Get error log',
@@ -131,7 +165,7 @@ async def get_error_log(request: Request):
 async def get_preview(request: Request):
     images = []
     i = 0
-    async for doc in request.app.mongodb_components.find():
+    async for doc in request.app.mongodb_components.find().sort('_id', 1):
         if i + 1 >= 20:
             break
         image_html = plot_polyline_to_html(
