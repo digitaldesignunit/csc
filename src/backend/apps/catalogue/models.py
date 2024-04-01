@@ -10,7 +10,7 @@ class ComponentModel(BaseModel):
     material: str = Field(...)
     materialthickness: float = Field(...)
     geometry: List[List[float]] = Field(...)
-    # boundingbox: Tuple[float, float, float] = Field(...)
+    color: Optional[List[float]]
 
     class Config:
         extra = 'allow'
@@ -38,7 +38,8 @@ class ComponentModel(BaseModel):
                     [951.7551596401481, 523.1081319456694],
                     [934.8209560769094, 522.3143411536425],
                     [679.2203210442758, 516.7578056094549]
-                    ]
+                    ],
+                'color': [200.0, 210.0, 255.0]
             }
         }
 
@@ -47,6 +48,8 @@ class UpdateComponentModel(BaseModel):
     componenttype: Optional[str]
     material: Optional[str]
     geometry: Optional[List[List[float]]]
+    materialthickness: Optional[float]
+    color: Optional[List[float]]
 
     class Config:
         extra = 'allow'
@@ -66,6 +69,7 @@ class UpdateComponentModel(BaseModel):
                     [951.7551596401481, 523.1081319456694],
                     [934.8209560769094, 522.3143411536425],
                     [796.9659551949196, 991.97389310284]
-                    ]
+                    ],
+                'color': [200.0, 210.0, 255.0]
             }
         }
