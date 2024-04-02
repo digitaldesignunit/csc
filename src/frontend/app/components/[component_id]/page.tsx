@@ -1,3 +1,5 @@
+import ComponentDetailCard from "@/components/ComponentDetailCard";
+
 export default function ComponentDetails({
   params,
 }: {
@@ -5,7 +7,7 @@ export default function ComponentDetails({
 }) {
   return (
     <div>
-      <h1>This is the component details page of {params.component_id}</h1>
+      <ComponentDetailCard params={{component_id: params.component_id}}/>
     </div>
   );
 }
