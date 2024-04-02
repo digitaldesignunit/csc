@@ -1,11 +1,19 @@
-import ComponentOverviewCard from "@/components/ComponentOverviewCard";
+import { ComponentOverviewDataTable } from "@/components/ComponentOverviewDataTable";
 import ComponentOverviewPagination from "@/components/ComponentOverviewPagination";
 import { ComponentData } from "@/components/models";
+import { ComponentOverviewColumns } from "@/components/ComponentOverviewColumns";
 
-export default async function ComponentOverview() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: {
+    page?: string;
+    limit?: string;
+  };
+}) {
 
-  const pageNum = 1;
-  const pageSize = 10;
+  const pageNum = Number(searchParams?.page) || 1;
+  const pageSize = Number(searchParams?.limit) || 10;
 
   const fetchComponentData = async () => {
     const response = await fetch(`https://api.ddu.uber.space/components?page=${pageNum}&size=${pageSize}`)
@@ -17,7 +25,11 @@ export default async function ComponentOverview() {
 
   return (
     <>
-      <div className="grow">
+      <div className="container mx-auto py-10">
+        <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={comps} />
+      </div>
+
+      {/* <div className="grow">
         <h1>Database Components</h1>
         <div>
           <ul>
@@ -28,10 +40,10 @@ export default async function ComponentOverview() {
             )}
           </ul>
         </div>
-      </div>
+      </div> */}
 
       <div>
-        <ComponentOverviewPagination />
+        <ComponentOverviewPagination pageNum={pageNum} pageSize={pageSize}/>
       </div>
     </>
   );

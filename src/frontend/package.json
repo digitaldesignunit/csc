@@ -13,6 +13,7 @@
     "@radix-ui/react-slot": "^1.0.2",
     "@react-three/drei": "^9.103.0",
     "@react-three/fiber": "^8.16.1",
+    "@tanstack/react-table": "^8.15.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "cmdk": "^1.0.0",
