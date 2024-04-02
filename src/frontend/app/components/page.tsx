@@ -3,7 +3,7 @@ import ComponentOverviewPagination from "@/components/ComponentOverviewPaginatio
 import { ComponentData } from "@/components/models";
 import { ComponentOverviewColumns } from "@/components/ComponentOverviewColumns";
 
-export default async function Page({
+export default async function Components({
   searchParams,
 }: {
   searchParams?: {

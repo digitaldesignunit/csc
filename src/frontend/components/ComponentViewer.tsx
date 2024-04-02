@@ -27,9 +27,9 @@ function Box(props: ThreeElements['mesh']) {
   )
 }
 
-export default function ThreeScene() {
+export default function ComponentViewer() {
   return (
-    <Card className='flex h-96'>
+    <Card className='flex h-[50dvh]'>
       <Canvas>
         <ambientLight intensity={Math.PI / 2} />
         <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI} />
