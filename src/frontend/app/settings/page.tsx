@@ -1,12 +1,12 @@
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function Home() {
+export default function SettingsPage() {
   return (
     <div className="grid gap-[32px] m-4">
       <Card>
         <CardHeader>
-          <CardTitle>Home</CardTitle>
-          <CardDescription>This is the home page</CardDescription>
+          <CardTitle>Settings</CardTitle>
+          <CardDescription>These are the Settings</CardDescription>
         </CardHeader>
       </Card>
     </div>

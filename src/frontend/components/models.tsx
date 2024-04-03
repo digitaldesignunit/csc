@@ -4,5 +4,9 @@ export type ComponentData = {
   material: string;
   materialthickness: number;
   color: Array<number>;
-  geometry: Array<Array<number>>;
+  geometry: {
+    polyline: ComponentPolylinePoints;
+  };
 }
+
+export type ComponentPolylinePoints = Array<Array<number>>;

@@ -2,8 +2,9 @@ import { ComponentOverviewDataTable } from "@/components/ComponentOverviewDataTa
 import ComponentOverviewPagination from "@/components/ComponentOverviewPagination";
 import { ComponentData } from "@/components/models";
 import { ComponentOverviewColumns } from "@/components/ComponentOverviewColumns";
+import { Card } from "@/components/ui/card";
 
-export default async function Components({
+export default async function ComponentsPage({
   searchParams,
 }: {
   searchParams?: {
@@ -25,25 +26,15 @@ export default async function Components({
 
   return (
     <>
-      <div className="container mx-auto py-10">
-        <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={comps} />
+      <div className="grid gap-[32px] m-4">
+        <Card>
+          <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={comps} />
+        </Card>
+        <ComponentOverviewPagination pageNum={pageNum} pageSize={pageSize}/>
       </div>
 
-      {/* <div className="grow">
-        <h1>Database Components</h1>
-        <div>
-          <ul>
-            {comps.map( (comp_item) => 
-              <li key={comp_item._id}>
-                <ComponentOverviewCard params={{component_data: comp_item}} />
-              </li>
-            )}
-          </ul>
-        </div>
-      </div> */}
-
       <div>
-        <ComponentOverviewPagination pageNum={pageNum} pageSize={pageSize}/>
+        
       </div>
     </>
   );

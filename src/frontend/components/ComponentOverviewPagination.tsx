@@ -4,12 +4,10 @@ import { useState } from "react";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "./ui/pagination";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 
-
 interface ComponentOverviewPaginationProps {
   pageNum: number
   pageSize: number
 }
-
 
 export default function ComponentOverviewPagination({
   pageNum,

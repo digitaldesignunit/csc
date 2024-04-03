@@ -89,16 +89,6 @@ router = APIRouter()
 
 # MAIN ROUTES -----------------------------------------------------------------
 
-@router.get('/',
-            response_description='Retrieve all components')
-async def get_all_components_base(request: Request):
-    components = []
-    # loop over all components in async loop to avoid to_list call with limit
-    async for doc in request.app.mongodb_components.find().sort('_id', 1):
-        components.append(doc)
-    return components
-
-
 @router.post('/', response_description='Add one new component')
 async def create_component(request: Request,
                            component: ComponentModel = Body(...)):
@@ -136,7 +126,7 @@ async def get_all_components(request: Request,
         return (
             await request.app.mongodb_components.find()
             .sort('_id', 1)
-            .skip((page - 1) * size)
+            .skip((page - 1) if page > 0 else page * size)
             .limit(size)
             .to_list(size)
         )
@@ -169,7 +159,7 @@ async def get_preview(request: Request):
         if i + 1 >= 20:
             break
         image_html = plot_polyline_to_html(
-                                coordinates=doc['geometry'][0],
+                                coordinates=doc['geometry']['polyline'],
                                 name=doc['_id'],
                                 scalefactor=0.1)
         images.append(image_html)

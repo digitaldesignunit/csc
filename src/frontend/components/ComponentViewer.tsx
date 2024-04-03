@@ -1,43 +1,69 @@
 'use client'
 
-import * as THREE from 'three'
-import React, { useRef, useState } from 'react'
-import { Canvas, useFrame, ThreeElements } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
-import { Card } from './ui/card'
+import { Canvas, useFrame } from '@react-three/fiber';
+import { useMemo, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { ComponentPolylinePoints } from './models';
+import { Card } from './ui/card';
+import { Bounds, OrbitControls } from '@react-three/drei';
+import { ComponentData } from './models';
+import { rgbToHex } from '@/lib/utils';
 
-function Box(props: ThreeElements['mesh']) {
+const ExtrudedPolyline = ({ component_data } : {component_data: ComponentData}) => {
   
-  const ref = useRef<THREE.Mesh>(null!)
-  const [hovered, hover] = useState(false)
-  const [clicked, click] = useState(false)
+  // Create a shape from the points
+  const polyline_shape = useMemo(() => {
+    const polyline_shape = new THREE.Shape();
+    const points: ComponentPolylinePoints = component_data.geometry.polyline
+    polyline_shape.moveTo(points[0][0] * 0.001, points[0][1] * 0.001);
+    points.forEach((pointtuple: number[], index) => {
+      if (index > 0) {
+        polyline_shape.lineTo(pointtuple[0] * 0.001, pointtuple[1] * 0.001);
+      }
+    });
+    return polyline_shape;
+  }, [component_data]);
 
-  useFrame((state, delta) => (ref.current.rotation.x += delta))
+  // Define extrusion settings
+  const extrudeSettings = {
+    steps: 2,
+    depth: component_data.materialthickness * 0.001,
+    bevelEnabled: false,
+  };
+
+  // Create extruded geometry from the shape
+  const extrudeGeometry = useMemo(() => new THREE.ExtrudeGeometry(polyline_shape, extrudeSettings), [polyline_shape]);
+  const component_color = rgbToHex(
+    component_data.color[0],
+    component_data.color[1],
+    component_data.color[2]
+  )
   return (
     <mesh
-      {...props}
-      ref={ref}
-      scale={clicked ? 1.5 : 1}
-      onClick={(event) => click(!clicked)}
-      onPointerOver={(event) => hover(true)}
-      onPointerOut={(event) => hover(false)}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color={hovered ? 'hotpink' : 'orange'} />
+      visible
+      geometry={extrudeGeometry}>
+      <meshStandardMaterial color={new THREE.Color(component_color)} />
     </mesh>
-  )
-}
+  );
+};
 
-export default function ComponentViewer() {
+export default function ComponentViewer({
+  component_data,
+}: {
+  component_data: ComponentData
+}) {
+
   return (
-    <Card className='flex h-[50dvh]'>
-      <Canvas>
-        <ambientLight intensity={Math.PI / 2} />
-        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI} />
-        <pointLight position={[-10, -10, -10]} decay={0} intensity={Math.PI} />
-        <Box position={[-1.2, 0, 0]} />
-        <Box position={[1.2, 0, 0]} />
-        <OrbitControls />
-      </Canvas>
-    </Card>
-  )
-}
+      <Card className='flex h-[50dvh] m-4'>
+        <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
+          <ambientLight intensity={Math.PI / 2} />
+          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI} />
+          <pointLight position={[-10, -10, -10]} decay={0} intensity={Math.PI} />
+          <Bounds fit clip observe margin={1.2} maxDuration={1} >
+            <ExtrudedPolyline component_data={component_data}/>
+          </Bounds>
+          <OrbitControls makeDefault/>
+        </Canvas>
+      </Card>
+  );
+};

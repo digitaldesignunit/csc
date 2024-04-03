@@ -12,27 +12,42 @@ import {
 } from "@/components/ui/drawer"
 import { Button } from "./ui/button";
 import ComponentViewer from "./ComponentViewer";
+import { ComponentData } from "./models";
 
+export default function ComponentDrawer({
+  component_data,
+}: {
+  component_data: ComponentData
+}) {
 
-export default function ComponentDrawer() {
   return (
+    
     <Drawer>
       <DrawerTrigger asChild>
-        <Button variant="outline">Open Drawer</Button>
+      <div className='text-left align-text-top font-bold cursor-pointer'>
+        
+      
+        <Button variant="outline">{component_data._id}</Button>
+        </div>
       </DrawerTrigger>
 
-      <DrawerContent>
+      <DrawerContent >
         <DrawerHeader>
-          <DrawerTitle>Are you absolutely sure?</DrawerTitle>
-          <DrawerDescription>This action cannot be undone.</DrawerDescription>
+          <DrawerTitle>Component Viewer</DrawerTitle>
+          <DrawerDescription>
+            <b>ID: {component_data._id} </b><br/>
+            Type: {component_data.type} <br/>
+            Material: {component_data.material} <br/>
+            Material Thickness: {component_data.materialthickness} <br/>
+            Color: {component_data.color}
+          </DrawerDescription>
         </DrawerHeader>
-        
-        <ComponentViewer />
-        
+          <div data-vaul-no-drag>
+            <ComponentViewer component_data={component_data}/>
+          </div>
         <DrawerFooter>
-        <Button>Submit</Button>
           <DrawerClose asChild>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="outline">Close</Button>
           </DrawerClose>
         </DrawerFooter>
       </DrawerContent>
