@@ -32,7 +32,7 @@ const ExtrudedPolyline = ({ component_data } : {component_data: ComponentData}) 
   };
 
   // Create extruded geometry from the shape
-  const extrudeGeometry = useMemo(() => new THREE.ExtrudeGeometry(polyline_shape, extrudeSettings), [polyline_shape, extrudeSettings]);
+  const extrudeGeometry = useMemo(() => new THREE.ExtrudeGeometry(polyline_shape, extrudeSettings), [polyline_shape]);
   const component_color = rgbToHex(
     component_data.color[0],
     component_data.color[1],
