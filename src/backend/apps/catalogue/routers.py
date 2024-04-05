@@ -112,9 +112,9 @@ async def get_component(request: Request, component_id: str):
 
 @router.get('/components',
             response_description='Retrieve all components')
-async def get_all_components(request: Request,
-                             page: int = 0,
-                             size: int = 0):
+async def get_components(request: Request,
+                         page: int = 0,
+                         size: int = 0):
     if not page and not size:
         components = []
         # loop over all components in async loop
@@ -126,7 +126,7 @@ async def get_all_components(request: Request,
         return (
             await request.app.mongodb_components.find()
             .sort('_id', 1)
-            .skip((page - 1) if page > 0 else page * size)
+            .skip((page - 1) * size if page > 0 else size)
             .limit(size)
             .to_list(size)
         )

@@ -9,12 +9,12 @@ export default async function ComponentsPage({
 }: {
   searchParams?: {
     page?: string;
-    limit?: string;
+    size?: string;
   };
 }) {
 
   const pageNum = Number(searchParams?.page) || 1;
-  const pageSize = Number(searchParams?.limit) || 10;
+  const pageSize = Number(searchParams?.size) || 10;
 
   const fetchComponentData = async () => {
     const response = await fetch(`https://api.ddu.uber.space/components?page=${pageNum}&size=${pageSize}`)
