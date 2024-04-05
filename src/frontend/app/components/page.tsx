@@ -32,10 +32,6 @@ export default async function ComponentsPage({
         </Card>
         <ComponentOverviewPagination pageNum={pageNum} pageSize={pageSize}/>
       </div>
-
-      <div>
-        
-      </div>
     </>
   );
 }

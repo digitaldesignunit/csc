@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Union
 import os
 import json
+import pathlib
 
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
@@ -19,14 +20,15 @@ from .models import (Token, # NOQA
                      TokenData,
                      User,
                      UserInDB)
-from ...utility import sanitize_path
+from utility import sanitize_path
 
 
 # ENVIRONMENT -----------------------------------------------------------------
 _HERE = os.path.dirname(sanitize_path(__file__))
 """str: Path to directory of this particular file."""
 
-_CONFIG_DIR = sanitize_path(os.path.join(_HERE, "config"))
+_CONFIG_DIR = sanitize_path(os.path.join(
+                    pathlib.Path(_HERE).parent.parent.absolute(), "config"))
 
 _CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
 """str: Default configuration file."""
@@ -51,11 +53,12 @@ def __get_auth_config():
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 fake_users_db = {
-    "johndoe": {
-        "username": "johndoe",
-        "full_name": "John Doe",
-        "email": "johndoe@example.com",
+    "admin": {
+        "username": "admin",
+        "full_name": "Root Admin",
+        "email": "eschenbach@dg.tu-darmstadt.de",
         "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW", # NOQA
         "disabled": False,
     }

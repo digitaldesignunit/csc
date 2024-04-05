@@ -26,11 +26,12 @@ from .models import (Token, # NOQA
                      UserInDB,
                      ComponentModel,
                      UpdateComponentModel)
-from ...utility import plot_polyline_to_html
+from utility import plot_polyline_to_html
 from .auth import (ACCESS_TOKEN_EXPIRE_MINUTES,
                    authenticate_user,
                    create_access_token,
                    fake_users_db)
+
 
 # INIT ROUTER -----------------------------------------------------------------
 

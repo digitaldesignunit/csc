@@ -21,10 +21,9 @@ export default function ComponentOverviewPagination({
   const pathname = usePathname();
   const { replace } = useRouter();
 
-  function handlePagination(pageNum: number | string, pageSize: number | string) {
+  function handlePagination(pageNum: number | string) {
     const params = new URLSearchParams(searchParams)
     params.set('page', pageNum.toString());
-    params.set('size', pageSize.toString())
     replace(`${pathname}?${params.toString()}`)
   }
 
@@ -45,7 +44,7 @@ export default function ComponentOverviewPagination({
                 "cursor-pointer"
               }
               onClick={() => {
-                handlePagination(pageNum - 1, pageSize);
+                handlePagination(pageNum - 1);
               }}
               />
           </PaginationItem>
@@ -76,7 +75,7 @@ export default function ComponentOverviewPagination({
                 "cursor-pointer"
               }
               onClick={() => {
-                handlePagination(pageNum + 1, pageSize);
+                handlePagination(pageNum + 1);
               }}
               />
           </PaginationItem>

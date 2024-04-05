@@ -16,8 +16,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 
-from .apps.catalogue.routers import router as catalogue_router
-from .utility import sanitize_path
+from apps.catalogue.routers import router as catalogue_router
+from utility import sanitize_path
 
 
 # ENVIRONMENT SETTINGS --------------------------------------------------------
