@@ -24,6 +24,7 @@ export default function ComponentOverviewPagination({
   function handlePagination(pageNum: number | string, pageSize: number | string) {
     const params = new URLSearchParams(searchParams)
     params.set('page', pageNum.toString());
+    params.set('limit', pageSize.toString())
     replace(`${pathname}?${params.toString()}`)
   }
 
