@@ -1,0 +1,12 @@
+{
+    "server": "your.mongodb.server.here",
+    "user": "username",
+    "pwd": "superpassword123",
+    "db": "databasename",
+    "origins": [
+        "http://my-safe-origin-for-cors-middelware.com/api"
+    ],
+    "secret": "secret key generated with 'openssl rand -hex 32'",
+    "algorithm": "HS256",
+    "access_token_expire_minutes": 30
+}

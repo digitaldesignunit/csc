@@ -4,6 +4,7 @@
 
 import os
 import json
+from contextlib import asynccontextmanager
 
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
@@ -15,14 +16,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 
-from apps.catalogue.routers import router as catalogue_router
-
-
-# UTILITY ---------------------------------------------------------------------
-
-def sanitize_path(fp: str = '') -> str:
-    """Sanitizes a filepath an returns the result."""
-    return os.path.abspath(os.path.realpath(os.path.normpath(fp)))
+from .apps.catalogue.routers import router as catalogue_router
+from .utility import sanitize_path
 
 
 # ENVIRONMENT SETTINGS --------------------------------------------------------
@@ -30,13 +25,18 @@ def sanitize_path(fp: str = '') -> str:
 _HERE = os.path.dirname(sanitize_path(__file__))
 """str: Path to directory of this particular file."""
 
-_CONFIGFILE = sanitize_path(os.path.join(_HERE, "dbconfig.json"))
+_CONFIG_DIR = sanitize_path(os.path.join(_HERE, "config"))
+
+_CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
 """str: Default configuration file."""
 
 
-# UTILITY ---------------------------------------------------------------------
+# CONFIG LOADING --------------------------------------------------------------
 
 def __get_db_connectionstring():
+    """
+    Read MongoDB connection string from config file.
+    """
     with open(_CONFIGFILE, 'r') as configfile:
         # Reading from json file
         dbconfig = json.load(configfile)
@@ -48,47 +48,46 @@ def __get_db_connectionstring():
     return cstr
 
 
-# FASTAPI INSTANCE ------------------------------------------------------------
-
-app = FastAPI(
-    title='Catalogue of Second Chances API',
-    description='CSC API to handle MongoDB stuff',
-    version='0.0.2'
-)
-
-origins = [
-    'ddu.uber.space',
-    'http://ddu.uber.space',
-    'https://ddu.uber.space',
-    'ddu.uber.space/:1',
-    'http://localhost:3000',
-    'http://0.0.0.0:3000',
-    'localhost:3000',
-    '0.0.0.0:3000'
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=['*'],
-    allow_headers=['*']
-)
+def __get_cors_origins():
+    """
+    Read CORS origins from config file.
+    """
+    with open(_CONFIGFILE, 'r') as configfile:
+        # Reading from json file
+        dbconfig = json.load(configfile)
+        origins = dbconfig['origins']
+    return origins
 
 
-# EVENTS ----------------------------------------------------------------------
+# FASTAPI SETUP ---------------------------------------------------------------
 
-@app.on_event('startup')
-async def startup_db_client():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
     app.mongodb_client = AsyncIOMotorClient(__get_db_connectionstring())
     app.mongodb = app.mongodb_client['csc']
     app.mongodb_components = app.mongodb['components']
     app.mongodb_users = app.mongodb['users']
-
-
-@app.on_event('shutdown')
-async def shutdown_db_client():
+    yield
+    # shutdown
     app.mongodb_client.close()
+
+# Create FastAPI instance
+app = FastAPI(
+    title='Catalogue of Second Chances API',
+    description='CSC API to handle MongoDB stuff',
+    version='0.0.2',
+    lifespan=lifespan
+)
+
+# Add CORS Origins to FastAPI instance
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=__get_cors_origins(),
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*']
+)
 
 
 # ROUTER ----------------------------------------------------------------------

@@ -6,7 +6,8 @@ class CommonSettings(BaseSettings):
 
 
 class DatabaseSettings(BaseSettings):
-    DB_URL: str
+    DB_SERVER: str
+    DB_USER: str
     DB_NAME: str
 
 

@@ -1,8 +1,38 @@
+#!/usr/bin/env python3.9
+
+# PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import uuid
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
+
+
+# THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 
 from pydantic import BaseModel, Field
 
+
+# AUTH ------------------------------------------------------------------------
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    username: Union[str, None] = None
+
+
+class User(BaseModel):
+    username: str
+    email: Union[str, None] = None
+    full_name: Union[str, None] = None
+    disabled: Union[bool, None] = None
+
+
+class UserInDB(User):
+    hashed_password: str
+
+
+# COMPONENTS ------------------------------------------------------------------
 
 class ComponentModel(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias='_id')
