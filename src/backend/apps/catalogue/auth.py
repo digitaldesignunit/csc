@@ -13,6 +13,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from motor.motor_asyncio import AsyncIOMotorClient
 
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -32,6 +33,21 @@ _CONFIG_DIR = sanitize_path(os.path.join(
 
 _CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
 """str: Default configuration file."""
+
+
+def __get_db_connectionstring():
+    """
+    Read MongoDB connection string from config file.
+    """
+    with open(_CONFIGFILE, 'r') as configfile:
+        # Reading from json file
+        dbconfig = json.load(configfile)
+        server = dbconfig['server']
+        user = dbconfig['user']
+        pwd = dbconfig['pwd']
+    # compose mongodb connection string
+    cstr = f'mongodb+srv://{user}:{pwd}@{server}'
+    return cstr
 
 
 def __get_auth_config():
@@ -54,16 +70,6 @@ def __get_auth_config():
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-fake_users_db = {
-    "admin": {
-        "username": "admin",
-        "full_name": "Root Admin",
-        "email": "eschenbach@dg.tu-darmstadt.de",
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW", # NOQA
-        "disabled": False,
-    }
-}
-
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -73,14 +79,19 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
-        return UserInDB(**user_dict)
+async def get_user(username: str):
+    mongodb_client = AsyncIOMotorClient(__get_db_connectionstring())
+    mongodb = mongodb_client['csc']
+    userdb = mongodb['users']
+
+    user_doc = await userdb.find_one({'username': username})
+    if user_doc:
+        mongodb_client.close()
+        return UserInDB(**user_doc)
 
 
-def authenticate_user(fake_db, username: str, password: str):
-    user = get_user(fake_db, username)
+def authenticate_user(username: str, password: str):
+    user = get_user(username)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -114,7 +125,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    user = get_user(fake_users_db, username=token_data.username)
+    user = get_user(username=token_data.username)
     if user is None:
         raise credentials_exception
     return user

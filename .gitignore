@@ -21,8 +21,10 @@ __pycache__/
 
 # DATABASE CONFIG FILE FOR DEVELOPMENT
 /src/backend/config/dbconfig.json
+/src/backend/apps/catalogue/hash_pwd.py
 
 # MISC
 _archive
 csc.code-workspace
 *.egg-info
+src/backend/apps/catalogue/test.json
