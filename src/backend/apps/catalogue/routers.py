@@ -99,7 +99,7 @@ async def get_components(request: Request,
         return (
             await request.app.mongodb_components.find()
             .sort('_id', 1)
-            .skip((page - 1) * size if page > 0 else size)
+            .skip((page - 1) * size if page > 0 else 0)
             .limit(size)
             .to_list(size)
         )
