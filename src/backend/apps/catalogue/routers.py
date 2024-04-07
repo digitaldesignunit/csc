@@ -30,7 +30,8 @@ from utility import plot_polyline_to_html
 from .auth import (ACCESS_TOKEN_EXPIRE_MINUTES,
                    authenticate_user,
                    create_access_token,
-                   fake_users_db)
+                   get_current_active_user,
+                   )
 
 
 # INIT ROUTER -----------------------------------------------------------------
@@ -45,9 +46,8 @@ router = APIRouter()
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Token:
-    user = authenticate_user(fake_users_db,
-                             form_data.username,
-                             form_data.password)
+    user = await authenticate_user(form_data.username,
+                                   form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -89,6 +89,30 @@ async def get_component(request: Request, component_id: str):
 async def get_components(request: Request,
                          page: int = 0,
                          size: int = 0):
+    if not page and not size:
+        components = []
+        # loop over all components in async loop
+        # to avoid to_list call with limit
+        async for doc in request.app.mongodb_components.find().sort('_id', 1):
+            components.append(doc)
+        return components
+    else:
+        return (
+            await request.app.mongodb_components.find()
+            .sort('_id', 1)
+            .skip((page - 1) * size if page > 0 else 0)
+            .limit(size)
+            .to_list(size)
+        )
+
+
+@router.get('/componentsauth',
+            response_description='Retrieve all components with auth')
+async def get_components_authed(request: Request,
+                                current_user: Annotated[User, Depends(get_current_active_user)], # NOQA
+                                page: int = 0,
+                                size: int = 0,
+                                ):
     if not page and not size:
         components = []
         # loop over all components in async loop
