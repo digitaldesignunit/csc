@@ -5,18 +5,21 @@ import { ComponentOverviewColumns } from "@/components/ComponentOverviewColumns"
 import { Card } from "@/components/ui/card";
 import { diff_mins } from "@/lib/utils";
 
+let API_TOKEN: string;
+let API_TOKENTIME: string;
+
 const create_headers = async (token: string) => {
-  if (!token || !process.env.API_TOKENTIME) {
+  if (!token || !API_TOKENTIME) {
     const token_response = await fetch_token();
     token = token_response.access_token
-    process.env.API_TOKEN = token
-    process.env.API_TOKENTIME = new Date().toString()
-  } else if (diff_mins(new Date(process.env.API_TOKENTIME as string), new Date()) >= Number(process.env.API_TOKEN_TIMEOUT_MINS)){
+    API_TOKEN = token
+    API_TOKENTIME = new Date().toString()
+  } else if (diff_mins(new Date(API_TOKENTIME as string), new Date()) >= Number(process.env.API_TOKEN_TIMEOUT_MINS)){
     const token_response = await fetch_token();
     token = token_response.access_token
-    process.env.API_TOKEN = token
+    API_TOKEN = token
     // set tokentime to now
-    process.env.API_TOKENTIME = new Date().toString()
+    API_TOKENTIME= new Date().toString()
   }
   return {'Authorization': `Bearer ${token}`}
 }
@@ -55,8 +58,8 @@ const fetch_token = async () => {
 }
 
 const fetch_components = async (page_num: Number, page_size: Number) => {
-  const endpoint_url = `https://api.ddu.uber.space/component?page=${page_num}&size=${page_size}`
-  const headers = await create_headers(process.env.API_TOKEN as string)
+  const endpoint_url = `https://api.ddu.uber.space/components?page=${page_num}&size=${page_size}`
+  const headers = await create_headers(API_TOKEN as string)
   const response = await fetch(
     endpoint_url,
     {
@@ -87,7 +90,7 @@ const fetch_components = async (page_num: Number, page_size: Number) => {
       const components: Array<ComponentData> = await response.json();
       return components
     } else {
-      console.log(`Response failed, Status: ${response.status}`);
+      console.log(`2nd Response failed, Status: ${response.status}`);
       return null
     }
   }

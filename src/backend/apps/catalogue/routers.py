@@ -65,7 +65,6 @@ async def login_for_access_token(
 
 @router.post('/', response_description='Add one new component')
 async def create_component(request: Request,
-                           current_user: Annotated[User, Depends(get_current_active_user)], # NOQA
                            component: ComponentModel = Body(...)):
     component = jsonable_encoder(component)
     collection = request.app.mongodb_components
@@ -79,9 +78,7 @@ async def create_component(request: Request,
 
 @router.get('/components/{component_id}',
             response_description='Retrieve one component by id')
-async def get_component(request: Request,
-                        current_user: Annotated[User, Depends(get_current_active_user)], # NOQA
-                        component_id: str):
+async def get_component(request: Request, component_id: str):
     collection = request.app.mongodb_components
     component = await collection.find_one({'_id': component_id})
     return JSONResponse(component)
