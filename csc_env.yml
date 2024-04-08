@@ -7,9 +7,16 @@ dependencies:
   - pip
   - pip:
     - fastapi
+    - pydantic
+    - python-multipart
+    - python-jose[cryptography]
+    - passlib[bcrypt]
     - pymongo
     - motor
     - uvicorn
     - gunicorn
-    - uvloop
     - httptools
+    - requests
+    - matplotlib
+    - rhino3dm
+    - COMPAS

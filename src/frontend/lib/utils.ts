@@ -6,6 +6,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 
+export function diff_mins(dt1: Date, dt2: Date) {
+  // Calculate the difference in milliseconds between the two provided dates and convert it to seconds
+  var diff =(dt2.getTime() - dt1.getTime()) / 1000;
+  // Convert the difference from seconds to minutes
+  diff /= 60;
+  // Return the absolute value of the rounded difference in minutes
+  return Math.abs(Math.round(diff));
+}
+
+
 export function rgbToHex(r: number, g: number, b: number) {
   return (
     "#" + ((1<<24) + (r<<16) + (g<<8)+ b).toString(16).slice(1)

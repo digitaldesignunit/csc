@@ -65,6 +65,7 @@ async def login_for_access_token(
 
 @router.post('/', response_description='Add one new component')
 async def create_component(request: Request,
+                           current_user: Annotated[User, Depends(get_current_active_user)], # NOQA
                            component: ComponentModel = Body(...)):
     component = jsonable_encoder(component)
     collection = request.app.mongodb_components
@@ -78,7 +79,9 @@ async def create_component(request: Request,
 
 @router.get('/components/{component_id}',
             response_description='Retrieve one component by id')
-async def get_component(request: Request, component_id: str):
+async def get_component(request: Request,
+                        current_user: Annotated[User, Depends(get_current_active_user)], # NOQA
+                        component_id: str):
     collection = request.app.mongodb_components
     component = await collection.find_one({'_id': component_id})
     return JSONResponse(component)
@@ -87,32 +90,9 @@ async def get_component(request: Request, component_id: str):
 @router.get('/components',
             response_description='Retrieve all components')
 async def get_components(request: Request,
+                         current_user: Annotated[User, Depends(get_current_active_user)], # NOQA
                          page: int = 0,
                          size: int = 0):
-    if not page and not size:
-        components = []
-        # loop over all components in async loop
-        # to avoid to_list call with limit
-        async for doc in request.app.mongodb_components.find().sort('_id', 1):
-            components.append(doc)
-        return components
-    else:
-        return (
-            await request.app.mongodb_components.find()
-            .sort('_id', 1)
-            .skip((page - 1) * size if page > 0 else 0)
-            .limit(size)
-            .to_list(size)
-        )
-
-
-@router.get('/componentsauth',
-            response_description='Retrieve all components with auth')
-async def get_components_authed(request: Request,
-                                current_user: Annotated[User, Depends(get_current_active_user)], # NOQA
-                                page: int = 0,
-                                size: int = 0,
-                                ):
     if not page and not size:
         components = []
         # loop over all components in async loop
