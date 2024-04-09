@@ -62,6 +62,7 @@ export default function ComponentViewer({
           <Bounds fit clip observe margin={1.2} maxDuration={1} >
             <ExtrudedPolyline component_data={component_data}/>
           </Bounds>
+          <axesHelper />
           <OrbitControls makeDefault/>
         </Canvas>
       </Card>

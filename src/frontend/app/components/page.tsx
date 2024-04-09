@@ -5,21 +5,22 @@ import { ComponentOverviewColumns } from "@/components/ComponentOverviewColumns"
 import { Card } from "@/components/ui/card";
 import { diff_mins } from "@/lib/utils";
 
-let API_TOKEN: string;
-let API_TOKENTIME: string;
+let API_TOKEN: string = '';
+let API_TOKENTIME: string = '2024-04-06T06:38:20.567Z';
 
 const create_headers = async (token: string) => {
-  if (!token || !API_TOKENTIME) {
-    const token_response = await fetch_token();
-    token = token_response.access_token
+  const tokenmins = Number(process.env.API_TOKEN_TIMEOUT_MINS)
+  let tokentime = diff_mins(new Date(API_TOKENTIME as string), new Date())
+  console.log(`Current tokentime is ${tokentime} minutes`)
+  if (!token || !API_TOKEN) {
+    token = await fetch_token();
     API_TOKEN = token
     API_TOKENTIME = new Date().toString()
-  } else if (diff_mins(new Date(API_TOKENTIME as string), new Date()) >= Number(process.env.API_TOKEN_TIMEOUT_MINS)){
-    const token_response = await fetch_token();
-    token = token_response.access_token
+  } else if (tokentime >= tokenmins){
+    token = await fetch_token();
     API_TOKEN = token
     // set tokentime to now
-    API_TOKENTIME= new Date().toString()
+    API_TOKENTIME = new Date().toString()
   }
   return {'Authorization': `Bearer ${token}`}
 }
@@ -29,13 +30,13 @@ const fetch_token = async () => {
   const username = process.env.API_USER as string;
   const password = process.env.API_PASS as string;
   // create headers
-  const form_data = new URLSearchParams({
+  let form_data = new URLSearchParams({
     'grant_type': 'password',
     'username': username,
     'password': password
   })
   // execute fetch
-  const response = await fetch(
+  let tokendata = await fetch(
     token_url,
     {
       method: 'POST',
@@ -45,55 +46,45 @@ const fetch_token = async () => {
       },
       body: form_data.toString()
     }
-  )
-  // check response and return if okay
-  if (response.ok) {
+  ).then((response) => {
     console.log(`Fetch Token Response Status: ${response.status}`)
-  } else {
-    console.log(`Response failed, Status: ${response.status}`);
-  }
-  // return json response
-  const json_response = await response.json()
-  return json_response
+    let data = response.json()
+    return data
+  }).catch((err) => {
+    console.log('Fetch Token Response Rejected!')
+    console.log(err)
+    return ''
+  })
+  let token = await tokendata.access_token
+  return token
 }
 
-const fetch_components = async (page_num: Number, page_size: Number) => {
+const fetch_components = async (page_num: Number, page_size: Number, retried: boolean = false) => {
   const endpoint_url = `https://api.ddu.uber.space/components?page=${page_num}&size=${page_size}`
-  const headers = await create_headers(API_TOKEN as string)
-  const response = await fetch(
+  let headers = await create_headers(API_TOKEN)
+  let components: Array<ComponentData> = await fetch(
     endpoint_url,
     {
       method: 'GET',
       mode: 'cors',
       headers: headers
     }
-  )
-  // check response and return if okay
-  if (response.ok) {
+  ).then(response => {
     console.log(`Get Components Response Status: ${response.status}`)
-    const components: Array<ComponentData> = await response.json();
-    return components
-  } else if (response.status == 401) {
-    console.log(`Response Unauthorized, Status: ${response.status}`);
-    console.log('Acquiring new token...')
-    const new_headers = await create_headers('')
-    const retry_response = await fetch(
-      endpoint_url,
-      {
-        method: 'GET',
-        mode: 'cors',
-        headers: new_headers
-      }
-    )
-    if (retry_response.ok) {
-      console.log(`Get Components 2nd Response Status: ${response.status}`)
-      const components: Array<ComponentData> = await response.json();
-      return components
+    return response.json()
+  }).catch((err) => {
+    if (!retried) {
+      console.log('Get Components Response Rejected!')
+      console.log(err)
+      console.log('Attempting retry...')
+      return fetch_components(page_num, page_size, true)
     } else {
-      console.log(`2nd Response failed, Status: ${response.status}`);
-      return null
+      console.log('Get Components 2nd Response Rejected! Aborting...')
+      console.log(err)
+      return []
     }
-  }
+  });
+  return components
 }
 
 export default async function ComponentsPage({
@@ -105,11 +96,11 @@ export default async function ComponentsPage({
   };
 }) {
   // search params retrieval
-  const page = Number(searchParams?.page) || 1;
-  const size = Number(searchParams?.size) || 10;
+  let page = Number(searchParams?.page) || 1;
+  let size = Number(searchParams?.size) || 10;
 
   // fetch components from API using search params
-  const db_components = await fetch_components(page, size)
+  let db_components = await fetch_components(page, size)
 
   return (
     <>
