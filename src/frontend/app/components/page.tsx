@@ -49,6 +49,7 @@ const fetch_token = async () => {
   ).then((response) => {
     console.log(`Fetch Token Response Status: ${response.status}`)
     let data = response.json()
+    API_TOKENTIME = new Date().toString()
     return data
   }).catch((err) => {
     console.log('Fetch Token Response Rejected!')
@@ -69,8 +70,13 @@ const fetch_components = async (page_num: Number, page_size: Number, retried: bo
       mode: 'cors',
       headers: headers
     }
-  ).then(response => {
+  ).then(async response => {
     console.log(`Get Components Response Status: ${response.status}`)
+    if (response.status == 401 && !retried) {
+      console.log('Response Unauthorized! Attempting Retry...')
+      API_TOKEN = await fetch_token()
+      return fetch_components(page_num, page_size, true)
+    }
     return response.json()
   }).catch((err) => {
     if (!retried) {
