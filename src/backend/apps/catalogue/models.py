@@ -42,6 +42,8 @@ class ComponentModel(BaseModel):
     materialthickness: float = Field(...)
     geometry: Dict = Field(...)
     color: Optional[List[float]]
+    validated: bool = Field(...)
+    bbx: Dict = Field(...)
 
     class Config:
         extra = 'allow'
@@ -72,7 +74,17 @@ class ComponentModel(BaseModel):
                         [679.2203210442758, 516.7578056094549]
                     ],
                 },
-                'color': [200.0, 210.0, 255.0]
+                'color': [200.0, 210.0, 255.0],
+                'validated': True,
+                'bbx': {
+                    'xy': [
+                        [-214.1436004638672, -95.405517578125],
+                        [195.86329650878906, -129.63218688964844],
+                        [214.6228485107422, 95.09168243408203],
+                        [-195.384033203125, 129.31834411621094]
+                    ],
+                    'xyz': None
+                }
             }
         }
 
@@ -83,6 +95,8 @@ class UpdateComponentModel(BaseModel):
     geometry: Optional[Dict]
     materialthickness: Optional[float]
     color: Optional[List[float]]
+    validated: Optional[bool]
+    bbx: Optional[Dict]
 
     class Config:
         extra = 'allow'
@@ -105,6 +119,16 @@ class UpdateComponentModel(BaseModel):
                         [796.9659551949196, 991.97389310284]
                     ],
                 },
-                'color': [200.0, 210.0, 255.0]
+                'color': [200.0, 210.0, 255.0],
+                'validated': True,
+                'bbx': {
+                    'xy': [
+                        [-214.1436004638672, -95.405517578125],
+                        [195.86329650878906, -129.63218688964844],
+                        [214.6228485107422, 95.09168243408203],
+                        [-195.384033203125, 129.31834411621094]
+                    ],
+                    'xyz': None
+                }
             }
         }
