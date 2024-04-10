@@ -3,7 +3,6 @@
 import { ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { ComponentData } from "./models";
 import { rgbToHex } from "@/lib/utils";
-import ComponentDrawer from "./ComponentDrawer";
 import ComponentSheet from "./ComponentSheet";
 
 const columnHelper = createColumnHelper<ComponentData>()
