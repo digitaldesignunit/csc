@@ -78,7 +78,8 @@ async def create_component(request: Request,
 
 @router.get('/components/{component_id}',
             response_description='Retrieve one component by id')
-async def get_component(request: Request, component_id: str):
+async def get_component(request: Request,
+                        component_id: str):
     collection = request.app.mongodb_components
     component = await collection.find_one({'_id': component_id})
     return JSONResponse(component)
@@ -86,10 +87,11 @@ async def get_component(request: Request, component_id: str):
 
 @router.get('/components',
             response_description='Retrieve all components')
-async def get_components(request: Request,
-                         current_user: Annotated[User, Depends(get_current_active_user)], # NOQA
-                         page: int = 0,
-                         size: int = 0):
+async def get_components(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        page: int = 0,
+        size: int = 0):
     if not page and not size:
         components = []
         # loop over all components in async loop

@@ -6,6 +6,7 @@ from typing import Annotated, Union
 import os
 import json
 import pathlib
+import uuid
 
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
@@ -83,7 +84,6 @@ async def get_user(username: str):
     mongodb_client = AsyncIOMotorClient(__get_db_connectionstring())
     mongodb = mongodb_client['csc']
     userdb = mongodb['users']
-
     user_doc = await userdb.find_one({'username': username})
     if user_doc:
         mongodb_client.close()
@@ -106,7 +106,10 @@ def create_access_token(data: dict,
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
+    to_encode.update({'exp': expire})
+    to_encode.update({
+        'csc_stamp': str(uuid.uuid4())
+    })
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
