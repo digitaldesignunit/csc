@@ -4,18 +4,19 @@ import { ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { ComponentData } from "./models";
 import { rgbToHex } from "@/lib/utils";
 import ComponentDrawer from "./ComponentDrawer";
+import ComponentSheet from "./ComponentSheet";
 
 const columnHelper = createColumnHelper<ComponentData>()
 
 export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   {
     accessorKey: '_id',
-    header: () => <div className="text-left">ID (Click to open preview)</div>,
+    header: () => <div className="text-left">ID</div>,
     cell: ({ row }) => {
         const component_id: string = row.getValue('_id')
       return (
-        <div className='text-left align-text-top font-bold'>
-          <ComponentDrawer component_data={row.original} />
+        <div>
+          <ComponentSheet component_data={row.original} />
         </div>
       );}
   },

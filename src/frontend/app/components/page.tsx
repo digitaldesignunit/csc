@@ -81,17 +81,17 @@ const fetch_components = async (page_num: Number, page_size: Number, retried: bo
   ).then(async response => {
     console.log(`Get Components Response Status: ${response.status}`)
     if (response.status == 401 && !retried) {
+      console.log(await response.json())
       console.log('Response Unauthorized! Attempting Retry...')
-      API_TOKEN = await fetch_token()
-      return fetch_components(page_num, page_size, true)
+      return await fetch_components(page_num, page_size, true)
     }
     return response.json()
-  }).catch((err) => {
+  }).catch(async (err) => {
     if (!retried) {
       console.log('Get Components Response Rejected!')
       console.log(err)
       console.log('Attempting retry...')
-      return fetch_components(page_num, page_size, true)
+      return await fetch_components(page_num, page_size, true)
     } else {
       console.log('Get Components 2nd Response Rejected! Aborting...')
       console.log(err)

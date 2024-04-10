@@ -52,7 +52,7 @@ export default function AppMenu() {
                 <CommandGroup heading={menuList[0].group}>
                   {menuList[0].items.map((option: any, optionKey: number) => 
                     <Link key={optionKey} href={option.link}>
-                      <CommandItem key={optionKey} className="flex gap-2 cursor-pointer">
+                      <CommandItem key={optionKey} className="flex gap-2 cursor-pointer hover:bg-[#009cda]">
                         {option.icon}
                         {option.text}
                       </CommandItem>

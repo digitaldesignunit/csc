@@ -57,7 +57,7 @@ export default function ComponentViewer({
 }) {
 
   return (
-      <Card className='flex h-[50dvh] m-4'>
+      <Card className='flex h-[40dvh] m-2'>
         <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
           <ambientLight intensity={Math.PI / 2} />
           <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI} />
