@@ -118,7 +118,7 @@ async def get_error_log(request: Request):
     try:
         with open(fp, 'r') as errorlog:
             lines = [line.rstrip() for line in errorlog]
-        ptr = '\n'.join(lines)
+        ptr = '\n'.join(lines[-100:])
         return ptr
     except FileNotFoundError:
         return 'No errors.log file found. No errors present.'

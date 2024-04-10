@@ -12,16 +12,24 @@ const create_headers = async (token: string) => {
   const tokenmins = Number(process.env.API_TOKEN_TIMEOUT_MINS)
   let tokentime = diff_mins(new Date(API_TOKENTIME as string), new Date())
   console.log(`Current tokentime is ${tokentime} minutes`)
+  console.log('Current token is:')
+  console.log(token)
   if (!token || !API_TOKEN) {
+    console.log('Acquiring token...')
     token = await fetch_token();
     API_TOKEN = token
     API_TOKENTIME = new Date().toString()
   } else if (tokentime >= tokenmins){
+    console.log('Token expired. Acquiring new token...')
     token = await fetch_token();
     API_TOKEN = token
     // set tokentime to now
     API_TOKENTIME = new Date().toString()
+    console.log('Token is:')
+    console.log(token)
   }
+  console.log('Token is:')
+  console.log(token)
   return {'Authorization': `Bearer ${token}`}
 }
 
