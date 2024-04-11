@@ -7,9 +7,13 @@ import { diff_mins } from "@/lib/utils";
 
 let API_TOKEN: string = '';
 let API_TOKENTIME: string = '2024-04-06T06:38:20.567Z';
+let API_TIMEOUT_MINS = Number(process.env.API_TOKEN_TIMEOUT_MINS)
+const API_TOKEN_URL: string = process.env.API_TOKEN_URL as string;
+const API_USER: string = process.env.API_USER as string;
+const API_PASS: string = process.env.API_PASS as string;
 
 const create_headers = async (token: string) => {
-  const tokenmins = Number(process.env.API_TOKEN_TIMEOUT_MINS)
+  const tokenmins = API_TIMEOUT_MINS
   let tokentime = diff_mins(new Date(API_TOKENTIME as string), new Date())
   console.log(`Current tokentime is ${tokentime} minutes`)
   console.log('Current token is:')
@@ -34,10 +38,9 @@ const create_headers = async (token: string) => {
 }
 
 const fetch_token = async () => {
-  const token_url = process.env.API_TOKEN_URL as string;
-  const username = process.env.API_USER as string;
-  const password = process.env.API_PASS as string;
-  // create headers
+  const token_url: string = API_TOKEN_URL
+  const username: string = API_USER
+  const password: string = API_PASS
   let form_data = new URLSearchParams({
     'grant_type': 'password',
     'username': username,
@@ -54,9 +57,9 @@ const fetch_token = async () => {
       },
       body: form_data.toString()
     }
-  ).then((response) => {
+  ).then(async (response) => {
     console.log(`Fetch Token Response Status: ${response.status}`)
-    let data = response.json()
+    let data = await response.json()
     API_TOKENTIME = new Date().toString()
     return data
   }).catch((err) => {
@@ -78,7 +81,7 @@ const fetch_components = async (page_num: Number, page_size: Number, retried: bo
       mode: 'cors',
       headers: headers
     }
-  ).then(async response => {
+  ).then( async (response) => {
     console.log(`Get Components Response Status: ${response.status}`)
     if (response.status == 401 && !retried) {
       console.log(await response.json())
@@ -124,6 +127,7 @@ export default async function ComponentsPage({
         </Card>
         <ComponentOverviewPagination pageNum={page} pageSize={size}/>
       </div>
+
     </>
   );
 }

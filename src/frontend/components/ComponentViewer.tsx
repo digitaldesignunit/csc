@@ -58,14 +58,15 @@ export default function ComponentViewer({
 
   return (
       <Card className='flex h-[40dvh] m-2'>
-        <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
+        <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
           <ambientLight intensity={Math.PI / 2} />
-          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI} />
-          <pointLight position={[-10, -10, -10]} decay={0} intensity={Math.PI} />
+          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI * 0.75} />
+          <pointLight position={[-10, -10, -10]} decay={0} intensity={Math.PI * 0.75} />
           <Bounds fit clip observe margin={1.2} maxDuration={1} >
             <ExtrudedPolyline component_data={component_data}/>
           </Bounds>
           <axesHelper />
+          <gridHelper />
           <OrbitControls makeDefault/>
         </Canvas>
       </Card>

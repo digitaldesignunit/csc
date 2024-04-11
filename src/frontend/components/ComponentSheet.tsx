@@ -36,7 +36,7 @@ export default function ComponentSheet({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" className="w-[320px] hover:bg-[#009cda]">{component_data._id}</Button>
+                <Button variant="ghost" className="w-[320px] hover:bg-[#009cda] hover:text-white">{component_data._id}</Button>
               </TooltipTrigger>
               <TooltipContent>
                 Click to preview

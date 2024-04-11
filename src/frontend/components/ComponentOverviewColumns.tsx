@@ -12,13 +12,23 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     accessorKey: '_id',
     header: () => <div className="text-left">ID</div>,
     cell: ({ row }) => {
-        const component_id: string = row.getValue('_id')
       return (
         <div>
           <ComponentSheet component_data={row.original} />
         </div>
       );}
   },
+  // {
+  //   accessorKey: 'bbx',
+  //   header: () => <div className="align-top">BBX</div>,
+  //   cell: ({ row }) => {
+  //     const component_bbx: string = row.original.bbx.xy.toString()
+  //   return (
+  //     <div className='text-left align-text-top'>
+  //       {component_bbx}
+  //     </div>
+  //   )}
+  // },
   {
     accessorKey: 'type',
     header: () => <div className="align-top">Type</div>,
@@ -28,7 +38,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
       <div className='text-left align-text-top'>
         {component_type}
       </div>
-    );}
+    )}
   },
   {
     accessorKey: 'material',
@@ -39,7 +49,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
       <div className='text-left align-text-top'>
         {component_mat}
       </div>
-    );}
+    )}
   },
   {
     accessorKey: 'materialthickness',
@@ -59,6 +69,6 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
           <div className="avatar rounded-full min-h-4 min-w-4 max-w-5 max-h-5 items-center justify-left" style={{backgroundColor: hexcol}}></div>
           <div className="px-2 items-center justify-center text-center text">{colR}/{colG}/{colB}</div>
         </div>
-    );}
+    )}
   },
 ]
