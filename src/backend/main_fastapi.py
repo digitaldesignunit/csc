@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title='Catalogue of Second Chances API',
     description='CSC API to handle MongoDB stuff',
-    version='0.0.2',
+    version='0.0.3',
     lifespan=lifespan
 )
 

@@ -52,7 +52,7 @@ export default function ComponentSheet({
           <SheetDescription>
             <Card className="m-2">
               <CardHeader>
-                <CardTitle className="text-base text-left">{component_data._id}</CardTitle>
+                <CardTitle className="text-sm text-left">{component_data._id}</CardTitle>
               </CardHeader>
               <CardContent className="text-left">
                 Type: {component_data.type} <br/>
@@ -61,7 +61,7 @@ export default function ComponentSheet({
                 <div className="flex items-center max-w-12">
                 Color: 
                 <div className="ml-2 avatar rounded-full min-h-4 min-w-4 max-w-5 max-h-5 items-center justify-left" style={{backgroundColor: hexcol}}></div>
-                <div className="ml-2 items-center justify-center text-center text">{colR}/{colG}/{colB}</div>
+                <div className="ml-2 items-center justify-center text-center">{colR}/{colG}/{colB}</div>
                 </div>
               </CardContent>
             </Card>
@@ -69,9 +69,11 @@ export default function ComponentSheet({
         </SheetHeader>
             <ComponentViewer component_data={component_data}/>
         <SheetFooter>
-          <SheetClose asChild>
+          <div >
+          <SheetClose asChild className="text-center items-center">
             <Button variant="outline">Close</Button>
           </SheetClose>
+          </div>
         </SheetFooter>
       </SheetContent>
     </Sheet>

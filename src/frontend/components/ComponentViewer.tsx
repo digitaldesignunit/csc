@@ -9,7 +9,7 @@ import { Bounds, OrbitControls } from '@react-three/drei';
 import { ComponentData } from './models';
 import { rgbToHex } from '@/lib/utils';
 
-const ExtrudedPolyline = ({ component_data } : {component_data: ComponentData}) => {
+const VisualizeSheet = (component_data: ComponentData) => {
   
   // Create a shape from the points
   const polyline_shape = useMemo(() => {
@@ -33,7 +33,9 @@ const ExtrudedPolyline = ({ component_data } : {component_data: ComponentData}) 
 
   // Create extruded geometry from the shape
   const extrudeGeometry = useMemo(() => {
-    return new THREE.ExtrudeGeometry(polyline_shape, extrudeSettings)
+    let extrude_geo = new THREE.ExtrudeGeometry(polyline_shape, extrudeSettings)
+    extrude_geo.rotateX(-Math.PI / 2)
+    return extrude_geo
   }, [polyline_shape])
   
   const component_color = rgbToHex(
@@ -50,6 +52,14 @@ const ExtrudedPolyline = ({ component_data } : {component_data: ComponentData}) 
   )
 }
 
+const VisualizeComponent = ({component_data } : {component_data: ComponentData}) => {
+  if (component_data.type == 'sheet') {
+    return VisualizeSheet(component_data)
+  } else {
+    return null
+  }
+}
+
 export default function ComponentViewer({
   component_data,
 }: {
@@ -61,12 +71,12 @@ export default function ComponentViewer({
         <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
           <ambientLight intensity={Math.PI / 2} />
           <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI * 0.75} />
-          <pointLight position={[-10, -10, -10]} decay={0} intensity={Math.PI * 0.75} />
+          <pointLight position={[-10, 10, -10]} decay={0} intensity={Math.PI * 0.75} />
           <Bounds fit clip observe margin={1.2} maxDuration={1} >
-            <ExtrudedPolyline component_data={component_data}/>
+            <VisualizeComponent component_data={component_data}/>
           </Bounds>
-          <axesHelper />
-          <gridHelper />
+          <axesHelper args={[0.1]}/>
+          <gridHelper args={[2, 20, 0xff0000, 'grey']} />
           <OrbitControls makeDefault/>
         </Canvas>
       </Card>

@@ -64,8 +64,10 @@ async def login_for_access_token(
 # MAIN ROUTES -----------------------------------------------------------------
 
 @router.post('/', response_description='Add one new component')
-async def create_component(request: Request,
-                           component: ComponentModel = Body(...)):
+async def create_component(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component: ComponentModel = Body(...)):
     component = jsonable_encoder(component)
     collection = request.app.mongodb_components
     new_component = await collection.insert_one(component)
@@ -78,8 +80,10 @@ async def create_component(request: Request,
 
 @router.get('/components/{component_id}',
             response_description='Retrieve one component by id')
-async def get_component(request: Request,
-                        component_id: str):
+async def get_component(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str):
     collection = request.app.mongodb_components
     component = await collection.find_one({'_id': component_id})
     return JSONResponse(component)
@@ -120,7 +124,7 @@ async def get_error_log(request: Request):
     try:
         with open(fp, 'r') as errorlog:
             lines = [line.rstrip() for line in errorlog]
-        ptr = '\n'.join(lines[-100:])
+        ptr = '\n'.join(lines[-200:])
         return ptr
     except FileNotFoundError:
         return 'No errors.log file found. No errors present.'

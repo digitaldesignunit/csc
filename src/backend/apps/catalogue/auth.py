@@ -67,7 +67,7 @@ def __get_auth_config():
  ACCESS_TOKEN_EXPIRE_MINUTES) = __get_auth_config()
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/token')
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -116,13 +116,16 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    print(token)
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
         username: str = payload.get("sub")
+        print(f'Username: {username}')
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
-    except JWTError:
+    except JWTError as e:
+        print(e)
         raise credentials_exception
     user = get_user(username=token_data.username)
     if user is None:
