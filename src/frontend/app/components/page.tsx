@@ -16,10 +16,10 @@ const create_headers = async (token: string) => {
   const tokenmins = API_TIMEOUT_MINS
   let tokentime = diff_mins(new Date(API_TOKENTIME as string), new Date())
   console.log(`Current tokentime is ${tokentime} minutes`)
-  console.log('Current token is:')
-  console.log(token)
+  // console.log('Current token is:')
+  // console.log(token)
   if (!token || !API_TOKEN) {
-    console.log('Acquiring token...')
+    console.log('No Token present. Acquiring token...')
     token = await fetch_token();
     API_TOKEN = token
     API_TOKENTIME = new Date().toString()
@@ -29,11 +29,11 @@ const create_headers = async (token: string) => {
     API_TOKEN = token
     // set tokentime to now
     API_TOKENTIME = new Date().toString()
-    console.log('Token is:')
-    console.log(token)
+    // console.log('Token is:')
+    // console.log(token)
   }
-  console.log('Token is:')
-  console.log(token)
+  // console.log('Token is:')
+  // console.log(token)
   return {'Authorization': `Bearer ${token}`}
 }
 
@@ -55,7 +55,8 @@ const fetch_token = async () => {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: form_data.toString()
+      body: form_data.toString(),
+      cache: 'no-store'
     }
   ).then(async (response) => {
     console.log(`Fetch Token Response Status: ${response.status}`)
@@ -63,7 +64,7 @@ const fetch_token = async () => {
     API_TOKENTIME = new Date().toString()
     return data
   }).catch((err) => {
-    console.log('Fetch Token Response Rejected!')
+    console.log('Fetch Token Response Rejected! Aborting...')
     console.log(err)
     return ''
   })
@@ -73,18 +74,19 @@ const fetch_token = async () => {
 
 const fetch_components = async (page_num: Number, page_size: Number, retried: boolean = false) => {
   const endpoint_url = `https://api.ddu.uber.space/components?page=${page_num}&size=${page_size}`
+  // console.log(endpoint_url)
   let headers = await create_headers(API_TOKEN)
   let components: Array<ComponentData> = await fetch(
     endpoint_url,
     {
       method: 'GET',
       mode: 'cors',
-      headers: headers
+      headers: headers,
+      cache: 'no-store'
     }
   ).then( async (response) => {
     console.log(`Get Components Response Status: ${response.status}`)
     if (response.status == 401 && !retried) {
-      console.log(await response.json())
       console.log('Response Unauthorized! Attempting Retry...')
       return await fetch_components(page_num, page_size, true)
     }
@@ -92,16 +94,49 @@ const fetch_components = async (page_num: Number, page_size: Number, retried: bo
   }).catch(async (err) => {
     if (!retried) {
       console.log('Get Components Response Rejected!')
-      console.log(err)
+      console.log(`Error: ${err}`)
       console.log('Attempting retry...')
       return await fetch_components(page_num, page_size, true)
     } else {
       console.log('Get Components 2nd Response Rejected! Aborting...')
-      console.log(err)
+      console.log(`Error: ${err}`)
       return []
     }
   });
   return components
+}
+
+const fetch_componentcount = async (retried: boolean = false) => {
+  const endpoint_url = 'https://api.ddu.uber.space/componentcount'
+  let headers = await create_headers(API_TOKEN)
+  let count: Number = await fetch(
+    endpoint_url,
+    {
+      method: 'GET',
+      mode: 'cors',
+      headers: headers,
+      cache: 'no-store'
+    }
+  ).then( async (response) => {
+    console.log(`Component Count Response Status: ${response.status}`)
+    if (response.status == 401 && !retried) {
+      console.log('Response Unauthorized! Attempting Retry...')
+      return await fetch_componentcount(true)
+    }
+    return response.json()
+  }).catch(async (err) => {
+    if (!retried) {
+      console.log('Component Count Response Rejected!')
+      console.log(`Error: ${err}`)
+      console.log('Attempting retry...')
+      return await fetch_componentcount(true)
+    } else {
+      console.log('Component Count 2nd Response Rejected! Aborting...')
+      console.log(`Error: ${err}`)
+      return []
+    }
+  });
+  return count
 }
 
 export default async function ComponentsPage({

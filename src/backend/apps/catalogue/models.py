@@ -35,6 +35,19 @@ class UserInDB(User):
 
 # COMPONENTS ------------------------------------------------------------------
 
+ALLOWED_COMPONENT_TYPES = [
+    'sheet',
+    'beam',
+    'slab',
+    'rubble'
+]
+
+ALLOWED_COMPONENT_SORTKEYS = [
+    '_id',
+    'type',
+]
+
+
 class ComponentModel(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias='_id')
     componenttype: str = Field(alias='type')

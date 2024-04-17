@@ -20,7 +20,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from .models import (Token, # NOQA
+from .models import (ALLOWED_COMPONENT_TYPES, # NOQA
+                     ALLOWED_COMPONENT_SORTKEYS,
+                     Token,
                      TokenData,
                      User,
                      UserInDB,
@@ -58,7 +60,7 @@ async def login_for_access_token(
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return Token(access_token=access_token, token_type="bearer")
+    return Token(access_token=access_token, token_type="Bearer")
 
 
 # MAIN ROUTES -----------------------------------------------------------------
@@ -90,27 +92,53 @@ async def get_component(
 
 
 @router.get('/components',
-            response_description='Retrieve all components')
+            response_description='Retrieve multiple components')
 async def get_components(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
         page: int = 0,
-        size: int = 0):
+        size: int = 0,
+        sortkey: str = '_id',
+        comptype: str = '',
+        validated: int = 1):
+    # get database
+    db = request.app.mongodb_components
+    # compose filter query and set sort order
+    filter_q = {}
+    sort_order = 1
+    # filter component type
+    if comptype and comptype in ALLOWED_COMPONENT_TYPES:
+        filter_q.update({'type': comptype})
+    # check to only get validated components
+    if validated == 1:
+        filter_q.update({'validated': True})
+    elif validated == -1:
+        filter_q.update({'validated': False})
+    if not sortkey or sortkey not in ALLOWED_COMPONENT_SORTKEYS:
+        sortkey = '_id'
+    # execute query either to get all components or to get a paginated subset
     if not page and not size:
         components = []
-        # loop over all components in async loop
-        # to avoid to_list call with limit
-        async for doc in request.app.mongodb_components.find().sort('_id', 1):
+        async for doc in db.find(filter_q).sort(sortkey, sort_order):
             components.append(doc)
         return components
     else:
         return (
-            await request.app.mongodb_components.find()
-            .sort('_id', 1)
+            await db.find(filter_q)
+            .sort(sortkey, sort_order)
             .skip((page - 1) * size if page > 0 else 0)
             .limit(size)
             .to_list(size)
         )
+
+
+@router.get('/componentcount',
+            response_description='Count all components')
+async def count_components(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)]):
+    count = await request.app.mongodb_components.count_documents({})
+    return count
 
 
 # UTILITY ROUTES --------------------------------------------------------------

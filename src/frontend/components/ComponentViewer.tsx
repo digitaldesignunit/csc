@@ -76,7 +76,7 @@ export default function ComponentViewer({
             <VisualizeComponent component_data={component_data}/>
           </Bounds>
           <axesHelper args={[0.1]}/>
-          <gridHelper args={[2, 20, 0xff0000, 'grey']} />
+          <gridHelper args={[2, 20, 'Gray', 'Gainsboro']} />
           <OrbitControls makeDefault/>
         </Canvas>
       </Card>
