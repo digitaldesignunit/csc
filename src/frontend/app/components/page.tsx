@@ -16,8 +16,6 @@ const create_headers = async (token: string) => {
   const tokenmins = API_TIMEOUT_MINS
   let tokentime = diff_mins(new Date(API_TOKENTIME as string), new Date())
   console.log(`Current tokentime is ${tokentime} minutes`)
-  // console.log('Current token is:')
-  // console.log(token)
   if (!token || !API_TOKEN) {
     console.log('No Token present. Acquiring token...')
     token = await fetch_token();
@@ -27,13 +25,8 @@ const create_headers = async (token: string) => {
     console.log('Token expired. Acquiring new token...')
     token = await fetch_token();
     API_TOKEN = token
-    // set tokentime to now
     API_TOKENTIME = new Date().toString()
-    // console.log('Token is:')
-    // console.log(token)
   }
-  // console.log('Token is:')
-  // console.log(token)
   return {'Authorization': `Bearer ${token}`}
 }
 
@@ -72,9 +65,14 @@ const fetch_token = async () => {
   return token
 }
 
-const fetch_components = async (page_num: Number, page_size: Number, retried: boolean = false) => {
-  const endpoint_url = `https://api.ddu.uber.space/components?page=${page_num}&size=${page_size}`
-  // console.log(endpoint_url)
+const fetch_components = async (
+  page_num: Number,
+  page_size: Number,
+  comptype: string,
+  sortkey: string,
+  retried: boolean = false
+) => {
+  const endpoint_url = `https://api.ddu.uber.space/components?page=${page_num}&size=${page_size}&comptype=${comptype}&sortkey=${sortkey}`
   let headers = await create_headers(API_TOKEN)
   let components: Array<ComponentData> = await fetch(
     endpoint_url,
@@ -88,7 +86,7 @@ const fetch_components = async (page_num: Number, page_size: Number, retried: bo
     console.log(`Get Components Response Status: ${response.status}`)
     if (response.status == 401 && !retried) {
       console.log('Response Unauthorized! Attempting Retry...')
-      return await fetch_components(page_num, page_size, true)
+      return await fetch_components(page_num, page_size, comptype, sortkey, true)
     }
     return response.json()
   }).catch(async (err) => {
@@ -96,7 +94,7 @@ const fetch_components = async (page_num: Number, page_size: Number, retried: bo
       console.log('Get Components Response Rejected!')
       console.log(`Error: ${err}`)
       console.log('Attempting retry...')
-      return await fetch_components(page_num, page_size, true)
+      return await fetch_components(page_num, page_size, comptype, sortkey, true)
     } else {
       console.log('Get Components 2nd Response Rejected! Aborting...')
       console.log(`Error: ${err}`)
@@ -143,16 +141,20 @@ export default async function ComponentsPage({
   searchParams,
 }: {
   searchParams?: {
-    page?: string;
-    size?: string;
+    page?: string
+    size?: string
+    sortkey?: string
+    comptype?: string
   };
 }) {
   // search params retrieval
-  let page = Number(searchParams?.page) || 1;
-  let size = Number(searchParams?.size) || 10;
+  let page = Number(searchParams?.page) || 1
+  let size = Number(searchParams?.size) || 10
+  let sortkey = searchParams?.sortkey || '_id'
+  let comptype = searchParams?.comptype || ''
 
   // fetch components from API using search params
-  let db_components = await fetch_components(page, size)
+  let db_components = await fetch_components(page, size, comptype, sortkey)
 
   return (
     <>
