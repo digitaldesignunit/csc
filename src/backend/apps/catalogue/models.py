@@ -39,12 +39,14 @@ ALLOWED_COMPONENT_TYPES = [
     'sheet',
     'beam',
     'slab',
-    'rubble'
+    'rubble',
+    'column'
 ]
 
 ALLOWED_COMPONENT_SORTKEYS = [
     '_id',
     'type',
+    'material'
 ]
 
 
