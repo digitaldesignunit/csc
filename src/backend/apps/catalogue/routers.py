@@ -80,6 +80,23 @@ async def create_component(
                         content=created_component)
 
 
+@router.get('/validate/{component_id}',
+            response_description='Validate Component')
+async def validate_component(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str):
+    collection = request.app.mongodb_components
+    component = await collection.find_one({'_id': component_id})
+    if component['validated'] is False:
+        result = await collection.update_one({'_id': component_id},
+                                             {'$set': {'validated': True}})
+        print(f'{result.modified_count} was successfully validated!')
+    updated_component = await collection.find_one({'_id': component_id})
+    return JSONResponse(status_code=status.HTTP_200_OK,
+                        content=updated_component)
+
+
 @router.get('/components/{component_id}',
             response_description='Retrieve one component by id')
 async def get_component(
