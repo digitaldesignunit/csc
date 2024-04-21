@@ -59,7 +59,7 @@ class ComponentModel(BaseModel):
     color: Optional[List[float]]
     validated: bool = Field(...)
     bbx: Dict = Field(...)
-    iframe = Optional[Dict]
+    iframe: Optional[Dict]
 
     class Config:
         extra = 'allow'
@@ -137,7 +137,7 @@ class UpdateComponentModel(BaseModel):
     color: Optional[List[float]]
     validated: Optional[bool]
     bbx: Optional[Dict]
-    iframe = Optional[Dict]
+    iframe: Optional[Dict]
 
     class Config:
         extra = 'allow'
