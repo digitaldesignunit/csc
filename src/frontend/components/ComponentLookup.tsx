@@ -30,6 +30,10 @@ const ComponentLookup = () => {
   const html5QrCodeRef: MutableRefObject<Html5Qrcode | null> = useRef(null)
   const elementId = "reader"
   const cameraContainerId = "cameracontainer"
+  const msg_match: string = "IDs Match!"
+  const msg_mismatch: string = "Does not Match with Reference ID!"
+  const msg_ref_scanned: string = "Reference ID set.\nStart scan for comparison."
+  const msg_camera_feed: string = "Camera Feed Placeholder.\n\nTo start comparing IDs,\neither scan or type an ID as reference."
 
   const startScanningForReference = () => {
       document.getElementById(elementId)?.scrollIntoView()
@@ -47,7 +51,7 @@ const ComponentLookup = () => {
                       decodedText => {
                           setReferenceID(decodedText);
                           setBorderColor('green')
-                          setComparisonResult("Reference QR Code scanned. Ready to scan comparison QR Code.");
+                          setComparisonResult(msg_ref_scanned);
                           stopScanning(); // Stop scanning after setting reference QR Code
                       },
                       undefined
@@ -74,7 +78,7 @@ const ComponentLookup = () => {
                     { facingMode: "environment" },
                       config,
                       decodedText => {
-                          const resultMessage: string = decodedText === referenceID ? "Matched the reference QR Code." : "Does NOT match the reference QR Code.";
+                          const resultMessage: string = decodedText === referenceID ? msg_match : msg_mismatch
                           if (decodedText === referenceID) {
                             setBorderColor('green')
                             setComparisonResult(resultMessage);
@@ -120,11 +124,12 @@ const ComponentLookup = () => {
     setComparisonResult('')
     setCurrentID('')
     setInputReferenceID('Reference ID')
-    setBorderColor('gray')
+    setBorderColor('silver')
   };
 
   const handleSetInputReferenceID = () => {
     setReferenceID(inputReferenceID);
+    setComparisonResult(msg_ref_scanned);
   };
 
   return (
@@ -158,7 +163,7 @@ const ComponentLookup = () => {
                   <div className="flex justify-end items-center">
                     <Badge
                       variant="secondary"
-                      className="no-wrap flex-shrink-0">
+                      className={referenceID? "bg-[#009cda] text-white no-wrap flex-shrink-0" : "bg-[#c0c0c0]	no-wrap flex-shrink-0"}>
                         {referenceID || 'Not set'}
                     </Badge>
                   </div>
@@ -177,16 +182,14 @@ const ComponentLookup = () => {
                   </div>
               </div>
 
-          <p>{comparisonResult}</p>
-
             </CardHeader>
             <CardContent
               id={cameraContainerId}
-              className="p-0 relative w-full max-w-[500px] h-[500px] border-8 rounded-xl"
+              className="mt-4 p-0 relative w-full max-w-[500px] h-[500px] border-8 rounded-xl"
               style={{borderColor: `${borderColor}`}}>
                 <div id={elementId} className="rounded-lg"></div>
-              {!isScanning && <div className="absolute inset-0 bg-gray-200 flex items-center justify-center rounded">
-                <span>Camera Feed</span>
+              {!isScanning && <div className="absolute inset-0 bg-gray-200 flex items-center text-center justify-center rounded">
+              <span className="whitespace-pre-wrap">{comparisonResult? comparisonResult : msg_camera_feed}</span>
               </div>}
             </CardContent>
 
@@ -199,7 +202,7 @@ const ComponentLookup = () => {
                 onClick={startScanningForReference}
                 variant="outline"
                 className="w-[200px] hover:bg-[#009cda] hover:text-white">
-                  Scan QR for Reference ID
+                  Start QR Code Scan
               </Button>
             }
 
@@ -208,7 +211,7 @@ const ComponentLookup = () => {
                 onClick={startScanningForComparison}
                 variant="outline"
                 className="w-[200px] hover:bg-[#009cda] hover:text-white">
-                  Scan QR for Comparison
+                  Start QR Code Scan
               </Button>
             }
 
