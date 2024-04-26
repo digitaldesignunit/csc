@@ -1,6 +1,6 @@
 'use client';
 
-import { FileLock, HomeIcon, ReceiptText, ScrollText, Settings } from "lucide-react";
+import { FileLock, HomeIcon, QrCode, ReceiptText, ScrollText, Settings } from "lucide-react";
 import { Command, CommandGroup, CommandItem, CommandList } from "./ui/command";
 import Link from "next/link";
 
@@ -11,14 +11,22 @@ export default function AppMenu() {
       group: "General",
       items: [
         {
+          id: "homebutton",
           link: "/",
           icon: <HomeIcon />,
           text: "Home"
         },
         {
+          id: "componentoverviewbutton",
           link: "/components",
           icon: <ReceiptText />,
           text: "Component Overview"
+        },
+        {
+          id: "findcomponentbutton",
+          link: "/findcomponent",
+          icon: <QrCode />,
+          text: "Find Component"
         },
       ]
       },
@@ -26,16 +34,19 @@ export default function AppMenu() {
         group: "Misc",
         items: [
           {
+            id: "settingsbutton",
             link: "/settings",
             icon: <Settings />,
             text: "Settings"
           },
           {
+            id: "privacybutton",
             link: "/",
             icon: <FileLock />,
             text: "Privacy"
           },
           {
+            id: "logsbutton",
             link: "/",
             icon: <ScrollText />,
             text: "Logs"
@@ -52,7 +63,7 @@ export default function AppMenu() {
                 <CommandGroup heading={menuList[0].group}>
                   {menuList[0].items.map((option: any, optionKey: number) => 
                     <Link key={optionKey} href={option.link}>
-                      <CommandItem key={optionKey} className="flex gap-2 cursor-pointer">
+                      <CommandItem id={option.id} key={optionKey} className="flex gap-2 cursor-pointer">
                         {option.icon}
                         {option.text}
                       </CommandItem>
@@ -69,7 +80,7 @@ export default function AppMenu() {
                 <CommandGroup heading={menuList[1].group}>
                   {menuList[1].items.map((option: any, optionKey: number) => 
                     <Link key={optionKey} href={option.link}>
-                      <CommandItem key={optionKey} className="flex gap-2">
+                      <CommandItem id={option.id} key={optionKey} className="flex gap-2">
                         {option.icon}
                         {option.text}
                       </CommandItem>
