@@ -9,9 +9,11 @@ import { Bounds, OrbitControls } from '@react-three/drei';
 import { ComponentData } from './models';
 import { rgbToHex } from '@/lib/utils';
 
+// Scale factor because THREE unit system is in meters
 const scale: number = 0.001
 
 const VisualizeMesh = (component_data: ComponentData) => {
+  // Create mesh geometry on request
   const mesh_geometry = useMemo(() => {
     const mesh_geometry = new THREE.BufferGeometry()
     // Flatten the vertices array and add to the geometry
@@ -114,8 +116,11 @@ const VisualizeSheet = (component_data: ComponentData) => {
   )
 }
 
-
-const VisualizeComponent = ({component_data } : {component_data: ComponentData}) => {
+const VisualizeComponent = ({
+  component_data
+} : {
+  component_data: ComponentData
+}) => {
   if (component_data.type == 'sheet') {
     return VisualizeSheet(component_data)
   } else {
@@ -134,8 +139,18 @@ export default function ComponentViewer({
       <Card className='flex h-[40dvh] m-2'>
         <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
           <ambientLight intensity={Math.PI / 2} />
-          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI * 0.75} />
-          <pointLight position={[-10, 10, -10]} decay={0} intensity={Math.PI * 0.75} />
+          <spotLight
+            position={[10, 10, 10]}
+            angle={0.15}
+            penumbra={1}
+            decay={0}
+            intensity={Math.PI * 0.75}
+          />
+          <pointLight
+            position={[-10, 10, -10]}
+            decay={0}
+            intensity={Math.PI * 0.75}
+          />
           <Bounds fit clip observe margin={1.2} maxDuration={1} >
             <VisualizeComponent component_data={component_data}/>
           </Bounds>
