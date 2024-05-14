@@ -54,15 +54,22 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   {
     accessorKey: 'materialthickness',
     header: 'Z',
+    cell: ({ row }) => {
+      const component_z: number = Math.round(row.getValue('materialthickness'))
+    return (
+      <div className='text-left align-text-top'>
+        {component_z}
+      </div>
+    )}
   },
   {
     accessorKey: 'color',
     header: 'Color',
     cell: ({ row }) => {
-      const color: number[] = row.getValue('color');
-      const colR = Math.round(color[0]);
-      const colG = Math.round(color[1]);
-      const colB = Math.round(color[2]);
+      const color: number[] = row.getValue('color')
+      const colR = Math.round(color[0])
+      const colG = Math.round(color[1])
+      const colB = Math.round(color[2])
       const hexcol = rgbToHex(colR, colG, colB)
       return (
         <div className="flex items-center max-w-12">
