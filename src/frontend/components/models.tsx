@@ -6,12 +6,18 @@ export type ComponentData = {
   color: Array<number>
   geometry: {
     polyline: ComponentPolylinePoints
+    mesh: {
+      v: ComponentMeshVertices
+      f: ComponentMeshFaces
+    }
   }
   validated: boolean,
   bbx: {
-    xy: ComponentPolylinePoints,
-    xyz: ComponentPolylinePoints | null
+    xy: ComponentPolylinePoints
+    xyz: ComponentPolylinePoints
   }
 }
 
 export type ComponentPolylinePoints = Array<Array<number>>;
+export type ComponentMeshVertices = Array<Array<number>>;
+export type ComponentMeshFaces = Array<Array<number>>;
