@@ -9,54 +9,118 @@ import { Bounds, OrbitControls } from '@react-three/drei';
 import { ComponentData } from './models';
 import { rgbToHex } from '@/lib/utils';
 
-const VisualizeSheet = (component_data: ComponentData) => {
-  
-  // Create a shape from the points
-  const polyline_shape = useMemo(() => {
-    const polyline_shape = new THREE.Shape()
-    const points: ComponentPolylinePoints = component_data.geometry.polyline
-    polyline_shape.moveTo(points[0][0] * 0.001, points[0][1] * 0.001)
-    points.forEach((pointtuple: number[], index) => {
-      if (index > 0) {
-        polyline_shape.lineTo(pointtuple[0] * 0.001, pointtuple[1] * 0.001);
-      }
-    })
-    return polyline_shape;
+const scale: number = 0.001
+
+const VisualizeMesh = (component_data: ComponentData) => {
+  const mesh_geometry = useMemo(() => {
+    const mesh_geometry = new THREE.BufferGeometry()
+    // Flatten the vertices array and add to the geometry
+    const vertices = component_data.geometry.mesh.v
+    const flatVertices = vertices.flat().map(v => v * scale)
+    const verticesAttribute = new THREE.Float32BufferAttribute(flatVertices, 3)
+    mesh_geometry.setAttribute('position', verticesAttribute)
+    // Flatten the faces array (indices) and set for the geometry
+    const faces = component_data.geometry.mesh.f
+    const flatFaces = faces.flat()
+    mesh_geometry.setIndex(flatFaces);
+    // Rotate in correct orientation to compensate for THREE axis system
+    mesh_geometry.rotateX(-Math.PI / 2)
+    return mesh_geometry
   }, [component_data])
-
-  // Define extrusion settings
-  const extrudeSettings = {
-    steps: 2,
-    depth: component_data.materialthickness * 0.001,
-    bevelEnabled: false,
-  }
-
-  // Create extruded geometry from the shape
-  const extrudeGeometry = useMemo(() => {
-    let extrude_geo = new THREE.ExtrudeGeometry(polyline_shape, extrudeSettings)
-    extrude_geo.rotateX(-Math.PI / 2)
-    return extrude_geo
-  }, [polyline_shape])
-  
+  // get component color from data and convert to hex for display
   const component_color = rgbToHex(
     component_data.color[0],
     component_data.color[1],
     component_data.color[2]
   )
+  // Create a basic material for displaying the mesh polygons
+  const mesh_material = new THREE.MeshBasicMaterial({ color: component_color })
+  // Create wireframe
+  const edge_geometry = useMemo(() => {
+    const edge_geometry = new THREE.EdgesGeometry(mesh_geometry)
+    return edge_geometry
+  }, [mesh_geometry])
+  // Create wireframe material
+  const edge_material = new THREE.LineBasicMaterial({ color: 0x000000 })
+  // Return the mesh component
   return (
-    <mesh
-      visible
-      geometry={extrudeGeometry}>
-      <meshStandardMaterial color={new THREE.Color(component_color)} />
-    </mesh>
+    <>
+      <mesh
+        visible
+        geometry={mesh_geometry}
+        material={mesh_material}
+      />
+      <lineSegments
+        geometry={edge_geometry}
+        material={edge_material}
+      />
+    </>
   )
 }
+
+const VisualizeSheet = (component_data: ComponentData) => {
+  // Create a shape from the points
+  const pline_shape = useMemo(() => {
+    const pline_shape = new THREE.Shape()
+    const points: ComponentPolylinePoints = component_data.geometry.polyline
+    pline_shape.moveTo(points[0][0] * scale, points[0][1] * scale)
+    points.forEach((pointtuple: number[], index) => {
+      if (index > 0) {
+        pline_shape.lineTo(pointtuple[0] * scale, pointtuple[1] * scale);
+      }
+    })
+    return pline_shape;
+  }, [component_data])
+  // Define extrusion settings
+  const extrudeSettings = {
+    steps: 2,
+    depth: component_data.materialthickness * scale,
+    bevelEnabled: false,
+  }
+  // Create extruded geometry from the shape
+  const extrude_geometry = useMemo(() => {
+    const extrude_geometry = new THREE.ExtrudeGeometry(
+      pline_shape,
+      extrudeSettings
+    )
+    extrude_geometry.rotateX(-Math.PI / 2)
+    return extrude_geometry
+  }, [pline_shape])
+  // Get component color
+  const component_color = rgbToHex(
+    component_data.color[0],
+    component_data.color[1],
+    component_data.color[2]
+  )
+  // Create wireframe
+  const edge_geometry = useMemo(() => {
+    const edge_geometry = new THREE.EdgesGeometry(extrude_geometry)
+    return edge_geometry
+  }, [extrude_geometry])
+  // Create wireframe material
+  const edge_material = new THREE.LineBasicMaterial({ color: 0x000000 })
+  return (
+    <>
+      <mesh
+        visible
+        geometry={extrude_geometry}>
+        <meshStandardMaterial color={new THREE.Color(component_color)} />
+      </mesh>
+      <lineSegments
+        geometry={edge_geometry}
+        material={edge_material}
+      />
+    </>
+  )
+}
+
 
 const VisualizeComponent = ({component_data } : {component_data: ComponentData}) => {
   if (component_data.type == 'sheet') {
     return VisualizeSheet(component_data)
   } else {
-    return null
+    // we assume that every other component type has a mesh attached
+    return VisualizeMesh(component_data)
   }
 }
 
