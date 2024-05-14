@@ -73,14 +73,14 @@ const VisualizeSheet = (component_data: ComponentData) => {
     })
     return pline_shape;
   }, [component_data])
-  // Define extrusion settings
-  const extrudeSettings = {
-    steps: 2,
-    depth: component_data.materialthickness * scale,
-    bevelEnabled: false,
-  }
   // Create extruded geometry from the shape
   const extrude_geometry = useMemo(() => {
+    // Define extrusion settings
+    const extrudeSettings = {
+      steps: 2,
+      depth: component_data.materialthickness * scale,
+      bevelEnabled: false,
+    }
     const extrude_geometry = new THREE.ExtrudeGeometry(
       pline_shape,
       extrudeSettings
