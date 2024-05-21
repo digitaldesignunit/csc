@@ -1,0 +1,13 @@
+# flake8: NOQA
+coverage
+flake8
+pytest >= 6.2.5
+numpy >= 1.15.4
+scipy
+scikit-learn
+opencv-python
+qreader
+potpourri3d >= 1.0.0
+invoke >= 0.14
+open3d >= 0.14.1
+pymongo

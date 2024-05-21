@@ -1,23 +1,38 @@
 export type ComponentData = {
-  _id: string
-  type: string
-  material: string
-  materialthickness: number
-  color: Array<number>
+  _id: string,
+  type: string,
+  material: string,
+  materialthickness: number,
+  complexity: number,
+  fragment: boolean,
+  assembly: boolean,
+  color: Array<number>,
   geometry: {
-    polyline: ComponentPolylinePoints
+    polyline: ComponentPolylinePoints,
     mesh: {
-      v: ComponentMeshVertices
+      v: ComponentMeshVertices,
       f: ComponentMeshFaces
     }
-  }
+  },
   validated: boolean,
   bbx: {
-    xy: ComponentPolylinePoints
+    xy: ComponentPolylinePoints,
     xyz: ComponentPolylinePoints
+  },
+  iframe: {
+    o: Array<number>,
+    x: Array<number>,
+    y: Array<number>,
+    z: Array<number>
+  }
+  descriptors: {
+    roundness: number
+  },
+  indicators: {
+    embodied_co2e: number
   }
 }
 
-export type ComponentPolylinePoints = Array<Array<number>>;
-export type ComponentMeshVertices = Array<Array<number>>;
-export type ComponentMeshFaces = Array<Array<number>>;
+export type ComponentPolylinePoints = Array<Array<number>>
+export type ComponentMeshVertices = Array<Array<number>>
+export type ComponentMeshFaces = Array<Array<number>>

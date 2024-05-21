@@ -1,0 +1,5 @@
+{
+    "server": "your.mongodb.server.here",
+    "user": "username",
+    "pwd": "superpassword123"
+}

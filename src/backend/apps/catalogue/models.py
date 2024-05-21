@@ -6,7 +6,6 @@ from typing import Optional, List, Dict, Union
 
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-
 from pydantic import BaseModel, Field
 
 
@@ -49,16 +48,36 @@ ALLOWED_COMPONENT_SORTKEYS = [
     'material'
 ]
 
+ALLOWED_COMPLEXITY_LEVELS = [
+    0,  # very low
+    1,  # low
+    2,  # medium
+    3,  # high
+]
+
 
 class ComponentModel(BaseModel):
+    # globally unique ID
     id: str = Field(default_factory=uuid.uuid4, alias='_id')
+    # timestamp fields
+    created: str = Field(...)
+    lastmodified: str = Field(...)
+    # base attributes
     componenttype: str = Field(alias='type')
     material: str = Field(...)
     materialthickness: float = Field(...)
+    complexity: Optional[float]
+    fragment: bool = Field(...)
+    assembly: bool = Field(...)
     geometry: Dict = Field(...)
     color: Optional[List[float]]
-    validated: bool = Field(...)
     bbx: Dict = Field(...)
+    # indicator and descriptor data
+    descriptors: Optional[Dict]
+    indicators: Optional[Dict]
+    # validation
+    validated: bool = Field(...)
+    # insertion frame
     iframe: Optional[Dict]
 
     class Config:
@@ -67,6 +86,8 @@ class ComponentModel(BaseModel):
         schema_extra = {
             'example': {
                 'id': 'bd5432e7-c332-4b1b-a898-b3e4296071e0',
+                'created': '240319-175318',
+                'lastmodified': '240322-112737',
                 'componenttype': 'sheet',
                 'material': 'corian',
                 'materialthickness': 12.0,
@@ -99,6 +120,9 @@ class ComponentModel(BaseModel):
                         ]
                     }
                 },
+                'complexity': 2,
+                'fragment': True,
+                'assembly': False,
                 'color': [200.0, 210.0, 255.0],
                 'validated': True,
                 'bbx': {
@@ -131,9 +155,13 @@ class ComponentModel(BaseModel):
 
 class UpdateComponentModel(BaseModel):
     componenttype: Optional[str]
+    lastmodified: str = Field(...)
     material: Optional[str]
     geometry: Optional[Dict]
     materialthickness: Optional[float]
+    complexity: Optional[float]
+    fragment: Optional[bool]
+    assembly: Optional[bool]
     color: Optional[List[float]]
     validated: Optional[bool]
     bbx: Optional[Dict]
@@ -144,6 +172,7 @@ class UpdateComponentModel(BaseModel):
         schema_extra = {
             'example': {
                 'componenttype': 'AnotherComponentType',
+                'lastmodified': '240422-172737',
                 'material': 'SuddenlyOtherMaterial',
                 'materialthickness': 14.2,
                 'geometry': {
@@ -175,6 +204,9 @@ class UpdateComponentModel(BaseModel):
                         ]
                     }
                 },
+                'complexity': 2,
+                'fragment': True,
+                'assembly': False,
                 'color': [200.0, 210.0, 255.0],
                 'validated': True,
                 'bbx': {

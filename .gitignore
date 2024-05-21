@@ -23,6 +23,8 @@ __pycache__/
 /src/backend/config/dbconfig.json
 /src/backend/apps/catalogue/hash_pwd.py
 
+/gh_dev/00_archive/
+
 # MISC
 _archive
 csc.code-workspace

@@ -5,18 +5,28 @@ channels:
 dependencies:
   - python=3.9.18
   - pip
+  - coverage
+  - flake8
+  - invoke>=0.14
+  - numpy>=1.15.4
+  - opencv
+  - pandas
+  - pymongo
+  - pytest>=6.2.5
+  - qrcode
+  - scipy
+  - scikit-learn
   - pip:
+    - gunicorn
     - fastapi
+    - httptools
+    - matplotlib
+    - motor
+    - open3d>=0.15.1
+    - passlib[bcrypt]
+    - potpourri3d>=1.0.0
     - pydantic
     - python-multipart
     - python-jose[cryptography]
-    - passlib[bcrypt]
-    - pymongo
-    - motor
-    - uvicorn
-    - gunicorn
-    - httptools
     - requests
-    - matplotlib
-    - rhino3dm
-    - COMPAS
+    - uvicorn
