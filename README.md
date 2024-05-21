@@ -53,11 +53,11 @@ OAuth2 with Password (and hashing), Bearer with JWT tokens](https://fastapi.tian
 - Copy `.env.example` and rename it to `.env.local`
 - Edit `.env.local` and paste your secret key into the `API_SECRET` field
 
+```
 /////////////////////////////////////////////////////
-
 /// INFO ON MONGO DB USER DATABASE SHOULD GO HERE ///
-
 /////////////////////////////////////////////////////
+```
 
 ## Configuring Uberspace
 
