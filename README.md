@@ -1,93 +1,239 @@
 # CSC - Catalogue of Second Chances
 
-Catalogue of Second Chances - Web Backend & Frontend
+_Catalogue of Second Chances (CSC)_ tries to provide a platform and the corresponding tools to leverage a database of uniquely identified, digitized building components and materials to create designs that reuse these components.
 
-## VENV on Uberspace
+## Prerequisites
 
-Activate VENV
-```
-source venv/bin/activate
-```
+- This is research level code! As always: expect bugs, weird behaviour, things not working, etc. pp.
 
-## FastAPI
+## Software Structure
 
-- Runs using Gunicorn on port 8000
+- The catalogue consists of a _database_, _backend_ and _frontend_
+- We use [_MongoDB Atlas_](https://www.mongodb.com/) as database
+- The backend is implemented using [_FastAPI_](https://fastapi.tiangolo.com/)
+- We use Python 3.9.18
+- The frontend is implemented using the [_Next.JS_](https://nextjs.org/) framework
+- The frontend is designed to connect to the backend via CORS on the same server using JWT-based auth
+- Everything runs on a web server, in our case we use [_Uberspace_](https://uberspace.de/)
 
-```
-~/csc/venv/bin/gunicorn --config ~/csc/backend/conf.py --check-config
-```
+---
 
-### Supervisor Config
+# Installation & Configuration
 
-Create a `services.d` file...
-```
-nano ~/etc/services.d/fastapi.ini
-```
+Start by cloning this repo onto your desktop computer.
 
-...with the following content:
-```
-[program:fastapi]
-directory=%(ENV_HOME)s/csc/backend
-command=%(ENV_HOME)s/csc/venv/bin/gunicorn --config %(ENV_HOME)s/csc/backend/conf.py --reload
-```
+## MongoDB and dbconfig.json
 
-### Web Backend
+Either create a MongoDB atlas account and set up a new database or run a MongoDB database by other means. Save your connection string / login credentials once you have them.
 
-- Gunicorn runs the FastAPI backend on Port 8000
-- Backend is set up on Port 8000
-- Web Backend has to be set to the port that the app is listening on!
+## Creating a Secret Key for JWT Auth
 
-Web Backend usage and settings:
-```
-uberspace web backend list
-uberspace web backend del <route>
-uberspace web backend set <route>
-```
-
-For our backend we will set api.uber.space to port 8000 (where gunicorn is
-listening!)
-```
-uberspace web backend set api.ddu.uber.space --http --port 8000
-```
-
-## Frontend with Next.js
-
-### NEXT.js
-
-#### Update NPM
+Open a terminal and run the following command to create a random secret key that will be used to sign JWT access tokens while authenticating with the FastAPI backend:
 
 ```
-npm install -g npm
+$ openssl rand -hex 32
+
+>> 09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7
 ```
 
-#### Create new Project
+- You will end up with a key like the above (__DON'T__ use the one in this example!).
+- If in doubt, have a look here for a detailed explanation of the auth setup: [FastAPI
+OAuth2 with Password (and hashing), Bearer with JWT tokens](https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/#handle-jwt-tokens)
+
+## Editing dbconfig.json
+
+- Naviagte to `... \csc\src\backend`
+- Copy `dbconfig.teamplate.json` and rename it to `dbconfig.json`
+- Edit `dbconfig.json` and add you MongoDB credentials
+- Paste your secret key from the previous step into the `'secret'` field of your `dbconfig.json`
+
+## Editing .env.local
+
+- Naviagte to `...\csc\src\frontend`
+- Copy `.env.example` and rename it to `.env.local`
+- Edit `.env.local` and paste your secret key into the `API_SECRET` field
+
+/////////////////////////////////////////////////////
+/// INFO ON MONGO DB USER DATABASE SHOULD GO HERE ///
+/////////////////////////////////////////////////////
+
+## Configuring Uberspace
+
+If you want to setup _CSC_ on _Uberspace_, here are some guidelines. Please also check the [Uberlab Guides](https://lab.uberspace.de/) for further / more detailed information on the covered topics.
+
+- Create a folder for running CSC and a virtual environment on your uberspace server.
 
 ```
-npx create-next-app@latest frontend --use-npm --example "https://github.com/vercel/next-learn/tree/main/dashboard/starter-example"
+[user@servername ~]$ mkdir ~/csc
+[user@servername ~]$ cd ~/csc
+[user@servername csc]$ python3.9 -m venv venv
+[user@servername csc]$ source venv/bin/activate
+(venv) [user@servername ~]$
 ```
 
-#### Create `-env-local` file
-
-Create .env.local file in `/frontend` directory, containing the following
-API environment variables:
+- Install necessary packages and then deactivate the venv
 
 ```
-API_TOKEN_URL=https://your.api.path.com/token
-API_USER=YourAuthUserName
-API_PASS=YourAuthUserPassword
-API_SECRET=JWTSecretShouldGoHere
-API_TOKEN_TIMEOUT_MINS=59
-API_TOKEN=
-API_TOKENTIME=
+(venv) [user@servername csc]$ pip install gunicorn uvloop httptools
+(venv) [user@servername csc]$ deactivate
+[user@servername ~]$
 ```
 
-### Supervisor Config
+## Uploading files
+
+Use a file transfer software to upload the `backend` and `frontend` folders to your web server. In our case the folder structure looks like this:
 
 ```
-[program:frontend]
-directory=%(ENV_HOME)s/csc/frontend
-command=npm run start
-autostart=true
-autorestart=true
-environment=NODE_ENV=production
+/home/user/
+├─ csc/
+│  ├─ venv/
+│  ├─ backend/
+│  ├─ frontend/
 ```
+
+## Setting up FastAPI
+
+We provide a pre-configured configuration file for gunicorn. Test if everything is working by running:
+
+```
+[user@servername ~]$ ~/csc/venv/bin/gunicorn --config ~/csc/backend/conf.py --check-config
+```
+
+If there is no output, you should be good. For additional info on setting up FastAPI on Uberspace, please theck [Uberlab](https://lab.uberspace.de/guide_fastapi/).
+
+## Setting up the Next.js based React Frontend
+
+The frontend runs using _Next.js_, which is a frontend framework based on _React_. All that runs using _Node.js_. First off, we check our node version. This repo assumes we run version 18:
+
+```
+[user@servername ~]$ uberspace tools version show node
+Using 'Node.js' version: '18'
+[user@servername ~]$
+```
+
+Once that is checked, navigate to `/home/user/csc/frontend` and run the following commands:
+
+```
+npm install -g npm@latest
+
+removed 2 packages, and changed 53 packages in 9s
+
+24 packages are looking for funding
+  run `npm fund` for details
+[user@servername frontend]$ npm i
+up to date, audited 482 packages in 4s
+[user@servername frontend]$
+```
+
+This should install all necessary packages using the node package manager (npm). Once that is done, run:
+
+```
+[user@servername frontend]$ npm run build
+
+> frontend@0.1.3 build
+> next build
+
+   ▲ Next.js 14.1.4
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+
+ ✓ Linting and checking validity of types
+ ✓ Collecting page data
+ ✓ Generating static pages (8/8)
+ ✓ Collecting build traces
+ ✓ Finalizing page optimization
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    141 B          84.5 kB
+├ ○ /_not-found                          882 B          85.2 kB
+├ λ /components                          244 kB          346 kB
+├ λ /components/[component_id]           816 B          91.9 kB
+├ ○ /findcomponent                       111 kB          203 kB
+└ ○ /settings                            141 B          84.5 kB
++ First Load JS shared by all            84.4 kB
+  ├ chunks/69-9d1319c8f23893a2.js        29 kB
+  ├ chunks/fd9d1056-7473a1f6941f0e46.js  53.4 kB
+  └ other shared chunks (total)          1.97 kB
+
+
+○  (Static)   prerendered as static content
+λ  (Dynamic)  server-rendered on demand using Node.js
+
+[user@servername frontend]$ 
+```
+
+Now you should be almost set up! The last things to do are configuring services and corresponding web backends...
+
+### Services Config using Supervisor
+
+Again, we will consider our setup case using Uberspace, which uses Supervisor for services:
+
+- On your computer, navigate to `...\csc\uberspaceconfig\etc\services.d`
+- This folder contains two configuration files for _Supervisor_
+- Transfer these files to Uberspace into `/home/yourusername/etc/services.d`
+- Run the following commands:
+
+```
+[user@servername ~]$ supervisorctl reread
+SERVICE: available
+[user@servername ~]$ supervisorctl update
+SERVICE: added process group
+[user@servername ~]$ supervisorctl status
+SERVICE                            RUNNING   pid 26020, uptime 0:03:14
+```
+
+### Configuring Web Backends
+
+- _Gunicorn_ is set up to run the _FastAPI_ backend on Port 8000
+- The _Next.js_ frontend is configured to run on Port 3000
+- The Web Backends have to be set to the port that the apps are listening on!
+
+- First, we list the active backends:
+
+```
+[user@servername ~]$ uberspace web backend list
+/ apache (default)
+[user@servername ~]$
+```
+
+- We will not use the default backend, so we delete it
+
+```
+[user@servername ~]$ uberspace web backend del /
+The web backend has been deleted.
+[user@servername ~]$
+```
+
+- Next we register a subdomain for our _FastAPI_ backend...
+
+```
+[user@servername ~]$ uberspace web domain add api.username.uber.space
+The webserver's configuration has been adapted.
+Now you can use the following records for your DNS:
+    A -> 185.26.156.55
+    AAAA -> 2a00:d0c0:200:0:b9:1a:9c:37
+[user@servername ~]$
+```
+
+- Then we add the corresponding web backend for _FastAPI_
+
+```
+[user@servername ~]$ uberspace web backend set api.username.uber.space/ --http --port 8000
+Set backend for api.username.uber.space/ to port 8000; please make sure something is listening!
+You can always check the status of your backend using "uberspace web backend list".
+[user@servername ~]$ 
+```
+
+- Lastly, we set our default backend to point to the _Next.js_...
+
+```
+[user@servername ~]$ uberspace web backend set / --http --port 3000
+Set backend for / to port 3000; please make sure something is listening!
+You can always check the status of your backend using "uberspace web backend list".
+[user@servername ~]$ 
+```
+
+For further information please refer to the corresponding Uberspace manual and Uberlab guides:
+- [Uberspace Web Backends](https://manual.uberspace.de/web-backends/)
+- [Uberspace Web Domains](https://manual.uberspace.de/web-domains/)
