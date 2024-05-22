@@ -1,4 +1,5 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
+import copy
 import json
 import os
 from typing import Dict, List, Sequence
@@ -196,6 +197,27 @@ class BaseComponent():
         self.__update_lastmodified()
 
     validated = property(get_validated, set_validated)
+
+    def access_dict(self):
+        """
+        Returns the dictionary of this component.
+
+        ATTENTION: If you modify the dictionary, the component will be
+        modified!
+        """
+        return self.__COMPONENT_DATA
+
+    def to_shallow_dict(self):
+        """
+        Returns a shallow copy of the dictionary of this component.
+        """
+        return self.__COMPONENT_DATA.copy()
+
+    def to_deep_dict(self):
+        """
+        Returns a deep copy of the dictionary of this component.
+        """
+        return copy.deepcopy(self.__COMPONENT_DATA)
 
     def to_json(self):
         """
