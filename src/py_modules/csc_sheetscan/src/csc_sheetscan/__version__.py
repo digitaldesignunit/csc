@@ -3,7 +3,7 @@ __description__ = (
     "Sheet Scanning Workflow for Catalog of Second Changes at DDU"
 )
 __url__ = "about:blank"
-__version__ = "0.0.1.9"
+__version__ = "0.0.1.10"
 __author__ = "Max Benjamin Eschenbach, Digital Design Unit (DDU)"
 __author_email__ = "eschenbach@dg.tu-darmstadt.de"
 __license__ = "MIT License"

@@ -24,7 +24,7 @@ from csc_sheetscan.utilities import (
     polygon_np_xy,
     create_timestamp_str
 )
-from csc_sheetscan.sheets.components import SheetComponent
+from csc_sheetscan.components import SheetComponent
 
 # ENVIRONMENT VARIABLES -------------------------------------------------------
 _HERE = os.path.dirname(sanitize_path(__file__))

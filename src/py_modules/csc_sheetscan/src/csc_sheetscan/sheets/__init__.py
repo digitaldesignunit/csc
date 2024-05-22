@@ -43,7 +43,3 @@ from .sheets import (_CONFIG_DIR, # NOQA401
                      load_input_dataset,
                      get_all_input_datasets
                      )
-
-from .components import (BaseComponent, # NOQA401
-                         SheetComponent
-                         )
