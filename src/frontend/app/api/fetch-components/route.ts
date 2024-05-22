@@ -17,7 +17,7 @@ const fetch_components = async (
       method: 'GET',
       mode: 'cors',
       headers: headers,
-      cache: 'no-store'
+      next: { revalidate: 1800 }
     }
   ).then( async (response) => {
     console.log(`Get Components Response Status: ${response.status}`)
@@ -37,7 +37,7 @@ const fetch_components = async (
       console.log(`Error: ${err}`)
       return []
     }
-  });
+  })
   return components
 }
 

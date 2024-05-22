@@ -18,11 +18,12 @@ export async function POST() {
     {
       method: 'POST',
       mode: 'cors',
-      headers: {
+      headers: 
+      {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: form_data.toString(),
-      cache: 'no-store'
+      next: { revalidate: 1800 }
     }
   ).then(async (response) => {
     console.log(`Fetch Token Response Status: ${response.status}`)
