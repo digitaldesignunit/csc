@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { set_token } from '@/lib/tokencache';
+import { NextRequest, NextResponse } from 'next/server'
+import { set_token } from '@/lib/tokencache'
 
 export async function POST() {
   const token_url: string = process.env.API_TOKEN_URL as string;
@@ -23,7 +23,7 @@ export async function POST() {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: form_data.toString(),
-      next: { revalidate: 1800 }
+      cache: 'no-cache',
     }
   ).then(async (response) => {
     console.log(`Fetch Token Response Status: ${response.status}`)

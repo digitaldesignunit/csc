@@ -1,14 +1,14 @@
-import { ComponentOverviewDataTable } from "@/components/ComponentOverviewDataTable";
-import ComponentOverviewPagination from "@/components/ComponentOverviewPagination";
-import { ComponentData } from "@/components/models";
-import { ComponentOverviewColumns } from "@/components/ComponentOverviewColumns";
-import { Card } from "@/components/ui/card";
+import { ComponentOverviewDataTable } from "@/components/ComponentOverviewDataTable"
+import ComponentOverviewPagination from "@/components/ComponentOverviewPagination"
+import { ComponentData } from "@/components/models"
+import { ComponentOverviewColumns } from "@/components/ComponentOverviewColumns"
+import { Card } from "@/components/ui/card"
 
 interface FetchComponentsProps {
-  page: number;
-  size: number;
-  comptype: string;
-  sortkey: string;
+  page: number
+  size: number
+  comptype: string
+  sortkey: string
 }
 
 const fetch_components = async ({ page, size, comptype, sortkey }: FetchComponentsProps) => {
@@ -27,7 +27,7 @@ const fetch_components = async ({ page, size, comptype, sortkey }: FetchComponen
     }
   )
   if (!response.ok) {
-    throw new Error('Failed to fetch components');
+    throw new Error('Failed to fetch components')
   }
   return response.json()
 }
@@ -41,7 +41,7 @@ export default async function ComponentsPage({
     sortkey?: string
     comptype?: string
     detail?: string
-  };
+  }
 }) {
   // search params retrieval
   let page = Number(searchParams?.page) || 1
