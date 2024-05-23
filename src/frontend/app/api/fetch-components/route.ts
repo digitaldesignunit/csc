@@ -17,7 +17,7 @@ const fetch_components = async (
       method: 'GET',
       mode: 'cors',
       headers: headers,
-      next: { revalidate: 1800 }
+      cache: 'no-cache'
     }
   ).then( async (response) => {
     console.log(`Get Components Response Status: ${response.status}`)

@@ -23,7 +23,7 @@ const fetch_components = async ({ page, size, comptype, sortkey }: FetchComponen
     `${process.env.NEXT_PUBLIC_BASE_URL}/api/fetch-components?${params.toString()}`,
     {
       method: 'GET',
-      next: { revalidate: 1800 }
+      cache: 'no-cache'
     }
   )
   if (!response.ok) {

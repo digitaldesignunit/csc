@@ -12,7 +12,7 @@ const fetch_componentcount = async (
       method: 'GET',
       mode: 'cors',
       headers: headers,
-      next: { revalidate: 1800 }
+      cache: 'no-cache'
     }
   ).then( async (response) => {
     console.log(`Component Count Response Status: ${response.status}`)
