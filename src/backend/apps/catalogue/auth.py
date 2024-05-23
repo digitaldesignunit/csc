@@ -116,6 +116,7 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
         username: str = payload.get("sub")
@@ -123,12 +124,13 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
             raise credentials_exception
         token_data = TokenData(username=username)
     except JWTError as e:
-        print(type(e))
-        print(e)
+        print(timestamp + ': ' + e)
         raise credentials_exception
     user = get_user(username=token_data.username)
     if user is None:
+        print(timestamp + ': ' + 'User is None!')
         raise credentials_exception
+    print(timestamp + ': ' + 'Authentication successful!')
     return user
 
 
