@@ -29,7 +29,7 @@ export type ComponentData = {
     roundness: number
   },
   indicators: {
-    embodied_co2e: number
+    eco2e: number
   }
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { set_token } from '@/lib/tokencache'
+import { timestamp_string } from '@/lib/utils'
 
 export async function POST() {
   const token_url: string = process.env.API_TOKEN_URL as string;
@@ -26,11 +27,11 @@ export async function POST() {
       cache: 'no-cache',
     }
   ).then(async (response) => {
-    console.log(`Fetch Token Response Status: ${response.status}`)
+    console.log(timestamp_string() + `: Fetch Token Response Status: ${response.status}`)
     let data = await response.json()
     return data
   }).catch((err) => {
-    console.log('Fetch Token Response Rejected! Aborting...')
+    console.log(timestamp_string() + ': Fetch Token Response Rejected! Aborting...')
     console.log(err)
     NextResponse.json({ error: 'Fetch Token Response Rejected!' }, { status: 500 })
   })

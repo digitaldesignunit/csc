@@ -74,9 +74,10 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI instance
 app = FastAPI(
-    title='Catalogue of Second Chances API',
-    description='CSC API to handle MongoDB stuff',
-    version='0.1.0.0',
+    title='CSC - Catalogue of Second Chances - Backend API',
+    description=('Backend API for Catalogue of Second Chances. '
+                 'Based on FastAPI, connected to MongoDB Database.'),
+    version='0.1.0.1',
     lifespan=lifespan
 )
 

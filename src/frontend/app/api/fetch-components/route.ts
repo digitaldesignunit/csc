@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { create_headers } from '@/lib/headers'
 import { ComponentData } from '@/components/models'
+import { timestamp_string } from '@/lib/utils'
 
 const fetch_components = async (
   page_num: string,
@@ -20,20 +21,20 @@ const fetch_components = async (
       cache: 'no-cache'
     }
   ).then( async (response) => {
-    console.log(`Get Components Response Status: ${response.status}`)
+    console.log(timestamp_string() + `: Get Components Response Status: ${response.status}`)
     if (response.status == 401 && !retried) {
-      console.log('Response Unauthorized! Attempting Retry...')
+      console.log(timestamp_string() + ': Response Unauthorized! Attempting Retry...')
       return await fetch_components(page_num, page_size, comptype, sortkey, true)
     }
     return response.json()
   }).catch(async (err) => {
     if (!retried) {
-      console.log('Get Components Response Rejected!')
+      console.log(timestamp_string() + ': Get Components Response Rejected!')
       console.log(`Error: ${err}`)
       console.log('Attempting retry...')
       return await fetch_components(page_num, page_size, comptype, sortkey, true)
     } else {
-      console.log('Get Components 2nd Response Rejected! Aborting...')
+      console.log(timestamp_string() + ': Get Components 2nd Response Rejected! Aborting...')
       console.log(`Error: ${err}`)
       return []
     }

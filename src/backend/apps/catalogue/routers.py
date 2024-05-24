@@ -4,7 +4,7 @@
 from datetime import timedelta
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, List
 
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
@@ -69,7 +69,7 @@ async def login_for_access_token(
 async def create_component(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
-        component: ComponentModel = Body(...)):
+        component: ComponentModel = Body(...)) -> ComponentModel:
     component = jsonable_encoder(component)
     collection = request.app.mongodb_components
     new_component = await collection.insert_one(component)
@@ -85,7 +85,7 @@ async def create_component(
 async def validate_component(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
-        component_id: str):
+        component_id: str) -> ComponentModel:
     collection = request.app.mongodb_components
     component = await collection.find_one({'_id': component_id})
     if component['validated'] is False:
@@ -102,10 +102,11 @@ async def validate_component(
 async def get_component(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
-        component_id: str):
+        component_id: str) -> ComponentModel:
     collection = request.app.mongodb_components
     component = await collection.find_one({'_id': component_id})
-    return JSONResponse(component)
+    return JSONResponse(status_code=status.HTTP_200_OK,
+                        content=component)
 
 
 @router.get('/components',
@@ -117,7 +118,7 @@ async def get_components(
         size: int = 0,
         sortkey: str = '_id',
         comptype: str = '',
-        validated: int = 1):
+        validated: int = 1) -> List[ComponentModel]:
     # get database
     db = request.app.mongodb_components
     # compose filter query and set sort order
@@ -138,15 +139,16 @@ async def get_components(
         components = []
         async for doc in db.find(filter_q).sort(sortkey, sort_order):
             components.append(doc)
-        return components
     else:
-        return (
+        components = (
             await db.find(filter_q)
             .sort(sortkey, sort_order)
             .skip((page - 1) * size if page > 0 else 0)
             .limit(size)
             .to_list(size)
         )
+    return JSONResponse(status_code=status.HTTP_200_OK,
+                        content=components)
 
 
 @router.get('/componentcount',
@@ -155,7 +157,8 @@ async def count_components(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)]):
     count = await request.app.mongodb_components.count_documents({})
-    return count
+    return JSONResponse(status_code=status.HTTP_200_OK,
+                        content=count)
 
 
 # UTILITY ROUTES --------------------------------------------------------------

@@ -58,3 +58,7 @@ export function invertColor(hex: string, bw: boolean = true) {
   return "#" + padZero(r) + padZero(g) + padZero(b);
 }
 
+
+export function timestamp_string() {
+  return new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
+}
