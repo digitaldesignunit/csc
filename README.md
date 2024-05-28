@@ -239,3 +239,38 @@ You can always check the status of your backend using "uberspace web backend lis
 For further information please refer to the corresponding Uberspace manual and Uberlab guides:
 - [Uberspace Web Backends](https://manual.uberspace.de/web-backends/)
 - [Uberspace Web Domains](https://manual.uberspace.de/web-domains/)
+
+~~## 3. Tests
+
+Malt uses `pytest` for testing. It is included in the `ddu_ias_research.yml`
+conda environment file and does not need to be installed separately.
+Tests go in the `/tests` directory. They are organized the same way as the
+structure of the malt package and its submodules.
+
+To run all available test, call
+```
+invoke test
+```
+
+## 4. Linting
+
+Please use the `flake8` linter when contributing code to malt. It is included
+in the `ddu_ias_research.yml` conda environment file and does not need to be
+installed separately.
+
+To lint all code, call
+```
+invoke lint
+```
+~~
+
+# Licensing & References
+
+- Original code is licensed under the MIT License.
+- The `csc_sheetscan` module makes heavy use of the [OpenCV](https://opencv.org/) library, more specifically its [pre-built packages for python](https://anaconda.org/conda-forge/opencv) via conda-forge.
+
+# To-Do & Extension Ideas
+
+## Possible Future Integrations
+
+...
