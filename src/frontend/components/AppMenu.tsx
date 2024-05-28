@@ -1,6 +1,6 @@
 'use client';
 
-import { FileLock, HomeIcon, QrCode, ReceiptText, ScrollText, Settings } from "lucide-react";
+import { BookUser, FileLock, HomeIcon, QrCode, ReceiptText, ScrollText, Settings } from "lucide-react";
 import { Command, CommandGroup, CommandItem, CommandList } from "./ui/command";
 import Link from "next/link";
 
@@ -46,10 +46,10 @@ export default function AppMenu() {
             text: "Privacy"
           },
           {
-            id: "logsbutton",
-            link: "/",
-            icon: <ScrollText />,
-            text: "Logs"
+            id: "creditsbutton",
+            link: "/credits",
+            icon: <BookUser />,
+            text: "Credits"
           },
         ]
       }
@@ -57,7 +57,8 @@ export default function AppMenu() {
 
   return (
     <>
-      <div className="grow">
+    <div className="flex flex-col h-full justify-between">
+      <div className="flex grow">
           <Command style={{ overflow: 'visible' }} className="rounded-lg">
             <CommandList style={{ overflow: 'visible' }}>
                 <CommandGroup heading={menuList[0].group}>
@@ -74,7 +75,7 @@ export default function AppMenu() {
           </Command>
         </div>
 
-        <div>
+        <div className="flex shrink-0">
           <Command style={{ overflow: 'visible' }} className="rounded-lg">
             <CommandList style={{ overflow: 'visible' }}>
                 <CommandGroup heading={menuList[1].group}>
@@ -90,6 +91,7 @@ export default function AppMenu() {
             </CommandList>
           </Command>
         </div>
+      </div>
       </>
   );
 }

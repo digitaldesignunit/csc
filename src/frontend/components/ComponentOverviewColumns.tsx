@@ -13,9 +13,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     header: () => <div className="text-left">ID</div>,
     cell: ({ row }) => {
       return (
-        <div>
           <ComponentSheet component_data={row.original} />
-        </div>
       );}
   },
   // {
@@ -73,7 +71,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
       const hexcol = rgbToHex(colR, colG, colB)
       return (
         <div className="flex items-center max-w-12">
-          <div className="avatar rounded-full min-h-4 min-w-4 max-w-5 max-h-5 items-center justify-left" style={{backgroundColor: hexcol}}></div>
+          <div className="avatar rounded-full min-h-4 min-w-4 max-w-4 max-h-4 items-center justify-left" style={{backgroundColor: hexcol}}></div>
           <div className="px-2 items-center justify-center text-center text">{colR}/{colG}/{colB}</div>
         </div>
     )}

@@ -62,3 +62,12 @@ export function invertColor(hex: string, bw: boolean = true) {
 export function timestamp_string() {
   return new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
 }
+
+
+export function copyright_year() {
+  const year = new Date().getFullYear()
+  if (year === 2024) {
+    return '2024'
+  }
+  return `2024 - ${year}`
+}

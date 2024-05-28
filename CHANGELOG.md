@@ -46,3 +46,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - Added `timestamp_string` function to `lib/utils.ts`
+
+## [0.0.1.3] - 2024-05-24
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.1
+- CSC React Frontend:   0.1.4.2
+- CSC Sheetscan Module: 0.0.1.10
+
+### Changed
+
+#### CSC React Frontend
+
+- Reformatted layout to incorporate Footer.
+- Started reformatting of Component Overview DataTable
+
+### Added
+
+#### CSC React Frontend
+
+- Added Credits Page `app/credits/page.tsx`
+- Added Footer Component `components/Footer.tsx`
+- Added Function `copyright_date` to `lib/utils.ts`
