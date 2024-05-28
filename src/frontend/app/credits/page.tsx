@@ -27,7 +27,7 @@ export default function CreditsPage() {
             <h2 className="text-xl font-bold mb-4">Student Work</h2>
             <ul className="list-disc list-inside mb-4">
               <li>
-                The <code className="bg-gray-200 px-1 py-0.5 rounded">csc_labels</code> python module was developed by Mirko Dutschke. The code has
+                The <code className="bg-gray-200 px-1 py-0.5 rounded">csc_labels</code> python code to create the QR-Code labels was developed by Mirko Dutschke. The code has
                 been refactored as a python module and integrated by Max Benjamin Eschenbach.
               </li>
               <li>

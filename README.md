@@ -1,10 +1,14 @@
 # CSC - Catalogue of Second Chances
 
-_Catalogue of Second Chances (CSC)_ tries to provide a platform and the corresponding tools to leverage a database of uniquely identified, digitized building components and materials to create designs that reuse these components.
+_Catalogue of Second Chances (CSC)_ tries to provide a platform and the
+corresponding tools to leverage a database of uniquely identified, digitized
+building components and materials to create designs that reuse these
+components.
 
 ## Prerequisites
 
-- This is research level code! As always: expect bugs, weird behaviour, things not working, etc. pp.
+- This is research level code! As always: expect bugs, weird behaviour, things
+not working, etc. pp.
 
 ## Software Structure
 
@@ -12,9 +16,12 @@ _Catalogue of Second Chances (CSC)_ tries to provide a platform and the correspo
 - We use [_MongoDB Atlas_](https://www.mongodb.com/) as database
 - The backend is implemented using [_FastAPI_](https://fastapi.tiangolo.com/)
 - We use Python 3.9.18
-- The frontend is implemented using the [_Next.JS_](https://nextjs.org/) framework
-- The frontend is designed to connect to the backend via CORS on the same server using JWT-based auth
-- Everything runs on a web server, in our case we use [_Uberspace_](https://uberspace.de/)
+- The frontend is implemented using the [_Next.JS_](https://nextjs.org/)
+framework
+- The frontend is designed to connect to the backend via CORS on the same
+server using JWT-based auth
+- Everything runs on a web server, in our case we use
+[_Uberspace_](https://uberspace.de/)
 
 ---
 
@@ -24,11 +31,15 @@ Start by cloning this repo onto your desktop computer.
 
 ## MongoDB and dbconfig.json
 
-Either create a MongoDB atlas account and set up a new database or run a MongoDB database by other means. Save your connection string / login credentials once you have them.
+Either create a MongoDB atlas account and set up a new database or run a
+MongoDB database by other means. Save your connection string / login
+credentials once you have them.
 
 ## Creating a Secret Key for JWT Auth
 
-Open a terminal and run the following command to create a random secret key that will be used to sign JWT access tokens while authenticating with the FastAPI backend:
+Open a terminal and run the following command to create a random secret key
+that will be used to sign JWT access tokens while authenticating with the
+FastAPI backend:
 
 ```
 $ openssl rand -hex 32
@@ -36,16 +47,19 @@ $ openssl rand -hex 32
 >> 09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7
 ```
 
-- You will end up with a key like the above (__DON'T__ use the one in this example!).
-- If in doubt, have a look here for a detailed explanation of the auth setup: [FastAPI
-OAuth2 with Password (and hashing), Bearer with JWT tokens](https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/#handle-jwt-tokens)
+- You will end up with a key like the above (__DON'T__ use the one in this
+example!).
+- If in doubt, have a look here for a detailed explanation of the auth setup:
+[FastAPI OAuth2 with Password (and hashing), Bearer with JWT tokens]
+(https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/#handle-jwt-tokens)
 
 ## Editing dbconfig.json
 
 - Naviagte to `... \csc\src\backend`
 - Copy `dbconfig.teamplate.json` and rename it to `dbconfig.json`
 - Edit `dbconfig.json` and add you MongoDB credentials
-- Paste your secret key from the previous step into the `'secret'` field of your `dbconfig.json`
+- Paste your secret key from the previous step into the `'secret'` field of
+your `dbconfig.json`
 
 ## Editing .env.local
 
@@ -61,9 +75,12 @@ OAuth2 with Password (and hashing), Bearer with JWT tokens](https://fastapi.tian
 
 ## Configuring Uberspace
 
-If you want to setup _CSC_ on _Uberspace_, here are some guidelines. Please also check the [Uberlab Guides](https://lab.uberspace.de/) for further / more detailed information on the covered topics.
+If you want to setup _CSC_ on _Uberspace_, here are some guidelines. Please
+also check the [Uberlab Guides](https://lab.uberspace.de/) for further / more
+detailed information on the covered topics.
 
-- Create a folder for running CSC and a virtual environment on your uberspace server.
+- Create a folder for running CSC and a virtual environment on your uberspace
+server.
 
 ```
 [user@servername ~]$ mkdir ~/csc
@@ -83,7 +100,8 @@ If you want to setup _CSC_ on _Uberspace_, here are some guidelines. Please also
 
 ## Uploading files
 
-Use a file transfer software to upload the `backend` and `frontend` folders to your web server. In our case the folder structure looks like this:
+Use a file transfer software to upload the `backend` and `frontend` folders to
+your web server. In our case the folder structure looks like this:
 
 ```
 /home/user/
@@ -95,17 +113,22 @@ Use a file transfer software to upload the `backend` and `frontend` folders to y
 
 ## Setting up FastAPI
 
-We provide a pre-configured configuration file for gunicorn. Test if everything is working by running:
+We provide a pre-configured configuration file for gunicorn. Test if everything
+is working by running:
 
 ```
 [user@servername ~]$ ~/csc/venv/bin/gunicorn --config ~/csc/backend/conf.py --check-config
 ```
 
-If there is no output, you should be good. For additional info on setting up FastAPI on Uberspace, please theck [Uberlab](https://lab.uberspace.de/guide_fastapi/).
+If there is no output, you should be good. For additional info on setting up
+FastAPI on Uberspace, please check
+[Uberlab](https://lab.uberspace.de/guide_fastapi/).
 
 ## Setting up the Next.js based React Frontend
 
-The frontend runs using _Next.js_, which is a frontend framework based on _React_. All that runs using _Node.js_. First off, we check our node version. This repo assumes we run version 18:
+The frontend runs using _Next.js_, which is a frontend framework based on
+_React_. All that runs using _Node.js_. First off, we check our node version.
+This repo assumes we run version 18:
 
 ```
 [user@servername ~]$ uberspace tools version show node
@@ -113,7 +136,8 @@ Using 'Node.js' version: '18'
 [user@servername ~]$
 ```
 
-Once that is checked, navigate to `/home/user/csc/frontend` and run the following commands:
+Once that is checked, navigate to `/home/user/csc/frontend` and run the
+following commands:
 
 ```
 npm install -g npm@latest
@@ -127,7 +151,8 @@ up to date, audited 482 packages in 4s
 [user@servername frontend]$
 ```
 
-This should install all necessary packages using the node package manager (npm). Once that is done, run:
+This should install all necessary packages using the node package manager
+(npm). Once that is done, run:
 
 ```
 [user@servername frontend]$ npm run build
@@ -165,11 +190,13 @@ Route (app)                              Size     First Load JS
 [user@servername frontend]$ 
 ```
 
-Now you should be almost set up! The last things to do are configuring services and corresponding web backends...
+Now you should be almost set up! The last things to do are configuring services
+and corresponding web backends...
 
 ### Services Config using Supervisor
 
-Again, we will consider our setup case using Uberspace, which uses Supervisor for services:
+Again, we will consider our setup case using Uberspace, which uses Supervisor
+for services:
 
 - On your computer, navigate to `...\csc\uberspaceconfig\etc\services.d`
 - This folder contains two configuration files for _Supervisor_
@@ -236,7 +263,8 @@ You can always check the status of your backend using "uberspace web backend lis
 [user@servername ~]$ 
 ```
 
-For further information please refer to the corresponding Uberspace manual and Uberlab guides:
+For further information please refer to the corresponding Uberspace manual and
+Uberlab guides:
 - [Uberspace Web Backends](https://manual.uberspace.de/web-backends/)
 - [Uberspace Web Domains](https://manual.uberspace.de/web-domains/)
 
@@ -267,17 +295,18 @@ invoke lint
 
 ## Public Funding
 
-Part of this research was conducted within the Project _Fertigteil 2.0 - Real-digital
-process chains for the production of built-in concrete components_. The project
-_Fertigteil 2.0 (Precast Concrete Components 2.0)_ was funded by the Federal
-Ministry of Education and Research Germany (BMBF) through the funding
-measure Resource-efficient circular economy - Building and mineral cycles
-(ReMin).
+Part of this research was conducted within the Project _Fertigteil 2.0 -
+Real-digital process chains for the production of built-in concrete
+components_. The project _Fertigteil 2.0 (Precast Concrete Components 2.0)_
+was funded by the Federal Ministry of Education and Research Germany (BMBF)
+through the funding measure Resource-efficient circular economy - Building and
+mineral cycles (ReMin).
 
 ## Student Work
 
-- The `csc_labels` python module was developed by Mirko Dutschke. The code has
-been refactored as a python module and integrated by Max Benjamin Eschenbach.
+- The `csc_labels` python code to create QR-Code labels was developed by Mirko
+Dutschke. The code has been refactored as a python module and integrated by
+Max Benjamin Eschenbach.
 - The `csc_sheetscan` pyton module was developed based on the scanning setup
 for sheets that was developed by Mirko Dutschke. The functional code has been
 written by Max Benjamin Eschenbach.
@@ -285,12 +314,19 @@ written by Max Benjamin Eschenbach.
 ## Licensing
 
 - Original code is licensed under the MIT License.
-- The `csc_sheetscan` module makes heavy use of the [OpenCV](https://opencv.org/) library, more specifically its [pre-built packages for python](https://anaconda.org/conda-forge/opencv) via conda-forge.
+- The `csc_sheetscan` module makes heavy use of the
+[OpenCV](https://opencv.org/) library, more specifically its
+[pre-built packages for python](https://anaconda.org/conda-forge/opencv)
+via conda-forge.
 
 ## References
 
-- The technical main inspiration for the _Catalogue of Second Chances_ interface is the [Catalogue Explorer](https://github.com/ibois-epfl/catalogue-explorer) by [@AymbericBr](https://github.com/AymericBr).
-- Another huge inspiration and reference is the [Timberstone Project](https://epfl-enac.github.io/MANSLAB-IBOIS-EESD-timberstone/), which is the origin of abovementioned Catalogue Explorer.
+- The technical main inspiration for the _Catalogue of Second Chances_
+interface is the [Catalogue Explorer](https://github.com/ibois-epfl/catalogue-explorer)
+by [@AymbericBr](https://github.com/AymericBr).
+- Another huge inspiration and reference is the
+[Timberstone Project](https://epfl-enac.github.io/MANSLAB-IBOIS-EESD-timberstone/),
+which is the origin of abovementioned Catalogue Explorer.
 
 # To-Do & Extension Ideas
 
