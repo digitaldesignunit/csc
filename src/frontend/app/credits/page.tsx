@@ -10,6 +10,7 @@ export default function CreditsPage() {
         </CardHeader>
 
         <CardContent>
+
           <section className="mb-8">
             <h2 className="text-xl font-bold mb-4">Public Funding</h2>
             <p className="mb-4">
@@ -42,7 +43,7 @@ export default function CreditsPage() {
             <ul className="list-disc list-inside mb-4">
               <li>Original code is licensed under the MIT License.</li>
               <li>
-                The <code className="bg-gray-200 px-1 py-0.5 rounded">csc_sheetscan</code> module makes heavy use of the <a href="https://opencv.org/" target="_blank" className="text-blue-500 underline">OpenCV</a> library, more specifically its <a href="https://anaconda.org/conda-forge/opencv" className="text-blue-500 underline">pre-built packages for python</a> via conda-forge.
+                The <code className="bg-gray-200 px-1 py-0.5 rounded">csc_sheetscan</code> module makes heavy use of the <a href="https://opencv.org/" target="_blank" className="text-blue-500 underline">OpenCV</a> library, more specifically its <a href="https://anaconda.org/conda-forge/opencv" target="_blank" className="text-blue-500 underline">pre-built packages for python</a> via conda-forge.
               </li>
             </ul>
           </section>
@@ -58,8 +59,10 @@ export default function CreditsPage() {
               </li>
             </ul>
           </section>
+        
         </CardContent>
+      
       </Card>
     </div>
-  );
+  )
 }
