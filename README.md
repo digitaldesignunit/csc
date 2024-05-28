@@ -245,12 +245,12 @@ For further information please refer to the corresponding Uberspace manual and U
 ~~Malt uses `pytest` for testing. It is included in the `ddu_ias_research.yml`
 conda environment file and does not need to be installed separately.
 Tests go in the `/tests` directory. They are organized the same way as the
-structure of the malt package and its submodules.~~
+structure of the malt package and its submodules.
 
 To run all available test, call
 ```
 invoke test
-```
+```~~
 
 ## 4. Linting
 
