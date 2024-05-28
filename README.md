@@ -282,10 +282,13 @@ been refactored as a python module and integrated by Max Benjamin Eschenbach.
 for sheets that was developed by Mirko Dutschke. The functional code has been
 written by Max Benjamin Eschenbach.
 
-# Licensing & References
+## Licensing
 
 - Original code is licensed under the MIT License.
 - The `csc_sheetscan` module makes heavy use of the [OpenCV](https://opencv.org/) library, more specifically its [pre-built packages for python](https://anaconda.org/conda-forge/opencv) via conda-forge.
+
+## References
+
 - The technical main inspiration for the _Catalogue of Second Chances_ interface is the [Catalogue Explorer](https://github.com/ibois-epfl/catalogue-explorer) by [@AymbericBr](https://github.com/AymericBr).
 - Another huge inspiration and reference is the [Timberstone Project](https://epfl-enac.github.io/MANSLAB-IBOIS-EESD-timberstone/), which is the origin of abovementioned Catalogue Explorer.
 
