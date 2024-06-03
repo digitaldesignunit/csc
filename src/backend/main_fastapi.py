@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI):
     app.mongodb = app.mongodb_client['csc']
     app.mongodb_components = app.mongodb['components']
     app.mongodb_users = app.mongodb['users']
+    app.mongodb_models = app.mongodb['models']
     yield
     # shutdown
     app.mongodb_client.close()

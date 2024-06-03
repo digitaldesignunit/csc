@@ -109,6 +109,63 @@ async def get_component(
                         content=component)
 
 
+@router.get('/componentgeometry/{component_id}',
+            response_description='Retrieve one component geometry by id')
+async def get_component_geometry(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str) -> ComponentModel:
+    collection = request.app.mongodb_components
+    query = {'_id': component_id}
+    projection = {'geometry': 1}
+    component = await collection.find_one(query, projection)
+    return JSONResponse(status_code=status.HTTP_200_OK,
+                        content=component)
+
+
+@router.get('/shallowcomponents',
+            response_description='Retrieve multiple shallow components')
+async def get_shallow_components(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        page: int = 0,
+        size: int = 0,
+        sortkey: str = '_id',
+        comptype: str = '',
+        validated: int = 1) -> List[ComponentModel]:
+    # get database
+    db = request.app.mongodb_components
+    # compose filter query and set sort order
+    query = {}
+    projection = {'geometry': 0}
+    sort_order = 1
+    # filter component type
+    if comptype and comptype in ALLOWED_COMPONENT_TYPES:
+        query.update({'type': comptype})
+    # check to only get validated components
+    if validated == 1:
+        query.update({'validated': True})
+    elif validated == -1:
+        query.update({'validated': False})
+    if not sortkey or sortkey not in ALLOWED_COMPONENT_SORTKEYS:
+        sortkey = '_id'
+    # execute query either to get all components or to get a paginated subset
+    if not page and not size:
+        components = []
+        async for doc in db.find(query, projection).sort(sortkey, sort_order):
+            components.append(doc)
+    else:
+        components = (
+            await db.find(query, projection)
+            .sort(sortkey, sort_order)
+            .skip((page - 1) * size if page > 0 else 0)
+            .limit(size)
+            .to_list(size)
+        )
+    return JSONResponse(status_code=status.HTTP_200_OK,
+                        content=components)
+
+
 @router.get('/components',
             response_description='Retrieve multiple components')
 async def get_components(
@@ -122,26 +179,26 @@ async def get_components(
     # get database
     db = request.app.mongodb_components
     # compose filter query and set sort order
-    filter_q = {}
+    query = {}
     sort_order = 1
     # filter component type
     if comptype and comptype in ALLOWED_COMPONENT_TYPES:
-        filter_q.update({'type': comptype})
+        query.update({'type': comptype})
     # check to only get validated components
     if validated == 1:
-        filter_q.update({'validated': True})
+        query.update({'validated': True})
     elif validated == -1:
-        filter_q.update({'validated': False})
+        query.update({'validated': False})
     if not sortkey or sortkey not in ALLOWED_COMPONENT_SORTKEYS:
         sortkey = '_id'
     # execute query either to get all components or to get a paginated subset
     if not page and not size:
         components = []
-        async for doc in db.find(filter_q).sort(sortkey, sort_order):
+        async for doc in db.find(query).sort(sortkey, sort_order):
             components.append(doc)
     else:
         components = (
-            await db.find(filter_q)
+            await db.find(query)
             .sort(sortkey, sort_order)
             .skip((page - 1) * size if page > 0 else 0)
             .limit(size)
