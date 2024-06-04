@@ -109,9 +109,9 @@ async def get_component(
                         content=component)
 
 
-@router.get('/components/shallow/{component_id}',
+@router.get('/shallowcomponents/{component_id}',
             response_description='Retrieve one component by id')
-async def get_shallow_component(
+async def get_component_shallow(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
         component_id: str) -> ComponentModel:
@@ -137,9 +137,9 @@ async def get_component_geometry(
                         content=component)
 
 
-@router.get('/components/shallow',
+@router.get('/shallowcomponents',
             response_description='Retrieve multiple shallow components')
-async def get_shallow_components(
+async def get_components_shallow(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
         page: int = 0,
