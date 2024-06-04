@@ -5,7 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-
 export function diff_mins(dt1: Date, dt2: Date) {
   // Calculate the difference in milliseconds between the two provided dates and convert it to seconds
   var diff =(dt2.getTime() - dt1.getTime()) / 1000;
@@ -15,20 +14,33 @@ export function diff_mins(dt1: Date, dt2: Date) {
   return Math.abs(Math.round(diff));
 }
 
-
 export function rgbToHex(r: number, g: number, b: number) {
   return (
     "#" + ((1<<24) + (r<<16) + (g<<8)+ b).toString(16).slice(1)
   );
 }
 
+export function hexComponentColor(component_color_rgb: number[]) {
+    // Component Color
+    const colR = Math.round(component_color_rgb[0])
+    const colG = Math.round(component_color_rgb[1])
+    const colB = Math.round(component_color_rgb[2])
+    const hexcol = rgbToHex(colR, colG, colB)
+    return hexcol
+}
+
+export function componentColorString(component_color_rgb: number[]) {
+  const colR = Math.round(component_color_rgb[0])
+  const colG = Math.round(component_color_rgb[1])
+  const colB = Math.round(component_color_rgb[2])
+  return `${colR}/${colG}/${colB}`
+}
 
 export function padZero(str: string, len: number = 2) {
   len = len || 2;
   var zeros = new Array(len).join('0');
   return (zeros + str).slice(-len);
 }
-
 
 export function invertColor(hex: string, bw: boolean = true) {
   if (hex.indexOf('#') === 0) {
@@ -58,11 +70,9 @@ export function invertColor(hex: string, bw: boolean = true) {
   return "#" + padZero(r) + padZero(g) + padZero(b);
 }
 
-
 export function timestamp_string() {
   return new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
 }
-
 
 export function copyright_year() {
   const year = new Date().getFullYear()

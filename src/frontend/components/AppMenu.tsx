@@ -20,7 +20,7 @@ export default function AppMenu() {
           id: "componentoverviewbutton",
           link: "/components",
           icon: <ReceiptText />,
-          text: "Component Overview"
+          text: "Components"
         },
         {
           id: "findcomponentbutton",

@@ -12,6 +12,15 @@ export default function CreditsPage() {
         <CardContent>
 
           <section className="mb-8">
+            <h2 className="text-xl font-bold mb-4">Context</h2>
+            <p className="mb-4">
+              This piece of software and the underlying research is part of the
+              PhD thesis of Max Benjamin Eschenbach at the Digital Design Unit (DDU),
+              chaired and supervised by Prof. Dr.-Ing. Oliver Tessmann.
+            </p>
+          </section>
+
+          <section className="mb-8">
             <h2 className="text-xl font-bold mb-4">Public Funding</h2>
             <p className="mb-4">
               Part of this research was conducted within the Project <em>Fertigteil 2.0 - Real-digital

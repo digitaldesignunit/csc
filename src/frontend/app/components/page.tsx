@@ -11,7 +11,7 @@ interface FetchComponentsProps {
   sortkey: string
 }
 
-const fetch_components = async ({ page, size, comptype, sortkey }: FetchComponentsProps) => {
+const fetch_components_shallow = async ({ page, size, comptype, sortkey }: FetchComponentsProps) => {
   const params = new URLSearchParams(
     { page: page.toString(),
       size: size.toString(),
@@ -20,7 +20,7 @@ const fetch_components = async ({ page, size, comptype, sortkey }: FetchComponen
     }
   )
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_BASE_URL}/api/fetch-components?${params.toString()}`,
+    `${process.env.NEXT_PUBLIC_BASE_URL}/api/fetch-components-shallow?${params.toString()}`,
     {
       method: 'GET',
       cache: 'no-cache'
@@ -40,17 +40,16 @@ export default async function ComponentsPage({
     size?: string
     sortkey?: string
     comptype?: string
-    detail?: string
   }
 }) {
   // search params retrieval
   let page = Number(searchParams?.page) || 1
-  let size = Number(searchParams?.size) || 10
+  let size = Number(searchParams?.size) || 20
   let sortkey = searchParams?.sortkey || '_id'
   let comptype = searchParams?.comptype || ''
 
   // fetch components from API using search params
-  let db_components = await fetch_components(
+  let db_components = await fetch_components_shallow(
     {
       page: page,
       size: size,
