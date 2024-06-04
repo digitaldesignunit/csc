@@ -1,8 +1,8 @@
-import { ComponentOverviewDataTable } from "@/components/ComponentOverviewDataTable"
-import ComponentOverviewPagination from "@/components/ComponentOverviewPagination"
-import { ComponentData } from "@/components/models"
-import { ComponentOverviewColumns } from "@/components/ComponentOverviewColumns"
-import { Card } from "@/components/ui/card"
+import { ComponentOverviewDataTable } from '@/components/ComponentOverviewDataTable'
+import ComponentOverviewPagination from '@/components/ComponentOverviewPagination'
+import { ComponentData } from '@/components/models'
+import { ComponentOverviewColumns } from '@/components/ComponentOverviewColumns'
+import { Card } from '@/components/ui/card'
 
 interface FetchComponentsProps {
   page: number
@@ -40,6 +40,7 @@ export default async function ComponentsPage({
     size?: string
     sortkey?: string
     comptype?: string
+    detail_id?: string
   }
 }) {
   // search params retrieval
@@ -47,6 +48,7 @@ export default async function ComponentsPage({
   let size = Number(searchParams?.size) || 20
   let sortkey = searchParams?.sortkey || '_id'
   let comptype = searchParams?.comptype || ''
+  let detail_id = searchParams?.detail_id || ''
 
   // fetch components from API using search params
   let db_components = await fetch_components_shallow(
@@ -60,7 +62,7 @@ export default async function ComponentsPage({
 
   return (
     <>
-      <div className="grid gap-[32px] m-4">
+      <div className='grid gap-[32px] m-4'>
         <Card>
           <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={db_components as ComponentData[]} />
         </Card>
@@ -68,5 +70,5 @@ export default async function ComponentsPage({
       </div>
 
     </>
-  );
+  )
 }

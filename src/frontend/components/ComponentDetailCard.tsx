@@ -1,11 +1,11 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card'
 
 export default function ComponentDetailCard({
   params,
 }: {
-  params: { component_id: string };
+  params: { component_id: string }
 }) {
   return (
     <div>
@@ -24,5 +24,5 @@ export default function ComponentDetailCard({
         </CardFooter>
       </Card>
     </div>
-  );
+  )
 }

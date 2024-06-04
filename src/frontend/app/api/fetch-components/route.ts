@@ -43,15 +43,15 @@ const fetch_components = async (
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url, process.env.NEXT_PUBLIC_BASE_URL);
+  const { searchParams } = new URL(request.url, process.env.NEXT_PUBLIC_BASE_URL)
   const page_num = searchParams.get('page') || '1'
   const page_size = searchParams.get('size') || '10'
   const comptype = searchParams.get('comptype') || ''
   const sortkey = searchParams.get('sortkey') || '_id'
   try {
     const components = await fetch_components(page_num, page_size, comptype, sortkey, false)
-    return NextResponse.json(components, { status: 200 });
+    return NextResponse.json(components, { status: 200 })
   } catch (err) {
-    return NextResponse.json({ error: 'Fetch Components Response Rejected!' }, { status: 500 });
+    return NextResponse.json({ error: 'Fetch Components Response Rejected!' }, { status: 500 })
   }
 }

@@ -1,8 +1,8 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function Home() {
   return (
-    <div className="grid gap-[32px] m-4">
+    <div className='grid gap-[32px] m-4'>
       <Card>
         <CardHeader>
           <CardTitle>Home</CardTitle>
@@ -17,5 +17,5 @@ export default function Home() {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

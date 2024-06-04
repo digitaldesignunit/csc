@@ -1,24 +1,24 @@
-'use client';
+'use client'
 
-import { ColumnDef, createColumnHelper } from "@tanstack/react-table";
-import { ComponentData } from "./models";
-import { rgbToHex } from "@/lib/utils";
-import ComponentSheet from "./ComponentSheet";
+import { ColumnDef, createColumnHelper } from '@tanstack/react-table'
+import { ComponentData } from './models'
+import { rgbToHex } from '@/lib/utils'
+import ComponentSheet from './ComponentSheet'
 
 const columnHelper = createColumnHelper<ComponentData>()
 
 export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   {
     accessorKey: '_id',
-    header: () => <div className="text-left">ID</div>,
+    header: () => <div className='text-left'>ID</div>,
     cell: ({ row }) => {
       return (
           <ComponentSheet component_data={row.original} />
-      );}
+      )}
   },
   // {
   //   accessorKey: 'bbx',
-  //   header: () => <div className="align-top">BBX</div>,
+  //   header: () => <div className='align-top'>BBX</div>,
   //   cell: ({ row }) => {
   //     const component_bbx: string = row.original.bbx.xy.toString()
   //   return (
@@ -29,7 +29,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   // },
   {
     accessorKey: 'type',
-    header: () => <div className="align-top">Type</div>,
+    header: () => <div className='align-top'>Type</div>,
     cell: ({ row }) => {
       const component_type: string = row.getValue('type')
     return (
@@ -70,9 +70,9 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
       const colB = Math.round(color[2])
       const hexcol = rgbToHex(colR, colG, colB)
       return (
-        <div className="flex items-center max-w-12">
-          <div className="avatar rounded-full min-h-4 min-w-4 max-w-4 max-h-4 items-center justify-left" style={{backgroundColor: hexcol}}></div>
-          <div className="px-2 items-center justify-center text-center text">{colR}/{colG}/{colB}</div>
+        <div className='flex items-center max-w-12'>
+          <div className='avatar rounded-full min-h-4 min-w-4 max-w-4 max-h-4 items-center justify-left' style={{backgroundColor: hexcol}}></div>
+          <div className='px-2 items-center justify-center text-center text'>{colR}/{colG}/{colB}</div>
         </div>
     )}
   },

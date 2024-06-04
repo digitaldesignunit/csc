@@ -1,13 +1,13 @@
 'use client'
 
-import { Canvas, useFrame } from '@react-three/fiber';
-import { useMemo, useRef, useState } from 'react';
-import * as THREE from 'three';
-import { ComponentPolylinePoints } from './models';
-import { Card } from './ui/card';
-import { Bounds, OrbitControls } from '@react-three/drei';
-import { ComponentData } from './models';
-import { rgbToHex } from '@/lib/utils';
+import { Canvas, useFrame } from '@react-three/fiber'
+import { useMemo, useRef, useState } from 'react'
+import * as THREE from 'three'
+import { ComponentPolylinePoints } from './models'
+import { Card } from './ui/card'
+import { Bounds, OrbitControls } from '@react-three/drei'
+import { ComponentData } from './models'
+import { rgbToHex } from '@/lib/utils'
 
 // Scale factor because THREE unit system is in meters
 const scale: number = 0.001
@@ -24,7 +24,7 @@ const VisualizeMesh = (component_data: ComponentData) => {
     // Flatten the faces array (indices) and set for the geometry
     const faces = component_data.geometry.mesh.f
     const flatFaces = faces.flat()
-    mesh_geometry.setIndex(flatFaces);
+    mesh_geometry.setIndex(flatFaces)
     // Rotate in correct orientation to compensate for THREE axis system
     mesh_geometry.rotateX(-Math.PI / 2)
     return mesh_geometry
@@ -68,10 +68,10 @@ const VisualizeSheet = (component_data: ComponentData) => {
     pline_shape.moveTo(points[0][0] * scale, points[0][1] * scale)
     points.forEach((pointtuple: number[], index) => {
       if (index > 0) {
-        pline_shape.lineTo(pointtuple[0] * scale, pointtuple[1] * scale);
+        pline_shape.lineTo(pointtuple[0] * scale, pointtuple[1] * scale)
       }
     })
-    return pline_shape;
+    return pline_shape
   }, [component_data])
   // Create extruded geometry from the shape
   const extrude_geometry = useMemo(() => {
@@ -159,5 +159,5 @@ export default function ComponentViewer({
           <OrbitControls makeDefault/>
         </Canvas>
       </Card>
-  );
-};
+  )
+}

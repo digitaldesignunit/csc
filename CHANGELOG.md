@@ -96,3 +96,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Components in the overview are now retrieved _shallow_, e.g. without geometry.
 - Geometry is loaded on click during opening of the Component Detail Sheet.
+
+## [0.0.1.5] - 2024-06-04
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.2
+- CSC React Frontend:   0.1.4.3
+- CSC Sheetscan Module: 0.0.1.10
+
+### Added
+
+#### CSC React Frontend
+
+- Add `ComponentViewerSkeleton.tsx` to display loading message during geometry load.
+
+### Changed
+
+#### CSC React Frontend
+
+- Fix linting in all components.
+- Change Sidebar width to `250px`

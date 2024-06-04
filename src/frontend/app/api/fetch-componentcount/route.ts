@@ -32,15 +32,15 @@ const fetch_componentcount = async (
       console.log(`Error: ${err}`)
       return []
     }
-  });
+  })
   return count
 }
 
 export async function GET(request: NextRequest) {
   try {
     const count: Number = await fetch_componentcount(false)
-    return NextResponse.json(count, { status: 200 });
+    return NextResponse.json(count, { status: 200 })
   } catch (err) {
-    return NextResponse.json({ error: 'Fetch Components Response Rejected!' }, { status: 500 });
+    return NextResponse.json({ error: 'Fetch Components Response Rejected!' }, { status: 500 })
   }
 }

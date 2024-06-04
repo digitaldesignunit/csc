@@ -1,8 +1,8 @@
-'use client';
+'use client'
 
-import { useState } from "react";
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "./ui/pagination";
-import { useSearchParams, usePathname, useRouter } from "next/navigation";
+import { useState } from 'react'
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from './ui/pagination'
+import { useSearchParams, usePathname, useRouter } from 'next/navigation'
 
 interface ComponentOverviewPaginationProps {
   pageNum: number
@@ -14,22 +14,22 @@ export default function ComponentOverviewPagination({
   pageSize,
 }: ComponentOverviewPaginationProps) {
 
-  // const [pageSize, setPageSize] = useState(10);
-  // const [pageNum, setPageNum] = useState(1);
+  // const [pageSize, setPageSize] = useState(10)
+  // const [pageNum, setPageNum] = useState(1)
 
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const { replace } = useRouter();
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const { replace } = useRouter()
 
   function handlePagination(pageNum: number | string) {
     const params = new URLSearchParams(searchParams)
-    params.set('page', pageNum.toString());
+    params.set('page', pageNum.toString())
     replace(`${pathname}?${params.toString()}`)
   }
 
-  // const [isActive, setActive] = useState<string>("");
+  // const [isActive, setActive] = useState<string>('')
   // const toggleHandler = (pn: number) => () =>
-  //   setActive((isActive) => (isActive === id ? "" : id));
+  //   setActive((isActive) => (isActive === id ? '' : id))
 
   return (
     <div>
@@ -40,27 +40,27 @@ export default function ComponentOverviewPagination({
             <PaginationPrevious 
               className={
                 pageNum === 1 ?
-                "pointer-events-none opacity-50" :
-                "cursor-pointer"
+                'pointer-events-none opacity-50' :
+                'cursor-pointer'
               }
               onClick={() => {
-                handlePagination(pageNum - 1);
+                handlePagination(pageNum - 1)
               }}
               />
           </PaginationItem>
 
           {/* <PaginationItem>
-            <PaginationLink href="#">1</PaginationLink>
+            <PaginationLink href='#'>1</PaginationLink>
           </PaginationItem>
 
           <PaginationItem>
-            <PaginationLink href="#" isActive>
+            <PaginationLink href='#' isActive>
               2
             </PaginationLink>
           </PaginationItem>
 
           <PaginationItem>
-            <PaginationLink href="#">3</PaginationLink>
+            <PaginationLink href='#'>3</PaginationLink>
           </PaginationItem> */}
 
           <PaginationItem>
@@ -71,11 +71,11 @@ export default function ComponentOverviewPagination({
             <PaginationNext 
               className={
                 pageNum === 100 ?
-                "pointer-events-none opacity-50" :
-                "cursor-pointer"
+                'pointer-events-none opacity-50' :
+                'cursor-pointer'
               }
               onClick={() => {
-                handlePagination(pageNum + 1);
+                handlePagination(pageNum + 1)
               }}
               />
           </PaginationItem>
@@ -83,5 +83,5 @@ export default function ComponentOverviewPagination({
         </PaginationContent>
       </Pagination>
     </div>
-  );
+  )
 }
