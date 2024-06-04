@@ -63,7 +63,19 @@ async def login_for_access_token(
     return Token(access_token=access_token, token_type="Bearer")
 
 
-# MAIN ROUTES -----------------------------------------------------------------
+# STATISTIC ROUTES ------------------------------------------------------------
+
+@router.get('/componentcount',
+            response_description='Count all components')
+async def count_components(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)]):
+    count = await request.app.mongodb_components.count_documents({})
+    return JSONResponse(status_code=status.HTTP_200_OK,
+                        content=count)
+
+
+# ADD COMPONENT ROUTES --------------------------------------------------------
 
 @router.post('/', response_description='Add one new component')
 async def create_component(
@@ -79,6 +91,8 @@ async def create_component(
     return JSONResponse(status_code=status.HTTP_201_CREATED,
                         content=created_component)
 
+
+# VALIDATION ROUTES -----------------------------------------------------------
 
 @router.get('/validate/{component_id}',
             response_description='Validate Component')
@@ -97,19 +111,9 @@ async def validate_component(
                         content=updated_component)
 
 
-@router.get('/components/{component_id}',
-            response_description='Retrieve one component by id')
-async def get_component(
-        request: Request,
-        current_user: Annotated[User, Depends(get_current_active_user)],
-        component_id: str) -> ComponentModel:
-    collection = request.app.mongodb_components
-    component = await collection.find_one({'_id': component_id})
-    return JSONResponse(status_code=status.HTTP_200_OK,
-                        content=component)
+# SHALLOW COMPONENT ROUTES ----------------------------------------------------
 
-
-@router.get('/components/shallow/{component_id}',
+@router.get('/shallowcomponents/{component_id}',
             response_description='Retrieve one component by id')
 async def get_component_shallow(
         request: Request,
@@ -123,21 +127,7 @@ async def get_component_shallow(
                         content=component)
 
 
-@router.get('/components/geometry/{component_id}',
-            response_description='Retrieve one component geometry by id')
-async def get_component_geometry(
-        request: Request,
-        current_user: Annotated[User, Depends(get_current_active_user)],
-        component_id: str) -> ComponentModel:
-    collection = request.app.mongodb_components
-    query = {'_id': component_id}
-    projection = {'geometry': 1}
-    component = await collection.find_one(query, projection)
-    return JSONResponse(status_code=status.HTTP_200_OK,
-                        content=component)
-
-
-@router.get('/components/shallow',
+@router.get('/shallowcomponents',
             response_description='Retrieve multiple shallow components')
 async def get_components_shallow(
         request: Request,
@@ -179,6 +169,8 @@ async def get_components_shallow(
     return JSONResponse(status_code=status.HTTP_200_OK,
                         content=components)
 
+
+# COMPONENT ROUTES ------------------------------------------------------------
 
 @router.get('/components',
             response_description='Retrieve multiple components')
@@ -222,14 +214,32 @@ async def get_components(
                         content=components)
 
 
-@router.get('/componentcount',
-            response_description='Count all components')
-async def count_components(
+@router.get('/components/{component_id}',
+            response_description='Retrieve one component by id')
+async def get_component(
         request: Request,
-        current_user: Annotated[User, Depends(get_current_active_user)]):
-    count = await request.app.mongodb_components.count_documents({})
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str) -> ComponentModel:
+    collection = request.app.mongodb_components
+    component = await collection.find_one({'_id': component_id})
     return JSONResponse(status_code=status.HTTP_200_OK,
-                        content=count)
+                        content=component)
+
+
+# COMPONENT DETAIL ROUTES -----------------------------------------------------
+
+@router.get('/componentgeometry/{component_id}',
+            response_description='Retrieve one component geometry by id')
+async def get_component_geometry(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str) -> ComponentModel:
+    collection = request.app.mongodb_components
+    query = {'_id': component_id}
+    projection = {'geometry': 1}
+    component = await collection.find_one(query, projection)
+    return JSONResponse(status_code=status.HTTP_200_OK,
+                        content=component)
 
 
 # UTILITY ROUTES --------------------------------------------------------------
