@@ -109,7 +109,21 @@ async def get_component(
                         content=component)
 
 
-@router.get('/componentgeometry/{component_id}',
+@router.get('/components/shallow/{component_id}',
+            response_description='Retrieve one component by id')
+async def get_shallow_component(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str) -> ComponentModel:
+    collection = request.app.mongodb_components
+    query = {'_id': component_id}
+    projection = {'geometry': 0}
+    component = await collection.find_one(query, projection)
+    return JSONResponse(status_code=status.HTTP_200_OK,
+                        content=component)
+
+
+@router.get('/components/geometry/{component_id}',
             response_description='Retrieve one component geometry by id')
 async def get_component_geometry(
         request: Request,
@@ -123,7 +137,7 @@ async def get_component_geometry(
                         content=component)
 
 
-@router.get('/shallowcomponents',
+@router.get('/components/shallow',
             response_description='Retrieve multiple shallow components')
 async def get_shallow_components(
         request: Request,
