@@ -8,6 +8,7 @@ import { Card } from './ui/card'
 import { Bounds, OrbitControls } from '@react-three/drei'
 import { ComponentData } from './models'
 import { rgbToHex } from '@/lib/utils'
+import ComponentViewerSkeleton from './ComponentViewerSkeleton'
 
 // Scale factor because THREE unit system is in meters
 const scale: number = 0.001
@@ -121,11 +122,16 @@ const VisualizeComponent = ({
 } : {
   component_data: ComponentData
 }) => {
-  if (component_data.type == 'sheet') {
-    return VisualizeSheet(component_data)
-  } else {
-    // we assume that every other component type has a mesh attached
-    return VisualizeMesh(component_data)
+  if (component_data.geometry == undefined) {
+    return null
+  }
+  else {
+    if (component_data.type == 'sheet') {
+      return VisualizeSheet(component_data)
+    } else {
+      // we assume that every other component type has a mesh attached
+      return VisualizeMesh(component_data)
+    }
   }
 }
 
@@ -136,28 +142,32 @@ export default function ComponentViewer({
 }) {
 
   return (
-      <Card className='flex h-[40dvh] m-2'>
-        <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
-          <ambientLight intensity={Math.PI / 2} />
-          <spotLight
-            position={[10, 10, 10]}
-            angle={0.15}
-            penumbra={1}
-            decay={0}
-            intensity={Math.PI * 0.75}
-          />
-          <pointLight
-            position={[-10, 10, -10]}
-            decay={0}
-            intensity={Math.PI * 0.75}
-          />
-          <Bounds fit clip observe margin={1.2} maxDuration={1} >
-            <VisualizeComponent component_data={component_data}/>
-          </Bounds>
-          <axesHelper args={[0.1]}/>
-          <gridHelper args={[2, 20, 'Gray', 'Gainsboro']} />
-          <OrbitControls makeDefault/>
-        </Canvas>
-      </Card>
+    <>
+      {component_data.geometry == undefined ? <ComponentViewerSkeleton message='No Geometry Available'/> : 
+        <Card className='flex h-[40dvh] m-2'>
+          <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
+            <ambientLight intensity={Math.PI / 2} />
+            <spotLight
+              position={[10, 10, 10]}
+              angle={0.15}
+              penumbra={1}
+              decay={0}
+              intensity={Math.PI * 0.75}
+            />
+            <pointLight
+              position={[-10, 10, -10]}
+              decay={0}
+              intensity={Math.PI * 0.75}
+            />
+            <Bounds fit clip observe margin={1.2} maxDuration={1} >
+              <VisualizeComponent component_data={component_data}/>
+            </Bounds>
+            <axesHelper args={[0.1]}/>
+            <gridHelper args={[2, 20, 'Gray', 'Gainsboro']} />
+            <OrbitControls makeDefault/>
+          </Canvas>
+        </Card>
+      }
+    </>
   )
 }

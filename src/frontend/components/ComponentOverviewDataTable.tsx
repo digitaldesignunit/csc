@@ -36,7 +36,7 @@ export function ComponentOverviewDataTable<TData, TValue>({
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
+            <TableRow key={headerGroup.id} className='items-start text-left'>
               {headerGroup.headers.map((header) => {
                 return (
                   <TableHead key={header.id}>
@@ -58,9 +58,10 @@ export function ComponentOverviewDataTable<TData, TValue>({
               <TableRow
                 key={row.id}
                 data-state={row.getIsSelected() && 'selected'}
+                className='items-start text-left'
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id} className='text-sm justify-items-start text-left'>
+                  <TableCell key={cell.id} className='text-sm items-start text-left'>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
@@ -68,7 +69,7 @@ export function ComponentOverviewDataTable<TData, TValue>({
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={columns.length} className='h-8 justify-items-start text-left'>
+              <TableCell colSpan={columns.length} className='h-8 items-start text-left'>
                 No results.
               </TableCell>
             </TableRow>

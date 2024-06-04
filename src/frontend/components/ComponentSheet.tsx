@@ -128,9 +128,9 @@ export default function ComponentSheet({
             </Card>
           </SheetDescription>
         </SheetHeader>
-        {isLoading ? <ComponentViewerSkeleton /> : isComponentViewerVisible && <ComponentViewer component_data={component_data} />}
+        {isLoading ? <ComponentViewerSkeleton message='Loading Geometry...'/> : isComponentViewerVisible && <ComponentViewer component_data={component_data} />}
         <SheetFooter>
-          <SheetClose asChild className='flex text-center justify-items-center ml-2 mr-2'>
+          <SheetClose asChild className='text-center items-center ml-2 mr-2'>
             <Button variant='outline'>Close</Button>
           </SheetClose>
         </SheetFooter>
