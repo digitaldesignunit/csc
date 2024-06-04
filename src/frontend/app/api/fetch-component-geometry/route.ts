@@ -41,13 +41,9 @@ const fetch_component_geometry = async (
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url, process.env.NEXT_PUBLIC_BASE_URL)
-  const page_num = searchParams.get('page') || '1'
-  const page_size = searchParams.get('size') || '10'
-  const comptype = searchParams.get('comptype') || ''
-  const sortkey = searchParams.get('sortkey') || '_id'
-  const geometry_id = searchParams.get('geometry_id') || ''
+  const component_id = searchParams.get('component_id') || ''
   try {
-    const component_geometry = await fetch_component_geometry(geometry_id, false)
+    const component_geometry = await fetch_component_geometry(component_id, false)
     return NextResponse.json(component_geometry, { status: 200 })
   } catch (err) {
     return NextResponse.json({ error: 'Fetch Components Response Rejected!' }, { status: 500 })

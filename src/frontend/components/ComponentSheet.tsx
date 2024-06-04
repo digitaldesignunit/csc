@@ -15,17 +15,16 @@ import {
   SheetTitle,
   SheetTrigger } from "./ui/sheet"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
-import { rgbToHex } from "@/lib/utils"
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "./ui/tooltip"
 import { hexComponentColor, componentColorString } from "@/lib/utils"
 
 interface FetchComponentGeometryProps {
-  geometry_id: string
+  component_id: string
 }
 
-const fetch_component_geometry = async ({ geometry_id }: FetchComponentGeometryProps) => {
+const fetch_component_geometry = async ({ component_id }: FetchComponentGeometryProps) => {
   const params = new URLSearchParams(
-    { geometry_id }
+    { component_id }
   )
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_BASE_URL}/api/fetch-component-geometry?${params.toString()}`,
@@ -63,7 +62,7 @@ export default function ComponentSheet({
     setIsLoading(true);
     setIsComponentViewerVisible(false); // Hide ComponentViewer while fetching
     try {
-      const component_geometry = await fetch_component_geometry({ geometry_id: component_data._id });
+      const component_geometry = await fetch_component_geometry({ component_id: component_data._id });
       inject_geometry(component_data, component_geometry.geometry);
       setFetchedData(component_geometry);
       setIsComponentViewerVisible(true); // Show ComponentViewer once data is fetched
