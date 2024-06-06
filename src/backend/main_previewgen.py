@@ -69,7 +69,7 @@ async def initialize_preview_generation() -> List[str]:
             {'_id': comp_id},
             projection
         )
-        missing_preview_components.append(await component)
+        missing_preview_components.append(component)
     # close mongodb client
     mongodb_client.close()
     # return list of missing preview ids
