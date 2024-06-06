@@ -7,14 +7,15 @@ import os
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 
 import numpy as np
-from PIL import Image
-import pyvista as pv
-
+from PIL import Image, ImageOps
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from io import BytesIO
 
 # FUNCTION DEFINITIONS --------------------------------------------------------
 
-def create_extrusion_component_mesh(
-        component_data: dict) -> pv.PolyData:
+
+def create_extrusion_component_mesh(component_data: dict):
     # Convert polyline to numpy array and add z-coordinate (0)
     points = np.array(component_data['geometry']['polyline'])
     num_points = len(points)
@@ -28,81 +29,119 @@ def create_extrusion_component_mesh(
     faces = []
     for i in range(num_points):
         next_i = (i + 1) % num_points
-        faces.append([4, i, next_i, num_points + next_i, num_points + i])
+        face = [
+            points_3d_bottom[i],
+            points_3d_bottom[next_i],
+            points_3d_top[next_i],
+            points_3d_top[i]
+        ]
+        faces.append(face)
     # Create faces for the top and bottom
-    bottom_face = [num_points] + list(range(num_points))
-    top_face = [num_points] + list(range(num_points, 2 * num_points))
-    # Combine all faces
-    faces = np.hstack(
-        [[len(face)] + face for face in faces + [bottom_face, top_face]])
-    # Create the mesh as PolyData object
-    mesh = pv.PolyData(all_points, faces)
-    return mesh
+    faces.append(points_3d_bottom.tolist())
+    faces.append(points_3d_top.tolist())
+    return all_points, faces
 
 
-def convert_mesh_component_mesh(
-        component_data: dict) -> pv.PolyData:
-    # build np arrays from mesh data
+def convert_mesh_component_mesh(component_data: dict):
+    # Build np arrays from mesh data
     vertices = np.array(component_data['geometry']['mesh']['v'])
-    faces = np.hstack(
-        [[len(face)] + face
-         for face in component_data['geometry']['mesh']['f']]
-    )
-    mesh = pv.PolyData(vertices, faces)
-    return mesh
+    faces = [[vertices[idx] for idx in face]
+             for face in component_data['geometry']['mesh']['f']]
+    return vertices, faces
 
 
-def create_component_preview(
+def create_component_preview_image(
         component_data: dict,
-        output_folder: str,
-        output_filename: str,
-        image_size: int = 800) -> bool:
+        size: int = 800,
+        dpi: int = 300) -> Image:
     # Create mesh based on component type
     if component_data['type'] == 'sheet':
-        component_mesh = create_extrusion_component_mesh(component_data)
+        vertices, faces = create_extrusion_component_mesh(component_data)
     else:
-        component_mesh = convert_mesh_component_mesh(component_data)
-    # Create plotter and set up scene
-    plotter = pv.Plotter(
-        off_screen=True,
-        window_size=[image_size, image_size],
-        line_smoothing=True,
-        polygon_smoothing=True
-    )
-    # Add mesh to plotter
-    plotter.add_mesh(
-        component_mesh,
-        color=component_data['color'],
-        show_edges=True
-    )
-    # Get the bounds of the mesh to adjust the view
-    bounds = component_mesh.bounds
-    center = component_mesh.center
-    max_extent = max(bounds[1] - bounds[0],
-                     bounds[3] - bounds[2],
-                     bounds[5] - bounds[4])
-    padding = max_extent * 0.1
-    # Adjust the camera to center the geometry and add some padding
-    plotter.view_isometric()
-    # Set the camera position and zoom to fit the mesh within the view
-    plotter.camera.focal_point = center
-    plotter.camera.position = [
-        center[0] + max_extent + padding,
-        center[1] + max_extent + padding,
-        center[2] + max_extent + padding
-    ]
-    # Zoom out to ensure there is padding around the geometry
-    plotter.camera.zoom(0.8)
-    # Render the plot and grab the image data
-    img_data = plotter.screenshot(transparent_background=False)
-    # Convert the image data to a PIL Image
-    img = Image.fromarray(img_data)
-    # Save to output folder as .webp
-    output_path = f'{output_folder}/{output_filename}.webp'
-    img.save(output_path, 'webp')
+        vertices, faces = convert_mesh_component_mesh(component_data)
+    # Calculate figsize based on image_size and dpi
+    figsize = size / dpi
+    # Create figure and 3D axis
+    fig = plt.figure(
+        figsize=(figsize, figsize),
+        dpi=dpi,
+        constrained_layout=True)
+    ax = fig.add_subplot(111, projection='3d')
+    # Create Poly3DCollection from faces
+    poly3d = Poly3DCollection(
+        faces, alpha=1.0,  # Set alpha to 1.0 for opaque mesh
+        facecolor=np.array(component_data['color']) / 255.0,
+        edgecolor='k',
+        linewidths=0.2)
+    ax.add_collection3d(poly3d)
+    # Auto scale to the mesh size
+    scale = vertices.flatten()
+    ax.auto_scale_xyz(scale, scale, scale)
+    ax.autoscale_view(tight=True)
+    # Set plot parameters
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    # Set the camera view
+    ax.view_init(elev=30., azim=45)
+    # Adjust camera zoom
+    ax.set_box_aspect(None, zoom=1)
+    # Render the plot
+    plt.axis('off')
+    plt.grid(b=None)
+    # Save to a BytesIO object
+    buf = BytesIO()
+    plt.savefig(
+        buf,
+        format='webp',
+        bbox_inches='tight',
+        pad_inches=0)
+    plt.close(fig)
+    buf.seek(0)
+    image = Image.open(buf)
+    return image
 
-    print(f'[PREVIEWGEN] Preview for {output_filename} saved to {output_path}')
 
+def crop_preview_whitespace(image: Image, padding: int = 10) -> Image:
+    """
+    Crop the whitespace around an image.
+
+    Args:
+        image (PIL.Image.Image): The input image.
+        padding (int, optional): The amount of padding to add to the bounding
+        box. Defaults to 10.
+
+    Returns:
+        PIL.Image.Image: The cropped image.
+    """
+    # Convert image to grayscale and invert it
+    gray_image = ImageOps.grayscale(image)
+    inverted_image = ImageOps.invert(gray_image)
+
+    # Get the bounding box of the non-white areas
+    bbox = inverted_image.getbbox()
+    if bbox:
+        # Add padding to the bounding box
+        bbox = (
+            max(bbox[0] - padding, 0),
+            max(bbox[1] - padding, 0),
+            min(bbox[2] + padding, image.width),
+            min(bbox[3] + padding, image.height)
+        )
+        return image.crop(bbox)
+    return image
+
+
+def save_preview_image(image: Image, folder: str, filename: str) -> bool:
+    # Ensure the folder exists
+    os.makedirs(folder, exist_ok=True)
+    # Construct the full file path with .webp extension
+    if not filename.lower().endswith('.webp'):
+        filename += '.webp'
+    file_path = os.path.join(folder, filename)
+    # Save the image in .webp format
+    image.save(file_path, format='webp')
+    print(f'[PREVIEWGEN] Preview for {filename} saved to {folder}')
     return True
 
 
@@ -286,12 +325,25 @@ __example_component_data_b = {
 
 
 if __name__ == '__main__':
-    output_folder = os.path.dirname(os.path.abspath(__file__))
-    create_component_preview(
-        __example_component_data_a,
-        output_folder,
-        __example_component_data_a['_id'])
-    create_component_preview(
-        __example_component_data_b,
-        output_folder,
-        __example_component_data_b['_id'])
+    out_dir = os.path.dirname(os.path.abspath(__file__))
+    # Create preview images for example component data
+    save_preview_image(
+        crop_preview_whitespace(
+            create_component_preview_image(
+                component_data=__example_component_data_a
+            ),
+            padding=10
+        ),
+        folder=out_dir,
+        filename=__example_component_data_a['_id']
+    )
+    save_preview_image(
+        crop_preview_whitespace(
+            create_component_preview_image(
+                component_data=__example_component_data_b
+            ),
+            padding=10
+        ),
+        folder=out_dir,
+        filename=__example_component_data_b['_id']
+    )

@@ -4,7 +4,7 @@
 
 import asyncio
 import os
-from typing import List
+from typing import List, Tuple
 
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
@@ -19,7 +19,11 @@ from utility import (
     get_db_connectionstring,
     get_preview_directory
 )
-from apps.previewgen import create_component_preview
+from apps.previewgen import (
+    create_component_preview_image,
+    crop_preview_whitespace,
+    save_preview_image
+)
 
 
 # ENVIRONMENT SETTINGS --------------------------------------------------------
@@ -33,7 +37,7 @@ _CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
 """str: Default configuration file."""
 
 
-async def initialize_preview_generation() -> List[str]:
+async def initialize_preview_generation() -> Tuple[List[dict], List[str]]:
     """
     Initialize preview generation by comparing component ids in database with
     preview images in preview directory. Return list of missing previews.
@@ -60,10 +64,15 @@ async def initialize_preview_generation() -> List[str]:
         component_ids.add(str(component['_id']))
     # compare both sets and find component ids with missing previews
     missing_preview_ids = list(component_ids - preview_images)
+    stale_preview_ids = list(preview_images - component_ids)
     # for all missing preview ids, retrieve type, materialthickness and
     # geometry from database
     missing_preview_components = []
-    projection = {'type': 1, 'materialthickness': 1, 'geometry': 1}
+    projection = {
+        'type': 1,
+        'materialthickness': 1,
+        'geometry': 1,
+        'color': 1}
     for comp_id in missing_preview_ids:
         component = await mongodb_components.find_one(
             {'_id': comp_id},
@@ -73,12 +82,21 @@ async def initialize_preview_generation() -> List[str]:
     # close mongodb client
     mongodb_client.close()
     # return list of missing preview ids
-    return missing_preview_components
+    return missing_preview_components, stale_preview_ids
 
 
 if __name__ == '__main__':
     preview_dir = get_preview_directory(_CONFIGFILE)
-    missing_preview_components = asyncio.run(initialize_preview_generation())
+    missing_preview_components, stale_preview_ids = asyncio.run(
+        initialize_preview_generation()
+    )
+    if not missing_preview_components:
+        print('[PREVIEWGEN] No stale preview images found.')
+    else:
+        # delete all stale preview images
+        for comp_id in stale_preview_ids:
+            os.remove(os.path.join(preview_dir, f'{comp_id}.webp'))
+            print(f'[PREVIEWGEN] Deleted stale preview image for {comp_id}.')
     if not missing_preview_components:
         print('[PREVIEWGEN] All previews are present.')
     else:
@@ -89,10 +107,16 @@ if __name__ == '__main__':
             print('[PREVIEWGEN] Generating preview for '
                   f'{component_data["_id"]}')
             # call preview generation function
-            create_component_preview(
-                component_data=component_data,
-                output_folder=preview_dir,
-                output_filename=component_data['_id'],
-                image_size=800)
+            save_preview_image(
+                crop_preview_whitespace(
+                    create_component_preview_image(
+                        component_data=component_data,
+                        size=800
+                        ),
+                    padding=2
+                ),
+                folder=preview_dir,
+                filename=component_data['_id']
+            )
             print('[PREVIEWGEN] Preview for '
                   f'{component_data["_id"]} generated.')
