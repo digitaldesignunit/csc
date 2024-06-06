@@ -8,5 +8,6 @@
     ],
     "secret": "secret key generated with 'openssl rand -hex 32'",
     "algorithm": "HS256",
-    "access_token_expire_minutes": 60
+    "access_token_expire_minutes": 60,
+    "preview_dir": "/home/your/path/to/preview/directory"
 }
