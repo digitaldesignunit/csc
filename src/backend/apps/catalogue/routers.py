@@ -15,7 +15,7 @@ from fastapi import (APIRouter, # NOQA
                      status,
                      Depends)
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse, PlainTextResponse, HTMLResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
 
@@ -28,7 +28,6 @@ from .models import (ALLOWED_COMPONENT_TYPES, # NOQA
                      UserInDB,
                      ComponentModel,
                      UpdateComponentModel)
-from utility import plot_polyline_to_html
 from .auth import (ACCESS_TOKEN_EXPIRE_MINUTES,
                    authenticate_user,
                    create_access_token,
@@ -257,22 +256,3 @@ async def get_error_log(request: Request):
         return ptr
     except FileNotFoundError:
         return 'No errors.log file found. No errors present.'
-
-
-@router.get('/preview',
-            response_description='Preview datasets from database.',
-            response_class=HTMLResponse)
-async def get_preview(request: Request):
-    images = []
-    i = 0
-    async for doc in request.app.mongodb_components.find().sort('_id', 1):
-        if i + 1 >= 20:
-            break
-        image_html = plot_polyline_to_html(
-                                coordinates=doc['geometry']['polyline'],
-                                name=doc['_id'],
-                                scalefactor=0.1)
-        images.append(image_html)
-        i += 1
-    resp = '<br>'.join(images)
-    return HTMLResponse(resp)

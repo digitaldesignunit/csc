@@ -1,19 +1,17 @@
 #!/usr/bin/env python3.9
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-
+from io import BytesIO
 import os
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-
-import numpy as np
-from PIL import Image, ImageOps
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from io import BytesIO
+import numpy as np
+from PIL import Image, ImageOps
+
 
 # FUNCTION DEFINITIONS --------------------------------------------------------
-
 
 def create_extrusion_component_mesh(component_data: dict):
     # Convert polyline to numpy array and add z-coordinate (0)
