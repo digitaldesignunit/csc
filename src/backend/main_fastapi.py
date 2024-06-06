@@ -3,7 +3,6 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
 import os
-import json
 from contextlib import asynccontextmanager
 
 
@@ -17,7 +16,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 
 from apps.catalogue.routers import router as catalogue_router
-from utility import sanitize_path
+from utility import sanitize_path, get_cors_origins, get_db_connectionstring
 
 
 # ENVIRONMENT SETTINGS --------------------------------------------------------
@@ -31,40 +30,14 @@ _CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
 """str: Default configuration file."""
 
 
-# CONFIG LOADING --------------------------------------------------------------
-
-def __get_db_connectionstring():
-    """
-    Read MongoDB connection string from config file.
-    """
-    with open(_CONFIGFILE, 'r') as configfile:
-        # Reading from json file
-        dbconfig = json.load(configfile)
-        server = dbconfig['server']
-        user = dbconfig['user']
-        pwd = dbconfig['pwd']
-    # compose mongodb connection string
-    cstr = f'mongodb+srv://{user}:{pwd}@{server}'
-    return cstr
-
-
-def __get_cors_origins():
-    """
-    Read CORS origins from config file.
-    """
-    with open(_CONFIGFILE, 'r') as configfile:
-        # Reading from json file
-        dbconfig = json.load(configfile)
-        origins = dbconfig['origins']
-    return origins
-
-
 # FASTAPI SETUP ---------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
-    app.mongodb_client = AsyncIOMotorClient(__get_db_connectionstring())
+    app.mongodb_client = AsyncIOMotorClient(
+        get_db_connectionstring(_CONFIGFILE)
+    )
     app.mongodb = app.mongodb_client['csc']
     app.mongodb_components = app.mongodb['components']
     app.mongodb_users = app.mongodb['users']
@@ -78,14 +51,14 @@ app = FastAPI(
     title='CSC - Catalogue of Second Chances - Backend API',
     description=('Backend API for Catalogue of Second Chances. '
                  'Based on FastAPI, connected to MongoDB Database.'),
-    version='0.1.0.2',
+    version='0.1.0.3',
     lifespan=lifespan
 )
 
 # Add CORS Origins to FastAPI instance
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=__get_cors_origins(),
+    allow_origins=get_cors_origins(_CONFIGFILE),
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*']
