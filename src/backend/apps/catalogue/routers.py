@@ -248,7 +248,7 @@ async def get_component_geometry(
             response_class=PlainTextResponse)
 async def get_error_log(request: Request):
     csc_dir = os.path.normpath(os.path.abspath(str(Path(__file__).parents[2])))
-    fp = os.path.normpath(os.path.join(csc_dir, 'errors.log'))
+    fp = os.path.normpath(os.path.join(csc_dir, '/logs/fastapi.log'))
     try:
         with open(fp, 'r') as errorlog:
             lines = [line.rstrip() for line in errorlog]
