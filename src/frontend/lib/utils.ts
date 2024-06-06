@@ -81,3 +81,22 @@ export function copyright_year() {
   }
   return `2024 - ${year}`
 }
+
+export function combinePath(baseUrl: string, filename: string, extension: string): string {
+  // Ensure the baseUrl ends with a slash
+  if (!baseUrl.endsWith('/')) {
+      baseUrl += '/';
+  }
+
+  // Ensure the filename does not start with a slash
+  if (filename.startsWith('/')) {
+      filename = filename.substring(1);
+  }
+
+  // Ensure the extension starts with a dot
+  if (!extension.startsWith('.')) {
+      extension = '.' + extension;
+  }
+
+  return `${baseUrl}${filename}${extension}`;
+}

@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { hexComponentColor, componentColorString } from '@/lib/utils'
 import { usePathname, useRouter } from 'next/navigation'
+import ComponentPreviewImage from './ComponentPreviewImage'
 
 interface FetchComponentGeometryProps {
   component_id: string
@@ -93,14 +94,33 @@ export default function ComponentSheet({
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <div className='text-left align-text-top cursor-pointer'>
+        <div className='text-left align-text-middle cursor-pointer flex items-center gap-1' onClick={handleButtonClickComponentDetail}>
+        <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+          <div className='min-w-8'>
+            <ComponentPreviewImage comp_id={component_data._id} alt={component_data._id} width={315} height={315} maxHeight={50} />
+          </div>
+          </TooltipTrigger>
+              <TooltipContent>
+                <div className='flex flex-col text-center'>
+                Click to view Details
+                <ComponentPreviewImage comp_id={component_data._id} alt={component_data._id} width={315} height={315} maxHeight={325}/>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant='ghost' className='h-5 w-[315px] hover:bg-[#009cda] hover:text-white' onClick={handleButtonClickComponentDetail}>{component_data._id}</Button>
+                <Button variant='ghost' className='text-xs h-5 w-[315px] hover:bg-[#009cda] hover:text-white' onClick={handleButtonClickComponentDetail}>{component_data._id}</Button>
               </TooltipTrigger>
               <TooltipContent>
-                Click to preview
+                <div className='flex flex-col text-center'>
+                Click to view Details
+                <ComponentPreviewImage comp_id={component_data._id} alt={component_data._id} width={315} height={315} maxHeight={325}/>
+                </div>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

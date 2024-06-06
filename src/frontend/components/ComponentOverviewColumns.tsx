@@ -4,6 +4,7 @@ import { ColumnDef, createColumnHelper } from '@tanstack/react-table'
 import { ComponentData } from './models'
 import { rgbToHex } from '@/lib/utils'
 import ComponentSheet from './ComponentSheet'
+import ComponentPreviewImage from './ComponentPreviewImage'
 
 const columnHelper = createColumnHelper<ComponentData>()
 
