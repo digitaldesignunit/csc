@@ -10,6 +10,9 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
 from PIL import Image, ImageOps
 
+# LOCAL MODULE IMPORTS --------------------------------------------------------
+from utility import create_logging_timestamp as logts
+
 
 # FUNCTION DEFINITIONS --------------------------------------------------------
 
@@ -139,7 +142,7 @@ def save_preview_image(image: Image, folder: str, filename: str) -> bool:
     file_path = os.path.join(folder, filename)
     # Save the image in .webp format
     image.save(file_path, format='webp')
-    print(f'[PREVIEWGEN] Preview for {filename} saved to {folder}')
+    print(f'[PREVIEWGEN] {logts()} Preview for {filename} saved to {folder}')
     return True
 
 

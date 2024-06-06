@@ -17,7 +17,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from utility import (
     sanitize_path,
     get_db_connectionstring,
-    get_preview_directory
+    get_preview_directory,
+    create_logging_timestamp as logts
 )
 from apps.previewgen import (
     create_component_preview_image,
@@ -96,15 +97,16 @@ if __name__ == '__main__':
         # delete all stale preview images
         for comp_id in stale_preview_ids:
             os.remove(os.path.join(preview_dir, f'{comp_id}.webp'))
-            print(f'[PREVIEWGEN] Deleted stale preview image for {comp_id}.')
+            print(f'[PREVIEWGEN] {logts()} Deleted stale preview image '
+                  f'for {comp_id}.')
     if not missing_preview_components:
-        print('[PREVIEWGEN] All previews are present.')
+        print('[PREVIEWGEN] {logts()} All previews are present.')
     else:
-        print(f'[PREVIEWGEN] Found {len(missing_preview_components)} '
-              'missing previews.')
+        print(f'[PREVIEWGEN] {logts()} Found {len(missing_preview_components)}'
+              ' missing previews.')
         # call preview generation for every missing preview id
         for component_data in missing_preview_components:
-            print('[PREVIEWGEN] Generating preview for '
+            print(f'[PREVIEWGEN] {logts()} Generating preview for '
                   f'{component_data["_id"]}')
             # call preview generation function
             save_preview_image(
@@ -118,5 +120,5 @@ if __name__ == '__main__':
                 folder=preview_dir,
                 filename=component_data['_id']
             )
-            print('[PREVIEWGEN] Preview for '
+            print(f'[PREVIEWGEN] {logts()} Preview for '
                   f'{component_data["_id"]} generated.')

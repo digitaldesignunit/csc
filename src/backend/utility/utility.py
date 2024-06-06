@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.9
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
+import datetime
 import json
 import os
 
@@ -54,3 +55,11 @@ def get_preview_directory(config_file: str) -> str:
         dbconfig = json.load(configfile)
         preview_dir = sanitize_path(dbconfig['preview_dir'])
     return preview_dir
+
+
+def create_logging_timestamp():
+    """
+    Creates a timestamp in YY:MM:DD-HH:MM:SS format.
+    """
+    timestamp = datetime.datetime.today().strftime('%y:%m:%d-%H:%M:%S')
+    return timestamp
