@@ -2,6 +2,7 @@
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
+import asyncio
 import os
 from typing import List
 
@@ -77,7 +78,7 @@ async def initialize_preview_generation() -> List[str]:
 
 if __name__ == '__main__':
     preview_dir = get_preview_directory(_CONFIGFILE)
-    missing_preview_components = initialize_preview_generation()
+    missing_preview_components = asyncio.run(initialize_preview_generation())
     if not missing_preview_components:
         print('[PREVIEWGEN] All previews are present.')
     else:
