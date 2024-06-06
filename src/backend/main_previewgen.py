@@ -91,7 +91,7 @@ if __name__ == '__main__':
             # call preview generation function
             create_component_preview(
                 component_data=component_data,
-                preview_dir=preview_dir,
+                output_folder=preview_dir,
                 output_filename=component_data['_id'],
                 image_size=800)
             print('[PREVIEWGEN] Preview for '
