@@ -92,21 +92,26 @@ if __name__ == '__main__':
         initialize_preview_generation()
     )
     if not missing_preview_components:
-        print('[PREVIEWGEN] No stale preview images found.')
+        ts = logts()
+        print(f'[PREVIEWGEN] {ts} No stale preview images found.')
     else:
         # delete all stale preview images
         for comp_id in stale_preview_ids:
             os.remove(os.path.join(preview_dir, f'{comp_id}.webp'))
-            print(f'[PREVIEWGEN] {logts()} Deleted stale preview image '
+            ts = logts()
+            print(f'[PREVIEWGEN] {ts} Deleted stale preview image '
                   f'for {comp_id}.')
     if not missing_preview_components:
-        print('[PREVIEWGEN] {logts()} All previews are present.')
+        ts = logts()
+        print(f'[PREVIEWGEN] {ts} All previews are present.')
     else:
-        print(f'[PREVIEWGEN] {logts()} Found {len(missing_preview_components)}'
+        ts = logts()
+        print(f'[PREVIEWGEN] {ts} Found {len(missing_preview_components)}'
               ' missing previews.')
         # call preview generation for every missing preview id
         for component_data in missing_preview_components:
-            print(f'[PREVIEWGEN] {logts()} Generating preview for '
+            ts = logts()
+            print(f'[PREVIEWGEN] {ts} Generating preview for '
                   f'{component_data["_id"]}')
             # call preview generation function
             save_preview_image(
@@ -120,5 +125,6 @@ if __name__ == '__main__':
                 folder=preview_dir,
                 filename=component_data['_id']
             )
-            print(f'[PREVIEWGEN] {logts()} Preview for '
+            ts = logts()
+            print(f'[PREVIEWGEN] {ts} Preview for '
                   f'{component_data["_id"]} generated.')

@@ -142,7 +142,8 @@ def save_preview_image(image: Image, folder: str, filename: str) -> bool:
     file_path = os.path.join(folder, filename)
     # Save the image in .webp format
     image.save(file_path, format='webp')
-    print(f'[PREVIEWGEN] {logts()} Preview for {filename} saved to {folder}')
+    ts = logts()
+    print(f'[PREVIEWGEN] {ts} Preview for {filename} saved to {folder}')
     return True
 
 
