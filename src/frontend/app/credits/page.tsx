@@ -15,20 +15,23 @@ export default function CreditsPage() {
             <h2 className='text-xl font-bold mb-4'>Context</h2>
             <p className='mb-4'>
               This piece of software and the underlying research is part of the
-              PhD thesis of Max Benjamin Eschenbach at the Digital Design Unit (DDU),
-              chaired and supervised by Prof. Dr.-Ing. Oliver Tessmann.
+              PhD thesis of <a href='https://maxeschenbach.com' target='_blank'>Max Benjamin Eschenbach</a> at the
+              <a href='https://www.dg.architektur.tu-darmstadt.de/fachgebiet_ddu/index.de.jsp' target='_blank'>Digital Design Unit (DDU)</a>,
+              <a href='https://www.tu-darmstadt.de/' target='_blank'>Technical University of Darmstadt</a>.
+              DDU is chaired by Prof. Dr.-Ing. Oliver Tessmann, who is also the
+              supervisor of the PhD Thesis.
             </p>
           </section>
 
           <section className='mb-8'>
             <h2 className='text-xl font-bold mb-4'>Public Funding</h2>
             <p className='mb-4'>
-              Part of this research was conducted within the Project <em>Fertigteil 2.0 - Real-digital
-              process chains for the production of built-in concrete components</em>. The project
-              <em>Fertigteil 2.0 (Precast Concrete Components 2.0)</em> was funded by the Federal
-              Ministry of Education and Research Germany (BMBF) through the funding
-              measure Resource-efficient circular economy - Building and mineral cycles
-              (ReMin).
+              Part of this research was conducted within the Project <em><a href='https://www.dg.architektur.tu-darmstadt.de/forschung_ddu/digitale_prozessketten_ddu/computational_design/fertigteil_2__0/fertigteile_2__0.en.jsp' target='_blank'>Fertigteil 2.0 - Real-digital
+              process chains for the production of built-in concrete components</a></em>. The project
+              <em>Fertigteil 2.0 (Precast Concrete Components 2.0)</em> was funded by the <a href='https://www.bmbf.de/bmbf/en/home/home_node.html' target='_blank'>Federal
+              Ministry of Education and Research Germany (BMBF)</a> through the funding
+              measure <a href='https://www.remin-kreislaufwirtschaft.de/en/projects/fertigteil-20' target='_blank'>Resource-efficient circular economy - Building and mineral cycles
+              (ReMin)</a>.
             </p>
           </section>
 
