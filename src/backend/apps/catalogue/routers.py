@@ -248,14 +248,15 @@ async def get_component_geometry(
             response_class=PlainTextResponse)
 async def get_fastapi_log(request: Request):
     csc_dir = os.path.normpath(os.path.abspath(str(Path(__file__).parents[2])))
-    fp = os.path.normpath(os.path.join(csc_dir, '/logs/fastapi.log'))
+    fp = os.path.normpath(os.path.abspath(
+        os.path.join(csc_dir, 'logs', 'fastapi.log')))
     try:
         with open(fp, 'r') as errorlog:
             lines = [line.rstrip() for line in errorlog]
         ptr = '\n'.join(lines[-200:])
         return ptr
     except FileNotFoundError:
-        return 'No fastapi.log file found. No errors present.'
+        return 'No fastapi.log file found. No errors present.' + fp
 
 
 @router.get('/previewgen_log',
@@ -263,8 +264,8 @@ async def get_fastapi_log(request: Request):
             response_class=PlainTextResponse)
 async def get_previewgen_log(request: Request):
     csc_dir = os.path.normpath(os.path.abspath(str(Path(__file__).parents[2])))
-    fp = os.path.normpath(
-        os.path.join(csc_dir, '/logs/previewgen_cronjob.log')
+    fp = os.path.normpath(os.path.abspath(
+        os.path.join(csc_dir, 'logs', 'previewgen_cronjob.log'))
     )
     try:
         with open(fp, 'r') as errorlog:
@@ -272,4 +273,4 @@ async def get_previewgen_log(request: Request):
         ptr = '\n'.join(lines[-200:])
         return ptr
     except FileNotFoundError:
-        return 'No previewgen_cronjob.log file found. No errors present.'
+        return 'No previewgen_cronjob.log file found. No errors present.' + fp

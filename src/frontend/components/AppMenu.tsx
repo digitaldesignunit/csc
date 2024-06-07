@@ -40,7 +40,7 @@ export default function AppMenu() {
         items: [
           {
             id: 'modelsbutton',
-            link: '/',
+            link: '/models',
             icon: <Package />,
             text: 'Models'
           },
@@ -63,7 +63,7 @@ export default function AppMenu() {
           },
           {
             id: 'imprintbutton',
-            link: '/',
+            link: '/imprint',
             icon: <BookText />,
             text: 'Imprint'
           },

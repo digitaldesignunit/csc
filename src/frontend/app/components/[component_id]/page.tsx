@@ -1,6 +1,6 @@
 import ComponentDetailCard from "@/components/ComponentDetailCard";
 
-export default function ComponentDetails({
+export default function ComponentDetailPage({
   params,
 }: {
   params: { component_id: string };
