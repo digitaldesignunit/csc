@@ -15,8 +15,8 @@ const fetch_components_shallow = async ({ page, size, comptype, sortkey }: Fetch
   const params = new URLSearchParams(
     { page: page.toString(),
       size: size.toString(),
-      comptype,
-      sortkey
+      comptype: comptype.toString(),
+      sortkey: sortkey.toString()
     }
   )
   const response = await fetch(
@@ -63,12 +63,11 @@ export default async function ComponentsPage({
   return (
     <>
       <div className='grid gap-[32px] m-4'>
-        <Card>
+        <Card className='max-w-fit overflow-x-auto'>
           <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={db_components as ComponentData[]} />
         </Card>
         <ComponentOverviewPagination pageNum={page} pageSize={size}/>
       </div>
-
     </>
   )
 }

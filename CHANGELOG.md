@@ -137,3 +137,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CCSC FastAPI Backend
 
 - Moved database connection functions to `utility` module
+
+## [0.0.1.7] - 2024-06-12
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.4
+- CSC React Frontend:   0.1.4.4
+- CSC Sheetscan Module: 0.0.1.10
+
+### Changed
+
+#### CCSC FastAPI Backend
+
+- Fixed color definition in ComponentModel in `models.py`
+
+#### CCSC React Frontend
+
+- Adapted table layout for component overview

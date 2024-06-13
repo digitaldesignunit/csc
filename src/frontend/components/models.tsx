@@ -33,6 +33,10 @@ export type ComponentData = {
   }
 }
 
+export type ComponentBoundingBox = {
+  xy: ComponentPolylinePoints,
+  xyz: ComponentPolylinePoints
+}
 export type ComponentPolylinePoints = Array<Array<number>>
 export type ComponentMeshVertices = Array<Array<number>>
 export type ComponentMeshFaces = Array<Array<number>>

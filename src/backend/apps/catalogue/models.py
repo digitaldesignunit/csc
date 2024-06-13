@@ -70,7 +70,7 @@ class ComponentModel(BaseModel):
     fragment: bool = Field(...)
     assembly: bool = Field(...)
     geometry: Dict = Field(...)
-    color: Optional[List[float]]
+    color: Optional[List[int]]
     bbx: Dict = Field(...)
     # indicator and descriptor data
     descriptors: Optional[Dict]
@@ -272,7 +272,7 @@ class UpdateComponentModel(BaseModel):
     complexity: Optional[float]
     fragment: Optional[bool]
     assembly: Optional[bool]
-    color: Optional[List[float]]
+    color: Optional[List[int]]
     validated: Optional[bool]
     bbx: Optional[Dict]
     iframe: Optional[Dict]
@@ -449,3 +449,12 @@ class UpdateComponentModel(BaseModel):
                 }
             ]
         }
+
+
+class DesignModel(BaseModel):
+    id: str = Field(default_factory=uuid.uuid4, alias='_id')
+    created: str = Field(...)
+    lastmodified: str = Field(...)
+    title: str = Field(...)
+    description: Optional[str]
+    components: List[str] = Field(...)
