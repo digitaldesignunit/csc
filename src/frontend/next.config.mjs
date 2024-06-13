@@ -2,7 +2,18 @@
 
 const nextConfig = {
   images: {
-      domains: ['public.ddu.uber.space', 'https://public.ddu.uber.space/csc_assets/component_preview'], // Add your image domain here
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'public.ddu.uber.space',
+        pathname: '**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'https://public.ddu.uber.space/csc_assets/component_preview',
+        pathname: '**',
+      },
+    ],
   },
 };
 
