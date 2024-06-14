@@ -88,7 +88,7 @@ const VisualizeSheet = (component_data: ComponentData) => {
     )
     extrude_geometry.rotateX(-Math.PI / 2)
     return extrude_geometry
-  }, [pline_shape])
+  }, [pline_shape, component_data.materialthickness])
   // Get component color
   const component_color = rgbToHex(
     component_data.color[0],
