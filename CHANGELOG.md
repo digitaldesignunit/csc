@@ -155,3 +155,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CCSC React Frontend
 
 - Adapted table layout for component overview
+
+## [0.0.1.8] - 2024-06-12
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.4
+- CSC React Frontend:   0.1.4.5
+- CSC Sheetscan Module: 0.0.1.10
+
+### Changed
+
+#### CCSC React Frontend
+
+- Extended DataTable for Components

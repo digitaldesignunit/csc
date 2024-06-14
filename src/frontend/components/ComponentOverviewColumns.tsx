@@ -1,17 +1,16 @@
 'use client'
 
-import { ColumnDef, createColumnHelper } from '@tanstack/react-table'
+import { ColumnDef } from '@tanstack/react-table'
 import { ComponentData, ComponentBoundingBox, ComponentPolylinePoints } from './models'
 import { rgbToHex } from '@/lib/utils'
 import ComponentSheet from './ComponentSheet'
-import ComponentPreviewImage from './ComponentPreviewImage'
-
-const columnHelper = createColumnHelper<ComponentData>()
+import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
+import { parseTimestamp } from '@/lib/utils'
 
 export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   {
     accessorKey: '_id',
-    header: () => <div className='text-left'>ID</div>,
+    header: () => <ComponentOverviewDataTableHeader header='ID'/>,
     cell: ({ row }) => {
       return (
           <ComponentSheet component_data={row.original} />
@@ -19,7 +18,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   },
   {
     accessorKey: 'type',
-    header: () => <div className='align-top'>Type</div>,
+    header: () => <ComponentOverviewDataTableHeader header='Type'/>,
     cell: ({ row }) => {
       const component_type: string = row.getValue('type')
     return (
@@ -30,7 +29,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   },
   {
     accessorKey: 'material',
-    header: 'Material',
+    header: () => <ComponentOverviewDataTableHeader header='Material'/>,
     cell: ({ row }) => {
       const component_mat: string = row.getValue('material')
     return (
@@ -41,7 +40,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   },
   {
     accessorKey: 'bbx',
-    header: 'X',
+    header: () => <ComponentOverviewDataTableHeader header='X'/>,
     cell: ({ row }) => {
       const component_bbx: ComponentBoundingBox = row.getValue('bbx')
       const component_bbx_xy: ComponentPolylinePoints = component_bbx.xy
@@ -61,7 +60,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   },
   {
     accessorKey: 'bbx',
-    header: 'Y',
+    header: () => <ComponentOverviewDataTableHeader header='Y'/>,
     cell: ({ row }) => {
       const component_bbx: ComponentBoundingBox = row.getValue('bbx')
       const component_bbx_xy: ComponentPolylinePoints = component_bbx.xy
@@ -81,7 +80,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   },
   {
     accessorKey: 'materialthickness',
-    header: 'Z',
+    header: () => <ComponentOverviewDataTableHeader header='Z'/>,
     cell: ({ row }) => {
       const component_z: number = Math.round(row.getValue('materialthickness'))
     return (
@@ -92,7 +91,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   },
   {
     accessorKey: 'color',
-    header: 'Color',
+    header: () => <ComponentOverviewDataTableHeader header='Color'/>,
     cell: ({ row }) => {
       const color: number[] = row.getValue('color')
       const colR = Math.round(color[0])
@@ -102,19 +101,52 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
       return (
         <div className='flex items-center'>
           <div className='avatar rounded-full min-h-4 min-w-4 max-w-4 max-h-4 items-center justify-left' style={{backgroundColor: hexcol}}></div>
-          <div className='px-2 items-center justify-center text-center text'>{colR}/{colG}/{colB}</div>
+          <div className='px-2 items-center justify-center text-center text-xs'>{colR}/{colG}/{colB}</div>
         </div>
     )}
   },
   {
-    accessorKey: 'created',
-    header: 'Created',
+    accessorKey: 'fragment',
+    header: () => <ComponentOverviewDataTableHeader header='Fragment'/>,
     cell: ({ row }) => {
-      const creation_date: string = row.getValue('created')
+      const complexity: boolean = row.getValue('fragment')
     return (
       <div className='text-left align-text-top'>
+        {complexity.toString()}
+      </div>
+    )}
+  },
+  {
+    accessorKey: 'complexity',
+    header: () => <ComponentOverviewDataTableHeader header='Complexity'/>,
+    cell: ({ row }) => {
+      const complexity: number = row.getValue('complexity')
+    return (
+      <div className='text-center align-text-top'>
+        {complexity.toString()}
+      </div>
+    )}
+  },
+  {
+    accessorKey: 'created',
+    header: () => <ComponentOverviewDataTableHeader header='Created'/>,
+    cell: ({ row }) => {
+      const creation_date: string = parseTimestamp(row.getValue('created'))
+    return (
+      <div className='text-left align-text-top text-xs'>
         {creation_date}
       </div>
     )}
   },
+  {
+    accessorKey: 'lastmodified',
+    header: () => <ComponentOverviewDataTableHeader header='Last Modified'/>,
+    cell: ({ row }) => {
+      const modified_date: string = parseTimestamp(row.getValue('lastmodified'))
+    return (
+      <div className='text-left align-text-top text-xs'>
+        {modified_date}
+      </div>
+    )}
+  }
 ]

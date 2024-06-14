@@ -100,3 +100,30 @@ export function combinePath(baseUrl: string, filename: string, extension: string
 
   return `${baseUrl}${filename}${extension}`;
 }
+
+export function parseTimestamp(input: string): string {
+  // Validate input format
+  const regex = /^\d{6}-\d{6}$/
+  if (!regex.test(input)) {
+      throw new Error(
+        "Invalid input format. Expected format is 'DDMMYY-HHMMSS'."
+    )
+  }
+
+  // Extract date and time parts
+  const datePart = input.slice(0, 6)
+  const timePart = input.slice(7, 13)
+
+  // Format date
+  const day = datePart.slice(0, 2)
+  const month = datePart.slice(2, 4)
+  const year = datePart.slice(4, 6)
+
+  // Format time
+  const hours = timePart.slice(0, 2)
+  const minutes = timePart.slice(2, 4)
+  const seconds = timePart.slice(4, 6)
+
+  // Construct and return the formatted timestamp
+  return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`
+}

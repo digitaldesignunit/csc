@@ -14,13 +14,13 @@ const PreviewBaseURL: string = process.env.NEXT_PUBLIC_COMPONENT_PREVIEW_BASE_UR
 
 const ComponentPreviewImage: React.FC<ComponentPreviewImageProps> = ({ comp_id, alt, width, height, maxHeight }) => {
   let src = combinePath(PreviewBaseURL, comp_id, 'webp')
-  const aspectRatio = width / height;
-  const maxWidth = maxHeight * aspectRatio;
+  const aspectRatio = width / height
+  const maxWidth = maxHeight * aspectRatio
   return (
     <div className="flex items-center justify-center overflow-hidden" style={{ maxHeight: `${maxHeight}px`, maxWidth: `${maxWidth}px` }}>
       <Image src={src} alt={alt} width={width} height={height} className="object-cover" />
     </div>
-  );
-};
+  )
+}
 
 export default ComponentPreviewImage

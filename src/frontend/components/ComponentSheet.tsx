@@ -114,7 +114,7 @@ export default function ComponentSheet({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant='ghost' className='text-xs h-5 w-[315px] hover:bg-[#009cda] hover:text-white' onClick={handleButtonClickComponentDetail}>{component_data._id}</Button>
+                <Button variant='ghost' className='text-xs h-5 w-15 hover:bg-[#009cda] hover:text-white' onClick={handleButtonClickComponentDetail}>{component_data._id}</Button>
               </TooltipTrigger>
               <TooltipContent>
                 <div className='flex flex-col text-center'>

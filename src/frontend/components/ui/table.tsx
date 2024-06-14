@@ -87,7 +87,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("p-4 align-left", className)}
+    className={cn("p-4 align-left whitespace-nowrap", className)}
     {...props}
   />
 ))
