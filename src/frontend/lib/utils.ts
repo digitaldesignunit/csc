@@ -101,7 +101,7 @@ export function combinePath(baseUrl: string, filename: string, extension: string
   return `${baseUrl}${filename}${extension}`;
 }
 
-export function parseTimestamp(input: string): string {
+export function formatTimestamp(input: string): string {
   // Validate input format
   const regex = /^\d{6}-\d{6}$/
   if (!regex.test(input)) {
@@ -126,4 +126,14 @@ export function parseTimestamp(input: string): string {
 
   // Construct and return the formatted timestamp
   return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`
+}
+
+export function formatLocation(coords: { lat: number; lon: number }): string {
+  const { lat, lon } = coords;
+  return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+}
+
+export function formatLocationMapsLink(coords: { lat: number; lon: number }): string {
+  const { lat, lon } = coords;
+  return `https://www.google.com/maps/place/${lat.toFixed(6)},${lon.toFixed(6)}`;
 }

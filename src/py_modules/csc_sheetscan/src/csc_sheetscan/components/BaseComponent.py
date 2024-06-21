@@ -32,6 +32,7 @@ class BaseComponent():
                  assembly: bool,
                  color: List[int],
                  bbx: Dict,
+                 location: Dict = {},
                  descriptors: Dict = {},
                  indicators: Dict = {},
                  validated: bool = False) -> None:
@@ -51,6 +52,7 @@ class BaseComponent():
         self.__COMPONENT_DATA['assembly'] = assembly
         self.__COMPONENT_DATA['color'] = color
         self.__COMPONENT_DATA['bbx'] = bbx
+        self.__COMPONENT_DATA['location'] = location
         self.__COMPONENT_DATA['descriptors'] = descriptors
         self.__COMPONENT_DATA['indicators'] = indicators
         self.__COMPONENT_DATA['validated'] = validated
@@ -165,6 +167,22 @@ class BaseComponent():
         return self.__COMPONENT_DATA['bbx']
 
     bbx = property(get_bbx)
+
+    # LOCATION PROP
+    def get_location(self):
+        return self.__COMPONENT_DATA['location']
+
+    def set_location(self, location: Dict):
+        if not location.has_key('lat'):
+            raise ValueError('Input location has no "lat" key! Dict should '
+                             'be like: {"lat": 49.861444, "lon": 8.676556}')
+        if not location.has_key('lon'):
+            raise ValueError('Input location has no "lon" key! Dict should '
+                             'be like: {"lat": 49.861444, "lon": 8.676556}')
+        self.__COMPONENT_DATA['location'] = location
+        self.__update_lastmodified()
+
+    location = property(get_location, set_location)
 
     # DESCRIPTORS PROP
     def get_descriptors(self):

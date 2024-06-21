@@ -2,10 +2,11 @@
 
 import { ColumnDef } from '@tanstack/react-table'
 import { ComponentData, ComponentBoundingBox, ComponentPolylinePoints } from './models'
-import { rgbToHex } from '@/lib/utils'
+import { formatLocationMapsLink, rgbToHex } from '@/lib/utils'
 import ComponentSheet from './ComponentSheet'
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
-import { parseTimestamp } from '@/lib/utils'
+import { formatTimestamp, formatLocation } from '@/lib/utils'
+import Link from 'next/link'
 
 export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
   {
@@ -128,10 +129,27 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     )}
   },
   {
+    accessorKey: 'location',
+    header: () => <ComponentOverviewDataTableHeader header='Location'/>,
+    cell: ({ row }) => {
+      const location: string = formatLocation(row.getValue('location'))
+      const locationlink: string = formatLocationMapsLink(row.getValue('location'))
+    return (
+      <div className='text-left align-text-top text-xs'>
+          <a href={locationlink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className='hover:text-gray-500'>
+            {location}
+          </a>
+      </div>
+    )}
+  },
+  {
     accessorKey: 'created',
     header: () => <ComponentOverviewDataTableHeader header='Created'/>,
     cell: ({ row }) => {
-      const creation_date: string = parseTimestamp(row.getValue('created'))
+      const creation_date: string = formatTimestamp(row.getValue('created'))
     return (
       <div className='text-left align-text-top text-xs'>
         {creation_date}
@@ -142,7 +160,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     accessorKey: 'lastmodified',
     header: () => <ComponentOverviewDataTableHeader header='Last Modified'/>,
     cell: ({ row }) => {
-      const modified_date: string = parseTimestamp(row.getValue('lastmodified'))
+      const modified_date: string = formatTimestamp(row.getValue('lastmodified'))
     return (
       <div className='text-left align-text-top text-xs'>
         {modified_date}

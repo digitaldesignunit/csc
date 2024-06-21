@@ -18,6 +18,7 @@ class SheetComponent(BaseComponent):
                  fragment: bool,
                  color: List[int],
                  bbx_xy: List[List[float]],
+                 location: Dict = {},
                  descriptors: Dict = {},
                  indicators: Dict = {},
                  validated: bool = False) -> None:
@@ -41,6 +42,7 @@ class SheetComponent(BaseComponent):
             assembly=False,
             color=color,
             bbx=bbx,
+            location=location,
             descriptors=descriptors,
             indicators=indicators,
             validated=validated

@@ -45,12 +45,15 @@ ALLOWED_COMPONENT_TYPES = [
 ALLOWED_COMPONENT_SORTKEYS = [
     '_id',
     'type',
-    'material'
+    'material',
+    'color',
+    'created',
+    'lastmodified',
 ]
 
 ALLOWED_COMPLEXITY_LEVELS = [
     0,  # very low
-    1,  # low
+    1,  # low -> e.g. extrusion, sheet, polygon
     2,  # medium
     3,  # high
 ]
@@ -72,6 +75,8 @@ class ComponentModel(BaseModel):
     geometry: Dict = Field(...)
     color: Optional[List[int]]
     bbx: Dict = Field(...)
+    # location
+    location: Optional[Dict]
     # indicator and descriptor data
     descriptors: Optional[Dict]
     indicators: Optional[Dict]
@@ -124,6 +129,10 @@ class ComponentModel(BaseModel):
                             [-236.98900730732106, 136.69496037267368]
                         ],
                         'xyz': None
+                    },
+                    'location': {
+                        'lat': 49.86144,
+                        'lon': 8.676556
                     },
                     'descriptors': {},
                     'indicators': {
@@ -248,6 +257,10 @@ class ComponentModel(BaseModel):
                             [510, 36.500000000000014, 26.500000000000004],
                             [-510, 36.500000000000014, 26.500000000000004]
                         ]
+                    },
+                    'location': {
+                        'lat': 49.86144,
+                        'lon': 8.676556
                     },
                     'descriptors': {},
                     'indicators': {},
