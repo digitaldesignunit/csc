@@ -134,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-#### CCSC FastAPI Backend
+#### CSC FastAPI Backend
 
 - Moved database connection functions to `utility` module
 
@@ -148,11 +148,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-#### CCSC FastAPI Backend
+#### CSC FastAPI Backend
 
 - Fixed color definition in ComponentModel in `models.py`
 
-#### CCSC React Frontend
+#### CSC React Frontend
 
 - Adapted table layout for component overview
 
@@ -166,6 +166,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-#### CCSC React Frontend
+#### CSC React Frontend
 
 - Extended DataTable for Components
+
+## [0.0.1.9] - 2024-06-21
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.5
+- CSC React Frontend:   0.1.4.6
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC FastAPI Backend
+
+- Changed Component model to reflect current location as attribute
+
+#### CSC React Frontend
+
+- Extended DataTable for Components with location attribute
+
+#### CSC Sheetscan Module
+
+- Extended BaseModel & SheetModel with location
+
+
+## [0.0.1.9] - 2024-10-02
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.5
+- CSC React Frontend:   0.1.4.7
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC React Frontend
+
+- Added proper imprint
+- Fixed npm vulns
