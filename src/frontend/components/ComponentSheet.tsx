@@ -19,6 +19,7 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/t
 import { hexComponentColor, componentColorString } from '@/lib/utils'
 import { usePathname, useRouter } from 'next/navigation'
 import ComponentPreviewImage from './ComponentPreviewImage'
+import Link from 'next/link'
 
 interface FetchComponentGeometryProps {
   component_id: string
@@ -44,7 +45,6 @@ const fetch_component_geometry = async ({ component_id }: FetchComponentGeometry
 function inject_geometry(component: ComponentData, component_geometry: any) {
       component.geometry = component_geometry
 }
-
 
 export default function ComponentSheet({
   component_data,
@@ -133,7 +133,28 @@ export default function ComponentSheet({
           <SheetDescription>
             <Card className='m-2'>
               <CardHeader>
-                <CardTitle className='text-sm text-left'>{component_data._id}</CardTitle>
+                <CardTitle className='text-sm text-left'>
+                  
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        
+                      
+                        <Link href={`/components/${component_data._id}`}>
+                          <Button variant='outline' className='h-8 hover:bg-[#009cda] hover:text-white'>
+                            {component_data._id}
+                          </Button>
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className='flex flex-col text-center'>
+                          Click to open component Detail page
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  
+                </CardTitle>
               </CardHeader>
               <CardContent className='text-left'>
                 Type: {component_data.type} <br/>
