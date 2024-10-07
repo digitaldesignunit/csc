@@ -113,7 +113,7 @@ async def validate_component(
 # SHALLOW COMPONENT ROUTES ----------------------------------------------------
 
 @router.get('/shallowcomponents/{component_id}',
-            response_description='Retrieve one component by id')
+            response_description='Retrieve one shallow component by id')
 async def get_component_shallow(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
