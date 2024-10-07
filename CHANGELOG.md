@@ -207,3 +207,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added proper imprint
 - Fixed npm vulns
+
+
+## [0.0.1.10] - 2024-10-07
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.6
+- CSC React Frontend:   0.1.4.8
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC React Frontend
+
+- Corrected docstring of single component fetch route
+
+#### CSC React Frontend
+
+- Added `components/[component_id]` API route to retrieve single component data
+- Added working ComponentDetailPage (`frontend/app/components/[component_id]/page.tsx`)
+- Modified `ComponentSheet` to link to component details page
