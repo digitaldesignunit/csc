@@ -51,7 +51,7 @@ app = FastAPI(
     title='CSC - Catalogue of Second Chances - Backend API',
     description=('Backend API for Catalogue of Second Chances. '
                  'Based on FastAPI, connected to MongoDB Database.'),
-    version='0.1.0.5',
+    version='0.1.0.6',
     lifespan=lifespan
 )
 
