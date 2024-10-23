@@ -1,7 +1,10 @@
 import ComponentDetailCard from "@/components/ComponentDetailCard";
 import ComponentViewer from "@/components/ComponentViewer";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { componentColorString, hexComponentColor } from "@/lib/utils";
+import Link from "next/link";
 
 interface FetchComponentProps {
   component_id: string
@@ -43,8 +46,27 @@ export default async function ComponentDetailPage({
     
     <Card className='m-2'>
     <CardHeader>
+
       <CardTitle className='text-sm text-left'>{component_data._id}</CardTitle>
+
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link href={`/findcomponent?reference_id=${component_data._id}`}>
+              <Button variant='outline' className='h-8 hover:bg-[#009cda] hover:text-white mt-4'>
+                Find Component
+              </Button>
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent>
+            <div className='flex flex-col text-center'>
+              Find this component using the QR code
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </CardHeader>
+
     <CardContent className='text-left'>
       Type: {component_data.type} <br/>
       Material: {component_data.material} <br/>
@@ -55,6 +77,7 @@ export default async function ComponentDetailPage({
         <div className='ml-2 items-center justify-center text-center'>{component_color_str}</div>
       </div>
     </CardContent>
+
     </Card>
 
     <ComponentViewer component_data={component_data} />

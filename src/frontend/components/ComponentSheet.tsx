@@ -138,8 +138,6 @@ export default function ComponentSheet({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        
-                      
                         <Link href={`/components/${component_data._id}`}>
                           <Button variant='outline' className='h-8 hover:bg-[#009cda] hover:text-white'>
                             {component_data._id}
@@ -160,11 +158,29 @@ export default function ComponentSheet({
                 Type: {component_data.type} <br/>
                 Material: {component_data.material} <br/>
                 Material Thickness: {component_data.materialthickness} <br/>
-                <div className='flex items-center max-w-12'>
+                <div className='flex items-center max-w-12 mb-4'>
                   Color: 
                   <div className='ml-2 avatar rounded-full min-h-4 min-w-4 max-w-5 max-h-5 items-center justify-left' style={{backgroundColor: component_color_hex}}></div>
                   <div className='ml-2 items-center justify-center text-center'>{component_color_str}</div>
                 </div>
+
+                <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Link href={`/findcomponent?reference_id=${component_data._id}`}>
+                          <Button variant='outline' className='h-8 hover:bg-[#009cda] hover:text-white'>
+                            Find Component
+                          </Button>
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className='flex flex-col text-center'>
+                          Find this component using the QR code
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
               </CardContent>
             </Card>
           </SheetDescription>

@@ -228,3 +228,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `components/[component_id]` API route to retrieve single component data
 - Added working ComponentDetailPage (`frontend/app/components/[component_id]/page.tsx`)
 - Modified `ComponentSheet` to link to component details page
+
+
+## [0.0.1.11] - 2024-10-23
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.6
+- CSC React Frontend:   0.1.4.9
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC React Frontend
+
+- Added possibility to pre-set reference id in `frontend/components/ComponentLookup.tsx`
+- Added possibility to pre-set reference id in `frontend/app/findcomponent/page.tsx`
+- Added link to find component with pre-set reference id in `frontend/components/ComponentSheet.tsx`
+- Added link to find component with pre-set reference id in `frontend/app/components/[component_id]/page.tsx`
