@@ -77,7 +77,6 @@ export default function ComponentSheet({
   // Handle Button Click to fetch Component Geometry
   const handleButtonClickComponentDetail = async () => {
     setIsComponentViewerVisible(false)
-    // setComponentDetail(component_data._id)
     setIsLoading(true)
     try {
       const component_geometry = await fetch_component_geometry(
