@@ -13,6 +13,11 @@ const nextConfig = {
         hostname: 'https://public.ddu.uber.space/csc_assets/component_preview',
         pathname: '**',
       },
+      {
+        protocol: 'https',
+        hostname: 'https://public.ddu.uber.space/csc_assets/component_geometry',
+        pathname: '**',
+      },
     ],
   },
 };
