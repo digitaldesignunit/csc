@@ -17,46 +17,66 @@ const VisualizeMesh = (component_data: ComponentData) => {
   // Create mesh geometry on request
   const mesh_geometry = useMemo(() => {
     const mesh_geometry = new THREE.BufferGeometry()
+
     // Flatten the vertices array and add to the geometry
     const vertices = component_data.geometry.mesh.v
-    const flatVertices = vertices.flat().map(v => v * scale)
+    const flatVertices = vertices.flat().map((v) => v * scale)
     const verticesAttribute = new THREE.Float32BufferAttribute(flatVertices, 3)
     mesh_geometry.setAttribute('position', verticesAttribute)
+
     // Flatten the faces array (indices) and set for the geometry
     const faces = component_data.geometry.mesh.f
     const flatFaces = faces.flat()
     mesh_geometry.setIndex(flatFaces)
-    // Rotate in correct orientation to compensate for THREE axis system
+
+    // Check if vertex colors are available
+    const colors = component_data.geometry.mesh.c
+    if (colors && colors.length === vertices.length) {
+      const flatColors = colors.flatMap((color) => color.map((v) => v / 255)) // Normalize RGB to [0, 1]
+      const colorAttribute = new THREE.Float32BufferAttribute(flatColors, 3)
+      mesh_geometry.setAttribute('color', colorAttribute)
+    }
+
+    // Rotate to correct orientation to compensate for THREE.js axis system
     mesh_geometry.rotateX(-Math.PI / 2)
+
+    // Ensure normals are computed
+    mesh_geometry.computeVertexNormals()
+
     return mesh_geometry
   }, [component_data])
-  // get component color from data and convert to hex for display
+
+  // Get component color from data and convert to hex for display
   const component_color = rgbToHex(
     component_data.color[0],
     component_data.color[1],
     component_data.color[2]
   )
+
   // Create a basic material for displaying the mesh polygons
-  const mesh_material = new THREE.MeshBasicMaterial({ color: component_color })
-  // Create wireframe
+  const mesh_material = useMemo(() => {
+    return new THREE.MeshBasicMaterial({
+      color: component_color,
+      vertexColors: component_data.geometry.mesh.c ? true : false, // Enable vertex colors if available
+      side: THREE.DoubleSide,
+    })
+  }, [component_color, component_data.geometry.mesh.c])
+
+  // Create wireframe geometry
   const edge_geometry = useMemo(() => {
-    const edge_geometry = new THREE.EdgesGeometry(mesh_geometry)
-    return edge_geometry
+    return new THREE.EdgesGeometry(mesh_geometry)
   }, [mesh_geometry])
+
   // Create wireframe material
-  const edge_material = new THREE.LineBasicMaterial({ color: 0x000000 })
+  const edge_material = useMemo(() => {
+    return new THREE.LineBasicMaterial({ color: 0x000000 })
+  }, [])
+
   // Return the mesh component
   return (
     <>
-      <mesh
-        visible
-        geometry={mesh_geometry}
-        material={mesh_material}
-      />
-      <lineSegments
-        geometry={edge_geometry}
-        material={edge_material}
-      />
+      <mesh visible geometry={mesh_geometry} material={mesh_material} />
+      <lineSegments geometry={edge_geometry} material={edge_material} />
     </>
   )
 }
@@ -65,7 +85,7 @@ const VisualizeSheet = (component_data: ComponentData) => {
   // Create a shape from the points
   const pline_shape = useMemo(() => {
     const pline_shape = new THREE.Shape()
-    const points: ComponentPolylinePoints = component_data.geometry.polyline
+    const points: ComponentPolylinePoints = component_data.geometry.extrusion.profile
     pline_shape.moveTo(points[0][0] * scale, points[0][1] * scale)
     points.forEach((pointtuple: number[], index) => {
       if (index > 0) {
@@ -79,13 +99,20 @@ const VisualizeSheet = (component_data: ComponentData) => {
     // Define extrusion settings
     const extrudeSettings = {
       steps: 2,
-      depth: component_data.materialthickness * scale,
+      depth: component_data.geometry.extrusion.height * scale,
       bevelEnabled: false,
     }
     const extrude_geometry = new THREE.ExtrudeGeometry(
       pline_shape,
       extrudeSettings
     )
+    // Translate to center of geometry
+    extrude_geometry.translate(
+      0,
+      0,
+      -component_data.geometry.extrusion.height * scale * 0.5
+    )
+    //Rotate to correct orientation to compensate for THREE.js axis system
     extrude_geometry.rotateX(-Math.PI / 2)
     return extrude_geometry
   }, [pline_shape, component_data.materialthickness])
