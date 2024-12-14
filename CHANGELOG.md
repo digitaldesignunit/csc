@@ -219,7 +219,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-#### CSC React Frontend
+#### CSC FastAPI Backend
 
 - Corrected docstring of single component fetch route
 
@@ -246,3 +246,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added possibility to pre-set reference id in `frontend/app/findcomponent/page.tsx`
 - Added link to find component with pre-set reference id in `frontend/components/ComponentSheet.tsx`
 - Added link to find component with pre-set reference id in `frontend/app/components/[component_id]/page.tsx`
+
+## [0.0.1.12] - 2024-12-14
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.7
+- CSC React Frontend:   0.1.4.10
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC FastAPI Backend
+
+- Modified component spec to enable SAS rubble imports
+
+#### CSC React Frontend
+
+- Modified Component Model and implementation to reflect changes in component spec
+
