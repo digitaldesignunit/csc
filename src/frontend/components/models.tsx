@@ -8,17 +8,18 @@ export type ComponentData = {
   assembly: boolean,
   color: Array<number>,
   geometry: {
-    polyline: ComponentPolylinePoints,
+    extrusion: {
+      height: number,
+      profile: ComponentPolylinePoints,
+    },
     mesh: {
       v: ComponentMeshVertices,
-      f: ComponentMeshFaces
+      f: ComponentMeshFaces,
+      c: ComponentMeshColors
     }
   },
   validated: boolean,
-  bbx: {
-    xy: ComponentPolylinePoints,
-    xyz: ComponentPolylinePoints
-  },
+  bbx: ComponentBoundingBox,
   iframe: {
     o: Array<number>,
     x: Array<number>,
@@ -33,10 +34,8 @@ export type ComponentData = {
   }
 }
 
-export type ComponentBoundingBox = {
-  xy: ComponentPolylinePoints,
-  xyz: ComponentPolylinePoints
-}
+export type ComponentBoundingBox =  Array<Array<number>>
 export type ComponentPolylinePoints = Array<Array<number>>
 export type ComponentMeshVertices = Array<Array<number>>
 export type ComponentMeshFaces = Array<Array<number>>
+export type ComponentMeshColors = Array<Array<number>>
