@@ -1,0 +1,23 @@
+# rewrite rules
+<IfModule mod_rewrite.c>
+
+# enable awesome urls. i.e.:
+# http://yourdomain.com/about-us/team
+RewriteEngine On
+
+# make sure to set the RewriteBase correctly
+# if you are running the site in a subfolder.
+# Otherwise links or the entire site will break.
+#
+# If your homepage is http://yourdomain.com/mysite
+# Set the RewriteBase to:
+#
+RewriteBase /
+
+# Force download files
+<FilesMatch "\.(wsc)$">
+    Header set Content-Type application/octet-stream
+    Header set Content-Disposition attachment
+</FilesMatch>
+
+Header set X-Content-Type-Options "nosniff"
