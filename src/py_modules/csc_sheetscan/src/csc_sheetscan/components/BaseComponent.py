@@ -26,35 +26,44 @@ class BaseComponent():
                  componenttype: str,
                  material: str,
                  materialthickness: float,
-                 geometry: Dict,
                  complexity: int,
                  fragment: bool,
                  assembly: bool,
+                 geometry: Dict,
                  color: List[int],
                  bbx: Dict,
+                 name: str = '',
                  location: Dict = {},
                  descriptors: Dict = {},
-                 indicators: Dict = {},
+                 processes: Dict = {},
+                 attributes: Dict = {},
                  validated: bool = False) -> None:
         self.__COMPONENT_DATA = {}
         # CREATE TIMESTAMP AND SET
         timestamp = create_timestamp_str()
+        # SYNTHESIZE NAME IF NOT PRESENT
+        if not name or name == '':
+            name = (f'{componenttype.capitalize()} Component '
+                    f'made from {material.capitalize()}, '
+                    f'created {timestamp}')
         # SET DATA TO DICT
         self.__COMPONENT_DATA['_id'] = _id
+        self.__COMPONENT_DATA['name'] = name  # add default name generation
         self.__COMPONENT_DATA['created'] = timestamp
         self.__COMPONENT_DATA['lastmodified'] = timestamp
         self.__COMPONENT_DATA['type'] = componenttype
         self.__COMPONENT_DATA['material'] = material
         self.__COMPONENT_DATA['materialthickness'] = materialthickness
-        self.__COMPONENT_DATA['geometry'] = geometry
         self.__COMPONENT_DATA['complexity'] = complexity
         self.__COMPONENT_DATA['fragment'] = fragment
         self.__COMPONENT_DATA['assembly'] = assembly
+        self.__COMPONENT_DATA['geometry'] = geometry
         self.__COMPONENT_DATA['color'] = color
         self.__COMPONENT_DATA['bbx'] = bbx
         self.__COMPONENT_DATA['location'] = location
         self.__COMPONENT_DATA['descriptors'] = descriptors
-        self.__COMPONENT_DATA['indicators'] = indicators
+        self.__COMPONENT_DATA['processes'] = processes
+        self.__COMPONENT_DATA['attributes'] = attributes
         self.__COMPONENT_DATA['validated'] = validated
         self.__COMPONENT_DATA['iframe'] = {
             'o': [0.0, 0.0, 0.0],
@@ -114,12 +123,6 @@ class BaseComponent():
 
     materialthickness = property(get_materialthickness, set_materialthickness)
 
-    # GEOMETRY PROP
-    def get_geometry(self):
-        return self.__COMPONENT_DATA['geometry']
-
-    geometry = property(get_geometry)
-
     # COMPLEXITY PROP
     def get_complexity(self):
         return self.__COMPONENT_DATA['complexity']
@@ -149,6 +152,12 @@ class BaseComponent():
         self.__update_lastmodified()
 
     assembly = property(get_assembly, set_assembly)
+
+    # GEOMETRY PROP
+    def get_geometry(self):
+        return self.__COMPONENT_DATA['geometry']
+
+    geometry = property(get_geometry)
 
     # COLOR PROP
     def get_color(self):
@@ -190,11 +199,11 @@ class BaseComponent():
 
     descriptors = property(get_descriptors)
 
-    # INDICATORS PROP
-    def get_indicators(self):
-        return self.__COMPONENT_DATA['indicators']
+    # PROCESSES PROP
+    def get_processes(self):
+        return self.__COMPONENT_DATA['processes']
 
-    indicators = property(get_indicators)
+    processes = property(get_processes)
 
     # IFRAME PROP
     def get_iframe(self):
@@ -205,6 +214,16 @@ class BaseComponent():
         self.__update_lastmodified()
 
     iframe = property(get_iframe, set_iframe)
+
+    # ATTRIBUTES PROP
+    def get_attributes(self):
+        return self.__COMPONENT_DATA['attributes']
+
+    def set_attributes(self, attributes: Dict):
+        self.__COMPONENT_DATA['attributes'] = attributes
+        self.__update_lastmodified()
+
+    attributes = property(get_attributes)
 
     # VALIDATED PROP
     def get_validated(self):
