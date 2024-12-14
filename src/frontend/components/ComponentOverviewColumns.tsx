@@ -44,15 +44,8 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     header: () => <ComponentOverviewDataTableHeader header='X'/>,
     cell: ({ row }) => {
       const component_bbx: ComponentBoundingBox = row.getValue('bbx')
-      const component_bbx_xy: ComponentPolylinePoints = component_bbx.xy
-      const component_bbx_xyz: ComponentPolylinePoints = component_bbx.xyz
       let component_bbx_x: number = 0
-      if (component_bbx_xy) {
-        component_bbx_x = component_bbx_xy[1][0] - component_bbx_xy[0][0]
-      }
-      else {
-        component_bbx_x = component_bbx_xyz[1][0] - component_bbx_xyz[0][0]
-      }
+      component_bbx_x = component_bbx[1][0] - component_bbx[0][0]
     return (
       <div className='text-left align-text-top'>
         {component_bbx_x.toFixed(2)}
@@ -64,15 +57,8 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     header: () => <ComponentOverviewDataTableHeader header='Y'/>,
     cell: ({ row }) => {
       const component_bbx: ComponentBoundingBox = row.getValue('bbx')
-      const component_bbx_xy: ComponentPolylinePoints = component_bbx.xy
-      const component_bbx_xyz: ComponentPolylinePoints = component_bbx.xyz
       let component_bbx_y: number = 0
-      if (component_bbx_xy) {
-        component_bbx_y = component_bbx_xy[2][1] - component_bbx_xy[1][1]
-      }
-      else {
-        component_bbx_y = component_bbx_xyz[2][1] - component_bbx_xyz[1][1]
-      }
+      component_bbx_y = component_bbx[1][1] - component_bbx[0][1]
     return (
       <div className='text-left align-text-top'>
         {component_bbx_y.toFixed(2)}
