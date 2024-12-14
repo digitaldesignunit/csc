@@ -36,13 +36,13 @@ export default function AppMenu() {
         ]
       },
       {
-        group: 'Models',
+        group: 'Designs',
         items: [
           {
-            id: 'modelsbutton',
-            link: '/models',
+            id: 'designsbutton',
+            link: '/designs',
             icon: <Package />,
-            text: 'Models'
+            text: 'Designs'
           },
         ]
       },
