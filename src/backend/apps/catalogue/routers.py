@@ -120,7 +120,7 @@ async def get_component_shallow(
         component_id: str) -> ComponentModel:
     collection = request.app.mongodb_components
     query = {'_id': component_id}
-    projection = {'geometry': 0}
+    projection = {'geometry': 0, 'descriptors': 0}
     component = await collection.find_one(query, projection)
     return JSONResponse(status_code=status.HTTP_200_OK,
                         content=component)
@@ -140,7 +140,7 @@ async def get_components_shallow(
     db = request.app.mongodb_components
     # compose filter query and set sort order
     query = {}
-    projection = {'geometry': 0}
+    projection = {'geometry': 0, 'descriptors': 0}
     sort_order = 1
     # filter component type
     if comptype and comptype in ALLOWED_COMPONENT_TYPES:
