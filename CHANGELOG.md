@@ -265,3 +265,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Modified Component Model and implementation to reflect changes in component spec
 
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.7
+- CSC React Frontend:   0.1.4.11
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC React Frontend
+
+- Updated ComponentViewer component to be able to display more detailed meshes on request
