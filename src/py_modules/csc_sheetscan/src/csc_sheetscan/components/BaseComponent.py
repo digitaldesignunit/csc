@@ -25,7 +25,6 @@ class BaseComponent():
                  _id: str,
                  componenttype: str,
                  material: str,
-                 materialthickness: float,
                  complexity: int,
                  fragment: bool,
                  assembly: bool,
@@ -53,7 +52,6 @@ class BaseComponent():
         self.__COMPONENT_DATA['lastmodified'] = timestamp
         self.__COMPONENT_DATA['type'] = componenttype
         self.__COMPONENT_DATA['material'] = material
-        self.__COMPONENT_DATA['materialthickness'] = materialthickness
         self.__COMPONENT_DATA['complexity'] = complexity
         self.__COMPONENT_DATA['fragment'] = fragment
         self.__COMPONENT_DATA['assembly'] = assembly
@@ -112,16 +110,6 @@ class BaseComponent():
         self.__update_lastmodified()
 
     material = property(get_material, set_material)
-
-    # MATERIALTHICKNESS PROP
-    def get_materialthickness(self):
-        return self.__COMPONENT_DATA['materialthickness']
-
-    def set_materialthickness(self, materialthickness: float):
-        self.__COMPONENT_DATA['materialthickness'] = materialthickness
-        self.__update_lastmodified()
-
-    materialthickness = property(get_materialthickness, set_materialthickness)
 
     # COMPLEXITY PROP
     def get_complexity(self):

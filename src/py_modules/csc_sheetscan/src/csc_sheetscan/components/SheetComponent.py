@@ -12,30 +12,32 @@ class SheetComponent(BaseComponent):
     def __init__(self,
                  _id: str,
                  material: str,
-                 materialthickness: float,
-                 polyline: List[List[float]],
+                 profile: List[List[float]],
                  complexity: int,
                  fragment: bool,
                  color: List[int],
-                 bbx_xy: List[List[float]],
-                 location: Dict = {},
-                 descriptors: Dict = {},
-                 indicators: Dict = {},
+                 bbx: List[List[float]],
+                 location: Dict = None,
+                 descriptors: Dict = None,
+                 indicators: Dict = None,
                  validated: bool = False) -> None:
+        if location is None:
+            location = {}
+        if descriptors is None:
+            descriptors = {}
+        if indicators is None:
+            indicators = {}
         # process inputs
         geometry = {
-            'polyline': polyline
-        }
-        bbx = {
-            'xy': bbx_xy,
-            'xyz': None
+            'extrusion': {
+                'profile': profile
+            }
         }
         # create BaseComponent
         super().__init__(
             _id=_id,
             componenttype='sheet',
             material=material,
-            materialthickness=materialthickness,
             geometry=geometry,
             complexity=complexity,
             fragment=fragment,
