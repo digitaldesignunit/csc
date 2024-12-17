@@ -16,7 +16,7 @@ import {
   SheetTrigger } from './ui/sheet'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip'
-import { hexComponentColor, componentColorString } from '@/lib/utils'
+import { hexComponentColor, componentColorString, componentBounds } from '@/lib/utils'
 import { usePathname, useRouter } from 'next/navigation'
 import ComponentPreviewImage from './ComponentPreviewImage'
 import Link from 'next/link'
@@ -58,6 +58,9 @@ export default function ComponentSheet({
   // Component Color
   const component_color_str = componentColorString(component_data.color)
   const component_color_hex = hexComponentColor(component_data.color)
+
+  // Component Bounds
+  const component_bounds = componentBounds(component_data.bbx)
 
   // Search Params
   const pathname = usePathname()
@@ -156,7 +159,7 @@ export default function ComponentSheet({
               <CardContent className='text-left'>
                 Type: {component_data.type} <br/>
                 Material: {component_data.material} <br/>
-                Material Thickness: {component_data.materialthickness} <br/>
+                X: {component_bounds[0].toFixed(2)} | Y: {component_bounds[1].toFixed(2)} | Z: {component_bounds[2].toFixed(2)}<br/>
                 <div className='flex items-center max-w-12 mb-4'>
                   Color: 
                   <div className='ml-2 avatar rounded-full min-h-4 min-w-4 max-w-5 max-h-5 items-center justify-left' style={{backgroundColor: component_color_hex}}></div>

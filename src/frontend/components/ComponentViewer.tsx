@@ -315,7 +315,7 @@ export default function ComponentViewer({
       ) : (
         <Card className='flex flex-col m-2'>
           <div className="p-2">
-            <label htmlFor="geometryModeSelect">Geometry Detail:</label>
+            <label htmlFor="geometryModeSelect">Geometry Resolution:</label>
             <select
               id="geometryModeSelect"
               value={geometryMode}

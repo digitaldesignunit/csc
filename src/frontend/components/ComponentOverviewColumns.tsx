@@ -66,13 +66,15 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     )}
   },
   {
-    accessorKey: 'materialthickness',
+    accessorKey: 'bbx',
     header: () => <ComponentOverviewDataTableHeader header='Z'/>,
     cell: ({ row }) => {
-      const component_z: number = Math.round(row.getValue('materialthickness'))
+      const component_bbx: ComponentBoundingBox = row.getValue('bbx')
+      let component_bbx_z: number = 0
+      component_bbx_z = component_bbx[1][2] - component_bbx[0][2]
     return (
       <div className='text-left align-text-top'>
-        {component_z.toFixed(2)}
+        {component_bbx_z.toFixed(2)}
       </div>
     )}
   },

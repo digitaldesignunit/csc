@@ -2,7 +2,6 @@ export type ComponentData = {
   _id: string,
   type: string,
   material: string,
-  materialthickness: number,
   complexity: number,
   fragment: boolean,
   assembly: boolean,
@@ -29,8 +28,9 @@ export type ComponentData = {
   descriptors: {
     roundness: number
   },
-  indicators: {
-    eco2e: number
+  processes: {
+  },
+  attributes: {
   }
 }
 
