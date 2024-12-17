@@ -206,7 +206,6 @@ __example_component_data_a = {
         'lastmodified': '240522-000248',
         'type': 'sheet',
         'material': 'corian',
-        'materialthickness': 12,
         'geometry': {
             'extrusion': {
                 'height': 12.0,
@@ -259,7 +258,6 @@ __example_component_data_b = {
         'lastmodified': '240522-083157',
         'type': 'beam',
         'material': 'timber',
-        'materialthickness': 53.00000000000001,
         'geometry': {
             'mesh': {
                 'v': [
