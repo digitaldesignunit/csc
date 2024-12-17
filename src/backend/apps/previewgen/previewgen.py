@@ -11,19 +11,23 @@ import numpy as np
 from PIL import Image, ImageOps
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from utility import create_logging_timestamp as logts
+try:
+    from utility import create_logging_timestamp as logts
+except ImportError:
+    print('Import Error: utility module not found, '
+          'continuing without logging...')
 
 
 # FUNCTION DEFINITIONS --------------------------------------------------------
 
 def create_extrusion_component_mesh(component_data: dict):
     # Convert polyline to numpy array and add z-coordinate (0)
-    points = np.array(component_data['geometry']['polyline'])
+    points = np.array(component_data['geometry']['extrusion']['profile'])
     num_points = len(points)
     points_3d_bottom = np.hstack([points, np.zeros((num_points, 1))])
     # Create the top points by adding the material thickness in the z-direction
     points_3d_top = points_3d_bottom.copy()
-    points_3d_top[:, 2] = component_data['materialthickness']
+    points_3d_top[:, 2] = component_data['geometry']['extrusion']['height']
     # Combine bottom and top points
     all_points = np.vstack([points_3d_bottom, points_3d_top])
     # Create faces for the sides
@@ -46,20 +50,47 @@ def create_extrusion_component_mesh(component_data: dict):
 def convert_mesh_component_mesh(component_data: dict):
     # Build np arrays from mesh data
     vertices = np.array(component_data['geometry']['mesh']['v'])
-    faces = [[vertices[idx] for idx in face]
-             for face in component_data['geometry']['mesh']['f']]
-    return vertices, faces
+    # Check for vertex colors
+    vertex_colors = None
+    if 'c' in component_data['geometry']['mesh']:
+        vertex_colors = np.array(component_data['geometry']['mesh']['c'])
+
+    faces_idx = component_data['geometry']['mesh']['f']
+    faces = [[vertices[idx] for idx in face] for face in faces_idx]
+
+    return vertices, faces, vertex_colors, faces_idx
 
 
 def create_component_preview_image(
         component_data: dict,
         size: int = 800,
         dpi: int = 300) -> Image:
+
     # Create mesh based on component type
     if component_data['type'] == 'sheet':
         vertices, faces = create_extrusion_component_mesh(component_data)
+        vertex_colors = None
+        faces_idx = None
     else:
-        vertices, faces = convert_mesh_component_mesh(component_data)
+        (vertices, faces,
+         vertex_colors,
+         faces_idx) = convert_mesh_component_mesh(component_data)
+
+    # If vertex colors are present, compute face colors by
+    # averaging vertex colors per face
+    if vertex_colors is not None and faces_idx is not None:
+        face_colors = []
+        for face in faces_idx:
+            # Extract the vertex colors for this face
+            fc = vertex_colors[face]
+            # Average the vertex colors to get a single face color
+            avg_color = np.mean(fc, axis=0)
+            face_colors.append(avg_color)
+        face_colors = np.array(face_colors) / 255.0
+    else:
+        # No vertex colors, use component assigned color
+        face_colors = np.array(component_data['color']) / 255.0
+
     # Calculate figsize based on image_size and dpi
     figsize = size / dpi
     # Create figure and 3D axis
@@ -68,28 +99,45 @@ def create_component_preview_image(
         dpi=dpi,
         constrained_layout=True)
     ax = fig.add_subplot(111, projection='3d')
+
     # Create Poly3DCollection from faces
-    poly3d = Poly3DCollection(
-        faces, alpha=1.0,  # Set alpha to 1.0 for opaque mesh
-        facecolor=np.array(component_data['color']) / 255.0,
-        edgecolor='k',
-        linewidths=0.2)
+    # If we have multiple face colors, pass them as facecolors
+    # Otherwise, it's just a single color for all faces
+    if vertex_colors is not None and faces_idx is not None:
+        # Multiple face colors
+        poly3d = Poly3DCollection(faces, facecolors=face_colors,
+                                  edgecolor='k', linewidths=0.2)
+    else:
+        # Single color for all faces
+        poly3d = Poly3DCollection(
+            faces,
+            alpha=1.0,
+            facecolor=face_colors,
+            edgecolor='k',
+            linewidths=0.2
+        )
     ax.add_collection3d(poly3d)
+
     # Auto scale to the mesh size
     scale = vertices.flatten()
     ax.auto_scale_xyz(scale, scale, scale)
     ax.autoscale_view(tight=True)
+
     # Set plot parameters
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
+
     # Set the camera view
     ax.view_init(elev=30., azim=45)
+
     # Adjust camera zoom
     ax.set_box_aspect(None, zoom=1)
+
     # Render the plot
     plt.axis('off')
     plt.grid(b=None)
+
     # Save to a BytesIO object
     buf = BytesIO()
     plt.savefig(
@@ -142,8 +190,11 @@ def save_preview_image(image: Image, folder: str, filename: str) -> bool:
     file_path = os.path.join(folder, filename)
     # Save the image in .webp format
     image.save(file_path, format='webp')
-    ts = logts()
-    print(f'[PREVIEWGEN] {ts} Preview for {filename} saved to {folder}')
+    try:
+        ts = logts()
+        print(f'[PREVIEWGEN] {ts} Preview for {filename} saved to {folder}')
+    except NameError:
+        print(f'[PREVIEWGEN] Preview for {filename} saved to {folder}')
     return True
 
 
@@ -157,24 +208,27 @@ __example_component_data_a = {
         'material': 'corian',
         'materialthickness': 12,
         'geometry': {
-            'polyline': [
-                [-236.5281668056187, 135.9138446188233],
-                [-235.98666438856054, 136.43043673849218],
-                [-187.81222509575286, 136.619636378187],
-                [236.19128468854456, 136.69496037267368],
-                [236.7078768082133, 136.15345795561552],
-                [236.95223496355607, 22.86883920802336],
-                [235.7850096001714, 7.0161038801627456],
-                [236.75591809603554, 3.2878627042294966],
-                [236.92702811500726, -0.6862193828435466],
-                [235.66342362481873, -9.390589013450608],
-                [236.98900730732123, -20.537947095166373],
-                [236.91902123370357, -135.93252734186524],
-                [235.57772033975323, -136.69496037267368],
-                [-236.59400116300475, -136.69496037267356],
-                [-236.98900730732095, -119.74676506200217],
-                [-236.5281668056187, 135.9138446188233]
-            ]
+            'extrusion': {
+                'height': 12.0,
+                'profile': [
+                    [-236.5281668056187, 135.9138446188233],
+                    [-235.98666438856054, 136.43043673849218],
+                    [-187.81222509575286, 136.619636378187],
+                    [236.19128468854456, 136.69496037267368],
+                    [236.7078768082133, 136.15345795561552],
+                    [236.95223496355607, 22.86883920802336],
+                    [235.7850096001714, 7.0161038801627456],
+                    [236.75591809603554, 3.2878627042294966],
+                    [236.92702811500726, -0.6862193828435466],
+                    [235.66342362481873, -9.390589013450608],
+                    [236.98900730732123, -20.537947095166373],
+                    [236.91902123370357, -135.93252734186524],
+                    [235.57772033975323, -136.69496037267368],
+                    [-236.59400116300475, -136.69496037267356],
+                    [-236.98900730732095, -119.74676506200217],
+                    [-236.5281668056187, 135.9138446188233]
+                ]
+            }
         },
         'complexity': 1,
         'fragment': True,
@@ -190,13 +244,6 @@ __example_component_data_a = {
             'xyz': None
         },
         'descriptors': {},
-        'indicators': {
-            'eco2e': {
-                'value': 7850,
-                'unit': 'kgCO2e/m3',
-                'source': 'DuPoint Corian Solid Surface EPD 2017'
-            }
-        },
         'validated': True,
         'iframe': {
             'o': [0, 0, 0],
@@ -294,6 +341,56 @@ __example_component_data_b = {
                     [39, 37, 38],
                     [43, 41, 40],
                     [47, 45, 46]
+                ],
+                'c': [
+                    [29, 28, 30],
+                    [35, 33, 32],
+                    [39, 37, 38],
+                    [43, 41, 40],
+                    [47, 45, 46],
+                    [35, 34, 33],
+                    [39, 36, 37],
+                    [43, 42, 41],
+                    [47, 44, 45],
+                    [1, 0, 2],
+                    [6, 11, 4],
+                    [11, 6, 7],
+                    [10, 7, 8],
+                    [13, 12, 14],
+                    [18, 19, 20],
+                    [23, 20, 21],
+                    [22, 21, 16],
+                    [27, 25, 26],
+                    [1, 2, 3],
+                    [6, 4, 5],
+                    [11, 7, 10],
+                    [10, 8, 9],
+                    [13, 14, 15],
+                    [18, 20, 23],
+                    [23, 21, 22],
+                    [22, 16, 17],
+                    [27, 26, 24],
+                    [29, 30, 31],
+                    [27, 25, 26],
+                    [29, 28, 30],
+                    [35, 33, 32],
+                    [39, 37, 38],
+                    [43, 41, 40],
+                    [47, 45, 46],
+                    [35, 34, 33],
+                    [39, 36, 37],
+                    [29, 28, 30],
+                    [35, 33, 32],
+                    [39, 37, 38],
+                    [47, 45, 46],
+                    [35, 34, 33],
+                    [39, 36, 37],
+                    [23, 21, 22],
+                    [22, 16, 17],
+                    [27, 26, 24],
+                    [29, 30, 31],
+                    [27, 25, 26],
+                    [29, 28, 30]
                 ]
             }
         },
