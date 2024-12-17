@@ -70,7 +70,6 @@ class ComponentModel(BaseModel):
     # base attributes
     componenttype: str = Field(alias='type')
     material: str = Field(...)
-    materialthickness: float = Field(...)
     complexity: Optional[int]
     fragment: bool = Field(...)
     assembly: bool = Field(...)
@@ -103,7 +102,6 @@ class ComponentModel(BaseModel):
                     'lastmodified': '240522-000248',
                     'type': 'sheet',
                     'material': 'corian',
-                    'materialthickness': 12,
                     'geometry': {
                         'extrusion': {
                             'height': 12.0,
@@ -157,7 +155,6 @@ class ComponentModel(BaseModel):
                     'lastmodified': '240522-083157',
                     'type': 'beam',
                     'material': 'timber',
-                    'materialthickness': 53.0,
                     'geometry': {
                         'mesh': {
                             'v': [
@@ -304,7 +301,6 @@ class UpdateComponentModel(BaseModel):
     lastmodified: str = Field(...)
     material: Optional[str]
     geometry: Optional[Dict]
-    materialthickness: Optional[float]
     complexity: Optional[float]
     fragment: Optional[bool]
     assembly: Optional[bool]
@@ -325,7 +321,6 @@ class UpdateComponentModel(BaseModel):
                     'lastmodified': '240522-000248',
                     'type': 'sheet',
                     'material': 'corian',
-                    'materialthickness': 12,
                     'geometry': {
                         'extrusion': {
                             'height': 12.0,
@@ -379,7 +374,6 @@ class UpdateComponentModel(BaseModel):
                     'lastmodified': '240522-083157',
                     'type': 'beam',
                     'material': 'timber',
-                    'materialthickness': 53.0,
                     'geometry': {
                         'mesh': {
                             'v': [
