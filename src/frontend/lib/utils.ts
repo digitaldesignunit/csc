@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { ComponentBoundingBox } from "@/components/models";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -136,4 +137,11 @@ export function formatLocation(coords: { lat: number; lon: number }): string {
 export function formatLocationMapsLink(coords: { lat: number; lon: number }): string {
   const { lat, lon } = coords;
   return `https://www.google.com/maps/place/${lat.toFixed(6)},${lon.toFixed(6)}`;
+}
+
+export function componentBounds(component_bbx: ComponentBoundingBox): Array<number> {
+  const bnds_x = component_bbx[1][0] - component_bbx[0][0]
+  const bnds_y = component_bbx[1][1] - component_bbx[0][1]
+  const bnds_z = component_bbx[1][2] - component_bbx[0][2]
+  return [bnds_x, bnds_y, bnds_z]
 }
