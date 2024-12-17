@@ -276,3 +276,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - Updated ComponentViewer component to be able to display more detailed meshes on request
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.8
+- CSC React Frontend:   0.1.4.12
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC FastAPI Backend
+
+- Removed Materialthickness
+
+#### CSC React Frontend
+
+- Removed Materialthickness and adapted everything to use BBX extents
