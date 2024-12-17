@@ -21,3 +21,9 @@ RewriteBase /
 </FilesMatch>
 
 Header set X-Content-Type-Options "nosniff"
+
+<IfModule mod_headers.c>
+  Header set Access-Control-Allow-Origin "http://localhost:3000"
+  Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+  Header set Access-Control-Allow-Headers "Content-Type"
+</IfModule>
