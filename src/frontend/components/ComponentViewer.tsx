@@ -44,7 +44,7 @@ async function loadExternalGeometry(
 
   const objName = mode === 'reduced' ? 'mesh_reduced.obj' : 'mesh.obj'
   const mtlName = mode === 'reduced' ? 'mesh_reduced.mtl' : 'mesh.mtl'
-  
+
   const objUrl = `${baseUrl}/${componentId}/${objName}`
   const mtlUrl = `${baseUrl}/${componentId}/${mtlName}`
 
@@ -203,6 +203,7 @@ const VisualizeMesh = React.memo((
     )
   }
 })
+VisualizeMesh.displayName = 'VisualizeMesh'
 
 /**
  * VisualizeSheet component:
@@ -267,6 +268,7 @@ const VisualizeSheet = React.memo(({ component_data }: { component_data: Compone
     </>
   )
 })
+VisualizeSheet.displayName = 'VisualizeSheet'
 
 /**
  * VisualizeComponent:
