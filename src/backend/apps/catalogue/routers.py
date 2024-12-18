@@ -227,8 +227,8 @@ async def get_component(
 
 # COMPONENT DETAIL ROUTES -----------------------------------------------------
 
-@router.get('/componentgeometry/{component_id}',
-            response_description='Retrieve one component geometry by id')
+@router.get('/component/{component_id}/geometry',
+            response_description='Retrieve one components geometry by id')
 async def get_component_geometry(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
@@ -236,6 +236,20 @@ async def get_component_geometry(
     collection = request.app.mongodb_components
     query = {'_id': component_id}
     projection = {'geometry': 1}
+    component = await collection.find_one(query, projection)
+    return JSONResponse(status_code=status.HTTP_200_OK,
+                        content=component)
+
+
+@router.get('/components/{component_id}/descriptors',
+            response_description='Retrieve one components descriptors by id')
+async def get_component_descriptors(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str) -> ComponentModel:
+    collection = request.app.mongodb_components
+    query = {'_id': component_id}
+    projection = {'descriptors': 1}
     component = await collection.find_one(query, projection)
     return JSONResponse(status_code=status.HTTP_200_OK,
                         content=component)
