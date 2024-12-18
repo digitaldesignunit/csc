@@ -97,30 +97,21 @@ export default function ComponentSheet({
     <Sheet>
       <SheetTrigger asChild>
         <div className='text-left align-text-middle cursor-pointer flex items-center gap-1' onClick={handleButtonClickComponentDetail}>
-        <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-          <div className='min-w-8'>
-            <ComponentPreviewImage comp_id={component_data._id} alt={component_data._id} width={315} height={315} maxHeight={50} />
-          </div>
-          </TooltipTrigger>
-              <TooltipContent>
-                <div className='flex flex-col text-center'>
-                Click to view Details
-                <ComponentPreviewImage comp_id={component_data._id} alt={component_data._id} width={315} height={315} maxHeight={325}/>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
+                <div className='min-w-8'>
+                  <ComponentPreviewImage comp_id={component_data._id} alt={component_data._id} width={315} height={315} maxHeight={50} />
+                </div>
+              </TooltipTrigger>
+
+              <TooltipTrigger asChild>
                 <Button variant='ghost' className='text-xs h-5 w-15 hover:bg-[#009cda] hover:text-white' onClick={handleButtonClickComponentDetail}>{component_data._id}</Button>
               </TooltipTrigger>
+
               <TooltipContent>
                 <div className='flex flex-col text-center'>
-                Click to view Details
+                Click to preview
                 <ComponentPreviewImage comp_id={component_data._id} alt={component_data._id} width={315} height={315} maxHeight={325}/>
                 </div>
               </TooltipContent>
@@ -131,66 +122,43 @@ export default function ComponentSheet({
 
       <SheetContent side='bottom'>
         <SheetHeader>
-          <SheetTitle className='text-center'>Component Viewer</SheetTitle>
+          <SheetTitle className='text-center text-m'>Component Preview</SheetTitle>
           <SheetDescription>
-            <Card className='m-2'>
-              <CardHeader>
-                <CardTitle className='text-sm text-left'>
-                  
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Link href={`/components/${component_data._id}`}>
-                          <Button variant='outline' className='h-8 hover:bg-[#009cda] hover:text-white'>
-                            {component_data._id}
-                          </Button>
-                        </Link>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <div className='flex flex-col text-center'>
-                          Click to open component Detail page
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  
-                </CardTitle>
-              </CardHeader>
-              <CardContent className='text-left'>
-                Type: {component_data.type} <br/>
-                Material: {component_data.material} <br/>
-                X: {component_bounds[0].toFixed(2)} | Y: {component_bounds[1].toFixed(2)} | Z: {component_bounds[2].toFixed(2)}<br/>
-                <div className='flex items-center max-w-12 mb-4'>
-                  Color: 
-                  <div className='ml-2 avatar rounded-full min-h-4 min-w-4 max-w-5 max-h-5 items-center justify-left' style={{backgroundColor: component_color_hex}}></div>
-                  <div className='ml-2 items-center justify-center text-center'>{component_color_str}</div>
-                </div>
-
-                <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Link href={`/findcomponent?reference_id=${component_data._id}`}>
-                          <Button variant='outline' className='h-8 hover:bg-[#009cda] hover:text-white'>
-                            Find Component
-                          </Button>
-                        </Link>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <div className='flex flex-col text-center'>
-                          Find this component using the QR code
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-
-              </CardContent>
-            </Card>
+            <p className='text-center text-sm font-bold'>{component_data._id}</p>
           </SheetDescription>
         </SheetHeader>
         {isLoading ? <ComponentViewerSkeleton message='Loading Geometry...'/> : isComponentViewerVisible && <ComponentViewer component_data={component_data} />}
-        <SheetFooter>
-          <SheetClose asChild className='text-center items-center ml-2 mr-2'>
-            <Button variant='outline'>Close</Button>
+        
+        
+        
+        <SheetFooter className="flex flex-col md:flex-row items-center justify-center gap-2 mt-4 ml-2 mr-2">
+          <Link href={`/components/${component_data._id}`} className="w-full md:w-200">
+            <Button variant='outline' className='h-8 w-full md:w-200 hover:bg-[#009cda] hover:text-white'>
+              Open Detail Page
+            </Button>
+          </Link>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href={`/findcomponent?reference_id=${component_data._id}`} className="w-full md:w-200">
+                  <Button variant='outline' className='h-8 w-full md:w-200 hover:bg-[#009cda] hover:text-white'>
+                    Find Component
+                  </Button>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className='flex flex-col text-center'>
+                  Find this component using the QR code
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <SheetClose asChild className="w-full md:w-200">
+              <Button variant='outline' className='h-8 w-full md:w-200 hover:bg-[#009cda] hover:text-white'>
+                Close Preview
+              </Button>
           </SheetClose>
         </SheetFooter>
       </SheetContent>

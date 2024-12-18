@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { componentColorString, hexComponentColor } from "@/lib/utils";
 import Link from "next/link";
+import { componentBounds } from "@/lib/utils";
 
 interface FetchComponentProps {
   component_id: string
@@ -40,47 +41,50 @@ export default async function ComponentDetailPage({
   const component_color_str = componentColorString(component_data.color)
   const component_color_hex = hexComponentColor(component_data.color)
 
+  // Component Bounds
+  const component_bounds = componentBounds(component_data.bbx)
+
   return (
     <div>
       {/* <ComponentDetailCard params={{component_id: params.component_id}}/> */}
     
     <Card className='m-2'>
-    <CardHeader>
+      <CardHeader>
+        <CardTitle className='text-sm text-left'>{component_data._id}</CardTitle>
+      </CardHeader>
 
-      <CardTitle className='text-sm text-left'>{component_data._id}</CardTitle>
+      <CardContent className='text-left'>
+        Type: {component_data.type} <br/>
+        Material: {component_data.material} <br/>
+        X: {component_bounds[0].toFixed(2)} | Y: {component_bounds[1].toFixed(2)} | Z: {component_bounds[2].toFixed(2)}<br/>
+        <div className='flex items-center max-w-12 mb-4'>
+          Color: 
+          <div className='ml-2 avatar rounded-full min-h-4 min-w-4 max-w-5 max-h-5 items-center justify-left' style={{backgroundColor: component_color_hex}}></div>
+          <div className='ml-2 items-center justify-center text-center'>{component_color_str}</div>
+        </div>
 
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Link href={`/findcomponent?reference_id=${component_data._id}`}>
-              <Button variant='outline' className='h-8 hover:bg-[#009cda] hover:text-white mt-4'>
-                Find Component
-              </Button>
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent>
-            <div className='flex flex-col text-center'>
-              Find this component using the QR code
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </CardHeader>
-
-    <CardContent className='text-left'>
-      Type: {component_data.type} <br/>
-      Material: {component_data.material} <br/>
-      Material Thickness: {component_data.materialthickness} <br/>
-      <div className='flex items-center max-w-12'>
-        Color: 
-        <div className='ml-2 avatar rounded-full min-h-4 min-w-4 max-w-5 max-h-5 items-center justify-left' style={{backgroundColor: component_color_hex}}></div>
-        <div className='ml-2 items-center justify-center text-center'>{component_color_str}</div>
-      </div>
-    </CardContent>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href={`/findcomponent?reference_id=${component_data._id}`}>
+                <Button variant='outline' className='h-8 hover:bg-[#009cda] hover:text-white'>
+                  Find Component
+                </Button>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className='flex flex-col text-center'>
+                Find this component using the QR code
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </CardContent>
 
     </Card>
 
     <ComponentViewer component_data={component_data} />
+
   </div>
   )
 }
