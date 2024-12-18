@@ -7,7 +7,7 @@ const fetch_component_geometry = async (
   component_id: string,
   retried: boolean = false
 ) => {
-  const endpoint_url = `https://api.ddu.uber.space/componentgeometry/${component_id}`
+  const endpoint_url = `https://api.ddu.uber.space/components/${component_id}/geometry`
   let headers = await create_headers()
   let component_geometry: ComponentData = await fetch(
     endpoint_url,
