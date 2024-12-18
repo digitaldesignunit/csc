@@ -227,7 +227,7 @@ async def get_component(
 
 # COMPONENT DETAIL ROUTES -----------------------------------------------------
 
-@router.get('/component/{component_id}/geometry',
+@router.get('/components/{component_id}/geometry',
             response_description='Retrieve one components geometry by id')
 async def get_component_geometry(
         request: Request,
