@@ -18,8 +18,7 @@ export default function CreditsPage() {
               PhD thesis of <a href='https://www.researchgate.net/profile/Max-Eschenbach' target='_blank' className='text-blue-500 underline'>Max Benjamin Eschenbach</a> at
               the <a href='https://www.dg.architektur.tu-darmstadt.de/fachgebiet_ddu/index.de.jsp' target='_blank' className='text-blue-500 underline'>Digital Design Unit (DDU)</a>
               , <a href='https://www.tu-darmstadt.de/' target='_blank' className='text-blue-500 underline'>Technical University of Darmstadt</a>.
-              DDU is chaired by Prof. Dr.-Ing. Oliver Tessmann, who is also the
-              supervisor of the PhD Thesis.
+              DDU is chaired by Prof. Dr.-Ing. Oliver Tessmann, who is also the supervisor of the PhD Thesis.
             </p>
           </section>
 

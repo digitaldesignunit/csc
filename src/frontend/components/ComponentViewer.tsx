@@ -314,22 +314,27 @@ export default function ComponentViewer({
         <ComponentViewerSkeleton message='No Geometry Available' />
       ) : (
         <Card className='flex flex-col m-2'>
-          <div className="p-2">
-            <label htmlFor="geometryModeSelect">Geometry Resolution:</label>
-            <select
-              id="geometryModeSelect"
-              value={geometryMode}
-              onChange={(e) => setGeometryMode(e.target.value as 'primitive' | 'reduced' | 'detailed')}
-              disabled={isSheet} 
-              style={{ marginLeft: '0.5rem', opacity: isSheet ? 0.5 : 1 }}
-            >
-              <option value="primitive">Primitive</option>
-              <option value="reduced">Reduced</option>
-              <option value="detailed">Detailed</option>
-            </select>
-          </div>
+          
           <div className='h-[40dvh]'>
+
+            <div className="p-2">
+              <label htmlFor="geometryModeSelect">Geometry Resolution:</label>
+              <select
+                id="geometryModeSelect"
+                value={geometryMode}
+                onChange={(e) => setGeometryMode(e.target.value as 'primitive' | 'reduced' | 'detailed')}
+                disabled={isSheet} 
+                style={{ marginLeft: '0.5rem', opacity: isSheet ? 0.5 : 1 }}
+              >
+                <option value="primitive">Primitive</option>
+                <option value="reduced">Reduced</option>
+                <option value="detailed">Detailed</option>
+              </select>
+            </div>
+
             <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
+
+            
               <ambientLight intensity={Math.PI / 2} />
               <spotLight
                 position={[10, 10, 10]}

@@ -19,6 +19,7 @@ export type ComponentData = {
   },
   validated: boolean,
   bbx: ComponentBoundingBox,
+  location: ComponentLocation,
   iframe: {
     o: Array<number>,
     x: Array<number>,
@@ -39,3 +40,7 @@ export type ComponentPolylinePoints = Array<Array<number>>
 export type ComponentMeshVertices = Array<Array<number>>
 export type ComponentMeshFaces = Array<Array<number>>
 export type ComponentMeshColors = Array<Array<number>>
+export type ComponentLocation = {
+  lat: number,
+  lon: number
+}

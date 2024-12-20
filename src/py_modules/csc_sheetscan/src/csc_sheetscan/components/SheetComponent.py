@@ -19,14 +19,14 @@ class SheetComponent(BaseComponent):
                  bbx: List[List[float]],
                  location: Dict = None,
                  descriptors: Dict = None,
-                 indicators: Dict = None,
+                 processes: Dict = None,
                  validated: bool = False) -> None:
         if location is None:
             location = {}
         if descriptors is None:
             descriptors = {}
-        if indicators is None:
-            indicators = {}
+        if processes is None:
+            processes = {}
         # process inputs
         geometry = {
             'extrusion': {
@@ -46,6 +46,6 @@ class SheetComponent(BaseComponent):
             bbx=bbx,
             location=location,
             descriptors=descriptors,
-            indicators=indicators,
+            processes=processes,
             validated=validated
         )
