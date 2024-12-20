@@ -69,7 +69,7 @@ export default function CreditsPage() {
               </li>
               <li>
                 Huge thanks to <a href='https://sandrosiefert.com/beyond-debris/' target='_blank' className='text-blue-500 underline'>Sandro Siefert</a>
-                for his inspirational work and the contribution of his debris dataset. Can't wait to continue this research with you!
+                for his inspirational work and the contribution of his debris dataset. Lookin forward to continue this research with you!
               </li>
             </ul>
           </section>
