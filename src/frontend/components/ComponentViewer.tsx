@@ -29,67 +29,79 @@ function ensureNormals(object: THREE.Object3D) {
   })
 }
 
-// Helper function to load external OBJ/MTL geometry
+// Helper function to load external OBJ/MTL geometry from Next.js routes
 async function loadExternalGeometry(
   baseUrl: string,
   componentId: string,
   mode: 'reduced' | 'detailed'
 ): Promise<THREE.Group | null> {
-
-  // Check cache first
   const cacheKey = `${componentId}:${mode}`
   if (externalGeometryCache.has(cacheKey)) {
     return externalGeometryCache.get(cacheKey) ?? null
   }
 
-  const objName = mode === 'reduced' ? 'mesh_reduced.obj' : 'mesh.obj'
-  const mtlName = mode === 'reduced' ? 'mesh_reduced.mtl' : 'mesh.mtl'
+  // Which endpoints to use
+  const geometryRoute = mode === 'reduced'
+    ? 'fetch-component-geometry-reduced'
+    : 'fetch-component-geometry-detailed'
+  const mtlRoute = mode === 'reduced'
+    ? 'fetch-component-mtl-reduced'
+    : 'fetch-component-mtl-detailed'
 
-  const objUrl = `${baseUrl}/${componentId}/${objName}`
-  const mtlUrl = `${baseUrl}/${componentId}/${mtlName}`
+  // The .obj/.mtl are loaded from API routes:
+  const objUrl = `${baseUrl}/api/${geometryRoute}?component_id=${componentId}`
+  const mtlUrl = `${baseUrl}/api/${mtlRoute}?component_id=${componentId}`
 
   try {
     const mtlLoader = new MTLLoader()
+
+    // IMPORTANT: The .mtl file references textures like 'map_Kd texture.jpg',
+    // so we set the resource path so the loader fetches them from your
+    // custom route.
+    // NOTE: We have to use "&texture=" as a placeholder for the MTL loader
+    mtlLoader.setResourcePath(
+      `${baseUrl}/api/fetch-component-texture?component_id=${componentId}&texture=`
+    )
+    
+    // Now load the .mtl
     const materials = await mtlLoader.loadAsync(mtlUrl)
     materials.preload()
 
+    // Then load the .obj with the materials
     const objLoader = new OBJLoader()
     objLoader.setMaterials(materials)
+
     const object = await objLoader.loadAsync(objUrl)
 
-    // Align scale and orientation with primitive geometry
     object.scale.set(scale, scale, scale)
     object.rotateX(-Math.PI / 2)
-
-    // Compute and normalize normals for external geometry
     ensureNormals(object)
 
-    // Store result in cache
     externalGeometryCache.set(cacheKey, object)
-
     return object
   } catch (error) {
     console.error('Failed to load external geometry:', error)
-    // Store null in cache so we don’t keep retrying
     externalGeometryCache.set(cacheKey, null)
     return null
   }
 }
 
+
 /**
  * VisualizeMesh component:
  * - Displays a 3D mesh of the component in THREE.js.
- * - If geometryMode is "reduced" or "detailed", attempts to load external geometry.
+ * - If geometryMode is "reduced" or "detailed", attempts to load external geometry (from Next.js API).
  * - Shows a loading indicator while external geometry is being fetched.
  * - Falls back to primitive geometry if external geometry fails to load.
  * - Caches external geometry to prevent re-fetching on subsequent switches.
  */
-const VisualizeMesh = React.memo((
-  { component_data, geometryMode }: {
-    component_data: ComponentData,
-    geometryMode: 'primitive' | 'reduced' | 'detailed'
-  }
-) => {
+const VisualizeMesh = React.memo(({
+  component_data,
+  geometryMode
+}: {
+  component_data: ComponentData,
+  geometryMode: 'primitive' | 'reduced' | 'detailed'
+}) => {
   const [externalObject, setExternalObject] = useState<THREE.Group | null>(null)
   const [isLoadingExternal, setIsLoadingExternal] = useState(false)
 
@@ -100,7 +112,7 @@ const VisualizeMesh = React.memo((
     let isMounted = true
 
     if (isExternalMode && component_data.type !== 'sheet') {
-      const baseUrl = process.env.NEXT_PUBLIC_COMPONENT_GEOMETRY_BASE_URL || ''
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || ''
       if (!baseUrl || !component_data._id) return
 
       setIsLoadingExternal(true)
@@ -111,7 +123,7 @@ const VisualizeMesh = React.memo((
         }
       })
     } else {
-      // Not external mode, no need to load external geometry
+      // Not external mode, or it's a sheet -> no external geometry
       setExternalObject(null)
       setIsLoadingExternal(false)
     }
@@ -168,7 +180,6 @@ const VisualizeMesh = React.memo((
     return new THREE.LineBasicMaterial({ color: 0x000000 })
   }, [])
 
-  // Rendering logic:
   if (isExternalMode) {
     // If loading external geometry, show loading indicator
     if (isLoadingExternal) {
@@ -180,13 +191,11 @@ const VisualizeMesh = React.memo((
         </mesh>
       )
     }
-
     // If external object loaded successfully, show it
     if (externalObject) {
       return <primitive object={externalObject} />
     }
-
-    // If external loading failed, fallback to primitive
+    // If external loading failed or not found, fallback to primitive geometry
     return (
       <>
         <mesh visible geometry={mesh_geometry} material={mesh_material} />
@@ -239,7 +248,7 @@ const VisualizeSheet = React.memo(({ component_data }: { component_data: Compone
       -component_data.geometry.extrusion.height * scale * 0.5
     )
     extrude_geometry.rotateX(-Math.PI / 2)
-    // Compute and normalize normals for the sheet geometry
+    // Compute and normalize normals
     extrude_geometry.computeVertexNormals()
     extrude_geometry.normalizeNormals()
     return extrude_geometry
@@ -282,10 +291,10 @@ const VisualizeComponent = ({
   component_data: ComponentData,
   geometryMode: 'primitive' | 'reduced' | 'detailed'
 }) => {
-  if (component_data.geometry == undefined) {
+  if (component_data.geometry === undefined) {
     return null
   } else {
-    if (component_data.type == 'sheet') {
+    if (component_data.type === 'sheet') {
       // Sheets have no detailed geometry. Always show primitive.
       return <VisualizeSheet component_data={component_data} />
     } else {
@@ -333,8 +342,6 @@ export default function ComponentViewer({
             </div>
 
             <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
-
-            
               <ambientLight intensity={Math.PI / 2} />
               <spotLight
                 position={[10, 10, 10]}
@@ -348,9 +355,11 @@ export default function ComponentViewer({
                 decay={0}
                 intensity={Math.PI * 0.75}
               />
+
               <Bounds fit clip observe margin={1.2} maxDuration={1}>
                 <VisualizeComponent component_data={component_data} geometryMode={geometryMode} />
               </Bounds>
+
               <axesHelper args={[0.1]} />
               <gridHelper args={[2, 20, 'Gray', 'Gainsboro']} />
               <OrbitControls makeDefault />
