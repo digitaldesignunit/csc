@@ -229,7 +229,7 @@ async def get_component(
 
 @router.get('/components/{component_id}/geometry',
             response_description='Retrieve one components geometry by id')
-async def get_component_geometry_detailed(
+async def get_component_geometry(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
         component_id: str) -> ComponentModel:
@@ -244,7 +244,7 @@ async def get_component_geometry_detailed(
 @router.get('/components/{component_id}/geometry_detailed',
             response_description='Retrieve one components detailed '
                                  'geometry by id')
-async def get_component_geometry(
+async def get_component_geometry_detailed(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
         component_id: str) -> FileResponse:
@@ -260,7 +260,8 @@ async def get_component_geometry(
     if not os.path.exists(mesh_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Mesh file not found for component {component_id}'
+            detail=('Mesh (mesh.obj) file not found '
+                    f'for component {component_id}')
         )
     # Return the .obj file
     return FileResponse(
@@ -270,19 +271,126 @@ async def get_component_geometry(
     )
 
 
-# @router.get('/components/{component_id}/geometry_reduced',
-#             response_description='Retrieve one components reduced mesh '
-#                                  'geometry by id')
-# async def get_component_geometry_reduced(
-#         request: Request,
-#         current_user: Annotated[User, Depends(get_current_active_user)],
-#         component_id: str) -> ComponentModel:
-#     collection = request.app.mongodb_components
-#     query = {'_id': component_id}
-#     projection = {'geometry': 1}
-#     component = await collection.find_one(query, projection)
-#     return JSONResponse(status_code=status.HTTP_200_OK,
-#                         content=component)
+@router.get('/components/{component_id}/material_detailed',
+            response_description='Retrieve one components detailed '
+                                 'material .mtl file by id')
+async def get_component_material_detailed(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str) -> FileResponse:
+    """
+    Fetch the mesh.mtl file for a component by component_id.
+    The path to the mesh file is: {geometry_dir}/{component_id}/mesh.mtl
+    """
+    # Grab the base directory for geometry files from your FastAPI app config
+    geometry_dir = request.app.component_geometry_dir
+    # Build the path to mesh.obj
+    mtl_path = os.path.join(geometry_dir, component_id, 'mesh.mtl')
+    # Check if the file exists
+    if not os.path.exists(mtl_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=('Material (.mtl) file not found for '
+                    f'component {component_id}')
+        )
+    # Return the .obj file
+    return FileResponse(
+        path=mtl_path,
+        media_type='text/x-mtl',
+        filename=f'{component_id}_mesh.mtl'
+    )
+
+
+@router.get('/components/{component_id}/geometry_reduced',
+            response_description='Retrieve one components reduced mesh '
+                                 'geometry by id')
+async def get_component_geometry_reduced(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str) -> FileResponse:
+    """
+    Fetch the mesh_reduced.obj file for a component by component_id.
+    The path to the mesh file is:
+    {geometry_dir}/{component_id}/mesh_reduced.obj
+    """
+    # Grab the base directory for geometry files from your FastAPI app config
+    geometry_dir = request.app.component_geometry_dir
+    # Build the path to mesh_reduced.obj
+    mesh_path = os.path.join(geometry_dir, component_id, 'mesh_reduced.obj')
+    # Check if the file exists
+    if not os.path.exists(mesh_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=('Reduced mesh (mesh_reduced.obj) file not found'
+                    f'for component {component_id}')
+        )
+    # Return the .obj file
+    return FileResponse(
+        path=mesh_path,
+        media_type='model/obj',
+        filename=f'{component_id}_mesh_reduced.obj'
+    )
+
+
+@router.get('/components/{component_id}/material_reduced',
+            response_description='Retrieve one components reduced material '
+                                 '.mtl file by id')
+async def get_component_material_reduced(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str) -> FileResponse:
+    """
+    Fetch the mesh_reduced.mtl file for a component by component_id.
+    The path to the mesh file is:
+    {geometry_dir}/{component_id}/mesh_reduced.mtl
+    """
+    # Grab the base directory for geometry files from your FastAPI app config
+    geometry_dir = request.app.component_geometry_dir
+    # Build the path to mesh_reduced.mtl
+    mtl_path = os.path.join(geometry_dir, component_id, 'mesh_reduced.mtl')
+    # Check if the file exists
+    if not os.path.exists(mtl_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=('Reduced material (.mtl) file not found for '
+                    f'component {component_id}')
+        )
+    # Return the .obj file
+    return FileResponse(
+        path=mtl_path,
+        media_type='text/x-mtl',
+        filename=f'{component_id}_mesh_reduced.mtl'
+    )
+
+
+@router.get('/components/{component_id}/texture',
+            response_description='Retrieve one components texture.jpg '
+                                 'file by id')
+async def get_component_texture(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str) -> FileResponse:
+    """
+    Fetch the mesh.mtl file for a component by component_id.
+    The path to the mesh file is: {geometry_dir}/{component_id}/texture.jpg
+    """
+    # Grab the base directory for geometry files from your FastAPI app config
+    geometry_dir = request.app.component_geometry_dir
+    # Build the path to mesh.obj
+    texture_path = os.path.join(geometry_dir, component_id, 'texture.jpg')
+    # Check if the file exists
+    if not os.path.exists(texture_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=('Texture (.jpg) file not found for '
+                    f'component {component_id}')
+        )
+    # Return the .obj file
+    return FileResponse(
+        path=texture_path,
+        media_type='image/jpeg',
+        filename=f'{component_id}_texture.jpg'
+    )
 
 
 @router.get('/components/{component_id}/descriptors',
