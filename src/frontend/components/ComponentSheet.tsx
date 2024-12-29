@@ -48,31 +48,9 @@ function inject_geometry(component: ComponentData, component_geometry: any) {
 
 export default function ComponentSheet({
   component_data,
-  searchParams
 }: {
   component_data: ComponentData,
-  searchParams?: {
-    detail_id?: string
-  }
 }) {
-  // Component Color
-  const component_color_str = componentColorString(component_data.color)
-  const component_color_hex = hexComponentColor(component_data.color)
-
-  // Component Bounds
-  const component_bounds = componentBounds(component_data.bbx)
-
-  // Search Params
-  const pathname = usePathname()
-  const { replace } = useRouter()
-  let detail_id = searchParams?.detail_id || ''
-
-  function setComponentDetail(component_id: string) {
-    const params = new URLSearchParams(searchParams)
-    params.set('detail_id', component_id)
-    replace(`${pathname}?${params.toString()}`)
-  }
-
   // Geometry Fetching
   const [isLoading, setIsLoading] = useState(false)
   const [isComponentViewerVisible, setIsComponentViewerVisible] = useState(false)
