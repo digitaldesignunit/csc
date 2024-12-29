@@ -266,8 +266,8 @@ async def get_component_geometry_detailed(
     # Return the .obj file
     return FileResponse(
         path=mesh_path,
-        media_type='model/obj',
-        filename=f'{component_id}_mesh.obj'
+        media_type='text/x-obj',
+        filename='mesh.obj'
     )
 
 
@@ -297,7 +297,7 @@ async def get_component_material_detailed(
     return FileResponse(
         path=mtl_path,
         media_type='text/x-mtl',
-        filename=f'{component_id}_mesh.mtl'
+        filename='mesh.mtl'
     )
 
 
@@ -327,8 +327,8 @@ async def get_component_geometry_reduced(
     # Return the .obj file
     return FileResponse(
         path=mesh_path,
-        media_type='model/obj',
-        filename=f'{component_id}_mesh_reduced.obj'
+        media_type='text/x-obj',
+        filename='mesh_reduced.obj'
     )
 
 
@@ -359,7 +359,7 @@ async def get_component_material_reduced(
     return FileResponse(
         path=mtl_path,
         media_type='text/x-mtl',
-        filename=f'{component_id}_mesh_reduced.mtl'
+        filename='mesh_reduced.mtl'
     )
 
 
