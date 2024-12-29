@@ -10,6 +10,7 @@ import { rgbToHex } from '@/lib/utils'
 import ComponentViewerSkeleton from './ComponentViewerSkeleton'
 import { MTLLoader } from 'three-stdlib'
 import { OBJLoader } from 'three-stdlib'
+import { Skeleton } from './ui/skeleton'
 
 // Scale factor for converting units to meters in THREE
 const scale: number = 0.001
@@ -185,8 +186,20 @@ const VisualizeMesh = React.memo(({
     if (isLoadingExternal) {
       return (
         <mesh>
-          <Html center style={{ background: 'rgba(255,255,255,0.8)', padding: '5px', borderRadius: '5px' }}>
-            Loading external geometry...
+          <Html center>
+            <div
+              style={{
+                minWidth: '200px',
+                padding: '8px',
+                background: 'rgba(255,255,255,0.8)',
+                borderRadius: '4px',
+                textAlign: 'center',
+              }}
+            >
+              <Skeleton className='h-full rounded-xl m-2 flex items-center justify-center'>
+                <strong>Loading geometry...</strong>
+              </Skeleton>
+            </div>
           </Html>
         </mesh>
       )
