@@ -316,3 +316,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - Fixed Tailwinds
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.9
+- CSC React Frontend:   0.1.4.15
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC FastAPI Backend
+
+- Added routes to fetch detailed geometry, reduced mesh geometry, material and textures
+
+#### CSC React Frontend
+
+- Updated detailed and reduced geometry routing to fetch geometry using backend API
