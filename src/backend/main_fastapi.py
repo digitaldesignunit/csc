@@ -16,7 +16,13 @@ from motor.motor_asyncio import AsyncIOMotorClient
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 
 from apps.catalogue.routers import router as catalogue_router
-from utility import sanitize_path, get_cors_origins, get_db_connectionstring
+from utility import (
+    sanitize_path,
+    get_cors_origins,
+    get_db_connectionstring,
+    get_preview_directory,
+    get_geometry_directory
+)
 
 
 # ENVIRONMENT SETTINGS --------------------------------------------------------
@@ -42,6 +48,8 @@ async def lifespan(app: FastAPI):
     app.mongodb_components = app.mongodb['components']
     app.mongodb_users = app.mongodb['users']
     app.mongodb_models = app.mongodb['models']
+    app.component_preview_dir = get_preview_directory(_CONFIGFILE)
+    app.component_geometry_dir = get_geometry_directory(_CONFIGFILE)
     yield
     # shutdown
     app.mongodb_client.close()

@@ -15,7 +15,7 @@ from fastapi import (APIRouter, # NOQA
                      status,
                      Depends)
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
 
@@ -229,7 +229,7 @@ async def get_component(
 
 @router.get('/components/{component_id}/geometry',
             response_description='Retrieve one components geometry by id')
-async def get_component_geometry(
+async def get_component_geometry_detailed(
         request: Request,
         current_user: Annotated[User, Depends(get_current_active_user)],
         component_id: str) -> ComponentModel:
@@ -239,6 +239,50 @@ async def get_component_geometry(
     component = await collection.find_one(query, projection)
     return JSONResponse(status_code=status.HTTP_200_OK,
                         content=component)
+
+
+@router.get('/components/{component_id}/geometry_detailed',
+            response_description='Retrieve one components detailed '
+                                 'geometry by id')
+async def get_component_geometry(
+        request: Request,
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        component_id: str) -> FileResponse:
+    """
+    Fetch the mesh.obj file for a component by component_id.
+    The path to the mesh file is: {geometry_dir}/{component_id}/mesh.obj
+    """
+    # Grab the base directory for geometry files from your FastAPI app config
+    geometry_dir = request.app.component_geometry_dir
+    # Build the path to mesh.obj
+    mesh_path = os.path.join(geometry_dir, component_id, 'mesh.obj')
+    # Check if the file exists
+    if not os.path.exists(mesh_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Mesh file not found for component {component_id}'
+        )
+    # Return the .obj file
+    return FileResponse(
+        path=mesh_path,
+        media_type='model/obj',
+        filename=f'{component_id}_mesh.obj'
+    )
+
+
+# @router.get('/components/{component_id}/geometry_reduced',
+#             response_description='Retrieve one components reduced mesh '
+#                                  'geometry by id')
+# async def get_component_geometry_reduced(
+#         request: Request,
+#         current_user: Annotated[User, Depends(get_current_active_user)],
+#         component_id: str) -> ComponentModel:
+#     collection = request.app.mongodb_components
+#     query = {'_id': component_id}
+#     projection = {'geometry': 1}
+#     component = await collection.find_one(query, projection)
+#     return JSONResponse(status_code=status.HTTP_200_OK,
+#                         content=component)
 
 
 @router.get('/components/{component_id}/descriptors',

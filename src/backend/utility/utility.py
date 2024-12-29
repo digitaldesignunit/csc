@@ -57,6 +57,17 @@ def get_preview_directory(config_file: str) -> str:
     return preview_dir
 
 
+def get_geometry_directory(config_file: str) -> str:
+    """
+    Read geometry directory from config file.
+    """
+    with open(config_file, 'r') as configfile:
+        # Reading from json file
+        dbconfig = json.load(configfile)
+        geometry_dir = sanitize_path(dbconfig['geometry_dir'])
+    return geometry_dir
+
+
 def create_logging_timestamp():
     """
     Creates a timestamp in YY:MM:DD-HH:MM:SS format.
