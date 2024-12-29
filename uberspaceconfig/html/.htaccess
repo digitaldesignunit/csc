@@ -23,11 +23,7 @@ RewriteBase /
 Header set X-Content-Type-Options "nosniff"
 
 <IfModule mod_headers.c>
-  # Match either http://localhost:3000 or https://ddu.uber.space
-  SetEnvIfOrigin "^(http://localhost:3000|https://ddu\.uber\.space)$" AccessControlAllow=$0
-
-  # Only set Access-Control-Allow-Origin if the origin matched
-  Header set Access-Control-Allow-Origin "%{AccessControlAllow}e" env=AccessControlAllow
+  Header set Access-Control-Allow-Origin "https://ddu.uber.space"
   Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
   Header set Access-Control-Allow-Headers "Content-Type"
 </IfModule>
