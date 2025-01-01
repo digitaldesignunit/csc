@@ -1,18 +1,11 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
 interface ComponentOverviewFilterMenuProps {
   defaultMaterial: string
@@ -24,26 +17,53 @@ interface ComponentOverviewFilterMenuProps {
  * for "material" and "comptype". When the user clicks "Apply",
  * it updates the search params in the URL, causing the server component
  * (page.tsx) to re-fetch with new filters.
+ *
+ * - Has a "Reset" button to clear filters.
+ * - Automatically updates local state if another component changes search params.
  */
 export default function ComponentOverviewFilterMenu({
   defaultMaterial,
   defaultCompType,
 }: ComponentOverviewFilterMenuProps) {
-  const [material, setMaterial] = useState(defaultMaterial)
-  const [compType, setCompType] = useState(defaultCompType)
-
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  // Local state to store the current filters
+  const [material, setMaterial] = useState(defaultMaterial)
+  const [compType, setCompType] = useState(defaultCompType)
+
+  // Whenever the searchParams themselves change (due to another component),
+  // we sync our local state so our inputs reflect the updated query string.
+  useEffect(() => {
+    // If the param is missing, we can default to "" or the defaultMaterial
+    const newMaterial = searchParams.get('material') || ''
+    const newCompType = searchParams.get('comptype') || ''
+
+    setMaterial(newMaterial)
+    setCompType(newCompType)
+  }, [searchParams])
+
   function handleApplyFilters() {
     const params = new URLSearchParams(searchParams.toString())
-    // Update the search params
     params.set('material', material)
     params.set('comptype', compType)
-    // Optionally reset the page to 1
+    // Optionally reset page to 1
     params.set('page', '1')
 
-    // Replace the URL so we don't keep adding history entries
+    router.replace(`?${params.toString()}`)
+  }
+
+  function handleResetFilters() {
+    const params = new URLSearchParams(searchParams.toString())
+    // Remove or reset these filters from the URL
+    params.delete('material')
+    params.delete('comptype')
+    // Also reset local state, if you want them empty
+    setMaterial('')
+    setCompType('')
+    // Reset page if needed
+    params.set('page', '1')
+
     router.replace(`?${params.toString()}`)
   }
 
@@ -73,9 +93,15 @@ export default function ComponentOverviewFilterMenu({
         </div>
       </div>
 
-      <Button onClick={handleApplyFilters}>
-        Apply Filters
-      </Button>
+      {/* Buttons */}
+      <div className="flex items-center gap-2 mt-2">
+        <Button onClick={handleApplyFilters}>
+          Apply Filters
+        </Button>
+        <Button variant="secondary" onClick={handleResetFilters}>
+          Reset Filters
+        </Button>
+      </div>
     </Card>
   )
 }

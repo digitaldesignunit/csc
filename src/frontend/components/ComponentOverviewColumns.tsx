@@ -8,6 +8,7 @@ import { formatTimestamp, formatLocation } from '@/lib/utils'
 import ComponentSheet from './ComponentSheet'
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
 import Link from 'next/link'
+import ComponentOverviewDataTableCell from './ComponentOverviewDataTableCell'
 
 // Build your columns for the data table
 export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
@@ -23,25 +24,13 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     header: () => <ComponentOverviewDataTableHeader header='Type' />,
     cell: ({ row }) => {
       // We'll add a click handler here to update the 'comptype' in search params
-      const router = useRouter()
-      const searchParams = useSearchParams()
       const component_type: string = row.getValue('type')
-      function handleClickCompType() {
-        // Copy current search params
-        const params = new URLSearchParams(searchParams.toString())
-        // Update 'comptype' to the clicked one
-        params.set('comptype', component_type)
-        // Update the URL with new params (replace so we don't push a new history entry)
-        router.replace(`?${params.toString()}`)
-      }
       return (
-        <div
-          className='text-left align-text-top underline cursor-pointer'
-          onClick={handleClickCompType}
-          title='Click to filter by this component type'
-        >
-          {component_type}
-        </div>
+        <ComponentOverviewDataTableCell
+          param='comptype'
+          value={component_type}
+          titletext='Click to filter by this component type'
+        />
     )
     },
   },
@@ -49,26 +38,13 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     accessorKey: 'material',
     header: () => <ComponentOverviewDataTableHeader header='Material' />,
     cell: ({ row }) => {
-      // We'll add a click handler here to update the 'material' in search params
-      const router = useRouter()
-      const searchParams = useSearchParams()
       const component_mat: string = row.getValue('material') ?? ''
-      function handleClickMaterial() {
-        // Copy current search params
-        const params = new URLSearchParams(searchParams.toString())
-        // Update 'material' to the clicked one
-        params.set('material', component_mat)
-        // Update the URL with new params (replace so we don't push a new history entry)
-        router.replace(`?${params.toString()}`)
-      }
       return (
-        <div
-          className='text-left align-text-top underline cursor-pointer'
-          onClick={handleClickMaterial}
-          title='Click to filter by this material'
-        >
-          {component_mat}
-        </div>
+        <ComponentOverviewDataTableCell
+          param='material'
+          value={component_mat}
+          titletext='Click to filter by this material'
+        />
       )
     },
   },
