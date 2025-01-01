@@ -67,7 +67,7 @@ export default async function ComponentsPage({
 
   return (
     <>
-      <div className="grid gap-[32px] m-2">
+      <div className="grid gap-2 m-2">
       {/* 1) Render the FilterMenu, passing in default values from search params */}
       <ComponentOverviewFilterMenu
         defaultMaterial={material}
