@@ -135,6 +135,7 @@ async def get_components_shallow(
         size: int = 0,
         sortkey: str = '_id',
         comptype: str = '',
+        material: str = '',
         validated: int = 1) -> List[ComponentModel]:
     # get database
     db = request.app.mongodb_components
@@ -145,6 +146,9 @@ async def get_components_shallow(
     # filter component type
     if comptype and comptype in ALLOWED_COMPONENT_TYPES:
         query.update({'type': comptype})
+    # filter material
+    if material:
+        query.update({'material': material})
     # check to only get validated components
     if validated == 1:
         query.update({'validated': True})
@@ -180,6 +184,7 @@ async def get_components(
         size: int = 0,
         sortkey: str = '_id',
         comptype: str = '',
+        material: str = '',
         validated: int = 1) -> List[ComponentModel]:
     # get database
     db = request.app.mongodb_components
@@ -189,6 +194,9 @@ async def get_components(
     # filter component type
     if comptype and comptype in ALLOWED_COMPONENT_TYPES:
         query.update({'type': comptype})
+    # filter material
+    if material:
+        query.update({'material': material})
     # check to only get validated components
     if validated == 1:
         query.update({'validated': True})
