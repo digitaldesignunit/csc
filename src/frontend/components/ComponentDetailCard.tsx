@@ -20,7 +20,7 @@ export default function ComponentDetailCard({
   // Component Bounds
   const component_bounds = componentBounds(component_data.bbx)
 
-  // Lat/Lon (adjust this depending on where your lat/lon data comes from)
+  // Lat/Lon
   const { lat, lon } = component_data.location || { lat: 37.81627937, lon: 144.95373531 }
   const mapSrc = `https://maps.google.com/maps?q=${lat},${lon}&z=15&output=embed`
 
@@ -50,9 +50,8 @@ export default function ComponentDetailCard({
 
         <CardContent>
           <div className='flex flex-col md:flex-row justify-between items-start gap-4 mb-4'>
-
             {/* Left side metadata */}
-            <div className='text-left w-full md:w-auto'>
+            <div className='text-left w-full md:min-w-[500px] md:w-auto'>
               <h2 className='font-bold mb-2'>Metadata</h2>
               <div><b>Type:</b> {component_data.type}</div>
               <div><b>Material:</b> {component_data.material}</div>
@@ -66,41 +65,45 @@ export default function ComponentDetailCard({
               </div>
               <div>
                 <b>BoundingBox</b><br />
-                  <ul className='list-disc list-inside'>
-                    <li className='ml-4'><b><i>X:</i></b> {component_bounds[0].toFixed(2)}</li>
-                    <li className='ml-4'><b><i>Y:</i></b> {component_bounds[1].toFixed(2)}</li>
-                    <li className='ml-4'><b><i>Z:</i></b> {component_bounds[2].toFixed(2)}</li>
-                  </ul>
+                <ul className='list-disc list-inside'>
+                  <li className='ml-4'><b><i>X:</i></b> {component_bounds[0].toFixed(2)}</li>
+                  <li className='ml-4'><b><i>Y:</i></b> {component_bounds[1].toFixed(2)}</li>
+                  <li className='ml-4'><b><i>Z:</i></b> {component_bounds[2].toFixed(2)}</li>
+                </ul>
               </div>
-              
+
               <Accordion type="single" collapsible className="w-full mt-2">
                 <AccordionItem value="item-1">
                   <AccordionTrigger><b>Show Descriptors</b></AccordionTrigger>
                   <AccordionContent>
-                    {component_data.descriptors ? (
-                      <pre className='text-sm whitespace-pre-wrap'>
-                        <code>
-                          {JSON.stringify(component_data.descriptors, null, 2)}
-                        </code>
-                      </pre>
-                    ) : (
-                      <div>No descriptors available.</div>
-                    )}
+                    <div className="max-h-64 overflow-auto p-2 bg-gray-50 border border-gray-300 rounded">
+                      {component_data.descriptors ? (
+                        <pre className='text-sm whitespace-pre-wrap'>
+                          <code>
+                            {JSON.stringify(component_data.descriptors, null, 2)}
+                          </code>
+                        </pre>
+                      ) : (
+                        <div>No descriptors available.</div>
+                      )}
+                    </div>
                   </AccordionContent>
                 </AccordionItem>
 
                 <AccordionItem value="item-2">
                   <AccordionTrigger><b>Show Raw JSON</b></AccordionTrigger>
                   <AccordionContent>
-                    {component_data ? (
-                      <pre className='text-sm whitespace-pre-wrap'>
-                        <code>
-                          {JSON.stringify(component_data, null, 2)}
-                        </code>
-                      </pre>
-                    ) : (
-                      <div>No raw JSON data available.</div>
-                    )}
+                    <div className="max-h-64 overflow-auto p-2 bg-gray-50 border border-gray-300 rounded">
+                      {component_data ? (
+                        <pre className='text-sm whitespace-pre-wrap'>
+                          <code>
+                            {JSON.stringify(component_data, null, 2)}
+                          </code>
+                        </pre>
+                      ) : (
+                        <div>No raw JSON data available.</div>
+                      )}
+                    </div>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>

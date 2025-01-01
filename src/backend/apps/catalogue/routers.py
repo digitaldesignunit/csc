@@ -144,7 +144,7 @@ async def get_components_shallow(
     projection = {'geometry': 0, 'descriptors': 0}
     sort_order = 1
     # filter component type
-    if comptype and comptype in ALLOWED_COMPONENT_TYPES:
+    if comptype:
         query.update({'type': comptype})
     # filter material
     if material:
@@ -192,7 +192,7 @@ async def get_components(
     query = {}
     sort_order = 1
     # filter component type
-    if comptype and comptype in ALLOWED_COMPONENT_TYPES:
+    if comptype:
         query.update({'type': comptype})
     # filter material
     if material:

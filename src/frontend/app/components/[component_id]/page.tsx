@@ -32,9 +32,11 @@ export default async function ComponentDetailPage({
   )
   return (
     <div>
+      <ComponentViewer component_data={component_data} />
+
       <ComponentDetailCard component_data={component_data}/>
 
-      <ComponentViewer component_data={component_data} />
+      
   </div>
   )
 }

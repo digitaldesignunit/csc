@@ -3,6 +3,7 @@ import ComponentOverviewPagination from '@/components/ComponentOverviewPaginatio
 import { ComponentData } from '@/components/models'
 import { ComponentOverviewColumns } from '@/components/ComponentOverviewColumns'
 import { Card } from '@/components/ui/card'
+import ComponentOverviewFilterMenu from '@/components/ComponentOverviewFilterMenu'
 
 interface FetchComponentsProps {
   page: number
@@ -66,12 +67,24 @@ export default async function ComponentsPage({
 
   return (
     <>
-      <div className='grid gap-[32px] m-4'>
-        <Card className='max-w-fit overflow-x-auto'>
-          <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={db_components as ComponentData[]} />
-        </Card>
-        <ComponentOverviewPagination pageNum={page} pageSize={size}/>
-      </div>
+      <div className="grid gap-[32px] m-2">
+      {/* 1) Render the FilterMenu, passing in default values from search params */}
+      <ComponentOverviewFilterMenu
+        defaultMaterial={material}
+        defaultCompType={comptype}
+      />
+
+      {/* 2) The data table */}
+      <Card className="max-w-fit overflow-x-auto">
+        <ComponentOverviewDataTable
+          columns={ComponentOverviewColumns}
+          data={db_components as ComponentData[]}
+        />
+      </Card>
+
+      {/* 3) Pagination, if needed */}
+      <ComponentOverviewPagination pageNum={page} pageSize={size} />
+    </div>
     </>
   )
 }
