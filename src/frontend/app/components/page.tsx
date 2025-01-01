@@ -7,16 +7,19 @@ import { Card } from '@/components/ui/card'
 interface FetchComponentsProps {
   page: number
   size: number
-  comptype: string
   sortkey: string
+  comptype: string
+  material: string
 }
 
-const fetch_components_shallow = async ({ page, size, comptype, sortkey }: FetchComponentsProps) => {
+const fetch_components_shallow = async ({ page, size, sortkey, comptype, material }: FetchComponentsProps) => {
   const params = new URLSearchParams(
     { page: page.toString(),
       size: size.toString(),
+      sortkey: sortkey.toString(),
       comptype: comptype.toString(),
-      sortkey: sortkey.toString()
+      material: material.toString()
+      
     }
   )
   const response = await fetch(
@@ -40,7 +43,7 @@ export default async function ComponentsPage({
     size?: string
     sortkey?: string
     comptype?: string
-    detail_id?: string
+    material?: string
   }
 }) {
   // search params retrieval
@@ -48,15 +51,16 @@ export default async function ComponentsPage({
   let size = Number(searchParams?.size) || 20
   let sortkey = searchParams?.sortkey || '_id'
   let comptype = searchParams?.comptype || ''
-  let detail_id = searchParams?.detail_id || ''
+  let material = searchParams?.material || ''
 
   // fetch components from API using search params
   let db_components = await fetch_components_shallow(
     {
       page: page,
       size: size,
+      sortkey: sortkey,
       comptype: comptype,
-      sortkey: sortkey
+      material: material
     }
   )
 

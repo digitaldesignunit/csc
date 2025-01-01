@@ -1,11 +1,5 @@
 import ComponentDetailCard from "@/components/ComponentDetailCard";
 import ComponentViewer from "@/components/ComponentViewer";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { componentColorString, hexComponentColor } from "@/lib/utils";
-import Link from "next/link";
-import { componentBounds } from "@/lib/utils";
 
 interface FetchComponentProps {
   component_id: string
