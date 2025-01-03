@@ -68,8 +68,28 @@ async def login_for_access_token(
             response_description='Count all components')
 async def count_components(
         request: Request,
-        current_user: Annotated[User, Depends(get_current_active_user)]):
-    count = await request.app.mongodb_components.count_documents({})
+        current_user: Annotated[User, Depends(get_current_active_user)],
+        comptype: str = '',
+        material: str = '',
+        validated: int = 1) -> JSONResponse:
+    # get database
+    db = request.app.mongodb_components
+    # compose filter query and set sort order
+    query = {}
+    # filter component type
+    if comptype:
+        query.update({'type': comptype})
+    # filter material
+    if material:
+        query.update({'material': material})
+    # check to only get validated components
+    if validated == 1:
+        query.update({'validated': True})
+    elif validated == -1:
+        query.update({'validated': False})
+    # count components using query
+    count = await db.count_documents(query)
+    # return JSON response
     return JSONResponse(status_code=status.HTTP_200_OK,
                         content=count)
 
