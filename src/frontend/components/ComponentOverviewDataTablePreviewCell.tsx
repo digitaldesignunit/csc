@@ -14,10 +14,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger } from './ui/sheet'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip'
-import { hexComponentColor, componentColorString, componentBounds } from '@/lib/utils'
-import { usePathname, useRouter } from 'next/navigation'
 import ComponentPreviewImage from './ComponentPreviewImage'
 import Link from 'next/link'
 
@@ -46,7 +43,7 @@ function inject_geometry(component: ComponentData, component_geometry: any) {
       component.geometry = component_geometry
 }
 
-export default function ComponentSheet({
+export default function ComponentOverviewDataTablePreviewCell({
   component_data,
 }: {
   component_data: ComponentData,
@@ -55,7 +52,7 @@ export default function ComponentSheet({
   const [isLoading, setIsLoading] = useState(false)
   const [isComponentViewerVisible, setIsComponentViewerVisible] = useState(false)
 
-  // Handle Button Click to fetch Component Geometry
+  // Handle Button Click to fetch and inject Component Geometry
   const handleButtonClickComponentDetail = async () => {
     setIsComponentViewerVisible(false)
     setIsLoading(true)
@@ -63,6 +60,7 @@ export default function ComponentSheet({
       const component_geometry = await fetch_component_geometry(
         { component_id: component_data._id }
       )
+      // inject the geometry into the component data
       inject_geometry(component_data, component_geometry.geometry)
     } catch (error) {
       console.error('Error fetching Component Geometry:', error)
@@ -73,31 +71,63 @@ export default function ComponentSheet({
   }
   return (
     <Sheet>
-      <SheetTrigger asChild>
-        <div className='text-left align-text-middle cursor-pointer flex items-center gap-1' onClick={handleButtonClickComponentDetail}>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className='min-w-8'>
-                  <ComponentPreviewImage comp_id={component_data._id} alt={component_data._id} width={315} height={315} maxHeight={50} />
-                </div>
-              </TooltipTrigger>
+      {/* The sheet trigger with the component preview image */}
+      <div className='text-left align-text-middle cursor-pointer flex items-center gap-1'>
+        
+          <SheetTrigger asChild>
+          <div onClick={handleButtonClickComponentDetail}>
+            {/* The preview image also provides a tooltip */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className='min-w-8'>
+                    <ComponentPreviewImage
+                      comp_id={component_data._id}
+                      alt={component_data._id}
+                      width={50}
+                      height={50}
+                      maxHeight={50}
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className='flex flex-col text-center'>
+                    Click to preview this component
+                    <ComponentPreviewImage
+                      comp_id={component_data._id}
+                      alt={component_data._id}
+                      width={315}
+                      height={315}
+                      maxHeight={325}
+                    />
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            </div>
+          </SheetTrigger>
+        
 
-              <TooltipTrigger asChild>
-                <Button variant='ghost' className='text-xs h-5 w-15 hover:bg-[#009cda] hover:text-white' onClick={handleButtonClickComponentDetail}>{component_data._id}</Button>
-              </TooltipTrigger>
+        {/* The Button with the Component id */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href={`/components/${component_data._id}`}>
+                <Button variant='ghost' className='text-xs h-5 w-15 hover:bg-[#009cda] hover:text-white'>
+                  {component_data._id}
+                </Button>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className='flex flex-col text-center'>
+                Click to open the component details page
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
 
-              <TooltipContent>
-                <div className='flex flex-col text-center'>
-                Click to preview
-                <ComponentPreviewImage comp_id={component_data._id} alt={component_data._id} width={315} height={315} maxHeight={325}/>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </SheetTrigger>
-
+      {/* The sheet content with the component viewer */}
       <SheetContent side='bottom'>
         <SheetHeader>
           <SheetTitle className='text-center text-m'>Component Preview</SheetTitle>
@@ -106,8 +136,6 @@ export default function ComponentSheet({
           </SheetDescription>
         </SheetHeader>
         {isLoading ? <ComponentViewerSkeleton message='Loading Geometry...'/> : isComponentViewerVisible && <ComponentViewer component_data={component_data} />}
-        
-        
         
         <SheetFooter className="flex flex-col md:flex-row items-center justify-center gap-2 mt-4 ml-2 mr-2">
           <Link href={`/components/${component_data._id}`} className="w-full md:w-200">

@@ -5,10 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { ComponentData, ComponentBoundingBox, ComponentPolylinePoints } from './models'
 import { formatLocationMapsLink, rgbToHex } from '@/lib/utils'
 import { formatTimestamp, formatLocation } from '@/lib/utils'
-import ComponentSheet from './ComponentSheet'
+import ComponentOverviewDataTablePreviewCell from './ComponentOverviewDataTablePreviewCell'
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
 import Link from 'next/link'
-import ComponentOverviewDataTableCell from './ComponentOverviewDataTableCell'
+import ComponentOverviewDataTableFilterCell from './ComponentOverviewDataTableFilterCell'
+import ComponentOverviewDataTableLocationCell from './ComponentOverviewDataTableLocationCell'
 
 // Build your columns for the data table
 export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
@@ -16,7 +17,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     accessorKey: '_id',
     header: () => <ComponentOverviewDataTableHeader header='ID' />,
     cell: ({ row }) => {
-      return <ComponentSheet component_data={row.original} />
+      return <ComponentOverviewDataTablePreviewCell component_data={row.original} />
     },
   },
   {
@@ -26,7 +27,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
       // We'll add a click handler here to update the 'comptype' in search params
       const component_type: string = row.getValue('type')
       return (
-        <ComponentOverviewDataTableCell
+        <ComponentOverviewDataTableFilterCell
           param='comptype'
           value={component_type}
           titletext='Click to filter by this component type'
@@ -40,7 +41,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     cell: ({ row }) => {
       const component_mat: string = row.getValue('material') ?? ''
       return (
-        <ComponentOverviewDataTableCell
+        <ComponentOverviewDataTableFilterCell
           param='material'
           value={component_mat}
           titletext='Click to filter by this material'
@@ -56,7 +57,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
       const component_bbx_x =
         component_bbx[1][0] - component_bbx[0][0]
       return (
-        <div className='text-left align-text-top'>
+        <div className='text-left align-text-top text-xs'>
           {component_bbx_x.toFixed(2)}
         </div>
       )
@@ -70,7 +71,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
       const component_bbx_y =
         component_bbx[1][1] - component_bbx[0][1]
       return (
-        <div className='text-left align-text-top'>
+        <div className='text-left align-text-top text-xs'>
           {component_bbx_y.toFixed(2)}
         </div>
       )
@@ -84,7 +85,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
       const component_bbx_z =
         component_bbx[1][2] - component_bbx[0][2]
       return (
-        <div className='text-left align-text-top'>
+        <div className='text-left align-text-top text-xs'>
           {component_bbx_z.toFixed(2)}
         </div>
       )
@@ -118,7 +119,11 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     header: () => <ComponentOverviewDataTableHeader header='Fragment' />,
     cell: ({ row }) => {
       const complexity: boolean = row.getValue('fragment')
-      return <div className='text-left align-text-top'>{complexity.toString()}</div>
+      return (
+        <div className='text-left align-text-top text-xs'>
+          {complexity.toString()}
+        </div>
+      )
     },
   },
   {
@@ -126,25 +131,20 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     header: () => <ComponentOverviewDataTableHeader header='Complexity' />,
     cell: ({ row }) => {
       const complexity: number = row.getValue('complexity')
-      return <div className='text-center align-text-top'>{complexity.toString()}</div>
+      return (
+        <div className='text-center align-text-top text-xs'>
+          {complexity.toString()}
+        </div>
+      )
     },
   },
   {
     accessorKey: 'location',
     header: () => <ComponentOverviewDataTableHeader header='Location' />,
     cell: ({ row }) => {
-      const location: string = formatLocation(row.getValue('location'))
-      const locationlink: string = formatLocationMapsLink(row.getValue('location'))
       return (
         <div className='text-left align-text-top text-xs'>
-          <a
-            href={locationlink}
-            target='_blank'
-            rel='noopener noreferrer'
-            className='hover:text-gray-500'
-          >
-            {location}
-          </a>
+          <ComponentOverviewDataTableLocationCell coords={row.getValue('location')}/>
         </div>
       )
     },

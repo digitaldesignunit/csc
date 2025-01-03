@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { ComponentBoundingBox } from "@/components/models";
+import { ComponentBoundingBox, ComponentLocation } from "@/components/models";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -129,12 +129,12 @@ export function formatTimestamp(input: string): string {
   return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`
 }
 
-export function formatLocation(coords: { lat: number; lon: number }): string {
+export function formatLocation(coords: ComponentLocation): string {
   const { lat, lon } = coords;
   return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
 }
 
-export function formatLocationMapsLink(coords: { lat: number; lon: number }): string {
+export function formatLocationMapsLink(coords: ComponentLocation): string {
   const { lat, lon } = coords;
   return `https://www.google.com/maps/place/${lat.toFixed(6)},${lon.toFixed(6)}`;
 }

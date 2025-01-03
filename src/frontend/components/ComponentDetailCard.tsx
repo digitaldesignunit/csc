@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import Link from 'next/link'
 import { Button } from './ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion'
+import ComponentDetailMap from './ComponentDetailMap'
 
 export default function ComponentDetailCard({
   component_data,
@@ -22,7 +23,6 @@ export default function ComponentDetailCard({
 
   // Lat/Lon
   const { lat, lon } = component_data.location || { lat: 37.81627937, lon: 144.95373531 }
-  const mapSrc = `https://maps.google.com/maps?q=${lat},${lon}&z=15&output=embed`
 
   return (
     <div>
@@ -112,16 +112,7 @@ export default function ComponentDetailCard({
             {/* Right side: small Google Maps embed */}
             <div className='w-full md:w-[300px] md:h-[200px]'>
               <h2 className='font-bold mb-2'>Location</h2>
-              <iframe
-                width="100%"
-                height="200"
-                style={{ border: 0 }}
-                src={mapSrc}
-                allowFullScreen
-                aria-hidden="false"
-                tabIndex={0}
-                className='rounded-md overflow-hidden'
-              ></iframe>
+              <ComponentDetailMap lat={lat} lon={lon} />
             </div>
           </div>
         </CardContent>
