@@ -75,7 +75,8 @@ async function loadExternalGeometry(
     const object = await objLoader.loadAsync(objUrl)
 
     object.scale.set(scale, scale, scale)
-    object.rotateX(-Math.PI / 2)
+    // do not rotate ,.obj's as they are already oriented correctly!
+    // OBJ has the same axis system than THREE but a different one than Rhino.
     ensureNormals(object)
 
     externalGeometryCache.set(cacheKey, object)
@@ -151,8 +152,10 @@ const VisualizeMesh = React.memo(({
       mesh_geometry.setAttribute('color', colorAttribute)
     }
 
-    // Adjust orientation and compute normals
+    // Rotate primitive geometry to comply with THREE axis orientation
+    // (this geometry is coming from rhino that's the reason!)
     mesh_geometry.rotateX(-Math.PI / 2)
+    // Compute normals
     mesh_geometry.computeVertexNormals()
     mesh_geometry.normalizeNormals()
 
@@ -206,6 +209,7 @@ const VisualizeMesh = React.memo(({
     }
     // If external object loaded successfully, show it
     if (externalObject) {
+      
       return <primitive object={externalObject} />
     }
     // If external loading failed or not found, fallback to primitive geometry
@@ -260,6 +264,7 @@ const VisualizeSheet = React.memo(({ component_data }: { component_data: Compone
       0,
       -component_data.geometry.extrusion.height * scale * 0.5
     )
+    // rotate to comply with THREE axis orientation
     extrude_geometry.rotateX(-Math.PI / 2)
     // Compute and normalize normals
     extrude_geometry.computeVertexNormals()
