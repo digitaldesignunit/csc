@@ -87,7 +87,7 @@ def gource(c):
                    "-o viz/overview.ppm").format(repodir))
             # track
             log.info("Creating gource track visualization...")
-            c.run(("gource s{0} -1920x1080 -f --multi-sampling -a 1 -s 1 "
+            c.run(("gource {0} -1920x1080 -f --multi-sampling -a 1 -s 1 "
                    "--hide bloom,mouse,progress --camera-mode track -r 60 -o "
                    "viz/track.ppm").format(repodir))
         except exceptions.UnexpectedExit:
