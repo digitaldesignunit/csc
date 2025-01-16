@@ -3,7 +3,7 @@
 # r: numpy==1.26.4
 # r: scipy==1.13.0
 # r: scikit-learn==1.4.2
-# VERSION: 241212
+# VERSION: 250115
 
 import os
 import json
@@ -207,56 +207,12 @@ def compute_minimum_bounds(geometry: Rhino.Geometry.GeometryBase):
         AlignedBBX = [Rhino.Geometry.Point3d(p[0], p[1], 0) for p in mbr]
         [pt.Transform(XForm) for pt in AlignedBBX]
     # return results
-    return (AlignedBBX, AlignedGeometry)
-
-
-def save_mesh_as_json(mesh_id, bbx_data, mt, json_file):
-    # Get mesh geometry
-    mesh = rs.coercemesh(mesh_id)
-    if not mesh:
-        print('Failed to get mesh geometry.')
-        return
-
-    # Get vertices
-    vertices = [[v.X, v.Y, v.Z] for v in mesh.Vertices]
-
-    # Get faces
-    faces = []
-    for i in range(mesh.Faces.Count):
-        face = mesh.Faces[i]
-        if face.IsQuad:
-            raise RuntimeError('QUAD DETECTED!')
-        else:
-            faces.append([face.A, face.B, face.C])
-
-    # Get vertex colors
-    colors = []
-    if mesh.VertexColors.Count == mesh.Vertices.Count:
-        colors = [[c.R, c.G, c.B] for c in mesh.VertexColors]
-    else:
-        # Default color if no vertex colors are assigned
-        colors = None
-
-    # Create JSON data structure
-    json_data = {
-        'bbxdata': bbx_data,
-        'materialthickness': mt,
-        'mesh': {
-            'v': vertices,
-            'f': faces,
-            'c': colors
-        }
-    }
-
-    # Save data to JSON file
-    with open(json_file, 'w') as f:
-        json.dump(json_data, f, indent=4)
-
-    print(f'Mesh data saved to {json_file}')
+    return (AlignedBBX, AlignedGeometry, XForm)
 
 
 def reduce_mesh(mesh_id, target_face_count=100):
     # Reduce the mesh using Rhino's MeshReduce function
+    sc.doc = Rhino.RhinoDoc.ActiveDoc
     mesh = rs.coercemesh(mesh_id)
     if not mesh:
         print('Failed to get mesh geometry.')
@@ -268,86 +224,161 @@ def reduce_mesh(mesh_id, target_face_count=100):
     primitive_mesh.Faces.ConvertQuadsToTriangles()
     primitive_mesh.Compact()
 
-    # compute minimum bounding box
-    bbx_xyz, aligned_geometry = compute_minimum_bounds(primitive_mesh)
-    # create bbx dict
-    bbxdata = {
-        'xyz': [[pt.X, pt.Y, pt.Z] for pt in bbx_xyz]
-    }
-    # specifiy materialthickness according to bbx
-    mt = bbx_xyz[0].DistanceTo(bbx_xyz[4])
-
     # Replace the original mesh with the reduced one
     rs.DeleteObject(mesh_id)
 
-    new_mesh_id = sc.doc.Objects.AddMesh(aligned_geometry)
-    return new_mesh_id, bbxdata, mt
+    primitive_mesh_id = sc.doc.Objects.AddMesh(primitive_mesh)
+    return primitive_mesh, primitive_mesh_id
 
 
-def process_mesh(mesh_file, mesh_reduced_file, output_file, json_file):
+def save_files(
+        primitive_mesh,
+        bbx_data, uid,
+        json_source_dir,
+        json_target_dir):
+    # Get vertices
+    vertices = [[v.X, v.Y, v.Z] for v in primitive_mesh.Vertices]
+
+    # Get faces
+    faces = []
+    for i in range(primitive_mesh.Faces.Count):
+        face = primitive_mesh.Faces[i]
+        if face.IsQuad:
+            raise RuntimeError('QUAD DETECTED!')
+        else:
+            faces.append([face.A, face.B, face.C])
+
+    # Get vertex colors
+    colors = []
+    if primitive_mesh.VertexColors.Count == primitive_mesh.Vertices.Count:
+        colors = [[c.R, c.G, c.B] for c in primitive_mesh.VertexColors]
+    else:
+        # Default color if no vertex colors are assigned
+        colors = None
+
+    # in json source dir, open file with uid
+    input_file = os.path.join(json_source_dir, uid + '.json')
+    with open(input_file, 'r', encoding='utf-8') as infile:
+        jsondata = json.load(infile)
+
+    # Modify geometry data, bbx, mt and lastmodified
+    jsondata['bbx'] = bbx_data
+    jsondata['geometry']['mesh']['v'] = vertices
+    jsondata['geometry']['mesh']['f'] = faces
+    jsondata['geometry']['mesh']['c'] = colors
+    jsondata['lastmodified'] = '250115-151700'
+
+    # Save the updated JSON to the output location
+    output_file = os.path.join(json_target_dir, uid + '.json')
+    with open(output_file, 'w', encoding='utf-8') as outfile:
+        json.dump(jsondata, outfile, indent=4)
+
+    print(f'    JSON updated and saved to: {output_file}')
+
+
+def process_mesh(
+        mesh_file,
+        mesh_reduced_file,
+        primitive_mesh_3dm_file,
+        target_geometry_dir,
+        uid,
+        json_source_dir,
+        json_target_dir):
     # PROCESS ORIGINAL MESH
+    print('    Processing ORIGINAL Mesh...')
     # Clear the current document and open a new empty one
     rs.DocumentModified(False)
     rs.Command('!-_New _None', echo=False)
     sc.doc = Rhino.RhinoDoc.ActiveDoc
     # Import the mesh
     rs.Command(f'!_-Open "{mesh_file}"')
+    rs.Command('!_-ZE')
     sc.doc = Rhino.RhinoDoc.ActiveDoc
     # Get all meshes in the document
     mesh_ids = rs.ObjectsByType(rs.filter.mesh)
     if not mesh_ids:
-        print(f'No mesh found in {mesh_file}')
+        print(f'    No mesh found in {mesh_file}')
         return
     # Assume we are working with the first mesh
     mesh_id = mesh_ids[0]
+    # --> Apply PCA and obtain XFORM for reduced mesh
+    # compute minimum bounding box
+    original_mesh = rs.coercemesh(mesh_id)
+    if not original_mesh:
+        print('    Failed to get mesh geometry.')
+        return
+    bbx_xyz, aligned_geometry, xform = compute_minimum_bounds(original_mesh)
+    # create bbx data (maximum points)
+    bbx_list = [[pt.X, pt.Y, pt.Z] for pt in bbx_xyz]
+    bbx_min = [bbx_list[0][0],
+               bbx_list[0][1],
+               bbx_list[0][2]]
+    bbx_max = [bbx_list[6][0],
+               bbx_list[6][1],
+               bbx_list[6][2]]
+    bbx_data = [bbx_min, bbx_max]
+    # transform original mesh using xform
+    rs.TransformObject(mesh_id, xform)
     # Export the mesh as OBJ with texture and MTL
     head, tail = os.path.split(mesh_file)
-    obj_dir = os.path.join(head, 'obj')
+    obj_dir = os.path.join(target_geometry_dir, uid)
     if not os.path.exists(obj_dir):
-        obj_dir = os.makedirs(obj_dir)
+        os.makedirs(obj_dir)
     obj_name = tail.split('.')[0]
-    obj_file = obj_name + '.obj'
-    export_mesh_as_obj(mesh_id, os.path.join(head, 'obj', obj_file))
+    obj_name += '.obj'
+    obj_file = os.path.join(obj_dir, obj_name)
+    print('    Exporting ORIGINAL OBJ...')
+    export_mesh_as_obj(mesh_id, obj_file)
+
+    # OBTAIN PRIMITIVE MESH FROM ORIGINAL MESH AND SAVE 3DM
+    print('    Creating PRIMITIVE Mesh...')
+    # Reduce the mesh to obtain a primitive representation
+    primitive_mesh, primitive_mesh_id = reduce_mesh(mesh_id,
+                                                    target_face_count=300)
+    if not primitive_mesh_id:
+        print('    Mesh reduction failed!')
+        return
+    # Save the primitive mesh to a new file
+    if not rs.SelectObject(primitive_mesh_id):
+        print('    Failed to select reduced mesh for saving...')
+        return
+    os.makedirs(os.path.split(primitive_mesh_3dm_file)[0], exist_ok=True)
+    if os.path.isfile(primitive_mesh_3dm_file):
+        os.remove(primitive_mesh_3dm_file)
+    if not rs.Command(f'!-_SaveAs \"{primitive_mesh_3dm_file}\"', echo=False):
+        print('    Failed to save reduced mesh to '
+              f'{primitive_mesh_3dm_file}...')
+        return
 
     # PROCESS REDUCED MESH
     # Clear the current document and open a new empty one
+    print('    Processing REDUCED Mesh...')
     rs.DocumentModified(False)
     rs.Command('!-_New _None', echo=False)
     sc.doc = Rhino.RhinoDoc.ActiveDoc
     # Import the mesh
     rs.Command(f'!_-Open "{mesh_reduced_file}"')
+    rs.Command('!_-ZE')
     sc.doc = Rhino.RhinoDoc.ActiveDoc
     # Get all meshes in the document
     mesh_ids = rs.ObjectsByType(rs.filter.mesh)
     if not mesh_ids:
-        print(f'No mesh found in {mesh_reduced_file}')
+        print(f'    No mesh found in {mesh_reduced_file}')
         return
     # Assume we are working with the first mesh
     mesh_id = mesh_ids[0]
+    # transform reduced mesh using xform
+    rs.TransformObject(mesh_id, xform)
     # Export the mesh as OBJ with texture and MTL
     head, tail = os.path.split(mesh_reduced_file)
-    # obj_dir = os.makedirs(os.path.join(head, 'obj'))
     obj_name = tail.split('.')[0]
-    obj_file = obj_name + '.obj'
-    export_mesh_as_obj(mesh_id, os.path.join(head, 'obj', obj_file))
-
-    # OBTAIN PRIMITIVE MESH FROM REDUCED MESH
-    # Reduce the mesh to obtain a primitive representation
-    primitive_mesh_id, bbx_data, mt = reduce_mesh(mesh_id,
-                                                  target_face_count=200)
-    if not primitive_mesh_id:
-        print('Mesh reduction failed!')
-        return
-    # Save the primitive mesh to a new file
-    if not rs.SelectObject(primitive_mesh_id):
-        print('Failed to select reduced mesh for saving.')
-        return
-    if not rs.Command(f'!-_SaveAs \"{output_file}\"', echo=False):
-        print(f'Failed to save reduced mesh to {output_file}')
-        return
+    obj_name = obj_name + '.obj'
+    obj_file = os.path.join(obj_dir, obj_name)
+    print('    Exporting REDUCED OBJ...')
+    export_mesh_as_obj(mesh_id, obj_file)
 
     # Save mesh data as JSON
-    save_mesh_as_json(primitive_mesh_id, bbx_data, mt, json_file)
+    save_files(primitive_mesh, bbx_data, uid, json_source_dir, json_target_dir)
 
 
 def export_mesh_as_obj(mesh_id, obj_file):
@@ -357,7 +388,7 @@ def export_mesh_as_obj(mesh_id, obj_file):
     # Export the mesh as an OBJ file
     export_command = f'!_-Export "{obj_file}" _Enter'
     if not rs.Command(export_command, echo=False):
-        print(f'Failed to export mesh to {obj_file}')
+        print(f'    Failed to export mesh to {obj_file}')
         return
 
     # extract obj filename without ext
@@ -375,14 +406,14 @@ def export_mesh_as_obj(mesh_id, obj_file):
     try:
         os.rename(texture_fp, new_texture_fp)
     except FileExistsError:
-        print('Texture file already renamed, deleting second one...')
+        print('    Texture file already renamed, deleting second one...')
         os.remove(texture_fp)
 
     # Check if the mtl file exists
     mtl_filename = obj_name + '.mtl'
     mtl_file_path = os.path.join(os.path.split(obj_file)[0], mtl_filename)
     if not os.path.exists(mtl_file_path):
-        print(f"File not found: {mtl_file_path}")
+        print(f'    File not found: {mtl_file_path}')
         return
 
     # Read the content of the .mtl file
@@ -403,22 +434,36 @@ def export_mesh_as_obj(mesh_id, obj_file):
     with open(mtl_file_path, 'w') as file:
         file.writelines(updated_lines)
 
-    print(f'Mesh exported to {obj_file}')
+    print(f'    Mesh exported to {obj_file}')
 
 
-def process_meshes_in_folder(main_folder):
+def sas_processing(
+        source_geometry_dir,
+        target_geometry_dir,
+        json_source_dir,
+        json_target_dir):
     # List all subfolders in the specified folder
-    subfolders = [f.path for f in os.scandir(main_folder) if f.is_dir()]
+    subfolders = [f.path for f in
+                  os.scandir(source_geometry_dir) if f.is_dir()]
+    total = len(subfolders)
 
-    for subfolder in subfolders:
+    for i, subfolder in enumerate(subfolders):
+        uid = os.path.basename(subfolder)
         mesh_file = os.path.join(subfolder, 'mesh.3dm')
         mesh_reduced_file = os.path.join(subfolder, 'mesh_reduced.3dm')
-        output_file = os.path.join(subfolder, 'mesh_primitive.3dm')
-        json_file = os.path.join(subfolder, 'mesh_primitive.json')
+        primitive_mesh_3dm_file = os.path.join(subfolder, 'mesh_primitive.3dm')
+        print('--------------------------------------------')
+        print(f'Processing ({i+1}/{total}) {uid}...')
 
         if os.path.exists(mesh_file):
-            print(f'Processing {os.path.basename(subfolder)}...')
-            process_mesh(mesh_file, mesh_reduced_file, output_file, json_file)
+            process_mesh(
+                mesh_file,
+                mesh_reduced_file,
+                primitive_mesh_3dm_file,
+                target_geometry_dir,
+                uid,
+                json_source_dir,
+                json_target_dir)
         else:
             print(f'mesh_reduced.3dm not found in {subfolder}')
 
@@ -428,11 +473,13 @@ def process_meshes_in_folder(main_folder):
     sc.doc = Rhino.RhinoDoc.ActiveDoc
 
 
-# Specify the main folder containing the subfolders
-main_folder = rs.BrowseForFolder(
-    title='Select the Main Folder Containing Subfolders with Mesh Files')
-
-if main_folder:
-    process_meshes_in_folder(main_folder)
-else:
-    print('No folder selected.')
+if __name__ == '__main__':
+    source_geometry_dir = r'C:\Users\EFESTWIN\Documents\07_tu_darmstadt_ddu\05_Promotion\07_Source\240404_SAS_Debris_Files'  # NOQA
+    target_geometry_dir = r'C:\Users\EFESTWIN\source\repos\csc\component_geometry\250115'  # NOQA
+    json_source_dir = r'C:\Users\EFESTWIN\source\repos\csc\mongodb_backup\250115_0825'  # NOQA
+    json_target_dir = r'C:\Users\EFESTWIN\source\repos\csc\mongodb_backup\SAS_NEW'  # NOQA
+    sas_processing(
+        source_geometry_dir,
+        target_geometry_dir,
+        json_source_dir,
+        json_target_dir)
