@@ -265,6 +265,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Modified Component Model and implementation to reflect changes in component spec
 
+## [0.0.1.13]
+
 ### Versions
 
 - CSC FastAPI Backend:  0.1.0.7
@@ -276,6 +278,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - Updated ComponentViewer component to be able to display more detailed meshes on request
+
+## [0.0.1.14]
 
 ### Versions
 
@@ -293,6 +297,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Removed Materialthickness and adapted everything to use BBX extents
 
+## [0.0.1.15]
+
 ### Versions
 
 - CSC FastAPI Backend:  0.1.0.8
@@ -305,6 +311,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated ComponentDetail display
 
+## [0.0.1.16]
+
 ### Versions
 
 - CSC FastAPI Backend:  0.1.0.8
@@ -316,6 +324,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - Fixed Tailwinds
+
+## [0.0.1.17]
 
 ### Versions
 
@@ -333,6 +343,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated detailed and reduced geometry routing to fetch geometry using backend API
 
+## [0.0.1.18]
+
 ### Versions
 
 - CSC FastAPI Backend:  0.1.0.10
@@ -348,6 +360,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - Added functionality to filter for materials and component types
+
+## [0.0.1.19]
 
 ### Versions
 
