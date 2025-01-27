@@ -380,3 +380,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reoriented all Rubble meshes according to PCA
 - Recomputed primitive geometry with 300 faces
 - Updated database, component geometry, component previews
+
+## [0.0.1.20]
+
+### Versions
+
+- CSC FastAPI Backend:  0.1.0.12
+- CSC React Frontend:   0.1.4.18
+- CSC Sheetscan Module: 0.0.1.11
+
+### Added
+
+#### CSC React Frontend
+
+- Added BoundingBox display option
+
+### Changed
+
+#### CSC React Frontend
+
+- Modified ComponentViewer interface to be an overlay on top of the 3d canvas
