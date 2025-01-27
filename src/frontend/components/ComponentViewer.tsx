@@ -270,8 +270,6 @@ function BoundingBoxMesh({
   component_data: ComponentData
   show: boolean
 }) {
-  if (!show) return null
-
   // Assume component_data.bbx.x, .y, .z exist:
   const sizeX = (component_data.bbx[1][0] - component_data.bbx[0][0]) * scale
   const sizeY = (component_data.bbx[1][2] - component_data.bbx[0][2]) * scale
@@ -286,18 +284,22 @@ function BoundingBoxMesh({
       opacity: 0.2,
     })
   }, [])
-
   const bbx_edge_geometry = useMemo(() => new THREE.EdgesGeometry(bbx_geometry), [bbx_geometry])
   const bbx_edge_material = useMemo(() => new THREE.LineBasicMaterial({ color: 0x000000 }), [])
-  
 
-  // Position it so it encloses the object around the origin (if your object is near the origin)
-  return (
-    <>
-      <mesh geometry={bbx_geometry} material={bbx_material} />
-      <lineSegments geometry={bbx_edge_geometry} material={bbx_edge_material} />
-    </>
-  )
+  if (!show)
+  {
+    return null
+  }
+  else
+  {
+    return (
+      <>
+        <mesh geometry={bbx_geometry} material={bbx_material} />
+        <lineSegments geometry={bbx_edge_geometry} material={bbx_edge_material} />
+      </>
+    )
+  }
 }
 
 /**
