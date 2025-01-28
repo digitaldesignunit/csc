@@ -68,8 +68,8 @@ export default function CreditsPage() {
                 Another huge inspiration and reference is the <a href='https://epfl-enac.github.io/MANSLAB-IBOIS-EESD-timberstone/' target='_blank' className='text-blue-500 underline'>Timberstone Project</a>, which is the origin of abovementioned Catalogue Explorer.
               </li>
               <li>
-                Huge thanks to <a href='https://sandrosiefert.com/beyond-debris/' target='_blank' className='text-blue-500 underline'>Sandro Siefert</a>
-                for his inspirational work and the contribution of his debris dataset. Lookin forward to continue this research with you!
+                Huge thanks to <a href='https://sandrosiefert.com/beyond-debris/' target='_blank' className='text-blue-500 underline'>Sandro Siefert</a> 
+                for his inspirational work and the contribution of his debris dataset. Looking forward to continue this research with you!
               </li>
             </ul>
           </section>
