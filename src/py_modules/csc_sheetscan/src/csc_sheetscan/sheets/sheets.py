@@ -781,14 +781,14 @@ def detect_contours_and_ids(dirpath: str = _UNDIST_DIR,
         sheet_obj = SheetComponent(
             _id=sheet_id,
             material='corian',
-            materialthickness=thickness,
-            polyline=sheet_polygons[0],
+            profile=sheet_polygons[0],
             complexity=1,
             fragment=True,
             color=colors[0],
-            bbx_xy=sheet_mbrs[0],
+            bbx=sheet_mbrs[0],
+            location=[0, 0],
             descriptors={},
-            indicators={},
+            processes={},
             validated=True
         )
         sheets.append(sheet_obj)
