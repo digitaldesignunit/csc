@@ -268,6 +268,39 @@ Uberlab guides:
 - [Uberspace Web Backends](https://manual.uberspace.de/web-backends/)
 - [Uberspace Web Domains](https://manual.uberspace.de/web-domains/)
 
+
+## Preview Generation CronJob
+
+Preview generation is a separate python app that is run using a cronjob. To
+test the preview generation, SSH into the server, activate the venv and run it
+using the command line:
+
+```
+[user@servername csc]$ source venv/bin/activate
+(venv) [user@servername ~]$
+(venv) [user@servername ~]$ python /home/ddu/csc/backend/main_previewgen.py
+```
+
+To check if it is already a cronjob on your instance, run:
+```
+[user@servername csc]$ crontab -l
+```
+
+To add the cronjob to your crontab run:
+
+```
+[user@servername csc]$ crontab -e
+```
+
+...to open the crontab in an editor and then add:
+
+```
+*/30 * * * * /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/main_previewgen.py >> /home/ddu/csc/backend/logs/previewgen_cronjob.log 2>&1
+```
+
+This will run the preview generation script every 30 minutes and write the
+results to a logging file.
+
 ## 3. Tests
 
 ~~Malt uses `pytest` for testing. It is included in the `ddu_ias_research.yml`
