@@ -9,7 +9,7 @@ from typing import List, Tuple
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -53,16 +53,16 @@ async def initialize_preview_generation() -> Tuple[List[dict], List[str]]:
         if os.path.isfile(os.path.join(preview_dir, file_name)):
             preview_images.add(os.path.splitext(file_name)[0])
     # set up database client and select collections
-    mongodb_client = AsyncIOMotorClient(
+    mongodb_client = AsyncMongoClient(
         get_db_connectionstring(_CONFIGFILE)
     )
     mongodb = mongodb_client['csc']
     mongodb_components = mongodb['components']
     # mongodb_models = mongodb['models']
     # retrieve all component ids from database and create set
-    component_ids = set()
-    async for component in mongodb_components.find({}, {'_id': 1}):
-        component_ids.add(str(component['_id']))
+    component_ids = {
+        str(c['_id']) async for c in mongodb_components.find({}, {'_id': 1})
+    }
     # compare both sets and find component ids with missing previews
     missing_preview_ids = list(component_ids - preview_images)
     stale_preview_ids = list(preview_images - component_ids)
@@ -76,12 +76,12 @@ async def initialize_preview_generation() -> Tuple[List[dict], List[str]]:
         'color': 1}
     for comp_id in missing_preview_ids:
         component = await mongodb_components.find_one(
-            {'_id': comp_id},
-            projection
+            {'_id': comp_id}, projection
         )
-        missing_preview_components.append(component)
+        if component:
+            missing_preview_components.append(component)
     # close mongodb client
-    mongodb_client.close()
+    await mongodb_client.close()
     # return list of missing preview ids
     return missing_preview_components, stale_preview_ids
 
