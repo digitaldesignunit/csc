@@ -17,6 +17,7 @@ from fastapi import (APIRouter, # NOQA
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, PlainTextResponse, FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
+from pymongo.errors import PyMongoError
 
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -43,23 +44,35 @@ router = APIRouter()
 
 # AUTH ------------------------------------------------------------------------
 
-@router.post("/token")
+@router.post('/token')
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Token:
-    user = authenticate_user(form_data.username,
-                             form_data.password)
+    user = await authenticate_user(form_data.username,
+                                   form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail='Incorrect username or password',
+            headers={'WWW-Authenticate': 'Bearer'},
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={'sub': user.username}, expires_delta=access_token_expires
     )
-    return Token(access_token=access_token, token_type="Bearer")
+    return Token(access_token=access_token, token_type='Bearer')
+
+
+# HEALTH CHECK ----------------------------------------------------------------
+
+@router.get('/health/db',
+            response_description='Check MongoDB connection')
+async def health_check_db(request: Request):
+    try:
+        await request.app.mongodb.command('ping')
+        return {'ok': True}
+    except PyMongoError as e:
+        return {'ok': False, 'error': str(e)}
 
 
 # STATISTIC ROUTES ------------------------------------------------------------
@@ -156,7 +169,8 @@ async def get_components_shallow(
         sortkey: str = '_id',
         comptype: str = '',
         material: str = '',
-        validated: int = 1) -> List[ComponentModel]:
+        validated: int = 1
+) -> List[ComponentModel]:
     # get database
     db = request.app.mongodb_components
     # compose filter query and set sort order
@@ -178,17 +192,14 @@ async def get_components_shallow(
         sortkey = '_id'
     # execute query either to get all components or to get a paginated subset
     if not page and not size:
-        components = []
-        async for doc in db.find(query, projection).sort(sortkey, sort_order):
-            components.append(doc)
+        components = [doc async for doc in
+                      db.find(query, projection).sort(sortkey, sort_order)]
     else:
-        components = (
-            await db.find(query, projection)
-            .sort(sortkey, sort_order)
-            .skip((page - 1) * size if page > 0 else 0)
-            .limit(size)
-            .to_list(size)
-        )
+        cursor = (db.find(query, projection)
+                    .sort(sortkey, sort_order)
+                    .skip((page - 1) * size if page > 0 else 0)
+                    .limit(size))
+        components = [doc async for doc in cursor]
     return JSONResponse(status_code=status.HTTP_200_OK,
                         content=components)
 
@@ -230,13 +241,11 @@ async def get_components(
         async for doc in db.find(query).sort(sortkey, sort_order):
             components.append(doc)
     else:
-        components = (
-            await db.find(query)
-            .sort(sortkey, sort_order)
-            .skip((page - 1) * size if page > 0 else 0)
-            .limit(size)
-            .to_list(size)
-        )
+        cursor = (db.find(query)
+                    .sort(sortkey, sort_order)
+                    .skip((page - 1) * size if page > 0 else 0)
+                    .limit(size))
+        components = [doc async for doc in cursor]
     return JSONResponse(status_code=status.HTTP_200_OK,
                         content=components)
 

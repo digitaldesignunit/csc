@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-import pymongo
+from pymongo import AsyncMongoClient
 
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -68,7 +68,7 @@ def __get_auth_config():
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/token')
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 
 def verify_password(plain_password, hashed_password):
@@ -79,18 +79,16 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-def get_user(username: str):
-    mongodb_client = pymongo.MongoClient(__get_db_connectionstring())
-    mongodb = mongodb_client['csc']
-    userdb = mongodb['users']
-    user_doc = userdb.find_one({'username': username})
-    if user_doc:
-        mongodb_client.close()
-        return UserInDB(**user_doc)
+async def get_user(username: str):
+    async with AsyncMongoClient(__get_db_connectionstring()) as client:
+        db = client['csc']
+        user_doc = await db['users'].find_one({'username': username})
+        if user_doc:
+            return UserInDB(**user_doc)
 
 
-def authenticate_user(username: str, password: str):
-    user = get_user(username)
+async def authenticate_user(username: str, password: str):
+    user = await get_user(username)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -110,23 +108,23 @@ def create_access_token(data: dict,
     return encoded_jwt
 
 
-def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
+        detail='Could not validate credentials',
+        headers={'WWW-Authenticate': 'Bearer'},
     )
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
-        username: str = payload.get("sub")
+        username: str = payload.get('sub')
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
     except JWTError as e:
         print(timestamp + ': ' + e)
         raise credentials_exception
-    user = get_user(username=token_data.username)
+    user = await get_user(username=token_data.username)
     if user is None:
         print(timestamp + ': ' + 'User is None!')
         raise credentials_exception
@@ -134,9 +132,9 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     return user
 
 
-def get_current_active_user(
+async def get_current_active_user(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     if current_user.disabled:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(status_code=400, detail='Inactive user')
     return current_user

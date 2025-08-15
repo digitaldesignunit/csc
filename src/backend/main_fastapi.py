@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -41,18 +41,28 @@ _CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup
-    app.mongodb_client = AsyncIOMotorClient(
-        get_db_connectionstring(_CONFIGFILE)
+    app.mongodb_client = AsyncMongoClient(
+        get_db_connectionstring(_CONFIGFILE),
+        serverSelectionTimeoutMS=5000
     )
+
+    # Explicit connect + ping to fail early if DB is unavailable
+    await app.mongodb_client.aconnect()
+    await app.mongodb_client.admin.command("ping")
+
     app.mongodb = app.mongodb_client['csc']
     app.mongodb_components = app.mongodb['components']
     app.mongodb_users = app.mongodb['users']
     app.mongodb_models = app.mongodb['models']
+
     app.component_preview_dir = get_preview_directory(_CONFIGFILE)
     app.component_geometry_dir = get_geometry_directory(_CONFIGFILE)
+
     yield
+
     # shutdown
-    app.mongodb_client.close()
+    if app.mongodb_client:
+        await app.mongodb_client.close()
 
 # Create FastAPI instance
 app = FastAPI(
