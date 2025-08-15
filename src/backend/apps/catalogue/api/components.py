@@ -1,38 +1,51 @@
 #!/usr/bin/env python3.9
-from typing import Annotated
 import os
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+# THIRD PARTY MODULE IMPORTS --------------------------------------------------
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.encoders import jsonable_encoder
+from pymongo.errors import PyMongoError
 
+# LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalogue.models import (  # NOQA
     ALLOWED_COMPONENT_SORTKEYS,
+    ComponentCount,
     ComponentModel,
     UpdateComponentModel,
     User,
 )
 from .auth import get_current_active_user, require_admin
 
+
+# INIT ROUTER -----------------------------------------------------------------
+
+# create router instance
 router = APIRouter()
 
 
-# -------- deps --------
+# FASTAPI DEPENDENCIES --------------------------------------------------------
+
 async def comps(request: Request):
     return request.app.mongodb_components
 
 
-# -------- statistics --------
-@router.get("/componentcount", summary="Count components")
+# STATISTIC ROUTES ------------------------------------------------------------
+
+@router.get(
+        "/componentcount",
+        summary="Count components",
+        response_model=ComponentCount)
 async def count_components(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
-    comptype: str = "",
-    material: str = "",
-    validated: int = 1,
+    comptype: Optional[str] = Query(None),
+    material: Optional[str] = Query(None),
+    validated: int = Query(1, description="1=true, -1=false, 0/other=any"),
 ):
     coll = await comps(request)
-    query = {}
+    query: dict = {}
     if comptype:
         query["type"] = comptype
     if material:
@@ -41,11 +54,17 @@ async def count_components(
         query["validated"] = True
     elif validated == -1:
         query["validated"] = False
-    count = await coll.count_documents(query)
-    return JSONResponse(status_code=status.HTTP_200_OK, content=count)
+
+    try:
+        count = await coll.count_documents(query)
+    except PyMongoError as e:
+        raise HTTPException(status_code=500, detail=f"DB error: {e}")
+
+    return {"count": count}
 
 
-# -------- create --------
+# ADD COMPONENT ROUTES --------------------------------------------------------
+
 @router.post("/", summary="Add a new component")
 async def create_component(
     request: Request,
@@ -59,7 +78,8 @@ async def create_component(
     return JSONResponse(status_code=status.HTTP_201_CREATED, content=created)
 
 
-# -------- validate --------
+# VALIDATION ROUTES -----------------------------------------------------------
+
 @router.get(
     "/validate/{component_id}",
     summary="Validate component"
@@ -81,7 +101,8 @@ async def validate_component(
     return JSONResponse(status_code=200, content=updated)
 
 
-# -------- shallow --------
+# SHALLOW COMPONENT ROUTES ----------------------------------------------------
+
 @router.get(
         "/shallowcomponents/{component_id}",
         summary="Single shallow component")
@@ -138,7 +159,8 @@ async def get_components_shallow(
     return JSONResponse(status_code=200, content=items)
 
 
-# -------- full components --------
+# FULL COMPONENT ROUTES -------------------------------------------------------
+
 @router.get("/components", summary="List components")
 async def get_components(
     request: Request,
@@ -190,6 +212,8 @@ async def get_component(
     return JSONResponse(status_code=200, content=doc)
 
 
+# COMPONENT DETAIL ROUTES -----------------------------------------------------
+
 @router.get(
     "/components/{component_id}/geometry",
     summary="Get component geometry"
@@ -206,7 +230,6 @@ async def get_component_geometry(
     return JSONResponse(status_code=200, content=doc)
 
 
-# -------- asset files on disk --------
 def _ensure_file(path: str):
     if not os.path.exists(path):
         raise HTTPException(404, "File not found")
@@ -288,7 +311,8 @@ async def get_component_texture(
     )
 
 
-# -------- destructive op: ADMIN ONLY --------
+# DELETE: ADMIN ONLY ----------------------------------------------------------
+
 @router.delete(
     "/components/{component_id}",
     summary="Delete component (admin only)"

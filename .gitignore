@@ -40,3 +40,4 @@ csc.code-workspace
 *.egg-info
 src/backend/apps/catalogue/test.json
 csc_deploy.sh
+src/backend/logs/fastapi.log

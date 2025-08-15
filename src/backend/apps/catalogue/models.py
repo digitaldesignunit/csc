@@ -51,6 +51,10 @@ ALLOWED_COMPONENT_SORTKEYS = [
 ALLOWED_COMPLEXITY_LEVELS = [0, 1, 2, 3]
 
 
+class ComponentCount(BaseModel):
+    count: int
+
+
 class ComponentModel(BaseModel):
     # globally unique ID (GUID stored in Mongo as _id)
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), alias="_id")

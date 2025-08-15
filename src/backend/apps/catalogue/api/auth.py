@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from pydantic import ValidationError
 
 from apps.catalogue.models import Token, TokenData, User, UserInDB # NOQA
 
@@ -58,8 +59,8 @@ async def users_coll(request: Request):
 
 async def get_current_user(
     request: Request,
-    token: Annotated[str, Depends(oauth2_scheme)]
-):
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> User:
     cred_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -69,29 +70,40 @@ async def get_current_user(
         payload = jwt.decode(
             token,
             request.app.state.jwt_secret,
-            algorithms=[request.app.state.jwt_algorithm]
+            algorithms=[request.app.state.jwt_algorithm],
         )
         sub = payload.get("sub")
-        role = payload.get("role", "user") # NOQA
         if sub is None:
             raise cred_exc
     except JWTError:
         raise cred_exc
 
-    user = await request.app.mongodb_users.find_one({"_id": sub})
-    if not user or user.get("disabled"):
+    doc = await request.app.mongodb_users.find_one({"_id": sub})
+    if not doc or doc.get("disabled"):
         raise cred_exc
-    return user  # raw doc (dict)
+
+    try:
+        return User(**doc)  # maps Mongo {_id: "...", ...} to User(id=..., ...)
+    except ValidationError:
+        # If the stored document is malformed, treat as invalid credentials
+        raise cred_exc
 
 
-async def get_current_active_user(current_user=Depends(get_current_user)):
-    if current_user.get("disabled"):
-        raise HTTPException(status_code=400, detail="Inactive user")
+async def get_current_active_user(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    if current_user.disabled is True:
+        raise HTTPException(
+            status_code=400,
+            detail="Inactive user"
+        )
     return current_user
 
 
-async def require_admin(current_user=Depends(get_current_user)):
-    if current_user.get("role") != "admin":
+async def require_admin(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    if current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin role required"
