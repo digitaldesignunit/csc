@@ -28,14 +28,28 @@ _CONFIG_DIR = sanitize_path(os.path.join(_HERE, "config"))
 _CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
 
 
+def load_jwt_secret(config_path: str) -> str:
+    # 1) Prefer env (same as NextAuth)
+    env = os.getenv("NEXTAUTH_SECRET") or os.getenv("API_SECRET")
+    if env:
+        # Strip any CRLF/whitespace just in case
+        return env.replace("\r", "").replace("\n", "").strip()
+
+    # 2) Fallback to JSON config (read utf-8-sig to drop BOM if present)
+    with open(config_path, "r", encoding="utf-8-sig") as f:
+        cfg = json.load(f)
+    secret = str(cfg["secret"])
+    return secret.replace("\r", "").replace("\n", "").strip()
+
+
 # FASTAPI SETUP ---------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Load config (secret, algorithm, expiry) once ------------------------
     with open(_CONFIGFILE, "r") as f:
         cfg = json.load(f)
-    app.state.jwt_secret = cfg["secret"]
-    app.state.jwt_algorithm = cfg.get("algorithm", "HS256")
+    app.state.jwt_secret = cfg["secret"].strip()
+    app.state.jwt_algorithm = cfg.get("algorithm", "HS256").strip()
     app.state.jwt_access_minutes = int(
         cfg.get("access_token_expire_minutes", 30)
     )
@@ -74,7 +88,7 @@ app = FastAPI(
         "Backend API for Catalogue of Second Chances. "
         "FastAPI + MongoDB (async)."
     ),
-    version="0.2.0.1",
+    version="0.2.0.2",
     lifespan=lifespan,
 )
 
