@@ -1,16 +1,23 @@
 #!/usr/bin/env python3.9
+
+# PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from datetime import datetime, timedelta, timezone
 import re
 from typing import Annotated
 
+# THIRD PARTY MODULE IMPORTS --------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import ValidationError
 
+# LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalogue.models import Token, TokenData, User, UserInDB # NOQA
 
+# INIT ROUTER -----------------------------------------------------------------
+
+# create router instance
 router = APIRouter()
 
 # OAuth2 uses this tokenUrl — keep in sync with the route below

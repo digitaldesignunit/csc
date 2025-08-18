@@ -55,6 +55,14 @@ class ComponentCount(BaseModel):
     count: int
 
 
+class ComponentDescriptors(BaseModel):
+    id: str = Field(alias="_id")
+    descriptors: Optional[Dict] = None
+
+    class Config:
+        populate_by_name = True
+
+
 class ComponentModel(BaseModel):
     # globally unique ID (GUID stored in Mongo as _id)
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), alias="_id")

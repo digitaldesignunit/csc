@@ -13,6 +13,9 @@ from fastapi import (APIRouter, # NOQA
                      Depends)
 from fastapi.responses import PlainTextResponse
 
+# INIT ROUTER -----------------------------------------------------------------
+
+# create router instance
 router = APIRouter()
 
 

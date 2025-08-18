@@ -12,6 +12,7 @@ from pymongo.errors import PyMongoError
 from apps.catalogue.models import (  # NOQA
     ALLOWED_COMPONENT_SORTKEYS,
     ComponentCount,
+    ComponentDescriptors,
     ComponentModel,
     UpdateComponentModel,
     User,
@@ -27,7 +28,7 @@ router = APIRouter()
 
 # FASTAPI DEPENDENCIES --------------------------------------------------------
 
-async def comps(request: Request):
+async def get_components_col(request: Request):
     return request.app.mongodb_components
 
 
@@ -44,7 +45,7 @@ async def count_components(
     material: Optional[str] = Query(None),
     validated: int = Query(1, description="1=true, -1=false, 0/other=any"),
 ):
-    coll = await comps(request)
+    coll = await get_components_col(request)
     query: dict = {}
     if comptype:
         query["type"] = comptype
@@ -72,7 +73,7 @@ async def create_component(
     component: ComponentModel = ...,
 ):
     doc = jsonable_encoder(component, by_alias=True)
-    coll = await comps(request)
+    coll = await get_components_col(request)
     res = await coll.insert_one(doc)
     created = await coll.find_one({"_id": res.inserted_id})
     return JSONResponse(status_code=status.HTTP_201_CREATED, content=created)
@@ -89,7 +90,7 @@ async def validate_component(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str = "",
 ):
-    coll = await comps(request)
+    coll = await get_components_col(request)
     component = await coll.find_one({"_id": component_id})
     if not component:
         raise HTTPException(404, "Not found")
@@ -111,7 +112,7 @@ async def get_component_shallow(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str = "",
 ):
-    coll = await comps(request)
+    coll = await get_components_col(request)
     projection = {"geometry": 0, "descriptors": 0}
     doc = await coll.find_one({"_id": component_id}, projection)
     if not doc:
@@ -130,7 +131,7 @@ async def get_components_shallow(
     material: str = "",
     validated: int = 1,
 ):
-    coll = await comps(request)
+    coll = await get_components_col(request)
     query = {}
     projection = {"geometry": 0, "descriptors": 0}
     sort_order = 1
@@ -172,7 +173,7 @@ async def get_components(
     material: str = "",
     validated: int = 1,
 ):
-    coll = await comps(request)
+    coll = await get_components_col(request)
     query, sort_order = {}, 1
     if comptype:
         query["type"] = comptype
@@ -205,7 +206,7 @@ async def get_component(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str = "",
 ):
-    coll = await comps(request)
+    coll = await get_components_col(request)
     doc = await coll.find_one({"_id": component_id})
     if not doc:
         raise HTTPException(404, "Not found")
@@ -223,7 +224,7 @@ async def get_component_geometry(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str = "",
 ):
-    coll = await comps(request)
+    coll = await get_components_col(request)
     doc = await coll.find_one({"_id": component_id}, {"geometry": 1})
     if not doc:
         raise HTTPException(404, "Not found")
@@ -311,6 +312,25 @@ async def get_component_texture(
     )
 
 
+@router.get(
+    "/components/{component_id}/descriptors",
+    summary="Retrieve descriptors for a component",
+    response_model=ComponentDescriptors,
+)
+async def get_component_descriptors(
+    component_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    components=Depends(get_components_col),
+):
+    doc = await components.find_one(
+        {"_id": component_id},
+        {"_id": 1, "descriptors": 1},           # include _id explicitly
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Component not found")
+    return doc
+
+
 # DELETE: ADMIN ONLY ----------------------------------------------------------
 
 @router.delete(
@@ -322,7 +342,7 @@ async def delete_component(
     admin_user=Depends(require_admin),
     component_id: str = "",
 ):
-    coll = await comps(request)
+    coll = await get_components_col(request)
     res = await coll.delete_one({"_id": component_id})
     if res.deleted_count == 0:
         raise HTTPException(404, "Not found")
