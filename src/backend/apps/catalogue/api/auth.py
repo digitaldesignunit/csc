@@ -12,7 +12,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from apps.catalogue.models import Token, TokenData, User, UserInDB # NOQA
+from apps.catalogue.models import Token, User, UserInDB # NOQA
 
 # INIT ROUTER -----------------------------------------------------------------
 

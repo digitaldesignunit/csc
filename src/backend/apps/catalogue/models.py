@@ -1,10 +1,13 @@
 #!/usr/bin/env python3.9
+
+# PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from typing import Optional, List, Dict, Union, Literal
 import uuid
+
+# THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from pydantic import BaseModel, Field, EmailStr
 
-# ---------------------- AUTH ----------------------
-
+# AUTH ------------------------------------------------------------------------
 Role = Literal["user", "admin"]
 
 
@@ -34,8 +37,7 @@ class UserInDB(User):
     hashed_password: str
 
 
-# ---------------------- COMPONENTS ----------------------
-
+# COMPONENTS ------------------------------------------------------------------
 ALLOWED_COMPONENT_TYPES = ["sheet", "beam", "slab", "rubble", "column"]
 
 
@@ -47,6 +49,7 @@ ALLOWED_COMPONENT_SORTKEYS = [
     "created",
     "lastmodified",
 ]
+
 
 ALLOWED_COMPLEXITY_LEVELS = [0, 1, 2, 3]
 

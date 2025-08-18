@@ -24,34 +24,27 @@ from utility import (
 
 # ENVIRONMENT SETTINGS --------------------------------------------------------
 _HERE = os.path.dirname(sanitize_path(__file__))
-_CONFIG_DIR = sanitize_path(os.path.join(_HERE, "config"))
-_CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
+_CONFIG_DIR = sanitize_path(os.path.join(_HERE, 'config'))
+_CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, 'dbconfig.json'))
 
 
 def load_jwt_secret(config_path: str) -> str:
-    # 1) Prefer env (same as NextAuth)
-    env = os.getenv("NEXTAUTH_SECRET") or os.getenv("API_SECRET")
-    if env:
-        # Strip any CRLF/whitespace just in case
-        return env.replace("\r", "").replace("\n", "").strip()
-
-    # 2) Fallback to JSON config (read utf-8-sig to drop BOM if present)
-    with open(config_path, "r", encoding="utf-8-sig") as f:
+    with open(config_path, 'r', encoding='utf-8-sig') as f:
         cfg = json.load(f)
-    secret = str(cfg["secret"])
-    return secret.replace("\r", "").replace("\n", "").strip()
+    secret = str(cfg['secret'])
+    return secret.replace('\r', '').replace('\n', '').strip()
 
 
 # FASTAPI SETUP ---------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Load config (secret, algorithm, expiry) once ------------------------
-    with open(_CONFIGFILE, "r") as f:
+    with open(_CONFIGFILE, 'r') as f:
         cfg = json.load(f)
-    app.state.jwt_secret = cfg["secret"].strip()
-    app.state.jwt_algorithm = cfg.get("algorithm", "HS256").strip()
+    app.state.jwt_secret = cfg['secret'].strip()
+    app.state.jwt_algorithm = cfg.get('algorithm', 'HS256').strip()
     app.state.jwt_access_minutes = int(
-        cfg.get("access_token_expire_minutes", 30)
+        cfg.get('access_token_expire_minutes', 30)
     )
 
     # --- MongoDB -------------------------------------------------------------
@@ -60,16 +53,16 @@ async def lifespan(app: FastAPI):
         serverSelectionTimeoutMS=5000,
     )
     await app.mongodb_client.aconnect()
-    await app.mongodb_client.admin.command("ping")
+    await app.mongodb_client.admin.command('ping')
 
-    app.mongodb = app.mongodb_client["csc"]
-    app.mongodb_users = app.mongodb["users"]
-    app.mongodb_components = app.mongodb["components"]
-    app.mongodb_models = app.mongodb["models"]
+    app.mongodb = app.mongodb_client['csc']
+    app.mongodb_users = app.mongodb['users']
+    app.mongodb_components = app.mongodb['components']
+    app.mongodb_models = app.mongodb['models']
 
     # Create helpful indexes (idempotent)
-    await app.mongodb_users.create_index("email", unique=True)
-    await app.mongodb_users.create_index("username", unique=True)
+    await app.mongodb_users.create_index('email', unique=True)
+    await app.mongodb_users.create_index('username', unique=True)
 
     # --- Directories ---------------------------------------------------------
     app.component_preview_dir = get_preview_directory(_CONFIGFILE)
@@ -83,12 +76,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="CSC - Catalogue of Second Chances - Backend API",
+    title='CSC - Catalogue of Second Chances - Backend API',
     description=(
-        "Backend API for Catalogue of Second Chances. "
-        "FastAPI + MongoDB (async)."
+        'Backend API for Catalogue of Second Chances. '
+        'FastAPI + MongoDB (async).'
     ),
-    version="0.2.0.2",
+    version='0.2.0.2',
     lifespan=lifespan,
 )
 
@@ -97,11 +90,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=get_cors_origins(_CONFIGFILE),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
 # ROUTERS ---------------------------------------------------------------------
 # New, modern router structure under apps/catalogue/api/*
 from apps.catalogue.api import api_router  # NOQA - aggregator for sub-routers
-app.include_router(api_router, prefix="")
+app.include_router(api_router, prefix='')

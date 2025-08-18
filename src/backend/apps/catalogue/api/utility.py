@@ -6,16 +6,10 @@ from pathlib import Path
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from fastapi import (APIRouter, # NOQA
-                     Body,
-                     HTTPException,
-                     Request,
-                     status,
-                     Depends)
+                     Request)
 from fastapi.responses import PlainTextResponse
 
 # INIT ROUTER -----------------------------------------------------------------
-
-# create router instance
 router = APIRouter()
 
 
