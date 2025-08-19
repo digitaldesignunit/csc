@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   // get FastAPI token from the user’s NextAuth JWT
   const jwt = await getToken({ req: request, secret: NEXTAUTH_SECRET })
-  const apiToken = (jwt as any)?.apiToken as string | undefined
+  const apiToken = (jwt)?.apiToken
   if (!apiToken) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }

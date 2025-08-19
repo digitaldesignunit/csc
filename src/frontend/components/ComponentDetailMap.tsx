@@ -4,8 +4,8 @@ export default function ComponentDetailMap({
   lat,
   lon
 } : {
-  lat: Number,
-  lon: Number
+  lat: number,
+  lon: number
 }) {
 
   // Lat/Lon

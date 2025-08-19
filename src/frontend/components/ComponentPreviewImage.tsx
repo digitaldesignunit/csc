@@ -13,7 +13,7 @@ interface ComponentPreviewImageProps {
 const PreviewBaseURL: string = process.env.NEXT_PUBLIC_COMPONENT_PREVIEW_BASE_URL as string
 
 const ComponentPreviewImage: React.FC<ComponentPreviewImageProps> = ({ comp_id, alt, width, height, maxHeight }) => {
-  let src = combinePath(PreviewBaseURL, comp_id, 'webp')
+  const src = combinePath(PreviewBaseURL, comp_id, 'webp')
   const aspectRatio = width / height
   const maxWidth = maxHeight * aspectRatio
   return (

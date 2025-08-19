@@ -20,7 +20,9 @@ import ComponentPreviewImage from './ComponentPreviewImage'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-async function fetch_component_geometry(component_id: string) {
+type Geometry = ComponentData['geometry']
+
+async function fetch_component_geometry(component_id: string): Promise<{ geometry: Geometry }> {
   const res = await fetch(
     `/api/backend/components/${encodeURIComponent(component_id)}/geometry`,
     { method: 'GET', credentials: 'include', cache: 'no-store' }
@@ -30,7 +32,7 @@ async function fetch_component_geometry(component_id: string) {
     const body = await res.text().catch(() => '')
     throw new Error(`Failed to fetch component geometry: ${res.status} ${body}`)
   }
-  return res.json()
+  return res.json() as Promise<{ geometry: Geometry }>
 }
 
 export default function ComponentOverviewDataTablePreviewCell({
@@ -41,7 +43,7 @@ export default function ComponentOverviewDataTablePreviewCell({
 
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [geometry, setGeometry] = useState<any | null>(null)
+  const [geometry, setGeometry] = useState<Geometry | null>(null)
 
   // Reset state when the row changes (sorting/filtering)
   useEffect(() => {
@@ -57,9 +59,9 @@ export default function ComponentOverviewDataTablePreviewCell({
     try {
       const data = await fetch_component_geometry(compId)
       setGeometry(data.geometry)
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Error fetching Component Geometry:', e)
-      if (String(e?.message).toLowerCase().includes('unauthorized')) {
+      if (e instanceof Error && e.message.toLowerCase().includes('unauthorized')) {
         router.push(`/auth/signin?callbackUrl=/components`)
       }
       setOpen(false)

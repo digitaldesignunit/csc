@@ -3,6 +3,7 @@
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 
+
 function initialsFrom(name?: string | null, email?: string | null, username?: string | null) {
   if (name) {
     const parts = name.trim().split(/\s+/).slice(0, 2)
@@ -42,12 +43,12 @@ export default function UserItem() {
   }
 
   const name = session.user.name ?? ''
-  const email = (session.user as any).email ?? ''
-  const username = (session.user as any).username ?? ''
+  const email = session.user?.email ?? ''
+  const username = (session.user as { username?: string | null }).username ?? ''
   const initials = initialsFrom(name, email, username)
 
-  const hasToken = (session as any).api?.hasAccessToken
-  const error = (session as any).error
+  const hasToken = (session as { api?: { hasAccessToken?: boolean } }).api?.hasAccessToken
+  const error = (session as { error?: 'ApiTokenExpired' | string }).error
   const isExpired = error === 'ApiTokenExpired' || hasToken === false
 
   return (

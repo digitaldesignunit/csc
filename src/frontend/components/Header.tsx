@@ -1,6 +1,6 @@
 'use client'
 
-import { BookOpenText, Menu } from 'lucide-react'
+import { BookOpenText} from 'lucide-react'
 import AppMenu from './AppMenu'
 import ThemeToggle from './ThemeToggle'
 

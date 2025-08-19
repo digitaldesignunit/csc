@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function diff_mins(dt1: Date, dt2: Date) {
   // Calculate the difference in milliseconds between the two provided dates and convert it to seconds
-  var diff =(dt2.getTime() - dt1.getTime()) / 1000;
+  let diff =(dt2.getTime() - dt1.getTime()) / 1000;
   // Convert the difference from seconds to minutes
   diff /= 60;
   // Return the absolute value of the rounded difference in minutes
@@ -39,7 +39,7 @@ export function componentColorString(component_color_rgb: number[]) {
 
 export function padZero(str: string, len: number = 2) {
   len = len || 2;
-  var zeros = new Array(len).join('0');
+  const zeros = new Array(len).join('0');
   return (zeros + str).slice(-len);
 }
 
@@ -54,9 +54,9 @@ export function invertColor(hex: string, bw: boolean = true) {
   if (hex.length !== 6) {
       throw new Error('Invalid HEX color.');
   }
-  var rnum = parseInt(hex.slice(0, 2), 16)
-  var gnum = parseInt(hex.slice(2, 4), 16)
-  var bnum = parseInt(hex.slice(4, 6), 16)
+  const rnum = parseInt(hex.slice(0, 2), 16)
+  const gnum = parseInt(hex.slice(2, 4), 16)
+  const bnum = parseInt(hex.slice(4, 6), 16)
   if (bw) {
       // https://stackoverflow.com/a/3943023/112731
       return (rnum * 0.299 + gnum * 0.587 + bnum * 0.114) > 186
@@ -64,9 +64,9 @@ export function invertColor(hex: string, bw: boolean = true) {
           : '#FFFFFF';
   }
   // invert color components
-  var r = (255 - rnum).toString(16);
-  var g = (255 - gnum).toString(16);
-  var b = (255 - bnum).toString(16);
+  const r = (255 - rnum).toString(16);
+  const g = (255 - gnum).toString(16);
+  const b = (255 - bnum).toString(16);
   // pad each with zeros and return
   return "#" + padZero(r) + padZero(g) + padZero(b);
 }

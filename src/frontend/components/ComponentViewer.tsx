@@ -12,24 +12,55 @@ import { MTLLoader, OBJLoader } from 'three-stdlib'
 import { Skeleton } from './ui/skeleton'
 
 // Scale factor for converting units to meters in THREE
-const scale: number = 0.001
+const scale = 0.001
 
 // Simple in-memory cache for external geometry
 const externalGeometryCache = new Map<string, THREE.Group | null>()
 
+/* ───────── Type guards (no `any`) ───────── */
+
+function isMesh(obj: THREE.Object3D): obj is THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (obj as any)?.isMesh === true
+}
+function isWithGeometry(obj: THREE.Object3D): obj is THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]> {
+  return isMesh(obj) && obj.geometry instanceof THREE.BufferGeometry
+}
+function isMaterial(m: unknown): m is THREE.Material {
+  return !!m && typeof m === 'object' && 'uuid' in (m as Record<string, unknown>)
+}
+function isTexture(t: unknown): t is THREE.Texture {
+  return !!t && typeof t === 'object' && 'isTexture' in (t as Record<string, unknown>)
+}
+
+/* ───────── Helpers ───────── */
+
 function ensureNormals(object: THREE.Object3D) {
-  object.traverse((child: THREE.Object3D) => {
-    if ((child as any).isMesh && (child as any).geometry) {
-      const geometry = (child as any).geometry as THREE.BufferGeometry
+  object.traverse((child) => {
+    if (isWithGeometry(child)) {
+      const geometry = child.geometry
       geometry.computeVertexNormals()
       geometry.normalizeNormals()
     }
   })
 }
 
+type GeometryMode = 'primitive' | 'reduced' | 'detailed'
+
+/** extend typings for optional three-stdlib APIs present in some versions */
+type MTLLoaderWithOptional = MTLLoader & {
+  setTexturePath?: (path: string) => void
+  setWithCredentials?: (withCreds: boolean) => void
+}
+type OBJLoaderWithOptional = OBJLoader & {
+  setWithCredentials?: (withCreds: boolean) => void
+}
+
+/* ───────── External geometry/mtl loading ───────── */
+
 async function loadExternalGeometry(
   componentId: string,
-  mode: 'reduced' | 'detailed'
+  mode: Exclude<GeometryMode, 'primitive'>
 ): Promise<THREE.Group | null> {
   const cacheKey = `${componentId}:${mode}`
   if (externalGeometryCache.has(cacheKey)) {
@@ -43,35 +74,40 @@ async function loadExternalGeometry(
   const mtlUrl = `/api/backend/components/${componentId}/${mtlRoute}`
 
   try {
-    const mtlLoader = new MTLLoader()
-    // let MTLLoader resolve map_Kd etc. via our proxy
+    const mtlLoader: MTLLoaderWithOptional = new MTLLoader() as MTLLoaderWithOptional
+    // Let MTLLoader resolve map_Kd/etc via our texture proxy
     const textureBase = `/api/fetch-component-texture?component_id=${encodeURIComponent(componentId)}&texture=`
     mtlLoader.setResourcePath(textureBase)
-    ;(mtlLoader as any).setTexturePath?.(textureBase)
+    mtlLoader.setTexturePath?.(textureBase)
     mtlLoader.setWithCredentials?.(true)
 
     const materials = await mtlLoader.loadAsync(mtlUrl)
     materials.preload()
 
-    const objLoader = new OBJLoader()
+    const objLoader: OBJLoaderWithOptional = new OBJLoader() as OBJLoaderWithOptional
     objLoader.setWithCredentials?.(true)
     objLoader.setMaterials(materials)
 
     const object = await objLoader.loadAsync(objUrl)
 
     // make sure textures render correctly on modern three
-    object.traverse(o => {
-      if ((o as any).isMesh) {
-        const mat = (o as any).material
-        const mats = Array.isArray(mat) ? mat : [mat]
-        mats.forEach(mm => {
-          if (mm && mm.map) {
-            mm.map.colorSpace = THREE.SRGBColorSpace
-            mm.needsUpdate = true
-          }
-        })
-        const g = (o as any).geometry as THREE.BufferGeometry
+    object.traverse((o) => {
+      if (!isMesh(o)) return
+      const mat = o.material
+      const mats = Array.isArray(mat) ? mat : [mat]
+      mats.forEach((mm) => {
+        if (!isMaterial(mm)) return
+        const maybeMap = (mm as unknown as { map?: unknown }).map
+        if (isTexture(maybeMap)) {
+          maybeMap.colorSpace = THREE.SRGBColorSpace
+          maybeMap.needsUpdate = true
+        }
+      })
+      if (isWithGeometry(o)) {
+        const g = o.geometry
         if (!g.getAttribute('uv')) {
+          // no UVs present -> texture cannot display
+          // (do not throw; just warn)
           console.warn('OBJ mesh has no UVs; texture cannot display', o.name)
         }
       }
@@ -97,7 +133,7 @@ const VisualizeMesh = React.memo(({
   geometryMode
 }: {
   component_data: ComponentData
-  geometryMode: 'primitive' | 'reduced' | 'detailed'
+  geometryMode: GeometryMode
 }) => {
   const [externalObject, setExternalObject] = useState<THREE.Group | null>(null)
   const [isLoadingExternal, setIsLoadingExternal] = useState(false)
@@ -109,19 +145,27 @@ const VisualizeMesh = React.memo(({
     if (isExternalMode && component_data.type !== 'sheet') {
       if (!component_data._id) return
       setIsLoadingExternal(true)
-      loadExternalGeometry(component_data._id.toString(), geometryMode).then(obj => {
-        if (isMounted) {
-          setExternalObject(obj)
-          setIsLoadingExternal(false)
-        }
-      })
+      loadExternalGeometry(component_data._id.toString(), geometryMode)
+        .then((obj) => {
+          if (isMounted) {
+            setExternalObject(obj)
+            setIsLoadingExternal(false)
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setExternalObject(null)
+            setIsLoadingExternal(false)
+          }
+        })
     } else {
       setExternalObject(null)
       setIsLoadingExternal(false)
     }
-    return () => { isMounted = false }
+    return () => {
+      isMounted = false
+    }
   }, [geometryMode, component_data, isExternalMode])
-
 
   // Primitive fallback geometry
   const mesh_geometry = useMemo(() => {
@@ -176,7 +220,7 @@ const VisualizeMesh = React.memo(({
                 textAlign: 'center',
               }}
             >
-              <Skeleton className='h-full rounded-xl m-2 flex items-center justify-center'>
+              <Skeleton className="h-full rounded-xl m-2 flex items-center justify-center">
                 <strong>Loading geometry...</strong>
               </Skeleton>
             </div>
@@ -258,7 +302,7 @@ function VisualizeComponent({
   geometryMode
 }: {
   component_data: ComponentData
-  geometryMode: 'primitive' | 'reduced' | 'detailed'
+  geometryMode: GeometryMode
 }) {
   if (!component_data.geometry) return null
   if (component_data.type === 'sheet') {
@@ -269,10 +313,7 @@ function VisualizeComponent({
 }
 
 /** 
- * BoundingBoxMesh:
- *  - Renders a semi-transparent box if showBoundingBox is true.
- *  - Reads .bbx.x, .bbx.y, .bbx.z from component_data
- *  - Scales by `scale`, places the box near [0,0,0].
+ * BoundingBoxMesh
  */
 function BoundingBoxMesh({
   component_data,
@@ -281,12 +322,10 @@ function BoundingBoxMesh({
   component_data: ComponentData
   show: boolean
 }) {
-  // Assume component_data.bbx.x, .y, .z exist:
   const sizeX = (component_data.bbx[1][0] - component_data.bbx[0][0]) * scale
   const sizeY = (component_data.bbx[1][2] - component_data.bbx[0][2]) * scale
   const sizeZ = (component_data.bbx[1][1] - component_data.bbx[0][1]) * scale
 
-  // Create a box geometry of that size
   const bbx_geometry = useMemo(() => new THREE.BoxGeometry(sizeX, sizeY, sizeZ), [sizeX, sizeY, sizeZ])
   const bbx_material = useMemo(() => {
     return new THREE.MeshBasicMaterial({
@@ -298,52 +337,45 @@ function BoundingBoxMesh({
   const bbx_edge_geometry = useMemo(() => new THREE.EdgesGeometry(bbx_geometry), [bbx_geometry])
   const bbx_edge_material = useMemo(() => new THREE.LineBasicMaterial({ color: 0x000000 }), [])
 
-  if (!show)
-  {
-    return null
-  }
-  else
-  {
-    return (
-      <>
-        <mesh geometry={bbx_geometry} material={bbx_material} />
-        <lineSegments geometry={bbx_edge_geometry} material={bbx_edge_material} />
-      </>
-    )
-  }
+  if (!show) return null
+  return (
+    <>
+      <mesh geometry={bbx_geometry} material={bbx_material} />
+      <lineSegments geometry={bbx_edge_geometry} material={bbx_edge_material} />
+    </>
+  )
 }
 
 /**
  * ComponentViewer
- * - Overlays a fixed UI (dropdown + checkbox) over the canvas (absolute).
- * - This UI does NOT move/zoom with the 3D scene.
  */
 export default function ComponentViewer({ component_data }: { component_data: ComponentData }) {
-  const [geometryMode, setGeometryMode] = useState<'primitive' | 'reduced' | 'detailed'>('primitive')
+  const [geometryMode, setGeometryMode] = useState<GeometryMode>('primitive')
   const [showBoundingBox, setShowBoundingBox] = useState(false)
 
   const isSheet = component_data.type === 'sheet'
-
   if (!component_data.geometry) {
     return <ComponentViewerSkeleton message="No Geometry Available" />
   }
 
+  const onModeChange: React.ChangeEventHandler<HTMLSelectElement> = (e) => {
+    const v = e.target.value as GeometryMode
+    setGeometryMode(v)
+  }
+
   return (
     <Card className="flex flex-col m-2">
-      {/* We wrap the canvas in a relative container so we can absolutely position the overlay */}
       <div className="relative h-[40dvh]">
-        {/* ABSOLUTE overlay that doesn't move with the scene */}
+        {/* Overlay UI */}
         <div className="absolute top-2 left-2 z-10 bg-accent-foreground bg-opacity-90 p-2 rounded shadow text-sm">
-
-          {/* Geometry Mode Dropdown */}
-          <div className="flex flex-col gap-1 mb-2">
+          <div className="mb-2 flex flex-col gap-1">
             <label htmlFor="geometryModeSelect" className="mr-2">Geometry Resolution:</label>
             <select
               id="geometryModeSelect"
               value={geometryMode}
-              onChange={(e) => setGeometryMode(e.target.value as any)}
+              onChange={onModeChange}
               disabled={isSheet}
-              className="border text-sm rounded p-1 w-full bg-accent-foreground"
+              className="w-full rounded border bg-accent-foreground p-1 text-sm"
             >
               <option value="primitive">Primitive</option>
               <option value="reduced">Reduced</option>
@@ -351,7 +383,6 @@ export default function ComponentViewer({ component_data }: { component_data: Co
             </select>
           </div>
 
-          {/* Display Bounding Box Checkbox */}
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -365,20 +396,11 @@ export default function ComponentViewer({ component_data }: { component_data: Co
 
         <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
           <ambientLight intensity={Math.PI / 2} />
-          <spotLight
-            position={[10, 10, 10]}
-            angle={0.15}
-            penumbra={1}
-            decay={0}
-            intensity={Math.PI * 0.75}
-          />
+          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI * 0.75} />
           <pointLight position={[-10, 10, -10]} decay={0} intensity={Math.PI * 0.75} />
 
           <Bounds fit clip observe margin={1.2} maxDuration={1}>
-            {/* The main object */}
             <VisualizeComponent component_data={component_data} geometryMode={geometryMode} />
-
-            {/* If user toggles bounding box, show it */}
             <BoundingBoxMesh component_data={component_data} show={showBoundingBox} />
           </Bounds>
 

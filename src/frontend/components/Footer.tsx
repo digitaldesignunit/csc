@@ -1,6 +1,5 @@
 'use client';
 
-import { BookOpenText, Menu } from 'lucide-react'
 import { copyright_year } from '@/lib/utils'
 
 export default function Footer() {

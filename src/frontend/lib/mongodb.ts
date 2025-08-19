@@ -10,15 +10,19 @@ const options = {};
 let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
 
+declare global {
+  var _mongoClientPromise: Promise<MongoClient> | undefined;
+}
+
 if (process.env.NODE_ENV === "development") {
-  // In development, use a global variable
-  if (!(global as any)._mongoClientPromise) {
+  // Reuse the global client if it exists
+  if (!global._mongoClientPromise) {
     client = new MongoClient(uri, options);
-    (global as any)._mongoClientPromise = client.connect();
+    global._mongoClientPromise = client.connect();
   }
-  clientPromise = (global as any)._mongoClientPromise;
+  clientPromise = global._mongoClientPromise;
 } else {
-  // In production, create a new client
+  // In production, always create a new client
   client = new MongoClient(uri, options);
   clientPromise = client.connect();
 }

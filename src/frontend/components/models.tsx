@@ -3,8 +3,8 @@ export type ComponentData = {
   type: string,
   material: string,
   complexity: number,
-  fragment: Boolean,
-  assembly: Boolean,
+  fragment: boolean,
+  assembly: boolean,
   color: Array<number>,
   geometry: {
     extrusion: {
@@ -17,7 +17,7 @@ export type ComponentData = {
       c: ComponentMeshColors
     }
   },
-  validated: Boolean,
+  validated: boolean,
   bbx: ComponentBoundingBox,
   location: ComponentLocation,
   iframe: {
@@ -29,10 +29,8 @@ export type ComponentData = {
   descriptors: {
     roundness: number
   },
-  processes: {
-  },
-  attributes: {
-  }
+  processes: object,
+  attributes: object
 }
 
 export type ComponentBoundingBox =  Array<Array<number>>
