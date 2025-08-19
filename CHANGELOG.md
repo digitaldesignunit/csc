@@ -400,3 +400,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - Modified ComponentViewer interface to be an overlay on top of the 3d canvas
+
+## [0.0.2.0]
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.1.0
+- CSC React Frontend:   0.2.0.0
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC FastAPI Backend
+
+- First stable version with new and revamped backend
+
+#### CSC React Frontend
+
+- Completely revamped NextJS app using NextJS 15

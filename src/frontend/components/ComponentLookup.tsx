@@ -1,0 +1,237 @@
+'use client'
+
+import React, { useState, useRef, MutableRefObject } from 'react'
+import { Html5Qrcode, Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
+import { Button } from './ui/button'
+import { CardContent, CardHeader } from './ui/card'
+import { Input } from './ui/input'
+import { Badge } from './ui/badge'
+
+interface Props {
+  presetReferenceID?: string
+}
+
+type ScanStatus = 'neutral' | 'ok' | 'bad'
+
+const ComponentLookup: React.FC<Props> = ({ presetReferenceID }) => {
+  const config = {
+    aspectRatio: 1,
+    fps: 10,
+    qrbox: { width: 300, height: 300 },
+    rememberLastUsedCamera: true,
+    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+  }
+
+  const [referenceID, setReferenceID] = useState(presetReferenceID || '')
+  const [currentID, setCurrentID] = useState('')
+  const [inputReferenceID, setInputReferenceID] = useState('')
+  const [comparisonResult, setComparisonResult] = useState('')
+  const [isScanning, setIsScanning] = useState(false)
+  const [status, setStatus] = useState<ScanStatus>('neutral')
+
+  const html5QrCodeRef: MutableRefObject<Html5Qrcode | null> = useRef(null)
+  const elementId = 'reader'
+  const cameraContainerId = 'cameracontainer'
+
+  const MSG_MATCH = 'IDs Match!'
+  const MSG_MISMATCH = 'Does not match the Reference ID!'
+  const MSG_REF_SCANNED = 'Reference ID set.\nStart scan for comparison.'
+  const MSG_CAMERA_FEED =
+    'Camera Feed Placeholder.\n\nTo start comparing IDs,\neither scan or type an ID as reference.'
+
+  const ensureInstance = () => {
+    if (!html5QrCodeRef.current) {
+      html5QrCodeRef.current = new Html5Qrcode(elementId)
+    }
+    return html5QrCodeRef.current
+  }
+
+  const startScanningForReference = () => {
+    document.getElementById(elementId)?.scrollIntoView()
+    const instance = ensureInstance()
+    if (!referenceID && !isScanning && instance) {
+      setIsScanning(true)
+      Html5Qrcode.getCameras()
+        .then((cameras) => {
+          if (cameras.length) {
+            instance
+              .start(
+                { facingMode: 'environment' },
+                config,
+                (decodedText) => {
+                  setReferenceID(decodedText)
+                  setStatus('ok')
+                  setComparisonResult(MSG_REF_SCANNED)
+                  stopScanning() // stop after capturing reference
+                },
+                undefined
+              )
+              .catch((err) => console.error('Error starting QR scan: ', err))
+          } else {
+            console.error('No cameras found.')
+          }
+        })
+        .catch((err) => console.error('Error getting cameras: ', err))
+    }
+  }
+
+  const startScanningForComparison = () => {
+    document.getElementById(elementId)?.scrollIntoView()
+    const instance = ensureInstance()
+    if (referenceID && !isScanning && instance) {
+      setIsScanning(true)
+      Html5Qrcode.getCameras()
+        .then((cameras) => {
+          if (cameras.length) {
+            instance
+              .start(
+                { facingMode: 'environment' },
+                config,
+                (decodedText) => {
+                  const match = decodedText === referenceID
+                  setCurrentID(decodedText)
+                  setStatus(match ? 'ok' : 'bad')
+                  setComparisonResult(match ? MSG_MATCH : MSG_MISMATCH)
+                  if (match) stopScanning()
+                },
+                undefined
+              )
+              .catch((err) => console.error('Error starting QR scan: ', err))
+          } else {
+            console.error('No cameras found.')
+          }
+        })
+        .catch((err) => console.error('Error getting cameras: ', err))
+    }
+  }
+
+  const stopScanning = () => {
+    html5QrCodeRef.current
+      ?.stop()
+      .then(() => {
+        setIsScanning(false)
+        html5QrCodeRef.current?.clear()
+      })
+      .catch((err) => console.error('Failed to stop scanning.', err))
+  }
+
+  const resetScanner = () => {
+    if (isScanning) stopScanning()
+    setReferenceID('')
+    setComparisonResult('')
+    setCurrentID('')
+    setInputReferenceID('')
+    setStatus('neutral')
+  }
+
+  const handleSetInputReferenceID = () => {
+    if (!inputReferenceID.trim()) return
+    setReferenceID(inputReferenceID.trim())
+    setComparisonResult(MSG_REF_SCANNED)
+    setStatus('ok')
+  }
+
+  // theme-friendly classes
+  const borderClass =
+    status === 'ok'
+      ? 'border-green-500'
+      : status === 'bad'
+      ? 'border-destructive'
+      : 'border-border'
+
+  const currentBadgeClass =
+    status === 'ok'
+      ? 'bg-green-500 text-white'
+      : status === 'bad'
+      ? 'bg-destructive text-destructive-foreground'
+      : 'bg-muted text-muted-foreground'
+
+  const refBadgeClass =
+    referenceID
+      ? 'bg-primary text-primary-foreground'
+      : 'bg-muted text-muted-foreground'
+
+  return (
+    <div className="flex flex-col items-center">
+      <CardHeader className="relative w-full max-w-sm p-1">
+        {/* Set Reference ID Interface */}
+        {!referenceID && !isScanning && (
+          <div className="flex w-full max-w-sm flex-col gap-2 pb-4">
+            {/* input ABOVE the button */}
+            <Input
+              id="inputFieldReferenceID"
+              placeholder="Reference ID"
+              value={inputReferenceID}
+              onChange={(e) => setInputReferenceID(e.target.value)}
+            />
+            <Button variant="outline" onClick={handleSetInputReferenceID}>
+              Set Ref. ID
+            </Button>
+          </div>
+        )}
+
+        {/* Display Reference and Current ID */}
+        <div className="w-full grid grid-cols-2 gap-y-3 items-center">
+          <div className="flex justify-start min-w-0 w-20">
+            <span className="text-sm font-medium text-foreground">Ref. ID:</span>
+          </div>
+          <div className="flex justify-end items-center">
+            <Badge variant="secondary" className={`no-wrap flex-shrink-0 ${refBadgeClass}`}>
+              {referenceID || 'Not set'}
+            </Badge>
+          </div>
+
+          <div className="flex justify-start min-w-0 w-20">
+            <span className="text-sm font-medium text-foreground">Cur. ID:</span>
+          </div>
+          <div className="flex justify-end items-center">
+            <Badge variant="secondary" className={`no-wrap flex-shrink-0 ${currentBadgeClass}`}>
+              {currentID || 'Not set'}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+
+      {/* QR Code Scanner Canvas */}
+      <CardContent
+        id={cameraContainerId}
+        className={`mt-4 p-0 relative w-full max-w-[500px] h-[500px] border-8 rounded-xl ${borderClass} bg-card`}
+      >
+        <div id={elementId} className="rounded-lg" />
+        {!isScanning && (
+          <div className="absolute inset-0 bg-muted/60 flex items-center justify-center text-center rounded">
+            <span className="whitespace-pre-wrap text-sm text-muted-foreground">
+              {comparisonResult ? comparisonResult : MSG_CAMERA_FEED}
+            </span>
+          </div>
+        )}
+      </CardContent>
+
+      <div className="m-4 flex flex-col items-center space-y-3">
+        {!referenceID && (
+          <Button onClick={startScanningForReference} variant="outline" className="w-[200px]">
+            Start QR Code Scan
+          </Button>
+        )}
+        {referenceID && !isScanning && (
+          <Button onClick={startScanningForComparison} variant="outline" className="w-[200px]">
+            Start QR Code Scan
+          </Button>
+        )}
+        {isScanning && (
+          <Button onClick={stopScanning} variant="outline" className="w-[200px]">
+            Stop Scanning
+          </Button>
+        )}
+        {!isScanning && (
+          <Button onClick={resetScanner} variant="destructive" className="w-[200px]">
+            Reset
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default ComponentLookup
