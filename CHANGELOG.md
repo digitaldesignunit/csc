@@ -417,4 +417,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### CSC React Frontend
 
-- Completely revamped NextJS app using NextJS 15
+- Completely revamped NextJS app using NextJS 15, builds in development mode
+- Production build still failing
+
+## [0.2.0.1]
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.1.0
+- CSC React Frontend:   0.2.0.1
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC React Frontend
+
+- Now builds in production mode
