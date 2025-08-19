@@ -74,7 +74,9 @@ echo "------------------------ BUILD FRONTEND -------------------------"
 echo "-----------------------------------------------------------------"
 echo "NPM: Building frontend..."
 cd ../$TARGET1
-rm -r .next
+if ! rm -r .next; then
+  echo "Warning: failed to remove .next dir, continuing..."
+fi
 npm i
 npm run build
 
