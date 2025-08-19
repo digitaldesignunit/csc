@@ -401,7 +401,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Modified ComponentViewer interface to be an overlay on top of the 3d canvas
 
-## [0.0.2.0]
+## [0.2.0.0]
 
 ### Versions
 
