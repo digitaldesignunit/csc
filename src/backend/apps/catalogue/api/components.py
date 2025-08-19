@@ -136,9 +136,9 @@ async def get_components_shallow(
     projection = {'geometry': 0, 'descriptors': 0}
     sort_order = 1
     if comptype:
-        query['type'] = comptype
+        query['type'] = {"$regex": f"^{comptype}$", "$options": "i"}
     if material:
-        query['material'] = material
+        query['material'] = {"$regex": f"^{material}$", "$options": "i"}
     if validated == 1:
         query['validated'] = True
     elif validated == -1:
@@ -176,9 +176,9 @@ async def get_components(
     coll = await get_components_col(request)
     query, sort_order = {}, 1
     if comptype:
-        query['type'] = comptype
+        query['type'] = {"$regex": f"^{comptype}$", "$options": "i"}
     if material:
-        query['material'] = material
+        query['material'] = {"$regex": f"^{material}$", "$options": "i"}
     if validated == 1:
         query['validated'] = True
     elif validated == -1:
