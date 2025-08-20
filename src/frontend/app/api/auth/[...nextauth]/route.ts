@@ -14,7 +14,7 @@ import type { Session } from 'next-auth'
 const MONGODB_URI = process.env.MONGODB_URI!
 const DB_NAME = process.env.MONGODB_DB!
 const DB_USERCOLLECTION = process.env.MONGODB_USERCOLLECTION!
-const NEXTAUTH_SECRET = process.env.API_SECRET
+const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET!
 const FASTAPI_URL = process.env.FASTAPI_URL!
 
 // Optional fallback if FastAPI doesn’t return expires_in and token has no exp

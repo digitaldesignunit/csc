@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
 const FASTAPI_URL = process.env.FASTAPI_URL!
-const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || process.env.API_SECRET
+const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET
 
 function buildTargetUrl(pathParts: string[] | undefined, srcUrl: URL) {
   const path = Array.isArray(pathParts) && pathParts.length
@@ -52,7 +52,7 @@ async function handle(
   })
 
   // 4) Call FastAPI
-  const res = await fetch(target, {
+  const upstream = await fetch(target, {
     method,
     headers,
     body,
@@ -60,13 +60,27 @@ async function handle(
     cache: 'no-store',
   })
 
-  // 5) Stream/return response as-is
-  const text = await res.text()
-  return new NextResponse(text, {
-    status: res.status,
-    headers: {
-      'content-type': res.headers.get('content-type') ?? 'application/json',
-    },
+  // 5) Stream/return response as-is (works for JSON, text, images, files)
+  const outHeaders = new Headers()
+
+  // Pass through common useful headers; especially content-type for images.
+  const pass = [
+    'content-type',
+    'cache-control',
+    'content-disposition',
+    'etag',
+    'last-modified',
+  ]
+  for (const name of pass) {
+    const val = upstream.headers.get(name)
+    if (val) outHeaders.set(name, val)
+  }
+
+  // Note: do NOT read .text()/json(); just forward the stream/body directly.
+  // For 204/304 upstream.body may be null — NextResponse handles that.
+  return new NextResponse(upstream.body, {
+    status: upstream.status,
+    headers: outHeaders,
   })
 }
 

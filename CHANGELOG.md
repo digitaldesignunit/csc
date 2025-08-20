@@ -447,3 +447,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC FastAPI Backend
 
 - Add preview image route
+
+## [0.2.0.2]
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.1.0
+- CSC React Frontend:   0.2.0.2
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC React Frontend
+
+- Changed routes to adapt to new preview image fetch method
+- Ensure that prod builds locally without errors

@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
 const FASTAPI_URL = process.env.FASTAPI_URL!
-const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || process.env.API_SECRET
+const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET!
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url)
