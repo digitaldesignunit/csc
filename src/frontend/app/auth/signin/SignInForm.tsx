@@ -1,15 +1,29 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
+function toSafePathClient(raw: string): string {
+  const fallback = '/components'
+  try {
+    // Build absolute URL to validate origin, but only return path
+    const u = new URL(raw, window.location.origin)
+    if (u.origin === window.location.origin && u.pathname.startsWith('/')) {
+      return u.pathname + u.search + u.hash
+    }
+  } catch {
+    // ignore
+  }
+  // If it was already a plain path like "/components", keep it
+  if (raw.startsWith('/')) return raw
+  return fallback
+}
+
 export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
-  const router = useRouter()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -18,20 +32,18 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    const safeCallback = typeof window === 'undefined'
+      ? callbackUrl // SSR fallback (already sanitized on server)
+      : toSafePathClient(callbackUrl)
 
     startTransition(async () => {
-      const res = await signIn('credentials', {
-        redirect: false,
+      await signIn('credentials', {
+        redirect: true,  // let NextAuth navigate
+        callbackUrl: safeCallback,
         identifier,
         password,
-        callbackUrl,
       })
-
-      if (res?.error) {
-        setError(res.error)
-      } else if (res?.ok) {
-        router.push(callbackUrl)
-      }
+      // no manual router.push needed
     })
   }
 

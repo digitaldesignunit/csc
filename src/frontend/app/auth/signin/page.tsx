@@ -6,11 +6,17 @@ import SignInForm from './SignInForm'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
+function toSafePathServer(raw: string | string[] | undefined): string {
+  const fallback = '/components'
+  const val = Array.isArray(raw) ? raw[0] : raw
+  if (!val) return fallback
+  // allow only same-origin relative paths
+  if (val.startsWith('/')) return val
+  return fallback
+}
+
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams
-  const raw = sp?.callbackUrl
-  const callbackUrl =
-    typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : '/'
-
+  const callbackUrl = toSafePathServer(sp?.callbackUrl)
   return <SignInForm callbackUrl={callbackUrl} />
 }
