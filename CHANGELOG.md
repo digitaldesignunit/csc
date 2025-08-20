@@ -433,3 +433,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - Now builds in production mode
+
+## [0.2.0.2]
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.2.0
+- CSC React Frontend:   0.2.0.1
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC FastAPI Backend
+
+- Add preview image route

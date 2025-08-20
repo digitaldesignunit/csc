@@ -312,6 +312,21 @@ async def get_component_texture(
     )
 
 
+@router.get('/components/{component_id}/preview_image')
+async def get_component_preview_image(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    component_id: str,
+):
+    base = request.app.component_preview_dir
+    preview_image_path = os.path.join(base, f'{component_id}.webp')
+    return FileResponse(
+        _ensure_file(preview_image_path),
+        media_type='image/webp',
+        filename=f'{component_id}.webp'
+    )
+
+
 @router.get(
     '/components/{component_id}/descriptors',
     summary='Retrieve descriptors for a component',
