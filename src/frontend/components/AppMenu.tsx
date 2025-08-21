@@ -1,7 +1,6 @@
 'use client'
 
 import { HomeIcon, QrCode, Package, Puzzle, Asterisk, BookText } from 'lucide-react'
-import { Command, CommandGroup, CommandItem, CommandList } from './ui/command'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
@@ -50,59 +49,73 @@ export default function AppMenu() {
   return (
     <div className="flex h-full flex-col justify-items-center gap-4">
       <div className="flex grow">
-        <Command className="rounded-lg" style={{ overflow: 'visible' }}>
-          <CommandList style={{ overflow: 'visible' }}>
-            <CommandGroup heading={menuList[0].group}>
+        <div className="w-full rounded-lg bg-popover text-popover-foreground border p-2 space-y-4" style={{ overflow: 'visible' }}>
+          <div className="space-y-2">
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+              {menuList[0].group}
+            </div>
+            <div className="space-y-1">
               {menuList[0].items.map((option) => (
                 <Link key={option.id} href={option.link}>
-                  <CommandItem id={option.id} className="flex gap-2 cursor-pointer">
+                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
                     {option.icon}
                     {option.text}
-                  </CommandItem>
+                  </div>
                 </Link>
               ))}
-            </CommandGroup>
+            </div>
+          </div>
 
-            <CommandGroup heading={menuList[1].group}>
+          <div className="space-y-2">
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+              {menuList[1].group}
+            </div>
+            <div className="space-y-1">
               {menuList[1].items.map((option) => (
                 <Link key={option.id} href={option.link}>
-                  <CommandItem id={option.id} className="flex gap-2 cursor-pointer">
+                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
                     {option.icon}
                     {option.text}
-                  </CommandItem>
+                  </div>
                 </Link>
               ))}
-            </CommandGroup>
+            </div>
+          </div>
 
-            <CommandGroup heading={menuList[2].group}>
+          <div className="space-y-2">
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+              {menuList[2].group}
+            </div>
+            <div className="space-y-1">
               {menuList[2].items.map((option) => (
                 <Link key={option.id} href={option.link}>
-                  <CommandItem id={option.id} className="flex gap-2 cursor-pointer">
+                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
                     {option.icon}
                     {option.text}
-                  </CommandItem>
+                  </div>
                 </Link>
               ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="flex shrink-0">
-        <Command className="rounded-lg" style={{ overflow: 'visible' }}>
-          <CommandList style={{ overflow: 'visible' }}>
-            <CommandGroup heading={menuList[3].group}>
-              {menuList[3].items.map((option) => (
-                <Link key={option.id} href={option.link}>
-                  <CommandItem id={option.id} className="flex gap-2 cursor-pointer">
-                    {option.icon}
-                    {option.text}
-                  </CommandItem>
-                </Link>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+        <div className="w-full rounded-lg bg-popover text-popover-foreground border p-2 space-y-2" style={{ overflow: 'visible' }}>
+          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+            {menuList[3].group}
+          </div>
+          <div className="space-y-1">
+            {menuList[3].items.map((option) => (
+              <Link key={option.id} href={option.link}>
+                <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
+                  {option.icon}
+                  {option.text}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )

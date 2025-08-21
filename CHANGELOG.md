@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0.4] - 2025-08-21
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.2.0
+- CSC React Frontend:   0.2.0.4
+- CSC Sheetscan Module: 0.0.1.11
+
+### Fixed
+
+#### CSC React Frontend
+
+- Fixed sidebar menu hover behavior - buttons no longer stay "selected" after hovering
+- Replaced Command components with proper navigation items for better UX
+- Maintained card-like visual appearance while fixing persistent selection states
+
 ## [0.2.0.3] - 2025-08-21
 
 ### Versions
