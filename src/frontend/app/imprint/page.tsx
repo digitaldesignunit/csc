@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export default function ImprintPage() {
   return (
-    <div className='grid gap-[32px] m-4'>
+    <div className='grid gap-[32px] m-2'>
       <Card>
         <CardHeader>
           <CardTitle>Imprint</CardTitle>

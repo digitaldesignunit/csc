@@ -9,7 +9,7 @@ export default function Home() {
   const { data: session, status } = useSession()
 
   return (
-    <div className='grid gap-[32px] m-4'>
+    <div className='grid gap-[32px] m-2'>
       <Card>
         <CardHeader>
           <CardTitle>Catalogue of Second Chances</CardTitle>

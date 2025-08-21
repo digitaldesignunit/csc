@@ -32,13 +32,22 @@ export default function UserItem() {
 
   if (!session?.user) {
     return (
-      <Button
-        onClick={() => signIn()}
-        className="w-full"
-        variant="default"
-      >
-        Sign in
-      </Button>
+      <div className="space-y-2">
+        <Button
+          onClick={() => signIn()}
+          className="w-full"
+          variant="default"
+        >
+          Sign in
+        </Button>
+        <Button
+          onClick={() => window.location.href = '/auth/register'}
+          className="w-full"
+          variant="outline"
+        >
+          Register
+        </Button>
+      </div>
     )
   }
 

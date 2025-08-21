@@ -11,7 +11,7 @@ export default async function FindComponent({ searchParams }: FindComponentProps
     typeof params.reference_id === 'string' ? params.reference_id : undefined
 
   return (
-    <div className='grid gap-[32px] m-4'>
+    <div className='grid gap-[32px] m-2'>
       <Card>
         <CardHeader>
           <CardTitle>Find Component</CardTitle>
