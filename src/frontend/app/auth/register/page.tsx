@@ -100,6 +100,15 @@ export default function RegisterPage() {
               />
             </div>
 
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                <strong>Security Notice:</strong> This is research and development software. 
+                While we follow security best practices and properly hash passwords, we cannot 
+                guarantee complete safety. Please use a unique password that you don't use 
+                elsewhere.
+              </p>
+            </div>
+
             <Button type="submit" className="w-full">Register</Button>
           </form>
           

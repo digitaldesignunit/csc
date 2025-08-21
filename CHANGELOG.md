@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0.8] - 2024-12-19
+
+### Added
+- Enhanced authentication system with comprehensive error handling and user feedback
+- Added Register button alongside Sign In button in UserItem component for non-authenticated users
+- Added security notice on registration page warning users to use unique passwords
+- Added cross-links between sign in and register pages for better user navigation
+
+### Changed
+- Improved sign in form error handling with specific error messages for different failure types
+- Updated sign in and register pages to stick to top on mobile/narrow screens instead of centering
+- Enhanced register page styling to match sign in page using consistent Card components
+- Improved form validation with client-side checks and better error positioning
+
+### Fixed
+- Sign in form now properly displays error messages on authentication failures
+- Register page layout now properly contains all elements within the form container
+- Consistent styling between authentication pages for better user experience
+
 ## [0.2.0.7] - 2024-12-19
 
 ### Fixed
