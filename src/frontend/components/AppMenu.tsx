@@ -49,14 +49,14 @@ export default function AppMenu() {
   return (
     <div className="flex h-full flex-col justify-items-center gap-4">
       <div className="flex grow">
-        <div className="w-full rounded-lg bg-popover text-popover-foreground border p-2 space-y-4" style={{ overflow: 'visible' }}>
+        <div className="w-full rounded-lg bg-popover text-popover-foreground p-1 space-y-4" style={{ overflow: 'visible' }}>
           <div className="space-y-2">
             <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
               {menuList[0].group}
             </div>
             <div className="space-y-1">
               {menuList[0].items.map((option) => (
-                <Link key={option.id} href={option.link}>
+                <Link key={option.id} href={option.link} onClick={() => document.dispatchEvent(new Event('closeMobileMenu'))}>
                   <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
                     {option.icon}
                     {option.text}
@@ -72,7 +72,7 @@ export default function AppMenu() {
             </div>
             <div className="space-y-1">
               {menuList[1].items.map((option) => (
-                <Link key={option.id} href={option.link}>
+                <Link key={option.id} href={option.link} onClick={() => document.dispatchEvent(new Event('closeMobileMenu'))}>
                   <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
                     {option.icon}
                     {option.text}
@@ -88,7 +88,7 @@ export default function AppMenu() {
             </div>
             <div className="space-y-1">
               {menuList[2].items.map((option) => (
-                <Link key={option.id} href={option.link}>
+                <Link key={option.id} href={option.link} onClick={() => document.dispatchEvent(new Event('closeMobileMenu'))}>
                   <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
                     {option.icon}
                     {option.text}
@@ -101,13 +101,13 @@ export default function AppMenu() {
       </div>
 
       <div className="flex shrink-0">
-        <div className="w-full rounded-lg bg-popover text-popover-foreground border p-2 space-y-2" style={{ overflow: 'visible' }}>
+        <div className="w-full rounded-lg bg-popover text-popover-foreground p-1 space-y-2" style={{ overflow: 'visible' }}>
           <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
             {menuList[3].group}
           </div>
           <div className="space-y-1">
             {menuList[3].items.map((option) => (
-              <Link key={option.id} href={option.link}>
+              <Link key={option.id} href={option.link} onClick={() => document.dispatchEvent(new Event('closeMobileMenu'))}>
                 <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
                   {option.icon}
                   {option.text}

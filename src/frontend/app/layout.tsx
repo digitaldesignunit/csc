@@ -30,11 +30,13 @@ export default function RootLayout({
         >
           <Providers>
             <div className="flex-grow grid md:grid-cols-[250px_1fr]">
+              {/* Desktop Sidebar - hidden on mobile */}
               <div className="h-full hidden md:block md:shrink-10 min-w-[250px] border-r">
                 <Sidebar />
               </div>
 
-              <main className="ml-0">
+              {/* Main Content Area */}
+              <main className="ml-0 min-h-screen">
                 <Header />
                 <div className="grid w-full">{children}</div>
               </main>
