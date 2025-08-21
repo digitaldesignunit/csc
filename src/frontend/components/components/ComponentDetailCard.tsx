@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import ComponentDetailMap from './ComponentDetailMap'
+import { Copy, Check } from 'lucide-react'
 
 export default function ComponentDetailCard({
   component_data,
@@ -16,6 +17,7 @@ export default function ComponentDetailCard({
   component_data: ComponentData
 }) {
   const [isMobile, setIsMobile] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     const checkScreenSize = () => {
@@ -31,6 +33,16 @@ export default function ComponentDetailCard({
     return () => window.removeEventListener('resize', checkScreenSize)
   }, [])
 
+  const handleCopyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(component_data._id)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err)
+    }
+  }
+
   // Component Color
   const component_color_str = componentColorString(component_data.color)
   const component_color_hex = hexComponentColor(component_data.color)
@@ -44,9 +56,38 @@ export default function ComponentDetailCard({
   return (
     <Card className="w-full overflow-x-auto">
       <CardHeader className="flex items-start justify-between gap-2">
-        <CardTitle className="text-left text-base text-foreground break-words">
-          {component_data._id}
-        </CardTitle>
+        <div className="flex items-start gap-3 flex-1 min-w-0 lg:max-w-md">
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-muted-foreground mb-1">Component ID</div>
+            <div className="font-mono text-base bg-muted/50 border border-border rounded-md px-3 py-2 text-foreground break-all">
+              {component_data._id}
+            </div>
+          </div>
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyToClipboard}
+                  className="h-8 w-8 p-0 flex-shrink-0 mt-6"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="text-center text-sm">
+                  {copied ? 'Copied!' : 'Copy ID to clipboard'}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
 
         <TooltipProvider>
           <Tooltip>
@@ -69,7 +110,7 @@ export default function ComponentDetailCard({
       <CardContent>
         <div className="mb-4 flex flex-col items-start justify-between gap-4 lg:flex-row">
           {/* Left side metadata */}
-          <div className="w-full text-left lg:min-w-0 lg:flex-1">
+          <div className="w-full text-left lg:min-w-0 lg:flex-1 lg:max-w-md">
             <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Metadata</h2>
 
             <div className="text-sm text-foreground">
