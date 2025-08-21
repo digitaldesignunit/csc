@@ -11,6 +11,7 @@ interface User {
   email: string;
   hashed_password: string;
   disabled: boolean;
+  role: string;
 }
 
 export async function POST(req: Request) {
@@ -50,7 +51,8 @@ export async function POST(req: Request) {
       full_name,
       email,
       hashed_password: hashedPassword,
-      disabled: false
+      disabled: false,
+      role: 'user'
     });
 
     return NextResponse.json({ message: "User registered successfully" });
