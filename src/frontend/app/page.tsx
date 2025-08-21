@@ -1,8 +1,13 @@
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 
 export default function Home() {
+  const { data: session, status } = useSession()
+
   return (
     <div className='grid gap-[32px] m-4'>
       <Card>
@@ -29,30 +34,32 @@ export default function Home() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Access</CardTitle>
-          <CardDescription>
-            Registration and sign-in
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm leading-relaxed">
-          <p>
-            To browse components and interact with the repository, you need to create an account and log in. 
-            Registered users can explore the catalogue, access component data, and begin working with it either 
-            through the web interface or within Rhino/Grasshopper.
-          </p>
-          <div className="flex gap-4">
-            <Link href="/auth/signin">
-              <Button variant="default">Sign In</Button>
-            </Link>
-            <Link href="/auth/register">
-              <Button variant="outline">Register</Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* Only show Access card when user is not logged in */}
+      {status !== 'loading' && !session?.user && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Access</CardTitle>
+            <CardDescription>
+              Registration and sign-in
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm leading-relaxed">
+            <p>
+              To browse components and interact with the repository, you need to create an account and log in. 
+              Registered users can explore the catalogue, access component data, and begin working with it either 
+              through the web interface or within Rhino/Grasshopper.
+            </p>
+            <div className="flex gap-4">
+              <Link href="/auth/signin">
+                <Button variant="default">Sign In</Button>
+              </Link>
+              <Link href="/auth/register">
+                <Button variant="outline">Register</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
