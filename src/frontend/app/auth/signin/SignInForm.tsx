@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
+import { useSearchParams } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -28,22 +29,82 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const searchParams = useSearchParams()
+
+  // Check for error messages in URL (from NextAuth redirects)
+  useEffect(() => {
+    const errorParam = searchParams.get('error')
+    if (errorParam) {
+      switch (errorParam) {
+        case 'CredentialsSignin':
+          setError('Invalid email/username or password. Please try again.')
+          break
+        case 'AccessDenied':
+          setError('Access denied. Please check your credentials.')
+          break
+        case 'Verification':
+          setError('Please verify your email address before signing in.')
+          break
+        case 'Configuration':
+          setError('Authentication service is not properly configured.')
+          break
+        case 'Default':
+          setError('An error occurred during sign in. Please try again.')
+          break
+        default:
+          setError('Sign in failed. Please try again.')
+      }
+    }
+  }, [searchParams])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    
+    // Client-side validation
+    if (!identifier.trim()) {
+      setError('Please enter your email or username.')
+      return
+    }
+    if (!password.trim()) {
+      setError('Please enter your password.')
+      return
+    }
+    
     const safeCallback = typeof window === 'undefined'
       ? callbackUrl // SSR fallback (already sanitized on server)
       : toSafePathClient(callbackUrl)
 
     startTransition(async () => {
-      await signIn('credentials', {
-        redirect: true,  // let NextAuth navigate
+      const result = await signIn('credentials', {
+        redirect: false, // Don't redirect automatically so we can handle errors
         callbackUrl: safeCallback,
-        identifier,
+        identifier: identifier.trim(),
         password,
       })
-      // no manual router.push needed
+
+      if (result?.error) {
+        // Handle specific error cases
+        switch (result.error) {
+          case 'CredentialsSignin':
+            setError('Invalid email/username or password. Please check your credentials and try again.')
+            break
+          case 'AccessDenied':
+            setError('Access denied. Please contact an administrator if you believe this is an error.')
+            break
+          case 'Verification':
+            setError('Please verify your email address before signing in.')
+            break
+          case 'Configuration':
+            setError('Authentication service is not properly configured. Please try again later.')
+            break
+          default:
+            setError('Sign in failed. Please try again or contact support if the problem persists.')
+        }
+      } else if (result?.ok) {
+        // Successful sign in, redirect manually
+        window.location.href = safeCallback
+      }
     })
   }
 
@@ -80,6 +141,16 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
               {isPending ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
+          
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            Don't have an account?{' '}
+            <a 
+              href="/auth/register" 
+              className="text-primary hover:underline font-medium"
+            >
+              Register here
+            </a>
+          </div>
         </CardContent>
       </Card>
     </div>
