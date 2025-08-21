@@ -88,74 +88,90 @@ export default function ComponentDetailCard({
             </Tooltip>
           </TooltipProvider>
         </div>
-
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link href={`/findcomponent?reference_id=${component_data._id}`}>
-                <Button variant="outline" className="h-8 flex-shrink-0">
-                  Find Component
-                </Button>
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent>
-              <div className="text-center text-sm">
-                Find this component using the QR code
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
       </CardHeader>
 
       <CardContent>
+        {/* Find Component Button */}
+        <div className="mb-4">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href={`/findcomponent?reference_id=${component_data._id}`}>
+                  <Button variant="outline" className="w-full sm:w-auto">
+                    Find Component
+                  </Button>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="text-center text-sm">
+                  Find this component using the QR code
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
         <div className="mb-4 flex flex-col items-start justify-between gap-4 lg:flex-row">
           {/* Left side metadata */}
           <div className="w-full text-left lg:min-w-0 lg:flex-1 lg:max-w-md">
-            <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Metadata</h2>
+            <h2 className="mb-3 text-base font-semibold text-foreground border-b border-border pb-2">Metadata</h2>
 
-            <div className="text-sm text-foreground">
-              <div>
-                <b>Type:</b> {component_data.type}
-              </div>
-              <div>
-                <b>Material:</b> {component_data.material}
+            <div className="space-y-3">
+              {/* Basic Info Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Type</span>
+                  <span className="text-xs font-semibold text-foreground bg-primary/10 px-2 py-1 rounded-md">
+                    {component_data.type}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Material</span>
+                  <span className="text-xs font-semibold text-foreground bg-secondary/10 px-2 py-1 rounded-md">
+                    {component_data.material}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Color</span>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="h-4 w-4 rounded-full border-2 border-border shadow-sm"
+                      style={{ backgroundColor: component_color_hex }}
+                      aria-label={`Color ${component_color_str}`}
+                      title={component_color_str}
+                    />
+                    <span className="text-xs font-semibold text-foreground bg-accent/10 px-2 py-1 rounded-md">
+                      {component_color_str}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="mt-1 flex items-center">
-                <span className="mr-2">
-                  <b>Color:</b>
-                </span>
-                <div
-                  className="h-4 w-4 shrink-0 rounded-full border border-border"
-                  style={{ backgroundColor: component_color_hex }}
-                  aria-label={`Color ${component_color_str}`}
-                  title={component_color_str}
-                />
-                <div className="ml-2 text-sm text-muted-foreground">{component_color_str}</div>
-              </div>
-
-              <div className="mt-2">
-                <b>Bounding Box</b>
-                <ul className="list-inside list-disc text-sm">
-                  <li className="ml-4">
-                    <b>
-                      <i>X:</i>
-                    </b>{' '}
-                    {component_bounds[0].toFixed(2)}
-                  </li>
-                  <li className="ml-4">
-                    <b>
-                      <i>Y:</i>
-                    </b>{' '}
-                    {component_bounds[1].toFixed(2)}
-                  </li>
-                  <li className="ml-4">
-                    <b>
-                      <i>Z:</i>
-                    </b>{' '}
-                    {component_bounds[2].toFixed(2)}
-                  </li>
-                </ul>
+              {/* Bounding Box Section */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-foreground">Bounding Box Dimensions</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2 bg-muted/30 rounded-lg border border-border/50 text-center">
+                    <div className="text-xs font-medium text-muted-foreground mb-1">X</div>
+                    <div className="text-xs font-mono font-semibold text-foreground">
+                      {component_bounds[0].toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="p-2 bg-muted/30 rounded-lg border border-border/50 text-center">
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Y</div>
+                    <div className="text-xs font-mono font-semibold text-foreground">
+                      {component_bounds[1].toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="p-2 bg-muted/30 rounded-lg border border-border/50 text-center">
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Z</div>
+                    <div className="text-xs font-mono font-semibold text-foreground">
+                      {component_bounds[2].toFixed(2)}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -198,7 +214,7 @@ export default function ComponentDetailCard({
 
           {/* Right side: small map */}
           <div className="w-full lg:h-[200px] lg:w-[300px] lg:flex-shrink-0">
-            <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Location</h2>
+            <h2 className="mb-3 text-base font-semibold text-foreground border-b border-border pb-2">Location</h2>
             <ComponentDetailMap lat={lat} lon={lon} />
           </div>
         </div>
