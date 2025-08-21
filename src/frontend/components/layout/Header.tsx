@@ -1,13 +1,32 @@
 'use client'
 
-import { BookOpenText, Menu, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import AppMenu from './AppMenu'
+import { Menu, X, BookOpenText } from 'lucide-react'
+import AppMenu from '@/components/layout/AppMenu'
 import ThemeToggle from '@/components/common/ThemeToggle'
 import UserItem from '@/components/auth/UserItem'
 
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (!mobile && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false)
+      }
+    }
+
+    // Check initial size
+    checkScreenSize()
+
+    // Add resize listener
+    window.addEventListener('resize', checkScreenSize)
+    
+    return () => window.removeEventListener('resize', checkScreenSize)
+  }, [isMobileMenuOpen])
 
   // Close mobile menu when navigation items are clicked
   useEffect(() => {
@@ -46,9 +65,11 @@ export default function Header() {
       </div>
 
       {/* Mobile UserItem - shown below header on mobile */}
-      <div className='md:hidden p-4 border-b bg-muted/30'>
-        <UserItem />
-      </div>
+      {isMobile && (
+        <div className='md:hidden p-4 border-b bg-muted/30'>
+          <UserItem />
+        </div>
+      )}
 
       {/* Mobile Navigation Menu - collapsible */}
       {isMobileMenuOpen && (

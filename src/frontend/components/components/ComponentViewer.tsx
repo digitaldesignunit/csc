@@ -364,18 +364,18 @@ export default function ComponentViewer({ component_data }: { component_data: Co
   }
 
   return (
-    <Card className="flex flex-col m-2">
+    <Card className="flex flex-col m-2 w-full overflow-x-auto">
       <div className="relative h-[40dvh]">
         {/* Overlay UI */}
-        <div className="absolute top-2 left-2 z-10 bg-accent-foreground bg-opacity-90 p-2 rounded shadow text-sm">
+        <div className="absolute top-2 left-2 z-10 bg-accent-foreground bg-opacity-90 p-2 rounded shadow text-sm max-w-[calc(100%-1rem)]">
           <div className="mb-2 flex flex-col gap-1">
-            <label htmlFor="geometryModeSelect" className="mr-2">Geometry Resolution:</label>
+            <label htmlFor="geometryModeSelect" className="mr-2 text-xs sm:text-sm">Geometry Resolution:</label>
             <select
               id="geometryModeSelect"
               value={geometryMode}
               onChange={onModeChange}
               disabled={isSheet}
-              className="w-full rounded border bg-accent-foreground p-1 text-sm"
+              className="w-full rounded border bg-accent-foreground p-1 text-xs sm:text-sm"
             >
               <option value="primitive">Primitive</option>
               <option value="reduced">Reduced</option>
@@ -390,7 +390,7 @@ export default function ComponentViewer({ component_data }: { component_data: Co
               checked={showBoundingBox}
               onChange={(e) => setShowBoundingBox(e.target.checked)}
             />
-            <label htmlFor="bboxCheckbox">Display BoundingBox</label>
+            <label htmlFor="bboxCheckbox" className="text-xs sm:text-sm">Display BoundingBox</label>
           </div>
         </div>
 

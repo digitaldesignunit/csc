@@ -4,24 +4,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0.6] - 2025-08-21
+## [0.2.0.7] - 2024-12-19
 
-### Versions
-
-- CSC FastAPI Backend:  0.2.2.0
-- CSC React Frontend:   0.2.0.6
-- CSC Sheetscan Module: 0.0.1.11
+### Fixed
+- Responsive layout issues when dynamically resizing window width
+- Layout not properly adapting when switching between mobile and desktop viewports
+- Sidebar visibility and positioning on resize events
+- Component detail page responsive behavior when resizing from wide to narrow
+- Fixed layout overflow issues caused by fixed minimum widths
+- Component detail page width constraints - now properly adapts to viewport when resizing
+- Fixed Card components expanding beyond container width on resize
 
 ### Changed
+- Improved responsive behavior with proper resize event listeners
+- Sidebar now dynamically shows/hides based on screen size
+- Header and mobile menu properly adapt to viewport changes
+- Layout structure changed from CSS Grid to Flexbox for better responsive behavior
+- Added proper cleanup of resize event listeners
+- Component detail page now uses flexible layout instead of fixed minimum widths
+- Changed breakpoint from `md:` to `lg:` for better mobile experience
+- Improved text sizing and button layout for different screen sizes
+- Component detail page layout changed from CSS Grid to Flexbox for better width control
+- Added explicit width constraints and overflow handling to Card components
 
-#### CSC React Frontend
+### Added
+- Dynamic screen size detection in Sidebar, Header, AppMenu, and ComponentDetailCard components
+- Automatic mobile menu closing when resizing to desktop
+- Proper z-index management for overlapping elements
+- Responsive text sizing for ComponentViewer overlay UI
+- Break-word handling for long component IDs
+- Strict width constraints and overflow handling for component detail page
 
-- Restructured component folder organization for better maintainability
-- Moved layout components (Header, Sidebar, Footer, AppMenu) to `components/layout/`
-- Moved authentication components (UserItem) to `components/auth/`
-- Moved common utilities (ThemeToggle, models) to `components/common/`
-- Moved component-related UI to `components/components/` with overview subfolder
-- Updated all import statements throughout the codebase to reflect new structure
+## [0.2.0.6] - 2024-12-19
+
+### Changed
+- Restructured frontend components folder organization:
+  - `src/frontend/components/layout/` - Layout components (Header, Sidebar, Footer)
+  - `src/frontend/components/auth/` - Authentication components (UserItem, SignInForm)
+  - `src/frontend/components/components/` - Component-specific components
+  - `src/frontend/components/common/` - Shared/common components (ThemeToggle, models)
+- Updated all import statements to use correct absolute paths (`@/components/ui/...`)
+- Fixed broken UI component imports after folder restructuring
 
 ## [0.2.0.5] - 2025-08-21
 

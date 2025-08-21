@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { componentBounds, componentColorString, hexComponentColor } from '@/lib/utils'
 import { ComponentData } from '@/components/common/models'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +15,22 @@ export default function ComponentDetailCard({
 }: {
   component_data: ComponentData
 }) {
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 1024) // lg breakpoint
+    }
+
+    // Check initial size
+    checkScreenSize()
+
+    // Add resize listener
+    window.addEventListener('resize', checkScreenSize)
+    
+    return () => window.removeEventListener('resize', checkScreenSize)
+  }, [])
+
   // Component Color
   const component_color_str = componentColorString(component_data.color)
   const component_color_hex = hexComponentColor(component_data.color)
@@ -25,10 +42,10 @@ export default function ComponentDetailCard({
   const { lat, lon } = component_data.location || { lat: 37.81627937, lon: 144.95373531 }
 
   return (
-    <div>
-      <Card className="m-2">
+    <div className="w-full">
+      <Card className="m-2 w-full overflow-hidden">
         <CardHeader className="flex items-start justify-between gap-2">
-          <CardTitle className="text-left text-base text-foreground">
+          <CardTitle className="text-left text-base text-foreground break-words">
             {component_data._id}
           </CardTitle>
 
@@ -36,7 +53,7 @@ export default function ComponentDetailCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Link href={`/findcomponent?reference_id=${component_data._id}`}>
-                  <Button variant="outline" className="h-8">
+                  <Button variant="outline" className="h-8 flex-shrink-0">
                     Find Component
                   </Button>
                 </Link>
@@ -50,10 +67,10 @@ export default function ComponentDetailCard({
           </TooltipProvider>
         </CardHeader>
 
-        <CardContent>
-          <div className="mb-4 flex flex-col items-start justify-between gap-4 md:flex-row">
+        <CardContent className="w-full max-w-full">
+          <div className="mb-4 flex flex-col items-start justify-between gap-4 lg:flex-row w-full max-w-full">
             {/* Left side metadata */}
-            <div className="w-full text-left md:min-w-[500px] md:w-auto">
+            <div className="w-full text-left lg:min-w-0 lg:flex-1 max-w-full">
               <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Metadata</h2>
 
               <div className="text-sm text-foreground">
@@ -140,7 +157,7 @@ export default function ComponentDetailCard({
             </div>
 
             {/* Right side: small map */}
-            <div className="w-full md:h-[200px] md:w-[300px]">
+            <div className="w-full lg:h-[200px] lg:w-[300px] lg:flex-shrink-0 max-w-full">
               <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Location</h2>
               <ComponentDetailMap lat={lat} lon={lon} />
             </div>

@@ -12,7 +12,7 @@ export default function ComponentDetailMap({
   const mapSrc = `https://maps.google.com/maps?q=${lat},${lon}&z=15&output=embed`
 
   return (
-    <div className='w-full md:w-[300px] md:h-[200px]'>
+    <div className='w-full h-[200px]'>
       <iframe
         width="100%"
         height="200"
@@ -21,7 +21,7 @@ export default function ComponentDetailMap({
         allowFullScreen
         aria-hidden="false"
         tabIndex={0}
-        className='rounded-md overflow-hidden'
+        className='rounded-md overflow-hidden w-full h-full'
       ></iframe>
     </div>
   )

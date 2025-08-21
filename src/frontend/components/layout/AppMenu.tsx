@@ -1,120 +1,84 @@
 'use client'
 
-import { HomeIcon, QrCode, Package, Puzzle, Asterisk, BookText } from 'lucide-react'
-import Link from 'next/link'
-import type { ReactNode } from 'react'
-
-type MenuItem = {
-  id: string
-  link: string
-  icon: ReactNode
-  text: string
-}
-
-type MenuGroup = {
-  group: string
-  items: MenuItem[]
-}
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Home, Package, Search, Palette, Award, FileText } from 'lucide-react'
 
 export default function AppMenu() {
-  const menuList: MenuGroup[] = [
-    {
-      group: 'General',
-      items: [
-        { id: 'homebutton', link: '/', icon: <HomeIcon />, text: 'Home' },
-      ],
-    },
-    {
-      group: 'Components',
-      items: [
-        { id: 'componentsbutton', link: '/components', icon: <Puzzle />, text: 'Browse Components' },
-        { id: 'findcomponentbutton', link: '/findcomponent', icon: <QrCode />, text: 'Find Component' },
-      ],
-    },
-    {
-      group: 'Designs',
-      items: [
-        { id: 'designsbutton', link: '/designs', icon: <Package />, text: 'Browse Designs' },
-      ],
-    },
-    {
-      group: 'Misc',
-      items: [
-        { id: 'creditsbutton', link: '/credits', icon: <Asterisk />, text: 'Credits' },
-        { id: 'imprintbutton', link: '/imprint', icon: <BookText />, text: 'Imprint' },
-      ],
-    },
-  ]
+  const router = useRouter()
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+
+    // Check initial size
+    checkScreenSize()
+
+    // Add resize listener
+    window.addEventListener('resize', checkScreenSize)
+    
+    return () => window.removeEventListener('resize', checkScreenSize)
+  }, [])
+
+  const handleNavigation = (path: string) => {
+    router.push(path)
+    // Close mobile menu on navigation
+    if (isMobile) {
+      document.dispatchEvent(new CustomEvent('closeMobileMenu'))
+    }
+  }
 
   return (
-    <div className="flex h-full flex-col justify-items-center gap-4">
-      <div className="flex grow">
-        <div className="w-full rounded-lg bg-popover text-popover-foreground p-1 space-y-4" style={{ overflow: 'visible' }}>
-          <div className="space-y-2">
-            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-              {menuList[0].group}
-            </div>
-            <div className="space-y-1">
-              {menuList[0].items.map((option) => (
-                <Link key={option.id} href={option.link} onClick={() => document.dispatchEvent(new Event('closeMobileMenu'))}>
-                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
-                    {option.icon}
-                    {option.text}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-              {menuList[1].group}
-            </div>
-            <div className="space-y-1">
-              {menuList[1].items.map((option) => (
-                <Link key={option.id} href={option.link} onClick={() => document.dispatchEvent(new Event('closeMobileMenu'))}>
-                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
-                    {option.icon}
-                    {option.text}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-              {menuList[2].group}
-            </div>
-            <div className="space-y-1">
-              {menuList[2].items.map((option) => (
-                <Link key={option.id} href={option.link} onClick={() => document.dispatchEvent(new Event('closeMobileMenu'))}>
-                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
-                    {option.icon}
-                    {option.text}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
+    <div className="space-y-2">
+      {/* Main Navigation */}
+      <div className="rounded-lg bg-popover text-popover-foreground p-1">
+        <div
+          onClick={() => handleNavigation('/')}
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+        >
+          <Home className="h-4 w-4" />
+          Home
+        </div>
+        <div
+          onClick={() => handleNavigation('/components')}
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+        >
+          <Package className="h-4 w-4" />
+          Components
+        </div>
+        <div
+          onClick={() => handleNavigation('/findcomponent')}
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+        >
+          <Search className="h-4 w-4" />
+          Find Component
+        </div>
+        <div
+          onClick={() => handleNavigation('/designs')}
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+        >
+          <Palette className="h-4 w-4" />
+          Designs
         </div>
       </div>
 
-      <div className="flex shrink-0">
-        <div className="w-full rounded-lg bg-popover text-popover-foreground p-1 space-y-2" style={{ overflow: 'visible' }}>
-          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-            {menuList[3].group}
-          </div>
-          <div className="space-y-1">
-            {menuList[3].items.map((option) => (
-              <Link key={option.id} href={option.link} onClick={() => document.dispatchEvent(new Event('closeMobileMenu'))}>
-                <div className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
-                  {option.icon}
-                  {option.text}
-                </div>
-              </Link>
-            ))}
-          </div>
+      {/* Misc Navigation */}
+      <div className="rounded-lg bg-popover text-popover-foreground p-1">
+        <div
+          onClick={() => handleNavigation('/credits')}
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+        >
+          <Award className="h-4 w-4" />
+          Credits
+        </div>
+        <div
+          onClick={() => handleNavigation('/imprint')}
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+        >
+          <FileText className="h-4 w-4" />
+          Imprint
         </div>
       </div>
     </div>
