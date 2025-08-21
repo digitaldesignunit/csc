@@ -46,7 +46,7 @@ export default async function ComponentDetailPage({
   const component_data = await res.json()
 
   return (
-    <div className="grid gap-2 m-2 w-full max-w-full overflow-hidden p-0">
+    <div className="grid gap-2 m-2">
       <ComponentViewer component_data={component_data} />
       <ComponentDetailCard component_data={component_data} />
     </div>

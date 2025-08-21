@@ -66,7 +66,7 @@ export default function Header() {
 
       {/* Mobile UserItem - shown below header on mobile */}
       {isMobile && (
-        <div className='md:hidden p-4 border-b bg-muted/30'>
+        <div className='md:hidden p-2 border-b bg-muted/30'>
           <UserItem />
         </div>
       )}
@@ -74,7 +74,7 @@ export default function Header() {
       {/* Mobile Navigation Menu - collapsible */}
       {isMobileMenuOpen && (
         <div className='md:hidden border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 animate-in slide-in-from-top-2 duration-200'>
-          <div className='p-4'>
+          <div className='p-2'>
             <AppMenu />
           </div>
         </div>

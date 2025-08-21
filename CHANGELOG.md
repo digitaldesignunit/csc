@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed layout overflow issues caused by fixed minimum widths
 - Component detail page width constraints - now properly adapts to viewport when resizing
 - Fixed Card components expanding beyond container width on resize
+- **Component detail page now properly constrains width to viewport (no more right-side overflow)**
 
 ### Changed
 - Improved responsive behavior with proper resize event listeners
@@ -26,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved text sizing and button layout for different screen sizes
 - Component detail page layout changed from CSS Grid to Flexbox for better width control
 - Added explicit width constraints and overflow handling to Card components
+- **Simplified component detail page width handling to match working overview page approach**
+- **Enhanced ThemeToggle with hover effects - moon icon now uses accent color on hover**
 
 ### Added
 - Dynamic screen size detection in Sidebar, Header, AppMenu, and ComponentDetailCard components

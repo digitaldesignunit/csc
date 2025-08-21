@@ -24,7 +24,7 @@ export default function Sidebar() {
   if (!isVisible) return null
 
   return (
-    <div className='fixed top-0 left-0 flex flex-col gap-4 w-[250px] h-screen p-4 justify-between overflow-hidden border-r bg-background z-40'>
+    <div className='fixed top-0 left-0 flex flex-col gap-2 w-[250px] h-screen p-2 justify-between overflow-hidden border-r bg-background z-40'>
       {/* User section at top */}
       <div>
         <UserItem />

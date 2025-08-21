@@ -33,7 +33,7 @@ export default function AppMenu() {
   return (
     <div className="space-y-2">
       {/* Main Navigation */}
-      <div className="rounded-lg bg-popover text-popover-foreground p-1">
+      <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
         <div
           onClick={() => handleNavigation('/')}
           className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
@@ -65,7 +65,7 @@ export default function AppMenu() {
       </div>
 
       {/* Misc Navigation */}
-      <div className="rounded-lg bg-popover text-popover-foreground p-1">
+      <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
         <div
           onClick={() => handleNavigation('/credits')}
           className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
