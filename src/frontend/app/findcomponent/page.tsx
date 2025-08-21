@@ -1,4 +1,4 @@
-import ComponentLookup from '@/components/ComponentLookup'
+import ComponentLookup from '@/components/components/ComponentLookup'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface FindComponentProps {

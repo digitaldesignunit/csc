@@ -2,7 +2,7 @@
 'use client'
 
 import { ColumnDef } from '@tanstack/react-table'
-import { ComponentData, ComponentBoundingBox } from './models'
+import { ComponentData, ComponentBoundingBox } from '@/components/common/models'
 import { formatTimestamp, rgbToHex } from '@/lib/utils'
 import ComponentOverviewDataTablePreviewCell from './ComponentOverviewDataTablePreviewCell'
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'

@@ -1,6 +1,6 @@
 'use client'
 
-import UserItem from './UserItem'
+import UserItem from '@/components/auth/UserItem'
 import AppMenu from './AppMenu'
 
 export default function Sidebar() {

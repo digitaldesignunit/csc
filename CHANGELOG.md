@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0.6] - 2025-08-21
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.2.0
+- CSC React Frontend:   0.2.0.6
+- CSC Sheetscan Module: 0.0.1.11
+
+### Changed
+
+#### CSC React Frontend
+
+- Restructured component folder organization for better maintainability
+- Moved layout components (Header, Sidebar, Footer, AppMenu) to `components/layout/`
+- Moved authentication components (UserItem) to `components/auth/`
+- Moved common utilities (ThemeToggle, models) to `components/common/`
+- Moved component-related UI to `components/components/` with overview subfolder
+- Updated all import statements throughout the codebase to reflect new structure
+
 ## [0.2.0.5] - 2025-08-21
 
 ### Versions

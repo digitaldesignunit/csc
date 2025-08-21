@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Button } from './ui/button'
-import ComponentViewer from './ComponentViewer'
-import ComponentViewerSkeleton from './ComponentViewerSkeleton'
-import { ComponentData } from './models'
+import { Button } from '@/components/ui/button'
+import ComponentViewer from '../ComponentViewer'
+import ComponentViewerSkeleton from '../ComponentViewerSkeleton'
+import { ComponentData } from '@/components/common/models'
 import {
   Sheet,
   SheetClose,
@@ -14,9 +14,9 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from './ui/sheet'
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip'
-import ComponentPreviewImage from './ComponentPreviewImage'
+} from '@/components/ui/sheet'
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import ComponentPreviewImage from '../ComponentPreviewImage'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 

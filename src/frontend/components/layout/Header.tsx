@@ -3,8 +3,8 @@
 import { BookOpenText, Menu, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import AppMenu from './AppMenu'
-import ThemeToggle from './ThemeToggle'
-import UserItem from './UserItem'
+import ThemeToggle from '@/components/common/ThemeToggle'
+import UserItem from '@/components/auth/UserItem'
 
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)

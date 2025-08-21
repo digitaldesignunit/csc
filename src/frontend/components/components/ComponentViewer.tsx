@@ -3,13 +3,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
-import { ComponentPolylinePoints, ComponentData } from './models'
-import { Card } from './ui/card'
+import { ComponentPolylinePoints, ComponentData } from '@/components/common/models'
+import { Card } from '@/components/ui/card'
 import { Bounds, OrbitControls, Html } from '@react-three/drei'
 import { rgbToHex } from '@/lib/utils'
 import ComponentViewerSkeleton from './ComponentViewerSkeleton'
 import { MTLLoader, OBJLoader } from 'three-stdlib'
-import { Skeleton } from './ui/skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 
 // Scale factor for converting units to meters in THREE
 const scale = 0.001

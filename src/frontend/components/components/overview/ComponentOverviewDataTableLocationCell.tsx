@@ -1,10 +1,10 @@
 'use client'
 
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip'
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import React from 'react'
-import ComponentDetailMap from './ComponentDetailMap';
+import ComponentDetailMap from '../ComponentDetailMap';
 import { formatLocation, formatLocationMapsLink } from '@/lib/utils'
-import { ComponentLocation } from './models'
+import { ComponentLocation } from '@/components/common/models'
 
 export default function ComponentOverviewDataTableLocationCell({ coords }: { coords: ComponentLocation }) {
   const location: string = formatLocation(coords)

@@ -1,12 +1,12 @@
 'use client'
 
 import { componentBounds, componentColorString, hexComponentColor } from '@/lib/utils'
-import { ComponentData } from './models'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
+import { ComponentData } from '@/components/common/models'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
-import { Button } from './ui/button'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion'
+import { Button } from '@/components/ui/button'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import ComponentDetailMap from './ComponentDetailMap'
 
 export default function ComponentDetailCard({

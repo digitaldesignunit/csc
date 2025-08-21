@@ -9,7 +9,7 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from './ui/pagination';
+} from '@/components/ui/pagination';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 
 export interface ComponentOverviewPaginationProps {

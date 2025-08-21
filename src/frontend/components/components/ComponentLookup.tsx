@@ -2,10 +2,10 @@
 
 import React, { useState, useRef, MutableRefObject } from 'react'
 import { Html5Qrcode, Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
-import { Button } from './ui/button'
-import { CardContent, CardHeader } from './ui/card'
-import { Input } from './ui/input'
-import { Badge } from './ui/badge'
+import { Button } from '@/components/ui/button'
+import { CardContent, CardHeader } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 
 interface Props {
   presetReferenceID?: string
