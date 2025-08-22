@@ -213,6 +213,13 @@ async def get_component(
     return JSONResponse(status_code=200, content=doc)
 
 
+@router.get('/schema/component', summary='Get ComponentModel schema')
+async def get_component_schema():
+    """Get the OpenAPI schema for ComponentModel"""
+    from apps.catalogue.models import ComponentModel
+    return ComponentModel.model_json_schema()
+
+
 # COMPONENT DETAIL ROUTES -----------------------------------------------------
 
 @router.get(
