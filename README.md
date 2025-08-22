@@ -12,7 +12,7 @@ not working, etc. pp.
 
 ## Software Structure
 
-- The catalogue consists of a _database_, _backend_ and _frontend_
+- The catalogue consists of a _database_, _backend_, _frontend_, and _Grasshopper interface_
 - We use [_MongoDB Atlas_](https://www.mongodb.com/) as database
 - The backend is implemented using [_FastAPI_](https://fastapi.tiangolo.com/)
 - We use Python 3.9.18
@@ -20,8 +20,16 @@ not working, etc. pp.
 framework
 - The frontend is designed to connect to the backend via CORS on the same
 server using JWT-based auth
+- **NEW**: Grasshopper interface provides Python 3 components for direct integration with Rhino/Grasshopper
 - Everything runs on a web server, in our case we use
 [_Uberspace_](https://uberspace.de/)
+
+## Current Versions
+
+- **CSC FastAPI Backend**: 0.2.2.0
+- **CSC React Frontend**: 0.2.0.9
+- **CSC Sheetscan Module**: 0.0.1.11
+- **CSC Grasshopper Interface**: 0.1.0.0 ✨
 
 ---
 
@@ -55,23 +63,42 @@ example!).
 
 ## Editing dbconfig.json
 
-- Naviagte to `... \csc\src\backend`
-- Copy `dbconfig.teamplate.json` and rename it to `dbconfig.json`
-- Edit `dbconfig.json` and add you MongoDB credentials
+- Navigate to `... \csc\src\backend`
+- Copy `dbconfig.template.json` and rename it to `dbconfig.json`
+- Edit `dbconfig.json` and add your MongoDB credentials
 - Paste your secret key from the previous step into the `'secret'` field of
 your `dbconfig.json`
 
 ## Editing .env.local
 
-- Naviagte to `...\csc\src\frontend`
-- Copy `.env.example` and rename it to `.env.local`
-- Edit `.env.local` and paste your secret key into the `API_SECRET` field
+- Navigate to `...\csc\src\frontend`
+- Copy `.env.example` and rename it to `.env`
+- Edit `.env` and paste your secret key into the `API_SECRET` field
+- Also add your MongoDB credentials so that the frontend can directly authenticate with MongoDB
+- Do the same with `.env.local.example`, following the comments given in the file
 
-```
-/////////////////////////////////////////////////////
-/// INFO ON MONGO DB USER DATABASE SHOULD GO HERE ///
-/////////////////////////////////////////////////////
-```
+## Grasshopper Interface Setup
+
+The CSC Grasshopper Interface consists of Python 3 components that can be used directly in Grasshopper:
+
+- **Location**: `grasshopper_userobjects_src/` - Source files for development
+- **Installation**: Copy `.ghuser` files from `grasshopper_userobjects/` to your Grasshopper UserObjects folder
+- **Requirements**: Python 3 with packages: requests, numpy, scipy, scikit-learn
+- **Authentication**: Use `CSC_SignIn` component first to authenticate with the backend
+- **Components Available**:
+  - `CSC_SignIn` - Authentication and JWT token management
+  - `CSC_FetchAllComponents` - Retrieve all components from database
+  - `CSC_FetchComponent` - Fetch individual components by ID
+  - `CSC_DisassembleComponent` - Extract geometry and metadata from components
+  - `CSC_BakeComponents` - Bake components to Rhino document with proper layers
+
+### Grasshopper Component Features
+
+- **Centralized Authentication**: All components use shared AuthCore for seamless API access
+- **Smart Color Management**: Automatic fallback system for mesh colors
+- **Comprehensive Error Handling**: Clear user feedback through runtime messages
+- **Professional Output**: Consistent data structures and JSON formatting
+- **Student-Ready**: Self-contained components with comprehensive documentation
 
 ## Configuring Uberspace
 
@@ -145,7 +172,6 @@ npm install -g npm@latest
 removed 2 packages, and changed 53 packages in 9s
 
 24 packages are looking for funding
-  run `npm fund` for details
 [user@servername frontend]$ npm i
 up to date, audited 482 packages in 4s
 [user@servername frontend]$
@@ -157,19 +183,18 @@ This should install all necessary packages using the node package manager
 ```
 [user@servername frontend]$ npm run build
 
-> frontend@0.1.3 build
+> frontend@0.2.0.9 build
 > next build
 
-   ▲ Next.js 14.1.4
+   ▲ Next.js 15.5.0
    - Environments: .env.local
 
    Creating an optimized production build ...
-
- ✓ Linting and checking validity of types
- ✓ Collecting page data
- ✓ Generating static pages (8/8)
- ✓ Collecting build traces
- ✓ Finalizing page optimization
+   ✓ Linting and checking validity of types
+   ✓ Collecting page data
+   ✓ Generating static pages (8/8)
+   ✓ Collecting build traces
+   ✓ Finalizing page optimization
 
 Route (app)                              Size     First Load JS
 ┌ ○ /                                    141 B          84.5 kB
@@ -301,25 +326,16 @@ To add the cronjob to your crontab run:
 This will run the preview generation script every 30 minutes and write the
 results to a logging file.
 
-## 3. Tests
+## Testing
 
-~~Malt uses `pytest` for testing. It is included in the `ddu_ias_research.yml`
-conda environment file and does not need to be installed separately.
-Tests go in the `/tests` directory. They are organized the same way as the
-structure of the malt package and its submodules.~~
-
-To run all available test, call
+To run all available tests, call
 ```
 invoke test
 ```
 
-## 4. Linting
+## Linting
 
-~~Please use the `flake8` linter when contributing code to malt. It is included
-in the `ddu_ias_research.yml` conda environment file and does not need to be
-installed separately.~~
-
-To lint all code, call
+To lint all python code, call
 ```
 invoke lint
 ```
@@ -340,9 +356,10 @@ mineral cycles (ReMin).
 - The `csc_labels` python code to create QR-Code labels was developed by Mirko
 Dutschke. The code has been refactored as a python module and integrated by
 Max Benjamin Eschenbach.
-- The `csc_sheetscan` pyton module was developed based on the scanning setup
+- The `csc_sheetscan` python module was developed based on the scanning setup
 for sheets that was developed by Mirko Dutschke. The functional code has been
 written by Max Benjamin Eschenbach.
+- **NEW**: The CSC Grasshopper Interface components were developed and standardized by Max Benjamin Eschenbach, providing Python 3 components for direct integration with Rhino/Grasshopper workflows.
 
 ## Licensing
 
@@ -365,4 +382,7 @@ which is the origin of abovementioned Catalogue Explorer.
 
 ## Possible Future Integrations
 
-...
+- **Grasshopper Interface Enhancements**: Additional geometry processing components, parametric design tools
+- **Mobile Applications**: Native mobile apps for field work and component identification
+- **AI Integration**: Machine learning for automatic component classification and quality assessment
+- **BIM Integration**: Direct integration with Revit, ArchiCAD, and other BIM software

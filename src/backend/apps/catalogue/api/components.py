@@ -83,11 +83,11 @@ async def create_component(
 
 @router.get(
     '/validate/{component_id}',
-    summary='Validate component'
+    summary='Validate component (admin only)'
 )
 async def validate_component(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    admin_user: Annotated[User, Depends(require_admin)],
     component_id: str = '',
 ):
     coll = await get_components_col(request)

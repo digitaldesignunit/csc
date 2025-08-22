@@ -14,13 +14,13 @@ import rhinoscriptsyntax as rs
 import scriptcontext as sc
 
 # GHENV COMPONENT SETTINGS
-ghenv.Component.Name = "CSC_SyncWithRhinoDoc"
-ghenv.Component.NickName = "CSC_SyncWithRhinoDoc"
+ghenv.Component.Name = "SyncWithRhinoDoc"
+ghenv.Component.NickName = "SyncWithRhinoDoc"
 ghenv.Component.Category = "DDU_CSC"
 ghenv.Component.SubCategory = "3 Component Operations"
 
 
-class SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
+class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License

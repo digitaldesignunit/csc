@@ -15,13 +15,13 @@ import rhinoscriptsyntax as rs
 
 
 # GHENV COMPONENT SETTINGS
-ghenv.Component.Name = "CSC_TransformComponent"
-ghenv.Component.NickName = "CSC_TransformComponent"
+ghenv.Component.Name = "TransformComponent"
+ghenv.Component.NickName = "TransformComponent"
 ghenv.Component.Category = "DDU_CSC"
 ghenv.Component.SubCategory = "3 Component Operations"
 
 
-class TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
+class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License

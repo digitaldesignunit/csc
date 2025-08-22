@@ -1,0 +1,292 @@
+#! python3
+# venv: DDU_CSC
+# r: requests==2.31.0
+# r: numpy==1.26.4
+# r: scipy==1.13.0
+# r: scikit-learn==1.4.2
+
+# PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
+import json
+
+# RHINO AND GH RELATED IMPORTS ------------------------------------------------
+import System  # type: ignore[reportMissingImport] # NOQA
+import Rhino  # type: ignore[reportMissingImport] # NOQA
+import Grasshopper  # type: ignore[reportMissingImport] # NOQA
+
+# GHENV COMPONENT SETTINGS ----------------------------------------------------
+ghenv.Component.Name = 'DisassembleComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.NickName = 'DisassembleComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.SubCategory = '3 Component Operations'  # type: ignore[reportUnedfinedVariable] # NOQA
+
+
+class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
+    """
+    Author: Max Benjamin Eschenbach
+    License: MIT License
+    Version: 250822
+    """
+
+    def __init__(self):
+        super().__init__()
+        # initialize props
+        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.InputParams = self.Component.Params.Input
+        self.OutputParams = self.Component.Params.Output
+
+    def _addRemark(self, msg: str = ''):
+        rml = self.Component.RuntimeMessageLevel.Remark
+        self.AddRuntimeMessage(rml, msg)
+
+    def _addWarning(self, msg: str = ''):
+        rml = self.Component.RuntimeMessageLevel.Warning
+        self.AddRuntimeMessage(rml, msg)
+
+    def _addError(self, msg: str = ''):
+        rml = self.Component.RuntimeMessageLevel.Error
+        self.AddRuntimeMessage(rml, msg)
+
+    def ComponentExtrusionProfile(
+            self,
+            json_comp: dict) -> Rhino.Geometry.Polyline:
+        pl = Rhino.Geometry.Polyline()
+        pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
+               for pt in json_comp['geometry']['extrusion']['profile']]
+        pl.AddRange(pts)
+        return pl
+
+    def ComponentExtrusion(
+            self,
+            json_comp: dict) -> Rhino.Geometry.Extrusion:
+        pl = Rhino.Geometry.Polyline()
+        pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
+               for pt in json_comp['geometry']['extrusion']['profile']]
+        pl.AddRange(pts)
+        cxt = Rhino.Geometry.Extrusion.Create(
+            pl.ToPolylineCurve(),
+            Rhino.Geometry.Plane.WorldXY,
+            json_comp['geometry']['extrusion']['height'],
+            True)
+        # move extrusion downwards half material
+        # thickness to center it at the origin
+        cxt.Translate(Rhino.Geometry.Vector3d(
+            0, 0, json_comp['geometry']['extrusion']['height'] * -0.5))
+        return cxt
+
+    def ComponentMesh(self, json_comp: dict) -> Rhino.Geometry.Mesh:
+        mesh = Rhino.Geometry.Mesh()
+        vl = json_comp['geometry']['mesh']['v']
+        fl = json_comp['geometry']['mesh']['f']
+        [mesh.Vertices.Add(*v) for v in vl]
+        [mesh.Faces.AddFace(*f) for f in fl]
+        # Try to get mesh-specific colors first
+        try:
+            cl = json_comp['geometry']['mesh']['c']
+            [mesh.VertexColors.Add(
+                System.Drawing.Color.FromArgb(*c)) for c in cl]
+        except KeyError:
+            # Fallback: use component color for all vertices
+            try:
+                component_color = System.Drawing.Color.FromArgb(
+                    255, *json_comp['color'])
+                for _ in range(len(vl)):
+                    mesh.VertexColors.Add(component_color)
+            except (KeyError, TypeError):
+                # If even component color fails, use a default gray
+                default_color = System.Drawing.Color.Gray
+                for _ in range(len(vl)):
+                    mesh.VertexColors.Add(default_color)
+                self._addWarning(
+                    f'Mesh {json_comp["_id"]} using default gray color')
+        mesh.RebuildNormals()
+        mesh.UnifyNormals()
+        mesh.Compact()
+        return mesh
+
+    def ComponentColor(self, json_comp: dict) -> System.Drawing.Color:
+        return System.Drawing.Color.FromArgb(255, *json_comp['color'])
+
+    def ComponentBoundingBox(
+            self,
+            json_comp: dict) -> Rhino.Geometry.BoundingBox:
+        minpt = json_comp['bbx'][0]
+        maxpt = json_comp['bbx'][1]
+        bbx = Rhino.Geometry.BoundingBox(
+            Rhino.Geometry.Point3d(*minpt),
+            Rhino.Geometry.Point3d(*maxpt))
+        return bbx
+
+    def RunScript(self, ComponentData: Grasshopper.DataTree[str]):
+        # Initialize param descriptions (this has to be done in RunScript)
+        self.InputParams[0].Description = (
+            'The ComponentData that was fetched from the server as JSON.')
+
+        # Initialize output param descriptions
+        self.OutputParams[0].Description = 'Component ID (GUID)'
+        self.OutputParams[1].Description = (
+            'Component type (sheet, beam, slab, etc.)'
+        )
+        self.OutputParams[2].Description = 'Component material'
+        self.OutputParams[3].Description = (
+            'Rhino geometry objects (extrusion, mesh, polyline)'
+        )
+        self.OutputParams[4].Description = (
+            'Component color as System.Drawing.Color'
+        )
+        self.OutputParams[5].Description = (
+            'Component bounding box as Rhino.Geometry.BoundingBox'
+        )
+        self.OutputParams[6].Description = (
+            'Component descriptors/metadata as JSON string'
+        )
+
+        try:
+            # set up output trees and results tuple
+            ID = Grasshopper.DataTree[System.Object]()
+            Type = Grasshopper.DataTree[System.Object]()
+            Material = Grasshopper.DataTree[System.Object]()
+            Geometry = Grasshopper.DataTree[System.Object]()
+            Color = Grasshopper.DataTree[System.Object]()
+            BoundingBox = Grasshopper.DataTree[System.Object]()
+            Descriptors = Grasshopper.DataTree[System.Object]()
+            __Results = (
+                ID,
+                Type,
+                Material,
+                Geometry,
+                Color,
+                BoundingBox,
+                Descriptors)
+
+            # Validate input
+            if not ComponentData or ComponentData.DataCount == 0:
+                msg = ('No component data provided. Please connect '
+                       'FetchComponent output.')
+                self._addWarning(msg)
+                self.Component.Message = msg
+                return __Results
+
+            self.Component.Message = 'Disassembling components...'
+
+            # loop over all branches
+            for i in range(ComponentData.BranchCount):
+                for j, comp in enumerate(ComponentData.Branches[i]):
+                    try:
+                        json_comp = json.loads(comp)
+                        # create datatree path
+                        ghp = ComponentData.Paths[i]
+                        # add directly available metadata to the
+                        # respective datatrees
+                        ID.Add(json_comp['_id'], ghp)
+                        Type.Add(json_comp['type'], ghp)
+                        Material.Add(json_comp['material'], ghp)
+
+                        # process insertion frame
+                        try:
+                            iframe = json_comp['iframe']
+                            iplane = Rhino.Geometry.Plane(
+                                Rhino.Geometry.Point3d(*iframe['o']),
+                                Rhino.Geometry.Vector3d(*iframe['x']),
+                                Rhino.Geometry.Vector3d(*iframe['y']),
+                            )
+                        except KeyError:
+                            iplane = Rhino.Geometry.Plane.WorldXY
+
+                        xform = Rhino.Geometry.Transform.PlaneToPlane(
+                            Rhino.Geometry.Plane.WorldXY,
+                            iplane)
+
+                        # treat geometry key in a special way because
+                        # it may hold multiple geometry types
+                        for key in sorted(json_comp['geometry'].keys()):
+                            if key == 'extrusion':
+                                pl = self.ComponentExtrusionProfile(json_comp)
+                                xtr = self.ComponentExtrusion(json_comp)
+                                # transform to iframe
+                                pl.Transform(xform)
+                                xtr.Transform(xform)
+                                # add to datatree
+                                Geometry.Add(pl, ghp)
+                                Geometry.Add(xtr, ghp)
+                            elif key == 'mesh':
+                                mesh = self.ComponentMesh(json_comp)
+                                # transform to iframe
+                                mesh.Transform(xform)
+                                # add to datatree
+                                Geometry.Add(mesh, ghp)
+                            elif key == 'polyline':
+                                pl = self.ComponentExtrusionProfile(json_comp)
+                                # transform to iframe
+                                pl.Transform(xform)
+                                # add to datatree
+                                Geometry.Add(pl, ghp)
+                            else:
+                                msg = (f'Missing implementation for geometry '
+                                       f'of type \'{key}\'!')
+                                self._addWarning(msg)
+                                self.Component.Message = msg
+
+                        # create system color from rgb values
+                        color = self.ComponentColor(json_comp)
+                        Color.Add(color, ghp)
+
+                        # construct boundingbox
+                        bbx = self.ComponentBoundingBox(json_comp)
+
+                        # apply iframe transform
+                        bbx.Transform(xform)
+                        BoundingBox.Add(bbx, ghp)
+
+                        # add descriptors
+                        try:
+                            descriptors = json_comp.get('descriptors', {})
+                            Descriptors.Add(json.dumps(descriptors), ghp)
+                        except KeyError:
+                            # If no descriptors, add empty dict as JSON string
+                            Descriptors.Add(json.dumps({}), ghp)
+
+                    except json.JSONDecodeError as e:
+                        msg = f'Failed to parse component data: {str(e)}'
+                        self._addError(msg)
+                        self.Component.Message = msg
+                    except Exception as e:
+                        msg = f'Error processing component: {str(e)}'
+                        self._addError(msg)
+                        self.Component.Message = msg
+
+            # Update success message
+            total_components = sum(
+                len(branch) for branch in ComponentData.Branches
+            )
+            self.Component.Message = (
+                f'Disassembled {total_components} component(s)'
+            )
+            self._addRemark(
+                f'Successfully disassembled {total_components} components'
+            )
+
+            # return output trees
+            return __Results
+
+        except Exception as e:
+            msg = f'Unexpected error during disassembly: {str(e)}'
+            self._addError(msg)
+            self.Component.Message = msg
+
+            # Return empty results if there was an error
+            ID = Grasshopper.DataTree[System.Object]()
+            Type = Grasshopper.DataTree[System.Object]()
+            Material = Grasshopper.DataTree[System.Object]()
+            Geometry = Grasshopper.DataTree[System.Object]()
+            Color = Grasshopper.DataTree[System.Object]()
+            BoundingBox = Grasshopper.DataTree[System.Object]()
+            Descriptors = Grasshopper.DataTree[System.Object]()
+            __Results = (
+                ID,
+                Type,
+                Material,
+                Geometry,
+                Color,
+                BoundingBox,
+                Descriptors)
+            return __Results

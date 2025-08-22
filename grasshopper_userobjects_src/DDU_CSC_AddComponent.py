@@ -6,6 +6,8 @@
 # r: scikit-learn==1.4.2
 
 import json
+import uuid
+from pprint import pprint
 
 import requests
 
@@ -14,12 +16,13 @@ import Grasshopper
 import Rhino
 
 # GHENV COMPONENT SETTINGS
-ghenv.Component.Name = "CSC_FetchAllComponents"
-ghenv.Component.NickName = "CSC_FetchAllComponents"
+ghenv.Component.Name = "AddComponent"
+ghenv.Component.NickName = "AddComponent"
 ghenv.Component.Category = "DDU_CSC"
 ghenv.Component.SubCategory = "2 Catalogue Interface"
 
-class FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
+
+class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
@@ -84,41 +87,35 @@ class FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
                                         data=data,
                                         headers=headers)
             if response.status_code != 200:
-                msg = ('Request failed with status '
-                       f'code {response.status_code}! Please '
-                       'recompute "Config" component to '
-                       'acquire new auth token.')
-                print(msg)
-                raise RuntimeError(msg)
+                raise RuntimeError(f'Request failed with status code {response.status_code}')
         return response
 
-    def RunScript(self, Config: str):
+    def RunScript(self, Config: str, ComponentData: str, Run: bool):
         # set up output trees and results tuple
-        ComponentData = Grasshopper.DataTree[System.Object]()
-        __Results = (ComponentData)
+        AddedComponentData = Grasshopper.DataTree[System.Object]()
         # sanitize input and abort if not present
         if not Config:
             rml = ghenv.Component.RuntimeMessageLevel.Warning
-            msg = 'Input CSCToken failed to collect data!'
+            msg = 'Input Config failed to collect data!'
             ghenv.Component.AddRuntimeMessage(rml, msg)
-            return __Results
+            return AddedComponentData
         else:
-            Config = str(Config)
             config_data = json.loads(Config)
             self.BASEURL = config_data['base_url']
             self.TOKEN = config_data['token']
-        # set endpoint
-        endpoint = 'components'
-        # perform request
-        response = self._make_request('GET', endpoint)
-        # convert response to json data
-        json_comps = response.json()
-        print(f'[CSC-API] Found {len(json_comps)} components on server.')
-        # loop over all components and disassemble them
-        for i, json_comp in enumerate(json_comps):
-            # create datatree path
-            ghp = Grasshopper.Kernel.Data.GH_Path(i)
-            # add all things to the respective datatrees
-            ComponentData.Add(json.dumps(json_comp), ghp)
-        # return output trees
-        return __Results
+        if not ComponentData:
+            rml = ghenv.Component.RuntimeMessageLevel.Warning
+            msg = 'Input ComponentData failed to collect data!'
+            ghenv.Component.AddRuntimeMessage(rml, msg)
+            return AddedComponentData
+
+        if Run:
+            # set endpoint
+            endpoint = '/'
+            # perform request
+            response = self._make_request('POST', endpoint, data=ComponentData)
+            # convert response to json data
+            json_comp = response.json()
+            print(f'[CSC-API] Added component {json_comp["_id"]} to database.')
+            AddedComponentData = json.dumps(json_comp)
+        return AddedComponentData

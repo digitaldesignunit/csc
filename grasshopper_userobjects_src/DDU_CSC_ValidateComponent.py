@@ -15,13 +15,13 @@ import Grasshopper
 import Rhino
 
 # GHENV COMPONENT SETTINGS
-ghenv.Component.Name = "CSC_ValidateComponent"
-ghenv.Component.NickName = "CSC_ValidateComponent"
+ghenv.Component.Name = "ValidateComponent"
+ghenv.Component.NickName = "ValidateComponent"
 ghenv.Component.Category = "DDU_CSC"
-ghenv.Component.SubCategory = "2 Catalogue Interface"
+ghenv.Component.SubCategory = "9 Admin Actions"
 
 
-class ValidateComponent(Grasshopper.Kernel.GH_ScriptInstance):
+class CSC_ValidateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License

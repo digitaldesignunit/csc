@@ -15,13 +15,13 @@ import Grasshopper
 
 
 # GHENV COMPONENT SETTINGS
-ghenv.Component.Name = "CSC_FilterComponents"
-ghenv.Component.NickName = "CSC_FilterComponents"
+ghenv.Component.Name = "FilterComponents"
+ghenv.Component.NickName = "FilterComponents"
 ghenv.Component.Category = "DDU_CSC"
 ghenv.Component.SubCategory = "2 Catalogue Interface"
 
 
-class FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
+class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License

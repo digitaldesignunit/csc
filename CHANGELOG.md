@@ -4,6 +4,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0.9] - 2024-12-19
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.2.0
+- CSC React Frontend:   0.2.0.9
+- CSC Sheetscan Module: 0.0.1.11
+- **CSC Grasshopper Interface: 0.1.0.0** ✨
+
+### Added
+
+#### CSC Grasshopper Interface (New Module)
+- **Centralized Authentication System**: Implemented `AuthCore` class for JWT token management across all components
+- **Sticky Storage Integration**: Components now share authentication state via Grasshopper's sticky storage
+- **Comprehensive Error Handling**: Added runtime messages (Remark, Warning, Error) for better user feedback
+- **Color Fallback System**: Enhanced mesh color handling with component color fallbacks and default gray
+- **Parameter Documentation**: Added tooltips for all input/output parameters across all components
+- **Consistent Coding Standards**: Unified import organization, pyright suppressions, and code structure
+
+#### Updated Components
+- **CSC_SignIn**: Complete authentication implementation with JWT token management
+- **CSC_FetchAllComponents**: Updated to use centralized AuthCore pattern
+- **CSC_FetchComponents**: Enhanced with AuthCore integration and improved error handling
+- **CSC_DisassembleComponent**: Added descriptors output and comprehensive geometry processing
+- **CSC_BakeComponents**: Enhanced with color fallbacks and improved user feedback
+
+### Changed
+
+#### CSC Grasshopper Interface
+- **Authentication Flow**: Replaced scattered authentication logic with centralized AuthCore system
+- **Component Architecture**: Standardized all components with consistent `__init__`, `_add*` methods, and error handling
+- **Mesh Color Handling**: Implemented three-tier color fallback system (mesh colors → component color → default gray)
+- **Output Format**: Descriptors now output as JSON strings for consistency with other components
+- **Error Recovery**: All components now provide graceful error handling with clear user feedback
+- **Code Quality**: Applied consistent pyright suppressions, import organization, and coding standards
+
+#### Component-Specific Improvements
+- **CSC_SignIn**: Added username tracking, refresh functionality, and comprehensive API error handling
+- **CSC_FetchAllComponents**: Enhanced with proper authentication validation and runtime messaging
+- **CSC_FetchComponents**: Improved individual component fetching with better error handling
+- **CSC_DisassembleComponent**: Added descriptors output and enhanced geometry processing robustness
+- **CSC_BakeComponents**: Improved baking process with better status tracking and error handling
+
+### Technical Improvements
+- **Memory Management**: Eliminated code duplication through centralized authentication
+- **User Experience**: Consistent feedback across all components via multiple message channels
+- **Robustness**: Enhanced error handling prevents crashes and provides clear user guidance
+- **Maintainability**: Standardized code structure makes future updates easier and more consistent
+- **Student Experience**: Professional-grade components with clear error messages and status updates
+
 ## [0.2.0.8] - 2024-12-19
 
 ### Added

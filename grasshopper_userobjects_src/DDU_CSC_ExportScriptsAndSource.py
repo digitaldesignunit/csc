@@ -1,34 +1,35 @@
-import System
-import Rhino
-import Grasshopper
-
+# PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os
-from pprint import pprint
 
-import GhPython as ghpy
-import ScriptComponents as scomp
-import RhinoCodePluginGH as rcpgh
+# RHINO AND GH RELATED IMPORTS ------------------------------------------------
+import System  # type: ignore[reportMissingImport] # NOQA
+import Rhino  # type: ignore[reportMissingImport] # NOQA
+import Grasshopper  # type: ignore[reportMissingImport] # NOQA
+import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
+import GhPython as ghpy  # type: ignore[reportMissingImport] # NOQA
+import ScriptComponents as scomp  # type: ignore[reportMissingImport] # NOQA
+import RhinoCodePluginGH as rcpgh  # type: ignore[reportMissingImport] # NOQA
 
-# GHENV COMPONENT SETTINGS
-ghenv.Component.Name = "ExportScriptsAndSource"
-ghenv.Component.NickName = "ExportScriptsAndSource"
-ghenv.Component.Category = "DDU_CSC"
-ghenv.Component.SubCategory = "0 Development"
+# GHENV COMPONENT SETTINGS ----------------------------------------------------
+ghenv.Component.Name = "ExportScriptsAndSource"  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.NickName = "ExportScriptsAndSource"  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Category = "DDU_CSC"  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.SubCategory = "0 Development"  # type: ignore[reportUnedfinedVariable] # NOQA
 
 
 class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
-    Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)
+    Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 250820
+    Version: 250822
     """
 
     def get_source_version(self, source):
         """
-        Attempts to get the first instance of the word "version" (or, "Version")
-        in a multi line string. Then attempts to extract an integer from this line
-        where the word "version" exists. So format version YYMMDD in the
-        docstring like so (or any other integer system):
+        Attempts to get the first instance of the word "version"
+        (or, "Version") in a multi line string. Then attempts to extract an
+        integer from this line where the word "version" exists. So format
+        version YYMMDD in the docstring like so (or any other integer system):
             Version: 160121
         """
         # Get first line with version in it
@@ -36,7 +37,9 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         version_str = [ln for ln in src_lower.split('\n') if "version" in ln]
         if version_str:
             # Get the first substring integer and return it
-            version_int = [int(s) for s in version_str[0].split() if s.isdigit()]
+            version_int = [
+                int(s) for s in version_str[0].split() if s.isdigit()
+            ]
             if version_int:
                 return int(version_int[0])
         else:
@@ -95,48 +98,59 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             if objtype_str == ghpycomp_str:
                 source = obj.Code
                 if source:
-                    print(f'Found Source for OLD GHPY Component "{nickname}" ({iguid})') if verbose else None
+                    print((f'Found Source for OLD GHPY Component "{nickname}" '
+                           f'({iguid})') if verbose else None)
                     scriptcomp = [id_ghpycomp, nickname, name, obj, source]
                     script_components[iguid] = scriptcomp
             # OLD C# COMPONENT
             elif objtype_str == cscomp_str:
                 source = obj.ScriptSource.ScriptCode
                 if source:
-                    print(f'Found Source for OLD CS Component "{nickname}" ({iguid})') if verbose else None
+                    print((f'Found Source for OLD CS Component "{nickname}" '
+                           f'({iguid})') if verbose else None)
                     scriptcomp = [id_cscomp, nickname, name, obj, source]
                     script_components[iguid] = scriptcomp
             # NEW C#9 COMPONENT
             elif objtype_str == cs9comp_str:
                 bres, source = obj.TryGetSource()
                 if bres:
-                    print(f'Found Source for CS9 Component "{nickname}" ({iguid})') if verbose else None
+                    print((f'Found Source for CS9 Component "{nickname}" '
+                           f'({iguid})') if verbose else None)
                     scriptcomp = [id_cs9comp, nickname, name, obj, source]
                     script_components[iguid] = scriptcomp
             # NEW IRONPYTHON COMPONENT
             elif objtype_str == ipycomp_str:
                 bres, source = obj.TryGetSource()
                 if bres:
-                    print(f'Found Source for IPY2 Component "{nickname}" ({iguid})') if verbose else None
+                    print((f'Found Source for IPY2 Component "{nickname}" '
+                           f'({iguid})') if verbose else None)
                     scriptcomp = [id_ipycomp, nickname, name, obj, source]
                     script_components[iguid] = scriptcomp
             # NEW PYTHON3 COMPONENT
             elif objtype_str == py3comp_str:
                 bres, source = obj.TryGetSource()
                 if bres:
-                    print(f'Found Source for PY3 Component "{nickname}" ({iguid})') if verbose else None
+                    print((f'Found Source for PY3 Component "{nickname}" '
+                           f'({iguid})') if verbose else None)
                     scriptcomp = [id_py3comp, nickname, name, obj, source]
                     script_components[iguid] = scriptcomp
             # CLUSTER COMPONENT
             elif objtype_str == clustercomp_str:
-                # RECURSIVELY STEP THROUGH CLUSTERS AND LOOK FOR SCRIPTS AGAIN...
-                print(f'Processing CLUSTER "{nickname}" ({name}, {iguid}) ...') if verbose else None
-                cluster_scripts = self.process_document_objects(obj.Document(''), verbose=verbose)
+                # RECURSIVELY STEP THROUGH CLUSTERS AND LOOK FOR SCRIPTS ...
+                print((f'Processing CLUSTER "{nickname}" ({name}, '
+                      f'{iguid}) ...') if verbose else None)
+                cluster_scripts = self.process_document_objects(
+                    obj.Document(''), verbose=verbose
+                )
                 # add cluster script dict to main dict
                 script_components.update(cluster_scripts)
 
         return script_components
 
-    def process_script_components(self, script_components: dict, set_category: str):
+    def process_script_components(
+            self,
+            script_components: dict,
+            set_category: str):
         """
         Process found script components and get unique components.
         """
@@ -154,28 +168,42 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             script_id = nickname + ' ' + name
             # NOT SEEN YET SCRIPT COMPONENTS
             if script_id not in unique_script_components:
+                version_present = True
+                category_match = True
                 if script_type == 'GHPY':
-                    OldScriptsDebug.append(f'{script_type} - {nickname} ({name})')
-                    OldScriptsDebug.append('    - IS AN OLD GHPYTHON SCRIPT!')
+                    OldScriptsDebug.append(
+                        f'{script_type} - {nickname} ({name})')
+                    OldScriptsDebug.append(
+                        '    - IS AN OLD GHPYTHON SCRIPT!')
                 elif script_type == 'CS':
-                    OldScriptsDebug.append(f'{script_type} - {nickname} ({name})')
+                    OldScriptsDebug.append(
+                        f'{script_type} - {nickname} ({name})')
                     OldScriptsDebug.append('    - IS AN OLD C# SCRIPT!')
                 if category != set_category:
+                    # create debug info messages
+                    category_match = False
                     if category == 'Maths':
-                        CategoryDebug.append(f'{script_type} - {nickname} ({name})')
-                        CategoryDebug.append(f'    - HAS NO CATEGORY ({category})!')
+                        CategoryDebug.append(
+                            f'{script_type} - {nickname} ({name})')
+                        CategoryDebug.append(
+                            f'    - HAS NO CATEGORY ({category}) (No Export)!')
                     else:
-                        CategoryDebug.append(f'{script_type} - {nickname} ({name})')
-                        CategoryDebug.append(f'    - {category} OUT OF SET CATEGORY {set_category}!')
+                        CategoryDebug.append(
+                            f'{script_type} - {nickname} ({name})')
+                        CategoryDebug.append(
+                            f'    - {category} OUT OF SET CATEGORY '
+                            f'{set_category} (No Export)!')
                 if version is None:
-                    VersionDebug.append(' '.join([script_type, nickname, name]))
-                    VersionDebug.append('    - HAS NO VERSION!')
-                else:
+                    version_present = False
+                    # create debug info messages
+                    VersionDebug.append(
+                        ' '.join([script_type, nickname, name]))
+                    VersionDebug.append('    - HAS NO VERSION! (No Export)')
+                if category_match and version_present:
                     InfoMessages.append(f'{script_type} - {nickname} ({name})')
                     unique_script_components[script_id] = values
             # ALREADY SEEN SCRIPT COMPONENTS
             else:
-                existing_obj = unique_script_components[script_id][3]
                 existing_source = unique_script_components[script_id][4]
                 existing_version = self.get_source_version(existing_source)
                 if version is None:
@@ -183,20 +211,28 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                     VersionDebug.append('    - HAS NO VERSION!')
                 elif existing_version is None and version is not None:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
-                    VersionDebug.append(f'    - VERSION {version} > ALREADY FOUND VERSION {existing_version}!')
+                    VersionDebug.append(
+                        f'    - VERSION {version} > ALREADY FOUND VERSION '
+                        f'{existing_version}!')
                     # REPLACE FOUND "NONE" VERSION WITH NAMED VERSION!
                     raise
                 elif version < existing_version:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
-                    VersionDebug.append(f'    - VERSION {version} < {existing_version}! Continuing...')
-                    # REPLACE THE SOURCE OF THE LOWER VERSION WITH HIGHER VERSION SOURCE!
+                    VersionDebug.append(
+                        f'    - VERSION {version} < {existing_version}! '
+                        'Continuing...')
+                    # REPLACE THE SOURCE OF THE LOWER VERSION
+                    # WITH HIGHER VERSION SOURCE!
                     continue
                 elif version > existing_version:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
-                    VersionDebug.append(f'    - VERSION {version} > ALREADY FOUND VERSION {existing_version}!')
+                    VersionDebug.append(
+                        f'    - VERSION {version} > ALREADY FOUND VERSION '
+                        f'{existing_version}!')
                     # REPLACE THE OBJECT IN DICT WITH NEWER VERSION
                     raise
-        return unique_script_components, OldScriptsDebug, CategoryDebug, VersionDebug, InfoMessages
+        return (unique_script_components, OldScriptsDebug, CategoryDebug,
+                VersionDebug, InfoMessages)
 
     def export_scriptcomp_usrobj(self, scriptcomp, usrobjpath, iconpath=''):
         """
@@ -215,14 +251,15 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             uo.Icon = obj.Icon_24x24
             # Set its properties based on the GHPython component properties
             uo.BaseGuid = obj.ComponentGuid
-            uo.Exposure = ghenv.Component.Exposure.primary
+            uo.Exposure = ghenv.Component.Exposure.primary  # type: ignore[reportUnedfinedVariable] # NOQA
             uo.Description.Name = obj.Name
             uo.Description.Description = obj.Description
             uo.Description.Category = obj.Category
             uo.Description.SubCategory = obj.SubCategory
             # Set the user object data and save to file
             uo.SetDataFromObject(obj)
-            uo.Path = os.path.join(usrobjpath, obj.Category + '_' + obj.Name + '.ghuser')
+            uo.Path = os.path.join(
+                usrobjpath, obj.Category + '_' + obj.Name + '.ghuser')
             uo.SaveToFile()
         except Exception as e:
             print(e)
@@ -274,17 +311,21 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         InfoMessages = Grasshopper.DataTree[object]()
 
         # Iterate the canvas and get to the GHPython components
-        grasshopper_document = ghenv.Component.OnPingDocument()
+        grasshopper_document = ghenv.Component.OnPingDocument()  # type: ignore[reportUnedfinedVariable] # NOQA
         gh_dir = os.path.dirname(grasshopper_document.FilePath)
 
-        usrobjpath = os.path.normpath(os.path.abspath(os.path.join(gh_dir, UserObjFolder)))
-        srcpath = os.path.normpath(os.path.abspath(os.path.join(gh_dir, SourceFolder)))
-        iconpath = os.path.normpath(os.path.abspath(os.path.join(gh_dir, IconPath)))
+        usrobjpath = os.path.normpath(
+            os.path.abspath(os.path.join(gh_dir, UserObjFolder)))
+        srcpath = os.path.normpath(
+            os.path.abspath(os.path.join(gh_dir, SourceFolder)))
+        iconpath = os.path.normpath(
+            os.path.abspath(os.path.join(gh_dir, IconPath)))
 
         if RunComponentAnalysis:
             # loop over all objects on the grasshopper canvas
             # and identify the components to export scriptsource from
-            script_components = self.process_document_objects(grasshopper_document, verbose=False)
+            script_components = self.process_document_objects(
+                grasshopper_document, verbose=False)
 
             # - are all "same" scripts the same code?
             # - are there scripts without category or version attribute?
@@ -293,7 +334,8 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
              OldScriptsDebug,
              CategoryDebug,
              VersionDebug,
-             InfoMessages) = self.process_script_components(script_components, Category)
+             InfoMessages) = self.process_script_components(
+                script_components, Category)
 
         # HERE LOOP OVER UNIQUE COMPONENTS
         if ExportUserObjectsAndSource and RunComponentAnalysis:
@@ -301,12 +343,14 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             # - SAVE SOURCE
             for script_id, scriptcomp in unique_script_components.items():
                 loc = self.export_scriptcomp_source(scriptcomp, srcpath)
-                res = self.export_scriptcomp_usrobj(scriptcomp, usrobjpath, iconpath)
+                res = self.export_scriptcomp_usrobj(
+                    scriptcomp, usrobjpath, iconpath)
                 print(res, loc)
         elif ExportUserObjectsAndSource and not RunComponentAnalysis:
-            rml = ghenv.Component.RuntimeMessageLevel.Warning
-            ghenv.Component.AddRuntimeMessage(
+            rml = ghenv.Component.RuntimeMessageLevel.Warning  # type: ignore[reportUnedfinedVariable] # NOQA
+            ghenv.Component.AddRuntimeMessage(  # type: ignore[reportUnedfinedVariable] # NOQA
                 rml,
-                'UserObjects and Source cannot be exported without running Component Analysis!')
+                'UserObjects and Source cannot be exported without running '
+                'Component Analysis!')
 
         return OldScriptsDebug, CategoryDebug, VersionDebug, InfoMessages

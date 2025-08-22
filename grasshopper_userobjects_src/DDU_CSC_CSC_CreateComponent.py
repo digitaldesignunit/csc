@@ -17,13 +17,13 @@ import Grasshopper
 import Rhino
 
 # GHENV COMPONENT SETTINGS
-ghenv.Component.Name = "CSC_CreateComponent"
-ghenv.Component.NickName = "CSC_CreateComponent"
+ghenv.Component.Name = "CreateComponent"
+ghenv.Component.NickName = "CreateComponent"
 ghenv.Component.Category = "DDU_CSC"
 ghenv.Component.SubCategory = "3 Component Operations"
 
 
-class CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
+class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
