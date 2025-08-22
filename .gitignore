@@ -41,3 +41,4 @@ csc.code-workspace
 src/backend/apps/catalogue/test.json
 csc_deploy.sh
 src/backend/logs/fastapi.log
+*.3dm.rhl
