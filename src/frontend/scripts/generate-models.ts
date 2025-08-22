@@ -48,8 +48,8 @@ export * from './ComponentModel';
   }
 }
 
-function generateTypeScriptInterface(schema: any): string {
-  const { properties, required = [] } = schema;
+function generateTypeScriptInterface(schema: Record<string, unknown>): string {
+  const { properties, required = [] } = schema as { properties: Record<string, unknown>; required?: string[] };
   
   let interfaceCode = `// Auto-generated from backend OpenAPI schema
 // Generated on: ${new Date().toISOString()}
@@ -59,10 +59,10 @@ export interface ComponentModel {
 `;
 
   // Add properties
-  for (const [propName, propSchema] of Object.entries(properties) as [string, any][]) {
+  for (const [propName, propSchema] of Object.entries(properties)) {
     const isRequired = required.includes(propName);
-    const typeAnnotation = getTypeScriptType(propSchema);
-    const comment = propSchema.description ? ` // ${propSchema.description}` : '';
+    const typeAnnotation = getTypeScriptType(propSchema as Record<string, unknown>);
+    const comment = (propSchema as Record<string, unknown>).description ? ` // ${(propSchema as Record<string, unknown>).description}` : '';
     
     interfaceCode += `  ${propName}${isRequired ? '' : '?'}: ${typeAnnotation};${comment}\n`;
   }
@@ -75,8 +75,11 @@ export type ComponentType = 'sheet' | 'beam' | 'slab' | 'rubble' | 'column';
 export type ComponentComplexity = 0 | 1 | 2 | 3;
 
 // Type guards
-export function isComponentModel(obj: any): obj is ComponentModel {
-  return obj && typeof obj === 'object' && '_id' in obj && 'type' in obj;
+export function isComponentModel(obj: unknown): obj is ComponentModel {
+  return obj !== null && 
+         typeof obj === 'object' && 
+         '_id' in obj && 
+         'type' in obj;
 }
 
 // Partial type for updates
@@ -86,17 +89,17 @@ export type PartialComponentModel = Partial<ComponentModel>;
   return interfaceCode;
 }
 
-function getTypeScriptType(schema: any): string {
+function getTypeScriptType(schema: Record<string, unknown>): string {
   if (schema.type === 'string') {
     if (schema.enum) {
-      return schema.enum.map((v: any) => `'${v}'`).join(' | ');
+      return (schema.enum as unknown[]).map((v: unknown) => `'${v}'`).join(' | ');
     }
     return 'string';
   }
   
   if (schema.type === 'integer' || schema.type === 'number') {
     if (schema.enum) {
-      return schema.enum.join(' | ');
+      return (schema.enum as unknown[]).join(' | ');
     }
     return 'number';
   }
@@ -106,29 +109,44 @@ function getTypeScriptType(schema: any): string {
   }
   
   if (schema.type === 'array') {
-    const itemType = getTypeScriptType(schema.items);
+    const itemType = getTypeScriptType(schema.items as Record<string, unknown>);
     return `${itemType}[]`;
   }
   
   if (schema.type === 'object') {
-    return 'Record<string, any>';
+    return 'Record<string, unknown>';
   }
   
   // Handle anyOf, oneOf, allOf
   if (schema.anyOf) {
-    return schema.anyOf.map((s: any) => getTypeScriptType(s)).join(' | ');
+    const types = (schema.anyOf as Record<string, unknown>[]).map((s: Record<string, unknown>) => getTypeScriptType(s));
+    // Filter out 'any' types to avoid union with any
+    const filteredTypes = types.filter((t: string) => t !== 'any');
+    if (filteredTypes.length === 0) return 'unknown';
+    if (filteredTypes.length === 1) return filteredTypes[0];
+    return filteredTypes.join(' | ');
   }
   
   if (schema.oneOf) {
-    return schema.oneOf.map((s: any) => getTypeScriptType(s)).join(' | ');
+    const types = (schema.oneOf as Record<string, unknown>[]).map((s: Record<string, unknown>) => getTypeScriptType(s));
+    // Filter out 'any' types to avoid union with any
+    const filteredTypes = types.filter((t: string) => t !== 'any');
+    if (filteredTypes.length === 0) return 'unknown';
+    if (filteredTypes.length === 1) return filteredTypes[0];
+    return filteredTypes.join(' | ');
   }
   
   if (schema.allOf) {
-    return schema.allOf.map((s: any) => getTypeScriptType(s)).join(' & ');
+    const types = (schema.allOf as Record<string, unknown>[]).map((s: Record<string, unknown>) => getTypeScriptType(s));
+    // Filter out 'any' types to avoid intersection with any
+    const filteredTypes = types.filter((t: string) => t !== 'any');
+    if (filteredTypes.length === 0) return 'unknown';
+    if (filteredTypes.length === 1) return filteredTypes[0];
+    return filteredTypes.join(' & ');
   }
   
-  // Default fallback
-  return 'any';
+  // Default fallback - use 'unknown' instead of 'any'
+  return 'unknown';
 }
 
 // Run the generation
