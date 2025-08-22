@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { componentBounds, componentColorString, hexComponentColor } from '@/lib/utils'
 import { ComponentData } from '@/components/common/models'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -16,22 +16,7 @@ export default function ComponentDetailCard({
 }: {
   component_data: ComponentData
 }) {
-  const [isMobile, setIsMobile] = useState(false)
   const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 1024) // lg breakpoint
-    }
-
-    // Check initial size
-    checkScreenSize()
-
-    // Add resize listener
-    window.addEventListener('resize', checkScreenSize)
-    
-    return () => window.removeEventListener('resize', checkScreenSize)
-  }, [])
 
   const handleCopyToClipboard = async () => {
     try {

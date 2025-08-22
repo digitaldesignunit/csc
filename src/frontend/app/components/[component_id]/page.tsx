@@ -1,5 +1,4 @@
 // app/components/[component_id]/page.tsx
-import { Suspense } from 'react'
 import ComponentDetailCard from '@/components/components/ComponentDetailCard'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import { headers } from 'next/headers'

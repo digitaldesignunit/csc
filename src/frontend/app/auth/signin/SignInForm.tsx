@@ -143,7 +143,7 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
           </form>
           
           <div className="mt-4 text-center text-sm text-muted-foreground">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <a 
               href="/auth/register" 
               className="text-primary hover:underline font-medium"

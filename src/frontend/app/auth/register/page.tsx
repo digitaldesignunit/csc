@@ -104,7 +104,7 @@ export default function RegisterPage() {
               <p className="text-sm text-amber-800 dark:text-amber-200">
                 <strong>Security Notice:</strong> This is research and development software. 
                 While we follow security best practices and properly hash passwords, we cannot 
-                guarantee complete safety. Please use a unique password that you don't use 
+                guarantee complete safety. Please use a unique password that you don&apos;t use 
                 elsewhere.
               </p>
             </div>
