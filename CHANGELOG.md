@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4.0] - 2025-08-25
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.4.0 ✨
+- CSC React Frontend:   0.2.1.0 ✨
+- CSC Sheetscan Module: 0.0.1.11
+- CSC Grasshopper Interface: 0.1.0.0
+
+### Added
+
+#### CSC React Frontend
+- **Dual Date Format Support**: Enhanced `formatTimestamp` function to handle both old and new date formats
+- **Migration Compatibility**: Frontend now works seamlessly with both legacy `DDMMYY-HHMMSS` and new ISO `YYYY-MM-DDTHH:MM:SSZ` formats
+- **Error Resilience**: Improved error handling prevents crashes from unknown date formats
+
+#### Database Migration Tools
+- **Bounding Box Format Migration**: Script to convert from `[[minX, minY, minZ], [maxX, maxY, maxZ]]` to `[X, Y, Z]` (maximum extents)
+- **Date Format Migration**: Script to convert dates from `DDMMYY-HHMMSS` to proper ISO format
+- **Comprehensive Migration**: Handles both bounding box and date format updates in a single operation
+
+### Changed
+
+#### CSC React Frontend
+- **Date Display Consistency**: All timestamps now display in uniform `YYYY.MM.DD HH:MM:SS` format regardless of source format
+- **Backward Compatibility**: Existing functionality preserved while adding support for new ISO date format
+- **Enhanced User Experience**: Filter menu now collapsed by default for better space management
+- **Improved Component Display**: Increased ID button width for better component ID visibility
+
+#### Database Schema
+- **Bounding Box Format**: Updated from coordinate pairs to maximum extents for better performance and clarity
+- **Date Format Standardization**: All dates now stored in ISO 8601 format for better compatibility and sorting
+- **Migration Safety**: Preserves original creation dates while updating modification timestamps
+
+### Technical Improvements
+- **Robust Date Parsing**: Intelligent format detection with graceful fallbacks
+- **Migration Scripts**: Comprehensive database migration tools with verification capabilities
+- **Frontend Resilience**: Enhanced error handling prevents application crashes from data format issues
+- **Code Quality**: Improved defensive programming and error logging throughout the system
+
 ## [0.2.3.0] - 2025-08-25
 
 ### Versions

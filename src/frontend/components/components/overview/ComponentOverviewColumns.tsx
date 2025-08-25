@@ -59,7 +59,15 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     meta: { colClassName: 'w-[84px] sm:w-[96px] text-left' },
     cell: ({ row }) => {
       const bbx: ComponentBoundingBox = row.getValue('bbx')
-      const x = bbx[1][0] - bbx[0][0]
+      // Debug logging to understand data structure
+      if (process.env.NODE_ENV === 'development') {
+        console.log('BBX data:', bbx, 'Type:', typeof bbx, 'IsArray:', Array.isArray(bbx))
+      }
+      // Add defensive programming for unexpected data structures
+      if (!bbx || !Array.isArray(bbx) || bbx.length < 1 || typeof bbx[0] !== 'number') {
+        return <div className='text-xs text-muted-foreground'>N/A</div>
+      }
+      const x = bbx[0] // X dimension
       return <div className='text-xs tabular-nums text-left truncate'>{x.toFixed(2)}</div>
     },
   },
@@ -69,7 +77,11 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     meta: { colClassName: 'w-[84px] sm:w-[96px] text-left' },
     cell: ({ row }) => {
       const bbx: ComponentBoundingBox = row.getValue('bbx')
-      const y = bbx[1][1] - bbx[0][1]
+      // Add defensive programming for unexpected data structures
+      if (!bbx || !Array.isArray(bbx) || bbx.length < 2 || typeof bbx[1] !== 'number') {
+        return <div className='text-xs text-muted-foreground'>N/A</div>
+      }
+      const y = bbx[1] // Y dimension
       return <div className='text-xs tabular-nums text-left truncate'>{y.toFixed(2)}</div>
     },
   },
@@ -79,7 +91,11 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     meta: { colClassName: 'w-[84px] sm:w-[96px] text-left' },
     cell: ({ row }) => {
       const bbx: ComponentBoundingBox = row.getValue('bbx')
-      const z = bbx[1][2] - bbx[0][2]
+      // Add defensive programming for unexpected data structures
+      if (!bbx || !Array.isArray(bbx) || bbx.length < 3 || typeof bbx[2] !== 'number') {
+        return <div className='text-xs text-muted-foreground'>N/A</div>
+      }
+      const z = bbx[2] // Z dimension
       return <div className='text-xs tabular-nums text-left truncate'>{z.toFixed(2)}</div>
     },
   },

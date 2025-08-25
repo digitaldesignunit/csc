@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { ComponentBoundingBox, ComponentLocation } from "@/components/models";
+import { ComponentBoundingBox, ComponentLocation } from "@/components/common/models";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -103,30 +103,53 @@ export function combinePath(baseUrl: string, filename: string, extension: string
 }
 
 export function formatTimestamp(input: string): string {
-  // Validate input format
-  const regex = /^\d{6}-\d{6}$/
-  if (!regex.test(input)) {
-      throw new Error(
-        "Invalid input format. Expected format is 'DDMMYY-HHMMSS'."
-    )
+  // Check if input is in ISO format (e.g., "2024-06-21T09:31:39Z")
+  if (input.includes('T') && input.includes('-')) {
+    try {
+      const date = new Date(input)
+      if (isNaN(date.getTime())) {
+        throw new Error('Invalid ISO date')
+      }
+      
+      // Format as YYYY.MM.DD HH:MM:SS
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      const seconds = String(date.getSeconds()).padStart(2, '0')
+      
+      return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`
+    } catch (e) {
+      console.warn('Failed to parse ISO date:', input, e)
+      return 'Invalid Date'
+    }
   }
+  
+  // Check if input is in old format (DDMMYY-HHMMSS)
+  const oldFormatRegex = /^\d{6}-\d{6}$/
+  if (oldFormatRegex.test(input)) {
+    // Extract date and time parts
+    const datePart = input.slice(0, 6)
+    const timePart = input.slice(7, 13)
 
-  // Extract date and time parts
-  const datePart = input.slice(0, 6)
-  const timePart = input.slice(7, 13)
+    // Format date
+    const day = datePart.slice(0, 2)
+    const month = datePart.slice(2, 4)
+    const year = datePart.slice(4, 6)
 
-  // Format date
-  const day = datePart.slice(0, 2)
-  const month = datePart.slice(2, 4)
-  const year = datePart.slice(4, 6)
+    // Format time
+    const hours = timePart.slice(0, 2)
+    const minutes = timePart.slice(2, 4)
+    const seconds = timePart.slice(4, 6)
 
-  // Format time
-  const hours = timePart.slice(0, 2)
-  const minutes = timePart.slice(2, 4)
-  const seconds = timePart.slice(4, 6)
-
-  // Construct and return the formatted timestamp
-  return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`
+    // Construct and return the formatted timestamp
+    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`
+  }
+  
+  // If neither format matches, return the input as-is or a fallback
+  console.warn('Unknown date format:', input)
+  return input || 'Unknown Date'
 }
 
 export function formatLocation(coords: ComponentLocation): string {
@@ -140,8 +163,22 @@ export function formatLocationMapsLink(coords: ComponentLocation): string {
 }
 
 export function componentBounds(component_bbx: ComponentBoundingBox): Array<number> {
-  const bnds_x = component_bbx[1][0] - component_bbx[0][0]
-  const bnds_y = component_bbx[1][1] - component_bbx[0][1]
-  const bnds_z = component_bbx[1][2] - component_bbx[0][2]
+  // Add defensive programming for unexpected data structures
+  if (!component_bbx || !Array.isArray(component_bbx) || component_bbx.length < 3) {
+    console.warn('Invalid bounding box data:', component_bbx)
+    return [0, 0, 0] // Return safe defaults
+  }
+  
+  // component_bbx is [X, Y, Z] - dimensions of the component
+  const bnds_x = component_bbx[0] // X dimension
+  const bnds_y = component_bbx[1] // Y dimension
+  const bnds_z = component_bbx[2] // Z dimension
+  
+  // Ensure all values are numbers
+  if (typeof bnds_x !== 'number' || typeof bnds_y !== 'number' || typeof bnds_z !== 'number') {
+    console.warn('Non-numeric bounding box values:', { bnds_x, bnds_y, bnds_z })
+    return [0, 0, 0] // Return safe defaults
+  }
+  
   return [bnds_x, bnds_y, bnds_z]
 }

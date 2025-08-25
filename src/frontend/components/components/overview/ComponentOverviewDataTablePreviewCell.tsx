@@ -111,7 +111,7 @@ export default function ComponentOverviewDataTablePreviewCell({
               <Link href={`/components/${compId}`} className="min-w-0">
                 <Button
                   variant="ghost"
-                  className="h-6 px-2 text-xs max-w-[12rem] truncate"
+                  className="h-6 px-2 text-xs max-w-[16rem] truncate"
                   title={compId}
                 >
                   {compId}

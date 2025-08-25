@@ -322,9 +322,23 @@ function BoundingBoxMesh({
   component_data: ComponentData
   show: boolean
 }) {
-  const sizeX = (component_data.bbx[1][0] - component_data.bbx[0][0]) * scale
-  const sizeY = (component_data.bbx[1][2] - component_data.bbx[0][2]) * scale
-  const sizeZ = (component_data.bbx[1][1] - component_data.bbx[0][1]) * scale
+  // Add defensive programming for unexpected data structures
+  if (!component_data.bbx || !Array.isArray(component_data.bbx) || component_data.bbx.length < 3) {
+    console.warn('Invalid bounding box data in ComponentViewer:', component_data.bbx)
+    return null // Don't render bounding box if data is invalid
+  }
+  
+  // Ensure all values are numbers
+  const bbx = component_data.bbx
+  if (typeof bbx[0] !== 'number' || typeof bbx[1] !== 'number' || typeof bbx[2] !== 'number') {
+    console.warn('Non-numeric bounding box values in ComponentViewer:', bbx)
+    return null // Don't render bounding box if values are not numbers
+  }
+  
+  // component_data.bbx is [X, Y, Z] - dimensions of the component
+  const sizeX = bbx[0] * scale // X dimension
+  const sizeY = bbx[2] * scale // Y dimension (using Z index for height)
+  const sizeZ = bbx[1] * scale // Z dimension (using Y index for depth)
 
   const bbx_geometry = useMemo(() => new THREE.BoxGeometry(sizeX, sizeY, sizeZ), [sizeX, sizeY, sizeZ])
   const bbx_material = useMemo(() => {

@@ -62,7 +62,7 @@ The new generated model provides better type safety:
 
 ```typescript
 // OLD: Generic types
-export type ComponentBoundingBox = Array<Array<number>>
+export type ComponentBoundingBox = Array<number>  // [X, Y, Z] - matches backend structure
 export type ComponentLocation = { lat: number, lon: number }
 
 // NEW: Generated from backend schema

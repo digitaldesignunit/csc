@@ -44,7 +44,7 @@ export default function ComponentDetailCard({
         <div className="flex items-start gap-3 flex-1 min-w-0 lg:max-w-md">
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-muted-foreground mb-1">Component ID</div>
-            <div className="font-mono text-base bg-muted/50 border border-border rounded-md px-3 py-2 text-foreground break-all">
+            <div className="font-mono text-sm font-medium bg-muted/50 border border-border rounded-md px-3 py-2 text-foreground break-all">
               {component_data._id}
             </div>
           </div>

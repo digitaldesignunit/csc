@@ -33,7 +33,7 @@ export type ComponentData = {
   attributes: object
 }
 
-export type ComponentBoundingBox =  Array<Array<number>>
+export type ComponentBoundingBox = Array<number>  // [X, Y, Z] - maximum extents/dimensions of the component
 export type ComponentPolylinePoints = Array<Array<number>>
 export type ComponentMeshVertices = Array<Array<number>>
 export type ComponentMeshFaces = Array<Array<number>>
@@ -41,4 +41,11 @@ export type ComponentMeshColors = Array<Array<number>>
 export type ComponentLocation = {
   lat: number,
   lon: number
+}
+
+// Type guard function to safely check if bounding box data is valid
+export function isValidBoundingBox(bbx: any): bbx is ComponentBoundingBox {
+  return Array.isArray(bbx) && 
+         bbx.length >= 3 && 
+         bbx.every(val => typeof val === 'number' && !isNaN(val))
 }

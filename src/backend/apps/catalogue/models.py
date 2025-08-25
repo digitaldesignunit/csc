@@ -112,7 +112,8 @@ class ComponentModel(BaseModel):
         description="RGB color values as [R, G, B] integers (0-255)"
     )
     bbx: List[float] = Field(
-        description="Bounding box dimensions as [X, Y, Z] float values"
+        description=("Bounding box maximum extents as [X, Y, Z] float values "
+                     "(dimensions of the component)")
     )
     location: Optional[Dict] = Field(
         None,
