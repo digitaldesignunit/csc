@@ -41,9 +41,17 @@ async def get_components_col(request: Request):
 async def count_components(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
-    comptype: Optional[str] = Query(None),
-    material: Optional[str] = Query(None),
+    comptype: Optional[str] = Query(None, description='Component type filter'),
+    material: Optional[str] = Query(None, description='Material type filter'),
     validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
+    complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
+    fragment: Optional[bool] = Query(None, description='Is fragment'),
+    bbx_min_x: Optional[float] = Query(None, description='Min X'),
+    bbx_min_y: Optional[float] = Query(None, description='Min Y'),
+    bbx_min_z: Optional[float] = Query(None, description='Min Z'),
+    bbx_max_x: Optional[float] = Query(None, description='Max X'),
+    bbx_max_y: Optional[float] = Query(None, description='Max Y'),
+    bbx_max_z: Optional[float] = Query(None, description='Max Z'),
 ):
     coll = await get_components_col(request)
     query: dict = {}
@@ -55,6 +63,40 @@ async def count_components(
         query['validated'] = True
     elif validated == -1:
         query['validated'] = False
+
+    # Add complexity filter
+    if complexity is not None:
+        query['complexity'] = complexity
+
+    # Add fragment filter
+    if fragment is not None:
+        query['fragment'] = fragment
+
+    # Add bounding box filters
+    if any([bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z]):
+        bbx_query = {}
+        if bbx_min_x is not None:
+            bbx_query['$gte'] = bbx_min_x
+        if bbx_max_x is not None:
+            bbx_query['$lte'] = bbx_max_x
+        if bbx_query:
+            query['bbx.0'] = bbx_query
+
+        bbx_query = {}
+        if bbx_min_y is not None:
+            bbx_query['$gte'] = bbx_min_y
+        if bbx_max_y is not None:
+            bbx_query['$lte'] = bbx_max_y
+        if bbx_query:
+            query['bbx.1'] = bbx_query
+
+        bbx_query = {}
+        if bbx_min_z is not None:
+            bbx_query['$gte'] = bbx_min_z
+        if bbx_max_z is not None:
+            bbx_query['$lte'] = bbx_max_z
+        if bbx_query:
+            query['bbx.2'] = bbx_query
 
     try:
         count = await coll.count_documents(query)
@@ -124,12 +166,20 @@ async def get_component_shallow(
 async def get_components_shallow(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
-    page: int = 0,
-    size: int = 0,
-    sortkey: str = '_id',
-    comptype: str = '',
-    material: str = '',
-    validated: int = 1,
+    page: int = Query(0, description='Page number (0-based)'),
+    size: int = Query(0, description='Page size'),
+    sortkey: str = Query('_id', description='Sort key'),
+    comptype: str = Query('', description='Component type filter'),
+    material: str = Query('', description='Material type filter'),
+    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
+    complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
+    fragment: Optional[bool] = Query(None, description='Is fragment'),
+    bbx_min_x: Optional[float] = Query(None, description='Min X'),
+    bbx_min_y: Optional[float] = Query(None, description='Min Y'),
+    bbx_min_z: Optional[float] = Query(None, description='Min Z'),
+    bbx_max_x: Optional[float] = Query(None, description='Max X'),
+    bbx_max_y: Optional[float] = Query(None, description='Max Y'),
+    bbx_max_z: Optional[float] = Query(None, description='Max Z'),
 ):
     coll = await get_components_col(request)
     query = {}
@@ -143,6 +193,41 @@ async def get_components_shallow(
         query['validated'] = True
     elif validated == -1:
         query['validated'] = False
+
+    # Add complexity filter
+    if complexity is not None:
+        query['complexity'] = complexity
+
+    # Add fragment filter
+    if fragment is not None:
+        query['fragment'] = fragment
+
+    # Add bounding box filters
+    if any([bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z]):
+        bbx_query = {}
+        if bbx_min_x is not None:
+            bbx_query['$gte'] = bbx_min_x
+        if bbx_max_x is not None:
+            bbx_query['$lte'] = bbx_max_x
+        if bbx_query:
+            query['bbx.0'] = bbx_query
+
+        bbx_query = {}
+        if bbx_min_y is not None:
+            bbx_query['$gte'] = bbx_min_y
+        if bbx_max_y is not None:
+            bbx_query['$lte'] = bbx_max_y
+        if bbx_query:
+            query['bbx.1'] = bbx_query
+
+        bbx_query = {}
+        if bbx_min_z is not None:
+            bbx_query['$gte'] = bbx_min_z
+        if bbx_max_z is not None:
+            bbx_query['$lte'] = bbx_max_z
+        if bbx_query:
+            query['bbx.2'] = bbx_query
+
     if sortkey not in ALLOWED_COMPONENT_SORTKEYS:
         sortkey = '_id'
 
@@ -166,12 +251,20 @@ async def get_components_shallow(
 async def get_components(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
-    page: int = 0,
-    size: int = 0,
-    sortkey: str = '_id',
-    comptype: str = '',
-    material: str = '',
-    validated: int = 1,
+    page: int = Query(0, description='Page number (0-based)'),
+    size: int = Query(0, description='Page size'),
+    sortkey: str = Query('_id', description='Sort key'),
+    comptype: str = Query('', description='Component type filter'),
+    material: str = Query('', description='Material type filter'),
+    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
+    complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
+    fragment: Optional[bool] = Query(None, description='Is fragment'),
+    bbx_min_x: Optional[float] = Query(None, description='Min X'),
+    bbx_min_y: Optional[float] = Query(None, description='Min Y'),
+    bbx_min_z: Optional[float] = Query(None, description='Min Z'),
+    bbx_max_x: Optional[float] = Query(None, description='Max X'),
+    bbx_max_y: Optional[float] = Query(None, description='Max Y'),
+    bbx_max_z: Optional[float] = Query(None, description='Max Z'),
 ):
     coll = await get_components_col(request)
     query, sort_order = {}, 1
@@ -183,6 +276,41 @@ async def get_components(
         query['validated'] = True
     elif validated == -1:
         query['validated'] = False
+
+    # Add complexity filter
+    if complexity is not None:
+        query['complexity'] = complexity
+
+    # Add fragment filter
+    if fragment is not None:
+        query['fragment'] = fragment
+
+    # Add bounding box filters
+    if any([bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z]):
+        bbx_query = {}
+        if bbx_min_x is not None:
+            bbx_query['$gte'] = bbx_min_x
+        if bbx_max_x is not None:
+            bbx_query['$lte'] = bbx_max_x
+        if bbx_query:
+            query['bbx.0'] = bbx_query
+
+        bbx_query = {}
+        if bbx_min_y is not None:
+            bbx_query['$gte'] = bbx_min_y
+        if bbx_max_y is not None:
+            bbx_query['$lte'] = bbx_max_y
+        if bbx_query:
+            query['bbx.1'] = bbx_query
+
+        bbx_query = {}
+        if bbx_min_z is not None:
+            bbx_query['$gte'] = bbx_min_z
+        if bbx_max_z is not None:
+            bbx_query['$lte'] = bbx_max_z
+        if bbx_query:
+            query['bbx.2'] = bbx_query
+
     if sortkey not in ALLOWED_COMPONENT_SORTKEYS:
         sortkey = '_id'
 

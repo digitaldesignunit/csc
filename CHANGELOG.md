@@ -4,7 +4,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0.9] - 2024-12-19
+## [0.2.3.0] - 2025-08-25
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.3.0 ✨
+- CSC React Frontend:   0.2.0.9
+- CSC Sheetscan Module: 0.0.1.11
+- CSC Grasshopper Interface: 0.1.0.0
+
+### Added
+
+#### CSC FastAPI Backend
+- **Enhanced Component Filtering**: Added comprehensive filtering capabilities to component API routes
+- **Complexity Filtering**: New `complexity` parameter to filter components by complexity level (0-3)
+- **Fragment Status Filtering**: New `fragment` parameter to filter components by fragment status
+- **Bounding Box Dimension Filtering**: New range-based filters for component dimensions:
+  - `bbx_min_x`, `bbx_min_y`, `bbx_min_z`: Minimum X, Y, Z values
+  - `bbx_max_x`, `bbx_max_y`, `bbx_max_z`: Maximum X, Y, Z values
+- **Improved API Documentation**: All query parameters now include descriptive documentation for better developer experience
+
+### Changed
+
+#### CSC FastAPI Backend
+- **API Parameter Structure**: Updated all filter parameters to use FastAPI's `Query` with descriptive documentation
+- **Consistent Filtering**: All three component routes (`/componentcount`, `/shallowcomponents`, `/components`) now support the same comprehensive filtering options
+- **Enhanced OpenAPI Schema**: Better parameter documentation will improve the generated API documentation and Swagger UI
+- **Backward Compatibility**: All existing functionality preserved - new filters are optional and don't affect current API usage
+
+### Technical Improvements
+- **MongoDB Query Optimization**: Efficient bounding box filtering using MongoDB's `$gte` and `$lte` operators
+- **Parameter Validation**: Proper type hints and validation for all new filter parameters
+- **Code Consistency**: Unified filtering logic across all component routes for maintainability
+- **Professional API Standards**: Following FastAPI best practices for parameter documentation and validation
+
+## [0.2.0.9] - 2025-08-22
 
 ### Versions
 
@@ -54,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Maintainability**: Standardized code structure makes future updates easier and more consistent
 - **Student Experience**: Professional-grade components with clear error messages and status updates
 
-## [0.2.0.8] - 2024-12-19
+## [0.2.0.8] - 2025-08-21
 
 ### Added
 - Enhanced authentication system with comprehensive error handling and user feedback
@@ -73,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Register page layout now properly contains all elements within the form container
 - Consistent styling between authentication pages for better user experience
 
-## [0.2.0.7] - 2024-12-19
+## [0.2.0.7] - 2025-08-21
 
 ### Fixed
 - Responsive layout issues when dynamically resizing window width
@@ -107,7 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Break-word handling for long component IDs
 - Strict width constraints and overflow handling for component detail page
 
-## [0.2.0.6] - 2024-12-19
+## [0.2.0.6] - 2025-08-21
 
 ### Changed
 - Restructured frontend components folder organization:
