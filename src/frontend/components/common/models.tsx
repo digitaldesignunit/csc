@@ -44,7 +44,7 @@ export type ComponentLocation = {
 }
 
 // Type guard function to safely check if bounding box data is valid
-export function isValidBoundingBox(bbx: any): bbx is ComponentBoundingBox {
+export function isValidBoundingBox(bbx: unknown): bbx is ComponentBoundingBox {
   return Array.isArray(bbx) && 
          bbx.length >= 3 && 
          bbx.every(val => typeof val === 'number' && !isNaN(val))

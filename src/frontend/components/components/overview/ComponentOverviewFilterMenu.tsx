@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
-import { ChevronDown, Filter, X } from 'lucide-react'
+import { Filter } from 'lucide-react'
 
 interface ComponentOverviewFilterMenuProps {
   defaultMaterial: string

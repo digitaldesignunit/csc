@@ -315,32 +315,33 @@ function VisualizeComponent({
 /** 
  * BoundingBoxMesh
  */
-function BoundingBoxMesh({
+const BoundingBoxMesh = React.memo(({
   component_data,
   show,
 }: {
   component_data: ComponentData
   show: boolean
-}) {
-  // Add defensive programming for unexpected data structures
-  if (!component_data.bbx || !Array.isArray(component_data.bbx) || component_data.bbx.length < 3) {
-    console.warn('Invalid bounding box data in ComponentViewer:', component_data.bbx)
-    return null // Don't render bounding box if data is invalid
-  }
+}) => {
+  // Call ALL hooks FIRST, before any conditional logic
+  const bbx_geometry = useMemo(() => {
+    if (!component_data.bbx || !Array.isArray(component_data.bbx) || component_data.bbx.length < 3) {
+      return null
+    }
+    
+    const bbx = component_data.bbx
+    const hasValidBbx = typeof bbx[0] === 'number' && typeof bbx[1] === 'number' && typeof bbx[2] === 'number'
+    
+    if (!hasValidBbx) {
+      return null
+    }
+    
+    const sizeX = bbx[0] * scale
+    const sizeY = bbx[2] * scale
+    const sizeZ = bbx[1] * scale
+    
+    return new THREE.BoxGeometry(sizeX, sizeY, sizeZ)
+  }, [component_data.bbx])
   
-  // Ensure all values are numbers
-  const bbx = component_data.bbx
-  if (typeof bbx[0] !== 'number' || typeof bbx[1] !== 'number' || typeof bbx[2] !== 'number') {
-    console.warn('Non-numeric bounding box values in ComponentViewer:', bbx)
-    return null // Don't render bounding box if values are not numbers
-  }
-  
-  // component_data.bbx is [X, Y, Z] - dimensions of the component
-  const sizeX = bbx[0] * scale // X dimension
-  const sizeY = bbx[2] * scale // Y dimension (using Z index for height)
-  const sizeZ = bbx[1] * scale // Z dimension (using Y index for depth)
-
-  const bbx_geometry = useMemo(() => new THREE.BoxGeometry(sizeX, sizeY, sizeZ), [sizeX, sizeY, sizeZ])
   const bbx_material = useMemo(() => {
     return new THREE.MeshBasicMaterial({
       color: 0xff0000,
@@ -348,33 +349,63 @@ function BoundingBoxMesh({
       opacity: 0.2,
     })
   }, [])
-  const bbx_edge_geometry = useMemo(() => new THREE.EdgesGeometry(bbx_geometry), [bbx_geometry])
-  const bbx_edge_material = useMemo(() => new THREE.LineBasicMaterial({ color: 0x000000 }), [])
+  
+  const bbx_edge_geometry = useMemo(() => {
+    if (!bbx_geometry) return null
+    return new THREE.EdgesGeometry(bbx_geometry)
+  }, [bbx_geometry])
+  
+  const bbx_edge_material = useMemo(() => {
+    return new THREE.LineBasicMaterial({ color: 0x000000 })
+  }, [])
 
+  // NOW handle all the conditional logic and early returns
+  if (!component_data.bbx || !Array.isArray(component_data.bbx) || component_data.bbx.length < 3) {
+    console.warn('Invalid bounding box data in ComponentViewer:', component_data.bbx)
+    return null
+  }
+  
+  const bbx = component_data.bbx
+  const hasValidBbx = typeof bbx[0] === 'number' && typeof bbx[1] === 'number' && typeof bbx[2] === 'number'
+  
+  if (!hasValidBbx) {
+    console.warn('Non-numeric bounding box values in ComponentViewer:', bbx)
+    return null
+  }
+  
   if (!show) return null
+  
+  if (!bbx_geometry || !bbx_edge_geometry) {
+    return null
+  }
+
   return (
     <>
       <mesh geometry={bbx_geometry} material={bbx_material} />
       <lineSegments geometry={bbx_edge_geometry} material={bbx_edge_material} />
     </>
   )
-}
+})
+BoundingBoxMesh.displayName = 'BoundingBoxMesh'
 
 /**
  * ComponentViewer
  */
 export default function ComponentViewer({ component_data }: { component_data: ComponentData }) {
+  // Call ALL hooks FIRST, unconditionally
   const [geometryMode, setGeometryMode] = useState<GeometryMode>('primitive')
   const [showBoundingBox, setShowBoundingBox] = useState(false)
 
   const isSheet = component_data.type === 'sheet'
-  if (!component_data.geometry) {
-    return <ComponentViewerSkeleton message="No Geometry Available" />
-  }
 
   const onModeChange: React.ChangeEventHandler<HTMLSelectElement> = (e) => {
     const v = e.target.value as GeometryMode
     setGeometryMode(v)
+  }
+
+  // Handle the conditional logic AFTER all hooks
+  if (!component_data.geometry) {
+    return <ComponentViewerSkeleton message="No Geometry Available" />
   }
 
   return (
