@@ -90,7 +90,7 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 raise RuntimeError(f'Request failed with status code {response.status_code}')
         return response
 
-    def RunScript(self, Config: str, ComponentData: str, Run: bool):
+    def RunScript(self, ComponentData: str, Run: bool):
         # set up output trees and results tuple
         AddedComponentData = Grasshopper.DataTree[System.Object]()
         # sanitize input and abort if not present

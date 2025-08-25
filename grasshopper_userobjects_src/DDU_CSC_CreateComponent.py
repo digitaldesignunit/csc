@@ -231,7 +231,6 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             Type: str,
             Material: str,
             Geometry: Rhino.Geometry.GeometryBase,
-            MaterialThickness: float,
             Color: System.Drawing.Color):
         
         # set up output trees and results tuple

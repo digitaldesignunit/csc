@@ -5,63 +5,64 @@
 # r: scipy==1.13.0
 # r: scikit-learn==1.4.2
 
+# PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json
 
-import System
-import Rhino
-import Grasshopper
+# RHINO AND GH RELATED IMPORTS ------------------------------------------------
+import System  # type: ignore[reportMissingImport] # NOQA
+import Rhino  # type: ignore[reportMissingImport] # NOQA
+import Grasshopper  # type: ignore[reportMissingImport] # NOQA
 
-import rhinoscriptsyntax as rs
-
-
-# GHENV COMPONENT SETTINGS
-ghenv.Component.Name = "TransformComponent"
-ghenv.Component.NickName = "TransformComponent"
-ghenv.Component.Category = "DDU_CSC"
-ghenv.Component.SubCategory = "3 Component Operations"
+# GHENV COMPONENT SETTINGS ----------------------------------------------------
+ghenv.Component.Name = 'TransformComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.NickName = 'TransformComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.SubCategory = '3 Component Operations'  # type: ignore[reportUnedfinedVariable] # NOQA
 
 
 class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250820
+    Version: 250822
+    Description: Transforms component insertion frames using Rhino transforms
     """
 
-    def ComponentPolyline(self, jcomp: dict) -> Rhino.Geometry.Polyline:
-        pl = Rhino.Geometry.Polyline()
-        pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
-               for pt in jcomp['geometry']['polyline']]
-        pl.AddRange(pts)
-        return pl
+    def __init__(self):
+        super().__init__()
+        # initialize props
+        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.InputParams = self.Component.Params.Input
+        self.OutputParams = self.Component.Params.Output
 
-    def ComponentPolylineExtrusion(self, jcomp: dict) -> Rhino.Geometry.Extrusion:
-        pl = Rhino.Geometry.Polyline()
-        pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
-               for pt in jcomp['geometry']['polyline']]
-        pl.AddRange(pts)
-        cxt = Rhino.Geometry.Extrusion.Create(
-                    pl.ToPolylineCurve(),
-                    Rhino.Geometry.Plane.WorldXY,
-                    jcomp['materialthickness'],
-                    True)
-        return cxt
+    def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component runtime messages."""
+        rml = self.Component.RuntimeMessageLevel.Remark
+        self.AddRuntimeMessage(rml, msg)
 
-    def ComponentMesh(self, jcomp: dict) -> Rhino.Geometry.Mesh:
-        mesh = Rhino.Geometry.Mesh()
-        vl = jcomp['geometry']['mesh']['v']
-        fl = jcomp['geometry']['mesh']['f']
-        [mesh.Vertices.Add(*v) for v in vl]
-        [mesh.Faces.AddFace(*f) for f in fl]
-        mesh.RebuildNormals()
-        mesh.UnifyNormals()
-        mesh.Compact()
-        return mesh
+    def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component runtime messages."""
+        rml = self.Component.RuntimeMessageLevel.Warning
+        self.AddRuntimeMessage(rml, msg)
 
-    def ComponentColor(self, jcomp: dict) -> System.Drawing.Color:
-        return System.Drawing.Color.FromArgb(255, *jcomp['color'])
+    def _addError(self, msg: str = ''):
+        """Add an error message to the component runtime messages."""
+        rml = self.Component.RuntimeMessageLevel.Error
+        self.AddRuntimeMessage(rml, msg)
 
     def PlaneToFrameDict(self, plane: Rhino.Geometry.Plane) -> dict:
+        """
+        Convert a Rhino plane to a frame dictionary format.
+
+        This method converts the plane's origin and axis vectors to the format
+        expected by the component system for insertion frames.
+
+        Args:
+            plane: Rhino.Geometry.Plane object
+
+        Returns:
+            Dictionary with 'o', 'x', 'y', 'z' keys containing coordinate lists
+        """
         iframe = {
             'o': [plane.OriginX, plane.OriginY, plane.OriginZ],
             'x': [plane.XAxis.X, plane.XAxis.Y, plane.XAxis.Z],
@@ -71,35 +72,101 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
         return iframe
 
     def RunScript(self, ComponentData: str, XForm: Rhino.Geometry.Transform):
+        """
+        Main execution method for transforming component insertion frames.
+
+        This method takes a component JSON string and a Rhino transform,
+        applies the transform to the component's insertion frame, and
+        returns the updated component data as a JSON string.
+
+        Args:
+            ComponentData: JSON string containing component data
+            XForm: Rhino transform to apply to the insertion frame
+
+        Returns:
+            JSON string of the transformed component data
+        """
+        # Initialize param descriptions (this has to be done in RunScript)
+        self.InputParams[0].Description = (
+            'Component data as JSON string from previous components.'
+        )
+        self.InputParams[1].Description = (
+            'Rhino transform to apply to the component insertion frame.'
+        )
+
+        # Initialize output param descriptions
+        self.OutputParams[0].Description = (
+            'Transformed component data as JSON string'
+        )
+
         # set up output trees and results tuple
         XComponentData = System.Collections.Generic.List[System.Object]()
+
+        # Validate input parameters
         if not ComponentData:
-            rml = ghenv.Component.RuntimeMessageLevel.Warning
             msg = 'Input ComponentData failed to collect data!'
-            ghenv.Component.AddRuntimeMessage(rml, msg)
+            self._addWarning(msg)
+            self.Component.Message = msg
             return XComponentData
+
         if not XForm:
-            rml = ghenv.Component.RuntimeMessageLevel.Warning
             msg = 'Input XForm failed to collect data!'
-            ghenv.Component.AddRuntimeMessage(rml, msg)
+            self._addWarning(msg)
+            self.Component.Message = msg
             return XComponentData
-        # load component json
-        jcomp = json.loads(ComponentData)
-        # process insertion frame
+
         try:
-            # try to extract insertion frame
-            iframe = jcomp['iframe']
-            iplane = Rhino.Geometry.Plane(
-                Rhino.Geometry.Point3d(*iframe['o']),
-                Rhino.Geometry.Vector3d(*iframe['x']),
-                Rhino.Geometry.Vector3d(*iframe['y']),
+            # Load and parse component JSON data
+            jcomp = json.loads(ComponentData)
+
+            # Process insertion frame
+            try:
+                # Try to extract existing insertion frame from component
+                iframe = jcomp['iframe']
+                iplane = Rhino.Geometry.Plane(
+                    Rhino.Geometry.Point3d(*iframe['o']),
+                    Rhino.Geometry.Vector3d(*iframe['x']),
+                    Rhino.Geometry.Vector3d(*iframe['y']),
+                )
+                self._addRemark(
+                    'Using existing insertion frame from component'
+                )
+            except KeyError:
+                # If there is no insertion frame,
+                # create world XY plane as default
+                iplane = Rhino.Geometry.Plane.WorldXY
+                self._addRemark(
+                    'No insertion frame found, using WorldXY plane'
+                )
+
+            # Apply the input transform to the insertion frame plane
+            iplane.Transform(XForm)
+
+            # Replace the insertion frame in the component data
+            # with the transformed one
+            jcomp['iframe'] = self.PlaneToFrameDict(iplane)
+
+            # Convert back to JSON string for output
+            XComponentData = json.dumps(jcomp)
+
+            # Update component message to indicate success
+            self.Component.Message = (
+                'Component insertion frame transformed successfully'
             )
-        except KeyError:
-            # if there is no respective key, create world xy plane
-            iplane = Rhino.Geometry.Plane.WorldXY
-        # transform the iframe using the input xform
-        iplane.Transform(XForm)
-        # replace iframe
-        jcomp['iframe'] = self.PlaneToFrameDict(iplane)
-        XComponentData = json.dumps(jcomp)
-        return XComponentData
+            self._addRemark(
+                'Successfully transformed component insertion frame'
+            )
+
+            return XComponentData
+
+        except json.JSONDecodeError as e:
+            msg = f'Failed to parse component JSON data: {str(e)}'
+            self._addError(msg)
+            self.Component.Message = msg
+            return XComponentData
+
+        except Exception as e:
+            msg = f'Unexpected error during transformation: {str(e)}'
+            self._addError(msg)
+            self.Component.Message = msg
+            return XComponentData
