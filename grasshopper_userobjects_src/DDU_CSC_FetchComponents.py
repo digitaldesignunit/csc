@@ -7,7 +7,6 @@
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json
-import uuid
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import requests
@@ -29,7 +28,7 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250822
+    Version: 250825
     """
 
     def __init__(self):
@@ -62,17 +61,6 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
             return None
         return auth_core
 
-    def validate_uuid(self, uuid_to_test: str, version: int = 4):
-        """
-        Check if uuid_to_test is a valid UUID.
-        Returns True if uuid_to_test is a valid UUID, otherwise False.
-        """
-        try:
-            uuid_obj = uuid.UUID(uuid_to_test, version=version)
-        except ValueError:
-            return False
-        return str(uuid_obj) == uuid_to_test
-
     def RunScript(self, ComponentID: System.Collections.Generic.List[str]):
         # Initialize param descriptions (this has to be done in RunScript)
         self.InputParams[0].Description = 'One or many ComponentIDs to fetch'
@@ -104,7 +92,7 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
         # Convert to list and validate UUIDs
         component_ids = list(ComponentID)
         for _id in component_ids:
-            if not self.validate_uuid(_id):
+            if not auth_core.validate_uuid(_id):
                 msg = f'ComponentID <{_id}> is not a valid UUID!'
                 self._addWarning(msg)
                 self.Component.Message = msg

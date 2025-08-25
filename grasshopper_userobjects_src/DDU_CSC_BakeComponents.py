@@ -218,6 +218,11 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                     # set layer to objects
                     for gid in geo_ids:
                         rs.ObjectLayer(gid, layer)
+                        # set user data
+                        rs.SetUserText(
+                            gid,
+                            'componentdata',
+                            ComponentData[i])
 
                     # set user data
                     rs.SetUserText(
