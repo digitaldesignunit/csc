@@ -131,6 +131,16 @@ class ComponentModel(BaseModel):
         None,
         description="Insertion Frame / Transformation matrix data"
     )
+    pca_frame: Optional[Dict] = Field(
+        None,
+        description=("PCA Frame / Principal Component Analysis transformation "
+                     "matrix data")
+    )
+    reserved: Optional[str] = Field(
+        None,
+        description=("UUID of user who has reserved this component "
+                     "(empty if not reserved)")
+    )
     attributes: Optional[Dict] = Field(
         None,
         description="Additional component attributes"
@@ -183,6 +193,8 @@ class UpdateComponentModel(BaseModel):
     validated: Optional[bool]
     bbx: Optional[Dict]
     iframe: Optional[Dict]
+    pca_frame: Optional[Dict]
+    reserved: Optional[str]
 
     class Config:
         extra = "allow"
