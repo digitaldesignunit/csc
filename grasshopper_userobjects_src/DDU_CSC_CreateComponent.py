@@ -234,12 +234,6 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             MaterialThickness: float,
             Color: System.Drawing.Color):
         
-        # GHENV COMPONENT SETTINGS
-        ghenv.Component.Name = "CSC_CreateComponent"
-        ghenv.Component.NickName = "CSC_CreateComponent"
-        ghenv.Component.Category = "DDU_CSC"
-        ghenv.Component.SubCategory = "2 Catalogue Interface"
-        
         # set up output trees and results tuple
         ComponentData = Grasshopper.DataTree[System.Object]()
         # sanitize input and abort if not present

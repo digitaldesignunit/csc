@@ -100,7 +100,7 @@ class CSC_ValidateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             return False
         return str(uuid_obj) == uuid_to_test
 
-    def RunScript(self, Config: str, Validate: bool, ComponentID: str):
+    def RunScript(self, Validate: bool, ComponentID: str):
         # set up output trees and results tuple
         ComponentData = Grasshopper.DataTree[System.Object]()
         # sanitize input and abort if not present

@@ -88,7 +88,7 @@ class CSC_FetchAllUnvalidatedComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 raise RuntimeError(f'Request failed with status code {response.status_code}')
         return response
 
-    def RunScript(self, Config: str):
+    def RunScript(self):
         # set up output trees and results tuple
         ComponentData = Grasshopper.DataTree[System.Object]()
         __Results = (ComponentData)
