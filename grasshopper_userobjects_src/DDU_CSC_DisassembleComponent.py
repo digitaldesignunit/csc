@@ -109,11 +109,18 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     def ComponentBoundingBox(
             self,
             json_comp: dict) -> Rhino.Geometry.BoundingBox:
-        minpt = json_comp['bbx'][0]
-        maxpt = json_comp['bbx'][1]
+        xtx = json_comp['bbx'][0]
+        xty = json_comp['bbx'][1]
+        xtz = json_comp['bbx'][2]
+        Rhino.Geometry.BoundingBox()
         bbx = Rhino.Geometry.BoundingBox(
-            Rhino.Geometry.Point3d(*minpt),
-            Rhino.Geometry.Point3d(*maxpt))
+            -xtx * 0.5,
+            -xty * 0.5,
+            -xtz * 0.5,
+            xtx * 0.5,
+            xty * 0.5,
+            xtz * 0.5
+        )
         return bbx
 
     def RunScript(self, ComponentData: Grasshopper.DataTree[str]):
@@ -199,32 +206,34 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         # treat geometry key in a special way because
                         # it may hold multiple geometry types
                         for key in sorted(json_comp['geometry'].keys()):
+                            component_geometry = None
                             if key == 'extrusion':
-                                pl = self.ComponentExtrusionProfile(json_comp)
                                 xtr = self.ComponentExtrusion(json_comp)
                                 # transform to iframe
-                                pl.Transform(xform)
                                 xtr.Transform(xform)
-                                # add to datatree
-                                Geometry.Add(pl, ghp)
-                                Geometry.Add(xtr, ghp)
+                                # set geometry
+                                component_geometry = xtr
                             elif key == 'mesh':
                                 mesh = self.ComponentMesh(json_comp)
                                 # transform to iframe
                                 mesh.Transform(xform)
-                                # add to datatree
-                                Geometry.Add(mesh, ghp)
+                                # set geometry
+                                component_geometry = mesh
                             elif key == 'polyline':
                                 pl = self.ComponentExtrusionProfile(json_comp)
                                 # transform to iframe
                                 pl.Transform(xform)
-                                # add to datatree
-                                Geometry.Add(pl, ghp)
+                                # set geometry
+                                component_geometry = pl
                             else:
                                 msg = (f'Missing implementation for geometry '
                                        f'of type \'{key}\'!')
                                 self._addWarning(msg)
                                 self.Component.Message = msg
+                            # set user string
+                            component_geometry.SetUserString('csc_component', comp)
+                            # add to datatree
+                            Geometry.Add(component_geometry, ghp)
 
                         # create system color from rgb values
                         color = self.ComponentColor(json_comp)
