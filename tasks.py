@@ -20,43 +20,58 @@ def help(c):
 
 
 @task()
-def gource(c):
+def gource(c, mode='overview', output_dir='viz'):
     """
-    Create gource video in /viz folder.
+    Create gource video in specified output directory.
+
+    Args:
+        mode: Either 'overview' or 'track' (default: 'overview')
+        output_dir: Output directory for the video (default: 'viz')
     """
+    if mode not in ['overview', 'track']:
+        raise ValueError("Mode must be either 'overview' or 'track'")
+
     repodir = os.path.normpath(os.path.dirname(__file__))
     with chdir(repodir):
-        vizpath = os.path.join(repodir, "viz")
-        if not os.path.exists(vizpath):
-            os.makedirs(vizpath)
+        # Create output directory if it doesn't exist
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
         # Gource visualization
         try:
-            # overview
-            print("Creating gource overview visualization...")
-            c.run(("gource {0} -1920x1080 -f --multi-sampling -a 1 -s 1 "
-                   "--hide bloom,mouse,progress --camera-mode overview -r 60 "
-                   "-o viz/overview.ppm").format(repodir))
-            # track
-            print("Creating gource track visualization...")
-            c.run(("gource s{0} -1920x1080 -f --multi-sampling -a 1 -s 1 "
-                   "--hide bloom,mouse,progress --camera-mode track -r 60 -o "
-                   "viz/track.ppm").format(repodir))
+            print(f"Creating gource {mode} visualization...")
+
+            if mode == 'overview':
+                gource_cmd = (
+                    "gource {0} -1920x1080 -f --multi-sampling -a 1 "
+                    "-s 1 --hide bloom,mouse,progress --camera-mode "
+                    "overview -r 60 -o {1}/{2}.ppm"
+                ).format(repodir, output_dir, mode)
+                c.run(gource_cmd)
+            else:  # track mode
+                gource_cmd = (
+                    "gource {0} -1920x1080 -f --multi-sampling -a 1 "
+                    "-s 1 --hide bloom,mouse,progress --camera-mode "
+                    "track -r 60 -o {1}/{2}.ppm"
+                ).format(repodir, output_dir, mode)
+                c.run(gource_cmd)
         except exceptions.UnexpectedExit:
             print("Gource is not installed or not in the current PATH! "
                   "See https://gource.io/ for info on installation.")
+            return
 
         # FFmpeg conversion
         try:
             print("Converting using FFMPEG...")
-            c.run("ffmpeg -y -r 60 -f image2pipe -vcodec ppm -i "
-                  "viz/overview.ppm -vcodec libx264 -preset medium "
-                  "-pix_fmt yuv420p -crf 1 -threads 0 -bf 0 viz/overview.mp4")
-            os.remove("viz/overview.ppm")
-            c.run("ffmpeg -y -r 60 -f image2pipe -vcodec ppm -i "
-                  "viz/track.ppm -vcodec libx264 -preset medium "
-                  "-pix_fmt yuv420p -crf 1 -threads 0 -bf 0 viz/track.mp4")
-            os.remove("viz/track.ppm")
+            ffmpeg_cmd = (
+                "ffmpeg -y -r 60 -f image2pipe -vcodec ppm -i "
+                "{0}/{1}.ppm -vcodec libx264 -preset medium "
+                "-pix_fmt yuv420p -crf 1 -threads 0 -bf 0 "
+                "{0}/{1}.mp4"
+            ).format(output_dir, mode)
+            c.run(ffmpeg_cmd)
+            os.remove(f"{output_dir}/{mode}.ppm")
+            print(f"Video saved to {output_dir}/{mode}.mp4")
         except exceptions.UnexpectedExit:
             print("FFmpeg is not installed or not in the current PATH! "
                   "See https://ffmpeg.org/ for info on installation.")
