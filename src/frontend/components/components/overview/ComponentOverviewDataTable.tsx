@@ -70,27 +70,33 @@ export function ComponentOverviewDataTable<TData, TValue>({
 
         <TableBody>
           {table.getRowModel().rows?.length ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow
-                key={row.id}
-                data-state={row.getIsSelected() && 'selected'}
-                className="h-12"
-              >
-                {row.getVisibleCells().map((cell) => {
-                  const cellMeta = cell.column.columnDef.meta as ColMeta | undefined
-                  return (
-                    <TableCell
-                      key={cell.id}
-                      className={`px-3 py-2 text-sm whitespace-nowrap overflow-hidden ${cellMeta?.colClassName ?? ''}`}
-                    >
-                      <div className="min-w-0 truncate">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </div>
-                    </TableCell>
-                  )
-                })}
-              </TableRow>
-            ))
+            table.getRowModel().rows.map((row) => {
+              // Check if this component is reserved
+              const componentData = row.original as any
+              const isReserved = componentData?.reserved
+              
+              return (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && 'selected'}
+                  className={`h-12 ${isReserved ? 'bg-amber-100/60 hover:bg-amber-200/70 dark:bg-amber-900/40 dark:hover:bg-amber-800/50' : ''}`}
+                >
+                  {row.getVisibleCells().map((cell) => {
+                    const cellMeta = cell.column.columnDef.meta as ColMeta | undefined
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        className={`px-3 py-2 text-sm whitespace-nowrap overflow-hidden ${cellMeta?.colClassName ?? ''}`}
+                      >
+                        <div className="min-w-0 truncate">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </div>
+                      </TableCell>
+                    )
+                  })}
+                </TableRow>
+              )
+            })
           ) : (
             <TableRow>
               <TableCell
