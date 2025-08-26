@@ -183,7 +183,7 @@ async def get_components_with_aggregation(
     })
 
     # Execute aggregation
-    cursor = coll.aggregate(pipeline)
+    cursor = await coll.aggregate(pipeline)
     components = [doc async for doc in cursor]
 
     return components

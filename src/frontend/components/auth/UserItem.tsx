@@ -90,12 +90,6 @@ export default function UserItem() {
               <p className="mt-0.5 text-xs font-medium text-destructive">
                 Session expired
               </p>
-              {/* Dashboard Link */}
-              <Link href="/dashboard" className="block mt-1">
-                <p className="text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer">
-                  View Dashboard →
-                </p>
-              </Link>
             </div>
           </div>
           
@@ -130,6 +124,12 @@ export default function UserItem() {
               <p className="truncate text-xs text-muted-foreground">
                 {email || username}
               </p>
+              {/* Dashboard Link */}
+              <Link href="/dashboard" className="block mt-1">
+                <p className="text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer">
+                  View Dashboard
+                </p>
+              </Link>
             </div>
           </div>
           
