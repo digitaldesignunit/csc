@@ -407,7 +407,7 @@ async def get_components(
     components = await get_components_with_aggregation(
         request,
         match_stage,
-        projection={'geometry': 0, 'descriptors': 0},
+        projection={},
         sortkey=sortkey,
         sort_order=1,
         page=page,
