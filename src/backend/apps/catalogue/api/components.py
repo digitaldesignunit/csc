@@ -121,7 +121,7 @@ async def get_components_with_aggregation(
         projection: Optional projection to limit returned fields
         sortkey: Field to sort by
         sort_order: Sort order (1 for ascending, -1 for descending)
-        page: Page number (0-based)
+                 page: Page number (0=get all, 1+=paginated)
         size: Page size
         include_username: Whether to include username enrichment
 
@@ -169,9 +169,13 @@ async def get_components_with_aggregation(
     pipeline.append({'$sort': {sortkey: sort_order}})
 
     # Add pagination if needed
-    if page > 0 and size > 0:
+    if not page and not size:
+        # Get all components - no pagination stages added
+        pass
+    else:
+        # Apply pagination
         pipeline.extend([
-            {'$skip': (page - 1) * size},
+            {'$skip': (page - 1) * size if page > 0 else 0},
             {'$limit': size}
         ])
 
