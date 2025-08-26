@@ -7,7 +7,7 @@ import SignInForm from './SignInForm'
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
 function toSafePathServer(raw: string | string[] | undefined): string {
-  const fallback = '/components'
+  const fallback = '/dashboard'
   const val = Array.isArray(raw) ? raw[0] : raw
   if (!val) return fallback
   // allow only same-origin relative paths

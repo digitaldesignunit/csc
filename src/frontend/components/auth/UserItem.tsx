@@ -63,60 +63,87 @@ export default function UserItem() {
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 rounded-lg border p-2 bg-card ${
+      className={`rounded-lg border p-2 bg-card ${
         isExpired ? 'border-destructive/40 bg-destructive/10' : 'border-border'
       }`}
     >
-      {/* avatar */}
-      <div
-        className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-bold ${
-          isExpired ? 'bg-destructive text-destructive-foreground' : 'bg-primary text-primary-foreground'
-        }`}
-        aria-hidden
-      >
-        {initials}
-      </div>
-
-      {/* identity */}
-      <div className="grow overflow-hidden">
-        <p className="truncate text-sm font-semibold text-foreground">
-          {name || username || email}
-        </p>
-        <p className="truncate text-xs text-muted-foreground">
-          {email || username}
-        </p>
-        {isExpired && (
-          <p className="mt-0.5 text-xs font-medium text-destructive">
-            Session expired
-          </p>
-        )}
-        {/* Dashboard Link */}
-        <Link href="/dashboard" className="block mt-1">
-          <p className="text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer">
-            View Dashboard →
-          </p>
-        </Link>
-      </div>
-
-      {/* actions */}
       {isExpired ? (
-        <Button
-          onClick={() => signIn()}
-          size="sm"
-          variant="destructive"
-          title="Re-authenticate"
-        >
-          Re-authenticate
-        </Button>
+        // Expired session layout - button below info
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            {/* avatar */}
+            <div
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-bold bg-destructive text-destructive-foreground"
+              aria-hidden
+            >
+              {initials}
+            </div>
+
+            {/* identity */}
+            <div className="grow overflow-hidden">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {name || username || email}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {email || username}
+              </p>
+              <p className="mt-0.5 text-xs font-medium text-destructive">
+                Session expired
+              </p>
+              {/* Dashboard Link */}
+              <Link href="/dashboard" className="block mt-1">
+                <p className="text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer">
+                  View Dashboard →
+                </p>
+              </Link>
+            </div>
+          </div>
+          
+          {/* Re-authenticate button below */}
+          <Button
+            onClick={() => signIn()}
+            size="sm"
+            variant="destructive"
+            title="Re-authenticate"
+            className="w-full"
+          >
+            Re-authenticate
+          </Button>
+        </div>
       ) : (
-        <Button
-          onClick={() => signOut()}
-          size="sm"
-          variant="outline"
-          title="Sign out"
-        >
-          Logout
-        </Button>
+        // Normal session layout - button below info
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            {/* avatar */}
+            <div
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-bold bg-primary text-primary-foreground"
+              aria-hidden
+            >
+              {initials}
+            </div>
+
+            {/* identity */}
+            <div className="grow overflow-hidden">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {name || username || email}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {email || username}
+              </p>
+            </div>
+          </div>
+          
+          {/* Logout button below */}
+          <Button
+            onClick={() => signOut()}
+            size="sm"
+            variant="outline"
+            title="Sign out"
+            className="w-full"
+          >
+            Logout
+          </Button>
+        </div>
       )}
     </div>
   )

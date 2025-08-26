@@ -6,10 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { 
-  User, 
-  Package, 
+  User,
   Settings, 
-  Clock, 
   MapPin, 
   Search,
   Bookmark,
@@ -55,6 +53,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick Stats */}
+      {/* TODO: Add quick stats */}
+      {/*
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -110,6 +110,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+      */}
 
       {/* Main Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
