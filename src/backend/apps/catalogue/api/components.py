@@ -130,6 +130,10 @@ async def get_components_with_aggregation(
     """
     coll = await get_components_col(request)
 
+    # Guard against invalid sortkeys
+    if sortkey not in ALLOWED_COMPONENT_SORTKEYS:
+        sortkey = '_id'
+
     # Build aggregation pipeline
     pipeline = [{'$match': match_stage}]
 
