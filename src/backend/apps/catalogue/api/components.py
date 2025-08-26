@@ -242,7 +242,14 @@ async def get_components_shallow(
             .limit(size)
         )
         items = [doc async for doc in cursor]
-    return JSONResponse(status_code=200, content=items)
+
+    # Enrich components with username information
+    users_coll = request.app.mongodb_users
+    enriched_items = await enrich_components_with_usernames(
+        items, users_coll
+    )
+
+    return JSONResponse(status_code=200, content=enriched_items)
 
 
 # FULL COMPONENT ROUTES -------------------------------------------------------
@@ -256,27 +263,47 @@ async def enrich_components_with_usernames(
     """
     enriched_components = []
 
-    for component in components:
+    print(f"[ENRICHMENT] Processing {len(components)} components")
+
+    for i, component in enumerate(components):
         # Convert ObjectId to string for JSON serialization
         component['_id'] = str(component['_id'])
+
+        # Always add reserved_by_username field
+        component['reserved_by_username'] = None
 
         # If component is reserved, add username information
         if component.get('reserved'):
             try:
+                reserved_user_id = str(component['reserved'])
+                print(f"[ENRICHMENT] Component {i}: reserved by user ID: "
+                      f"{reserved_user_id}")
+
                 user_doc = await users_coll.find_one(
-                    {'_id': component['reserved']}
+                    {'_id': reserved_user_id}
                 )
+
                 if user_doc:
-                    component['reserved_by_username'] = (
-                        user_doc.get('username', 'Unknown')
-                    )
+                    username = user_doc.get('username', 'Unknown')
+                    component['reserved_by_username'] = username
+                    print(f"[ENRICHMENT] Component {i}: found username: "
+                          f"{username}")
                 else:
                     component['reserved_by_username'] = 'Unknown User'
-            except Exception:
+                    print(f"[ENRICHMENT] Component {i}: user not found in "
+                          f"database")
+
+            except Exception as e:
                 component['reserved_by_username'] = 'Unknown User'
+                print(f"[ENRICHMENT] Component {i}: error getting username: "
+                      f"{str(e)}")
+        else:
+            print(f"[ENRICHMENT] Component {i}: not reserved")
 
         enriched_components.append(component)
 
+    print(f"[ENRICHMENT] Completed processing {len(enriched_components)} "
+          "components")
     return enriched_components
 
 
