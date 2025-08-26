@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5.0] - 2025-08-26
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.5.0 ✨
+- CSC React Frontend:   0.2.1.0
+- CSC Sheetscan Module: 0.0.1.11
+- CSC Grasshopper Interface: 0.1.0.0
+
+### Added
+
+#### CSC FastAPI Backend
+- **Component Reservation System**: New API routes for managing component reservations
+- **Reserve Component Endpoint**: `POST /reserve/{component_id}` allows users to reserve components
+- **List Reserved Components Endpoint**: `GET /reserve/{user_identifier}` lists all components reserved by a user
+- **Release Component Endpoint**: `DELETE /reserve/{component_id}` allows users to release their reservations
+- **User Identification Support**: Reservation endpoints accept both UUID and username for user identification
+- **PCA Frame Property**: Added `pca_frame` property to component model for future PCA transformation support
+- **Reserved Property**: Added `reserved` property to component model to track component reservations
+
+#### Database Schema Updates
+- **Component Model Enhancement**: Extended `ComponentModel` with `pca_frame` and `reserved` properties
+- **Migration Script**: Created `migrate_add_pca_frame_and_reserved.py` to update existing components
+- **Backward Compatibility**: All new properties are optional and don't affect existing functionality
+
+### Changed
+
+#### CSC FastAPI Backend
+- **Component Model**: Updated `ComponentModel` and `UpdateComponentModel` with new reservation fields
+- **API Router**: Added new reservation router (`reserve.py`) to handle component reservation operations
+- **Security**: Implemented proper authorization - users can only manage their own reservations unless admin
+
+### Technical Improvements
+- **Reservation Logic**: Robust reservation system with conflict detection and proper error handling
+- **Database Operations**: Efficient MongoDB operations for reservation management
+- **API Design**: RESTful API design following FastAPI best practices
+- **Error Handling**: Comprehensive error responses with appropriate HTTP status codes
+- **Security**: Role-based access control for reservation management
+
 ## [0.2.4.0] - 2025-08-25
 
 ### Versions
