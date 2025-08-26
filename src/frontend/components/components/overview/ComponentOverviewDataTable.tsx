@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ComponentData } from '@/components/common/models'
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -72,7 +73,7 @@ export function ComponentOverviewDataTable<TData, TValue>({
           {table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => {
               // Check if this component is reserved
-              const componentData = row.original as any
+              const componentData = row.original as ComponentData
               const isReserved = componentData?.reserved
               
               return (
