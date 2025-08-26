@@ -247,6 +247,39 @@ async def get_components_shallow(
 
 # FULL COMPONENT ROUTES -------------------------------------------------------
 
+async def enrich_components_with_usernames(
+    components: list,
+    users_coll
+) -> list:
+    """
+    Enrich components with username information for reserved components.
+    """
+    enriched_components = []
+
+    for component in components:
+        # Convert ObjectId to string for JSON serialization
+        component['_id'] = str(component['_id'])
+
+        # If component is reserved, add username information
+        if component.get('reserved'):
+            try:
+                user_doc = await users_coll.find_one(
+                    {'_id': component['reserved']}
+                )
+                if user_doc:
+                    component['reserved_by_username'] = (
+                        user_doc.get('username', 'Unknown')
+                    )
+                else:
+                    component['reserved_by_username'] = 'Unknown User'
+            except Exception:
+                component['reserved_by_username'] = 'Unknown User'
+
+        enriched_components.append(component)
+
+    return enriched_components
+
+
 @router.get('/components', summary='List components')
 async def get_components(
     request: Request,
@@ -325,7 +358,12 @@ async def get_components(
             .limit(size)
         )
         items = [doc async for doc in cursor]
-    return JSONResponse(status_code=200, content=items)
+
+    # Enrich components with username information
+    users_coll = request.app.mongodb_users
+    enriched_items = await enrich_components_with_usernames(items, users_coll)
+
+    return JSONResponse(status_code=200, content=enriched_items)
 
 
 @router.get('/components/{component_id}', summary='Get component by id')
@@ -338,7 +376,12 @@ async def get_component(
     doc = await coll.find_one({'_id': component_id})
     if not doc:
         raise HTTPException(404, 'Not found')
-    return JSONResponse(status_code=200, content=doc)
+
+    # Enrich component with username information
+    users_coll = request.app.mongodb_users
+    enriched_docs = await enrich_components_with_usernames([doc], users_coll)
+
+    return JSONResponse(status_code=200, content=enriched_docs[0])
 
 
 @router.get('/schema/component', summary='Get ComponentModel schema')
