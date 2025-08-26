@@ -2,6 +2,7 @@
 
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
+import Link from 'next/link'
 
 
 function initialsFrom(name?: string | null, email?: string | null, username?: string | null) {
@@ -89,6 +90,12 @@ export default function UserItem() {
             Session expired
           </p>
         )}
+        {/* Dashboard Link */}
+        <Link href="/dashboard" className="block mt-1">
+          <p className="text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer">
+            View Dashboard →
+          </p>
+        </Link>
       </div>
 
       {/* actions */}

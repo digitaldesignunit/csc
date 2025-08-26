@@ -10,6 +10,16 @@ import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import ComponentDetailMap from './ComponentDetailMap'
 import { Copy, Check } from 'lucide-react'
+import { useSession } from 'next-auth/react'
+
+// Type for session user with extended properties
+interface ExtendedUser {
+  id?: string
+  sub?: string
+  username?: string | null
+  name?: string | null
+  email?: string | null
+}
 
 export default function ComponentDetailCard({
   component_data,
@@ -17,6 +27,7 @@ export default function ComponentDetailCard({
   component_data: ComponentData
 }) {
   const [copied, setCopied] = useState(false)
+  const { data: session } = useSession()
 
   const handleCopyToClipboard = async () => {
     try {
@@ -25,6 +36,57 @@ export default function ComponentDetailCard({
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       console.error('Failed to copy to clipboard:', err)
+    }
+  }
+
+  const handleReserveComponent = async () => {
+    try {
+      const response = await fetch(`/api/backend/reserve/${component_data._id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log('Component reserved successfully:', result)
+        // Refresh the page to show updated reservation status
+        window.location.reload()
+      } else {
+        const error = await response.json()
+        console.error('Failed to reserve component:', error)
+        // You could show a toast notification here
+        alert(`Failed to reserve component: ${error.detail || 'Unknown error'}`)
+      }
+    } catch (err) {
+      console.error('Failed to reserve component:', err)
+      alert('Failed to reserve component. Please try again.')
+    }
+  }
+
+  const handleReleaseComponent = async () => {
+    try {
+      const response = await fetch(`/api/backend/reserve/${component_data._id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log('Component released successfully:', result)
+        // Refresh the page to show updated reservation status
+        window.location.reload()
+      } else {
+        const error = await response.json()
+        console.error('Failed to release component:', error)
+        alert(`Failed to release component: ${error.detail || 'Unknown error'}`)
+      }
+    } catch (err) {
+      console.error('Failed to release component:', err)
+      alert('Failed to release component. Please try again.')
     }
   }
 
@@ -77,7 +139,7 @@ export default function ComponentDetailCard({
 
       <CardContent>
         {/* Find Component Button */}
-        <div className="mb-4">
+        <div className="mb-4 flex flex-col sm:flex-row gap-2">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -90,6 +152,55 @@ export default function ComponentDetailCard({
               <TooltipContent>
                 <div className="text-center text-sm">
                   Find this component using the QR code
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {/* Reserve Component Button */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {component_data.reserved ? (
+                  // Component is reserved
+                  (session?.user as ExtendedUser)?.id === component_data.reserved ? (
+                    // Reserved by current user - show release button
+                    <Button 
+                      variant="destructive"
+                      className="w-full sm:w-auto"
+                      onClick={handleReleaseComponent}
+                    >
+                      Release Component
+                    </Button>
+                  ) : (
+                    // Reserved by another user - show disabled button
+                    <Button 
+                      variant="destructive"
+                      className="w-full sm:w-auto"
+                      disabled
+                    >
+                      Reserved by {component_data.reserved_by_username || 'Another User'}
+                    </Button>
+                  )
+                ) : (
+                  // Component is available - show reserve button
+                  <Button 
+                    variant="default"
+                    className="w-full sm:w-auto"
+                    onClick={handleReserveComponent}
+                  >
+                    Reserve Component
+                  </Button>
+                )}
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="text-center text-sm">
+                  {component_data.reserved ? 
+                    ((session?.user as ExtendedUser)?.id === component_data.reserved ? 
+                      'Click to release this component' : 
+                      `This component is reserved by ${component_data.reserved_by_username || 'another user'}`) : 
+                    'Reserve this component for your project'
+                  }
                 </div>
               </TooltipContent>
             </Tooltip>

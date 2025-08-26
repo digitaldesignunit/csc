@@ -159,4 +159,33 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
       <div className='text-xs truncate'>{formatTimestamp(row.getValue('lastmodified'))}</div>
     ),
   },
+  {
+    accessorKey: 'reserved',
+    header: () => <ComponentOverviewDataTableHeader header='Reserved' />,
+    meta: { colClassName: 'w-[140px] sm:w-[160px]' },
+    cell: ({ row }) => {
+      const reserved: string | null = row.getValue('reserved')
+      // Access reserved_by_username from the raw data, not as a table column
+      const reservedByUsername: string | undefined = (row.original as ComponentData).reserved_by_username
+      
+      if (!reserved) {
+        return (
+          <div className='text-xs text-muted-foreground'>
+            Available
+          </div>
+        )
+      }
+      return (
+        <div className='text-xs'>
+          <div className='flex items-center gap-1'>
+            <div className='w-2 h-2 rounded-full bg-orange-500'></div>
+            <span className='text-orange-600 font-medium'>Reserved</span>
+          </div>
+          <div className='text-xs text-muted-foreground truncate' title={reservedByUsername || 'Unknown User'}>
+            by {reservedByUsername || 'Unknown User'}
+          </div>
+        </div>
+      )
+    },
+  },
 ]

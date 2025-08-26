@@ -25,7 +25,15 @@ export type ComponentData = {
     x: Array<number>,
     y: Array<number>,
     z: Array<number>
-  }
+  },
+  pca_frame?: {
+    o: Array<number>,
+    x: Array<number>,
+    y: Array<number>,
+    z: Array<number>
+  },
+  reserved?: string | null,  // UUID of user who has reserved this component
+  reserved_by_username?: string, // Username of who reserved this component
   descriptors: {
     roundness: number
   },

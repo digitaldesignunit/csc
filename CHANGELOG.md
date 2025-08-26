@@ -9,11 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Versions
 
 - CSC FastAPI Backend:  0.2.5.0 ✨
-- CSC React Frontend:   0.2.1.0
+- CSC React Frontend:   0.2.2.0 ✨
 - CSC Sheetscan Module: 0.0.1.11
 - CSC Grasshopper Interface: 0.1.0.0
 
 ### Added
+
+#### CSC React Frontend
+- **Component Reservation System Integration**: Complete frontend integration for the component reservation system
+- **User Dashboard**: New dashboard page accessible from user menu with quick stats and navigation
+- **Reserved Components Page**: Dedicated page showing all components reserved by the logged-in user
+- **Reservation Management**: Users can reserve and release components directly from component detail pages
+- **Enhanced Component Overview**: Added "Reserved" column showing reservation status and username
+- **Improved Navigation**: Added dashboard link to AppMenu with organized section headlines
+
+#### User Experience Enhancements
+- **Reservation Buttons**: "Reserve Component" and "Release Component" buttons on component detail cards
+- **Username Display**: Shows human-readable usernames instead of UUIDs for reserved components
+- **Smart UI States**: Dynamic button text and states based on reservation status
+- **Quick Actions**: Release components directly from the reserved components overview table
+
+#### Technical Improvements
+- **Type Safety**: Eliminated all TypeScript `any` types with proper interfaces
+- **React Hooks**: Fixed useEffect dependency warnings with useCallback
+- **Code Quality**: Resolved all linting errors and improved code maintainability
+- **Responsive Design**: Enhanced mobile and desktop layouts for reservation management
 
 #### CSC FastAPI Backend
 - **Component Reservation System**: New API routes for managing component reservations
@@ -31,10 +51,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+#### CSC React Frontend
+- **Component Overview Table**: Added new "Reserved" column with reservation status and username information
+- **User Menu**: Enhanced UserItem component with dashboard navigation link
+- **AppMenu Organization**: Added section headlines ("Main" and "Other") for better navigation structure
+- **Component Detail Cards**: Added reservation management buttons alongside existing "Find Component" button
+
 #### CSC FastAPI Backend
 - **Component Model**: Updated `ComponentModel` and `UpdateComponentModel` with new reservation fields
 - **API Router**: Added new reservation router (`reserve.py`) to handle component reservation operations
 - **Security**: Implemented proper authorization - users can only manage their own reservations unless admin
+- **Data Enrichment**: Enhanced component endpoints to include `reserved_by_username` for better user experience
 
 ### Technical Improvements
 - **Reservation Logic**: Robust reservation system with conflict detection and proper error handling
@@ -42,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **API Design**: RESTful API design following FastAPI best practices
 - **Error Handling**: Comprehensive error responses with appropriate HTTP status codes
 - **Security**: Role-based access control for reservation management
+- **Frontend-Backend Integration**: Seamless integration between reservation API and frontend components
 
 ## [0.2.4.0] - 2025-08-25
 

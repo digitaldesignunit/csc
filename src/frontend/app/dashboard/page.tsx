@@ -1,0 +1,265 @@
+'use client'
+
+import { useSession } from 'next-auth/react'
+import { redirect } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { 
+  User, 
+  Package, 
+  Settings, 
+  Clock, 
+  MapPin, 
+  Search,
+  Bookmark,
+  Calendar
+} from 'lucide-react'
+import Link from 'next/link'
+
+export default function DashboardPage() {
+  const { data: session, status } = useSession()
+
+  if (status === 'loading') {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-muted rounded w-1/3"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-32 bg-muted rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!session?.user) {
+    redirect('/auth/signin?callbackUrl=/dashboard')
+  }
+
+  const username = (session.user as { username?: string | null }).username || 
+                   session.user.name || 
+                   session.user.email || 
+                   'User'
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold text-foreground">User Dashboard</h1>
+        <p className="text-muted-foreground">
+          Welcome back, {username}! Manage your account and view your activities.
+        </p>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Components</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">-</div>
+            <p className="text-xs text-muted-foreground">
+              Available in catalogue
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Reserved</CardTitle>
+            <Bookmark className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">-</div>
+            <p className="text-xs text-muted-foreground">
+              Your reservations
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Last Activity</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">-</div>
+            <p className="text-xs text-muted-foreground">
+              Recent activity
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Account Status</CardTitle>
+            <User className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <Badge variant="secondary" className="text-xs">
+              Active
+            </Badge>
+            <p className="text-xs text-muted-foreground mt-1">
+              Account verified
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Reserved Components */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bookmark className="h-5 w-5 text-primary" />
+              Reserved Components
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              View and manage all components you have reserved for your projects.
+            </p>
+            <Link href="/dashboard/reserved">
+              <Button className="w-full" variant="default">
+                View Reserved Components
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Component Search */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="h-5 w-5 text-primary" />
+              Find Components
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Search and browse the component catalogue to find what you need.
+            </p>
+            <Link href="/components">
+              <Button className="w-full" variant="outline">
+                Browse Catalogue
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Component Lookup */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              Component Lookup
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Look up specific components using QR codes or reference IDs.
+            </p>
+            <Link href="/findcomponent">
+              <Button className="w-full" variant="outline">
+                Lookup Component
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Account Settings */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5 text-primary" />
+              Account Settings
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Manage your account preferences and profile information.
+            </p>
+            <Link href="/settings">
+              <Button className="w-full" variant="outline">
+                Manage Account
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Recent Activity */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-primary" />
+              Recent Activity
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              View your recent component interactions and reservations.
+            </p>
+            <Button className="w-full" variant="outline" disabled>
+              Coming Soon
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Help & Support */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              Help & Support
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Get help with using the system or report issues.
+            </p>
+            <Button className="w-full" variant="outline" disabled>
+              Coming Soon
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Links */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Links</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/components">
+              <Badge variant="outline" className="cursor-pointer hover:bg-primary hover:text-primary-foreground">
+                Component Catalogue
+              </Badge>
+            </Link>
+            <Link href="/dashboard/reserved">
+              <Badge variant="outline" className="cursor-pointer hover:bg-primary hover:text-primary-foreground">
+                My Reservations
+              </Badge>
+            </Link>
+            <Link href="/findcomponent">
+              <Badge variant="outline" className="cursor-pointer hover:bg-primary hover:text-primary-foreground">
+                Component Lookup
+              </Badge>
+            </Link>
+            <Link href="/settings">
+              <Badge variant="outline" className="cursor-pointer hover:bg-primary hover:text-primary-foreground">
+                Settings
+              </Badge>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
