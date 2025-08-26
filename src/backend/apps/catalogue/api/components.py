@@ -169,15 +169,13 @@ async def get_components_with_aggregation(
     pipeline.append({'$sort': {sortkey: sort_order}})
 
     # Add pagination if needed
-    if not page and not size:
-        # Get all components - no pagination stages added
-        pass
-    else:
-        # Apply pagination
+    if page > 0 and size > 0:
         pipeline.extend([
-            {'$skip': (page - 1) * size if page > 0 else 0},
-            {'$limit': size}
+            {'$skip': (page - 1) * size},
+            {'$limit': size},
         ])
+    elif page == 0 and size > 0:
+        pipeline.append({'$limit': size})
 
     # Convert ObjectId to string for JSON serialization
     pipeline.append({
@@ -356,7 +354,14 @@ async def get_components_shallow(
         bbx_max_z=bbx_max_z,
     )
     components = await get_components_with_aggregation(
-        request, match_stage, projection={'geometry': 0, 'descriptors': 0}
+        request,
+        match_stage,
+        projection={'geometry': 0, 'descriptors': 0},
+        sortkey=sortkey,
+        sort_order=1,
+        page=page,
+        size=size,
+        include_username=True,
     )
     return JSONResponse(status_code=200, content=components)
 
@@ -396,7 +401,14 @@ async def get_components(
         bbx_max_z=bbx_max_z,
     )
     components = await get_components_with_aggregation(
-        request, match_stage
+        request,
+        match_stage,
+        projection={'geometry': 0, 'descriptors': 0},
+        sortkey=sortkey,
+        sort_order=1,
+        page=page,
+        size=size,
+        include_username=True,
     )
     return JSONResponse(status_code=200, content=components)
 
@@ -409,7 +421,9 @@ async def get_component(
 ):
     match_stage = {'_id': component_id}
     components = await get_components_with_aggregation(
-        request, match_stage, include_username=True
+        request,
+        match_stage,
+        include_username=True
     )
 
     if not components:
