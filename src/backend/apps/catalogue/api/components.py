@@ -327,8 +327,8 @@ async def get_component_shallow(
 async def get_components_shallow(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
-    page: int = Query(0, description='Page number (0-based)'),
-    size: int = Query(0, description='Page size'),
+    page: int = Query(0, description='Page number (0=get all, 1+=paginated)'),
+    size: int = Query(0, description='Page size (0=get all)'),
     sortkey: str = Query('_id', description='Sort key'),
     comptype: str = Query('', description='Component type filter'),
     material: str = Query('', description='Material type filter'),
@@ -367,8 +367,8 @@ async def get_components_shallow(
 async def get_components(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
-    page: int = Query(0, description='Page number (0-based)'),
-    size: int = Query(0, description='Page size'),
+    page: int = Query(0, description='Page number (0=get all, 1+=paginated)'),
+    size: int = Query(0, description='Page size (0=get all)'),
     sortkey: str = Query('_id', description='Sort key'),
     comptype: str = Query('', description='Component type filter'),
     material: str = Query('', description='Material type filter'),
