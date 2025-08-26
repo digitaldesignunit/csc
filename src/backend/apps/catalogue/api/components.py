@@ -169,7 +169,7 @@ async def get_components_with_aggregation(
     pipeline.append({'$sort': {sortkey: sort_order}})
 
     # Add pagination if needed
-    if page and size:
+    if page > 0 and size > 0:
         pipeline.extend([
             {'$skip': (page - 1) * size},
             {'$limit': size}
