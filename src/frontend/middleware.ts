@@ -17,6 +17,7 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     '/components/:path*',   // protect your pages
+    '/dashboard/:path*',    // protect the dashboard too
     '/api/backend/:path*',  // protect the catch-all proxy too
   ],
 }
