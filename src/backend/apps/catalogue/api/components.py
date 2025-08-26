@@ -32,6 +32,163 @@ async def get_components_col(request: Request):
     return request.app.mongodb_components
 
 
+def build_component_match_stage(
+    comptype: Optional[str] = None,
+    material: Optional[str] = None,
+    validated: Optional[int] = None,
+    complexity: Optional[int] = None,
+    fragment: Optional[bool] = None,
+    bbx_min_x: Optional[float] = None,
+    bbx_min_y: Optional[float] = None,
+    bbx_min_z: Optional[float] = None,
+    bbx_max_x: Optional[float] = None,
+    bbx_max_y: Optional[float] = None,
+    bbx_max_z: Optional[float] = None,
+) -> dict:
+    """Build MongoDB match stage for component filtering."""
+    match_stage = {}
+
+    if comptype:
+        match_stage['type'] = {"$regex": f"^{comptype}$", "$options": "i"}
+    if material:
+        match_stage['material'] = {"$regex": f"^{material}$", "$options": "i"}
+    if validated == 1:
+        match_stage['validated'] = True
+    elif validated == -1:
+        match_stage['validated'] = False
+
+    # Add complexity filter
+    if complexity is not None:
+        match_stage['complexity'] = complexity
+
+    # Add fragment filter
+    if fragment is not None:
+        match_stage['fragment'] = fragment
+
+    # Add bounding box filters
+    bbx_filters = [
+        bbx_min_x, bbx_min_y, bbx_min_z,
+        bbx_max_x, bbx_max_y, bbx_max_z
+    ]
+    if any(bbx_filters):
+        if bbx_min_x is not None or bbx_max_x is not None:
+            bbx_query = {}
+            if bbx_min_x is not None:
+                bbx_query['$gte'] = bbx_min_x
+            if bbx_max_x is not None:
+                bbx_query['$lte'] = bbx_max_x
+            if bbx_query:
+                match_stage['bbx.0'] = bbx_query
+
+        if bbx_min_y is not None or bbx_max_y is not None:
+            bbx_query = {}
+            if bbx_min_y is not None:
+                bbx_query['$gte'] = bbx_min_y
+            if bbx_max_y is not None:
+                bbx_query['$lte'] = bbx_max_y
+            if bbx_query:
+                match_stage['bbx.1'] = bbx_query
+
+        if bbx_min_z is not None or bbx_max_z is not None:
+            bbx_query = {}
+            if bbx_min_z is not None:
+                bbx_query['$gte'] = bbx_min_z
+            if bbx_max_z is not None:
+                bbx_query['$lte'] = bbx_max_z
+            if bbx_query:
+                match_stage['bbx.2'] = bbx_query
+
+    return match_stage
+
+
+async def get_components_with_aggregation(
+    request: Request,
+    match_stage: dict,
+    projection: Optional[dict] = None,
+    sortkey: str = '_id',
+    sort_order: int = 1,
+    page: int = 0,
+    size: int = 0,
+    include_username: bool = True
+) -> list:
+    """
+    Get components using MongoDB aggregation pipeline with optional
+    username enrichment.
+
+    Args:
+        request: FastAPI request object
+        match_stage: MongoDB match stage for filtering
+        projection: Optional projection to limit returned fields
+        sortkey: Field to sort by
+        sort_order: Sort order (1 for ascending, -1 for descending)
+        page: Page number (0-based)
+        size: Page size
+        include_username: Whether to include username enrichment
+
+    Returns:
+        List of components with optional username enrichment
+    """
+    coll = await get_components_col(request)
+
+    # Build aggregation pipeline
+    pipeline = [{'$match': match_stage}]
+
+    # Add username enrichment if requested
+    if include_username:
+        users_coll = request.app.mongodb_users
+        pipeline.extend([
+            {
+                '$lookup': {
+                    'from': users_coll.name,
+                    'localField': 'reserved',
+                    'foreignField': '_id',
+                    'as': 'user_info'
+                }
+            },
+            {
+                '$addFields': {
+                    'reserved_by_username': {
+                        '$cond': {
+                            'if': {'$gt': [{'$size': '$user_info'}, 0]},
+                            'then': {
+                                '$arrayElemAt': ['$user_info.username', 0]
+                            },
+                            'else': None
+                        }
+                    }
+                }
+            },
+            {'$unset': 'user_info'}  # Remove temporary user_info array
+        ])
+
+    # Add projection if specified
+    if projection:
+        pipeline.append({'$project': projection})
+
+    # Add sorting
+    pipeline.append({'$sort': {sortkey: sort_order}})
+
+    # Add pagination if needed
+    if page > 0 and size > 0:
+        pipeline.extend([
+            {'$skip': (page - 1) * size},
+            {'$limit': size}
+        ])
+
+    # Convert ObjectId to string for JSON serialization
+    pipeline.append({
+        '$addFields': {
+            '_id': {'$toString': '$_id'}
+        }
+    })
+
+    # Execute aggregation
+    cursor = coll.aggregate(pipeline)
+    components = [doc async for doc in cursor]
+
+    return components
+
+
 # STATISTIC ROUTES ------------------------------------------------------------
 
 @router.get(
@@ -181,131 +338,26 @@ async def get_components_shallow(
     bbx_max_y: Optional[float] = Query(None, description='Max Y'),
     bbx_max_z: Optional[float] = Query(None, description='Max Z'),
 ):
-    coll = await get_components_col(request)
-    query = {}
-    projection = {'geometry': 0, 'descriptors': 0}
-    sort_order = 1
-    if comptype:
-        query['type'] = {"$regex": f"^{comptype}$", "$options": "i"}
-    if material:
-        query['material'] = {"$regex": f"^{material}$", "$options": "i"}
-    if validated == 1:
-        query['validated'] = True
-    elif validated == -1:
-        query['validated'] = False
-
-    # Add complexity filter
-    if complexity is not None:
-        query['complexity'] = complexity
-
-    # Add fragment filter
-    if fragment is not None:
-        query['fragment'] = fragment
-
-    # Add bounding box filters
-    if any([bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z]):
-        bbx_query = {}
-        if bbx_min_x is not None:
-            bbx_query['$gte'] = bbx_min_x
-        if bbx_max_x is not None:
-            bbx_query['$lte'] = bbx_max_x
-        if bbx_query:
-            query['bbx.0'] = bbx_query
-
-        bbx_query = {}
-        if bbx_min_y is not None:
-            bbx_query['$gte'] = bbx_min_y
-        if bbx_max_y is not None:
-            bbx_query['$lte'] = bbx_max_y
-        if bbx_query:
-            query['bbx.1'] = bbx_query
-
-        bbx_query = {}
-        if bbx_min_z is not None:
-            bbx_query['$gte'] = bbx_min_z
-        if bbx_max_z is not None:
-            bbx_query['$lte'] = bbx_max_z
-        if bbx_query:
-            query['bbx.2'] = bbx_query
-
-    if sortkey not in ALLOWED_COMPONENT_SORTKEYS:
-        sortkey = '_id'
-
-    if not page and not size:
-        items = [doc async for doc
-                 in coll.find(query, projection).sort(sortkey, sort_order)]
-    else:
-        cursor = (
-            coll.find(query, projection)
-            .sort(sortkey, sort_order)
-            .skip((page - 1) * size if page > 0 else 0)
-            .limit(size)
-        )
-        items = [doc async for doc in cursor]
-
-    # Enrich components with username information
-    users_coll = request.app.mongodb_users
-    enriched_items = await enrich_components_with_usernames(
-        items, users_coll
+    match_stage = build_component_match_stage(
+        comptype=comptype,
+        material=material,
+        validated=validated,
+        complexity=complexity,
+        fragment=fragment,
+        bbx_min_x=bbx_min_x,
+        bbx_min_y=bbx_min_y,
+        bbx_min_z=bbx_min_z,
+        bbx_max_x=bbx_max_x,
+        bbx_max_y=bbx_max_y,
+        bbx_max_z=bbx_max_z,
     )
-
-    return JSONResponse(status_code=200, content=enriched_items)
+    components = await get_components_with_aggregation(
+        request, match_stage, projection={'geometry': 0, 'descriptors': 0}
+    )
+    return JSONResponse(status_code=200, content=components)
 
 
 # FULL COMPONENT ROUTES -------------------------------------------------------
-
-async def enrich_components_with_usernames(
-    components: list,
-    users_coll
-) -> list:
-    """
-    Enrich components with username information for reserved components.
-    """
-    enriched_components = []
-
-    print(f"[ENRICHMENT] Processing {len(components)} components")
-
-    for i, component in enumerate(components):
-        # Convert ObjectId to string for JSON serialization
-        component['_id'] = str(component['_id'])
-
-        # Always add reserved_by_username field
-        component['reserved_by_username'] = None
-
-        # If component is reserved, add username information
-        if component.get('reserved'):
-            try:
-                reserved_user_id = str(component['reserved'])
-                print(f"[ENRICHMENT] Component {i}: reserved by user ID: "
-                      f"{reserved_user_id}")
-
-                user_doc = await users_coll.find_one(
-                    {'_id': reserved_user_id}
-                )
-
-                if user_doc:
-                    username = user_doc.get('username', 'Unknown')
-                    component['reserved_by_username'] = username
-                    print(f"[ENRICHMENT] Component {i}: found username: "
-                          f"{username}")
-                else:
-                    component['reserved_by_username'] = 'Unknown User'
-                    print(f"[ENRICHMENT] Component {i}: user not found in "
-                          f"database")
-
-            except Exception as e:
-                component['reserved_by_username'] = 'Unknown User'
-                print(f"[ENRICHMENT] Component {i}: error getting username: "
-                      f"{str(e)}")
-        else:
-            print(f"[ENRICHMENT] Component {i}: not reserved")
-
-        enriched_components.append(component)
-
-    print(f"[ENRICHMENT] Completed processing {len(enriched_components)} "
-          "components")
-    return enriched_components
-
 
 @router.get('/components', summary='List components')
 async def get_components(
@@ -326,71 +378,23 @@ async def get_components(
     bbx_max_y: Optional[float] = Query(None, description='Max Y'),
     bbx_max_z: Optional[float] = Query(None, description='Max Z'),
 ):
-    coll = await get_components_col(request)
-    query, sort_order = {}, 1
-    if comptype:
-        query['type'] = {"$regex": f"^{comptype}$", "$options": "i"}
-    if material:
-        query['material'] = {"$regex": f"^{material}$", "$options": "i"}
-    if validated == 1:
-        query['validated'] = True
-    elif validated == -1:
-        query['validated'] = False
-
-    # Add complexity filter
-    if complexity is not None:
-        query['complexity'] = complexity
-
-    # Add fragment filter
-    if fragment is not None:
-        query['fragment'] = fragment
-
-    # Add bounding box filters
-    if any([bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z]):
-        bbx_query = {}
-        if bbx_min_x is not None:
-            bbx_query['$gte'] = bbx_min_x
-        if bbx_max_x is not None:
-            bbx_query['$lte'] = bbx_max_x
-        if bbx_query:
-            query['bbx.0'] = bbx_query
-
-        bbx_query = {}
-        if bbx_min_y is not None:
-            bbx_query['$gte'] = bbx_min_y
-        if bbx_max_y is not None:
-            bbx_query['$lte'] = bbx_max_y
-        if bbx_query:
-            query['bbx.1'] = bbx_query
-
-        bbx_query = {}
-        if bbx_min_z is not None:
-            bbx_query['$gte'] = bbx_min_z
-        if bbx_max_z is not None:
-            bbx_query['$lte'] = bbx_max_z
-        if bbx_query:
-            query['bbx.2'] = bbx_query
-
-    if sortkey not in ALLOWED_COMPONENT_SORTKEYS:
-        sortkey = '_id'
-
-    if not page and not size:
-        items = [doc async for doc
-                 in coll.find(query).sort(sortkey, sort_order)]
-    else:
-        cursor = (
-            coll.find(query)
-            .sort(sortkey, sort_order)
-            .skip((page - 1) * size if page > 0 else 0)
-            .limit(size)
-        )
-        items = [doc async for doc in cursor]
-
-    # Enrich components with username information
-    users_coll = request.app.mongodb_users
-    enriched_items = await enrich_components_with_usernames(items, users_coll)
-
-    return JSONResponse(status_code=200, content=enriched_items)
+    match_stage = build_component_match_stage(
+        comptype=comptype,
+        material=material,
+        validated=validated,
+        complexity=complexity,
+        fragment=fragment,
+        bbx_min_x=bbx_min_x,
+        bbx_min_y=bbx_min_y,
+        bbx_min_z=bbx_min_z,
+        bbx_max_x=bbx_max_x,
+        bbx_max_y=bbx_max_y,
+        bbx_max_z=bbx_max_z,
+    )
+    components = await get_components_with_aggregation(
+        request, match_stage
+    )
+    return JSONResponse(status_code=200, content=components)
 
 
 @router.get('/components/{component_id}', summary='Get component by id')
@@ -399,16 +403,15 @@ async def get_component(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str = '',
 ):
-    coll = await get_components_col(request)
-    doc = await coll.find_one({'_id': component_id})
-    if not doc:
+    match_stage = {'_id': component_id}
+    components = await get_components_with_aggregation(
+        request, match_stage, include_username=True
+    )
+
+    if not components:
         raise HTTPException(404, 'Not found')
 
-    # Enrich component with username information
-    users_coll = request.app.mongodb_users
-    enriched_docs = await enrich_components_with_usernames([doc], users_coll)
-
-    return JSONResponse(status_code=200, content=enriched_docs[0])
+    return JSONResponse(status_code=200, content=components[0])
 
 
 @router.get('/schema/component', summary='Get ComponentModel schema')
