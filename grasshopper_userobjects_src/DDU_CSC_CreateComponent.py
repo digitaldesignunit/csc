@@ -185,7 +185,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             compute_3d = False
         else:
             raise RuntimeError('Minimum BBX not implemented '
-                               f'for geometry of type {type(Geometry)}!')
+                               f'for geometry of type {type(geometry)}!')
         # PROCESSING RESULTS FOR OUTPUT
         if compute_3d:
             # compute bbx
