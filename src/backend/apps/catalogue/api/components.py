@@ -44,6 +44,7 @@ def build_component_match_stage(
     bbx_max_x: Optional[float] = None,
     bbx_max_y: Optional[float] = None,
     bbx_max_z: Optional[float] = None,
+    reserved: Optional[str] = None,
 ) -> dict:
     """Build MongoDB match stage for component filtering."""
     match_stage = {}
@@ -64,6 +65,15 @@ def build_component_match_stage(
     # Add fragment filter
     if fragment is not None:
         match_stage['fragment'] = fragment
+
+    # Add reservation status filter
+    if reserved == 'true':
+        # Fetch components reserved by current user
+        # This will be handled in the aggregation pipeline
+        match_stage['reserved'] = {"$ne": ""}
+    elif reserved == 'false':
+        # Fetch components that are not reserved by anyone
+        match_stage['reserved'] = ""
 
     # Add bounding box filters
     bbx_filters = [
@@ -109,7 +119,8 @@ async def get_components_with_aggregation(
     sort_order: int = 1,
     page: int = 0,
     size: int = 0,
-    include_username: bool = True
+    include_username: bool = True,
+    current_user_id: Optional[str] = None
 ) -> list:
     """
     Get components using MongoDB aggregation pipeline with optional
@@ -164,6 +175,12 @@ async def get_components_with_aggregation(
             },
             {'$unset': 'user_info'}  # Remove temporary user_info array
         ])
+
+        # Add filter for components reserved by current user if requested
+        if current_user_id and match_stage.get('reserved') == {"$ne": ""}:
+            pipeline.append({
+                '$match': {'reserved': current_user_id}
+            })
 
     # Add projection if specified
     if projection:
@@ -337,6 +354,11 @@ async def get_components_shallow(
     validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
     complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
     fragment: Optional[bool] = Query(None, description='Is fragment'),
+    reserved: Optional[str] = Query(
+        None,
+        description=('Reservation filter: "true"=reserved by current user, '
+                     '"false"=not reserved, None=any')
+    ),
     bbx_min_x: Optional[float] = Query(None, description='Min X'),
     bbx_min_y: Optional[float] = Query(None, description='Min Y'),
     bbx_min_z: Optional[float] = Query(None, description='Min Z'),
@@ -350,6 +372,7 @@ async def get_components_shallow(
         validated=validated,
         complexity=complexity,
         fragment=fragment,
+        reserved=reserved,
         bbx_min_x=bbx_min_x,
         bbx_min_y=bbx_min_y,
         bbx_min_z=bbx_min_z,
@@ -366,6 +389,7 @@ async def get_components_shallow(
         page=page,
         size=size,
         include_username=True,
+        current_user_id=current_user.id,
     )
     return JSONResponse(status_code=200, content=components)
 
@@ -384,6 +408,11 @@ async def get_components(
     validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
     complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
     fragment: Optional[bool] = Query(None, description='Is fragment'),
+    reserved: Optional[str] = Query(
+        None,
+        description=('Reservation filter: "true"=reserved by current user, '
+                     '"false"=not reserved, None=any')
+    ),
     bbx_min_x: Optional[float] = Query(None, description='Min X'),
     bbx_min_y: Optional[float] = Query(None, description='Min Y'),
     bbx_min_z: Optional[float] = Query(None, description='Min Z'),
@@ -397,6 +426,7 @@ async def get_components(
         validated=validated,
         complexity=complexity,
         fragment=fragment,
+        reserved=reserved,
         bbx_min_x=bbx_min_x,
         bbx_min_y=bbx_min_y,
         bbx_min_z=bbx_min_z,
@@ -413,6 +443,7 @@ async def get_components(
         page=page,
         size=size,
         include_username=True,
+        current_user_id=current_user.id,
     )
     return JSONResponse(status_code=200, content=components)
 
