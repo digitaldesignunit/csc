@@ -28,7 +28,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250825
+    Version: 250827
     """
 
     def __init__(self):
@@ -61,9 +61,19 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             return None
         return auth_core
 
-    def build_filter_query_params(self, Type, Material, Complexity, Fragment,
-                                  MinDimensionX, MaxDimensionX, MinDimensionY,
-                                  MaxDimensionY, MinDimensionZ, MaxDimensionZ):
+    def build_filter_query_params(
+            self,
+            Type,
+            Material,
+            Complexity,
+            Fragment,
+            MinDimensionX,
+            MaxDimensionX,
+            MinDimensionY,
+            MaxDimensionY,
+            MinDimensionZ,
+            MaxDimensionZ,
+            ReservedStatus):
         """Build query parameters for filtering components."""
         params = {}
 
@@ -85,6 +95,15 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         # Add fragment filter if provided
         if Fragment is not None:
             params['fragment'] = Fragment
+
+        # Add reservation status filter if provided
+        if ReservedStatus is not None and ReservedStatus != -1:
+            if ReservedStatus == 0:
+                # Fetch components that are not reserved by anyone
+                params['reserved'] = 'false'
+            elif ReservedStatus == 1:
+                # Fetch components reserved by current user
+                params['reserved'] = 'true'
 
         # Add bounding box filters if provided
         if MinDimensionX is not None and MinDimensionX != 0.0:
@@ -113,6 +132,12 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             description.append(f'\nComplexity: {filter_params["complexity"]}')
         if filter_params.get('fragment') is not None:
             description.append(f'\nFragment: {filter_params["fragment"]}')
+
+        # Add reservation status filter description
+        if filter_params.get('reserved') == 'false':
+            description.append('\nReservation: Not reserved by anyone')
+        elif filter_params.get('reserved') == 'true':
+            description.append('\nReservation: Reserved by current user')
 
         # Handle bounding box filters with detailed information
         bbx_filters = []
@@ -144,7 +169,8 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             MinDimensionY: float,
             MaxDimensionY: float,
             MinDimensionZ: float,
-            MaxDimensionZ: float):
+            MaxDimensionZ: float,
+            ReservedStatus):
         # Initialize param descriptions (this has to be done in RunScript)
         self.InputParams[0].Description = (
             'Component type filter (e.g., "beam", "slab", "column")'
@@ -176,6 +202,10 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         self.InputParams[9].Description = (
             'Maximum Z dimension filter (bounding box)'
         )
+        self.InputParams[10].Description = (
+            'Reservation status filter: -1=ignore, 0=not reserved, '
+            '1=reserved by current user'
+        )
 
         # Initialize output param descriptions
         self.OutputParams[0].Description = (
@@ -206,7 +236,8 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             filter_params = self.build_filter_query_params(
                 Type, Material, Complexity, Fragment,
                 MinDimensionX, MaxDimensionX, MinDimensionY,
-                MaxDimensionY, MinDimensionZ, MaxDimensionZ
+                MaxDimensionY, MinDimensionZ, MaxDimensionZ,
+                ReservedStatus
             )
 
             # Build the query string
