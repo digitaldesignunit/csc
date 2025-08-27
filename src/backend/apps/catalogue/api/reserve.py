@@ -226,7 +226,7 @@ async def release_component(
         # Release the component
         result = await coll.update_one(
             {'_id': component_id},
-            {'$unset': {'reserved': ''}}
+            {'$set': {'reserved': ''}}
         )
 
         if result.modified_count == 0:

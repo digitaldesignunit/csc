@@ -175,6 +175,17 @@ class ComponentModel(BaseModel):
                 "location": {"lat": 37.81627937, "lon": 144.95373531},
                 "descriptors": {"roundness": 0.1},
                 "processes": {"manufacturing": "cast"},
+                "iframe": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                },
+                "pca_frame": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                },
+                "reserved": "550e8400-e29b-41d4-a716-446655440000",
                 "attributes": {"strength": "C30"},
                 "validated": True
             }
@@ -199,3 +210,69 @@ class UpdateComponentModel(BaseModel):
     class Config:
         extra = "allow"
         populate_by_name = True
+
+
+# DESIGNS ---------------------------------------------------------------------
+
+class DesignModel(BaseModel):
+    # globally unique ID (GUID stored in Mongo as _id)
+    id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        alias="_id",
+        description="Globally unique design identifier (GUID)"
+    )
+    # name and description
+    name: Optional[str] = Field(
+        None,
+        description="Human readable design name (optional)"
+    )
+    description: Optional[str] = Field(
+        None,
+        description="Design description (optional)"
+    )
+    # creator
+    creator: str = Field(
+        description="UUID of user who created this design"
+    )
+    # timestamps
+    created: str = Field(
+        description="ISO timestamp when design was created"
+    )
+    lastmodified: str = Field(
+        description="ISO timestamp when design was last modified"
+    )
+    # components and respetive insertion frames
+    components: List[Dict] = Field(
+        description="List of components and their insertion frames"
+    )
+
+    class Config:
+        extra = "allow"
+        populate_by_name = True
+        schema_extra = {
+            "example": {
+                "_id": "550e8400-e29b-41d4-a716-446655440000",
+                "name": "Design A",
+                "description": "One of many beautiful designs",
+                "created": "2024-01-15T10:30:00Z",
+                "lastmodified": "2024-01-15T10:30:00Z",
+                "components": [
+                    {
+                        "component": "550e8400-e29b-41d4-a716-446655440000",
+                        "iframe": {
+                            "x": 0,
+                            "y": 0,
+                            "z": 0
+                        }
+                    },
+                    {
+                        "component": "550e8400-e29b-41d4-a716-446655440001",
+                        "iframe": {
+                            "x": 0,
+                            "y": 0,
+                            "z": 0
+                        }
+                    }
+                ]
+            }
+        }

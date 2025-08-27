@@ -118,17 +118,20 @@ async def get_current_user(
     if sub:
         doc = await users.find_one({'_id': sub})
         if doc:
-            print(f'{ts()} [AUTH] Matched user by _id (sub):', sub)
+            # print(f'{ts()} [AUTH] Matched user by _id (sub):', sub)
+            pass
 
     if not doc and uname:
         doc = await users.find_one({'username': uname})
         if doc:
-            print(f'{ts()} [AUTH] Matched user by username:', uname)
+            # print(f'{ts()} [AUTH] Matched user by username:', uname)
+            pass
 
     if not doc and email:
         doc = await users.find_one({'email': email})
         if doc:
-            print(f'{ts()} [AUTH] Matched user by email:', email)
+            # print(f'{ts()} [AUTH] Matched user by email:', email)
+            pass
 
     if not doc:
         print(f'{ts()} [AUTH] No user found for sub/username/email:',

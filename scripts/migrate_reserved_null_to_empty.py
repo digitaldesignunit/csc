@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-MongoDB PCA Frame and Reserved Properties Migration Script
+MongoDB Reserved Field Migration Script
 
-This script adds two new properties to all components in the CSC database:
-1. pca_frame: PCA transformation matrix (identical to iframe for now)
-2. reserved: UUID of user who has reserved the component (empty for now)
+This script changes the "reserved" field from null to empty string for all
+components in the CSC database. Currently, components that are not reserved
+have a null value for the reserved field, but we want them to have an empty
+string instead.
 
 The script:
 1. Connects to MongoDB
-2. Finds all components that don't have these properties
-3. Adds the properties with default values
-4. Updates the database
-5. Provides a summary of the migration
+2. Finds all components with reserved field set to null
+3. Updates them to have an empty string instead
+4. Provides a summary of the migration
 
 Usage:
-    python scripts/migrate_add_pca_frame_and_reserved.py
+    python scripts/migrate_reserved_null_to_empty.py
 
 Requirements:
     - pymongo
@@ -33,7 +33,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('pca_frame_migration.log'),
+        logging.FileHandler('reserved_null_to_empty_migration.log'),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -74,19 +74,9 @@ def load_config() -> dict:
     return None
 
 
-def get_default_pca_frame() -> dict:
-    """Get the default PCA frame structure (identical to iframe)"""
-    return {
-        "o": [0, 0, 0],      # origin
-        "x": [1, 0, 0],      # x-axis
-        "y": [0, 1, 0],      # y-axis
-        "z": [0, 0, 1]       # z-axis
-    }
-
-
-def migrate_pca_frame_and_reserved():
+def migrate_reserved_null_to_empty():
     """Main migration function"""
-    logger.info("Starting PCA frame and reserved properties migration...")
+    logger.info("Starting reserved field null to empty string migration...")
     
     # Load configuration
     config = load_config()
@@ -110,25 +100,21 @@ def migrate_pca_frame_and_reserved():
         logger.info(f"Connected to database: {db.name}")
         logger.info(f"Collection: {components_collection.name}")
         
-        # Find all components that need migration (missing pca_frame or reserved)
-        migration_query = {
-            "$or": [
-                {"pca_frame": {"$exists": False}},
-                {"reserved": {"$exists": False}}
-            ]
-        }
+        # Find all components with reserved field set to null
+        migration_query = {"reserved": None}
 
         components_to_migrate = list(
             components_collection.find(migration_query)
         )
         logger.info(
-            f"Found {len(components_to_migrate)} components that need migration"
+            f"Found {len(components_to_migrate)} components with null "
+            f"reserved field"
         )
 
         if not components_to_migrate:
             logger.info(
                 "No components need migration. All components already have "
-                "pca_frame and reserved properties."
+                "non-null reserved field values."
             )
             return True
 
@@ -140,49 +126,22 @@ def migrate_pca_frame_and_reserved():
         for component in components_to_migrate:
             try:
                 component_id = component.get('_id')
-                updates = {}
+                
+                # Update the component to set reserved to empty string
+                result = components_collection.update_one(
+                    {'_id': component_id},
+                    {'$set': {'reserved': ''}}
+                )
 
-                # Check and add pca_frame if missing
-                if 'pca_frame' not in component:
-                    # Use iframe if available, otherwise use default
-                    if component.get('iframe'):
-                        updates['pca_frame'] = component['iframe']
-                        logger.info(
-                            f"Component {component_id}: Using iframe as pca_frame"
-                        )
-                    else:
-                        updates['pca_frame'] = get_default_pca_frame()
-                        logger.info(
-                            f"Component {component_id}: Added default pca_frame"
-                        )
-
-                # Check and add reserved if missing
-                if 'reserved' not in component:
-                    updates['reserved'] = ''  # Empty string (not reserved)
+                if result.modified_count > 0:
+                    migrated_count += 1
                     logger.info(
-                        f"Component {component_id}: Added empty reserved property"
+                        f"Successfully migrated component {component_id}: "
+                        f"null -> empty string"
                     )
-
-                # Update the component if there are changes
-                if updates:
-                    result = components_collection.update_one(
-                        {'_id': component_id},
-                        {'$set': updates}
-                    )
-
-                    if result.modified_count > 0:
-                        migrated_count += 1
-                        logger.info(
-                            f"Successfully migrated component {component_id}"
-                        )
-                    else:
-                        logger.warning(
-                            f"Component {component_id}: No changes made"
-                        )
-                        skipped_count += 1
                 else:
-                    logger.info(
-                        f"Component {component_id}: No migration needed"
+                    logger.warning(
+                        f"Component {component_id}: No changes made"
                     )
                     skipped_count += 1
 
@@ -197,7 +156,7 @@ def migrate_pca_frame_and_reserved():
         logger.info("=" * 50)
         logger.info("MIGRATION SUMMARY")
         logger.info("=" * 50)
-        logger.info(f"Total components found: {len(components_to_migrate)}")
+        logger.info(f"Total components found with null reserved: {len(components_to_migrate)}")
         logger.info(f"Successfully migrated: {migrated_count}")
         logger.info(f"Skipped: {skipped_count}")
         logger.info(f"Errors: {error_count}")
@@ -242,45 +201,54 @@ def verify_migration():
         
         components_collection = db.components
         
-        # Check for components missing pca_frame
-        missing_pca_frame_query = {"pca_frame": {"$exists": False}}
-        missing_pca_frame = list(components_collection.find(missing_pca_frame_query))
+        # Check for components with null reserved field (should be 0)
+        null_reserved_query = {"reserved": None}
+        null_reserved_count = components_collection.count_documents(null_reserved_query)
         
-        # Check for components missing reserved
-        missing_reserved_query = {"reserved": {"$exists": False}}
-        missing_reserved = list(components_collection.find(missing_reserved_query))
+        # Check for components with empty string reserved field
+        empty_reserved_query = {"reserved": ""}
+        empty_reserved_count = components_collection.count_documents(empty_reserved_query)
         
-        # Check for components with pca_frame
-        has_pca_frame_query = {"pca_frame": {"$exists": True}}
-        has_pca_frame_count = components_collection.count_documents(has_pca_frame_query)
+        # Check for components with non-empty reserved field (actually reserved)
+        reserved_components_query = {
+            "$and": [
+                {"reserved": {"$ne": ""}},
+                {"reserved": {"$ne": None}}
+            ]
+        }
+        reserved_components_count = components_collection.count_documents(
+            reserved_components_query
+        )
         
-        # Check for components with reserved
+        # Check for components with reserved field (any value)
         has_reserved_query = {"reserved": {"$exists": True}}
         has_reserved_count = components_collection.count_documents(has_reserved_query)
         
-        # Check for components with non-empty reserved (actually reserved)
-        reserved_components_query = {"reserved": {"$ne": ""}}
-        reserved_components_count = components_collection.count_documents(reserved_components_query)
+        # Total components
+        total_components = components_collection.count_documents({})
         
-        if missing_pca_frame:
-            logger.warning(f"Found {len(missing_pca_frame)} components still missing pca_frame:")
-            for comp in missing_pca_frame[:3]:  # Show first 3
-                logger.warning(f"  {comp.get('_id')}")
+        logger.info("=" * 50)
+        logger.info("VERIFICATION RESULTS")
+        logger.info("=" * 50)
+        logger.info(f"Total components: {total_components}")
+        logger.info(f"Components with reserved field: {has_reserved_count}")
+        logger.info(f"Components with null reserved: {null_reserved_count}")
+        logger.info(f"Components with empty string reserved: {empty_reserved_count}")
+        logger.info(f"Components actually reserved: {reserved_components_count}")
+        logger.info("=" * 50)
+        
+        if null_reserved_count == 0:
+            logger.info("✓ All components have non-null reserved field values")
         else:
-            logger.info("✓ All components have pca_frame property")
+            logger.warning(f"⚠ Found {null_reserved_count} components still with null reserved field")
         
-        if missing_reserved:
-            logger.warning(f"Found {len(missing_reserved)} components still missing reserved property:")
-            for comp in missing_reserved[:3]:  # Show first 3
-                logger.warning(f"  {comp.get('_id')}")
-        else:
-            logger.info("✓ All components have reserved property")
+        if empty_reserved_count > 0:
+            logger.info(f"✓ {empty_reserved_count} components now have empty string reserved field")
         
-        logger.info(f"✓ {has_pca_frame_count} components have pca_frame property")
-        logger.info(f"✓ {has_reserved_count} components have reserved property")
-        logger.info(f"✓ {reserved_components_count} components are actually reserved (non-null)")
+        if reserved_components_count > 0:
+            logger.info(f"✓ {reserved_components_count} components are actually reserved")
         
-        return len(missing_pca_frame) == 0 and len(missing_reserved) == 0
+        return null_reserved_count == 0
         
     except Exception as e:
         logger.error(f"Verification failed: {e}")
@@ -291,11 +259,11 @@ def verify_migration():
 
 
 if __name__ == "__main__":
-    print("CSC PCA Frame and Reserved Properties Migration Script")
-    print("=" * 60)
+    print("CSC Reserved Field Null to Empty String Migration Script")
+    print("=" * 65)
     
     # Run migration
-    success = migrate_pca_frame_and_reserved()
+    success = migrate_reserved_null_to_empty()
     
     if success:
         print("\nMigration completed successfully!")
