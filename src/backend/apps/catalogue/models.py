@@ -172,19 +172,23 @@ class ComponentModel(BaseModel):
                 },
                 "color": [128, 128, 128],
                 "bbx": [1.0, 1.0, 0.2],
-                "location": {"lat": 37.81627937, "lon": 144.95373531},
+                "location": {
+                    "lat": 37.81627937,
+                    "lon": 144.95373531},
                 "descriptors": {"roundness": 0.1},
                 "processes": {"manufacturing": "cast"},
                 "iframe": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 0
-                },
+                    "o": [0, 0, 0],
+                    "x": [1, 0, 0],
+                    "y": [0, 1, 0],
+                    "z": [0, 0, 1]
+                    },
                 "pca_frame": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 0
-                },
+                    "o": [0, 0, 0],
+                    "x": [1, 0, 0],
+                    "y": [0, 1, 0],
+                    "z": [0, 0, 1]
+                    },
                 "reserved": "550e8400-e29b-41d4-a716-446655440000",
                 "attributes": {"strength": "C30"},
                 "validated": True
