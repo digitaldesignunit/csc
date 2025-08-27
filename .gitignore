@@ -43,4 +43,5 @@ csc_deploy.sh
 csc_deploy_backend.sh
 src/backend/logs/fastapi.log
 *.3dm.rhl
-scripts/pca_frame_migration.log
+
+scripts/*.log
