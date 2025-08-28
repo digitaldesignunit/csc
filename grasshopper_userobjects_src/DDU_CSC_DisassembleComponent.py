@@ -24,7 +24,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250822
+    Version: 250828
     """
 
     def __init__(self):
@@ -231,7 +231,10 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                                 self._addWarning(msg)
                                 self.Component.Message = msg
                             # set user string
-                            component_geometry.SetUserString('csc_component', comp)
+                            component_geometry.SetUserString(
+                                'csc_component',
+                                comp
+                            )
                             # add to datatree
                             Geometry.Add(component_geometry, ghp)
 

@@ -30,7 +30,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250825
+    Version: 250828
 
     Fetches reduced or detailed geometry from the CSC API.
     Input can be:
@@ -74,12 +74,9 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             return None
         return auth_core
 
-    def extract_component_id(self, input_data):
+    def extract_component_data(self, input_data):
         """
-        Extract component ID from various input types:
-        - Geometry object with 'csc_component' userstring
-        - JSON string
-        - Direct component ID
+        Extract component data from various input types:
         """
         try:
             # Check if it's a geometry object with userstring
@@ -91,39 +88,46 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     try:
                         # Parse the JSON string to get the _id
                         comp_data = json.loads(value)
-                        if '_id' in comp_data:
-                            return comp_data['_id']
+                        return comp_data
                     except json.JSONDecodeError:
                         self._addWarning(
                             'Invalid JSON in csc_component userstring'
                         )
-                        return None
-
+                        pass
             # Check if it's a string that could be JSON
             if isinstance(input_data, str):
                 input_str = input_data.strip()
-                auth_core = self.get_auth_core_from_sticky()
-
-                # Check if it's a valid UUID first
-                if auth_core.validate_uuid(input_str):
-                    return input_str
-
                 # Try to parse as JSON
                 try:
                     comp_data = json.loads(input_str)
-                    if '_id' in comp_data:
-                        return comp_data['_id']
+                    return comp_data
                 except json.JSONDecodeError:
                     # Not JSON, might be just a string
                     pass
+        except Exception as e:
+            self._addWarning(f'Error extracting ComponentData: {str(e)}')
+        return None
 
-            # Check if it's a list of strings
-            if isinstance(input_data, list) and len(input_data) > 0:
-                return self.extract_component_id(input_data[0])
-
+    def extract_component_id(self, comp_data):
+        """
+        Extract component data from various input types:
+        - Geometry object with 'csc_component' userstring
+        - JSON string
+        - Direct component ID
+        """
+        try:
+            # Check if it's a string that could be JSON
+            if isinstance(comp_data, str):
+                input_str = comp_data.strip()
+                auth_core = self.get_auth_core_from_sticky()
+                # Check if it's a valid UUID first
+                if auth_core.validate_uuid(input_str):
+                    return input_str
+            # Parse the JSON string to get the _id
+            elif '_id' in comp_data:
+                return comp_data['_id']
         except Exception as e:
             self._addWarning(f'Error extracting component ID: {str(e)}')
-
         return None
 
     def fetch_geometry_from_api(self, auth_core, component_id, detailed=False):
@@ -325,7 +329,6 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             0, 0, extrusion_data['height'] * -0.5))
         return cxt
 
-
     def construct_primitive_geometry(self, geometry_data):
         """
         Construct primitive geometry data.
@@ -356,6 +359,38 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         except Exception as e:
             self._addError(f'Error constructing primitive geometry: {str(e)}')
             return None
+
+    def iframe_to_xform(self, iframe) -> Rhino.Geometry.Transform:
+        """
+        Converts a component iframe to a Rhino 4x4 transformation matrix.
+        """
+        # Extract origin and vectors
+        origin = iframe['o']
+        x_vec = iframe['x']
+        y_vec = iframe['y']
+        z_vec = iframe['z']
+        # Create 4x4 transformation matrix
+        transform_matrix = [
+            [x_vec[0], y_vec[0], z_vec[0], origin[0]],
+            [x_vec[1], y_vec[1], z_vec[1], origin[1]],
+            [x_vec[2], y_vec[2], z_vec[2], origin[2]],
+            [0.0, 0.0, 0.0, 1.0]
+        ]
+        # Convert to Rhino Transform
+        XForm = Rhino.Geometry.Transform.Identity
+        XForm.M00 = transform_matrix[0][0]
+        XForm.M01 = transform_matrix[0][1]
+        XForm.M02 = transform_matrix[0][2]
+        XForm.M03 = transform_matrix[0][3]
+        XForm.M10 = transform_matrix[1][0]
+        XForm.M11 = transform_matrix[1][1]
+        XForm.M12 = transform_matrix[1][2]
+        XForm.M13 = transform_matrix[1][3]
+        XForm.M20 = transform_matrix[2][0]
+        XForm.M21 = transform_matrix[2][1]
+        XForm.M22 = transform_matrix[2][2]
+        XForm.M23 = transform_matrix[2][3]
+        return XForm
 
     def RunScript(self, Input, Detailed: bool):
         # Initialize param descriptions (this has to be done in RunScript)
@@ -390,11 +425,22 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = msg
             return
 
+        # Set up output trees and results tuple
+        GeometryData = Grasshopper.DataTree[System.Object]()
+        GeometryType = Grasshopper.DataTree[str]()
+        ComponentID = Grasshopper.DataTree[str]()
+        __Results = (GeometryData, GeometryType, ComponentID)
+
         try:
             self.Component.Message = 'Processing input...'
 
-            # Extract component ID from input
-            component_id = self.extract_component_id(Input)
+            # Extract component data and ID from input
+            component_data = self.extract_component_data(Input)
+            if component_data:
+                component_id = self.extract_component_id(component_data)
+            else:
+                component_id = self.extract_component_id(Input)
+
             if not component_id:
                 msg = 'Could not extract component ID from input.'
                 self._addError(msg)
@@ -422,13 +468,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     msg = f'No geometry available for component {component_id}'
                     self._addError(msg)
                     self.Component.Message = msg
-                    return
-
-            # Set up output trees and results tuple
-            GeometryData = Grasshopper.DataTree[System.Object]()
-            GeometryType = Grasshopper.DataTree[str]()
-            ComponentID = Grasshopper.DataTree[str]()
-            __Results = (GeometryData, GeometryType, ComponentID)
+                    return __Results
 
             # Create datatree paths
             ghp = Grasshopper.Kernel.Data.GH_Path(0)
@@ -438,18 +478,34 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                 # Convert OBJ to mesh
                 mesh = self.convert_obj_to_mesh(geometry_data['data'])
                 if mesh:
+                    if component_data:
+                        xform = self.iframe_to_xform(component_data['iframe'])
+                        mesh.Transform(xform)
+                    else:
+                        self._addWarning(
+                            'No transformation applied, '
+                            'input is just an ID'
+                        )
                     GeometryData.Add(mesh, ghp)
                 else:
                     self._addError('Failed to convert OBJ to mesh')
-                    return
+                    return __Results
             else:
                 # Construct primitive geometry
                 primitive_geometry = self.construct_primitive_geometry(geometry_data['data'])
                 if primitive_geometry:
+                    if component_data:
+                        xform = self.iframe_to_xform(component_data['iframe'])
+                        primitive_geometry.Transform(xform)
+                    else:
+                        self._addWarning(
+                            'No transformation applied, '
+                            'input is just an ID'
+                        )
                     GeometryData.Add(primitive_geometry, ghp)
                 else:
                     self._addError('Failed to construct primitive geometry')
-                    return
+                    return __Results
 
             GeometryType.Add(geometry_data['type'], ghp)
             ComponentID.Add(component_id, ghp)
@@ -485,9 +541,4 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             self._addError(msg)
             self.Component.Message = msg
 
-        # Return empty results if there was an error
-        GeometryData = Grasshopper.DataTree[rg.GeometryBase]()
-        GeometryType = Grasshopper.DataTree[str]()
-        ComponentID = Grasshopper.DataTree[str]()
-        __Results = (GeometryData, GeometryType, ComponentID)
         return __Results

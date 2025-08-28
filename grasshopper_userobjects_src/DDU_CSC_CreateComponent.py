@@ -449,6 +449,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
             COMPDATA = {
                 '_id': ComponentID,
+                'name': f'Component ({Type}) made from {Material}',
                 'type': Type,
                 'material': Material,
                 'created': current_time,
