@@ -64,9 +64,6 @@ async def lifespan(app: FastAPI):
     await app.mongodb_users.create_index('email', unique=True)
     await app.mongodb_users.create_index('username', unique=True)
 
-    # Create unique index on component _id field to prevent duplicates
-    await app.mongodb_components.create_index('_id', unique=True)
-
     # --- Directories ---------------------------------------------------------
     app.component_preview_dir = get_preview_directory(_CONFIGFILE)
     app.component_geometry_dir = get_geometry_directory(_CONFIGFILE)
