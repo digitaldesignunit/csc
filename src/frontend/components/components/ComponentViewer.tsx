@@ -305,6 +305,22 @@ function VisualizeComponent({
   geometryMode: GeometryMode
 }) {
   if (!component_data.geometry) return null
+  
+  // Infer visualization type based on geometry content rather than just type field
+  const hasExtrusion = component_data.geometry.extrusion && 
+                       component_data.geometry.extrusion.profile && 
+                       component_data.geometry.extrusion.height
+  const hasMesh = component_data.geometry.mesh && 
+                  component_data.geometry.mesh.v && 
+                  component_data.geometry.mesh.f
+  
+  if (hasExtrusion) {
+    return <VisualizeSheet component_data={component_data} />
+  } else if (hasMesh) {
+    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} />
+  }
+  
+  // Fallback to type-based logic if geometry inference fails
   if (component_data.type === 'sheet') {
     return <VisualizeSheet component_data={component_data} />
   } else {
@@ -312,89 +328,12 @@ function VisualizeComponent({
   }
 }
 
-/** 
- * BoundingBoxMesh
- */
-const BoundingBoxMesh = React.memo(({
-  component_data,
-  show,
-}: {
-  component_data: ComponentData
-  show: boolean
-}) => {
-  // Call ALL hooks FIRST, before any conditional logic
-  const bbx_geometry = useMemo(() => {
-    if (!component_data.bbx || !Array.isArray(component_data.bbx) || component_data.bbx.length < 3) {
-      return null
-    }
-    
-    const bbx = component_data.bbx
-    const hasValidBbx = typeof bbx[0] === 'number' && typeof bbx[1] === 'number' && typeof bbx[2] === 'number'
-    
-    if (!hasValidBbx) {
-      return null
-    }
-    
-    const sizeX = bbx[0] * scale
-    const sizeY = bbx[2] * scale
-    const sizeZ = bbx[1] * scale
-    
-    return new THREE.BoxGeometry(sizeX, sizeY, sizeZ)
-  }, [component_data.bbx])
-  
-  const bbx_material = useMemo(() => {
-    return new THREE.MeshBasicMaterial({
-      color: 0xff0000,
-      transparent: true,
-      opacity: 0.2,
-    })
-  }, [])
-  
-  const bbx_edge_geometry = useMemo(() => {
-    if (!bbx_geometry) return null
-    return new THREE.EdgesGeometry(bbx_geometry)
-  }, [bbx_geometry])
-  
-  const bbx_edge_material = useMemo(() => {
-    return new THREE.LineBasicMaterial({ color: 0x000000 })
-  }, [])
-
-  // NOW handle all the conditional logic and early returns
-  if (!component_data.bbx || !Array.isArray(component_data.bbx) || component_data.bbx.length < 3) {
-    console.warn('Invalid bounding box data in ComponentViewer:', component_data.bbx)
-    return null
-  }
-  
-  const bbx = component_data.bbx
-  const hasValidBbx = typeof bbx[0] === 'number' && typeof bbx[1] === 'number' && typeof bbx[2] === 'number'
-  
-  if (!hasValidBbx) {
-    console.warn('Non-numeric bounding box values in ComponentViewer:', bbx)
-    return null
-  }
-  
-  if (!show) return null
-  
-  if (!bbx_geometry || !bbx_edge_geometry) {
-    return null
-  }
-
-  return (
-    <>
-      <mesh geometry={bbx_geometry} material={bbx_material} />
-      <lineSegments geometry={bbx_edge_geometry} material={bbx_edge_material} />
-    </>
-  )
-})
-BoundingBoxMesh.displayName = 'BoundingBoxMesh'
-
 /**
  * ComponentViewer
  */
 export default function ComponentViewer({ component_data }: { component_data: ComponentData }) {
   // Call ALL hooks FIRST, unconditionally
   const [geometryMode, setGeometryMode] = useState<GeometryMode>('primitive')
-  const [showBoundingBox, setShowBoundingBox] = useState(false)
 
   const isSheet = component_data.type === 'sheet'
 
@@ -427,16 +366,6 @@ export default function ComponentViewer({ component_data }: { component_data: Co
               <option value="detailed">Detailed</option>
             </select>
           </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="bboxCheckbox"
-              checked={showBoundingBox}
-              onChange={(e) => setShowBoundingBox(e.target.checked)}
-            />
-            <label htmlFor="bboxCheckbox" className="text-xs sm:text-sm">Display BoundingBox</label>
-          </div>
         </div>
 
         <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
@@ -446,7 +375,6 @@ export default function ComponentViewer({ component_data }: { component_data: Co
 
           <Bounds fit clip observe margin={1.2} maxDuration={1}>
             <VisualizeComponent component_data={component_data} geometryMode={geometryMode} />
-            <BoundingBoxMesh component_data={component_data} show={showBoundingBox} />
           </Bounds>
 
           <axesHelper args={[0.1]} />
