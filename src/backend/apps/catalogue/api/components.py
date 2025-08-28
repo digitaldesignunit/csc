@@ -288,7 +288,7 @@ async def count_components(
 
 # ADD COMPONENT ROUTES --------------------------------------------------------
 
-@router.post('/', summary='Add a new component')
+@router.post('/components/add/', summary='Add a new component')
 async def create_component(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
