@@ -18,6 +18,7 @@ export const config = {
   matcher: [
     '/components/:path*',   // protect your pages
     '/dashboard/:path*',    // protect the dashboard too
+    '/admin/:path*',        // protect admin routes
     '/api/backend/:path*',  // protect the catch-all proxy too
   ],
 }

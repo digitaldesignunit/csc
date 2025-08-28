@@ -1,0 +1,335 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { CheckCircle, Package, Shield, Eye, ChevronDown, ChevronUp } from 'lucide-react'
+import { ComponentModel } from '@/src/generated/ComponentModel'
+import ComponentViewer from '@/components/components/ComponentViewer'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { ComponentData } from '@/components/common/models'
+
+export default function AdminPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const [components, setComponents] = useState<ComponentModel[]>([])
+  const [loading, setLoading] = useState(true)
+  const [validating, setValidating] = useState<string | null>(null)
+  const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set())
+  const [componentData, setComponentData] = useState<Record<string, ComponentData>>({})
+  const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(new Set())
+
+  // Redirect non-admin users
+  useEffect(() => {
+    if (status === 'loading') return
+    
+    if (!session?.user || session.user.role !== 'admin') {
+      router.push('/')
+    }
+  }, [session, status, router])
+
+  // Fetch unvalidated components
+  useEffect(() => {
+    if (session?.user?.role === 'admin') {
+      fetchUnvalidatedComponents()
+    }
+  }, [session])
+
+  const fetchUnvalidatedComponents = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/backend/shallowcomponents?validated=-1&size=100')
+      if (response.ok) {
+        const data = await response.json()
+        setComponents(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch components:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const validateComponent = async (componentId: string) => {
+    try {
+      setValidating(componentId)
+      const response = await fetch(`/api/backend/validate/${componentId}`, {
+        method: 'GET',
+      })
+      
+      if (response.ok) {
+        // Remove the validated component from the list
+        setComponents(prev => prev.filter(c => c._id !== componentId))
+      } else {
+        console.error('Failed to validate component')
+      }
+    } catch (error) {
+      console.error('Error validating component:', error)
+    } finally {
+      setValidating(null)
+    }
+  }
+
+  const togglePreview = async (componentId: string) => {
+    setExpandedPreviews(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(componentId)) {
+        newSet.delete(componentId)
+        return newSet
+      } else {
+        newSet.add(componentId)
+        return newSet
+      }
+    })
+
+    // If expanding and we don't have the data yet, fetch it
+    if (!expandedPreviews.has(componentId) && !componentData[componentId]) {
+      setLoadingPreviews(prev => new Set(prev).add(componentId))
+      try {
+        const response = await fetch(`/api/backend/components/${componentId}`)
+        if (response.ok) {
+          const data = await response.json()
+          setComponentData(prev => ({ ...prev, [componentId]: data }))
+        }
+      } catch (error) {
+        console.error('Failed to fetch component data:', error)
+      } finally {
+        setLoadingPreviews(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(componentId)
+          return newSet
+        })
+      }
+    }
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!session?.user || session.user.role !== 'admin') {
+    return null // Will redirect
+  }
+
+  return (
+    <div className="container mx-auto p-6">
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <Shield className="h-8 w-8 text-primary" />
+          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        </div>
+        <p className="text-muted-foreground">
+          Manage component validation and system administration
+        </p>
+      </div>
+
+      <div className="grid gap-6">
+        {/* Component Validation Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Component Validation
+            </CardTitle>
+            <CardDescription>
+              Review and validate pending components before they become publicly available
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            ) : components.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+                <p className="text-lg font-medium">All components are validated!</p>
+                <p>No pending components require validation.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {components.length} component{components.length !== 1 ? 's' : ''} pending validation
+                  </p>
+                  <Button
+                    onClick={fetchUnvalidatedComponents}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Refresh
+                  </Button>
+                </div>
+                
+                <div className="grid gap-4">
+                  {components.map((component) => (
+                    <div
+                      key={component._id}
+                      className="border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between p-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="font-medium">
+                              {(typeof component.name === 'string' && component.name) || `Component ${component._id?.slice(0, 8)}`}
+                            </h3>
+                            <Badge variant="secondary">{component.type}</Badge>
+                            <Badge variant="outline">{component.material}</Badge>
+                            {component.complexity !== undefined && 
+                             component.complexity !== null && 
+                             typeof component.complexity === 'number' && (
+                              <Badge variant="outline">Complexity: {component.complexity}</Badge>
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground space-y-1">
+                            <p>ID: {component._id}</p>
+                            <p>Created: {new Date(component.created).toLocaleDateString()}</p>
+                            <p>Fragment: {component.fragment ? 'Yes' : 'No'}</p>
+                            <p>Assembly: {component.assembly ? 'Yes' : 'No'}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 ml-4">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  onClick={() => togglePreview(component._id!)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex items-center gap-2"
+                                >
+                                  {loadingPreviews.has(component._id!) ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                                  ) : (
+                                    <Eye className="h-4 w-4" />
+                                  )}
+                                  {expandedPreviews.has(component._id!) ? (
+                                    <>
+                                      <ChevronUp className="h-4 w-4" />
+                                      Hide
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ChevronDown className="h-4 w-4" />
+                                      Preview
+                                    </>
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Preview 3D geometry and component details</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <Button
+                            onClick={() => validateComponent(component._id!)}
+                            disabled={validating === component._id}
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            {validating === component._id ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                              <>
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Validate
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Expandable Preview Section */}
+                      {expandedPreviews.has(component._id!) && (
+                        <div className="p-4 bg-muted/30 rounded-b-lg border-t">
+                          <div className="mb-3">
+                            <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                              Component Preview - {(typeof component.name === 'string' && component.name) || `Component ${component._id?.slice(0, 8)}`}
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                              Interactive 3D view with orbit controls. Use mouse to rotate, scroll to zoom.
+                            </p>
+                          </div>
+                          <div className="h-[400px] w-full">
+                            {loadingPreviews.has(component._id!) ? (
+                              <div className="flex items-center justify-center h-full">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                              </div>
+                            ) : componentData[component._id!] && component._id ? (
+                              <ComponentViewer 
+                                component_data={componentData[component._id]}
+                              />
+                            ) : (
+                              <div className="flex items-center justify-center h-full text-muted-foreground">
+                                Failed to load component data
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Admin Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Pending Validation
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{components.length}</div>
+              <p className="text-xs text-muted-foreground">
+                Components awaiting review
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total Components
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">-</div>
+              <p className="text-xs text-muted-foreground">
+                All components in system
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Validated Today
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">-</div>
+              <p className="text-xs text-muted-foreground">
+                Components validated today
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}

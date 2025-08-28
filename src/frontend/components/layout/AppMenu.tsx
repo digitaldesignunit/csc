@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Home, Package, Search, Palette, Award, FileText, User } from 'lucide-react'
+import { useSession } from 'next-auth/react'
+import { Home, Package, Search, Palette, Award, FileText, User, Shield } from 'lucide-react'
 
 export default function AppMenu() {
   const router = useRouter()
+  const { data: session } = useSession()
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
@@ -75,6 +77,24 @@ export default function AppMenu() {
           </div>
         </div>
       </div>
+
+      {/* Admin Navigation - Only visible to admin users */}
+      {session?.user?.role === 'admin' && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
+            Admin
+          </h3>
+          <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
+            <div
+              onClick={() => handleNavigation('/admin')}
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            >
+              <Shield className="h-4 w-4" />
+              Admin Dashboard
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Misc Navigation */}
       <div className="space-y-2">
