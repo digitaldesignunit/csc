@@ -64,6 +64,9 @@ async def lifespan(app: FastAPI):
     await app.mongodb_users.create_index('email', unique=True)
     await app.mongodb_users.create_index('username', unique=True)
 
+    # Create unique index on component _id field to prevent duplicates
+    await app.mongodb_components.create_index('_id', unique=True)
+
     # --- Directories ---------------------------------------------------------
     app.component_preview_dir = get_preview_directory(_CONFIGFILE)
     app.component_geometry_dir = get_geometry_directory(_CONFIGFILE)
@@ -81,7 +84,7 @@ app = FastAPI(
         'Backend API for Catalogue of Second Chances. '
         'FastAPI + MongoDB (async).'
     ),
-    version='0.2.6.0',
+    version='0.2.7.0',
     lifespan=lifespan,
 )
 

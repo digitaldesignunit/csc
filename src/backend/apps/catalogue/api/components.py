@@ -296,9 +296,35 @@ async def create_component(
 ):
     doc = jsonable_encoder(component, by_alias=True)
     coll = await get_components_col(request)
-    res = await coll.insert_one(doc)
-    created = await coll.find_one({'_id': res.inserted_id})
-    return JSONResponse(status_code=status.HTTP_201_CREATED, content=created)
+    # Check if component with this ID already exists
+    existing_component = await coll.find_one({'_id': doc['_id']})
+    if existing_component:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(f'Component with ID {doc["_id"]} '
+                    'already exists')
+        )
+    try:
+        res = await coll.insert_one(doc)
+        created = await coll.find_one({'_id': res.inserted_id})
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content=created)
+    except PyMongoError as e:
+        # Handle MongoDB errors, including duplicate key errors
+        error_str = str(e).lower()
+        if ('duplicate key error' in error_str or
+                'duplicate key' in error_str):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(f'Component with ID {doc["_id"]} '
+                        'already exists')
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f'Database error: {str(e)}'
+            )
 
 
 # VALIDATION ROUTES -----------------------------------------------------------
