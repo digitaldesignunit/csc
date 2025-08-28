@@ -152,7 +152,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             ID = Grasshopper.DataTree[System.Object]()
             Type = Grasshopper.DataTree[System.Object]()
             Material = Grasshopper.DataTree[System.Object]()
-            Geometry = Grasshopper.DataTree[System.Object]()
+            PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
             Color = Grasshopper.DataTree[System.Object]()
             BoundingBox = Grasshopper.DataTree[System.Object]()
             Descriptors = Grasshopper.DataTree[System.Object]()
@@ -160,7 +160,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 ID,
                 Type,
                 Material,
-                Geometry,
+                PrimitiveGeometry,
                 Color,
                 BoundingBox,
                 Descriptors)
@@ -236,7 +236,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                                 comp
                             )
                             # add to datatree
-                            Geometry.Add(component_geometry, ghp)
+                            PrimitiveGeometry.Add(component_geometry, ghp)
 
                         # create system color from rgb values
                         color = self.ComponentColor(json_comp)
@@ -289,7 +289,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             ID = Grasshopper.DataTree[System.Object]()
             Type = Grasshopper.DataTree[System.Object]()
             Material = Grasshopper.DataTree[System.Object]()
-            Geometry = Grasshopper.DataTree[System.Object]()
+            PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
             Color = Grasshopper.DataTree[System.Object]()
             BoundingBox = Grasshopper.DataTree[System.Object]()
             Descriptors = Grasshopper.DataTree[System.Object]()
@@ -297,7 +297,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 ID,
                 Type,
                 Material,
-                Geometry,
+                PrimitiveGeometry,
                 Color,
                 BoundingBox,
                 Descriptors)

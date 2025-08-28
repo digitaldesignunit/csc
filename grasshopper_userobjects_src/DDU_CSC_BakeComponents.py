@@ -26,7 +26,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250822
+    Version: 250828
     """
 
     def __init__(self):
@@ -162,42 +162,18 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                         Rhino.Geometry.Plane.WorldXY,
                         iplane)
 
-                    # create tag
-                    tag = Rhino.Geometry.TextEntity()
-                    tag.Text = comp_id
-                    tag.Plane = iplane
-                    # specify height in millimeters
-                    usf = Rhino.RhinoMath.UnitScale(
-                        Rhino.UnitSystem.Millimeters,
-                        sc.doc.ModelUnitSystem)
-                    tag.TextHeight = 10.0 * usf
-                    tag.Justification = (
-                        Rhino.Geometry.TextJustification.MiddleCenter
-                    )
-                    id_tag = sc.doc.Objects.Add(tag)
-                    geo_ids = [id_tag]
-
                     # create component geometry
+                    geo_ids = []
                     for key in sorted(json_comp['geometry'].keys()):
                         if key == 'extrusion':
-                            pl = self.ComponentExtrusionProfile(json_comp)
                             xtr = self.ComponentExtrusion(json_comp)
-                            pl.Transform(xform)
                             xtr.Transform(xform)
-                            geo_ids.append(
-                                sc.doc.Objects.Add(pl.ToPolylineCurve()))
                             geo_ids.append(sc.doc.Objects.Add(xtr))
                         elif key == 'mesh':
                             mesh = self.ComponentMesh(json_comp)
                             # transform to iframe
                             mesh.Transform(xform)
                             geo_ids.append(sc.doc.Objects.Add(mesh))
-                        elif key == 'polyline':
-                            pl = self.ComponentExtrusionProfile(json_comp)
-                            # transform to iframe
-                            pl.Transform(xform)
-                            geo_ids.append(
-                                sc.doc.Objects.Add(pl.ToPolylineCurve()))
                         else:
                             msg = (f'Missing implementation for geometry '
                                    f'of type \'{key}\'!')
@@ -215,25 +191,20 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                     if not rs.IsLayer(layer):
                         rs.AddLayer(layer, self.ComponentColor(json_comp))
 
-                    # set layer to objects
+                    # set layer and add component data as user strings
                     for gid in geo_ids:
                         rs.ObjectLayer(gid, layer)
-                        # set user data
+                        # set component data as user string
                         rs.SetUserText(
                             gid,
-                            'componentdata',
+                            'csc_component',
                             ComponentData[i])
 
-                    # set user data
-                    rs.SetUserText(
-                        id_tag,
-                        'componentdata',
-                        ComponentData[i])
-
                     # create group
-                    _ = sc.doc.Groups.Add(
-                        comp_id,
-                        geo_ids)
+                    if len(geo_ids) > 1:
+                        _ = sc.doc.Groups.Add(
+                            comp_id,
+                            geo_ids)
 
                     baked_count += 1
                     self._addRemark(
