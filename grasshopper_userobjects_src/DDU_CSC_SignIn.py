@@ -10,6 +10,7 @@ import time
 import json
 import base64
 from threading import RLock
+import uuid
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import requests
@@ -115,8 +116,9 @@ class _AuthCore(object):
             self,
             path,
             json_body=None,
+            files=None,
             extra_headers=None,
-            timeout=20):
+            timeout=60):
         if not self.is_valid():
             raise RuntimeError(
                 'Access token missing or expired. Please sign in again.'
@@ -124,19 +126,43 @@ class _AuthCore(object):
         headers = self.auth_header()
         if extra_headers:
             headers.update(extra_headers)
-        return requests.post(
-            self.base_url + path,
-            json=json_body,
-            headers=headers,
-            timeout=timeout
-        )
+        # Handle file uploads vs JSON requests
+        if files is not None:
+            # For file uploads, don't set Content-Type header
+            # (let requests handle it)
+            # and use data instead of json
+            return requests.post(
+                self.base_url + path,
+                files=files,
+                headers=headers,
+                timeout=timeout
+            )
+        else:
+            # For JSON requests, use json parameter
+            return requests.post(
+                self.base_url + path,
+                json=json_body,
+                headers=headers,
+                timeout=timeout
+            )
+
+    def validate_uuid(self, uuid_to_test: str, version: int = 4):
+        """
+        Check if uuid_to_test is a valid UUID.
+        Returns True if uuid_to_test is a valid UUID, otherwise False.
+        """
+        try:
+            uuid_obj = uuid.UUID(uuid_to_test, version=version)
+        except ValueError:
+            return False
+        return str(uuid_obj) == uuid_to_test
 
 
 class CSC_SignIn(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250822
+    Version: 250902
     """
 
     def __init__(self):
@@ -172,7 +198,8 @@ class CSC_SignIn(Grasshopper.Kernel.GH_ScriptInstance):
         self.InputParams[0].Description = 'Your Username or E-Mail'
         self.InputParams[1].Description = 'Your password'
         self.InputParams[2].Description = (
-            'Refresh toggle, press when your token expired')
+            'Refresh toggle, press when your token expired'
+        )
 
         # Get or create AuthCore instance
         auth_core = self.get_auth_core_from_sticky()
