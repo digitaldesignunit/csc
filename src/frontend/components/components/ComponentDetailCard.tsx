@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { componentBounds, componentColorString, hexComponentColor } from '@/lib/utils'
+import { componentBounds, componentColorString, hexComponentColor, generateGrasshopperPanelXML } from '@/lib/utils'
 import { ComponentData } from '@/components/common/models'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import ComponentDetailMap from './ComponentDetailMap'
-import { Copy, Check } from 'lucide-react'
+import { Copy, Check, FileText } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 
 // Type for session user with extended properties
@@ -27,6 +27,7 @@ export default function ComponentDetailCard({
   component_data: ComponentData
 }) {
   const [copied, setCopied] = useState(false)
+  const [grasshopperCopied, setGrasshopperCopied] = useState(false)
   const { data: session } = useSession()
 
   const handleCopyToClipboard = async () => {
@@ -36,6 +37,17 @@ export default function ComponentDetailCard({
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       console.error('Failed to copy to clipboard:', err)
+    }
+  }
+
+  const handleCopyAsGrasshopperPanel = async () => {
+    try {
+      const grasshopperXML = generateGrasshopperPanelXML(component_data._id)
+      await navigator.clipboard.writeText(grasshopperXML)
+      setGrasshopperCopied(true)
+      setTimeout(() => setGrasshopperCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy Grasshopper panel to clipboard:', err)
     }
   }
 
@@ -111,29 +123,55 @@ export default function ComponentDetailCard({
             </div>
           </div>
           
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyToClipboard}
-                  className="h-8 w-8 p-0 flex-shrink-0 mt-6"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <div className="text-center text-sm">
-                  {copied ? 'Copied!' : 'Copy ID to clipboard'}
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="flex gap-1 mt-6">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyToClipboard}
+                    className="h-8 w-8 p-0 flex-shrink-0"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-center text-sm">
+                    {copied ? 'Copied!' : 'Copy ID to clipboard'}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyAsGrasshopperPanel}
+                    className="h-8 w-8 p-0 flex-shrink-0"
+                  >
+                    {grasshopperCopied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <FileText className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-center text-sm">
+                    {grasshopperCopied ? 'Copied!' : 'Copy ID as Grasshopper Panel to clipboard'}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
       </CardHeader>
 
