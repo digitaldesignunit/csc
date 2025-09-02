@@ -26,7 +26,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250828
+    Version: 250902
     """
 
     def __init__(self):
@@ -54,7 +54,6 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
         Returns a list of tuples: (object, component_data, path)
         """
         objects_with_component = []
-        
         try:
             # Get all objects in the document
             all_objects = rs.AllObjects()
@@ -67,32 +66,36 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                     # Look for 'csc_component' userkey
                     component_data = None
                     if usr_txt_type == 1:
-                        component_data = rs.GetUserText(obj, 'csc_component', False)
+                        component_data = rs.GetUserText(
+                            obj, 'csc_component', False)
                     elif usr_txt_type == 2:
-                        component_data = rs.GetUserText(obj, 'csc_component', True)
+                        component_data = rs.GetUserText(
+                            obj, 'csc_component', True)
                     elif usr_txt_type == 3:
-                        component_data = rs.GetUserText(obj, 'csc_component', False)
+                        component_data = rs.GetUserText(
+                            obj, 'csc_component', False)
                         if not component_data:
-                            component_data = rs.GetUserText(obj, 'csc_component', True)
+                            component_data = rs.GetUserText(
+                                obj, 'csc_component', True)
                     if component_data:
                         try:
                             # Parse the JSON data
                             parsed_data = json.loads(component_data)
                             # Get the object's path for organization
                             obj_path = self.get_object_path(obj, doc)
-                            objects_with_component.append((obj, parsed_data, obj_path))
+                            objects_with_component.append(
+                                (obj, parsed_data, obj_path))
                         except json.JSONDecodeError as e:
                             self._addWarning(
                                 f'Invalid JSON in csc_component userstring '
                                 f'for object {obj.Id}: {str(e)}'
                             )
                             continue
-                            
         except Exception as e:
             self._addError(
                 f'Error searching for objects with csc_component: {str(e)}'
             )
-            
+        # return results
         return objects_with_component
 
     def get_object_path(self, obj, doc):
@@ -133,23 +136,20 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                         x_axis = bbox.XAxis
                         y_axis = bbox.YAxis
                         z_axis = bbox.ZAxis
-                        
                         # Update the iframe in component data
                         if 'iframe' not in component_data:
                             component_data['iframe'] = {}
-                            
                         component_data['iframe'].update({
                             'o': [center.X, center.Y, center.Z],
                             'x': [x_axis.X, x_axis.Y, x_axis.Z],
                             'y': [y_axis.X, y_axis.Y, y_axis.Z],
                             'z': [z_axis.X, z_axis.Y, z_axis.Z]
                         })
-                        
                         return component_data
-                        
         except Exception as e:
-            self._addWarning(f'Error updating frame for object {obj.Id}: {str(e)}')
-            
+            self._addWarning(
+                f'Error updating frame for object {obj.Id}: {str(e)}'
+            )
         return component_data
 
     def RunScript(self, Sync: bool):
@@ -173,49 +173,53 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
 
         try:
             self.Component.Message = 'Searching for components in document...'
-            
             # Find all objects with csc_component userkey
-            objects_with_component = self.find_objects_with_csc_component(sc.doc)
-            
+            objects_with_component = self.find_objects_with_csc_component(
+                sc.doc
+            )
             if not objects_with_component:
                 msg = 'No components found in document!'
                 self._addWarning(msg)
                 self.Component.Message = msg
-                
                 # Return empty results
                 LAST_SYNC = Grasshopper.DataTree[System.Object]()
                 __Results = (LAST_SYNC,)
                 return __Results
-
             # Create output datatree
             LAST_SYNC = Grasshopper.DataTree[System.Object]()
-            
             # Process each component
             for i, (obj, component_data, obj_path) in enumerate(objects_with_component):
                 try:
-                    # Update the component's frame based on current object position
-                    updated_data = self.update_component_frame(obj, component_data)
-                    
+                    # Update the component's frame
+                    # based on current object position
+                    updated_data = self.update_component_frame(
+                        obj, component_data
+                    )
                     # Create datatree path
                     ghp = Grasshopper.Kernel.Data.GH_Path(i)
-                    
                     # Add updated component data to datatree
                     LAST_SYNC.Add(json.dumps(updated_data), ghp)
-                    
                     self._addRemark(
-                        f'Updated component {component_data.get("_id", "unknown")} from {obj_path}'
+                        'Updated component '
+                        f'{component_data.get("_id", "unknown")} '
+                        f'from {obj_path}'
                     )
-                    
                 except Exception as e:
-                    msg = f'Error processing component from {obj_path}: {str(e)}'
+                    msg = (
+                        'Error processing component '
+                        f'from {obj_path}: {str(e)}'
+                    )
                     self._addWarning(msg)
                     continue
 
             # Update success message
             if LAST_SYNC.DataCount > 0:
-                self.Component.Message = f'Synced {LAST_SYNC.DataCount} component(s)'
+                self.Component.Message = (
+                    f'Synced {LAST_SYNC.DataCount} component(s)'
+                )
                 self._addRemark(
-                    f'Successfully synced {LAST_SYNC.DataCount} components with document'
+                    f'Successfully synced {LAST_SYNC.DataCount} '
+                    'components with document'
                 )
             else:
                 self.Component.Message = 'No components synced'
