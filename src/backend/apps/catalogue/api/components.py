@@ -3,7 +3,9 @@ import os
 from typing import Annotated, Optional
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
+from fastapi import (
+    APIRouter, Depends, HTTPException, Request, status, Query, UploadFile, File
+)
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.encoders import jsonable_encoder
 from pymongo.errors import PyMongoError
@@ -631,6 +633,144 @@ async def get_component_descriptors(
     if not doc:
         raise HTTPException(status_code=404, detail='Component not found')
     return doc
+
+
+# ADD GEOMETRY ROUTES ---------------------------------------------------------
+
+@router.post(
+    '/components/{component_id}/geometry/add_reduced',
+    summary='Add reduced geometry to existing component'
+)
+async def add_reduced_geometry(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    component_id: str,
+    mesh_file: UploadFile = File(..., description='Reduced mesh OBJ file'),
+    material_file: UploadFile = File(
+        ..., description='Reduced material MTL file'
+    ),
+    texture_file: Optional[UploadFile] = File(
+        None, description='Texture JPG file'
+    ),
+):
+    """
+    Add reduced geometry files to an existing component.
+    Accepts mesh_reduced.obj, mesh_reduced.mtl, and optionally texture.jpg.
+    """
+    # Check if component exists
+    coll = await get_components_col(request)
+    component = await coll.find_one({'_id': component_id})
+    if not component:
+        raise HTTPException(404, 'Component not found')
+
+    # Validate file types
+    if not mesh_file.filename.endswith('.obj'):
+        raise HTTPException(400, 'Mesh file must be a .obj file')
+    if not material_file.filename.endswith('.mtl'):
+        raise HTTPException(400, 'Material file must be a .mtl file')
+    if texture_file and not texture_file.filename.endswith('.jpg'):
+        raise HTTPException(400, 'Texture file must be a .jpg file')
+
+    # Create component geometry directory
+    base_dir = request.app.component_geometry_dir
+    component_dir = os.path.join(base_dir, component_id)
+    os.makedirs(component_dir, exist_ok=True)
+
+    try:
+        # Save reduced mesh file
+        mesh_path = os.path.join(component_dir, 'mesh_reduced.obj')
+        with open(mesh_path, 'wb') as f:
+            content = await mesh_file.read()
+            f.write(content)
+
+        # Save reduced material file
+        mtl_path = os.path.join(component_dir, 'mesh_reduced.mtl')
+        with open(mtl_path, 'wb') as f:
+            content = await material_file.read()
+            f.write(content)
+
+        # Save texture file if provided
+        if texture_file:
+            texture_path = os.path.join(component_dir, 'texture.jpg')
+            with open(texture_path, 'wb') as f:
+                content = await texture_file.read()
+                f.write(content)
+
+        return JSONResponse(
+            status_code=200,
+            content={'message': 'Reduced geometry files uploaded successfully'}
+        )
+    except Exception as e:
+        raise HTTPException(500, f'Error saving files: {str(e)}')
+
+
+@router.post(
+    '/components/{component_id}/geometry/add_detailed',
+    summary='Add detailed geometry to existing component'
+)
+async def add_detailed_geometry(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    component_id: str,
+    mesh_file: UploadFile = File(..., description='Detailed mesh OBJ file'),
+    material_file: UploadFile = File(
+        ..., description='Detailed material MTL file'
+    ),
+    texture_file: Optional[UploadFile] = File(
+        None, description='Texture JPG file'
+    ),
+):
+    """
+    Add detailed geometry files to an existing component.
+    Accepts mesh.obj, mesh.mtl, and optionally texture.jpg.
+    """
+    # Check if component exists
+    coll = await get_components_col(request)
+    component = await coll.find_one({'_id': component_id})
+    if not component:
+        raise HTTPException(404, 'Component not found')
+
+    # Validate file types
+    if not mesh_file.filename.endswith('.obj'):
+        raise HTTPException(400, 'Mesh file must be a .obj file')
+    if not material_file.filename.endswith('.mtl'):
+        raise HTTPException(400, 'Material file must be a .mtl file')
+    if texture_file and not texture_file.filename.endswith('.jpg'):
+        raise HTTPException(400, 'Texture file must be a .jpg file')
+
+    # Create component geometry directory
+    base_dir = request.app.component_geometry_dir
+    component_dir = os.path.join(base_dir, component_id)
+    os.makedirs(component_dir, exist_ok=True)
+
+    try:
+        # Save detailed mesh file
+        mesh_path = os.path.join(component_dir, 'mesh.obj')
+        with open(mesh_path, 'wb') as f:
+            content = await mesh_file.read()
+            f.write(content)
+
+        # Save detailed material file
+        mtl_path = os.path.join(component_dir, 'mesh.mtl')
+        with open(mtl_path, 'wb') as f:
+            content = await material_file.read()
+            f.write(content)
+
+        # Save texture file if provided
+        if texture_file:
+            texture_path = os.path.join(component_dir, 'texture.jpg')
+            with open(texture_path, 'wb') as f:
+                content = await texture_file.read()
+                f.write(content)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                'message': 'Detailed geometry files uploaded successfully'
+            }
+        )
+    except Exception as e:
+        raise HTTPException(500, f'Error saving files: {str(e)}')
 
 
 # DELETE: ADMIN ONLY ----------------------------------------------------------
