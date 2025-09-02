@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Home, Package, Search, Palette, Award, FileText, User, Shield } from 'lucide-react'
+import { Home, Package, Search, Palette, Award, FileText, User, Shield, QrCode } from 'lucide-react'
 
 export default function AppMenu() {
   const router = useRouter()
@@ -67,6 +67,13 @@ export default function AppMenu() {
           >
             <Search className="h-4 w-4" />
             Find Component
+          </div>
+          <div
+            onClick={() => handleNavigation('/identify')}
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+          >
+            <QrCode className="h-4 w-4" />
+            Identify Component
           </div>
           <div
             onClick={() => handleNavigation('/designs')}

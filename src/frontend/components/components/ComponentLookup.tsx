@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, MutableRefObject } from 'react'
+import React, { useState, useRef, MutableRefObject, useEffect } from 'react'
 import { Html5Qrcode, Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { Button } from '@/components/ui/button'
 import { CardContent, CardHeader } from '@/components/ui/card'
@@ -39,6 +39,14 @@ const ComponentLookup: React.FC<Props> = ({ presetReferenceID }) => {
   const MSG_REF_SCANNED = 'Reference ID set.\nStart scan for comparison.'
   const MSG_CAMERA_FEED =
     'Camera Feed Placeholder.\n\nTo start comparing IDs,\neither scan or type an ID as reference.'
+
+  // Handle preset reference ID
+  useEffect(() => {
+    if (presetReferenceID && presetReferenceID === referenceID && !comparisonResult) {
+      setStatus('ok')
+      setComparisonResult(MSG_REF_SCANNED)
+    }
+  }, [presetReferenceID, referenceID, comparisonResult])
 
   const ensureInstance = () => {
     if (!html5QrCodeRef.current) {

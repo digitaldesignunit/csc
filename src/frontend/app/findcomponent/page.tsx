@@ -1,5 +1,6 @@
 import ComponentLookup from '@/components/components/ComponentLookup'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Search } from 'lucide-react'
 
 interface FindComponentProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
@@ -14,9 +15,12 @@ export default async function FindComponent({ searchParams }: FindComponentProps
     <div className='grid gap-[32px] m-2'>
       <Card>
         <CardHeader>
-          <CardTitle>Find Component</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-6 w-6" />
+            Find Component
+          </CardTitle>
           <CardDescription>
-            Use this tool to compare QR codes and find components within the physical repository.
+            Use this tool to <b>find a physical component</b> based on its <b>Component ID</b>.
           </CardDescription>
         </CardHeader>
         <CardContent className='p-1'>
