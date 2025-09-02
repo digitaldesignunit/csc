@@ -115,7 +115,7 @@ export default function ComponentDetailCard({
   return (
     <Card className="w-full overflow-x-auto">
       <CardHeader className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-3 flex-1 min-w-0 lg:max-w-md">
+        <div className="flex items-start gap-3 flex-1 min-w-0 xl:max-w-md">
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-muted-foreground mb-1">Component ID</div>
             <div className="font-mono text-sm font-medium bg-muted/50 border border-border rounded-md px-3 py-2 text-foreground break-all">
@@ -245,9 +245,9 @@ export default function ComponentDetailCard({
           </TooltipProvider>
         </div>
 
-        <div className="mb-4 flex flex-col items-start justify-between gap-4 lg:flex-row">
+        <div className="mb-4 flex flex-col items-start justify-between gap-4 xl:flex-row">
           {/* Left side metadata */}
-          <div className="w-full text-left lg:min-w-0 lg:flex-1 lg:max-w-md">
+          <div className="w-full text-left xl:min-w-0 xl:flex-1 xl:max-w-md">
             <h2 className="mb-3 text-base font-semibold text-foreground border-b border-border pb-2">Metadata</h2>
 
             <div className="space-y-3">
@@ -347,7 +347,7 @@ export default function ComponentDetailCard({
           </div>
 
           {/* Right side: small map */}
-          <div className="w-full lg:h-[200px] lg:w-[300px] lg:flex-shrink-0">
+          <div className="w-full xl:h-[200px] xl:w-[300px] xl:flex-shrink-0">
             <h2 className="mb-3 text-base font-semibold text-foreground border-b border-border pb-2">Location</h2>
             <ComponentDetailMap lat={lat} lon={lon} />
           </div>

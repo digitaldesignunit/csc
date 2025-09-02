@@ -148,13 +148,13 @@ export default function ValidationPage() {
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <Shield className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold">Validation Dashboard</h1>
+    <div className="container mx-auto p-4 sm:p-6">
+      <div className="mb-6 sm:mb-8">
+        <div className="flex items-center gap-2 sm:gap-3 mb-2">
+          <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold">Validation Dashboard</h1>
         </div>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground text-sm sm:text-base">
           Manage component validation
         </p>
       </div>
@@ -184,7 +184,7 @@ export default function ValidationPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <p className="text-sm text-muted-foreground">
                     {components.length} component{components.length !== 1 ? 's' : ''} pending validation
                   </p>
@@ -192,6 +192,7 @@ export default function ValidationPage() {
                     onClick={fetchUnvalidatedComponents}
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto"
                   >
                     Refresh
                   </Button>
@@ -203,22 +204,22 @@ export default function ValidationPage() {
                       key={component._id}
                       className="border rounded-lg hover:bg-muted/50 transition-colors"
                     >
-                      <div className="flex items-center justify-between p-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="font-medium">
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-4 gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <h3 className="font-medium text-sm sm:text-base truncate">
                               {(typeof component.name === 'string' && component.name) || `Component ${component._id?.slice(0, 8)}`}
                             </h3>
-                            <Badge variant="secondary">{component.type}</Badge>
-                            <Badge variant="outline">{component.material}</Badge>
+                            <Badge variant="secondary" className="text-xs">{component.type}</Badge>
+                            <Badge variant="outline" className="text-xs">{component.material}</Badge>
                             {component.complexity !== undefined && 
                              component.complexity !== null && 
                              typeof component.complexity === 'number' && (
-                              <Badge variant="outline">Complexity: {component.complexity}</Badge>
+                              <Badge variant="outline" className="text-xs">Complexity: {component.complexity}</Badge>
                             )}
                           </div>
-                          <div className="text-sm text-muted-foreground space-y-1">
-                            <p>ID: {component._id}</p>
+                          <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
+                            <p className="break-all">ID: {component._id}</p>
                             <p>Created: {new Date(component.created).toLocaleString('de-DE', { 
                               timeZone: 'Europe/Berlin',
                               day: '2-digit',
@@ -234,7 +235,7 @@ export default function ValidationPage() {
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-2 ml-4">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 lg:ml-4 lg:flex-shrink-0">
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -242,7 +243,7 @@ export default function ValidationPage() {
                                   onClick={() => togglePreview(component._id!)}
                                   variant="outline"
                                   size="sm"
-                                  className="flex items-center gap-2"
+                                  className="flex items-center gap-2 w-full sm:w-auto"
                                 >
                                   {loadingPreviews.has(component._id!) ? (
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
@@ -252,12 +253,12 @@ export default function ValidationPage() {
                                   {expandedPreviews.has(component._id!) ? (
                                     <>
                                       <ChevronUp className="h-4 w-4" />
-                                      Hide
+                                      <span className="hidden sm:inline">Hide</span>
                                     </>
                                   ) : (
                                     <>
                                       <ChevronDown className="h-4 w-4" />
-                                      Preview
+                                      <span className="hidden sm:inline">Preview</span>
                                     </>
                                   )}
                                 </Button>
@@ -271,14 +272,14 @@ export default function ValidationPage() {
                             onClick={() => validateComponent(component._id!)}
                             disabled={validating === component._id || deleting === component._id}
                             size="sm"
-                            className="bg-green-600 hover:bg-green-700"
+                            className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
                           >
                             {validating === component._id ? (
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                             ) : (
                               <>
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                                Validate
+                                <CheckCircle className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Validate</span>
                               </>
                             )}
                           </Button>
@@ -287,13 +288,14 @@ export default function ValidationPage() {
                             disabled={validating === component._id || deleting === component._id}
                             size="sm"
                             variant="destructive"
+                            className="w-full sm:w-auto"
                           >
                             {deleting === component._id ? (
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                             ) : (
                               <>
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
+                                <Trash2 className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Delete</span>
                               </>
                             )}
                           </Button>
@@ -302,7 +304,7 @@ export default function ValidationPage() {
                       
                       {/* Expandable Preview Section */}
                       {expandedPreviews.has(component._id!) && (
-                        <div className="p-4 bg-muted/30 rounded-b-lg border-t">
+                        <div className="p-3 sm:p-4 bg-muted/30 rounded-b-lg border-t">
                           <div className="mb-3">
                             <h4 className="text-sm font-medium text-muted-foreground mb-2">
                               Component Preview - {(typeof component.name === 'string' && component.name) || `Component ${component._id?.slice(0, 8)}`}
@@ -311,7 +313,7 @@ export default function ValidationPage() {
                               Interactive 3D view with orbit controls. Use mouse to rotate, scroll to zoom.
                             </p>
                           </div>
-                          <div className="h-[400px] w-full">
+                          <div className="h-[320px] sm:h-[400px] w-full">
                             {loadingPreviews.has(component._id!) ? (
                               <div className="flex items-center justify-center h-full">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -337,7 +339,7 @@ export default function ValidationPage() {
         </Card>
 
         {/* Admin Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">

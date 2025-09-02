@@ -58,13 +58,89 @@ type OBJLoaderWithOptional = OBJLoader & {
 
 /* ───────── External geometry/mtl loading ───────── */
 
+/**
+ * Parse vertex colors from OBJ file content
+ * Handles both 'vc' format and 'v' format with color data
+ */
+function parseVertexColorsFromOBJ(objContent: string): number[][] {
+  const vertexColors: number[][] = []
+  const lines = objContent.split('\n')
+  let vcCount = 0
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim()
+    
+    // Handle 'vc' format: vc r g b
+    if (trimmedLine.startsWith('vc ')) {
+      const parts = trimmedLine.split(/\s+/)
+      if (parts.length >= 4) {
+        const r = parseFloat(parts[1])
+        const g = parseFloat(parts[2])
+        const b = parseFloat(parts[3])
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+          // Validate that colors are in 0-1 range (normalized)
+          const isValidColor = r >= 0 && r <= 1 && g >= 0 && g <= 1 && b >= 0 && b <= 1
+          if (isValidColor) {
+            vertexColors.push([r, g, b])
+            vcCount++
+            if (vcCount <= 3) { // Log first few for debugging
+              console.log(`Parsed vc: r=${r}, g=${g}, b=${b} (normalized 0-1 range)`)
+            }
+          } else {
+            console.warn(`Invalid vertex color values (not in 0-1 range): r=${r}, g=${g}, b=${b}`)
+          }
+        }
+      }
+    }
+    // Handle 'v' format with colors: v x y z r g b
+    else if (trimmedLine.startsWith('v ') && !trimmedLine.startsWith('vt ') && !trimmedLine.startsWith('vn ')) {
+      const parts = trimmedLine.split(/\s+/)
+      if (parts.length >= 7) {
+        const r = parseFloat(parts[4])
+        const g = parseFloat(parts[5])
+        const b = parseFloat(parts[6])
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+          // Validate that colors are in 0-1 range (normalized)
+          const isValidColor = r >= 0 && r <= 1 && g >= 0 && g <= 1 && b >= 0 && b <= 1
+          if (isValidColor) {
+            vertexColors.push([r, g, b])
+          } else {
+            console.warn(`Invalid vertex color values (not in 0-1 range): r=${r}, g=${g}, b=${b}`)
+          }
+        }
+      }
+    }
+  }
+  
+  console.log(`Total vertex colors parsed: ${vertexColors.length}`)
+  return vertexColors
+}
+
+type GeometryLoadResult = {
+  success: true
+  object: THREE.Group
+} | {
+  success: false
+  error: 'not_found' | 'network_error' | 'parse_error'
+  message: string
+}
+
 async function loadExternalGeometry(
   componentId: string,
   mode: Exclude<GeometryMode, 'primitive'>
-): Promise<THREE.Group | null> {
+): Promise<GeometryLoadResult> {
   const cacheKey = `${componentId}:${mode}`
   if (externalGeometryCache.has(cacheKey)) {
-    return externalGeometryCache.get(cacheKey) ?? null
+    const cached = externalGeometryCache.get(cacheKey)
+    if (cached) {
+      return { success: true, object: cached }
+    } else {
+      return { 
+        success: false, 
+        error: 'not_found', 
+        message: `No ${mode} geometry available for this component` 
+      }
+    }
   }
 
   const geometryRoute = mode === 'reduced' ? 'geometry_reduced' : 'geometry_detailed'
@@ -74,6 +150,7 @@ async function loadExternalGeometry(
   const mtlUrl = `/api/backend/components/${componentId}/${mtlRoute}`
 
   try {
+    // Load MTL materials (should always exist)
     const mtlLoader: MTLLoaderWithOptional = new MTLLoader() as MTLLoaderWithOptional
     // Let MTLLoader resolve map_Kd/etc via our texture proxy
     const textureBase = `/api/fetch-component-texture?component_id=${encodeURIComponent(componentId)}&texture=`
@@ -90,38 +167,170 @@ async function loadExternalGeometry(
 
     const object = await objLoader.loadAsync(objUrl)
 
-    // make sure textures render correctly on modern three
+    // Check for vertex colors and handle texture/material fallback
+    let hasVertexColors = false
+    let hasTextures = false
+
     object.traverse((o) => {
       if (!isMesh(o)) return
+      
+      // Check for vertex colors in geometry
+      if (isWithGeometry(o)) {
+        const g = o.geometry
+        const colorAttribute = g.getAttribute('color')
+        if (colorAttribute) {
+          hasVertexColors = true
+        }
+        
+        if (!g.getAttribute('uv')) {
+          // no UVs present -> texture cannot display
+          console.warn('OBJ mesh has no UVs; texture cannot display', o.name)
+        }
+      }
+
+      // Check for textures in materials
       const mat = o.material
       const mats = Array.isArray(mat) ? mat : [mat]
       mats.forEach((mm) => {
         if (!isMaterial(mm)) return
         const maybeMap = (mm as unknown as { map?: unknown }).map
         if (isTexture(maybeMap)) {
+          hasTextures = true
           maybeMap.colorSpace = THREE.SRGBColorSpace
           maybeMap.needsUpdate = true
         }
       })
-      if (isWithGeometry(o)) {
-        const g = o.geometry
-        if (!g.getAttribute('uv')) {
-          // no UVs present -> texture cannot display
-          // (do not throw; just warn)
-          console.warn('OBJ mesh has no UVs; texture cannot display', o.name)
-        }
-      }
     })
+
+    // If no vertex colors were detected but we expect them, try to parse them manually
+    // This handles cases where the OBJLoader doesn't automatically parse vertex colors
+    if (!hasVertexColors && !hasTextures) {
+      console.log(`Attempting to parse vertex colors from ${mode} geometry OBJ file`)
+      
+      try {
+        // Fetch the raw OBJ content to check for vertex colors
+        const response = await fetch(objUrl, { credentials: 'include' })
+        if (response.ok) {
+          const objContent = await response.text()
+          
+          // Check if the OBJ file contains vertex colors (vc format or v with color data)
+          const hasVcFormat = objContent.includes('vc ') || /^v\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+/m.test(objContent)
+          
+          if (hasVcFormat) {
+            console.log(`Found vertex color data in ${mode} geometry OBJ file, parsing manually`)
+            
+            // Parse vertex colors from OBJ content
+            const vertexColors = parseVertexColorsFromOBJ(objContent)
+            console.log(`Parsed ${vertexColors.length} vertex colors from ${mode} geometry OBJ file`)
+            
+            if (vertexColors.length > 0) {
+              // Apply vertex colors to the geometry
+              object.traverse((o) => {
+                if (!isMesh(o)) return
+                
+                if (isWithGeometry(o)) {
+                  const g = o.geometry
+                  const positionAttribute = g.getAttribute('position')
+                  
+                  if (positionAttribute && vertexColors.length >= positionAttribute.count) {
+                    // Create color attribute from parsed vertex colors
+                    const colorArray = new Float32Array(vertexColors.length * 3)
+                    for (let i = 0; i < vertexColors.length; i++) {
+                      colorArray[i * 3] = vertexColors[i][0]     // R
+                      colorArray[i * 3 + 1] = vertexColors[i][1] // G
+                      colorArray[i * 3 + 2] = vertexColors[i][2] // B
+                    }
+                    
+                    g.setAttribute('color', new THREE.Float32BufferAttribute(colorArray, 3))
+                    hasVertexColors = true
+                    console.log(`Applied ${vertexColors.length} vertex colors to ${mode} geometry`)
+                    
+                    // Debug: Verify the color attribute was set correctly
+                    const colorAttr = g.getAttribute('color')
+                    if (colorAttr) {
+                      console.log(`Color attribute verified: count=${colorAttr.count}, itemSize=${colorAttr.itemSize}`)
+                      // Log first few color values for verification
+                      const firstColors = []
+                      for (let i = 0; i < Math.min(3, colorAttr.count); i++) {
+                        firstColors.push({
+                          r: colorAttr.getX(i),
+                          g: colorAttr.getY(i),
+                          b: colorAttr.getZ(i)
+                        })
+                      }
+                      console.log(`First few color values:`, firstColors)
+                    }
+                  }
+                }
+              })
+            }
+          }
+        }
+      } catch (parseError) {
+        console.warn(`Failed to parse vertex colors from ${mode} geometry:`, parseError)
+      }
+    }
+
+    // Handle different material scenarios
+    if (hasVertexColors && !hasTextures) {
+      // MTL file exists but textures are missing - use vertex colors
+      console.log(`Using vertex colors for ${mode} geometry (MTL exists but textures missing)`)
+      
+      object.traverse((o) => {
+        if (!isMesh(o)) return
+        
+        // Create a new material that uses vertex colors
+        // Note: vertex colors are already in 0-1 range (normalized) as expected by Three.js
+        const vertexColorMat = new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          side: THREE.DoubleSide
+        })
+        
+        console.log(`Applied vertex color material to mesh: ${o.name || 'unnamed'}`)
+        o.material = vertexColorMat
+        
+        // Debug: Verify material configuration
+        console.log(`Material vertexColors: ${vertexColorMat.vertexColors}`)
+        console.log(`Material needsUpdate: ${vertexColorMat.needsUpdate}`)
+        
+        // Force material update
+        vertexColorMat.needsUpdate = true
+      })
+    } else if (hasVertexColors && hasTextures) {
+      // If we have both vertex colors and textures, prioritize textures
+      console.log(`Both vertex colors and textures available for ${mode} geometry, using textures`)
+    } else if (!hasTextures && !hasVertexColors) {
+      // MTL file exists but no textures and no vertex colors - use MTL materials as-is
+      console.log(`Using MTL materials for ${mode} geometry (no textures or vertex colors)`)
+    }
 
     object.scale.set(scale, scale, scale)
     ensureNormals(object)
 
     externalGeometryCache.set(cacheKey, object)
-    return object
+    return { success: true, object }
   } catch (e) {
     console.error('Failed to load external geometry:', e)
+    
+    // Determine error type based on the error
+    let errorType: 'not_found' | 'network_error' | 'parse_error' = 'network_error'
+    let message = `Failed to load ${mode} geometry`
+    
+    if (e instanceof Error) {
+      if (e.message.includes('404') || e.message.includes('not found')) {
+        errorType = 'not_found'
+        message = `No ${mode} geometry available for this component`
+      } else if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+        errorType = 'network_error'
+        message = `Network error loading ${mode} geometry`
+      } else {
+        errorType = 'parse_error'
+        message = `Error parsing ${mode} geometry data`
+      }
+    }
+    
     externalGeometryCache.set(cacheKey, null)
-    return null
+    return { success: false, error: errorType, message }
   }
 }
 
@@ -137,6 +346,7 @@ const VisualizeMesh = React.memo(({
 }) => {
   const [externalObject, setExternalObject] = useState<THREE.Group | null>(null)
   const [isLoadingExternal, setIsLoadingExternal] = useState(false)
+  const [geometryError, setGeometryError] = useState<string | null>(null)
 
   const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
 
@@ -145,22 +355,31 @@ const VisualizeMesh = React.memo(({
     if (isExternalMode && component_data.type !== 'sheet') {
       if (!component_data._id) return
       setIsLoadingExternal(true)
+      setGeometryError(null)
       loadExternalGeometry(component_data._id.toString(), geometryMode)
-        .then((obj) => {
+        .then((result) => {
           if (isMounted) {
-            setExternalObject(obj)
+            if (result.success) {
+              setExternalObject(result.object)
+              setGeometryError(null)
+            } else {
+              setExternalObject(null)
+              setGeometryError(result.message)
+            }
             setIsLoadingExternal(false)
           }
         })
-        .catch(() => {
+        .catch((error) => {
           if (isMounted) {
             setExternalObject(null)
+            setGeometryError(`Failed to load ${geometryMode} geometry`)
             setIsLoadingExternal(false)
           }
         })
     } else {
       setExternalObject(null)
       setIsLoadingExternal(false)
+      setGeometryError(null)
     }
     return () => {
       isMounted = false
@@ -221,7 +440,7 @@ const VisualizeMesh = React.memo(({
               }}
             >
               <Skeleton className="h-full rounded-xl m-2 flex items-center justify-center">
-                <strong>Loading geometry...</strong>
+                <strong>Loading {geometryMode} geometry...</strong>
               </Skeleton>
             </div>
           </Html>
@@ -230,6 +449,29 @@ const VisualizeMesh = React.memo(({
     }
     if (externalObject) {
       return <primitive object={externalObject} />
+    }
+    if (geometryError) {
+      return (
+        <mesh>
+          <Html center>
+            <div
+              style={{
+                minWidth: '200px',
+                padding: '12px',
+                background: 'rgba(255,255,255,0.9)',
+                borderRadius: '4px',
+                textAlign: 'center',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              }}
+            >
+              <div style={{ color: '#6b7280', fontSize: '14px', marginBottom: '8px' }}>
+                <strong>{geometryError}</strong>
+              </div>
+            </div>
+          </Html>
+        </mesh>
+      )
     }
     // fallback if external fail
     return (
@@ -349,11 +591,11 @@ export default function ComponentViewer({ component_data }: { component_data: Co
 
   return (
     <Card className="flex flex-col w-full overflow-x-auto">
-      <div className="relative h-[40dvh]">
+      <div className="relative h-[30dvh] sm:h-[40dvh]">
         {/* Overlay UI */}
-        <div className="absolute top-2 left-2 z-10 bg-accent-foreground bg-opacity-90 p-2 rounded shadow text-sm max-w-[calc(100%-1rem)]">
-          <div className="mb-2 flex flex-col gap-1">
-            <label htmlFor="geometryModeSelect" className="mr-2 text-xs sm:text-sm">Geometry Resolution:</label>
+        <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-10 bg-accent-foreground bg-opacity-90 p-1 sm:p-2 rounded shadow text-xs sm:text-sm max-w-[calc(100%-0.5rem)] sm:max-w-[calc(100%-1rem)]">
+          <div className="mb-1 sm:mb-2 flex flex-col gap-1">
+            <label htmlFor="geometryModeSelect" className="text-xs sm:text-sm">Geometry Resolution:</label>
             <select
               id="geometryModeSelect"
               value={geometryMode}
