@@ -111,15 +111,17 @@ export function formatTimestamp(input: string): string {
         throw new Error('Invalid ISO date')
       }
       
-      // Format as YYYY.MM.DD HH:MM:SS
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      const hours = String(date.getHours()).padStart(2, '0')
-      const minutes = String(date.getMinutes()).padStart(2, '0')
-      const seconds = String(date.getSeconds()).padStart(2, '0')
-      
-      return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`
+      // Format as DD.MM.YYYY HH:MM:SS in Berlin timezone
+      return date.toLocaleString('de-DE', { 
+        timeZone: 'Europe/Berlin',
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      })
     } catch (e) {
       console.warn('Failed to parse ISO date:', input, e)
       return 'Invalid Date'
@@ -136,15 +138,15 @@ export function formatTimestamp(input: string): string {
     // Format date
     const day = datePart.slice(0, 2)
     const month = datePart.slice(2, 4)
-    const year = datePart.slice(4, 6)
+    const year = '20' + datePart.slice(4, 6) // Assume 20xx for 2-digit years
 
     // Format time
     const hours = timePart.slice(0, 2)
     const minutes = timePart.slice(2, 4)
     const seconds = timePart.slice(4, 6)
 
-    // Construct and return the formatted timestamp
-    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`
+    // Construct and return the formatted timestamp (DD.MM.YYYY HH:MM:SS)
+    return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`
   }
   
   // If neither format matches, return the input as-is or a fallback

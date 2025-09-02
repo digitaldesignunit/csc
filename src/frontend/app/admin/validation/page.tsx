@@ -219,7 +219,16 @@ export default function ValidationPage() {
                           </div>
                           <div className="text-sm text-muted-foreground space-y-1">
                             <p>ID: {component._id}</p>
-                            <p>Created: {new Date(component.created).toLocaleString()}</p>
+                            <p>Created: {new Date(component.created).toLocaleString('de-DE', { 
+                              timeZone: 'Europe/Berlin',
+                              day: '2-digit',
+                              month: '2-digit', 
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                              hour12: false
+                            })}</p>
                             <p>Fragment: {component.fragment ? 'Yes' : 'No'}</p>
                             <p>Assembly: {component.assembly ? 'Yes' : 'No'}</p>
                           </div>
