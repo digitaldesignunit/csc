@@ -8,6 +8,8 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json
 import uuid
+import os
+import platform
 from datetime import datetime
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
@@ -31,7 +33,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250827
+    Version: 250902
     """
 
     def __init__(self):
@@ -215,8 +217,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             # Swap dimensions - the longer dimension should be X
             dimensions = [y_dim, x_dim, height]
             # Rotate by 90 degrees to make Y the X axis
-            cos_angle_90 = np.cos(-optimal_angle + np.pi/2)
-            sin_angle_90 = np.sin(-optimal_angle + np.pi/2)
+            cos_angle_90 = np.cos(-optimal_angle + np.pi / 2)
+            sin_angle_90 = np.sin(-optimal_angle + np.pi / 2)
             principal_components = np.array([
                 [cos_angle_90, -sin_angle_90, 0],  # X axis = long axis
                 [sin_angle_90, cos_angle_90, 0],   # Y axis = short axis
@@ -284,6 +286,286 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         except ValueError:
             return False
         return str(uuid_obj) == uuid_to_test
+
+    def get_geometry_folder_path(self, component_id: str) -> str:
+        """
+        Get the geometry folder path for a component.
+        Returns the appropriate path based on the operating system.
+        """
+        if platform.system() == 'Windows':
+            base_path = os.path.expandvars('%APPDATA%')
+            geometry_path = os.path.join(
+                base_path, 'DDU_CSC', 'component_geometry', component_id
+            )
+        else:  # macOS and Linux
+            base_path = os.path.expanduser('~')
+            geometry_path = os.path.join(
+                base_path, 'Library', 'Application Support', 'DDU_CSC',
+                'component_geometry', component_id
+            )
+
+        return geometry_path
+
+    def create_geometry_folder(self, component_id: str) -> str:
+        """
+        Create the geometry folder for a component if it doesn't exist.
+        Returns the folder path.
+        """
+        folder_path = self.get_geometry_folder_path(component_id)
+        os.makedirs(folder_path, exist_ok=True)
+        return folder_path
+
+    def reduce_mesh(
+        self, mesh: Rhino.Geometry.Mesh, target_face_count: int
+    ) -> Rhino.Geometry.Mesh:
+        """
+        Reduce a mesh to a target face count using Rhino's mesh reduction.
+        Returns the reduced mesh.
+        """
+        reduced_mesh = mesh.Duplicate()
+        reduced_mesh.Reduce(target_face_count, True, 5, False, True)
+        reduced_mesh.Faces.ConvertQuadsToTriangles()
+        reduced_mesh.Compact()
+        return reduced_mesh
+
+    def generate_vertex_colors_from_texture(
+            self, mesh: Rhino.Geometry.Mesh) -> Rhino.Geometry.Mesh:
+        """
+        Generate vertex colors from texture if mesh has texture but no vertex
+        colors. Returns the mesh with generated vertex colors.
+        """
+        try:
+            # Check if mesh has texture but no vertex colors
+            if (mesh.VertexColors.Count == 0 and
+                    mesh.TextureCoordinates.Count > 0 and
+                    mesh.Material and mesh.Material.IsValid):
+                texture = mesh.Material.GetBitmapTexture()
+                if texture and texture.IsValid:
+                    bitmap = texture.GetBitmap()
+                    if bitmap:
+                        # Create a copy of the mesh to modify
+                        colored_mesh = mesh.Duplicate()
+                        # Generate vertex colors from texture
+                        for i in range(colored_mesh.Vertices.Count):
+                            if i < colored_mesh.TextureCoordinates.Count:
+                                tex_coord = colored_mesh.TextureCoordinates[i]
+                                # Convert UV coordinates to pixel coordinates
+                                u = int(tex_coord.X * (bitmap.Width - 1))
+                                v = int(tex_coord.Y * (bitmap.Height - 1))
+                                # Clamp coordinates
+                                u = max(0, min(u, bitmap.Width - 1))
+                                v = max(0, min(v, bitmap.Height - 1))
+                                # Get pixel color
+                                pixel_color = bitmap.GetPixel(u, v)
+                                # Add vertex color
+                                colored_mesh.VertexColors.Add(pixel_color)
+                            else:
+                                # Fallback to white if no texture coordinate
+                                colored_mesh.VertexColors.Add(
+                                    System.Drawing.Color.White
+                                )
+                        # add remark
+                        self._addRemark('Generated vertex colors from texture')
+                        return colored_mesh
+            # Return original mesh if no texture or already has vertex colors
+            return mesh
+        except Exception as e:
+            self._addWarning(
+                f'Failed to generate vertex colors from texture: {str(e)}'
+            )
+            return mesh
+
+    def save_mesh_as_obj(
+        self, mesh: Rhino.Geometry.Mesh, file_path: str,
+        material_name: str = 'default_material'
+    ) -> bool:
+        """
+        Save a mesh as OBJ file with associated MTL file.
+        Handles coordinate system mapping (Rhino Z -> OBJ Y) and textures.
+        Returns True if successful, False otherwise.
+        """
+        try:
+            # Create OBJ content
+            obj_content = '# OBJ file generated by DDU_CSC\n'
+            mtl_filename = os.path.basename(file_path).replace('.obj', '.mtl')
+            obj_content += f'mtllib {mtl_filename}\n'
+            obj_content += 'o mesh\n'
+
+            # Add vertices with coordinate system mapping (Rhino Z -> OBJ Y)
+            for vertex in mesh.Vertices:
+                # Map Rhino (X,Y,Z) to OBJ (X,Z,-Y) coordinate system
+                obj_content += f'v {vertex.X} {vertex.Z} {-vertex.Y}\n'
+
+            # Add vertex colors if available
+            has_vertex_colors = mesh.VertexColors.Count > 0
+            if has_vertex_colors:
+                for color in mesh.VertexColors:
+                    # Normalize colors to 0-1 range
+                    r = color.R / 255.0
+                    g = color.G / 255.0
+                    b = color.B / 255.0
+                    obj_content += f'vc {r} {g} {b}\n'
+
+            # Add texture coordinates if mesh has them
+            has_texture_coords = mesh.TextureCoordinates.Count > 0
+            if has_texture_coords:
+                for tex_coord in mesh.TextureCoordinates:
+                    obj_content += f'vt {tex_coord.X} {tex_coord.Y}\n'
+
+            # Add faces (OBJ uses 1-based indexing)
+            for i, face in enumerate(mesh.Faces):
+                if face.IsTriangle:
+                    if has_vertex_colors and has_texture_coords:
+                        # v/vt/vc format
+                        obj_content += (
+                            f'f {face.A + 1}/{face.A + 1}/{face.A + 1} '
+                            f'{face.B + 1}/{face.B + 1}/{face.B + 1} '
+                            f'{face.C + 1}/{face.C + 1}/{face.C + 1}\n'
+                        )
+                    elif has_vertex_colors:
+                        # v//vc format
+                        obj_content += (
+                            f'f {face.A + 1}//{face.A + 1} '
+                            f'{face.B + 1}//{face.B + 1} '
+                            f'{face.C + 1}//{face.C + 1}\n'
+                        )
+                    elif has_texture_coords:
+                        # v/vt format
+                        obj_content += (
+                            f'f {face.A + 1}/{face.A + 1} '
+                            f'{face.B + 1}/{face.B + 1} '
+                            f'{face.C + 1}/{face.C + 1}\n'
+                        )
+                    else:
+                        # v format
+                        obj_content += (
+                            f'f {face.A + 1} {face.B + 1} {face.C + 1}\n'
+                        )
+                elif face.IsQuad:
+                    if has_vertex_colors and has_texture_coords:
+                        obj_content += (
+                            f'f {face.A + 1}/{face.A + 1}/{face.A + 1} '
+                            f'{face.B + 1}/{face.B + 1}/{face.B + 1} '
+                            f'{face.C + 1}/{face.C + 1}/{face.C + 1} '
+                            f'{face.D + 1}/{face.D + 1}/{face.D + 1}\n'
+                        )
+                    elif has_vertex_colors:
+                        obj_content += (
+                            f'f {face.A + 1}//{face.A + 1} '
+                            f'{face.B + 1}//{face.B + 1} '
+                            f'{face.C + 1}//{face.C + 1} '
+                            f'{face.D + 1}//{face.D + 1}\n'
+                        )
+                    elif has_texture_coords:
+                        obj_content += (
+                            f'f {face.A + 1}/{face.A + 1} '
+                            f'{face.B + 1}/{face.B + 1} '
+                            f'{face.C + 1}/{face.C + 1} '
+                            f'{face.D + 1}/{face.D + 1}\n'
+                        )
+                    else:
+                        obj_content += (
+                            f'f {face.A + 1} {face.B + 1} {face.C + 1} '
+                            f'{face.D + 1}\n'
+                        )
+
+            # Write OBJ file
+            with open(file_path, 'w') as f:
+                f.write(obj_content)
+
+            # Create MTL file
+            mtl_path = file_path.replace('.obj', '.mtl')
+            mtl_content = '# MTL file generated by DDU_CSC\n'
+            mtl_content += f'newmtl {material_name}\n'
+            # Default material properties
+            mtl_content += 'Ka 0.2 0.2 0.2\n'  # Ambient color
+            mtl_content += 'Kd 0.8 0.8 0.8\n'  # Diffuse color
+            mtl_content += 'Ks 0.0 0.0 0.0\n'  # Specular color
+            mtl_content += 'Ns 0.0\n'          # Specular exponent
+            mtl_content += 'illum 1\n'         # Illumination model
+
+            # Write MTL file
+            with open(mtl_path, 'w') as f:
+                f.write(mtl_content)
+
+            return True
+
+        except Exception as e:
+            self._addWarning(f'Failed to save mesh as OBJ: {str(e)}')
+            return False
+
+    def process_mesh_geometry(
+        self, geometry: Rhino.Geometry.Mesh, component_id: str
+    ) -> tuple:
+        """
+        Process mesh geometry and create reduced/primitive versions if needed.
+        Returns (original_mesh, reduced_mesh, primitive_mesh, files_saved)
+        """
+        # Get face count
+        face_count = geometry.Faces.Count
+
+        # Initialize return values
+        reduced_mesh = None
+        primitive_mesh = None
+        files_saved = False
+
+        # Check if geometry files already exist
+        folder_path = self.get_geometry_folder_path(component_id)
+        detailed_obj_path = os.path.join(folder_path, 'mesh.obj')
+        reduced_obj_path = os.path.join(folder_path, 'mesh_reduced.obj')
+        files_exist = (os.path.exists(detailed_obj_path) or
+                       os.path.exists(reduced_obj_path))
+        if files_exist:
+            self._addWarning(
+                f'Geometry files already exist for component {component_id}. '
+                f'Skipping file saving but computing primitive geometry.'
+            )
+
+        # Generate vertex colors from texture if needed
+        processed_geometry = self.generate_vertex_colors_from_texture(geometry)
+
+        # Determine what versions to create based on face count
+        if face_count > 5000:
+            # Create both reduced and primitive versions
+            if not files_exist:
+                reduced_mesh = self.reduce_mesh(processed_geometry, 1000)
+            primitive_mesh = self.reduce_mesh(processed_geometry, 350)
+            files_saved = not files_exist  # Only save if files don't exist
+        elif face_count > 500:
+            # Create only primitive version
+            primitive_mesh = self.reduce_mesh(processed_geometry, 350)
+            files_saved = not files_exist  # Only save if files don't exist
+        else:
+            # Use original as primitive, no files saved
+            primitive_mesh = processed_geometry
+
+        # Save files if needed and files don't already exist
+        if files_saved:
+            try:
+                folder_path = self.create_geometry_folder(component_id)
+
+                # Save original/detailed mesh
+                detailed_obj_path = os.path.join(folder_path, 'mesh.obj')
+                self.save_mesh_as_obj(
+                    processed_geometry, detailed_obj_path, 'detailed_material'
+                )
+
+                # Save reduced mesh if created
+                if reduced_mesh is not None:
+                    reduced_obj_path = os.path.join(
+                        folder_path, 'mesh_reduced.obj'
+                    )
+                    self.save_mesh_as_obj(
+                        reduced_mesh, reduced_obj_path, 'reduced_material'
+                    )
+
+                self._addRemark(f'Saved geometry files to {folder_path}')
+
+            except Exception as e:
+                self._addWarning(f'Failed to save geometry files: {str(e)}')
+                files_saved = False
+
+        return processed_geometry, reduced_mesh, primitive_mesh, files_saved
 
     def RunScript(self,
             ComponentID: str,
@@ -449,7 +731,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
             COMPDATA = {
                 '_id': ComponentID,
-                'name': f'Component ({Type}) made from {Material}',
+                'name': (f'{str(Type).capitalize()} Component '
+                         f'made from {Material}'),
                 'type': Type,
                 'material': Material,
                 'created': current_time,
@@ -483,19 +766,23 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             # Process geometry input based on type
             # HANDLE MESH
             if isinstance(Geometry, Rhino.Geometry.Mesh):
-                Geometry.Faces.ConvertQuadsToTriangles()
-                Geometry.Compact()
+                # Process the centered geometry for mesh reduction
+                # and file saving
+                (original_mesh, reduced_mesh, primitive_mesh, files_saved) = (
+                    self.process_mesh_geometry(centered_geometry, ComponentID)
+                )
 
+                # Use primitive mesh for JSON geometry data
                 # create geometry dict for mesh with colors
                 vertices = [[p.X, p.Y, p.Z]
-                            for p in centered_geometry.Vertices]
-                faces = [[f[0], f[1], f[2]] for f in centered_geometry.Faces]
+                            for p in primitive_mesh.Vertices]
+                faces = [[f[0], f[1], f[2]] for f in primitive_mesh.Faces]
 
                 # Extract vertex colors if available
                 colors = []
-                if centered_geometry.VertexColors.Count > 0:
+                if primitive_mesh.VertexColors.Count > 0:
                     colors = [[c.R, c.G, c.B]
-                              for c in centered_geometry.VertexColors]
+                              for c in primitive_mesh.VertexColors]
                 else:
                     # Use default color if no vertex colors
                     colors = [[Color.R, Color.G, Color.B]] * len(vertices)
@@ -578,10 +865,10 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             self._addError(msg)
             self.Component.Message = msg
 
-        # except Exception as e:
-        #     msg = f'Unexpected error: {str(e)}'
-        #     self._addError(msg)
-        #     self.Component.Message = msg
+        except Exception as e:
+            msg = f'Unexpected error: {str(e)}'
+            self._addError(msg)
+            self.Component.Message = msg
 
         # Return empty results if there was an error
         ComponentData = Grasshopper.DataTree[System.Object]()
