@@ -31,6 +31,12 @@ ghenv.Component.SubCategory = '1 User'  # type: ignore[reportUnedfinedVariable] 
 # AuthCore - Embedded ---------------------------------------------------------
 
 class _AuthCore(object):
+    """
+    Author: Max Benjamin Eschenbach
+    License: MIT License
+    Version: 250902
+    """
+
     def __init__(self, base_url, leeway=30):
         self.base_url = (base_url or 'https://api.ddu.uber.space').rstrip('/')
         self.leeway = int(leeway) if leeway is not None else 30

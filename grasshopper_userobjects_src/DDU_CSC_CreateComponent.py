@@ -732,7 +732,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             COMPDATA = {
                 '_id': ComponentID,
                 'name': (f'{str(Type).capitalize()} Component '
-                         f'made from {Material}'),
+                         f'made from {str(Material).capitalize()}'),
                 'type': Type,
                 'material': Material,
                 'created': current_time,
