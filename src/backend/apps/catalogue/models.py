@@ -54,6 +54,53 @@ ALLOWED_COMPONENT_SORTKEYS = [
 ALLOWED_COMPLEXITY_LEVELS = [0, 1, 2, 3]
 
 
+# COMPONENT SPECIFIC TYPES ----------------------------------------------------
+
+
+class ComponentLocation(BaseModel):
+    lat: float = Field(description="Latitude coordinate")
+    lon: float = Field(description="Longitude coordinate")
+
+
+# Type aliases (keep existing array formats)
+ComponentBoundingBox = List[float]
+ComponentPolylinePoints = List[List[float]]
+ComponentMeshVertices = List[List[float]]
+ComponentMeshFaces = List[List[int]]
+ComponentMeshColors = List[List[int]]
+
+
+class ComponentMesh(BaseModel):
+    v: ComponentMeshVertices = Field(description="Mesh vertices")
+    f: ComponentMeshFaces = Field(description="Mesh faces")
+    c: Optional[ComponentMeshColors] = Field(
+        None, description="Mesh vertex colors"
+    )
+
+
+class ComponentExtrusion(BaseModel):
+    profile: ComponentPolylinePoints = Field(
+        description="Extrusion profile points"
+    )
+    height: float = Field(description="Extrusion height")
+
+
+class ComponentGeometry(BaseModel):
+    mesh: Optional[ComponentMesh] = Field(
+        None, description="Mesh geometry"
+    )
+    extrusion: Optional[ComponentExtrusion] = Field(
+        None, description="Extrusion geometry"
+    )
+
+
+class ComponentFrame(BaseModel):
+    o: List[float] = Field(description="Origin point [x, y, z]")
+    x: List[float] = Field(description="X axis vector [x, y, z]")
+    y: List[float] = Field(description="Y axis vector [x, y, z]")
+    z: List[float] = Field(description="Z axis vector [x, y, z]")
+
+
 class ComponentCount(BaseModel):
     count: int
 
@@ -104,18 +151,18 @@ class ComponentModel(BaseModel):
         description="Whether this component is an assembly"
     )
     # geometry & data
-    geometry: Dict = Field(
+    geometry: ComponentGeometry = Field(
         description="Component geometry data (mesh, extrusion, etc.)"
     )
     color: Optional[List[int]] = Field(
         None,
         description="RGB color values as [R, G, B] integers (0-255)"
     )
-    bbx: List[float] = Field(
+    bbx: ComponentBoundingBox = Field(
         description=("Bounding box maximum extents as [X, Y, Z] float values "
                      "(dimensions of the component)")
     )
-    location: Optional[Dict] = Field(
+    location: Optional[ComponentLocation] = Field(
         None,
         description="Geographic location data (lat/lon coordinates)"
     )
@@ -127,11 +174,11 @@ class ComponentModel(BaseModel):
         None,
         description="Manufacturing or processing information"
     )
-    iframe: Optional[Dict] = Field(
+    iframe: Optional[ComponentFrame] = Field(
         None,
         description="Insertion Frame / Transformation matrix data"
     )
-    pca_frame: Optional[Dict] = Field(
+    pca_frame: Optional[ComponentFrame] = Field(
         None,
         description=("PCA Frame / Principal Component Analysis transformation "
                      "matrix data")
@@ -200,15 +247,15 @@ class UpdateComponentModel(BaseModel):
     componenttype: Optional[str]
     lastmodified: str
     material: Optional[str]
-    geometry: Optional[Dict]
+    geometry: Optional[ComponentGeometry]
     complexity: Optional[float]
     fragment: Optional[bool]
     assembly: Optional[bool]
     color: Optional[List[int]]
     validated: Optional[bool]
-    bbx: Optional[Dict]
-    iframe: Optional[Dict]
-    pca_frame: Optional[Dict]
+    bbx: Optional[ComponentBoundingBox]
+    iframe: Optional[ComponentFrame]
+    pca_frame: Optional[ComponentFrame]
     reserved: Optional[str]
 
     class Config:
