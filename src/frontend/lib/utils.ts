@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { ComponentBoundingBox, ComponentLocation } from "@/components/common/models";
+import { ComponentBoundingBox, ComponentLocation } from "@/generated/ComponentModel";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 const BACKEND_URL = process.env.FASTAPI_URL || 'https://api.ddu.uber.space';
-const OUTPUT_DIR = path.join(process.cwd(), 'src', 'generated');
+const OUTPUT_DIR = path.join(process.cwd(), 'generated');
 const MODELS_FILE = path.join(OUTPUT_DIR, 'ComponentModel.ts');
 
 async function generateComponentModel() {
@@ -73,6 +73,15 @@ export interface ComponentModel {
   interfaceCode += `// Utility types for better type safety
 export type ComponentType = 'sheet' | 'beam' | 'slab' | 'rubble' | 'column';
 export type ComponentComplexity = 0 | 1 | 2 | 3;
+export type ComponentBoundingBox = Array<number>
+export type ComponentPolylinePoints = Array<Array<number>>
+export type ComponentMeshVertices = Array<Array<number>>
+export type ComponentMeshFaces = Array<Array<number>>
+export type ComponentMeshColors = Array<Array<number>>
+export type ComponentLocation = {
+  lat: number,
+  lon: number
+}
 
 // Type guards
 export function isComponentModel(obj: unknown): obj is ComponentModel {
@@ -80,6 +89,32 @@ export function isComponentModel(obj: unknown): obj is ComponentModel {
          typeof obj === 'object' && 
          '_id' in obj && 
          'type' in obj;
+}
+export function isValidBoundingBox(bbx: unknown): bbx is ComponentBoundingBox {
+  return Array.isArray(bbx) && 
+         bbx.length >= 3 && 
+         bbx.every(val => typeof val === 'number' && !isNaN(val))
+}
+export function isMeshGeometry(geometry: unknown): geometry is { mesh: { v: number[][], f: number[][], c: number[][] } } {
+  return geometry !== null && 
+         typeof geometry === 'object' && 
+         'mesh' in geometry &&
+         geometry.mesh !== null &&
+         typeof geometry.mesh === 'object' &&
+         'v' in geometry.mesh && 'f' in geometry.mesh && 'c' in geometry.mesh;
+}
+export function isExtrusionGeometry(geometry: unknown): geometry is { extrusion: { profile: number[][], height: number } } {
+  return geometry !== null && 
+         typeof geometry === 'object' && 
+         'extrusion' in geometry &&
+         geometry.extrusion !== null &&
+         typeof geometry.extrusion === 'object' &&
+         'profile' in geometry.extrusion && 'height' in geometry.extrusion;
+}
+
+// Extension types
+export interface ExtendedComponentModel extends ComponentModel {
+  reserved_by_username?: string;
 }
 
 // Partial type for updates

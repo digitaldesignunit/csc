@@ -7,10 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Package, Shield, Eye, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
-import { ComponentModel } from '@/src/generated/ComponentModel'
+import { ComponentModel } from '@/generated/ComponentModel'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { ComponentData } from '@/components/common/models'
 
 export default function ValidationPage() {
   const { data: session, status } = useSession()
@@ -20,7 +19,7 @@ export default function ValidationPage() {
   const [validating, setValidating] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set())
-  const [componentData, setComponentData] = useState<Record<string, ComponentData>>({})
+  const [componentData, setComponentData] = useState<Record<string, ComponentModel>>({})
   const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(new Set())
 
   // Redirect non-admin users

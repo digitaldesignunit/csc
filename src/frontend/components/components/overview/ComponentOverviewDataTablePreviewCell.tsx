@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import ComponentViewer from '../ComponentViewer'
 import ComponentViewerSkeleton from '../ComponentViewerSkeleton'
-import { ComponentData } from '@/components/common/models'
+import { ComponentModel } from '@/generated/ComponentModel'
 import {
   Sheet,
   SheetClose,
@@ -20,7 +20,7 @@ import ComponentPreviewImage from '../ComponentPreviewImage'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-type Geometry = ComponentData['geometry']
+type Geometry = ComponentModel['geometry']
 
 async function fetch_component_geometry(component_id: string): Promise<{ geometry: Geometry }> {
   const res = await fetch(
@@ -37,7 +37,7 @@ async function fetch_component_geometry(component_id: string): Promise<{ geometr
 
 export default function ComponentOverviewDataTablePreviewCell({
   component_data,
-}: { component_data: ComponentData }) {
+}: { component_data: ComponentModel }) {
   const router = useRouter()
   const compId = component_data._id
 
@@ -57,7 +57,7 @@ export default function ComponentOverviewDataTablePreviewCell({
     if (geometry) return
     setIsLoading(true)
     try {
-      const data = await fetch_component_geometry(compId)
+      const data = await fetch_component_geometry(compId as string)
       setGeometry(data.geometry)
     } catch (e: unknown) {
       console.error('Error fetching Component Geometry:', e)
@@ -88,8 +88,8 @@ export default function ComponentOverviewDataTablePreviewCell({
                 >
                   <ComponentPreviewImage
                     key={compId}
-                    comp_id={compId}
-                    alt={compId}
+                    comp_id={compId as string}
+                    alt={compId as string}
                     width={40}
                     height={40}
                     maxHeight={40}

@@ -2,14 +2,14 @@
 'use client'
 
 import { ColumnDef } from '@tanstack/react-table'
-import { ComponentData, ComponentBoundingBox } from '@/components/common/models'
+import { ComponentModel, ExtendedComponentModel, ComponentBoundingBox } from '@/generated/ComponentModel'
 import { formatTimestamp, rgbToHex } from '@/lib/utils'
 import ComponentOverviewDataTablePreviewCell from './ComponentOverviewDataTablePreviewCell'
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
 import ComponentOverviewDataTableFilterCell from './ComponentOverviewDataTableFilterCell'
 import ComponentOverviewDataTableLocationCell from './ComponentOverviewDataTableLocationCell'
 
-export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
+export const ComponentOverviewColumns: ColumnDef<ComponentModel>[] = [
   {
     accessorKey: '_id',
     header: () => <ComponentOverviewDataTableHeader header='ID' />,
@@ -166,8 +166,7 @@ export const ComponentOverviewColumns: ColumnDef<ComponentData>[] = [
     cell: ({ row }) => {
       const reserved: string | null = row.getValue('reserved')
       // Access reserved_by_username from the raw data, not as a table column
-      const reservedByUsername: string | undefined = (row.original as ComponentData).reserved_by_username
-      
+      const reservedByUsername: string | undefined = (row.original as ExtendedComponentModel).reserved_by_username
       if (!reserved) {
         return (
           <div className='text-xs text-muted-foreground'>

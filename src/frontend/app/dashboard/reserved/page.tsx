@@ -10,7 +10,7 @@ import { Bookmark, ArrowLeft, Package, User } from 'lucide-react'
 import Link from 'next/link'
 import { ComponentOverviewDataTable } from '@/components/components/overview/ComponentOverviewDataTable'
 import { ComponentOverviewColumns } from '@/components/components/overview/ComponentOverviewColumns'
-import { ComponentData } from '@/components/common/models'
+import { ComponentModel } from '@/generated/ComponentModel'
 import { ColumnDef } from '@tanstack/react-table'
 
 // Type for session user with extended properties
@@ -24,14 +24,14 @@ interface ExtendedUser {
 
 export default function ReservedComponentsPage() {
   const { data: session, status } = useSession()
-  const [reservedComponents, setReservedComponents] = useState<ComponentData[]>([])
+  const [reservedComponents, setReservedComponents] = useState<ComponentModel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // Create custom columns for reserved components that include the actions column
-  const ReservedComponentColumns = ComponentOverviewColumns.filter((col: ColumnDef<ComponentData>) => 
-    (col as ColumnDef<ComponentData> & { accessorKey?: string }).accessorKey !== 'actions' && 
-    (col as ColumnDef<ComponentData> & { accessorKey?: string }).accessorKey !== 'reserved'
+  const ReservedComponentColumns = ComponentOverviewColumns.filter((col: ColumnDef<ComponentModel>) => 
+    (col as ColumnDef<ComponentModel> & { accessorKey?: string }).accessorKey !== 'actions' && 
+    (col as ColumnDef<ComponentModel> & { accessorKey?: string }).accessorKey !== 'reserved'
   )
   
   ReservedComponentColumns.push({

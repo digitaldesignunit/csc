@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { componentBounds, componentColorString, hexComponentColor, generateGrasshopperPanelXML } from '@/lib/utils'
-import { ComponentData } from '@/components/common/models'
+import { ExtendedComponentModel, ComponentLocation } from '@/generated/ComponentModel'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
@@ -24,7 +24,7 @@ interface ExtendedUser {
 export default function ComponentDetailCard({
   component_data,
 }: {
-  component_data: ComponentData
+  component_data: ExtendedComponentModel
 }) {
   const [copied, setCopied] = useState(false)
   const [grasshopperCopied, setGrasshopperCopied] = useState(false)
@@ -32,7 +32,7 @@ export default function ComponentDetailCard({
 
   const handleCopyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(component_data._id)
+      await navigator.clipboard.writeText(component_data._id || '')
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
@@ -42,7 +42,7 @@ export default function ComponentDetailCard({
 
   const handleCopyAsGrasshopperPanel = async () => {
     try {
-      const grasshopperXML = generateGrasshopperPanelXML(component_data._id)
+      const grasshopperXML = generateGrasshopperPanelXML(component_data._id || '')
       await navigator.clipboard.writeText(grasshopperXML)
       setGrasshopperCopied(true)
       setTimeout(() => setGrasshopperCopied(false), 2000)
@@ -103,14 +103,14 @@ export default function ComponentDetailCard({
   }
 
   // Component Color
-  const component_color_str = componentColorString(component_data.color)
-  const component_color_hex = hexComponentColor(component_data.color)
+  const component_color_str = componentColorString(Array.isArray(component_data.color) ? component_data.color : [])
+  const component_color_hex = hexComponentColor(Array.isArray(component_data.color) ? component_data.color : [])
 
   // Component Bounds
   const component_bounds = componentBounds(component_data.bbx)
 
   // Lat/Lon
-  const { lat, lon } = component_data.location || { lat: 37.81627937, lon: 144.95373531 }
+  const { lat, lon } = component_data.location as ComponentLocation || { lat: 37.81627937, lon: 144.95373531 }
 
   return (
     <Card className="w-full overflow-x-auto">

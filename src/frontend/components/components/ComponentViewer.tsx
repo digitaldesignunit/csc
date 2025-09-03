@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
-import { ComponentPolylinePoints, ComponentData } from '@/components/common/models'
+import { ComponentPolylinePoints, ComponentModel, ComponentMeshVertices, ComponentMeshFaces, ComponentMeshColors, isMeshGeometry, isExtrusionGeometry } from '@/generated/ComponentModel'
 import { Card } from '@/components/ui/card'
 import { Bounds, OrbitControls, Html } from '@react-three/drei'
 import { rgbToHex } from '@/lib/utils'
@@ -341,7 +341,7 @@ const VisualizeMesh = React.memo(({
   component_data,
   geometryMode
 }: {
-  component_data: ComponentData
+  component_data: ComponentModel
   geometryMode: GeometryMode
 }) => {
   const [externalObject, setExternalObject] = useState<THREE.Group | null>(null)
@@ -369,7 +369,7 @@ const VisualizeMesh = React.memo(({
             setIsLoadingExternal(false)
           }
         })
-        .catch((error) => {
+        .catch(() => {
           if (isMounted) {
             setExternalObject(null)
             setGeometryError(`Failed to load ${geometryMode} geometry`)
@@ -389,14 +389,17 @@ const VisualizeMesh = React.memo(({
   // Primitive fallback geometry
   const mesh_geometry = useMemo(() => {
     const g = new THREE.BufferGeometry()
-    const vertices = component_data.geometry.mesh.v
+    if (!isMeshGeometry(component_data.geometry)) {
+      return g; // Return empty geometry if structure is invalid
+    }
+    const vertices = component_data.geometry.mesh.v as ComponentMeshVertices
     const flatVertices = vertices.flat().map((v) => v * scale)
     g.setAttribute('position', new THREE.Float32BufferAttribute(flatVertices, 3))
 
-    const faces = component_data.geometry.mesh.f
+    const faces = component_data.geometry.mesh.f as ComponentMeshFaces
     g.setIndex(faces.flat())
 
-    const colors = component_data.geometry.mesh.c
+    const colors = component_data.geometry.mesh.c as ComponentMeshColors
     if (colors && colors.length === vertices.length) {
       const flatColors = colors.flatMap((c) => c.map((v) => v / 255))
       g.setAttribute('color', new THREE.Float32BufferAttribute(flatColors, 3))
@@ -409,18 +412,22 @@ const VisualizeMesh = React.memo(({
   }, [component_data])
 
   const colorHex = rgbToHex(
-    component_data.color[0],
-    component_data.color[1],
-    component_data.color[2]
+    Array.isArray(component_data.color) ? component_data.color[0] as number : 0,
+    Array.isArray(component_data.color) ? component_data.color[1] as number : 0,
+    Array.isArray(component_data.color) ? component_data.color[2] as number : 0
   )
 
   const mesh_material = useMemo(() => {
+    const hasVertexColors = isMeshGeometry(component_data.geometry) && 
+                         component_data.geometry.mesh.c && 
+                         component_data.geometry.mesh.c.length > 0;
+
     return new THREE.MeshBasicMaterial({
       color: colorHex,
-      vertexColors: !!component_data.geometry.mesh.c,
+      vertexColors: hasVertexColors,
       side: THREE.DoubleSide
     })
-  }, [colorHex, component_data.geometry.mesh.c])
+  }, [colorHex, component_data.geometry])
 
   const edge_geometry = useMemo(() => new THREE.EdgesGeometry(mesh_geometry), [mesh_geometry])
   const edge_material = useMemo(() => new THREE.LineBasicMaterial({ color: 0x000000 }), [])
@@ -495,9 +502,12 @@ VisualizeMesh.displayName = 'VisualizeMesh'
 /** 
  * VisualizeSheet 
  */
-const VisualizeSheet = React.memo(({ component_data }: { component_data: ComponentData }) => {
+const VisualizeSheet = React.memo(({ component_data }: { component_data: ComponentModel }) => {
   const pline_shape = useMemo(() => {
     const shape = new THREE.Shape()
+    if (!isExtrusionGeometry(component_data.geometry)) {
+      return shape; // Return empty shape if structure is invalid
+    }
     const points: ComponentPolylinePoints = component_data.geometry.extrusion.profile
     shape.moveTo(points[0][0] * scale, points[0][1] * scale)
     points.forEach((p, i) => {
@@ -507,6 +517,9 @@ const VisualizeSheet = React.memo(({ component_data }: { component_data: Compone
   }, [component_data])
 
   const extrude_geometry = useMemo(() => {
+    if (!isExtrusionGeometry(component_data.geometry)) {
+      return new THREE.ExtrudeGeometry(new THREE.Shape());
+    }
     const extrudeSettings = { steps: 2, depth: component_data.geometry.extrusion.height * scale, bevelEnabled: false }
     const g = new THREE.ExtrudeGeometry(pline_shape, extrudeSettings)
     g.translate(0, 0, -component_data.geometry.extrusion.height * scale * 0.5)
@@ -514,12 +527,12 @@ const VisualizeSheet = React.memo(({ component_data }: { component_data: Compone
     g.computeVertexNormals()
     g.normalizeNormals()
     return g
-  }, [pline_shape, component_data.geometry.extrusion.height])
+  }, [pline_shape, component_data.geometry])
 
   const colorHex = rgbToHex(
-    component_data.color[0],
-    component_data.color[1],
-    component_data.color[2]
+    Array.isArray(component_data.color) ? component_data.color[0] as number : 0,
+    Array.isArray(component_data.color) ? component_data.color[1] as number : 0,
+    Array.isArray(component_data.color) ? component_data.color[2] as number : 0
   )
 
   const edge_geometry = useMemo(() => new THREE.EdgesGeometry(extrude_geometry), [extrude_geometry])
@@ -543,16 +556,16 @@ function VisualizeComponent({
   component_data,
   geometryMode
 }: {
-  component_data: ComponentData
+  component_data: ComponentModel
   geometryMode: GeometryMode
 }) {
   if (!component_data.geometry) return null
   
   // Infer visualization type based on geometry content rather than just type field
-  const hasExtrusion = component_data.geometry.extrusion && 
+  const hasExtrusion = isExtrusionGeometry(component_data.geometry) && 
                        component_data.geometry.extrusion.profile && 
                        component_data.geometry.extrusion.height
-  const hasMesh = component_data.geometry.mesh && 
+  const hasMesh = isMeshGeometry(component_data.geometry) && 
                   component_data.geometry.mesh.v && 
                   component_data.geometry.mesh.f
   
@@ -573,7 +586,7 @@ function VisualizeComponent({
 /**
  * ComponentViewer
  */
-export default function ComponentViewer({ component_data }: { component_data: ComponentData }) {
+export default function ComponentViewer({ component_data }: { component_data: ComponentModel }) {
   // Call ALL hooks FIRST, unconditionally
   const [geometryMode, setGeometryMode] = useState<GeometryMode>('primitive')
 
