@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Union, Literal
 import uuid
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, RootModel
 
 # AUTH ------------------------------------------------------------------------
 Role = Literal["user", "admin"]
@@ -63,11 +63,139 @@ class ComponentLocation(BaseModel):
 
 
 # Type aliases (keep existing array formats)
-ComponentBoundingBox = List[float]
-ComponentPolylinePoints = List[List[float]]
-ComponentMeshVertices = List[List[float]]
-ComponentMeshFaces = List[List[int]]
-ComponentMeshColors = List[List[int]]
+
+
+class ComponentBoundingBox(RootModel[List[float]]):
+    """Bounding box as [X, Y, Z] array format"""
+    root: List[float] = Field(
+        description="Bounding box maximum extents as [X, Y, Z] float values"
+    )
+
+    def __init__(self, root: List[float]):
+        if len(root) != 3:
+            raise ValueError(
+                'Bounding box must have exactly 3 elements [X, Y, Z]'
+            )
+        if not all(isinstance(x, (int, float)) for x in root):
+            raise ValueError('All bounding box elements must be numbers')
+        super().__init__(root=root)
+
+    def __iter__(self):
+        return iter(self.root)
+
+    def __getitem__(self, item):
+        return self.root[item]
+
+    def __len__(self):
+        return len(self.root)
+
+
+class ComponentPolylinePoints(RootModel[List[List[float]]]):
+    """Polyline points as array of [x, y] coordinates"""
+    root: List[List[float]] = Field(
+        description="Array of [x, y] coordinate pairs"
+    )
+
+    def __init__(self, root: List[List[float]]):
+        if not all(
+            isinstance(point, list) and len(point) == 2
+            and all(isinstance(coord, (int, float)) for coord in point)
+            for point in root
+        ):
+            raise ValueError(
+                'All polyline points must be [x, y] coordinate pairs'
+            )
+        super().__init__(root=root)
+
+    def __iter__(self):
+        return iter(self.root)
+
+    def __getitem__(self, item):
+        return self.root[item]
+
+    def __len__(self):
+        return len(self.root)
+
+
+class ComponentMeshVertices(RootModel[List[List[float]]]):
+    """Mesh vertices as array of [x, y, z] coordinates"""
+    root: List[List[float]] = Field(
+        description="Array of [x, y, z] vertex coordinates"
+    )
+
+    def __init__(self, root: List[List[float]]):
+        if not all(
+            isinstance(vertex, list) and len(vertex) == 3
+            and all(isinstance(coord, (int, float)) for coord in vertex)
+            for vertex in root
+        ):
+            raise ValueError(
+                'All mesh vertices must be [x, y, z] coordinate triplets'
+            )
+        super().__init__(root=root)
+
+    def __iter__(self):
+        return iter(self.root)
+
+    def __getitem__(self, item):
+        return self.root[item]
+
+    def __len__(self):
+        return len(self.root)
+
+
+class ComponentMeshFaces(RootModel[List[List[int]]]):
+    """Mesh faces as array of vertex indices"""
+    root: List[List[int]] = Field(
+        description="Array of face vertex indices"
+    )
+
+    def __init__(self, root: List[List[int]]):
+        if not all(
+            isinstance(face, list) and len(face) >= 3
+            and all(isinstance(idx, int) for idx in face)
+            for face in root
+        ):
+            raise ValueError(
+                'All mesh faces must be arrays of integer vertex indices'
+            )
+        super().__init__(root=root)
+
+    def __iter__(self):
+        return iter(self.root)
+
+    def __getitem__(self, item):
+        return self.root[item]
+
+    def __len__(self):
+        return len(self.root)
+
+
+class ComponentMeshColors(RootModel[List[List[int]]]):
+    """Mesh vertex colors as array of [r, g, b] values"""
+    root: List[List[int]] = Field(
+        description="Array of [r, g, b] color values (0-255)"
+    )
+
+    def __init__(self, root: List[List[int]]):
+        if not all(
+            isinstance(color, list) and len(color) == 3
+            and all(isinstance(c, int) and 0 <= c <= 255 for c in color)
+            for color in root
+        ):
+            raise ValueError(
+                'All mesh colors must be [r, g, b] values (0-255)'
+            )
+        super().__init__(root=root)
+
+    def __iter__(self):
+        return iter(self.root)
+
+    def __getitem__(self, item):
+        return self.root[item]
+
+    def __len__(self):
+        return len(self.root)
 
 
 class ComponentMesh(BaseModel):
