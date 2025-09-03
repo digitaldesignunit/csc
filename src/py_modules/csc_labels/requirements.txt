@@ -1,0 +1,4 @@
+# flake8: NOQA
+numpy >= 1.15.4
+pillow
+qrcode
