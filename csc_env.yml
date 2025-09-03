@@ -21,7 +21,7 @@ dependencies:
     - fastapi
     - httptools
     - matplotlib
-    - motor
+    - qreader
     - open3d>=0.15.1
     - passlib[bcrypt]
     - potpourri3d>=1.0.0
