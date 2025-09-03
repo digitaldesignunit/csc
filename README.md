@@ -85,20 +85,6 @@ The CSC Grasshopper Interface consists of Python 3 components that can be used d
 - **Installation**: Copy `.ghuser` files from `grasshopper_userobjects/` to your Grasshopper UserObjects folder
 - **Requirements**: Python 3 with packages: requests, numpy, scipy, scikit-learn
 - **Authentication**: Use `CSC_SignIn` component first to authenticate with the backend
-- **Components Available**:
-  - `CSC_SignIn` - Authentication and JWT token management
-  - `CSC_FetchAllComponents` - Retrieve all components from database
-  - `CSC_FetchComponent` - Fetch individual components by ID
-  - `CSC_DisassembleComponent` - Extract geometry and metadata from components
-  - `CSC_BakeComponents` - Bake components to Rhino document with proper layers
-
-### Grasshopper Component Features
-
-- **Centralized Authentication**: All components use shared AuthCore for seamless API access
-- **Smart Color Management**: Automatic fallback system for mesh colors
-- **Comprehensive Error Handling**: Clear user feedback through runtime messages
-- **Professional Output**: Consistent data structures and JSON formatting
-- **Student-Ready**: Self-contained components with comprehensive documentation
 
 ## Configuring Uberspace
 
