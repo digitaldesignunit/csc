@@ -19,6 +19,9 @@ __pycache__/
 # VIZ FOLDER
 /viz/
 
+# OUTPUT
+src/csc_labels/output/
+
 # MISC
 _archive
 urban_production_env.yml
