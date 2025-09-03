@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.8.0] - 2025-09-03
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.8.0 ✨
+- CSC React Frontend:   0.2.3.0 ✨
+- CSC Sheetscan Module: 0.0.1.11
+- CSC Grasshopper Interface: 0.1.1.0 ✨
+
+### Added
+
+#### CSC Grasshopper Interface
+- **Enhanced Component Management**: Improved component creation and management workflows
+- **Better Error Handling**: Enhanced error messages and user feedback across all components
+
+### Changed
+
+#### CSC FastAPI Backend
+- **Version Bump**: Updated to version 0.2.8.0 for new release cycle
+- **API Stability**: Maintained backward compatibility while preparing for future enhancements
+
+#### CSC React Frontend
+- **Version Bump**: Updated to version 0.2.3.0 for new release cycle
+- **UI Improvements**: Enhanced user interface components and interactions
+
+#### CSC Grasshopper Interface
+- **Version Standardization**: All components now use consistent version numbering
+- **Component Updates**: Refreshed component versions for better tracking and maintenance
+
+### Technical Improvements
+- **Version Management**: Improved version tracking across all project components
+- **Release Coordination**: Better synchronization between backend, frontend, and Grasshopper interface
+- **Documentation**: Updated changelog with comprehensive version information
+
 ## [0.2.5.0] - 2025-08-26
 
 ### Versions
