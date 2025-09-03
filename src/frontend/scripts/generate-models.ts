@@ -64,7 +64,7 @@ function generateTypeScriptInterface(schema: Record<string, unknown>): string {
   // Generate nested interfaces first
   if ($defs) {
     for (const [defName, defSchema] of Object.entries($defs)) {
-      interfaceCode += generateNestedInterface(defName, defSchema as Record<string, unknown>);
+      interfaceCode += generateNestedInterface(defName, defSchema as Record<string, unknown>, $defs);
       interfaceCode += '\n\n';
     }
   }
@@ -108,13 +108,20 @@ export type PartialComponentModel = Partial<ComponentModel>;
   return interfaceCode;
 }
 
-function generateNestedInterface(name: string, schema: Record<string, unknown>): string {
-  const { properties, required = [] } = schema as { properties: Record<string, unknown>; required?: string[] };
+function generateNestedInterface(name: string, schema: Record<string, unknown>, $defs?: Record<string, unknown>): string {
+  const { properties, required = [] } = schema as { properties?: Record<string, unknown>; required?: string[] };
+  
+  // Handle RootModel types (like ComponentBoundingBox) that don't have properties
+  if (!properties) {
+    const typeAnnotation = getTypeScriptType(schema, $defs);
+    return `export type ${name} = ${typeAnnotation};\n`;
+  }
+  
   let interfaceCode = `export interface ${name} {\n`;
   
   for (const [propName, propSchema] of Object.entries(properties)) {
     const isRequired = required.includes(propName);
-    const typeAnnotation = getTypeScriptType(propSchema as Record<string, unknown>);
+    const typeAnnotation = getTypeScriptType(propSchema as Record<string, unknown>, $defs);
     const comment = (propSchema as Record<string, unknown>).description ? ` // ${(propSchema as Record<string, unknown>).description}` : '';
     
     interfaceCode += `  ${propName}${isRequired ? '' : '?'}: ${typeAnnotation};${comment}\n`;

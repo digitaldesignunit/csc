@@ -1,9 +1,12 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2025-09-03T13:03:38.706Z
+// Generated on: 2025-09-03T13:21:39.195Z
 // Source: https://api.ddu.uber.space/schema/component
 
+export type ComponentBoundingBox = number[];
+
+
 export interface ComponentExtrusion {
-  profile: number[][]; // Extrusion profile points
+  profile: ComponentPolylinePoints; // Extrusion profile points
   height: number; // Extrusion height
 }
 
@@ -25,10 +28,22 @@ export interface ComponentLocation {
 }
 
 export interface ComponentMesh {
-  v: number[][]; // Mesh vertices
-  f: number[][]; // Mesh faces
-  c?: number[][] | unknown; // Mesh vertex colors
+  v: ComponentMeshVertices; // Mesh vertices
+  f: ComponentMeshFaces; // Mesh faces
+  c?: ComponentMeshColors | unknown; // Mesh vertex colors
 }
+
+export type ComponentMeshColors = number[][];
+
+
+export type ComponentMeshFaces = number[][];
+
+
+export type ComponentMeshVertices = number[][];
+
+
+export type ComponentPolylinePoints = number[][];
+
 
 export interface ComponentModel {
   _id?: string; // Globally unique component identifier (GUID)
@@ -42,7 +57,7 @@ export interface ComponentModel {
   assembly: boolean; // Whether this component is an assembly
   geometry: ComponentGeometry; // Component geometry data (mesh, extrusion, etc.)
   color?: number[] | unknown; // RGB color values as [R, G, B] integers (0-255)
-  bbx: number[]; // Bounding box maximum extents as [X, Y, Z] float values (dimensions of the component)
+  bbx: ComponentBoundingBox; // Bounding box maximum extents as [X, Y, Z] float values (dimensions of the component)
   location?: ComponentLocation | unknown; // Geographic location data (lat/lon coordinates)
   descriptors?: Record<string, unknown> | unknown; // Component descriptors and metadata
   processes?: Record<string, unknown> | unknown; // Manufacturing or processing information
