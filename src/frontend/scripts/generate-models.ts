@@ -49,19 +49,33 @@ export * from './ComponentModel';
 }
 
 function generateTypeScriptInterface(schema: Record<string, unknown>): string {
-  const { properties, required = [] } = schema as { properties: Record<string, unknown>; required?: string[] };
+  const { properties, required = [], $defs } = schema as { 
+    properties: Record<string, unknown>; 
+    required?: string[]; 
+    $defs?: Record<string, unknown>;
+  };
   
   let interfaceCode = `// Auto-generated from backend OpenAPI schema
 // Generated on: ${new Date().toISOString()}
 // Source: ${BACKEND_URL}/schema/component
 
-export interface ComponentModel {
+`;
+
+  // Generate nested interfaces first
+  if ($defs) {
+    for (const [defName, defSchema] of Object.entries($defs)) {
+      interfaceCode += generateNestedInterface(defName, defSchema as Record<string, unknown>);
+      interfaceCode += '\n\n';
+    }
+  }
+
+  interfaceCode += `export interface ComponentModel {
 `;
 
   // Add properties
   for (const [propName, propSchema] of Object.entries(properties)) {
     const isRequired = required.includes(propName);
-    const typeAnnotation = getTypeScriptType(propSchema as Record<string, unknown>);
+    const typeAnnotation = getTypeScriptType(propSchema as Record<string, unknown>, $defs);
     const comment = (propSchema as Record<string, unknown>).description ? ` // ${(propSchema as Record<string, unknown>).description}` : '';
     
     interfaceCode += `  ${propName}${isRequired ? '' : '?'}: ${typeAnnotation};${comment}\n`;
@@ -69,19 +83,10 @@ export interface ComponentModel {
   
   interfaceCode += '}\n\n';
   
-  // Add utility types for better type safety
+  // Add utility types and type guards
   interfaceCode += `// Utility types for better type safety
 export type ComponentType = 'sheet' | 'beam' | 'slab' | 'rubble' | 'column';
 export type ComponentComplexity = 0 | 1 | 2 | 3;
-export type ComponentBoundingBox = Array<number>
-export type ComponentPolylinePoints = Array<Array<number>>
-export type ComponentMeshVertices = Array<Array<number>>
-export type ComponentMeshFaces = Array<Array<number>>
-export type ComponentMeshColors = Array<Array<number>>
-export type ComponentLocation = {
-  lat: number,
-  lon: number
-}
 
 // Type guards
 export function isComponentModel(obj: unknown): obj is ComponentModel {
@@ -89,27 +94,6 @@ export function isComponentModel(obj: unknown): obj is ComponentModel {
          typeof obj === 'object' && 
          '_id' in obj && 
          'type' in obj;
-}
-export function isValidBoundingBox(bbx: unknown): bbx is ComponentBoundingBox {
-  return Array.isArray(bbx) && 
-         bbx.length >= 3 && 
-         bbx.every(val => typeof val === 'number' && !isNaN(val))
-}
-export function isMeshGeometry(geometry: unknown): geometry is { mesh: { v: number[][], f: number[][], c: number[][] } } {
-  return geometry !== null && 
-         typeof geometry === 'object' && 
-         'mesh' in geometry &&
-         geometry.mesh !== null &&
-         typeof geometry.mesh === 'object' &&
-         'v' in geometry.mesh && 'f' in geometry.mesh && 'c' in geometry.mesh;
-}
-export function isExtrusionGeometry(geometry: unknown): geometry is { extrusion: { profile: number[][], height: number } } {
-  return geometry !== null && 
-         typeof geometry === 'object' && 
-         'extrusion' in geometry &&
-         geometry.extrusion !== null &&
-         typeof geometry.extrusion === 'object' &&
-         'profile' in geometry.extrusion && 'height' in geometry.extrusion;
 }
 
 // Extension types
@@ -124,7 +108,32 @@ export type PartialComponentModel = Partial<ComponentModel>;
   return interfaceCode;
 }
 
-function getTypeScriptType(schema: Record<string, unknown>): string {
+function generateNestedInterface(name: string, schema: Record<string, unknown>): string {
+  const { properties, required = [] } = schema as { properties: Record<string, unknown>; required?: string[] };
+  let interfaceCode = `export interface ${name} {\n`;
+  
+  for (const [propName, propSchema] of Object.entries(properties)) {
+    const isRequired = required.includes(propName);
+    const typeAnnotation = getTypeScriptType(propSchema as Record<string, unknown>);
+    const comment = (propSchema as Record<string, unknown>).description ? ` // ${(propSchema as Record<string, unknown>).description}` : '';
+    
+    interfaceCode += `  ${propName}${isRequired ? '' : '?'}: ${typeAnnotation};${comment}\n`;
+  }
+  
+  interfaceCode += '}';
+  return interfaceCode;
+}
+
+function getTypeScriptType(schema: Record<string, unknown>, $defs?: Record<string, unknown>): string {
+  // Handle $ref references
+  if (schema.$ref) {
+    const refPath = schema.$ref as string;
+    if (refPath.startsWith('#/$defs/')) {
+      const refName = refPath.replace('#/$defs/', '');
+      return refName;
+    }
+  }
+  
   if (schema.type === 'string') {
     if (schema.enum) {
       return (schema.enum as unknown[]).map((v: unknown) => `'${v}'`).join(' | ');
@@ -144,17 +153,21 @@ function getTypeScriptType(schema: Record<string, unknown>): string {
   }
   
   if (schema.type === 'array') {
-    const itemType = getTypeScriptType(schema.items as Record<string, unknown>);
+    const itemType = getTypeScriptType(schema.items as Record<string, unknown>, $defs);
     return `${itemType}[]`;
   }
   
   if (schema.type === 'object') {
+    // Check if this is a specific nested type with properties
+    if (schema.properties) {
+      return generateNestedInterface('Anonymous', schema as { properties: Record<string, unknown>; required?: string[] });
+    }
     return 'Record<string, unknown>';
   }
   
   // Handle anyOf, oneOf, allOf
   if (schema.anyOf) {
-    const types = (schema.anyOf as Record<string, unknown>[]).map((s: Record<string, unknown>) => getTypeScriptType(s));
+    const types = (schema.anyOf as Record<string, unknown>[]).map((s: Record<string, unknown>) => getTypeScriptType(s, $defs));
     // Filter out 'any' types to avoid union with any
     const filteredTypes = types.filter((t: string) => t !== 'any');
     if (filteredTypes.length === 0) return 'unknown';
@@ -163,7 +176,7 @@ function getTypeScriptType(schema: Record<string, unknown>): string {
   }
   
   if (schema.oneOf) {
-    const types = (schema.oneOf as Record<string, unknown>[]).map((s: Record<string, unknown>) => getTypeScriptType(s));
+    const types = (schema.oneOf as Record<string, unknown>[]).map((s: Record<string, unknown>) => getTypeScriptType(s, $defs));
     // Filter out 'any' types to avoid union with any
     const filteredTypes = types.filter((t: string) => t !== 'any');
     if (filteredTypes.length === 0) return 'unknown';
@@ -172,7 +185,7 @@ function getTypeScriptType(schema: Record<string, unknown>): string {
   }
   
   if (schema.allOf) {
-    const types = (schema.allOf as Record<string, unknown>[]).map((s: Record<string, unknown>) => getTypeScriptType(s));
+    const types = (schema.allOf as Record<string, unknown>[]).map((s: Record<string, unknown>) => getTypeScriptType(s, $defs));
     // Filter out 'any' types to avoid intersection with any
     const filteredTypes = types.filter((t: string) => t !== 'any');
     if (filteredTypes.length === 0) return 'unknown';

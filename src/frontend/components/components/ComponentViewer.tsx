@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
-import { ComponentPolylinePoints, ComponentModel, ComponentMeshVertices, ComponentMeshFaces, ComponentMeshColors, isMeshGeometry, isExtrusionGeometry } from '@/generated/ComponentModel'
+import { ComponentModel, ComponentGeometry, ComponentMesh, ComponentExtrusion } from '@/generated/ComponentModel'
 import { Card } from '@/components/ui/card'
 import { Bounds, OrbitControls, Html } from '@react-three/drei'
 import { rgbToHex } from '@/lib/utils'
@@ -389,19 +389,24 @@ const VisualizeMesh = React.memo(({
   // Primitive fallback geometry
   const mesh_geometry = useMemo(() => {
     const g = new THREE.BufferGeometry()
-    if (!isMeshGeometry(component_data.geometry)) {
+    
+    // Check if geometry has mesh data
+    const geometry = component_data.geometry as ComponentGeometry
+    const mesh = geometry.mesh as ComponentMesh | undefined
+    if (!mesh?.v || !mesh?.f) {
       return g; // Return empty geometry if structure is invalid
     }
-    const vertices = component_data.geometry.mesh.v as ComponentMeshVertices
+    
+    const vertices = mesh.v
     const flatVertices = vertices.flat().map((v) => v * scale)
     g.setAttribute('position', new THREE.Float32BufferAttribute(flatVertices, 3))
 
-    const faces = component_data.geometry.mesh.f as ComponentMeshFaces
+    const faces = mesh.f
     g.setIndex(faces.flat())
 
-    const colors = component_data.geometry.mesh.c as ComponentMeshColors
-    if (colors && colors.length === vertices.length) {
-      const flatColors = colors.flatMap((c) => c.map((v) => v / 255))
+    const colors = mesh.c
+    if (colors && Array.isArray(colors) && colors.length === vertices.length) {
+      const flatColors = colors.flatMap((c) => Array.isArray(c) ? c.map((v) => v / 255) : [])
       g.setAttribute('color', new THREE.Float32BufferAttribute(flatColors, 3))
     }
     // Adjust orientation
@@ -418,9 +423,9 @@ const VisualizeMesh = React.memo(({
   )
 
   const mesh_material = useMemo(() => {
-    const hasVertexColors = isMeshGeometry(component_data.geometry) && 
-                         component_data.geometry.mesh.c && 
-                         component_data.geometry.mesh.c.length > 0;
+    const geometry = component_data.geometry as ComponentGeometry
+    const mesh = geometry.mesh as ComponentMesh | undefined
+    const hasVertexColors = Boolean(mesh?.c && Array.isArray(mesh.c) && mesh.c.length > 0);
 
     return new THREE.MeshBasicMaterial({
       color: colorHex,
@@ -505,10 +510,15 @@ VisualizeMesh.displayName = 'VisualizeMesh'
 const VisualizeSheet = React.memo(({ component_data }: { component_data: ComponentModel }) => {
   const pline_shape = useMemo(() => {
     const shape = new THREE.Shape()
-    if (!isExtrusionGeometry(component_data.geometry)) {
+    
+    // Check if geometry has extrusion data
+    const geometry = component_data.geometry as ComponentGeometry
+    const extrusion = geometry.extrusion as ComponentExtrusion | undefined
+    if (!extrusion?.profile || !Array.isArray(extrusion.profile)) {
       return shape; // Return empty shape if structure is invalid
     }
-    const points: ComponentPolylinePoints = component_data.geometry.extrusion.profile
+    
+    const points = extrusion.profile
     shape.moveTo(points[0][0] * scale, points[0][1] * scale)
     points.forEach((p, i) => {
       if (i > 0) shape.lineTo(p[0] * scale, p[1] * scale)
@@ -517,12 +527,15 @@ const VisualizeSheet = React.memo(({ component_data }: { component_data: Compone
   }, [component_data])
 
   const extrude_geometry = useMemo(() => {
-    if (!isExtrusionGeometry(component_data.geometry)) {
+    const geometry = component_data.geometry as ComponentGeometry
+    const extrusion = geometry.extrusion as ComponentExtrusion | undefined
+    if (!extrusion?.profile || !extrusion?.height) {
       return new THREE.ExtrudeGeometry(new THREE.Shape());
     }
-    const extrudeSettings = { steps: 2, depth: component_data.geometry.extrusion.height * scale, bevelEnabled: false }
+    
+    const extrudeSettings = { steps: 2, depth: extrusion.height * scale, bevelEnabled: false }
     const g = new THREE.ExtrudeGeometry(pline_shape, extrudeSettings)
-    g.translate(0, 0, -component_data.geometry.extrusion.height * scale * 0.5)
+    g.translate(0, 0, -extrusion.height * scale * 0.5)
     g.rotateX(-Math.PI / 2)
     g.computeVertexNormals()
     g.normalizeNormals()
@@ -562,12 +575,12 @@ function VisualizeComponent({
   if (!component_data.geometry) return null
   
   // Infer visualization type based on geometry content rather than just type field
-  const hasExtrusion = isExtrusionGeometry(component_data.geometry) && 
-                       component_data.geometry.extrusion.profile && 
-                       component_data.geometry.extrusion.height
-  const hasMesh = isMeshGeometry(component_data.geometry) && 
-                  component_data.geometry.mesh.v && 
-                  component_data.geometry.mesh.f
+  const geometry = component_data.geometry as ComponentGeometry
+  const extrusion = geometry.extrusion as ComponentExtrusion | undefined
+  const mesh = geometry.mesh as ComponentMesh | undefined
+  
+  const hasExtrusion = extrusion?.profile && extrusion?.height
+  const hasMesh = mesh?.v && mesh?.f
   
   if (hasExtrusion) {
     return <VisualizeSheet component_data={component_data} />
