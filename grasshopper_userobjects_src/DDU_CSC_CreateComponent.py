@@ -567,7 +567,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
         return processed_geometry, reduced_mesh, primitive_mesh, files_saved
 
-    def RunScript(self,
+    def RunScript(
+            self,
             ComponentID: str,
             Type: str,
             Material: str,
