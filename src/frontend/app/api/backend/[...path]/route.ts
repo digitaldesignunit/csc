@@ -17,7 +17,7 @@ function buildTargetUrl(pathParts: string[] | undefined, srcUrl: URL) {
 
 function forwardableHeaders(req: NextRequest, extra: Record<string, string>) {
   const out = new Headers()
-  const allow = ['content-type', 'accept', 'accept-encoding', 'accept-language', 'user-agent']
+  const allow = ['content-type', 'accept', 'accept-encoding', 'accept-language', 'user-agent', 'if-none-match']
   for (const [k, v] of req.headers) {
     if (allow.includes(k.toLowerCase())) out.set(k, v)
   }

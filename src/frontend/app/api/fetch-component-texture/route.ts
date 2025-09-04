@@ -24,9 +24,16 @@ export async function GET(request: NextRequest) {
   // talk to FastAPI directly (bypass /api/backend hop)
   const target = `${FASTAPI_URL.replace(/\/+$/, '')}/components/${encodeURIComponent(component_id)}/texture`
 
+  // Prepare headers including conditional request support
+  const headers: Record<string, string> = { Authorization: `Bearer ${apiToken}` }
+  const ifNoneMatch = request.headers.get('if-none-match')
+  if (ifNoneMatch) {
+    headers['if-none-match'] = ifNoneMatch
+  }
+
   const res = await fetch(target, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${apiToken}` },
+    headers,
     cache: 'no-store',
     redirect: 'manual'
   })
@@ -37,8 +44,16 @@ export async function GET(request: NextRequest) {
   }
 
   const contentType = res.headers.get('content-type') ?? 'image/jpeg'
+  const responseHeaders: Record<string, string> = { 'content-type': contentType }
+  
+  // Pass through cache-related headers
+  const etag = res.headers.get('etag')
+  const cacheControl = res.headers.get('cache-control')
+  if (etag) responseHeaders['etag'] = etag
+  if (cacheControl) responseHeaders['cache-control'] = cacheControl
+
   return new NextResponse(res.body, {
-    status: 200,
-    headers: { 'content-type': contentType }
+    status: res.status,
+    headers: responseHeaders
   })
 }
