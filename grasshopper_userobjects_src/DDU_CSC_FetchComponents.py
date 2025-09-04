@@ -28,7 +28,7 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250825
+    Version: 250904
     """
 
     def __init__(self):
@@ -100,7 +100,7 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
         try:
             self.Component.Message = (
-                f'Fetching {len(component_ids)} component(s)...'
+                f'Fetching {len(component_ids)} component(s) (with cache)...'
             )
 
             # Set up output trees and results tuple
@@ -110,11 +110,12 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
             # Fetch each component
             for i, _id in enumerate(component_ids):
                 try:
-                    # Make authenticated request to fetch specific component
-                    response = auth_core.authorized_get(f'/components/{_id}')
+                    # Make cached request to fetch specific component
+                    response = auth_core.cached_get(
+                        f'/components/{_id}', f'component:{_id}')
 
                     if response.status_code == 200:
-                        # Successfully fetched component
+                        # Successfully fetched component (from server or cache)
                         json_comp = response.json()
 
                         # Create datatree path
@@ -162,7 +163,7 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
             # Update success message
             if ComponentData.DataCount > 0:
                 self.Component.Message = (
-                    f'Fetched {ComponentData.DataCount} component(s)'
+                    f'Fetched {ComponentData.DataCount} component(s) (cached)'
                 )
             else:
                 self.Component.Message = 'No components fetched'

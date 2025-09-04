@@ -28,7 +28,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250827
+    Version: 250904
     """
 
     def __init__(self):
@@ -253,10 +253,15 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 filter_params
             )
 
-            self.Component.Message = 'Fetching filtered components...'
+            self.Component.Message = (
+                'Fetching filtered components (with cache)...'
+            )
 
-            # Make authenticated request to fetch filtered components
-            response = auth_core.authorized_get(endpoint)
+            # Create cache key based on filter parameters
+            cache_key = (f'filtered:{query_string}' if query_string
+                         else 'filtered:all')
+            # Make cached request to fetch filtered components
+            response = auth_core.cached_get(endpoint, cache_key, filter_params)
 
             if response.status_code == 200:
                 # Successfully fetched components
@@ -264,7 +269,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 component_count = len(json_comps)
 
                 # Show filter info in message
-                filter_msg = f'Found {component_count} components.'
+                filter_msg = f'Found {component_count} components (cached).'
 
                 self.Component.Message = filter_msg
                 self._addRemark(
@@ -285,8 +290,10 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                     ComponentData.Add(json.dumps(json_comp), ghp)
 
                 # Add filter description to the filter query output
-                FilterDescription.Add(filter_description,
-                                Grasshopper.Kernel.Data.GH_Path(0))
+                FilterDescription.Add(
+                    filter_description,
+                    Grasshopper.Kernel.Data.GH_Path(0)
+                )
 
                 return __Results
 

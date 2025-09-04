@@ -28,7 +28,7 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250822
+    Version: 250904
     """
 
     def __init__(self):
@@ -82,17 +82,19 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
             return
 
         try:
-            self.Component.Message = 'Fetching components...'
+            self.Component.Message = 'Fetching components (with cache)...'
 
-            # Make authenticated request to fetch all components
-            response = auth_core.authorized_get('/components')
+            # Make cached request to fetch all components
+            response = auth_core.cached_get('/components', 'all_components')
 
             if response.status_code == 200:
                 # Successfully fetched components
                 json_comps = response.json()
                 component_count = len(json_comps)
 
-                self.Component.Message = f'Found {component_count} components'
+                self.Component.Message = (
+                    f'Found {component_count} components (cached)'
+                )
                 self._addRemark(
                     f'Successfully fetched {component_count} components'
                 )

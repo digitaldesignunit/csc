@@ -21,6 +21,7 @@ from sklearn.decomposition import PCA
 import System  # type: ignore[reportMissingImport] # NOQA
 import Grasshopper  # type: ignore[reportMissingImport] # NOQA
 import Rhino  # type: ignore[reportMissingImport] # NOQA
+import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
 ghenv.Component.Name = 'CreateComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -33,7 +34,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250902
+    Version: 250904
     """
 
     def __init__(self):
@@ -54,6 +55,214 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     def _addError(self, msg: str = ''):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+
+    def get_auth_core_from_sticky(self):
+        """Get AuthCore instance from sticky storage."""
+        auth_core = sc.sticky.get('CSC_AuthCore')
+        if auth_core is None:
+            self._addWarning('No authentication found. '
+                             'Using hardcoded schema.')
+            return None
+        return auth_core
+
+    def get_component_schema(self):
+        """Get component schema from cache or fallback to hardcoded schema."""
+        # Try to get schema from AuthCore cache first
+        auth_core = self.get_auth_core_from_sticky()
+        if auth_core and hasattr(auth_core, 'get_component_schema'):
+            try:
+                schema = auth_core.get_component_schema()
+                if schema:
+                    self._addRemark('Using cached component schema')
+                    return schema
+                else:
+                    self._addWarning('Failed to get cached schema, '
+                                     'using hardcoded schema')
+            except Exception as e:
+                self._addWarning(f'Error fetching cached schema: {str(e)}, '
+                                 'using hardcoded schema')
+
+        # Fallback to hardcoded schema
+        self._addRemark('Using hardcoded component schema')
+        return self.get_hardcoded_schema()
+
+    def get_hardcoded_schema(self):
+        """Get hardcoded component schema as fallback."""
+        return {
+            'type': 'object',
+            'properties': {
+                '_id': {'type': 'string', 'format': 'uuid'},
+                'name': {'type': 'string'},
+                'type': {'type': 'string'},
+                'material': {'type': 'string'},
+                'created': {'type': 'string', 'format': 'date-time'},
+                'lastmodified': {'type': 'string', 'format': 'date-time'},
+                'complexity': {'type': 'integer', 'minimum': 0, 'maximum': 3},
+                'fragment': {'type': 'boolean'},
+                'assembly': {'type': 'boolean'},
+                'geometry': {'type': 'object'},
+                'color': {'type': 'array', 'items': {'type': 'integer'}},
+                'bbx': {'type': 'array', 'items': {'type': 'number'}},
+                'location': {'type': 'object'},
+                'descriptors': {'type': 'object'},
+                'processes': {'type': 'object'},
+                'iframe': {'type': 'object'},
+                'pca_frame': {'type': 'object'},
+                'reserved': {'type': 'string'},
+                'attributes': {'type': 'object'},
+                'validated': {'type': 'boolean'},
+                'etag': {'type': 'string'}
+            },
+            'required': ['type', 'material', 'created', 'lastmodified',
+                         'complexity', 'fragment', 'assembly', 'geometry',
+                         'bbx', 'iframe', 'pca_frame', 'reserved', 'validated']
+        }
+
+    def validate_component_data(self, component_data, schema):
+        """Validate component data against schema."""
+        try:
+            # Basic validation - check required fields
+            required_fields = schema.get('required', [])
+            missing_fields = []
+
+            for field in required_fields:
+                if field not in component_data:
+                    missing_fields.append(field)
+
+            if missing_fields:
+                self._addWarning(f'Missing required fields: '
+                                 f'{", ".join(missing_fields)}')
+                return False
+
+            # Type validation for key fields
+            if not isinstance(component_data.get('complexity'), int):
+                self._addWarning('Complexity must be an integer')
+                return False
+
+            if not isinstance(component_data.get('fragment'), bool):
+                self._addWarning('Fragment must be a boolean')
+                return False
+
+            if not isinstance(component_data.get('assembly'), bool):
+                self._addWarning('Assembly must be a boolean')
+                return False
+
+            # Validate optional color field
+            color = component_data.get('color', [])
+            if color and (not isinstance(color, list) or len(color) != 3):
+                self._addWarning(
+                    'Color must be a list of 3 integers [R, G, B]')
+                return False
+
+            # Validate required frame fields
+            if not isinstance(component_data.get('iframe'), dict):
+                self._addWarning('iframe must be a dictionary with frame data')
+                return False
+
+            if not isinstance(component_data.get('pca_frame'), dict):
+                self._addWarning('pca_frame must be a dictionary with '
+                                 'frame data')
+                return False
+
+            if not isinstance(component_data.get('reserved'), str):
+                self._addWarning('reserved must be a string (UUID or empty)')
+                return False
+
+            return True
+
+        except Exception as e:
+            self._addWarning(f'Validation error: {str(e)}')
+            return False
+
+    def build_component_data_from_schema(
+            self,
+            schema,
+            ComponentID: str,
+            Type: str,
+            Material: str,
+            Complexity: int,
+            Fragment: bool,
+            Assembly: bool,
+            Color,
+            dimensions,
+            location_data,
+            principal_components):
+        """Build component data dictionary using the actual schema."""
+        current_time = datetime.utcnow().isoformat() + 'Z'
+        
+        # Get all properties from the schema
+        properties = schema.get('properties', {})
+        component_data = {}
+        
+        # Build component data based on schema properties
+        for field_name, field_schema in properties.items():
+            if field_name == '_id':
+                component_data[field_name] = ComponentID
+            elif field_name == 'name':
+                component_data[field_name] = f'{str(Type).capitalize()} Component made from {str(Material).capitalize()}'
+            elif field_name == 'type':
+                component_data[field_name] = Type
+            elif field_name == 'material':
+                component_data[field_name] = Material
+            elif field_name == 'created':
+                component_data[field_name] = current_time
+            elif field_name == 'lastmodified':
+                component_data[field_name] = current_time
+            elif field_name == 'complexity':
+                component_data[field_name] = int(Complexity)
+            elif field_name == 'fragment':
+                component_data[field_name] = bool(Fragment)
+            elif field_name == 'assembly':
+                component_data[field_name] = bool(Assembly)
+            elif field_name == 'geometry':
+                component_data[field_name] = {}  # Will be filled later
+            elif field_name == 'color':
+                component_data[field_name] = [Color.R, Color.G, Color.B]
+            elif field_name == 'bbx':
+                component_data[field_name] = dimensions
+            elif field_name == 'location':
+                component_data[field_name] = location_data
+            elif field_name == 'descriptors':
+                component_data[field_name] = {}
+            elif field_name == 'processes':
+                component_data[field_name] = {}
+            elif field_name == 'iframe':
+                component_data[field_name] = {
+                    'o': [0.0, 0.0, 0.0],
+                    'x': [1.0, 0.0, 0.0],
+                    'y': [0.0, 1.0, 0.0],
+                    'z': [0.0, 0.0, 1.0]
+                }
+            elif field_name == 'pca_frame':
+                component_data[field_name] = {
+                    'o': [0.0, 0.0, 0.0],
+                    'x': principal_components[0].tolist(),
+                    'y': principal_components[1].tolist(),
+                    'z': principal_components[2].tolist()
+                }
+            elif field_name == 'reserved':
+                component_data[field_name] = ''
+            elif field_name == 'attributes':
+                component_data[field_name] = {}
+            elif field_name == 'validated':
+                component_data[field_name] = False
+            elif field_name == 'etag':
+                component_data[field_name] = ''
+            else:
+                # Handle any other fields from the schema with appropriate defaults
+                field_type = field_schema.get('type', 'string')
+                if field_type == 'string':
+                    component_data[field_name] = ''
+                elif field_type == 'integer':
+                    component_data[field_name] = 0
+                elif field_type == 'boolean':
+                    component_data[field_name] = False
+                elif field_type == 'array':
+                    component_data[field_name] = []
+                elif field_type == 'object':
+                    component_data[field_name] = {}
+
+        return component_data
 
     def center_geometry_at_origin(self, geometry):
         """
@@ -567,8 +776,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
         return processed_geometry, reduced_mesh, primitive_mesh, files_saved
 
-    def RunScript(
-            self,
+    def RunScript(self,
             ComponentID: str,
             Type: str,
             Material: str,
@@ -619,6 +827,10 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
             # set up output trees and results tuple
             ComponentData = Grasshopper.DataTree[System.Object]()
+
+            # Initialize schema validation
+            self._addRemark('Initializing component creation with '
+                            'schema validation...')
 
             # sanitize input and abort if not present
             if not ComponentID:
@@ -727,42 +939,20 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         centered_points, height)
                 )
 
-            # Create component data dictionary adhering to ComponentModel
-            current_time = datetime.utcnow().isoformat() + 'Z'
+            # Get component schema first
+            schema = self.get_component_schema()
 
-            COMPDATA = {
-                '_id': ComponentID,
-                'name': (f'{str(Type).capitalize()} Component '
-                         f'made from {str(Material).capitalize()}'),
-                'type': Type,
-                'material': Material,
-                'created': current_time,
-                'lastmodified': current_time,
-                'complexity': Complexity,  # User complexity level
-                'fragment': Fragment,  # User fragment status
-                'assembly': Assembly,  # User assembly status
-                'geometry': {},
-                'color': [Color.R, Color.G, Color.B],
-                'bbx': dimensions,  # [X, Y, Z] dimensions
-                'location': location_data,  # {lat, lon} or None
-                'descriptors': {},
-                'processes': {},
-                'iframe': {
-                    'o': [0.0, 0.0, 0.0],
-                    'x': [1.0, 0.0, 0.0],
-                    'y': [0.0, 1.0, 0.0],
-                    'z': [0.0, 0.0, 1.0]
-                },
-                'pca_frame': {
-                    'o': [0.0, 0.0, 0.0],
-                    'x': principal_components[0].tolist(),
-                    'y': principal_components[1].tolist(),
-                    'z': principal_components[2].tolist()
-                },
-                'reserved': '',  # Empty string when not reserved
-                'attributes': {},  # Empty attributes dict
-                'validated': False
-            }
+            # Create component data dictionary based on schema
+            COMPDATA = self.build_component_data_from_schema(
+                schema, ComponentID, Type, Material, Complexity, Fragment,
+                Assembly, Color, dimensions, location_data,
+                principal_components
+            )
+
+            # Validate component data against schema
+            if not self.validate_component_data(COMPDATA, schema):
+                self._addWarning('Component data validation failed, '
+                                 'but continuing...')
 
             # Process geometry input based on type
             # HANDLE MESH
