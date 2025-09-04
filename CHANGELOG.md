@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.9.0] - 2025-09-04
+
+### Versions
+
+- CSC FastAPI Backend:  0.2.9.0 ✨
+- CSC React Frontend:   0.2.4.0 ✨
+- CSC Sheetscan Module: 0.0.1.11
+- CSC Grasshopper Interface: 0.1.2.0 ✨
+
+### Added
+
+#### CSC FastAPI Backend
+- **ETag-based Caching System**: Implemented comprehensive caching solution with ETag support for conditional requests
+- **Component Schema Caching**: Added schema endpoint with ETag support for offline component creation
+- **Cache-Control Headers**: Added proper HTTP caching headers for better performance
+- **ETag Generation Utilities**: Created utility functions for generating ETags from component data and timestamps
+
+#### CSC Grasshopper Interface
+- **Local Cache Management**: Implemented `_ComponentCache` class for local storage with thread safety and TTL support
+- **Cache Integration**: All fetch components now use intelligent caching with ETag validation
+- **Schema-driven Component Creation**: `CreateComponent` now uses cached/fetched schema instead of hardcoded data
+- **Status Output**: Added detailed status messages via dedicated output parameter for better user feedback
+- **Cache Control Parameters**: Added `DisableCache` and `ClearCache` inputs to SignIn component
+
+### Changed
+
+#### CSC FastAPI Backend
+- **API Endpoints**: Enhanced `/components`, `/components/{id}`, and `/schema/component` with ETag support
+- **Conditional Requests**: Implemented 304 Not Modified responses for unchanged resources
+- **Component Model**: Added optional `etag` field to ComponentModel for cache validation
+- **Backward Compatibility**: All changes are additive and maintain full backward compatibility
+
+#### CSC Grasshopper Interface
+- **Authentication Core**: Enhanced `_AuthCore` with `cached_get` method for intelligent caching
+- **Component Data Creation**: Completely rewrote `build_component_data_from_schema` to use actual schema
+- **Dynamic Schema Usage**: Components now build data structures dynamically from fetched schema
+- **Improved Error Handling**: Enhanced validation and error messages throughout all components
+
+### Technical Improvements
+- **Hybrid ETag Generation**: Combines `lastmodified` timestamp with key component fields for robust cache validation
+- **Cross-platform Caching**: Supports Windows (`%APPDATA%`) and macOS (`~/Library/Application Support`) cache locations
+- **Single Components Cache + Metadata Cache**: Efficient storage strategy avoiding data duplication
+- **Thread Safety**: Implemented proper locking mechanisms for concurrent cache access
+- **Schema Validation**: Dynamic component data creation ensures strict adherence to data model
+- **Performance Optimization**: Reduced bandwidth usage through intelligent caching and conditional requests
+
 ## [0.2.8.0] - 2025-09-03
 
 ### Versions
