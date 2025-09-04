@@ -40,7 +40,7 @@ def build_component_match_stage(
     material: Optional[str] = None,
     validated: Optional[int] = None,
     complexity: Optional[int] = None,
-    fragment: Optional[str] = None,
+    fragment: Optional[bool] = None,
     bbx_min_x: Optional[float] = None,
     bbx_min_y: Optional[float] = None,
     bbx_min_z: Optional[float] = None,
@@ -67,11 +67,7 @@ def build_component_match_stage(
 
     # Add fragment filter
     if fragment is not None:
-        # Convert string to boolean for MongoDB query
-        fragment_bool = fragment.lower() in ('true', '1', 'yes', 'on')
-        print(f'DEBUG: fragment input="{fragment}", '
-              f'converted to {fragment_bool}')
-        match_stage['fragment'] = fragment_bool
+        match_stage['fragment'] = fragment
 
     # Add reservation status filter
     if reserved == 'true':
@@ -249,9 +245,7 @@ async def count_components(
     material: Optional[str] = Query(None, description='Material type filter'),
     validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
     complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
-    fragment: Optional[str] = Query(
-        None, description='Is fragment (true/false)'
-    ),
+    fragment: Optional[bool] = Query(None, description='Is fragment'),
     bbx_min_x: Optional[float] = Query(None, description='Min X'),
     bbx_min_y: Optional[float] = Query(None, description='Min Y'),
     bbx_min_z: Optional[float] = Query(None, description='Min Z'),
@@ -405,9 +399,7 @@ async def get_components_shallow(
     material: str = Query('', description='Material type filter'),
     validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
     complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
-    fragment: Optional[str] = Query(
-        None, description='Is fragment (true/false)'
-    ),
+    fragment: Optional[bool] = Query(None, description='Is fragment'),
     reserved: Optional[str] = Query(
         None,
         description=('Reservation filter: "true"=reserved by current user, '
@@ -461,9 +453,7 @@ async def get_components(
     material: str = Query('', description='Material type filter'),
     validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
     complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
-    fragment: Optional[str] = Query(
-        None, description='Is fragment (true/false)'
-    ),
+    fragment: Optional[bool] = Query(None, description='Is fragment'),
     reserved: Optional[str] = Query(
         None,
         description=('Reservation filter: "true"=reserved by current user, '
