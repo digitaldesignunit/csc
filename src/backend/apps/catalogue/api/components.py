@@ -69,6 +69,8 @@ def build_component_match_stage(
     if fragment is not None:
         # Convert string to boolean for MongoDB query
         fragment_bool = fragment.lower() in ('true', '1', 'yes', 'on')
+        print(f'DEBUG: fragment input="{fragment}", '
+              f'converted to {fragment_bool}')
         match_stage['fragment'] = fragment_bool
 
     # Add reservation status filter
