@@ -235,7 +235,7 @@ class ComponentCount(BaseModel):
 
 class ComponentDescriptors(BaseModel):
     id: str = Field(alias="_id")
-    descriptors: Optional[Dict] = None
+    descriptors: Dict = Field(default_factory=dict)
 
     class Config:
         populate_by_name = True
@@ -250,7 +250,7 @@ class ComponentModel(BaseModel):
     )
     # human readable name (optional)
     name: Optional[str] = Field(
-        None,
+        'Unnamed Component',
         description="Human readable component name (optional)"
     )
     # timestamps
@@ -268,8 +268,7 @@ class ComponentModel(BaseModel):
     material: str = Field(
         description="Material type of the component"
     )
-    complexity: Optional[int] = Field(
-        None,
+    complexity: int = Field(
         description="Complexity level (0-3, where 0 is simplest)"
     )
     fragment: bool = Field(
@@ -283,7 +282,7 @@ class ComponentModel(BaseModel):
         description="Component geometry data (mesh, extrusion, etc.)"
     )
     color: Optional[List[int]] = Field(
-        None,
+        [110, 110, 110],
         description="RGB color values as [R, G, B] integers (0-255)"
     )
     bbx: ComponentBoundingBox = Field(
@@ -291,40 +290,53 @@ class ComponentModel(BaseModel):
                      "(dimensions of the component)")
     )
     location: Optional[ComponentLocation] = Field(
-        None,
+        {
+            'lat': 0.0,
+            'lon': 0.0
+        },
         description="Geographic location data (lat/lon coordinates)"
     )
     descriptors: Optional[Dict] = Field(
-        None,
+        {},
         description="Component descriptors and metadata"
     )
     processes: Optional[Dict] = Field(
-        None,
+        {},
         description="Manufacturing or processing information"
     )
-    iframe: Optional[ComponentFrame] = Field(
-        None,
+    iframe: ComponentFrame = Field(
+        {
+            'o': [0.0, 0.0, 0.0],
+            'x': [1.0, 0.0, 0.0],
+            'y': [0.0, 1.0, 0.0],
+            'z': [0.0, 0.0, 1.0]
+        },
         description="Insertion Frame / Transformation matrix data"
     )
-    pca_frame: Optional[ComponentFrame] = Field(
-        None,
+    pca_frame: ComponentFrame = Field(
+        {
+            'o': [0.0, 0.0, 0.0],
+            'x': [1.0, 0.0, 0.0],
+            'y': [0.0, 1.0, 0.0],
+            'z': [0.0, 0.0, 1.0]
+        },
         description=("PCA Frame / Principal Component Analysis transformation "
                      "matrix data")
     )
-    reserved: Optional[str] = Field(
-        None,
+    reserved: str = Field(
+        '',
         description=("UUID of user who has reserved this component "
                      "(empty if not reserved)")
     )
     attributes: Optional[Dict] = Field(
-        None,
+        {},
         description="Additional component attributes"
     )
     validated: bool = Field(
         description="Whether this component has been validated"
     )
     etag: Optional[str] = Field(
-        None,
+        '',
         description=("ETag for cache validation (auto-generated from "
                      "lastmodified and key fields)")
     )
