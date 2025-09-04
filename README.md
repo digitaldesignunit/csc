@@ -18,9 +18,8 @@ not working, etc. pp.
 - We use Python 3.9.18
 - The frontend is implemented using the [_Next.JS_](https://nextjs.org/)
 framework
-- The frontend is designed to connect to the backend via CORS on the same
-server using JWT-based auth
-- **NEW**: Grasshopper interface provides Python 3 components for direct integration with Rhino/Grasshopper
+- The frontend is designed to connect to the backend on the same server using JWT-based auth
+- Grasshopper interface provides Python 3 components for direct integration with Rhino/Grasshopper
 - Everything runs on a web server, in our case we use
 [_Uberspace_](https://uberspace.de/)
 
