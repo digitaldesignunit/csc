@@ -323,6 +323,11 @@ class ComponentModel(BaseModel):
     validated: bool = Field(
         description="Whether this component has been validated"
     )
+    etag: Optional[str] = Field(
+        None,
+        description=("ETag for cache validation (auto-generated from "
+                     "lastmodified and key fields)")
+    )
 
     class Config:
         extra = "allow"
@@ -366,7 +371,8 @@ class ComponentModel(BaseModel):
                     },
                 "reserved": "550e8400-e29b-41d4-a716-446655440000",
                 "attributes": {"strength": "C30"},
-                "validated": True
+                "validated": True,
+                "etag": "abc123def456"
             }
         }
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3.9
 import os
+import json
+import hashlib
 from typing import Annotated, Optional
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
@@ -16,11 +18,10 @@ from apps.catalogue.models import (  # NOQA
     ComponentCount,
     ComponentDescriptors,
     ComponentModel,
-    UpdateComponentModel,
     User,
 )
 from .auth import get_current_active_user, require_admin
-
+from utility import generate_component_etag, generate_etag_for_components
 
 # INIT ROUTER -----------------------------------------------------------------
 
@@ -111,6 +112,23 @@ def build_component_match_stage(
                 match_stage['bbx.2'] = bbx_query
 
     return match_stage
+
+
+def check_conditional_request(request: Request, etag: str) -> bool:
+    """
+    Check if request is a conditional request with If-None-Match header.
+
+    Args:
+        request: FastAPI request object
+        etag: Current ETag of the resource
+
+    Returns:
+        True if resource hasn't changed (should return 304), False otherwise
+    """
+    if_none_match = request.headers.get('if-none-match')
+    if if_none_match and if_none_match == etag:
+        return True
+    return False
 
 
 async def get_components_with_aggregation(
@@ -473,7 +491,27 @@ async def get_components(
         include_username=True,
         current_user_id=current_user.id,
     )
-    return JSONResponse(status_code=200, content=components)
+
+    # Generate ETag for the component list
+    etag = generate_etag_for_components(components)
+
+    # Check for conditional request
+    if check_conditional_request(request, etag):
+        return JSONResponse(
+            status_code=304,
+            content=None,
+            headers={'ETag': etag}
+        )
+
+    # Return components with ETag header
+    return JSONResponse(
+        status_code=200,
+        content=components,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=3600'  # 1 hour cache
+        }
+    )
 
 
 @router.get('/components/{component_id}', summary='Get component by id')
@@ -492,14 +530,57 @@ async def get_component(
     if not components:
         raise HTTPException(404, 'Not found')
 
-    return JSONResponse(status_code=200, content=components[0])
+    component = components[0]
+
+    # Generate ETag for the individual component
+    etag = generate_component_etag(component)
+
+    # Check for conditional request
+    if check_conditional_request(request, etag):
+        return JSONResponse(
+            status_code=304,
+            content=None,
+            headers={'ETag': etag}
+        )
+
+    # Return component with ETag header
+    return JSONResponse(
+        status_code=200,
+        content=component,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=3600'  # 1 hour cache
+        }
+    )
 
 
 @router.get('/schema/component', summary='Get ComponentModel schema')
-async def get_component_schema():
+async def get_component_schema(request: Request):
     """Get the OpenAPI schema for ComponentModel"""
-    from apps.catalogue.models import ComponentModel
-    return ComponentModel.model_json_schema()
+
+    schema = ComponentModel.model_json_schema()
+
+    # Generate ETag for schema (hash of the schema content)
+    schema_string = json.dumps(schema, sort_keys=True, separators=(',', ':'))
+    etag = hashlib.md5(schema_string.encode('utf-8')).hexdigest()
+
+    # Check for conditional request
+    if check_conditional_request(request, etag):
+        return JSONResponse(
+            status_code=304,
+            content=None,
+            headers={'ETag': etag}
+        )
+
+    # Return schema with ETag header
+    return JSONResponse(
+        status_code=200,
+        content=schema,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=86400'  # 24h cache for schema
+        }
+    )
 
 
 # COMPONENT DETAIL ROUTES -----------------------------------------------------

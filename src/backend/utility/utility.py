@@ -2,6 +2,7 @@
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import datetime
+import hashlib
 import json
 import os
 
@@ -74,3 +75,64 @@ def create_logging_timestamp():
     """
     timestamp = datetime.datetime.today().strftime('%y:%m:%d-%H:%M:%S')
     return timestamp
+
+
+def generate_component_etag(component_data: dict) -> str:
+    """
+    Generate ETag for a component using hybrid hash approach.
+
+    Creates a hash from lastmodified timestamp and key component fields
+    (id, type, material, validated) for efficient cache validation.
+
+    Args:
+        component_data: Component data dictionary
+
+    Returns:
+        ETag string (hex digest of MD5 hash)
+    """
+    # Extract key fields for ETag generation
+    key_fields = {
+        'lastmodified': component_data.get('lastmodified', ''),
+        'id': component_data.get('_id', component_data.get('id', '')),
+        'type': component_data.get('type',
+                                   component_data.get('componenttype', '')),
+        'material': component_data.get('material', ''),
+        'validated': str(component_data.get('validated', False))
+    }
+
+    # Create a consistent string representation
+    etag_string = json.dumps(key_fields, sort_keys=True,
+                             separators=(',', ':'))
+
+    # Generate MD5 hash
+    etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
+
+    return etag_hash
+
+
+def generate_etag_for_components(components: list) -> str:
+    """
+    Generate ETag for a list of components using the individual component
+    ETag function.
+
+    Args:
+        components: List of component dictionaries
+
+    Returns:
+        ETag string (MD5 hash of component ETags)
+    """
+
+    # Generate ETag for each component and collect them
+    component_etags = []
+    for comp in components:
+        etag = generate_component_etag(comp)
+        component_etags.append(etag)
+
+    # Sort for consistent hashing
+    component_etags.sort()
+
+    # Create hash of all component ETags
+    etag_string = json.dumps(component_etags, separators=(',', ':'))
+    etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
+
+    return etag_hash
