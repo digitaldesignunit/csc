@@ -163,6 +163,9 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 'pca_frame': {'type': 'object'},
                 'reserved': {'type': 'string'},
                 'attributes': {'type': 'object'},
+                'marker_points': {
+                    'type': 'array', 'items': {
+                        'type': 'array', 'items': {'type': 'number'}}},
                 'validated': {'type': 'boolean'},
                 'etag': {'type': 'string'}
             },
@@ -300,6 +303,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 component_data[field_name] = ''
             elif field_name == 'attributes':
                 component_data[field_name] = {}
+            elif field_name == 'marker_points':
+                component_data[field_name] = []
             elif field_name == 'validated':
                 component_data[field_name] = False
             elif field_name == 'etag':
@@ -692,9 +697,14 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 f'Skipping file saving but computing primitive geometry.'
             )
 
-        # Check if any mesh needs file saving (has > 500 faces)
-        needs_file_saving = any(mesh is not None and mesh.Faces.Count > 500
-                                for mesh in meshes)
+        # Check if any mesh needs file saving
+        # Save detailed files if any mesh has > 500 faces
+        # Save reduced files if any mesh has > 5000 faces
+        needs_detailed_saving = any(mesh is not None and mesh.Faces.Count > 500
+                                    for mesh in meshes)
+        needs_reduced_saving = any(mesh is not None and mesh.Faces.Count > 5000
+                                   for mesh in meshes)
+        needs_file_saving = needs_detailed_saving or needs_reduced_saving
 
         # Process each mesh
         for i, mesh in enumerate(meshes):
@@ -735,27 +745,26 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         # Save files if needed and files don't already exist
         if files_saved:
             try:
-                # Save all meshes as a single OBJ file with object declarations
-                self.save_multiple_meshes_as_obj(
-                    meshes, detailed_obj_path
-                )
+                # Save detailed files if any mesh has > 500 faces
+                if needs_detailed_saving:
+                    self.save_multiple_meshes_as_obj(
+                        meshes, detailed_obj_path
+                    )
 
-                # Save reduced version if any mesh has high face count
-                high_face_meshes = [m for m in meshes
-                                    if m is not None and m.Faces.Count > 5000]
-                if high_face_meshes:
-                    # Use reduced meshes for the reduced OBJ file
+                # Save reduced files if any mesh has > 5000 faces
+                if needs_reduced_saving:
+                    # Include ALL meshes but use reduced
+                    # versions where available
                     reduced_meshes_for_saving = []
                     for i, mesh in enumerate(meshes):
-                        if (mesh is not None and
-                                mesh.Faces.Count > 5000 and
-                                reduced_meshes[i] is not None):
-                            reduced_meshes_for_saving.append(reduced_meshes[i])
-                        elif (mesh is not None and
-                              mesh.Faces.Count > 5000 and
-                              reduced_meshes[i] is None):
-                            # Fallback to original if no reduced version
-                            reduced_meshes_for_saving.append(mesh)
+                        if mesh is not None:
+                            if reduced_meshes[i] is not None:
+                                # Use reduced version if available
+                                reduced_meshes_for_saving.append(
+                                    reduced_meshes[i])
+                            else:
+                                # Use original mesh if no reduced version
+                                reduced_meshes_for_saving.append(mesh)
 
                     if reduced_meshes_for_saving:
                         self.save_multiple_meshes_as_obj(
@@ -1117,7 +1126,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                             'c': colors
                         }]
                     }
-                    COMPDATA['geometry'].update(comp_geometry)
+                    COMPDATA['geometry'] = comp_geometry
 
                 elif isinstance(single_geometry, Rhino.Geometry.Extrusion):
                     # Handle single extrusion (existing logic)
@@ -1152,7 +1161,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                             'height': height
                         }
                     }
-                    COMPDATA['geometry'].update(comp_extrusion)
+                    COMPDATA['geometry'] = comp_extrusion
             else:
                 # HANDLE MULTIPLE MESHES
                 # Center all meshes using the translation
@@ -1207,7 +1216,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 comp_geometry = {
                     'meshes': meshes_data
                 }
-                COMPDATA['geometry'].update(comp_geometry)
+                COMPDATA['geometry'] = comp_geometry
 
             # create json string
             ComponentData = json.dumps(COMPDATA)

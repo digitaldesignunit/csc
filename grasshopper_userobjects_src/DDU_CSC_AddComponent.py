@@ -247,6 +247,94 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = msg
             return AddedComponentData
 
+        # Validate required fields for component creation
+        required_fields = [
+            'type', 'material', 'complexity', 'fragment', 'assembly',
+            'geometry', 'bbx', 'iframe'
+        ]
+        missing_fields = []
+        for field in required_fields:
+            if field not in component_json:
+                missing_fields.append(field)
+
+        if missing_fields:
+            fields_str = ", ".join(missing_fields)
+            msg = f'Component data missing required fields: {fields_str}'
+            self._addError(msg)
+            self.Component.Message = msg
+            return AddedComponentData
+
+        # Validate geometry structure
+        geometry = component_json.get('geometry', {})
+        if not geometry:
+            msg = 'Component data must contain a geometry field.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return AddedComponentData
+
+        # Check if geometry has either mesh or meshes (but not both)
+        has_mesh = 'mesh' in geometry
+        has_meshes = 'meshes' in geometry
+
+        if not has_mesh and not has_meshes:
+            msg = ('Component geometry must contain either mesh or '
+                   'meshes field.')
+            self._addError(msg)
+            self.Component.Message = msg
+            return AddedComponentData
+
+        if has_mesh and has_meshes:
+            msg = ('Component geometry cannot contain both mesh and '
+                   'meshes fields.')
+            self._addError(msg)
+            self.Component.Message = msg
+            return AddedComponentData
+
+        # Validate field types
+        validation_errors = []
+
+        # Check complexity is integer
+        if 'complexity' in component_json:
+            if not isinstance(component_json['complexity'], int):
+                validation_errors.append('complexity must be an integer')
+
+        # Check fragment is boolean
+        if 'fragment' in component_json:
+            if not isinstance(component_json['fragment'], bool):
+                validation_errors.append('fragment must be a boolean')
+
+        # Check assembly is boolean
+        if 'assembly' in component_json:
+            if not isinstance(component_json['assembly'], bool):
+                validation_errors.append('assembly must be a boolean')
+
+        # Check bbx is list of 3 numbers
+        if 'bbx' in component_json:
+            bbx = component_json['bbx']
+            if not isinstance(bbx, list) or len(bbx) != 3:
+                validation_errors.append('bbx must be a list of 3 numbers')
+            elif not all(isinstance(x, (int, float)) for x in bbx):
+                validation_errors.append('bbx must contain only numbers')
+
+        # Check color format if present
+        if 'color' in component_json:
+            color = component_json['color']
+            if color is not None:  # color is optional
+                if not isinstance(color, list) or len(color) != 3:
+                    validation_errors.append(
+                        'color must be a list of 3 integers')
+                elif not all(isinstance(x, int) and 0 <= x <= 255
+                             for x in color):
+                    validation_errors.append(
+                        'color must contain integers between 0-255')
+
+        if validation_errors:
+            errors_str = '\n'.join(validation_errors)
+            msg = f'Component data validation errors:\n{errors_str}'
+            self._addError(msg)
+            self.Component.Message = msg
+            return AddedComponentData
+
         # Check for geometry files
         files_status = self.check_geometry_files(component_id)
         has_geometry_files = files_status['detailed_obj']
@@ -339,7 +427,29 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 self.Component.Message = msg
 
             elif response.status_code == 422:
-                msg = 'Component data validation failed.'
+                # Try to get detailed validation error from response
+                try:
+                    error_detail = response.json()
+                    if 'detail' in error_detail:
+                        if isinstance(error_detail['detail'], list):
+                            # Pydantic validation errors
+                            validation_errors = []
+                            for error in error_detail['detail']:
+                                field = error.get('loc', ['unknown'])[-1]
+                                message = error.get('msg', 'validation error')
+                                validation_errors.append(f"{field}: {message}")
+                            errors_str = '\n'.join(validation_errors)
+                            msg = (f'Component data validation failed:\n'
+                                   f'{errors_str}')
+                        else:
+                            detail = error_detail["detail"]
+                            msg = (f'Component data validation failed: '
+                                   f'{detail}')
+                    else:
+                        msg = (f'Component data validation failed: '
+                               f'{error_detail}')
+                except (json.JSONDecodeError, KeyError):
+                    msg = 'Component data validation failed.'
                 self._addError(msg)
                 self.Component.Message = msg
 
