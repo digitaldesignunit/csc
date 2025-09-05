@@ -346,6 +346,10 @@ class ComponentModel(BaseModel):
         {},
         description="Additional component attributes"
     )
+    marker_points: Optional[List[List[float]]] = Field(
+        [],
+        description="Marker points as array of [x, y, z] coordinate triplets"
+    )
     validated: bool = Field(
         description="Whether this component has been validated"
     )
@@ -407,6 +411,7 @@ class ComponentModel(BaseModel):
                     },
                 "reserved": "550e8400-e29b-41d4-a716-446655440000",
                 "attributes": {"strength": "C30"},
+                "marker_points": [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
                 "validated": True,
                 "etag": "abc123def456"
             }

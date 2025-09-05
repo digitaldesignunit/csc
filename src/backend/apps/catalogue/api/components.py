@@ -628,13 +628,12 @@ async def get_component_material_detailed(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str,
 ):
-    base = request.app.component_geometry_dir
-    mtl_path = os.path.join(base, component_id, 'mesh.mtl')
-    return FileResponse(
-        _ensure_file(mtl_path),
-        media_type='text/x-mtl',
-        filename='mesh.mtl'
-    )
+    """
+    DEPRECATED: Material files are no longer generated.
+    Returns 404 as materials are now embedded as vertex colors in OBJ files.
+    """
+    raise HTTPException(404, 'Material files no longer supported. '
+                             'Colors embedded as vertex colors in OBJ files.')
 
 
 @router.get('/components/{component_id}/geometry_reduced')
@@ -658,13 +657,12 @@ async def get_component_material_reduced(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str,
 ):
-    base = request.app.component_geometry_dir
-    mtl_path = os.path.join(base, component_id, 'mesh_reduced.mtl')
-    return FileResponse(
-        _ensure_file(mtl_path),
-        media_type='text/x-mtl',
-        filename='mesh_reduced.mtl'
-    )
+    """
+    DEPRECATED: Material files are no longer generated.
+    Returns 404 as materials are now embedded as vertex colors in OBJ files.
+    """
+    raise HTTPException(404, 'Material files no longer supported. '
+                             'Colors embedded as vertex colors in OBJ files.')
 
 
 @router.get('/components/{component_id}/texture')
@@ -673,13 +671,12 @@ async def get_component_texture(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str,
 ):
-    base = request.app.component_geometry_dir
-    texture_path = os.path.join(base, component_id, 'texture.jpg')
-    return FileResponse(
-        _ensure_file(texture_path),
-        media_type='image/jpeg',
-        filename=f'{component_id}_texture.jpg'
-    )
+    """
+    DEPRECATED: Texture files are no longer generated.
+    Returns 404 as colors are now embedded as vertex colors in OBJ files.
+    """
+    raise HTTPException(404, 'Texture files no longer supported. '
+                             'Colors embedded as vertex colors in OBJ files.')
 
 
 @router.get('/components/{component_id}/preview_image')
@@ -727,16 +724,10 @@ async def add_reduced_geometry(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str,
     mesh_file: UploadFile = File(..., description='Reduced mesh OBJ file'),
-    material_file: UploadFile = File(
-        ..., description='Reduced material MTL file'
-    ),
-    texture_file: Optional[UploadFile] = File(
-        None, description='Texture JPG file'
-    ),
 ):
     """
     Add reduced geometry files to an existing component.
-    Accepts mesh_reduced.obj, mesh_reduced.mtl, and optionally texture.jpg.
+    Accepts mesh_reduced.obj with embedded vertex colors.
     """
     # Check if component exists
     coll = await get_components_col(request)
@@ -747,10 +738,6 @@ async def add_reduced_geometry(
     # Validate file types
     if not mesh_file.filename.endswith('.obj'):
         raise HTTPException(400, 'Mesh file must be a .obj file')
-    if not material_file.filename.endswith('.mtl'):
-        raise HTTPException(400, 'Material file must be a .mtl file')
-    if texture_file and not texture_file.filename.endswith('.jpg'):
-        raise HTTPException(400, 'Texture file must be a .jpg file')
 
     # Create component geometry directory
     base_dir = request.app.component_geometry_dir
@@ -764,25 +751,12 @@ async def add_reduced_geometry(
             content = await mesh_file.read()
             f.write(content)
 
-        # Save reduced material file
-        mtl_path = os.path.join(component_dir, 'mesh_reduced.mtl')
-        with open(mtl_path, 'wb') as f:
-            content = await material_file.read()
-            f.write(content)
-
-        # Save texture file if provided
-        if texture_file:
-            texture_path = os.path.join(component_dir, 'texture.jpg')
-            with open(texture_path, 'wb') as f:
-                content = await texture_file.read()
-                f.write(content)
-
         return JSONResponse(
             status_code=200,
-            content={'message': 'Reduced geometry files uploaded successfully'}
+            content={'message': 'Reduced geometry file uploaded successfully'}
         )
     except Exception as e:
-        raise HTTPException(500, f'Error saving files: {str(e)}')
+        raise HTTPException(500, f'Error saving file: {str(e)}')
 
 
 @router.post(
@@ -794,16 +768,10 @@ async def add_detailed_geometry(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str,
     mesh_file: UploadFile = File(..., description='Detailed mesh OBJ file'),
-    material_file: UploadFile = File(
-        ..., description='Detailed material MTL file'
-    ),
-    texture_file: Optional[UploadFile] = File(
-        None, description='Texture JPG file'
-    ),
 ):
     """
     Add detailed geometry files to an existing component.
-    Accepts mesh.obj, mesh.mtl, and optionally texture.jpg.
+    Accepts mesh.obj with embedded vertex colors.
     """
     # Check if component exists
     coll = await get_components_col(request)
@@ -814,10 +782,6 @@ async def add_detailed_geometry(
     # Validate file types
     if not mesh_file.filename.endswith('.obj'):
         raise HTTPException(400, 'Mesh file must be a .obj file')
-    if not material_file.filename.endswith('.mtl'):
-        raise HTTPException(400, 'Material file must be a .mtl file')
-    if texture_file and not texture_file.filename.endswith('.jpg'):
-        raise HTTPException(400, 'Texture file must be a .jpg file')
 
     # Create component geometry directory
     base_dir = request.app.component_geometry_dir
@@ -831,27 +795,14 @@ async def add_detailed_geometry(
             content = await mesh_file.read()
             f.write(content)
 
-        # Save detailed material file
-        mtl_path = os.path.join(component_dir, 'mesh.mtl')
-        with open(mtl_path, 'wb') as f:
-            content = await material_file.read()
-            f.write(content)
-
-        # Save texture file if provided
-        if texture_file:
-            texture_path = os.path.join(component_dir, 'texture.jpg')
-            with open(texture_path, 'wb') as f:
-                content = await texture_file.read()
-                f.write(content)
-
         return JSONResponse(
             status_code=200,
             content={
-                'message': 'Detailed geometry files uploaded successfully'
+                'message': 'Detailed geometry file uploaded successfully'
             }
         )
     except Exception as e:
-        raise HTTPException(500, f'Error saving files: {str(e)}')
+        raise HTTPException(500, f'Error saving file: {str(e)}')
 
 
 # DELETE: ADMIN ONLY ----------------------------------------------------------
