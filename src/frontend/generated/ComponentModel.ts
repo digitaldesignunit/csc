@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2025-09-05T08:11:52.421Z
+// Generated on: 2025-09-05T19:21:01.557Z
 // Source: https://api.ddu.uber.space/schema/component
 
 export type ComponentBoundingBox = number[];
@@ -66,6 +66,7 @@ export interface ComponentModel {
   pca_frame?: ComponentFrame; // PCA Frame / Principal Component Analysis transformation matrix data
   reserved?: string; // UUID of user who has reserved this component (empty if not reserved)
   attributes?: Record<string, unknown> | unknown; // Additional component attributes
+  marker_points?: number[][] | unknown; // Marker points as array of [x, y, z] coordinate triplets
   validated: boolean; // Whether this component has been validated
   etag?: string | unknown; // ETag for cache validation (auto-generated from lastmodified and key fields)
 }
