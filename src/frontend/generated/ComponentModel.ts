@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2025-09-03T13:21:39.195Z
+// Generated on: 2025-09-05T08:11:52.421Z
 // Source: https://api.ddu.uber.space/schema/component
 
 export type ComponentBoundingBox = number[];
@@ -18,7 +18,8 @@ export interface ComponentFrame {
 }
 
 export interface ComponentGeometry {
-  mesh?: ComponentMesh | unknown; // Mesh geometry
+  mesh?: ComponentMesh | unknown; // Mesh geometry (single mesh - backward compat)
+  meshes?: ComponentMesh[] | unknown; // Array of mesh geometries (multiple meshes)
   extrusion?: ComponentExtrusion | unknown; // Extrusion geometry
 }
 
@@ -52,7 +53,7 @@ export interface ComponentModel {
   lastmodified: string; // ISO timestamp when component was last modified
   type: string; // Type of component (sheet, beam, slab, rubble, column)
   material: string; // Material type of the component
-  complexity?: number | unknown; // Complexity level (0-3, where 0 is simplest)
+  complexity: number; // Complexity level (0-3, where 0 is simplest)
   fragment: boolean; // Whether this component is a fragment
   assembly: boolean; // Whether this component is an assembly
   geometry: ComponentGeometry; // Component geometry data (mesh, extrusion, etc.)
@@ -61,11 +62,12 @@ export interface ComponentModel {
   location?: ComponentLocation | unknown; // Geographic location data (lat/lon coordinates)
   descriptors?: Record<string, unknown> | unknown; // Component descriptors and metadata
   processes?: Record<string, unknown> | unknown; // Manufacturing or processing information
-  iframe?: ComponentFrame | unknown; // Insertion Frame / Transformation matrix data
-  pca_frame?: ComponentFrame | unknown; // PCA Frame / Principal Component Analysis transformation matrix data
-  reserved?: string | unknown; // UUID of user who has reserved this component (empty if not reserved)
+  iframe?: ComponentFrame; // Insertion Frame / Transformation matrix data
+  pca_frame?: ComponentFrame; // PCA Frame / Principal Component Analysis transformation matrix data
+  reserved?: string; // UUID of user who has reserved this component (empty if not reserved)
   attributes?: Record<string, unknown> | unknown; // Additional component attributes
   validated: boolean; // Whether this component has been validated
+  etag?: string | unknown; // ETag for cache validation (auto-generated from lastmodified and key fields)
 }
 
 // Utility types for better type safety
