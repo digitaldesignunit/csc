@@ -9,7 +9,6 @@ from fastapi import (
     APIRouter, Depends, HTTPException, Request, status, Query, UploadFile, File
 )
 from fastapi.responses import JSONResponse, FileResponse
-from fastapi.encoders import jsonable_encoder
 from pymongo.errors import PyMongoError
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -314,7 +313,7 @@ async def create_component(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component: ComponentModel = ...,
 ):
-    doc = jsonable_encoder(component, by_alias=True)
+    doc = component.model_dump(by_alias=True, exclude_none=True)
     coll = await get_components_col(request)
     # Check if component with this ID already exists
     existing_component = await coll.find_one({'_id': doc['_id']})
