@@ -235,6 +235,9 @@ class ComponentGeometry(BaseModel):
             )
         return self
 
+    class Config:
+        exclude_none = True
+
 
 class ComponentFrame(BaseModel):
     o: List[float] = Field(description="Origin point [x, y, z]")
@@ -362,6 +365,7 @@ class ComponentModel(BaseModel):
     class Config:
         extra = "allow"
         populate_by_name = True
+        exclude_none = True
         schema_extra = {
             "example": {
                 "_id": "550e8400-e29b-41d4-a716-446655440000",
