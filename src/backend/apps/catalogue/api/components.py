@@ -492,8 +492,18 @@ async def get_components(
         current_user_id=current_user.id,
     )
 
+    # Parse through ComponentModel to apply exclude_none configuration
+    components_clean = []
+    for component in components:
+        try:
+            component_model = ComponentModel(**component)
+            components_clean.append(component_model.model_dump())
+        except Exception:
+            # If parsing fails, use original component data
+            components_clean.append(component)
+
     # Generate ETag for the component list
-    etag = generate_etag_for_components(components)
+    etag = generate_etag_for_components(components_clean)
 
     # Check for conditional request
     if check_conditional_request(request, etag):
@@ -506,7 +516,7 @@ async def get_components(
     # Return components with ETag header
     return JSONResponse(
         status_code=200,
-        content=components,
+        content=components_clean,
         headers={
             'ETag': etag,
             'Cache-Control': 'public, max-age=3600'  # 1 hour cache
@@ -532,8 +542,16 @@ async def get_component(
 
     component = components[0]
 
+    # Parse through ComponentModel to apply exclude_none configuration
+    try:
+        component_model = ComponentModel(**component)
+        component_clean = component_model.model_dump()
+    except Exception:
+        # If parsing fails, use original component data
+        component_clean = component
+
     # Generate ETag for the individual component
-    etag = generate_component_etag(component)
+    etag = generate_component_etag(component_clean)
 
     # Check for conditional request
     if check_conditional_request(request, etag):
@@ -546,7 +564,7 @@ async def get_component(
     # Return component with ETag header
     return JSONResponse(
         status_code=200,
-        content=component,
+        content=component_clean,
         headers={
             'ETag': etag,
             'Cache-Control': 'public, max-age=3600'  # 1 hour cache
