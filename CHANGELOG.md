@@ -4,6 +4,113 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0.0] - 2025-09-05
+
+### Versions
+
+- CSC FastAPI Backend:  0.3.0.0 ✨
+- CSC React Frontend:   0.3.0.0 ✨
+- CSC Sheetscan Module: 0.0.1.11
+- CSC Grasshopper Interface: 0.2.0.0 ✨
+
+### Added
+
+#### CSC FastAPI Backend
+- **Multi-Mesh Support**: Added `meshes` field to `ComponentGeometry` model for supporting multiple meshes per component
+- **Marker Points Field**: Added `marker_points` field to `ComponentModel` for storing coordinate triplets
+- **OBJ-Only Geometry**: Updated geometry endpoints to support OBJ files with embedded vertex colors only
+- **Database Migration Scripts**: Created comprehensive migration scripts for multi-mesh and field format updates
+- **Schema Validation**: Enhanced component validation with proper field type checking and format validation
+
+#### CSC React Frontend
+- **Multi-Mesh Visualization**: Complete support for displaying multiple meshes in ComponentViewer
+- **Vertex Color Support**: Full support for `v X Y Z R G B` vertex colors in OBJ files with smart normalization
+- **Mesh Visibility Controls**: Individual checkbox controls to show/hide specific meshes in primitive mode
+- **Manual OBJ Parsing**: Custom OBJ parser for reliable vertex color extraction and face triangulation
+- **Smart Color Normalization**: Automatic detection and conversion of 0-255 to 0-1 color ranges
+- **Consistent Geometry Display**: Unified positioning and scaling across primitive, reduced, and detailed modes
+
+#### CSC Grasshopper Interface
+- **Multi-Mesh Input Support**: All components now accept `List[Rhino.Geometry.GeometryBase]` for single or multiple meshes
+- **OBJ File Generation**: Enhanced OBJ export with proper object declarations (`o object_0`, `o object_1`, etc.)
+- **Vertex Color Embedding**: Automatic embedding of vertex colors in OBJ files using `v X Y Z R G B` format
+- **PCA Assembly Processing**: New method for computing PCA on entire multi-mesh assemblies with proper centering
+- **Coordinate System Mapping**: Correct Rhino (X,Y,Z) to OBJ (X,Z,-Y) coordinate transformation
+- **Multi-Mesh Baking**: Support for baking multiple meshes as grouped components with individual metadata
+- **Enhanced SyncWithRhinoDoc**: Groups multiple meshes by component ID instead of treating as separate components
+
+#### Database Migration Tools
+- **Marker Points Migration**: `migrate_marker_points_and_multi_mesh.py` - Adds marker_points field and converts single-mesh to multi-mesh format
+- **Fragment Boolean Migration**: `migrate_fragment_boolean.py` - Ensures fragment field is properly typed as boolean
+- **Color Format Migration**: `migrate_color_format.py` - Converts color fields to proper `[R, G, B]` integer format
+- **OBJ File Migration**: `convert_obj_files.py` - Processes existing OBJ files to remove MTL references and standardize format
+
+### Changed
+
+#### CSC FastAPI Backend
+- **Geometry Endpoints**: Updated to serve OBJ files only, removed MTL and texture file support
+- **API Validation**: Enhanced validation for multi-mesh components and proper field format checking
+- **Deprecated Endpoints**: Material and texture serving endpoints now return 404 with informative messages
+- **Component Model**: Added validation to ensure `mesh` and `meshes` fields are not both present
+
+#### CSC React Frontend
+- **ComponentViewer Architecture**: Complete rewrite for multi-mesh support with consistent rendering pipeline
+- **Geometry Loading**: Replaced OBJLoader with custom parser for reliable vertex color handling
+- **Material System**: Switched to `MeshBasicMaterial` for proper vertex color display without lighting requirements
+- **Bounds Integration**: Fixed primitive geometry positioning to work correctly with `Bounds` component
+- **Performance Optimization**: Improved geometry caching and memory management for large multi-mesh components
+
+#### CSC Grasshopper Interface
+- **CreateComponent**: Updated to handle both single and multiple mesh inputs with unified processing pipeline
+- **FetchGeometry**: Enhanced to parse multi-object OBJ files and return lists of geometry objects
+- **DisassembleComponent**: Added support for creating multiple `Rhino.Geometry.Mesh` objects from `meshes` field
+- **BakeComponents**: Updated to bake multiple meshes with proper grouping and metadata
+- **AddComponent**: Simplified to handle OBJ-only uploads with proper file validation
+- **SyncWithRhinoDoc**: Refactored to group meshes by component ID for proper component management
+
+### Technical Improvements
+
+#### Multi-Mesh Architecture
+- **Unified Data Model**: Consistent handling of single and multiple meshes across all components
+- **Backward Compatibility**: Existing single-mesh components continue to work seamlessly
+- **Forward Compatibility**: New multi-mesh format supports future enhancements
+- **Data Integrity**: Comprehensive validation ensures proper component structure
+
+#### Geometry Processing
+- **Smart Scaling**: Consistent scaling and positioning across all geometry modes
+- **Coordinate Systems**: Proper mapping between Rhino and OBJ coordinate systems
+- **Face Triangulation**: Automatic conversion of quads and N-gons to triangles for rendering
+- **Vertex Color Handling**: Robust parsing and normalization of vertex colors in various formats
+
+#### Performance & Reliability
+- **Memory Management**: Proper cleanup and caching of geometry objects
+- **Error Handling**: Comprehensive error handling with informative user feedback
+- **Type Safety**: Eliminated all TypeScript `any` types with proper interfaces
+- **Code Quality**: Resolved all linting errors and improved maintainability
+
+#### Migration & Deployment
+- **Database Safety**: All migration scripts include comprehensive validation and rollback capabilities
+- **File System Migration**: Automated conversion of existing OBJ files to new format
+- **Schema Validation**: Post-migration verification ensures data integrity
+- **Documentation**: Comprehensive documentation for all migration processes
+
+### Breaking Changes
+
+#### CSC FastAPI Backend
+- **Material/Texture Endpoints**: `get_component_material_detailed`, `get_component_material_reduced`, and `get_component_texture` now return 404
+- **Geometry Upload**: `add_reduced_geometry` and `add_detailed_geometry` now only accept OBJ files
+
+#### CSC Grasshopper Interface
+- **Input Parameters**: All geometry inputs now expect `List[Rhino.Geometry.GeometryBase]` instead of single objects
+- **OBJ File Format**: Generated OBJ files now use object declarations and embedded vertex colors only
+
+### Migration Notes
+
+- **Database Migration**: Run `migrate_marker_points_and_multi_mesh.py` to update existing components
+- **File System Migration**: Run `convert_obj_files.py` to update existing OBJ files
+- **Frontend Update**: No manual migration required - automatically handles both old and new formats
+- **Grasshopper Update**: Update all components to new versions for multi-mesh support
+
 ## [0.2.9.0] - 2025-09-04
 
 ### Versions
