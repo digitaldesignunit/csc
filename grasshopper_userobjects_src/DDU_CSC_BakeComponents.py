@@ -26,7 +26,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250828
+    Version: 250905
     """
 
     def __init__(self):
@@ -76,6 +76,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
         return cxt
 
     def ComponentMesh(self, json_comp: dict) -> Rhino.Geometry.Mesh:
+        """Create a single mesh from geometry.mesh field (backward compat)."""
         mesh = Rhino.Geometry.Mesh()
         vl = json_comp['geometry']['mesh']['v']
         fl = json_comp['geometry']['mesh']['f']
@@ -107,6 +108,43 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
         mesh.Compact()
         return mesh
 
+    def ComponentMeshes(self, json_comp: dict) -> list:
+        """Create multiple meshes from geometry.meshes field."""
+        meshes = []
+        for i, mesh_data in enumerate(json_comp['geometry']['meshes']):
+            mesh = Rhino.Geometry.Mesh()
+            vl = mesh_data['v']
+            fl = mesh_data['f']
+            [mesh.Vertices.Add(*v) for v in vl]
+            [mesh.Faces.AddFace(*f) for f in fl]
+
+            # Try to get mesh-specific colors first
+            try:
+                cl = mesh_data['c']
+                [mesh.VertexColors.Add(
+                    System.Drawing.Color.FromArgb(*c)) for c in cl]
+            except KeyError:
+                # Fallback: use component color for all vertices
+                try:
+                    component_color = System.Drawing.Color.FromArgb(
+                        255, *json_comp['color'])
+                    for _ in range(len(vl)):
+                        mesh.VertexColors.Add(component_color)
+                except (KeyError, TypeError):
+                    # If even component color fails, use a default gray
+                    default_color = System.Drawing.Color.Gray
+                    for _ in range(len(vl)):
+                        mesh.VertexColors.Add(default_color)
+                    self._addWarning(
+                        f'Mesh {i} in component {json_comp["_id"]} '
+                        f'using default gray color')
+
+            mesh.RebuildNormals()
+            mesh.UnifyNormals()
+            mesh.Compact()
+            meshes.append(mesh)
+        return meshes
+
     def ComponentColor(self, json_comp: dict) -> System.Drawing.Color:
         return System.Drawing.Color.FromArgb(255, *json_comp['color'])
 
@@ -115,14 +153,12 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
             ComponentData: System.Collections.Generic.List[str]):
         # Initialize param descriptions (this has to be done in RunScript)
         self.InputParams[0].Description = 'Toggle to bake components to Rhino'
-        self.InputParams[1].Description = 'Component data from FetchComponents'
-
+        self.InputParams[1].Description = (
+            'Component data from FetchComponents'
+        )
         # Initialize output param descriptions
         if hasattr(self, 'OutputParams') and len(self.OutputParams) > 0:
             self.OutputParams[0].Description = 'Baking status message'
-
-        # set document
-        sc.doc = Rhino.RhinoDoc.ActiveDoc
 
         # bake toggle
         if Bake:
@@ -135,6 +171,9 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
             self.Component.Message = 'Baking components...'
             baked_count = 0
+
+            # set document
+            sc.doc = Rhino.RhinoDoc.ActiveDoc
 
             for i, cd in enumerate(ComponentData):
                 try:
@@ -170,10 +209,20 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                             xtr.Transform(xform)
                             geo_ids.append(sc.doc.Objects.Add(xtr))
                         elif key == 'mesh':
+                            # Handle single mesh (backward compatibility)
                             mesh = self.ComponentMesh(json_comp)
-                            # transform to iframe
                             mesh.Transform(xform)
                             geo_ids.append(sc.doc.Objects.Add(mesh))
+                        elif key == 'meshes':
+                            # Handle multiple meshes
+                            meshes = self.ComponentMeshes(json_comp)
+                            for j, mesh in enumerate(meshes):
+                                mesh.Transform(xform)
+                                geo_id = sc.doc.Objects.Add(mesh)
+                                geo_ids.append(geo_id)
+                                # Add mesh index as user text
+                                rs.SetUserText(geo_id, 'csc_mesh_index',
+                                               str(j))
                         else:
                             msg = (f'Missing implementation for geometry '
                                    f'of type \'{key}\'!')
@@ -207,8 +256,14 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                             geo_ids)
 
                     baked_count += 1
-                    self._addRemark(
-                        f'Successfully baked component {comp_id}')
+                    mesh_count = len(geo_ids)
+                    if mesh_count == 1:
+                        self._addRemark(
+                            f'Successfully baked component {comp_id}')
+                    else:
+                        self._addRemark(
+                            f'Successfully baked component {comp_id} '
+                            f'({mesh_count} meshes)')
 
                 except json.JSONDecodeError as e:
                     msg = f'Failed to parse component data: {str(e)}'
@@ -227,9 +282,8 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
             else:
                 self.Component.Message = 'No components were baked'
                 self._addWarning('No components were baked')
+            # restore document context
+            sc.doc = ghdoc
         else:
             self.Component.Message = 'Bake toggle is off'
             self._addRemark('Bake toggle is off - no components baked')
-
-        # Restore original document context if needed
-        # Note: ghdoc was undefined in original code

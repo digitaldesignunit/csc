@@ -100,7 +100,60 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 'complexity': {'type': 'integer', 'minimum': 0, 'maximum': 3},
                 'fragment': {'type': 'boolean'},
                 'assembly': {'type': 'boolean'},
-                'geometry': {'type': 'object'},
+                'geometry': {
+                    'type': 'object',
+                    'properties': {
+                        'mesh': {
+                            'type': 'object',
+                            'description': ('Mesh geometry (single mesh '
+                                            '- backward compatibility)'),
+                            'properties': {
+                                'v': {'type': 'array',
+                                      'items': {'type': 'array',
+                                                'items': {'type': 'number'}}},
+                                'f': {'type': 'array',
+                                      'items': {'type': 'array',
+                                                'items': {'type': 'integer'}}},
+                                'c': {'type': 'array',
+                                      'items': {'type': 'array',
+                                                'items': {'type': 'integer'}}}
+                            }
+                        },
+                        'meshes': {
+                            'type': 'array',
+                            'description': ('Array of mesh geometries '
+                                            '(multiple meshes)'),
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'v': {'type': 'array',
+                                          'items': {
+                                            'type': 'array',
+                                            'items': {'type': 'number'}}},
+                                    'f': {'type': 'array',
+                                          'items': {
+                                            'type': 'array',
+                                            'items': {'type': 'integer'}}},
+                                    'c': {'type': 'array',
+                                          'items': {
+                                            'type': 'array',
+                                            'items': {'type': 'integer'}}}
+                                }
+                            }
+                        },
+                        'extrusion': {
+                            'type': 'object',
+                            'description': 'Extrusion geometry',
+                            'properties': {
+                                'profile': {'type': 'array',
+                                            'items': {
+                                                'type': 'array',
+                                                'items': {'type': 'number'}}},
+                                'height': {'type': 'number'}
+                            }
+                        }
+                    }
+                },
                 'color': {'type': 'array', 'items': {'type': 'integer'}},
                 'bbx': {'type': 'array', 'items': {'type': 'number'}},
                 'location': {'type': 'object'},
@@ -189,17 +242,20 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             principal_components):
         """Build component data dictionary using the actual schema."""
         current_time = datetime.utcnow().isoformat() + 'Z'
-        
+
         # Get all properties from the schema
         properties = schema.get('properties', {})
         component_data = {}
-        
+
         # Build component data based on schema properties
         for field_name, field_schema in properties.items():
             if field_name == '_id':
                 component_data[field_name] = ComponentID
             elif field_name == 'name':
-                component_data[field_name] = f'{str(Type).capitalize()} Component made from {str(Material).capitalize()}'
+                component_data[field_name] = (
+                    f'{str(Type).capitalize()} Component made '
+                    f'from {str(Material).capitalize()}'
+                )
             elif field_name == 'type':
                 component_data[field_name] = Type
             elif field_name == 'material':
@@ -249,7 +305,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             elif field_name == 'etag':
                 component_data[field_name] = ''
             else:
-                # Handle any other fields from the schema with appropriate defaults
+                # Handle any other fields from the
+                # schema with appropriate defaults
                 field_type = field_schema.get('type', 'string')
                 if field_type == 'string':
                     component_data[field_name] = ''
@@ -537,145 +594,6 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         reduced_mesh.Compact()
         return reduced_mesh
 
-    def generate_vertex_colors_from_texture(
-            self, mesh: Rhino.Geometry.Mesh) -> Rhino.Geometry.Mesh:
-        """
-        Generate vertex colors from texture if mesh has texture but no vertex
-        colors. Returns the mesh with generated vertex colors.
-        """
-        try:
-            # Check if mesh has texture but no vertex colors
-            if (mesh.VertexColors.Count == 0 and
-                    mesh.TextureCoordinates.Count > 0 and
-                    mesh.Material and mesh.Material.IsValid):
-                texture = mesh.Material.GetBitmapTexture()
-                if texture and texture.IsValid:
-                    bitmap = texture.GetBitmap()
-                    if bitmap:
-                        # Create a copy of the mesh to modify
-                        colored_mesh = mesh.Duplicate()
-                        # Generate vertex colors from texture
-                        for i in range(colored_mesh.Vertices.Count):
-                            if i < colored_mesh.TextureCoordinates.Count:
-                                tex_coord = colored_mesh.TextureCoordinates[i]
-                                # Convert UV coordinates to pixel coordinates
-                                u = int(tex_coord.X * (bitmap.Width - 1))
-                                v = int(tex_coord.Y * (bitmap.Height - 1))
-                                # Clamp coordinates
-                                u = max(0, min(u, bitmap.Width - 1))
-                                v = max(0, min(v, bitmap.Height - 1))
-                                # Get pixel color
-                                pixel_color = bitmap.GetPixel(u, v)
-                                # Add vertex color
-                                colored_mesh.VertexColors.Add(pixel_color)
-                            else:
-                                # Fallback to white if no texture coordinate
-                                colored_mesh.VertexColors.Add(
-                                    System.Drawing.Color.White
-                                )
-                        # add remark
-                        self._addRemark('Generated vertex colors from texture')
-                        return colored_mesh
-            # Return original mesh if no texture or already has vertex colors
-            return mesh
-        except Exception as e:
-            self._addWarning(
-                f'Failed to generate vertex colors from texture: {str(e)}'
-            )
-            return mesh
-
-    def save_mesh_as_obj(
-        self, mesh: Rhino.Geometry.Mesh, file_path: str,
-        material_name: str = 'default_material'
-    ) -> bool:
-        """
-        Save a mesh as OBJ file with associated MTL file.
-        Uses v X Y Z R G B format for vertices with RGB integer colors.
-        Handles coordinate system mapping (Rhino Z -> OBJ Y) and textures.
-        Returns True if successful, False otherwise.
-        """
-        try:
-            # Create OBJ content
-            obj_content = '# OBJ file generated by DDU_CSC\n'
-            mtl_filename = os.path.basename(file_path).replace('.obj', '.mtl')
-            obj_content += f'mtllib {mtl_filename}\n'
-            obj_content += 'o mesh\n'
-
-            # Add vertices with coordinate system mapping (Rhino Z -> OBJ Y)
-            # and colors in v X Y Z R G B format
-            has_vertex_colors = mesh.VertexColors.Count > 0
-            for i, vertex in enumerate(mesh.Vertices):
-                # Map Rhino (X,Y,Z) to OBJ (X,Z,-Y) coordinate system
-                if has_vertex_colors and i < mesh.VertexColors.Count:
-                    # Use vertex color if available
-                    color = mesh.VertexColors[i]
-                    obj_content += (f'v {vertex.X} {vertex.Z} {-vertex.Y} '
-                                    f'{color.R} {color.G} {color.B}\n')
-                else:
-                    # Use default white color if no vertex colors
-                    obj_content += (f'v {vertex.X} {vertex.Z} {-vertex.Y} '
-                                    f'255 255 255\n')
-
-            # Add texture coordinates if mesh has them
-            has_texture_coords = mesh.TextureCoordinates.Count > 0
-            if has_texture_coords:
-                for tex_coord in mesh.TextureCoordinates:
-                    obj_content += f'vt {tex_coord.X} {tex_coord.Y}\n'
-
-            # Add faces (OBJ uses 1-based indexing)
-            for i, face in enumerate(mesh.Faces):
-                if face.IsTriangle:
-                    if has_texture_coords:
-                        # v/vt format
-                        obj_content += (
-                            f'f {face.A + 1}/{face.A + 1} '
-                            f'{face.B + 1}/{face.B + 1} '
-                            f'{face.C + 1}/{face.C + 1}\n'
-                        )
-                    else:
-                        # v format
-                        obj_content += (
-                            f'f {face.A + 1} {face.B + 1} {face.C + 1}\n'
-                        )
-                elif face.IsQuad:
-                    if has_texture_coords:
-                        obj_content += (
-                            f'f {face.A + 1}/{face.A + 1} '
-                            f'{face.B + 1}/{face.B + 1} '
-                            f'{face.C + 1}/{face.C + 1} '
-                            f'{face.D + 1}/{face.D + 1}\n'
-                        )
-                    else:
-                        obj_content += (
-                            f'f {face.A + 1} {face.B + 1} {face.C + 1} '
-                            f'{face.D + 1}\n'
-                        )
-
-            # Write OBJ file
-            with open(file_path, 'w') as f:
-                f.write(obj_content)
-
-            # Create MTL file
-            mtl_path = file_path.replace('.obj', '.mtl')
-            mtl_content = '# MTL file generated by DDU_CSC\n'
-            mtl_content += f'newmtl {material_name}\n'
-            # Default material properties
-            mtl_content += 'Ka 0.2 0.2 0.2\n'  # Ambient color
-            mtl_content += 'Kd 0.8 0.8 0.8\n'  # Diffuse color
-            mtl_content += 'Ks 0.0 0.0 0.0\n'  # Specular color
-            mtl_content += 'Ns 0.0\n'          # Specular exponent
-            mtl_content += 'illum 1\n'         # Illumination model
-
-            # Write MTL file
-            with open(mtl_path, 'w') as f:
-                f.write(mtl_content)
-
-            return True
-
-        except Exception as e:
-            self._addWarning(f'Failed to save mesh as OBJ: {str(e)}')
-            return False
-
     def process_mesh_geometry(
         self, geometry: Rhino.Geometry.Mesh, component_id: str
     ) -> tuple:
@@ -703,8 +621,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 f'Skipping file saving but computing primitive geometry.'
             )
 
-        # Generate vertex colors from texture if needed
-        processed_geometry = self.generate_vertex_colors_from_texture(geometry)
+        # Generate vertex colors from texture (not implemented yet))
+        processed_geometry = geometry
 
         # Determine what versions to create based on face count
         if face_count > 5000:
@@ -726,10 +644,10 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             try:
                 folder_path = self.create_geometry_folder(component_id)
 
-                # Save original/detailed mesh
+                # Save original/detailed mesh with object declaration
                 detailed_obj_path = os.path.join(folder_path, 'mesh.obj')
-                self.save_mesh_as_obj(
-                    processed_geometry, detailed_obj_path, 'detailed_material'
+                self.save_multiple_meshes_as_obj(
+                    [processed_geometry], detailed_obj_path
                 )
 
                 # Save reduced mesh if created
@@ -737,8 +655,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                     reduced_obj_path = os.path.join(
                         folder_path, 'mesh_reduced.obj'
                     )
-                    self.save_mesh_as_obj(
-                        reduced_mesh, reduced_obj_path, 'reduced_material'
+                    self.save_multiple_meshes_as_obj(
+                        [reduced_mesh], reduced_obj_path
                     )
 
                 self._addRemark(f'Saved geometry files to {folder_path}')
@@ -749,6 +667,209 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
         return processed_geometry, reduced_mesh, primitive_mesh, files_saved
 
+    def process_multiple_meshes_geometry(self, meshes, component_id):
+        """
+        Process multiple meshes for geometry reduction and file saving.
+        Returns list of primitive meshes and files_saved status.
+        """
+        if not meshes or len(meshes) == 0:
+            return [], False
+
+        primitive_meshes = []
+        reduced_meshes = []
+        files_saved = False
+
+        # Check if files already exist
+        folder_path = self.create_geometry_folder(component_id)
+        detailed_obj_path = os.path.join(folder_path, 'mesh.obj')
+        reduced_obj_path = os.path.join(folder_path, 'mesh_reduced.obj')
+        files_exist = (os.path.exists(detailed_obj_path) or
+                       os.path.exists(reduced_obj_path))
+
+        if files_exist:
+            self._addWarning(
+                f'Geometry files already exist for component {component_id}. '
+                f'Skipping file saving but computing primitive geometry.'
+            )
+
+        # Check if any mesh needs file saving (has > 500 faces)
+        needs_file_saving = any(mesh is not None and mesh.Faces.Count > 500
+                                for mesh in meshes)
+
+        # Process each mesh
+        for i, mesh in enumerate(meshes):
+            if mesh is None:
+                primitive_meshes.append(None)
+                reduced_meshes.append(None)
+                continue
+
+            # Generate vertex colors from texture (not implemented yet)
+            processed_mesh = mesh
+
+            # Determine face count for this mesh
+            face_count = processed_mesh.Faces.Count
+
+            # Create versions based on face count (matching single mesh logic)
+            if face_count > 5000:
+                # Create both reduced and primitive versions
+                if not files_exist and needs_file_saving:
+                    reduced_mesh = self.reduce_mesh(processed_mesh, 1000)
+                else:
+                    reduced_mesh = None
+                primitive_mesh = self.reduce_mesh(processed_mesh, 350)
+            elif face_count > 500:
+                # Create only primitive version
+                reduced_mesh = None
+                primitive_mesh = self.reduce_mesh(processed_mesh, 350)
+            else:
+                # Use original as primitive, no files saved
+                reduced_mesh = None
+                primitive_mesh = processed_mesh
+
+            primitive_meshes.append(primitive_mesh)
+            reduced_meshes.append(reduced_mesh)
+
+        # Set files_saved flag (only save if files don't exist and needed)
+        files_saved = not files_exist and needs_file_saving
+
+        # Save files if needed and files don't already exist
+        if files_saved:
+            try:
+                # Save all meshes as a single OBJ file with object declarations
+                self.save_multiple_meshes_as_obj(
+                    meshes, detailed_obj_path
+                )
+
+                # Save reduced version if any mesh has high face count
+                high_face_meshes = [m for m in meshes
+                                    if m is not None and m.Faces.Count > 5000]
+                if high_face_meshes:
+                    # Use reduced meshes for the reduced OBJ file
+                    reduced_meshes_for_saving = []
+                    for i, mesh in enumerate(meshes):
+                        if (mesh is not None and
+                                mesh.Faces.Count > 5000 and
+                                reduced_meshes[i] is not None):
+                            reduced_meshes_for_saving.append(reduced_meshes[i])
+                        elif (mesh is not None and
+                              mesh.Faces.Count > 5000 and
+                              reduced_meshes[i] is None):
+                            # Fallback to original if no reduced version
+                            reduced_meshes_for_saving.append(mesh)
+
+                    if reduced_meshes_for_saving:
+                        self.save_multiple_meshes_as_obj(
+                            reduced_meshes_for_saving, reduced_obj_path
+                        )
+
+                self._addRemark(f'Saved geometry files to {folder_path}')
+
+            except Exception as e:
+                self._addWarning(f'Failed to save geometry files: {str(e)}')
+                files_saved = False
+
+        return primitive_meshes, files_saved
+
+    def save_multiple_meshes_as_obj(self, meshes, file_path):
+        """
+        Save meshes as a single OBJ file with object declarations.
+        Each mesh becomes a separate object in the OBJ file.
+        Works for both single meshes (wrapped in list) and multiple meshes.
+        Uses v X Y Z R G B format for vertices with RGB integer colors.
+        No MTL file generation - colors are embedded in OBJ file.
+        """
+        obj_content = '# OBJ file generated by DDU_CSC\n'
+        obj_content += '# Meshes with object declarations\n'
+        obj_content += '# Vertex colors embedded (no MTL file)\n\n'
+
+        vertex_offset = 0
+
+        for i, mesh in enumerate(meshes):
+            if mesh is None:
+                continue
+
+            # Add object declaration
+            obj_content += f'o object_{i}\n'
+
+            # Add vertices with coordinate system mapping (Rhino Z -> OBJ Y)
+            # and colors in v X Y Z R G B format
+            has_vertex_colors = mesh.VertexColors.Count > 0
+            for i, vertex in enumerate(mesh.Vertices):
+                # Map Rhino (X,Y,Z) to OBJ (X,Z,-Y) coordinate system
+                if has_vertex_colors and i < mesh.VertexColors.Count:
+                    # Use vertex color if available
+                    color = mesh.VertexColors[i]
+                    obj_content += (f'v {vertex.X} {vertex.Z} {-vertex.Y} '
+                                    f'{color.R} {color.G} {color.B}\n')
+                else:
+                    # Use default white color if no vertex colors
+                    obj_content += (f'v {vertex.X} {vertex.Z} {-vertex.Y} '
+                                    f'255 255 255\n')
+
+            # Add texture coordinates if available
+            if mesh.TextureCoordinates.Count > 0:
+                for tex_coord in mesh.TextureCoordinates:
+                    obj_content += f'vt {tex_coord.X} {tex_coord.Y}\n'
+
+            # Add faces (OBJ uses 1-based indexing, adjust for vertex offset)
+            for face in mesh.Faces:
+                if face.IsTriangle:
+                    obj_content += (f'f {face.A + 1 + vertex_offset} '
+                                    f'{face.B + 1 + vertex_offset} '
+                                    f'{face.C + 1 + vertex_offset}\n')
+                elif face.IsQuad:
+                    obj_content += (f'f {face.A + 1 + vertex_offset} '
+                                    f'{face.B + 1 + vertex_offset} '
+                                    f'{face.C + 1 + vertex_offset} '
+                                    f'{face.D + 1 + vertex_offset}\n')
+
+            # Update vertex offset for next mesh
+            vertex_offset += mesh.Vertices.Count
+            obj_content += '\n'
+
+        # Write OBJ file
+        with open(file_path, 'w') as f:
+            f.write(obj_content)
+
+    def compute_pca_for_multiple_meshes(self, meshes):
+        """
+        Compute PCA for multiple meshes as a whole assembly.
+        Centers the assembly at origin before computing PCA.
+        Returns dimensions, principal components, and translation vector.
+        """
+        if not meshes or len(meshes) == 0:
+            return None, None, None
+
+        # Collect all points from all meshes
+        all_points = []
+        for mesh in meshes:
+            if mesh is None:
+                continue
+            for vertex in mesh.Vertices:
+                all_points.append([vertex.X, vertex.Y, vertex.Z])
+
+        if not all_points:
+            return None, None, None
+
+        # Convert to numpy array
+        import numpy as np
+        points_array = np.array(all_points)
+
+        # Center the assembly at origin (like single meshes)
+        # Compute centroid of all points
+        centroid = np.mean(points_array, axis=0)
+        translation_vector = -centroid
+
+        # Center the points
+        centered_points = points_array + translation_vector
+
+        # Compute PCA for the centered combined geometry
+        dimensions, principal_components = (
+            self.compute_minimum_bounding_box_3d(centered_points)
+        )
+
+        return dimensions, principal_components, translation_vector
+
     def RunScript(self,
             ComponentID: str,
             Type: str,
@@ -758,7 +879,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             Assembly: bool,
             Color: System.Drawing.Color,
             Location: Rhino.Geometry.Vector3d,
-            Geometry: Rhino.Geometry.GeometryBase):
+            Geometry: System.Collections.Generic.List[Rhino.Geometry.GeometryBase]):
         try:
             # Initialize param descriptions (this has to be done in RunScript)
             self.InputParams[0].Description = (
@@ -787,8 +908,9 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 'Component color (System.Drawing.Color)'
             )
             self.InputParams[8].Description = (
-                'Rhino geometry object (Mesh or Extrusion for sheets, '
-                'Mesh for rubble)'
+                'Rhino geometry object(s) - single object or list of objects. '
+                'For single: Mesh or Extrusion for sheets, Mesh for rubble. '
+                'For multiple: all must be Meshes.'
             )
 
             # Initialize output param descriptions
@@ -863,54 +985,83 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addWarning(msg)
                 self.Component.Message = msg
                 return ComponentData
-            elif not Geometry.IsValid:
+
+            # TYPE FILTERING
+            if not Geometry or len(Geometry) == 0:
                 msg = 'Input Geometry is invalid!'
                 self._addError(msg)
                 self.Component.Message = msg
                 return ComponentData
 
-            # TYPE FILTERING
-            if Type == 'rubble':
-                if not isinstance(Geometry, Rhino.Geometry.Mesh):
-                    msg = ('The "rubble" type expects a Mesh as '
-                           'geometry input! Please ensure and try again.')
-                    print(msg)
-                    raise ValueError(msg)
-            elif Type == 'sheet':
-                if not isinstance(
-                        Geometry,
-                        (Rhino.Geometry.Mesh, Rhino.Geometry.Extrusion)
-                ):
-                    msg = ('The "sheet" type expects a Mesh or Extrusion as '
-                           'geometry input! Please ensure and try again.')
-                    print(msg)
-                    raise ValueError(msg)
+            # Check if single or multiple objects
+            if len(Geometry) == 1:
+                # Single object validation
+                single_geometry = Geometry[0]
+                if Type == 'rubble':
+                    if not isinstance(single_geometry, Rhino.Geometry.Mesh):
+                        msg = ('The "rubble" type expects a Mesh as '
+                               'geometry input! Please ensure and try again.')
+                        print(msg)
+                        raise ValueError(msg)
+                elif Type == 'sheet':
+                    if not isinstance(
+                            single_geometry,
+                            (Rhino.Geometry.Mesh, Rhino.Geometry.Extrusion)
+                    ):
+                        msg = (
+                            'The "sheet" type expects a Mesh or Extrusion as '
+                            'geometry input! Please ensure and try again.'
+                        )
+                        print(msg)
+                        raise ValueError(msg)
+            else:
+                # Multiple objects - all must be meshes
+                for i, geom in enumerate(Geometry):
+                    if (geom is not None and
+                            not isinstance(geom, Rhino.Geometry.Mesh)):
+                        msg = (
+                            f'The geometry input at index {i} is not a Mesh! '
+                            'For multiple objects, all must be '
+                            'Rhino.Geometry.Mesh objects.')
+                        print(msg)
+                        raise ValueError(msg)
 
             self.Component.Message = f'Processing {Type} component...'
 
-            # Process geometry to extract points
-            points, compute_3d = self.process_geometry(Geometry)
+            # Process geometry to extract points and compute PCA
+            if len(Geometry) == 1:
+                # Handle single geometry (existing logic)
+                single_geometry = Geometry[0]
+                points, compute_3d = self.process_geometry(single_geometry)
 
-            # Center geometry at world origin
-            (centered_geometry,
-             translation_vector) = self.center_geometry_at_origin(Geometry)
+                # Center geometry at world origin
+                (centered_geometry, translation_vector) = (
+                    self.center_geometry_at_origin(single_geometry)
+                )
 
-            # Centered points
-            centered_points = points - translation_vector
+                # Centered points
+                centered_points = points - translation_vector
 
-            # Compute minimum bounding box and PCA transformation
-            if compute_3d:
-                dimensions, principal_components = (
-                    self.compute_minimum_bounding_box_3d(centered_points))
+                # Compute minimum bounding box and PCA transformation
+                if compute_3d:
+                    dimensions, principal_components = (
+                        self.compute_minimum_bounding_box_3d(centered_points))
+                else:
+                    # 2D APPROACH, i.e. used for Extrusions
+                    height = centered_geometry.PathStart.DistanceTo(
+                        centered_geometry.PathEnd
+                    )
+                    dimensions, principal_components = (
+                        self.compute_minimum_bounding_box_2d(
+                            centered_points, height)
+                    )
             else:
-                # 2D APPROACH, i.e. used for Extrusions
-                height = centered_geometry.PathStart.DistanceTo(
-                    centered_geometry.PathEnd
+                # Handle multiple meshes - compute PCA for whole assembly
+                dimensions, principal_components, translation_vector = (
+                    self.compute_pca_for_multiple_meshes(Geometry)
                 )
-                dimensions, principal_components = (
-                    self.compute_minimum_bounding_box_2d(
-                        centered_points, height)
-                )
+                centered_geometry = None  # Not used for multiple meshes
+                compute_3d = True  # Always 3D for multiple meshes
 
             # Get component schema first
             schema = self.get_component_schema()
@@ -928,84 +1079,135 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                                  'but continuing...')
 
             # Process geometry input based on type
-            # HANDLE MESH
-            if isinstance(Geometry, Rhino.Geometry.Mesh):
-                # Process the centered geometry for mesh reduction
-                # and file saving
-                (original_mesh, reduced_mesh, primitive_mesh, files_saved) = (
-                    self.process_mesh_geometry(centered_geometry, ComponentID)
+            if len(Geometry) == 1:
+                # HANDLE SINGLE GEOMETRY
+                single_geometry = Geometry[0]
+                if isinstance(single_geometry, Rhino.Geometry.Mesh):
+                    # Process single mesh
+                    (original_mesh,
+                     reduced_mesh,
+                     primitive_mesh,
+                     files_saved) = (
+                        self.process_mesh_geometry(
+                            centered_geometry,
+                            ComponentID
+                        )
+                    )
+
+                    # Use primitive mesh for JSON geometry data
+                    vertices = [[p.X, p.Y, p.Z]
+                                for p in primitive_mesh.Vertices]
+                    faces = [[f[0], f[1], f[2]]
+                             for f in primitive_mesh.Faces]
+
+                    # Extract vertex colors if available
+                    colors = []
+                    if primitive_mesh.VertexColors.Count > 0:
+                        colors = [[c.R, c.G, c.B]
+                                  for c in primitive_mesh.VertexColors]
+                    else:
+                        # Use default color if no vertex colors
+                        colors = [[Color.R, Color.G, Color.B]] * len(vertices)
+
+                    # Use new meshes format even for single mesh
+                    comp_geometry = {
+                        'meshes': [{
+                            'v': vertices,
+                            'f': faces,
+                            'c': colors
+                        }]
+                    }
+                    COMPDATA['geometry'].update(comp_geometry)
+
+                elif isinstance(single_geometry, Rhino.Geometry.Extrusion):
+                    # Handle single extrusion (existing logic)
+                    # Get the profile curve from the CENTERED geometry and
+                    # convert to polyline
+                    if centered_geometry.ProfileCount > 1:
+                        raise RuntimeError(
+                            'Extrusion has more than one profile!'
+                        )
+                    # Get first profile
+                    profile_curve = centered_geometry.Profile3d(0, 0.0)
+                    if profile_curve is None:
+                        raise RuntimeError('Extrusion has no profile curve!')
+
+                    # Convert profile to polyline
+                    _tgpr, polyline = profile_curve.TryGetPolyline()
+                    if _tgpr is False:
+                        polyline = profile_curve.ToPolyline(0.01, 0.01, 0, 0)
+                    if polyline is None:
+                        raise RuntimeError(
+                            'Failed to convert profile curve to polyline!'
+                        )
+
+                    # Get height
+                    height = centered_geometry.PathStart.DistanceTo(
+                        centered_geometry.PathEnd)
+
+                    # Create extrusion geometry data
+                    comp_extrusion = {
+                        'extrusion': {
+                            'profile': [[p.X, p.Y] for p in polyline],
+                            'height': height
+                        }
+                    }
+                    COMPDATA['geometry'].update(comp_extrusion)
+            else:
+                # HANDLE MULTIPLE MESHES
+                # Center all meshes using the translation
+                # vector from PCA computation
+                centered_meshes = []
+                for mesh in Geometry:
+                    if mesh is not None:
+                        # Create a copy of the mesh
+                        centered_mesh = mesh.Duplicate()
+                        # Apply the translation to center the mesh
+                        translation_xform = (
+                            Rhino.Geometry.Transform.Translation(
+                                translation_vector[0],
+                                translation_vector[1],
+                                translation_vector[2]
+                            )
+                        )
+                        centered_mesh.Transform(translation_xform)
+                        centered_meshes.append(centered_mesh)
+                    else:
+                        centered_meshes.append(None)
+
+                # Process multiple meshes (now centered)
+                primitive_meshes, files_saved = (
+                    self.process_multiple_meshes_geometry(
+                        centered_meshes, ComponentID)
                 )
 
-                # Use primitive mesh for JSON geometry data
-                # create geometry dict for mesh with colors
-                vertices = [[p.X, p.Y, p.Z]
-                            for p in primitive_mesh.Vertices]
-                faces = [[f[0], f[1], f[2]] for f in primitive_mesh.Faces]
+                # Create meshes array for JSON geometry data
+                meshes_data = []
+                for primitive_mesh in primitive_meshes:
+                    vertices = [[p.X, p.Y, p.Z]
+                                for p in primitive_mesh.Vertices]
+                    faces = [[f[0], f[1], f[2]]
+                             for f in primitive_mesh.Faces]
 
-                # Extract vertex colors if available
-                colors = []
-                if primitive_mesh.VertexColors.Count > 0:
-                    colors = [[c.R, c.G, c.B]
-                              for c in primitive_mesh.VertexColors]
-                else:
-                    # Use default color if no vertex colors
-                    colors = [[Color.R, Color.G, Color.B]] * len(vertices)
+                    # Extract vertex colors if available
+                    colors = []
+                    if primitive_mesh.VertexColors.Count > 0:
+                        colors = [[c.R, c.G, c.B]
+                                  for c in primitive_mesh.VertexColors]
+                    else:
+                        # Use default color if no vertex colors
+                        colors = [[Color.R, Color.G, Color.B]] * len(vertices)
 
-                comp_mesh = {
-                    'mesh': {
+                    meshes_data.append({
                         'v': vertices,
                         'f': faces,
                         'c': colors
-                    }
+                    })
+
+                comp_geometry = {
+                    'meshes': meshes_data
                 }
-                COMPDATA['geometry'].update(comp_mesh)
-
-            # HANDLE EXTRUSION
-            elif isinstance(Geometry, Rhino.Geometry.Extrusion):
-                # Get the profile curve from the CENTERED geometry and
-                # convert to polyline
-                if centered_geometry.ProfileCount > 1:
-                    raise RuntimeError('Extrusion has more than one profile!')
-                # Get first profile
-                profile_curve = centered_geometry.Profile3d(0, 0.0)
-                if profile_curve is None:
-                    raise RuntimeError('Extrusion has no profile curve!')
-
-                # Convert profile to polyline
-                _tgpr, polyline = profile_curve.TryGetPolyline()
-                if _tgpr is False:
-                    polyline = profile_curve.ToPolyline(0.01, 0.01, 0, 0)
-                if polyline is None:
-                    raise RuntimeError(
-                        'Could not convert profile curve to polyline!'
-                    )
-
-                # Extract 2D points from polyline
-                profile_points = [[p.X, p.Y] for p in polyline]
-
-                # Get extrusion height from centered geometry
-                height = centered_geometry.PathStart.DistanceTo(
-                    centered_geometry.PathEnd)
-
-                comp_extrusion = {
-                    'extrusion': {
-                        'height': height,
-                        'profile': profile_points
-                    }
-                }
-                COMPDATA['geometry'].update(comp_extrusion)
-
-            # HANDLE BREP
-            elif isinstance(Geometry, Rhino.Geometry.Brep):
-                raise RuntimeError(
-                    'Geometry Processing for geometry of '
-                    f'type {type(Geometry)} not implemented yet! '
-                    'Please convert to Mesh and try again.')
-            else:
-                raise RuntimeError(
-                    'Geometry Processing for geometry of '
-                    f'type {type(Geometry)} not implemented yet! '
-                    'Please convert to Mesh and try again.')
+                COMPDATA['geometry'].update(comp_geometry)
 
             # create json string
             ComponentData = json.dumps(COMPDATA)

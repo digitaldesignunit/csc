@@ -26,7 +26,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250902
+    Version: 250905
     """
 
     def __init__(self):
@@ -51,9 +51,11 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     def find_objects_with_csc_component(self, doc):
         """
         Find all objects in the document that have the 'csc_component' userkey.
-        Returns a list of tuples: (object, component_data, path)
+        Groups objects by component ID to handle multiple meshes correctly.
+        Returns a list of tuples: (component_id, component_data, objects_list,
+                                   combined_path)
         """
-        objects_with_component = []
+        components_dict = {}
         try:
             # Get all objects in the document
             all_objects = rs.AllObjects()
@@ -81,10 +83,23 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                         try:
                             # Parse the JSON data
                             parsed_data = json.loads(component_data)
-                            # Get the object's path for organization
+                            component_id = parsed_data.get('_id', 'unknown')
+
+                            # Group objects by component ID
+                            if component_id not in components_dict:
+                                components_dict[component_id] = {
+                                    'component_data': parsed_data,
+                                    'objects': [],
+                                    'paths': []
+                                }
+
+                            # Add object to the component group
                             obj_path = self.get_object_path(obj, doc)
-                            objects_with_component.append(
-                                (obj, parsed_data, obj_path))
+                            components_dict[component_id]['objects'].append(
+                                obj
+                            )
+                            components_dict[component_id]['paths'].append(
+                                obj_path)
                         except json.JSONDecodeError as e:
                             self._addWarning(
                                 f'Invalid JSON in csc_component userstring '
@@ -95,8 +110,19 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
             self._addError(
                 f'Error searching for objects with csc_component: {str(e)}'
             )
-        # return results
-        return objects_with_component
+
+        # Convert to list format for compatibility
+        components_list = []
+        for component_id, data in components_dict.items():
+            combined_path = ' | '.join(data['paths'])  # Combine all paths
+            components_list.append((
+                component_id,
+                data['component_data'],
+                data['objects'],
+                combined_path
+            ))
+
+        return components_list
 
     def get_object_path(self, obj, doc):
         """
@@ -119,36 +145,51 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
             pass
         return f"Object_{obj}"
 
-    def update_component_frame(self, obj, component_data):
+    def update_component_frame(self, objects_list, component_data):
         """
-        Update the component's iframe based on the object's current position.
+        Update the component's iframe based on the combined bounding box
+        of all objects from the same component.
         Returns updated component data.
         """
         try:
-            # Get the object's current transformation
-            if hasattr(obj, 'Geometry'):
-                geometry = obj.Geometry
-                if hasattr(geometry, 'GetBoundingBox'):
-                    bbox = geometry.GetBoundingBox(True)
-                    if bbox.IsValid:
-                        # Create frame based on bounding box
-                        center = bbox.Center
-                        x_axis = bbox.XAxis
-                        y_axis = bbox.YAxis
-                        z_axis = bbox.ZAxis
-                        # Update the iframe in component data
-                        if 'iframe' not in component_data:
-                            component_data['iframe'] = {}
-                        component_data['iframe'].update({
-                            'o': [center.X, center.Y, center.Z],
-                            'x': [x_axis.X, x_axis.Y, x_axis.Z],
-                            'y': [y_axis.X, y_axis.Y, y_axis.Z],
-                            'z': [z_axis.X, z_axis.Y, z_axis.Z]
-                        })
-                        return component_data
+            if not objects_list:
+                return component_data
+
+            # Calculate combined bounding box for all objects
+            combined_bbox = None
+            for obj in objects_list:
+                if hasattr(obj, 'Geometry'):
+                    geometry = obj.Geometry
+                    if hasattr(geometry, 'GetBoundingBox'):
+                        bbox = geometry.GetBoundingBox(True)
+                        if bbox.IsValid:
+                            if combined_bbox is None:
+                                combined_bbox = bbox
+                            else:
+                                combined_bbox = (
+                                    Rhino.Geometry.BoundingBox.Union(
+                                        combined_bbox, bbox))
+
+            if combined_bbox and combined_bbox.IsValid:
+                # Create frame based on combined bounding box
+                center = combined_bbox.Center
+                x_axis = combined_bbox.XAxis
+                y_axis = combined_bbox.YAxis
+                z_axis = combined_bbox.ZAxis
+
+                # Update the iframe in component data
+                if 'iframe' not in component_data:
+                    component_data['iframe'] = {}
+                component_data['iframe'].update({
+                    'o': [center.X, center.Y, center.Z],
+                    'x': [x_axis.X, x_axis.Y, x_axis.Z],
+                    'y': [y_axis.X, y_axis.Y, y_axis.Z],
+                    'z': [z_axis.X, z_axis.Y, z_axis.Z]
+                })
+                return component_data
         except Exception as e:
             self._addWarning(
-                f'Error updating frame for object {obj.Id}: {str(e)}'
+                f'Error updating frame for component: {str(e)}'
             )
         return component_data
 
@@ -187,27 +228,36 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                 return __Results
             # Create output datatree
             LAST_SYNC = Grasshopper.DataTree[System.Object]()
-            # Process each component
-            for i, (obj, component_data, obj_path) in enumerate(objects_with_component):
+            # Process each component (now grouped by component ID)
+            for i, (component_id, component_data, objects_list,
+                    combined_path) in enumerate(objects_with_component):
                 try:
-                    # Update the component's frame
-                    # based on current object position
+                    # Update the component's frame based on combined
+                    # bounding box of all objects from the same component
                     updated_data = self.update_component_frame(
-                        obj, component_data
+                        objects_list, component_data
                     )
                     # Create datatree path
                     ghp = Grasshopper.Kernel.Data.GH_Path(i)
                     # Add updated component data to datatree
                     LAST_SYNC.Add(json.dumps(updated_data), ghp)
-                    self._addRemark(
-                        'Updated component '
-                        f'{component_data.get("_id", "unknown")} '
-                        f'from {obj_path}'
-                    )
+
+                    # Log success message with object count
+                    object_count = len(objects_list)
+                    if object_count == 1:
+                        self._addRemark(
+                            f'Updated component {component_id} '
+                            f'from {combined_path}'
+                        )
+                    else:
+                        self._addRemark(
+                            f'Updated component {component_id} '
+                            f'({object_count} meshes) from {combined_path}'
+                        )
                 except Exception as e:
                     msg = (
-                        'Error processing component '
-                        f'from {obj_path}: {str(e)}'
+                        f'Error processing component {component_id} '
+                        f'from {combined_path}: {str(e)}'
                     )
                     self._addWarning(msg)
                     continue

@@ -24,7 +24,7 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250822
+    Version: 250905
     Description: Transforms component insertion frames using Rhino transforms
     """
 

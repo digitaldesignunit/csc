@@ -189,18 +189,24 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             self._addError(f'Error fetching geometry from API: {str(e)}')
             return None
 
-    def convert_obj_to_mesh(self, obj_content):
+    def convert_obj_to_meshes(self, obj_content):
         """
-        Convert OBJ file content to Rhino.Geometry.Mesh.
-        Supports v X Y Z R G B format with RGB integer colors.
-        Returns the mesh object or None if conversion fails.
+        Convert OBJ file content to list of Rhino.Geometry.Mesh objects.
+        Supports multiple objects (o object_0, o object_1, etc.) and
+        v X Y Z R G B format with RGB integer colors.
+        Returns list of mesh objects or empty list if conversion fails.
         """
         try:
-            # Parse OBJ content
-            vertices = []
-            faces = []
-            normals = []
-            vertex_colors = []
+            meshes = []
+            current_mesh = None
+            current_vertices = []
+            current_faces = []
+            current_normals = []
+            current_vertex_colors = []
+            global_vertices = []
+            global_normals = []
+            global_vertex_colors = []
+
             lines = obj_content.strip().split('\n')
             for line in lines:
                 line = line.strip()
@@ -209,12 +215,31 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                 parts = line.split()
                 if not parts:
                     continue
-                if parts[0] == 'v':  # vertex
+
+                if parts[0] == 'o':  # object declaration
+                    # Save previous mesh if it exists
+                    if (current_mesh is not None and current_vertices and
+                            current_faces):
+                        self._finalize_mesh(current_mesh, current_vertices,
+                                            current_faces, current_normals,
+                                            current_vertex_colors)
+                        meshes.append(current_mesh)
+
+                    # Start new mesh
+                    current_mesh = rg.Mesh()
+                    current_vertices = []
+                    current_faces = []
+                    current_normals = []
+                    current_vertex_colors = []
+
+                elif parts[0] == 'v':  # vertex
                     if len(parts) >= 4:
                         x = float(parts[1])
                         y = float(parts[2])
                         z = float(parts[3])
-                        vertices.append(rg.Point3d(x, y, z))
+                        vertex = rg.Point3d(x, y, z)
+                        global_vertices.append(vertex)
+                        current_vertices.append(vertex)
 
                         # Check for vertex colors in v X Y Z R G B format
                         if len(parts) >= 7:
@@ -222,16 +247,24 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                             r = int(parts[4])
                             g = int(parts[5])
                             b = int(parts[6])
-                            vertex_colors.append((r, g, b))
+                            color = (r, g, b)
+                            global_vertex_colors.append(color)
+                            current_vertex_colors.append(color)
                         else:
                             # No color data, use default white
-                            vertex_colors.append((255, 255, 255))
+                            color = (255, 255, 255)
+                            global_vertex_colors.append(color)
+                            current_vertex_colors.append(color)
+
                 elif parts[0] == 'vn':  # vertex normal
                     if len(parts) >= 4:
                         nx = float(parts[1])
                         ny = float(parts[2])
                         nz = float(parts[3])
-                        normals.append(rg.Vector3d(nx, ny, nz))
+                        normal = rg.Vector3d(nx, ny, nz)
+                        global_normals.append(normal)
+                        current_normals.append(normal)
+
                 elif parts[0] == 'f':  # face
                     if len(parts) >= 4:
                         face_vertices = []
@@ -240,22 +273,82 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                             # (v, v/vt, v//vn, v/vt/vn)
                             vertex_part = parts[i].split('/')[0]
                             if vertex_part:
-                                # OBJ is 1-indexed
+                                # OBJ is 1-indexed, convert to 0-indexed
                                 vertex_index = int(vertex_part) - 1
-                                if 0 <= vertex_index < len(vertices):
+                                if 0 <= vertex_index < len(global_vertices):
+                                    # Convert global index to local index for
+                                    # current mesh
+                                    # Find the local index by counting vertices
+                                    # in current mesh
+                                    local_index = (vertex_index -
+                                                   (len(global_vertices) -
+                                                    len(current_vertices)))
+                                    if (0 <= local_index <
+                                            len(current_vertices)):
+                                        face_vertices.append(local_index)
+                        if len(face_vertices) >= 3:
+                            current_faces.append(face_vertices)
+
+            # Handle the last mesh
+            if current_mesh is not None and current_vertices and current_faces:
+                self._finalize_mesh(current_mesh, current_vertices,
+                                    current_faces, current_normals,
+                                    current_vertex_colors)
+                meshes.append(current_mesh)
+
+            # If no objects were found, treat as single mesh
+            # (backward compatibility)
+            if not meshes and global_vertices:
+                # Collect all faces from the global context
+                global_faces = []
+                for line in lines:
+                    line = line.strip()
+                    if (not line or line.startswith('#') or
+                            line.startswith('o')):
+                        continue
+                    parts = line.split()
+                    if not parts or parts[0] != 'f':
+                        continue
+                    if len(parts) >= 4:
+                        face_vertices = []
+                        for i in range(1, len(parts)):
+                            vertex_part = parts[i].split('/')[0]
+                            if vertex_part:
+                                vertex_index = int(vertex_part) - 1
+                                if 0 <= vertex_index < len(global_vertices):
                                     face_vertices.append(vertex_index)
                         if len(face_vertices) >= 3:
-                            faces.append(face_vertices)
-            if not vertices or not faces:
+                            global_faces.append(face_vertices)
+
+                if global_faces:
+                    single_mesh = rg.Mesh()
+                    self._finalize_mesh(single_mesh, global_vertices,
+                                        global_faces, global_normals,
+                                        global_vertex_colors)
+                    meshes.append(single_mesh)
+
+            if not meshes:
                 self._addWarning(
                     'No valid vertices or faces found in OBJ data'
                 )
-                return None
-            # Create mesh
-            mesh = rg.Mesh()
+                return []
+
+            return meshes
+
+        except Exception as e:
+            self._addError(f'Error converting OBJ to meshes: {str(e)}')
+            return []
+
+    def _finalize_mesh(self, mesh, vertices, faces, normals, vertex_colors):
+        """
+        Helper method to finalize a mesh with vertices, faces, normals,
+        and colors.
+        """
+        try:
             # Add vertices
             for vertex in vertices:
                 mesh.Vertices.Add(vertex)
+
             # Add faces
             for face in faces:
                 if len(face) == 3:
@@ -266,6 +359,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     # Triangulate polygon faces
                     for i in range(1, len(face) - 1):
                         mesh.Faces.AddFace(face[0], face[i], face[i + 1])
+
             # Add normals if available
             if normals and len(normals) == len(vertices):
                 mesh.Normals.Clear()
@@ -289,11 +383,9 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             )
             # Compute mesh properties
             mesh.Compact()
-            return mesh
 
         except Exception as e:
-            self._addError(f'Error converting OBJ to mesh: {str(e)}')
-            return None
+            self._addError(f'Error finalizing mesh: {str(e)}')
 
     def fetch_primitive_geometry(self, auth_core, component_id):
         """
@@ -329,6 +421,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             return None
 
     def primitive_mesh(self, mesh_data: dict) -> Rhino.Geometry.Mesh:
+        """Create a single mesh from primitive mesh data."""
         # Handle mesh with vertices and faces
         if 'v' in mesh_data and 'f' in mesh_data:
             vertices = mesh_data['v']
@@ -364,6 +457,15 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             mesh.Compact()
             return mesh
 
+    def primitive_meshes(self, meshes_data: list) -> list:
+        """Create multiple meshes from primitive meshes data."""
+        meshes = []
+        for i, mesh_data in enumerate(meshes_data):
+            mesh = self.primitive_mesh(mesh_data)
+            if mesh is not None:
+                meshes.append(mesh)
+        return meshes
+
     def primitive_extrusion(
         self,
         extrusion_data: dict
@@ -387,32 +489,49 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         """
         Construct primitive geometry data.
         Handles different primitive geometry types from component JSON.
+        Returns list of geometry objects.
         """
         try:
             if not isinstance(geometry_data, dict):
                 self._addWarning('Primitive geometry data is not a dictionary')
-                return None
+                return []
 
-            # Check for mesh data
+            geometries = []
+
+            # Check for single mesh data (backward compatibility)
             if 'mesh' in geometry_data:
                 mesh_data = geometry_data['mesh']
                 mesh_geometry = self.primitive_mesh(mesh_data)
-                return mesh_geometry
+                if mesh_geometry is not None:
+                    geometries.append(mesh_geometry)
+
+            # Check for multiple meshes data
+            elif 'meshes' in geometry_data:
+                meshes_data = geometry_data['meshes']
+                if isinstance(meshes_data, list):
+                    mesh_geometries = self.primitive_meshes(meshes_data)
+                    geometries.extend(mesh_geometries)
+                else:
+                    self._addWarning('Meshes data is not a list')
+                    return []
 
             # Check for extrusion data
             elif 'extrusion' in geometry_data:
                 extrusion_data = geometry_data['extrusion']
                 extrusion_geometry = self.primitive_extrusion(extrusion_data)
-                return extrusion_geometry
+                if extrusion_geometry is not None:
+                    geometries.append(extrusion_geometry)
 
             # Check for other primitive types
             else:
                 self._addWarning('Unsupported primitive geometry type')
-                return None
+                return []
+
+            return geometries
 
         except Exception as e:
             self._addError(f'Error constructing primitive geometry: {str(e)}')
-            return None
+            return []
 
     def iframe_to_xform(self, iframe) -> Rhino.Geometry.Transform:
         """
@@ -502,7 +621,8 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             'True for detailed geometry, False for reduced'
         )
         self.OutputParams[0].Description = (
-            'Fetched geometry as Rhino.Geometry.GeometryBase'
+            'Fetched geometry as Rhino.Geometry.GeometryBase objects '
+            '(can be multiple meshes)'
         )
         self.OutputParams[1].Description = (
             'Geometry type: detailed, reduced, or primitive'
@@ -609,54 +729,73 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             ghp = Grasshopper.Kernel.Data.GH_Path(0)
 
             # Process geometry based on format
+            geometry_objects = []
             if geometry_data['format'] == 'obj':
-                # Convert OBJ to mesh
-                geometry_object = self.convert_obj_to_mesh(
+                # Convert OBJ to meshes (can be multiple)
+                geometry_objects = self.convert_obj_to_meshes(
                     geometry_data['data']
                 )
-                if not geometry_object:
-                    self._addError('Failed to convert OBJ to mesh')
+                if not geometry_objects:
+                    self._addError('Failed to convert OBJ to meshes')
                     return __Results
             else:
-                # Construct primitive geometry
-                geometry_object = self.construct_primitive_geometry(
+                # Construct primitive geometry (can be multiple)
+                geometry_objects = self.construct_primitive_geometry(
                     geometry_data['data']
                 )
-                if not geometry_object:
+                if not geometry_objects:
                     self._addError('Failed to construct primitive geometry')
                     return __Results
 
             # Apply transformation if iframe data is available
-            if not no_prev_transformation and component_data and 'iframe' in component_data:
+            if (not no_prev_transformation and component_data and
+                    'iframe' in component_data):
                 xform = self.iframe_to_xform(component_data['iframe'])
-                geometry_object.Transform(xform)
+                for geometry_object in geometry_objects:
+                    geometry_object.Transform(xform)
             else:
                 self._addWarning(
                     'No previous transformation applied, '
                     'input was only ComponentID!'
                 )
 
-            # Set component data as user string
-            self.set_component_data_as_user_string(
-                geometry_object,
-                component_data
-            )
+            # Set component data as user string on all geometry objects
+            for i, geometry_object in enumerate(geometry_objects):
+                self.set_component_data_as_user_string(
+                    geometry_object,
+                    component_data
+                )
+                # Add mesh index for multiple meshes
+                if len(geometry_objects) > 1:
+                    if hasattr(geometry_object, 'SetUserString'):
+                        geometry_object.SetUserString('csc_mesh_index', str(i))
 
-            # Add to outputs
-            GeometryData.Add(geometry_object, ghp)
-            GeometryType.Add(geometry_data['type'], ghp)
-            ComponentID.Add(component_id, ghp)
+            # Add all geometry objects to outputs
+            for geometry_object in geometry_objects:
+                GeometryData.Add(geometry_object, ghp)
+                GeometryType.Add(geometry_data['type'], ghp)
+                ComponentID.Add(component_id, ghp)
 
             # Update success message
-            self.Component.Message = (
-                f'Successfully fetched {geometry_data["type"]} '
-                f'geometry for {component_id}'
-            )
-
-            self._addRemark(
-                f'Fetched {geometry_data["type"]} geometry '
-                f'for component {component_id}'
-            )
+            mesh_count = len(geometry_objects)
+            if mesh_count == 1:
+                self.Component.Message = (
+                    f'Successfully fetched {geometry_data["type"]} '
+                    f'geometry for {component_id}'
+                )
+                self._addRemark(
+                    f'Fetched {geometry_data["type"]} geometry '
+                    f'for component {component_id}'
+                )
+            else:
+                self.Component.Message = (
+                    f'Successfully fetched {geometry_data["type"]} '
+                    f'geometry ({mesh_count} meshes) for {component_id}'
+                )
+                self._addRemark(
+                    f'Fetched {geometry_data["type"]} geometry '
+                    f'({mesh_count} meshes) for component {component_id}'
+                )
 
             return __Results
 

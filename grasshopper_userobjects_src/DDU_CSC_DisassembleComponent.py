@@ -24,7 +24,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250828
+    Version: 250905
     """
 
     def __init__(self):
@@ -74,6 +74,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         return cxt
 
     def ComponentMesh(self, json_comp: dict) -> Rhino.Geometry.Mesh:
+        """Create a single mesh from geometry.mesh field (backward compat)."""
         mesh = Rhino.Geometry.Mesh()
         vl = json_comp['geometry']['mesh']['v']
         fl = json_comp['geometry']['mesh']['f']
@@ -102,6 +103,41 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         mesh.UnifyNormals()
         mesh.Compact()
         return mesh
+
+    def ComponentMeshes(self, json_comp: dict) -> list[Rhino.Geometry.Mesh]:
+        """Create multiple meshes from geometry.meshes field."""
+        meshes = []
+        for i, mesh_data in enumerate(json_comp['geometry']['meshes']):
+            mesh = Rhino.Geometry.Mesh()
+            vl = mesh_data['v']
+            fl = mesh_data['f']
+            [mesh.Vertices.Add(*v) for v in vl]
+            [mesh.Faces.AddFace(*f) for f in fl]
+            # Try to get mesh-specific colors first
+            try:
+                cl = mesh_data['c']
+                [mesh.VertexColors.Add(
+                    System.Drawing.Color.FromArgb(*c)) for c in cl]
+            except KeyError:
+                # Fallback: use component color for all vertices
+                try:
+                    component_color = System.Drawing.Color.FromArgb(
+                        255, *json_comp['color'])
+                    for _ in range(len(vl)):
+                        mesh.VertexColors.Add(component_color)
+                except (KeyError, TypeError):
+                    # If even component color fails, use a default gray
+                    default_color = System.Drawing.Color.Gray
+                    for _ in range(len(vl)):
+                        mesh.VertexColors.Add(default_color)
+                    self._addWarning(
+                        f'Mesh {i} in component {json_comp["_id"]} '
+                        f'using default gray color')
+            mesh.RebuildNormals()
+            mesh.UnifyNormals()
+            mesh.Compact()
+            meshes.append(mesh)
+        return meshes
 
     def ComponentColor(self, json_comp: dict) -> System.Drawing.Color:
         return System.Drawing.Color.FromArgb(255, *json_comp['color'])
@@ -135,7 +171,8 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         )
         self.OutputParams[2].Description = 'Component material'
         self.OutputParams[3].Description = (
-            'Rhino geometry objects (extrusion, mesh, polyline)'
+            'Rhino geometry objects (extrusion, mesh, multiple meshes, '
+            'polyline)'
         )
         self.OutputParams[4].Description = (
             'Component color as System.Drawing.Color'
@@ -206,37 +243,48 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         # treat geometry key in a special way because
                         # it may hold multiple geometry types
                         for key in sorted(json_comp['geometry'].keys()):
-                            component_geometry = None
                             if key == 'extrusion':
                                 xtr = self.ComponentExtrusion(json_comp)
                                 # transform to iframe
                                 xtr.Transform(xform)
-                                # set geometry
-                                component_geometry = xtr
+                                # set user string
+                                xtr.SetUserString('csc_component', comp)
+                                # add to datatree
+                                PrimitiveGeometry.Add(xtr, ghp)
                             elif key == 'mesh':
+                                # Handle single mesh (backward compatibility)
                                 mesh = self.ComponentMesh(json_comp)
                                 # transform to iframe
                                 mesh.Transform(xform)
-                                # set geometry
-                                component_geometry = mesh
+                                # set user string
+                                mesh.SetUserString('csc_component', comp)
+                                # add to datatree
+                                PrimitiveGeometry.Add(mesh, ghp)
+                            elif key == 'meshes':
+                                # Handle multiple meshes
+                                meshes = self.ComponentMeshes(json_comp)
+                                for i, mesh in enumerate(meshes):
+                                    # transform to iframe
+                                    mesh.Transform(xform)
+                                    # set user string with mesh index
+                                    mesh.SetUserString('csc_component', comp)
+                                    mesh.SetUserString('csc_mesh_index',
+                                                       str(i))
+                                    # add to datatree
+                                    PrimitiveGeometry.Add(mesh, ghp)
                             elif key == 'polyline':
                                 pl = self.ComponentExtrusionProfile(json_comp)
                                 # transform to iframe
                                 pl.Transform(xform)
-                                # set geometry
-                                component_geometry = pl
+                                # set user string
+                                pl.SetUserString('csc_component', comp)
+                                # add to datatree
+                                PrimitiveGeometry.Add(pl, ghp)
                             else:
                                 msg = (f'Missing implementation for geometry '
                                        f'of type \'{key}\'!')
                                 self._addWarning(msg)
                                 self.Component.Message = msg
-                            # set user string
-                            component_geometry.SetUserString(
-                                'csc_component',
-                                comp
-                            )
-                            # add to datatree
-                            PrimitiveGeometry.Add(component_geometry, ghp)
 
                         # create system color from rgb values
                         color = self.ComponentColor(json_comp)

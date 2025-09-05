@@ -30,7 +30,7 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250902
+    Version: 250905
     """
 
     def __init__(self):
@@ -85,19 +85,14 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
         """
         Check which geometry files exist for a component.
         Returns dict with file existence status.
+        Note: Only OBJ files with embedded vertex colors are used.
         """
         folder_path = self.get_geometry_folder_path(component_id)
         files_status = {
             'detailed_obj': os.path.exists(
                 os.path.join(folder_path, 'mesh.obj')),
-            'detailed_mtl': os.path.exists(
-                os.path.join(folder_path, 'mesh.mtl')),
             'reduced_obj': os.path.exists(
                 os.path.join(folder_path, 'mesh_reduced.obj')),
-            'reduced_mtl': os.path.exists(
-                os.path.join(folder_path, 'mesh_reduced.mtl')),
-            'texture': os.path.exists(
-                os.path.join(folder_path, 'texture.jpg')),
             'folder_path': folder_path
         }
         return files_status
@@ -106,13 +101,14 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
             self, auth_core, component_id: str, files_status: dict) -> bool:
         """
         Upload geometry files to the backend using the geometry routes.
+        Now handles OBJ-only uploads (no MTL files).
         Returns True if successful, False otherwise.
         """
         try:
             folder_path = files_status['folder_path']
             upload_success = True
-            # Upload detailed geometry if files exist
-            if files_status['detailed_obj'] and files_status['detailed_mtl']:
+            # Upload detailed geometry if OBJ file exists
+            if files_status['detailed_obj']:
                 self.Component.Message = 'Uploading detailed geometry...'
                 self._addRemark(
                     'Starting detailed geometry upload '
@@ -120,14 +116,8 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 )
                 detailed_files = {
                     'mesh_file': open(os.path.join(
-                        folder_path, 'mesh.obj'), 'rb'),
-                    'material_file': open(os.path.join(
-                        folder_path, 'mesh.mtl'), 'rb')
+                        folder_path, 'mesh.obj'), 'rb')
                 }
-                # Add texture file if it exists
-                if files_status['texture']:
-                    detailed_files['texture_file'] = open(
-                        os.path.join(folder_path, 'texture.jpg'), 'rb')
                 try:
                     # Use longer timeout for file uploads
                     response = auth_core.authorized_post(
@@ -162,22 +152,14 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
                     for file_obj in detailed_files.values():
                         file_obj.close()
 
-            # Upload reduced geometry if files exist
-            if (files_status['reduced_obj'] and
-                    files_status['reduced_mtl'] and
-                    upload_success):
+            # Upload reduced geometry if OBJ file exists
+            if files_status['reduced_obj'] and upload_success:
                 self.Component.Message = 'Uploading reduced geometry...'
                 self._addRemark('Starting reduced geometry upload')
                 reduced_files = {
                     'mesh_file': open(os.path.join(
-                        folder_path, 'mesh_reduced.obj'), 'rb'),
-                    'material_file': open(os.path.join(
-                        folder_path, 'mesh_reduced.mtl'), 'rb')
+                        folder_path, 'mesh_reduced.obj'), 'rb')
                 }
-                # Add texture file if it exists (same texture for both)
-                if files_status['texture']:
-                    reduced_files['texture_file'] = open(os.path.join(
-                        folder_path, 'texture.jpg'), 'rb')
                 try:
                     # Use longer timeout for file uploads
                     response = auth_core.authorized_post(
@@ -267,19 +249,16 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
         # Check for geometry files
         files_status = self.check_geometry_files(component_id)
-        has_geometry_files = (files_status['detailed_obj'] and
-                              files_status['detailed_mtl'])
+        has_geometry_files = files_status['detailed_obj']
 
         if has_geometry_files:
             self._addRemark(
                 f'Found geometry files for component {component_id}'
             )
-            if files_status['reduced_obj'] and files_status['reduced_mtl']:
+            if files_status['reduced_obj']:
                 self._addRemark(
                     'Found both detailed and reduced geometry files'
                 )
-            if files_status['texture']:
-                self._addRemark('Found texture file')
         else:
             self._addRemark(
                 f'No geometry files found for component {component_id}'
