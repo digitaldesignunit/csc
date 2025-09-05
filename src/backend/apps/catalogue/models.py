@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Union, Literal
 import uuid
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-from pydantic import BaseModel, Field, EmailStr, RootModel
+from pydantic import BaseModel, Field, EmailStr, RootModel, model_validator
 
 # AUTH ------------------------------------------------------------------------
 Role = Literal["user", "admin"]
@@ -215,11 +215,25 @@ class ComponentExtrusion(BaseModel):
 
 class ComponentGeometry(BaseModel):
     mesh: Optional[ComponentMesh] = Field(
-        None, description="Mesh geometry"
+        None, description="Mesh geometry (single mesh - backward compat)"
+    )
+    meshes: Optional[List[ComponentMesh]] = Field(
+        None, description="Array of mesh geometries (multiple meshes)"
     )
     extrusion: Optional[ComponentExtrusion] = Field(
         None, description="Extrusion geometry"
     )
+
+    @model_validator(mode='after')
+    def validate_mesh_fields(self):
+        """Validate that mesh and meshes fields are not both present."""
+        if self.mesh is not None and self.meshes is not None:
+            raise ValueError(
+                "Cannot have both 'mesh' and 'meshes' fields present. "
+                "Use 'mesh' for single mesh (backward compatibility) or "
+                "'meshes' for multiple meshes."
+            )
+        return self
 
 
 class ComponentFrame(BaseModel):
@@ -356,11 +370,21 @@ class ComponentModel(BaseModel):
                 "fragment": False,
                 "assembly": False,
                 "geometry": {
-                    "mesh": {
-                        "v": [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
-                        "f": [[0, 1, 2], [0, 2, 3]],
-                        "c": [[128, 128, 128], [128, 128, 128]]
-                    }
+                    "meshes": [
+                        {
+                            "v": [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
+                            "f": [[0, 1, 2], [0, 2, 3]],
+                            "c": [[128, 128, 128], [128, 128, 128],
+                                  [128, 128, 128], [128, 128, 128]]
+                        },
+                        {
+                            "v": [[0, 0, 0.1], [1, 0, 0.1],
+                                  [1, 1, 0.1], [0, 1, 0.1]],
+                            "f": [[0, 1, 2], [0, 2, 3]],
+                            "c": [[200, 200, 200], [200, 200, 200],
+                                  [200, 200, 200], [200, 200, 200]]
+                        }
+                    ]
                 },
                 "color": [128, 128, 128],
                 "bbx": [1.0, 1.0, 0.2],
