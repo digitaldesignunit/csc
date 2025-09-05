@@ -34,7 +34,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250904
+    Version: 250905
     """
 
     def __init__(self):
@@ -590,6 +590,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     ) -> bool:
         """
         Save a mesh as OBJ file with associated MTL file.
+        Uses v X Y Z R G B format for vertices with RGB integer colors.
         Handles coordinate system mapping (Rhino Z -> OBJ Y) and textures.
         Returns True if successful, False otherwise.
         """
@@ -601,19 +602,19 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             obj_content += 'o mesh\n'
 
             # Add vertices with coordinate system mapping (Rhino Z -> OBJ Y)
-            for vertex in mesh.Vertices:
-                # Map Rhino (X,Y,Z) to OBJ (X,Z,-Y) coordinate system
-                obj_content += f'v {vertex.X} {vertex.Z} {-vertex.Y}\n'
-
-            # Add vertex colors if available
+            # and colors in v X Y Z R G B format
             has_vertex_colors = mesh.VertexColors.Count > 0
-            if has_vertex_colors:
-                for color in mesh.VertexColors:
-                    # Normalize colors to 0-1 range
-                    r = color.R / 255.0
-                    g = color.G / 255.0
-                    b = color.B / 255.0
-                    obj_content += f'vc {r} {g} {b}\n'
+            for i, vertex in enumerate(mesh.Vertices):
+                # Map Rhino (X,Y,Z) to OBJ (X,Z,-Y) coordinate system
+                if has_vertex_colors and i < mesh.VertexColors.Count:
+                    # Use vertex color if available
+                    color = mesh.VertexColors[i]
+                    obj_content += (f'v {vertex.X} {vertex.Z} {-vertex.Y} '
+                                    f'{color.R} {color.G} {color.B}\n')
+                else:
+                    # Use default white color if no vertex colors
+                    obj_content += (f'v {vertex.X} {vertex.Z} {-vertex.Y} '
+                                    f'255 255 255\n')
 
             # Add texture coordinates if mesh has them
             has_texture_coords = mesh.TextureCoordinates.Count > 0
@@ -624,21 +625,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             # Add faces (OBJ uses 1-based indexing)
             for i, face in enumerate(mesh.Faces):
                 if face.IsTriangle:
-                    if has_vertex_colors and has_texture_coords:
-                        # v/vt/vc format
-                        obj_content += (
-                            f'f {face.A + 1}/{face.A + 1}/{face.A + 1} '
-                            f'{face.B + 1}/{face.B + 1}/{face.B + 1} '
-                            f'{face.C + 1}/{face.C + 1}/{face.C + 1}\n'
-                        )
-                    elif has_vertex_colors:
-                        # v//vc format
-                        obj_content += (
-                            f'f {face.A + 1}//{face.A + 1} '
-                            f'{face.B + 1}//{face.B + 1} '
-                            f'{face.C + 1}//{face.C + 1}\n'
-                        )
-                    elif has_texture_coords:
+                    if has_texture_coords:
                         # v/vt format
                         obj_content += (
                             f'f {face.A + 1}/{face.A + 1} '
@@ -651,21 +638,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                             f'f {face.A + 1} {face.B + 1} {face.C + 1}\n'
                         )
                 elif face.IsQuad:
-                    if has_vertex_colors and has_texture_coords:
-                        obj_content += (
-                            f'f {face.A + 1}/{face.A + 1}/{face.A + 1} '
-                            f'{face.B + 1}/{face.B + 1}/{face.B + 1} '
-                            f'{face.C + 1}/{face.C + 1}/{face.C + 1} '
-                            f'{face.D + 1}/{face.D + 1}/{face.D + 1}\n'
-                        )
-                    elif has_vertex_colors:
-                        obj_content += (
-                            f'f {face.A + 1}//{face.A + 1} '
-                            f'{face.B + 1}//{face.B + 1} '
-                            f'{face.C + 1}//{face.C + 1} '
-                            f'{face.D + 1}//{face.D + 1}\n'
-                        )
-                    elif has_texture_coords:
+                    if has_texture_coords:
                         obj_content += (
                             f'f {face.A + 1}/{face.A + 1} '
                             f'{face.B + 1}/{face.B + 1} '

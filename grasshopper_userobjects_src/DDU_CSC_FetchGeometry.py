@@ -30,7 +30,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250828
+    Version: 250905
 
     Fetches reduced or detailed geometry from the CSC API.
     Input can be:
@@ -192,6 +192,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     def convert_obj_to_mesh(self, obj_content):
         """
         Convert OBJ file content to Rhino.Geometry.Mesh.
+        Supports v X Y Z R G B format with RGB integer colors.
         Returns the mesh object or None if conversion fails.
         """
         try:
@@ -199,6 +200,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             vertices = []
             faces = []
             normals = []
+            vertex_colors = []
             lines = obj_content.strip().split('\n')
             for line in lines:
                 line = line.strip()
@@ -213,6 +215,17 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                         y = float(parts[2])
                         z = float(parts[3])
                         vertices.append(rg.Point3d(x, y, z))
+
+                        # Check for vertex colors in v X Y Z R G B format
+                        if len(parts) >= 7:
+                            # Extract RGB integer values
+                            r = int(parts[4])
+                            g = int(parts[5])
+                            b = int(parts[6])
+                            vertex_colors.append((r, g, b))
+                        else:
+                            # No color data, use default white
+                            vertex_colors.append((255, 255, 255))
                 elif parts[0] == 'vn':  # vertex normal
                     if len(parts) >= 4:
                         nx = float(parts[1])
@@ -261,6 +274,13 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                 mesh.Normals.ComputeNormals()
             else:
                 mesh.Normals.ComputeNormals()
+
+            # Add vertex colors if available
+            if vertex_colors and len(vertex_colors) == len(vertices):
+                for color in vertex_colors:
+                    r, g, b = color
+                    mesh.VertexColors.Add(r, g, b)
+
             # rotate around x-axis to normalize for Rhino
             mesh.Rotate(
                 (math.pi / 2),
