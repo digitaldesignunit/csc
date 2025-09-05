@@ -496,7 +496,7 @@ async def get_components(
     for component in components:
         try:
             component_model = ComponentModel(**component)
-            components_clean.append(component_model.model_dump())
+            components_clean.append(component_model.model_dump(by_alias=True))
         except Exception:
             # If parsing fails, use original component data
             components_clean.append(component)
@@ -544,7 +544,7 @@ async def get_component(
     # Parse through ComponentModel to apply exclude_none configuration
     try:
         component_model = ComponentModel(**component)
-        component_clean = component_model.model_dump()
+        component_clean = component_model.model_dump(by_alias=True)
     except Exception:
         # If parsing fails, use original component data
         component_clean = component
