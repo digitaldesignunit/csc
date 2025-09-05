@@ -134,10 +134,10 @@ export default async function ComponentsPage({
   })
 
   // Debug logging in development
-  if (process.env.NODE_ENV === 'development' && items.length > 0) {
-    console.log('Sample component data:', items[0])
-    console.log('Sample bbx structure:', items[0]?.bbx, 'Type:', typeof items[0]?.bbx)
-  }
+  // if (process.env.NODE_ENV === 'development' && items.length > 0) {
+  //   console.log('[ComponentsPage] Sample component data:', items[0])
+  //   console.log('[ComponentsPage] Sample bbx structure:', items[0]?.bbx, 'Type:', typeof items[0]?.bbx)
+  // }
 
   return (
     <div className="grid gap-2 m-2">

@@ -60,9 +60,9 @@ export const ComponentOverviewColumns: ColumnDef<ComponentModel>[] = [
     cell: ({ row }) => {
       const bbx: ComponentBoundingBox = row.getValue('bbx')
       // Debug logging to understand data structure
-      if (process.env.NODE_ENV === 'development') {
-        console.log('BBX data:', bbx, 'Type:', typeof bbx, 'IsArray:', Array.isArray(bbx))
-      }
+      // if (process.env.NODE_ENV === 'development') {
+      //   console.log('[ComponentOverviewColumns] BBX data:', bbx, 'Type:', typeof bbx, 'IsArray:', Array.isArray(bbx))
+      // }
       // Add defensive programming for unexpected data structures
       if (!bbx || !Array.isArray(bbx) || bbx.length < 1 || typeof bbx[0] !== 'number') {
         return <div className='text-xs text-muted-foreground'>N/A</div>
