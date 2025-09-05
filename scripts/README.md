@@ -1,2 +1,2 @@
 # CSC Scripts
-User and maintenance scripts
+User, maintenance and migration scripts
