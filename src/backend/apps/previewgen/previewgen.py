@@ -61,20 +61,86 @@ def convert_mesh_component_mesh(component_data: dict):
     return vertices, faces, vertex_colors, faces_idx
 
 
+def convert_multiple_meshes_component_mesh(component_data: dict):
+    # Build np arrays from multiple mesh data
+    all_vertices = []
+    all_faces = []
+    all_vertex_colors = []
+    all_faces_idx = []
+    vertex_offset = 0
+
+    for mesh_data in component_data['geometry']['meshes']:
+        # Build np arrays from mesh data
+        vertices = np.array(mesh_data['v'])
+        # Check for vertex colors
+        vertex_colors = None
+        if 'c' in mesh_data:
+            vertex_colors = np.array(mesh_data['c'])
+
+        faces_idx = mesh_data['f']
+        # Adjust face indices to account for vertex offset
+        adjusted_faces_idx = [
+            [idx + vertex_offset for idx in face] for face in faces_idx
+        ]
+
+        # Add to combined arrays
+        all_vertices.extend(vertices)
+        all_faces.extend([
+            [vertices[idx] for idx in face] for face in faces_idx
+        ])
+        all_faces_idx.extend(adjusted_faces_idx)
+
+        if vertex_colors is not None:
+            all_vertex_colors.extend(vertex_colors)
+
+        # Update vertex offset for next mesh
+        vertex_offset += len(vertices)
+
+    # Convert to numpy arrays
+    combined_vertices = np.array(all_vertices)
+    combined_faces = all_faces
+    combined_faces_idx = all_faces_idx
+    combined_vertex_colors = (
+        np.array(all_vertex_colors) if all_vertex_colors else None
+    )
+
+    return (combined_vertices, combined_faces, combined_vertex_colors,
+            combined_faces_idx)
+
+
 def create_component_preview_image(
         component_data: dict,
         size: int = 800,
         dpi: int = 300) -> Image:
 
-    # Create mesh based on component type
-    if component_data['type'] == 'sheet':
+    # Determine preview type based on geometry keys, not component type
+    geometry = component_data.get('geometry', {})
+
+    if 'extrusion' in geometry and geometry['extrusion']:
+        # Create extrusion preview
         vertices, faces = create_extrusion_component_mesh(component_data)
         vertex_colors = None
         faces_idx = None
-    else:
+    elif 'meshes' in geometry and geometry['meshes']:
+        # Create multiple meshes preview
+        (vertices, faces,
+         vertex_colors,
+         faces_idx) = convert_multiple_meshes_component_mesh(component_data)
+    elif 'mesh' in geometry and geometry['mesh']:
+        # Create single mesh preview (backward compatibility)
         (vertices, faces,
          vertex_colors,
          faces_idx) = convert_mesh_component_mesh(component_data)
+    else:
+        # Fallback to component type for backward compatibility
+        if component_data.get('type') == 'sheet':
+            vertices, faces = create_extrusion_component_mesh(component_data)
+            vertex_colors = None
+            faces_idx = None
+        else:
+            (vertices, faces,
+             vertex_colors,
+             faces_idx) = convert_mesh_component_mesh(component_data)
 
     # If vertex colors are present, compute face colors by
     # averaging vertex colors per face
@@ -421,6 +487,125 @@ __example_component_data_b = {
     }
 
 
+__example_component_data_c = {
+        '_id': 'c99b2619-0d97-495f-98c4-a6b02db206a4',
+        'created': '240522-083157',
+        'lastmodified': '240522-083157',
+        'type': 'assembly',
+        'material': 'steel',
+        'geometry': {
+            'meshes': [
+                {
+                    'v': [
+                        [0, 0, 0],
+                        [10, 0, 0],
+                        [10, 10, 0],
+                        [0, 10, 0],
+                        [0, 0, 10],
+                        [10, 0, 10],
+                        [10, 10, 10],
+                        [0, 10, 10]
+                    ],
+                    'f': [
+                        [0, 1, 2],
+                        [0, 2, 3],
+                        [4, 7, 6],
+                        [4, 6, 5],
+                        [0, 4, 5],
+                        [0, 5, 1],
+                        [2, 6, 7],
+                        [2, 7, 3],
+                        [0, 3, 7],
+                        [0, 7, 4],
+                        [1, 5, 6],
+                        [1, 6, 2]
+                    ],
+                    'c': [
+                        [255, 0, 0],
+                        [255, 0, 0],
+                        [255, 0, 0],
+                        [255, 0, 0],
+                        [255, 0, 0],
+                        [255, 0, 0],
+                        [255, 0, 0],
+                        [255, 0, 0],
+                        [255, 0, 0],
+                        [255, 0, 0],
+                        [255, 0, 0],
+                        [255, 0, 0]
+                    ]
+                },
+                {
+                    'v': [
+                        [20, 0, 0],
+                        [30, 0, 0],
+                        [30, 10, 0],
+                        [20, 10, 0],
+                        [20, 0, 10],
+                        [30, 0, 10],
+                        [30, 10, 10],
+                        [20, 10, 10]
+                    ],
+                    'f': [
+                        [0, 1, 2],
+                        [0, 2, 3],
+                        [4, 7, 6],
+                        [4, 6, 5],
+                        [0, 4, 5],
+                        [0, 5, 1],
+                        [2, 6, 7],
+                        [2, 7, 3],
+                        [0, 3, 7],
+                        [0, 7, 4],
+                        [1, 5, 6],
+                        [1, 6, 2]
+                    ],
+                    'c': [
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0],
+                        [0, 255, 0]
+                    ]
+                }
+            ]
+        },
+        'complexity': 2,
+        'fragment': False,
+        'assembly': True,
+        'color': [100, 100, 100],
+        'bbx': {
+            'xy': None,
+            'xyz': [
+                [0, 0, 0],
+                [30, 0, 0],
+                [30, 10, 0],
+                [0, 10, 0],
+                [0, 0, 10],
+                [30, 0, 10],
+                [30, 10, 10],
+                [0, 10, 10]
+            ]
+        },
+        'descriptors': {},
+        'indicators': {},
+        'validated': True,
+        'iframe': {
+            'o': [0, 0, 0],
+            'x': [1, 0, 0],
+            'y': [0, 1, 0],
+            'z': [0, 0, 1]
+        }
+    }
+
+
 if __name__ == '__main__':
     out_dir = os.path.dirname(os.path.abspath(__file__))
     # Create preview images for example component data
@@ -443,4 +628,14 @@ if __name__ == '__main__':
         ),
         folder=out_dir,
         filename=__example_component_data_b['_id']
+    )
+    save_preview_image(
+        crop_preview_whitespace(
+            create_component_preview_image(
+                component_data=__example_component_data_c
+            ),
+            padding=10
+        ),
+        folder=out_dir,
+        filename=__example_component_data_c['_id']
     )
