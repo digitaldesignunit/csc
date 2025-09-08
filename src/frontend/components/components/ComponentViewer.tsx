@@ -559,7 +559,7 @@ const MarkerPoints = React.memo(({
   if (!visible || markerPoints.length === 0) return null
 
   return (
-    <group scale={[scale, scale, scale]}>
+    <group scale={[scale, scale, scale]} rotation={[-Math.PI / 2, 0, 0]}>
       {markerPoints.map((point, index) => {
         const [x, y, z] = point
         return (
