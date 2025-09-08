@@ -2,6 +2,7 @@
 import os
 import json
 import hashlib
+import shutil
 from typing import Annotated, Optional
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
@@ -836,8 +837,46 @@ async def delete_component(
     admin_user=Depends(require_admin),
     component_id: str = '',
 ):
+    """
+    Delete a component and its associated files.
+
+    This operation:
+    1. Deletes the component's geometry directory (containing OBJ files)
+    2. Deletes the component's preview image file (.webp)
+    3. Removes the component from the database
+
+    If file deletion fails, the operation continues and deletes the
+    database record anyway.
+    """
+    # Get component geometry directory path
+    geometry_base_dir = request.app.component_geometry_dir
+    component_dir = os.path.join(geometry_base_dir, component_id)
+
+    # Delete geometry directory if it exists
+    if os.path.exists(component_dir):
+        try:
+            shutil.rmtree(component_dir)
+        except Exception as e:
+            # Log the error but continue with other deletions
+            print(f'Warning: Failed to delete geometry directory '
+                  f'{component_dir}: {e}')
+
+    # Get component preview file path and delete if it exists
+    preview_base_dir = request.app.component_preview_dir
+    preview_file_path = os.path.join(preview_base_dir, f'{component_id}.webp')
+
+    if os.path.exists(preview_file_path):
+        try:
+            os.remove(preview_file_path)
+        except Exception as e:
+            # Log the error but continue with database deletion
+            print(f'Warning: Failed to delete preview file '
+                  f'{preview_file_path}: {e}')
+
+    # Delete component from database
     coll = await get_components_col(request)
     res = await coll.delete_one({'_id': component_id})
     if res.deleted_count == 0:
         raise HTTPException(404, 'Not found')
+
     return {'ok': True}
