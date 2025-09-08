@@ -74,8 +74,8 @@ function parseOBJ(objContent: string): { meshes: { vertices: number[], faces: nu
   const meshes: { vertices: number[], faces: number[], colors: number[], name: string }[] = []
   
   let currentMesh: { vertices: number[], faces: number[], colors: number[], name: string } | null = null
-  let globalVertices: number[] = []
-  let globalColors: number[] = []
+  const globalVertices: number[] = []
+  const globalColors: number[] = []
   
   for (const line of lines) {
     const trimmed = line.trim()
@@ -165,7 +165,6 @@ function parseOBJ(objContent: string): { meshes: { vertices: number[], faces: nu
   for (const mesh of meshes) {
     if (mesh.faces.length > 0) {
       const usedVertices = new Set<number>()
-      const usedColors = new Set<number>()
       
       // Find all unique vertex indices used by this mesh
       for (let i = 0; i < mesh.faces.length; i++) {

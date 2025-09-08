@@ -9,8 +9,9 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import ComponentDetailMap from './ComponentDetailMap'
-import { Copy, Check, FileText } from 'lucide-react'
+import { Copy, Check, FileText, CheckCircle, Trash2 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 
 // Type for session user with extended properties
 interface ExtendedUser {
@@ -28,7 +29,10 @@ export default function ComponentDetailCard({
 }) {
   const [copied, setCopied] = useState(false)
   const [grasshopperCopied, setGrasshopperCopied] = useState(false)
+  const [validating, setValidating] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const { data: session } = useSession()
+  const router = useRouter()
 
   const handleCopyToClipboard = async () => {
     try {
@@ -99,6 +103,54 @@ export default function ComponentDetailCard({
     } catch (err) {
       console.error('Failed to release component:', err)
       alert('Failed to release component. Please try again.')
+    }
+  }
+
+  const handleValidateComponent = async () => {
+    try {
+      setValidating(true)
+      const response = await fetch(`/api/backend/validate/${component_data._id}`, {
+        method: 'GET',
+      })
+      
+      if (response.ok) {
+        // Redirect to validation page after successful validation
+        router.push('/admin/validation')
+      } else {
+        console.error('Failed to validate component')
+        alert('Failed to validate component. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error validating component:', error)
+      alert('Failed to validate component. Please try again.')
+    } finally {
+      setValidating(false)
+    }
+  }
+
+  const handleDeleteComponent = async () => {
+    if (!confirm('Are you sure you want to delete this component? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      setDeleting(true)
+      const response = await fetch(`/api/backend/components/${component_data._id}`, {
+        method: 'DELETE',
+      })
+      
+      if (response.ok) {
+        // Redirect to validation page after successful deletion
+        router.push('/admin/validation')
+      } else {
+        console.error('Failed to delete component')
+        alert('Failed to delete component. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error deleting component:', error)
+      alert('Failed to delete component. Please try again.')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -176,13 +228,13 @@ export default function ComponentDetailCard({
       </CardHeader>
 
       <CardContent>
-        {/* Find Component Button */}
-        <div className="mb-4 flex flex-col sm:flex-row gap-2">
+        {/* User Action Buttons */}
+        <div className="mb-4 flex gap-2 xl:max-w-md">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href={`/findcomponent?reference_id=${component_data._id}`}>
-                  <Button variant="outline" className="w-full sm:w-auto">
+                <Link href={`/findcomponent?reference_id=${component_data._id}`} className="flex-1">
+                  <Button variant="outline" className="w-full">
                     Find Component
                   </Button>
                 </Link>
@@ -199,37 +251,39 @@ export default function ComponentDetailCard({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                {component_data.reserved ? (
-                  // Component is reserved
-                  (session?.user as ExtendedUser)?.id === component_data.reserved ? (
-                    // Reserved by current user - show release button
-                    <Button 
-                      variant="destructive"
-                      className="w-full sm:w-auto"
-                      onClick={handleReleaseComponent}
-                    >
-                      Release Component
-                    </Button>
+                <div className="flex-1">
+                  {component_data.reserved ? (
+                    // Component is reserved
+                    (session?.user as ExtendedUser)?.id === component_data.reserved ? (
+                      // Reserved by current user - show release button
+                      <Button 
+                        variant="destructive"
+                        className="w-full"
+                        onClick={handleReleaseComponent}
+                      >
+                        Release Component
+                      </Button>
+                    ) : (
+                      // Reserved by another user - show disabled button
+                      <Button 
+                        variant="destructive"
+                        className="w-full"
+                        disabled
+                      >
+                        Reserved by {component_data.reserved_by_username || 'Another User'}
+                      </Button>
+                    )
                   ) : (
-                    // Reserved by another user - show disabled button
+                    // Component is available - show reserve button
                     <Button 
-                      variant="destructive"
-                      className="w-full sm:w-auto"
-                      disabled
+                      variant="default"
+                      className="w-full"
+                      onClick={handleReserveComponent}
                     >
-                      Reserved by {component_data.reserved_by_username || 'Another User'}
+                      Reserve Component
                     </Button>
-                  )
-                ) : (
-                  // Component is available - show reserve button
-                  <Button 
-                    variant="default"
-                    className="w-full sm:w-auto"
-                    onClick={handleReserveComponent}
-                  >
-                    Reserve Component
-                  </Button>
-                )}
+                  )}
+                </div>
               </TooltipTrigger>
               <TooltipContent>
                 <div className="text-center text-sm">
@@ -244,6 +298,65 @@ export default function ComponentDetailCard({
             </Tooltip>
           </TooltipProvider>
         </div>
+
+        {/* Admin Action Buttons - Only show for admin users */}
+        {session?.user?.role === 'admin' && (
+          <div className="mb-4 flex gap-2 xl:max-w-md">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleValidateComponent}
+                    disabled={validating || deleting}
+                    variant="default"
+                    className="bg-green-600 hover:bg-green-700 flex-1"
+                  >
+                    {validating ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        <span>Validate</span>
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-center text-sm">
+                    Validate this component for public use
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleDeleteComponent}
+                    disabled={validating || deleting}
+                    variant="destructive"
+                    className="flex-1"
+                  >
+                    {deleting ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        <span>Delete</span>
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-center text-sm">
+                    Permanently delete this component
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        )}
 
         <div className="mb-4 flex flex-col items-start justify-between gap-4 xl:flex-row">
           {/* Left side metadata */}

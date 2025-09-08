@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle, Package, Shield, Eye, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { CheckCircle, Package, Shield, Eye, ChevronDown, ChevronUp, Trash2, ExternalLink } from 'lucide-react'
 import { ComponentModel } from '@/generated/ComponentModel'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -207,7 +208,15 @@ export default function ValidationPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-2">
                             <h3 className="font-medium text-sm sm:text-base truncate">
-                              {(typeof component.name === 'string' && component.name) || `Component ${component._id?.slice(0, 8)}`}
+                              {(typeof component.name === 'string' && component.name) || (
+                                <Link 
+                                  href={`/components/${component._id}`}
+                                  className="text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-1 transition-colors"
+                                >
+                                  Component {component._id?.slice(0, 8)}
+                                  <ExternalLink className="h-3 w-3" />
+                                </Link>
+                              )}
                             </h3>
                             <Badge variant="secondary" className="text-xs">{component.type}</Badge>
                             <Badge variant="outline" className="text-xs">{component.material}</Badge>
@@ -218,7 +227,15 @@ export default function ValidationPage() {
                             )}
                           </div>
                           <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
-                            <p className="break-all">ID: {component._id}</p>
+                            <p className="break-all">
+                              ID: <Link 
+                                href={`/components/${component._id}`}
+                                className="text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-1 transition-colors"
+                              >
+                                {component._id}
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                            </p>
                             <p>Created: {new Date(component.created).toLocaleString('de-DE', { 
                               timeZone: 'Europe/Berlin',
                               day: '2-digit',
@@ -306,7 +323,15 @@ export default function ValidationPage() {
                         <div className="p-3 sm:p-4 bg-muted/30 rounded-b-lg border-t">
                           <div className="mb-3">
                             <h4 className="text-sm font-medium text-muted-foreground mb-2">
-                              Component Preview - {(typeof component.name === 'string' && component.name) || `Component ${component._id?.slice(0, 8)}`}
+                              Component Preview - {(typeof component.name === 'string' && component.name) || (
+                                <Link 
+                                  href={`/components/${component._id}`}
+                                  className="text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-1 transition-colors"
+                                >
+                                  Component {component._id?.slice(0, 8)}
+                                  <ExternalLink className="h-3 w-3" />
+                                </Link>
+                              )}
                             </h4>
                             <p className="text-xs text-muted-foreground">
                               Interactive 3D view with orbit controls. Use mouse to rotate, scroll to zoom.
