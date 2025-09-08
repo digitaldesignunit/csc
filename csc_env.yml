@@ -31,4 +31,4 @@ dependencies:
     - requests
     - uvicorn
     - httpx
-    - trimesh
+    - trimesh>=3.15.0
