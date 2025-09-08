@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2025-09-05T19:21:01.557Z
+// Generated on: 2025-09-08T13:53:17.577Z
 // Source: https://api.ddu.uber.space/schema/component
 
 export type ComponentBoundingBox = number[];
