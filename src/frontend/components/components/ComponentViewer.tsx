@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 const scale = 0.001
 
 // Simple in-memory cache for external geometry
-const externalGeometryCache = new Map<string, THREE.Group | null>()
+const externalGeometryCache = new Map<string, THREE.Group[] | null>()
 
 /* ───────── Helpers ───────── */
 
@@ -59,7 +59,7 @@ function normalizeColors(colors: number[]): number[] {
 
 type GeometryLoadResult = {
   success: true
-  object: THREE.Group
+  meshes: THREE.Group[]
 } | {
   success: false
   error: 'not_found' | 'network_error' | 'parse_error'
@@ -67,23 +67,37 @@ type GeometryLoadResult = {
 }
 
 /**
- * Parse OBJ file manually to extract vertices, faces, and colors
+ * Parse OBJ file manually to extract multiple meshes with vertices, faces, and colors
  */
-function parseOBJ(objContent: string): { vertices: number[], faces: number[], colors: number[] } {
+function parseOBJ(objContent: string): { meshes: { vertices: number[], faces: number[], colors: number[], name: string }[] } {
   const lines = objContent.split('\n')
-  const vertices: number[] = []
-  const faces: number[] = []
-  const colors: number[] = []
+  const meshes: { vertices: number[], faces: number[], colors: number[], name: string }[] = []
+  
+  let currentMesh: { vertices: number[], faces: number[], colors: number[], name: string } | null = null
+  let globalVertices: number[] = []
+  let globalColors: number[] = []
   
   for (const line of lines) {
     const trimmed = line.trim()
+    
+    // Parse object/group definition: o name or g name
+    if (trimmed.startsWith('o ') || trimmed.startsWith('g ')) {
+      // Save previous mesh if it exists
+      if (currentMesh && currentMesh.faces.length > 0) {
+        meshes.push(currentMesh)
+      }
+      
+      // Start new mesh
+      const name = trimmed.split(/\s+/).slice(1).join(' ') || `Mesh ${meshes.length + 1}`
+      currentMesh = { vertices: [], faces: [], colors: [], name }
+    }
     
     // Parse vertex with colors: v x y z r g b
     if (trimmed.startsWith('v ') && !trimmed.startsWith('vt ') && !trimmed.startsWith('vn ')) {
       const parts = trimmed.split(/\s+/)
       if (parts.length >= 4) {
         // Position
-        vertices.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]))
+        globalVertices.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]))
         
         // Colors (if present)
         if (parts.length >= 7) {
@@ -91,47 +105,111 @@ function parseOBJ(objContent: string): { vertices: number[], faces: number[], co
           const g = parseFloat(parts[5])
           const b = parseFloat(parts[6])
           if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
-            colors.push(r, g, b)
+            globalColors.push(r, g, b)
           } else {
-            colors.push(0.5, 0.5, 0.5) // Default gray
+            globalColors.push(0.5, 0.5, 0.5) // Default gray
           }
         } else {
-          colors.push(0.5, 0.5, 0.5) // Default gray
+          globalColors.push(0.5, 0.5, 0.5) // Default gray
         }
       }
     }
     // Parse faces: f v1 v2 v3 (1-indexed)
     else if (trimmed.startsWith('f ')) {
+      if (!currentMesh) {
+        // If no object/group defined, create a default mesh
+        currentMesh = { vertices: [], faces: [], colors: [], name: 'Default Mesh' }
+      }
+      
       const parts = trimmed.split(/\s+/)
       if (parts.length >= 4) {
         // Convert from 1-indexed to 0-indexed and handle negative indices
         const faceIndices: number[] = []
         for (let i = 1; i < parts.length; i++) {
           const faceIndex = parseInt(parts[i].split('/')[0])
-          const index = faceIndex < 0 ? vertices.length / 3 + faceIndex : faceIndex - 1
+          const index = faceIndex < 0 ? globalVertices.length / 3 + faceIndex : faceIndex - 1
           faceIndices.push(index)
         }
         
         // Triangulate faces (convert quads to triangles)
         if (faceIndices.length === 3) {
           // Triangle - add as-is
-          faces.push(...faceIndices)
+          currentMesh.faces.push(...faceIndices)
         } else if (faceIndices.length === 4) {
           // Quad - split into two triangles
-          faces.push(faceIndices[0], faceIndices[1], faceIndices[2])
-          faces.push(faceIndices[0], faceIndices[2], faceIndices[3])
+          currentMesh.faces.push(faceIndices[0], faceIndices[1], faceIndices[2])
+          currentMesh.faces.push(faceIndices[0], faceIndices[2], faceIndices[3])
         } else if (faceIndices.length > 4) {
           // N-gon - fan triangulation
           for (let i = 1; i < faceIndices.length - 1; i++) {
-            faces.push(faceIndices[0], faceIndices[i], faceIndices[i + 1])
+            currentMesh.faces.push(faceIndices[0], faceIndices[i], faceIndices[i + 1])
           }
         }
       }
     }
   }
   
-  debugLog(`Parsed OBJ: ${vertices.length / 3} vertices, ${faces.length / 3} faces, ${colors.length / 3} colors`)
-  return { vertices, faces, colors }
+  // Save the last mesh if it exists
+  if (currentMesh && currentMesh.faces.length > 0) {
+    meshes.push(currentMesh)
+  }
+  
+  // If no meshes were created (no object/group definitions), create a single mesh from all data
+  if (meshes.length === 0 && globalVertices.length > 0) {
+    const singleMesh = { vertices: globalVertices, faces: [], colors: globalColors, name: 'Single Mesh' }
+    // We need to reconstruct faces from the global data - this is a fallback
+    meshes.push(singleMesh)
+  }
+  
+  // For each mesh, extract the relevant vertices and colors based on face indices
+  for (const mesh of meshes) {
+    if (mesh.faces.length > 0) {
+      const usedVertices = new Set<number>()
+      const usedColors = new Set<number>()
+      
+      // Find all unique vertex indices used by this mesh
+      for (let i = 0; i < mesh.faces.length; i++) {
+        usedVertices.add(mesh.faces[i])
+      }
+      
+      // Create mapping from old indices to new indices
+      const vertexMap = new Map<number, number>()
+      const newVertices: number[] = []
+      const newColors: number[] = []
+      
+      let newIndex = 0
+      for (const oldIndex of usedVertices) {
+        vertexMap.set(oldIndex, newIndex)
+        newIndex++
+        
+        // Copy vertex data
+        if (oldIndex * 3 + 2 < globalVertices.length) {
+          newVertices.push(
+            globalVertices[oldIndex * 3],
+            globalVertices[oldIndex * 3 + 1],
+            globalVertices[oldIndex * 3 + 2]
+          )
+        }
+        
+        // Copy color data
+        if (oldIndex * 3 + 2 < globalColors.length) {
+          newColors.push(
+            globalColors[oldIndex * 3],
+            globalColors[oldIndex * 3 + 1],
+            globalColors[oldIndex * 3 + 2]
+          )
+        }
+      }
+      
+      // Update face indices to use new mapping
+      mesh.faces = mesh.faces.map(oldIndex => vertexMap.get(oldIndex) || 0)
+      mesh.vertices = newVertices
+      mesh.colors = newColors
+    }
+  }
+  
+  debugLog(`Parsed OBJ: ${meshes.length} meshes, ${globalVertices.length / 3} total vertices, ${globalColors.length / 3} total colors`)
+  return { meshes }
 }
 
 async function loadExternalGeometry(
@@ -144,8 +222,8 @@ async function loadExternalGeometry(
   if (externalGeometryCache.has(cacheKey)) {
     const cached = externalGeometryCache.get(cacheKey)
     if (cached) {
-      debugLog(`Using cached geometry for ${componentId}`)
-      return { success: true, object: cached }
+      debugLog(`Using cached geometry for ${componentId}: ${cached.length} meshes`)
+      return { success: true, meshes: cached }
     } else {
       return { 
         success: false, 
@@ -167,71 +245,78 @@ async function loadExternalGeometry(
     }
     
     const objContent = await response.text()
-    const { vertices, faces, colors } = parseOBJ(objContent)
+    const { meshes: parsedMeshes } = parseOBJ(objContent)
     
-    if (vertices.length === 0) {
-      throw new Error('No vertices found in OBJ file')
+    if (parsedMeshes.length === 0) {
+      throw new Error('No meshes found in OBJ file')
     }
 
-    // Build BufferGeometry manually
-    const geometry = new THREE.BufferGeometry()
-    
-    // Set positions
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-    
-    // Set faces (indices)
-    if (faces.length > 0) {
-      geometry.setIndex(faces)
+    const threeMeshes: THREE.Group[] = []
+
+    for (const meshData of parsedMeshes) {
+      if (meshData.vertices.length === 0) continue
+
+      // Build BufferGeometry manually
+      const geometry = new THREE.BufferGeometry()
+      
+      // Set positions
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(meshData.vertices, 3))
+      
+      // Set faces (indices)
+      if (meshData.faces.length > 0) {
+        geometry.setIndex(meshData.faces)
+      }
+      
+      // Set colors if available
+      if (meshData.colors.length > 0) {
+        // Normalize colors using smart normalization
+        const normalizedColors = normalizeColors(meshData.colors)
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
+        debugLog(`Applied ${normalizedColors.length / 3} normalized vertex colors to ${meshData.name}`)
+      }
+
+      // Compute normals to fix see-through faces
+      geometry.computeVertexNormals()
+      geometry.normalizeNormals()
+      
+      // Debug geometry info
+      debugLog(`${meshData.name} stats: ${meshData.vertices.length / 3} vertices, ${meshData.faces.length / 3} triangles`)
+
+      // Create material with proper settings
+      const material = meshData.colors.length > 0
+        ? new THREE.MeshBasicMaterial({
+            vertexColors: true,
+            side: THREE.DoubleSide,
+            transparent: false,
+            opacity: 1.0
+          })
+        : new THREE.MeshBasicMaterial({ 
+            color: 0x888888, 
+            side: THREE.DoubleSide,
+            transparent: false,
+            opacity: 1.0
+          })
+
+      // Create mesh
+      const mesh = new THREE.Mesh(geometry, material)
+      mesh.name = meshData.name
+      
+      // Create group and add mesh
+      const object = new THREE.Group()
+      object.add(mesh)
+      
+      // Apply scaling
+      object.scale.set(scale, scale, scale)
+
+      threeMeshes.push(object)
     }
+
+    debugLog(`Created ${threeMeshes.length} meshes from OBJ file`)
+
+    // Cache the individual meshes
+    externalGeometryCache.set(cacheKey, threeMeshes)
     
-    // Set colors if available
-    if (colors.length > 0) {
-      // Normalize colors using smart normalization
-      const normalizedColors = normalizeColors(colors)
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
-      debugLog(`Applied ${normalizedColors.length / 3} normalized vertex colors`)
-    }
-
-    // Compute normals to fix see-through faces
-    geometry.computeVertexNormals()
-    geometry.normalizeNormals()
-    
-    // Debug geometry info
-    debugLog(`Geometry stats: ${vertices.length / 3} vertices, ${faces.length / 3} triangles`)
-    debugLog(`Position attribute: ${geometry.getAttribute('position')?.count} items`)
-    debugLog(`Index attribute: ${geometry.getAttribute('index')?.count} items`)
-    debugLog(`Color attribute: ${geometry.getAttribute('color')?.count} items`)
-
-    // Create material with proper settings
-    const material = colors.length > 0
-      ? new THREE.MeshBasicMaterial({
-          vertexColors: true,
-          side: THREE.DoubleSide,
-          transparent: false,
-          opacity: 1.0
-        })
-      : new THREE.MeshBasicMaterial({ 
-          color: 0x888888, 
-          side: THREE.DoubleSide,
-          transparent: false,
-          opacity: 1.0
-        })
-
-    // Create mesh
-    const mesh = new THREE.Mesh(geometry, material)
-    mesh.name = 'parsed_mesh'
-    
-    // Create group and add mesh
-    const object = new THREE.Group()
-    object.add(mesh)
-    
-    // Apply scaling
-    object.scale.set(scale, scale, scale)
-
-    debugLog(`Created geometry with ${vertices.length / 3} vertices, ${faces.length / 3} faces`)
-
-    externalGeometryCache.set(cacheKey, object)
-    return { success: true, object }
+    return { success: true, meshes: threeMeshes }
   } catch (e) {
     debugLog(`Failed to load external geometry:`, e)
     
@@ -261,52 +346,20 @@ async function loadExternalGeometry(
  */
 const VisualizeMesh = React.memo(({
   component_data,
-  geometryMode
+  geometryMode,
+  visibleMeshes = [],
+  externalMeshes = [],
+  isLoadingExternal = false,
+  geometryError = null
 }: {
   component_data: ComponentModel
   geometryMode: GeometryMode
+  visibleMeshes?: boolean[]
+  externalMeshes?: THREE.Group[]
+  isLoadingExternal?: boolean
+  geometryError?: string | null
 }) => {
-  const [externalObject, setExternalObject] = useState<THREE.Group | null>(null)
-  const [isLoadingExternal, setIsLoadingExternal] = useState(false)
-  const [geometryError, setGeometryError] = useState<string | null>(null)
-
   const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
-
-  useEffect(() => {
-    let isMounted = true
-    if (isExternalMode && component_data.type !== 'sheet') {
-      if (!component_data._id) return
-      setIsLoadingExternal(true)
-      setGeometryError(null)
-      loadExternalGeometry(component_data._id.toString(), geometryMode)
-        .then((result) => {
-          if (isMounted) {
-            if (result.success) {
-              setExternalObject(result.object)
-              setGeometryError(null)
-            } else {
-              setExternalObject(null)
-              setGeometryError(result.message)
-            }
-            setIsLoadingExternal(false)
-          }
-        })
-        .catch(() => {
-          if (isMounted) {
-            setExternalObject(null)
-            setGeometryError(`Failed to load ${geometryMode} geometry`)
-            setIsLoadingExternal(false)
-          }
-        })
-    } else {
-      setExternalObject(null)
-      setIsLoadingExternal(false)
-      setGeometryError(null)
-    }
-    return () => {
-      isMounted = false
-    }
-  }, [geometryMode, component_data, isExternalMode])
 
   // Primitive fallback geometry
   const mesh_geometry = useMemo(() => {
@@ -384,8 +437,15 @@ const VisualizeMesh = React.memo(({
         </mesh>
       )
     }
-    if (externalObject) {
-      return <primitive object={externalObject} />
+    if (externalMeshes.length > 0) {
+      return (
+        <>
+          {externalMeshes.map((mesh, index) => {
+            if (!visibleMeshes[index]) return null
+            return <primitive key={index} object={mesh} />
+          })}
+        </>
+      )
     }
     if (geometryError) {
       return (
@@ -493,56 +553,21 @@ VisualizeSheet.displayName = 'VisualizeSheet'
 const VisualizeMultipleMeshes = React.memo(({
   component_data,
   geometryMode,
-  visibleMeshes = []
+  visibleMeshes = [],
+  externalMeshes = [],
+  isLoadingExternal = false,
+  geometryError = null
 }: {
   component_data: ComponentModel
   geometryMode: GeometryMode
   visibleMeshes?: boolean[]
+  externalMeshes?: THREE.Group[]
+  isLoadingExternal?: boolean
+  geometryError?: string | null
 }) => {
-  const [isLoadingExternal, setIsLoadingExternal] = useState(false)
-  const [geometryError, setGeometryError] = useState<string | null>(null)
-  const [externalObject, setExternalObject] = useState<THREE.Group | null>(null)
-
   const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
   const geometry = component_data.geometry as ComponentGeometry
   const meshes = (geometry.meshes || []) as ComponentMesh[]
-
-  // Load external geometry for detailed/reduced modes
-  useEffect(() => {
-    let isMounted = true
-    if (isExternalMode && component_data.type !== 'sheet') {
-      if (!component_data._id) return
-      setIsLoadingExternal(true)
-      setGeometryError(null)
-      loadExternalGeometry(component_data._id.toString(), geometryMode)
-        .then((result) => {
-          if (isMounted) {
-            if (result.success) {
-              setExternalObject(result.object)
-              setGeometryError(null)
-            } else {
-              setExternalObject(null)
-              setGeometryError(result.message)
-            }
-            setIsLoadingExternal(false)
-          }
-        })
-        .catch(() => {
-          if (isMounted) {
-            setExternalObject(null)
-            setGeometryError(`Failed to load ${geometryMode} geometry`)
-            setIsLoadingExternal(false)
-          }
-        })
-    } else {
-      setExternalObject(null)
-      setIsLoadingExternal(false)
-      setGeometryError(null)
-    }
-    return () => {
-      isMounted = false
-    }
-  }, [geometryMode, component_data, isExternalMode])
 
   if (isLoadingExternal) {
     return (
@@ -590,9 +615,16 @@ const VisualizeMultipleMeshes = React.memo(({
     )
   }
 
-  if (isExternalMode && externalObject) {
-    // For external geometry, render all meshes as a group
-    return <primitive object={externalObject} />
+  if (isExternalMode && externalMeshes.length > 0) {
+    // For external geometry, render individual meshes with visibility controls
+    return (
+      <>
+        {externalMeshes.map((mesh, index) => {
+          if (!visibleMeshes[index]) return null
+          return <primitive key={index} object={mesh} />
+        })}
+      </>
+    )
   }
 
   // For primitive mode, render individual meshes with visibility controls
@@ -649,11 +681,17 @@ VisualizeMultipleMeshes.displayName = 'VisualizeMultipleMeshes'
 function VisualizeComponent({
   component_data,
   geometryMode,
-  visibleMeshes = []
+  visibleMeshes = [],
+  externalMeshes = [],
+  isLoadingExternal = false,
+  geometryError = null
 }: {
   component_data: ComponentModel
   geometryMode: GeometryMode
   visibleMeshes?: boolean[]
+  externalMeshes?: THREE.Group[]
+  isLoadingExternal?: boolean
+  geometryError?: string | null
 }) {
   if (!component_data.geometry) return null
   
@@ -670,16 +708,16 @@ function VisualizeComponent({
   if (hasExtrusion) {
     return <VisualizeSheet component_data={component_data} />
   } else if (hasMultipleMeshes) {
-    return <VisualizeMultipleMeshes component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} />
+    return <VisualizeMultipleMeshes component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} />
   } else if (hasMesh) {
-    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} />
+    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} />
   }
   
   // Fallback to type-based logic if geometry inference fails
   if (component_data.type === 'sheet') {
     return <VisualizeSheet component_data={component_data} />
   } else {
-    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} />
+    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} />
   }
 }
 
@@ -690,18 +728,63 @@ export default function ComponentViewer({ component_data }: { component_data: Co
   // Call ALL hooks FIRST, unconditionally
   const [geometryMode, setGeometryMode] = useState<GeometryMode>('primitive')
   const [visibleMeshes, setVisibleMeshes] = useState<boolean[]>([])
+  const [externalMeshes, setExternalMeshes] = useState<THREE.Group[]>([])
+  const [isLoadingExternal, setIsLoadingExternal] = useState(false)
+  const [geometryError, setGeometryError] = useState<string | null>(null)
 
   const isSheet = component_data.type === 'sheet'
   const geometry = component_data.geometry as ComponentGeometry
   const meshes = useMemo(() => (geometry?.meshes || []) as ComponentMesh[], [geometry?.meshes])
   const hasMultipleMeshes = meshes && meshes.length > 0
+  const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
 
-  // Initialize visibility state for multiple meshes
+  // Load external geometry centrally
   useEffect(() => {
-    if (hasMultipleMeshes && meshes && visibleMeshes.length === 0) {
-      setVisibleMeshes(new Array(meshes.length).fill(true))
+    let isMounted = true
+    if (isExternalMode && component_data.type !== 'sheet' && component_data._id) {
+      setIsLoadingExternal(true)
+      setGeometryError(null)
+      loadExternalGeometry(component_data._id.toString(), geometryMode)
+        .then((result) => {
+          if (isMounted) {
+            if (result.success) {
+              setExternalMeshes(result.meshes)
+              setGeometryError(null)
+              // Initialize visibility state for external meshes
+              setVisibleMeshes(new Array(result.meshes.length).fill(true))
+            } else {
+              setExternalMeshes([])
+              setGeometryError(result.message)
+              setVisibleMeshes([])
+            }
+            setIsLoadingExternal(false)
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setExternalMeshes([])
+            setGeometryError(`Failed to load ${geometryMode} geometry`)
+            setVisibleMeshes([])
+            setIsLoadingExternal(false)
+          }
+        })
+    } else {
+      setExternalMeshes([])
+      setIsLoadingExternal(false)
+      setGeometryError(null)
+      // Initialize visibility state for primitive meshes
+      if (hasMultipleMeshes && meshes) {
+        setVisibleMeshes(new Array(meshes.length).fill(true))
+      } else if (geometry?.mesh) {
+        setVisibleMeshes([true]) // Single mesh
+      } else {
+        setVisibleMeshes([])
+      }
     }
-  }, [hasMultipleMeshes, meshes, visibleMeshes.length])
+    return () => {
+      isMounted = false
+    }
+  }, [geometryMode, component_data, isExternalMode, hasMultipleMeshes, meshes, geometry?.mesh])
 
   const onModeChange: React.ChangeEventHandler<HTMLSelectElement> = (e) => {
     const v = e.target.value as GeometryMode
@@ -742,11 +825,11 @@ export default function ComponentViewer({ component_data }: { component_data: Co
           </div>
           
           {/* Mesh Visibility Controls */}
-          {hasMultipleMeshes && geometryMode === 'primitive' && (
+          {((hasMultipleMeshes && geometryMode === 'primitive') || (isExternalMode && externalMeshes.length > 0)) && (
             <div className="mb-1 sm:mb-2 flex flex-col gap-1">
               <label className="text-xs sm:text-sm">Mesh Visibility:</label>
               <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-                {meshes.map((mesh: ComponentMesh, index: number) => (
+                {(isExternalMode ? Array.from({ length: externalMeshes.length }, (_, i) => i) : meshes.map((_, i) => i)).map((index: number) => (
                   <label key={index} className="flex items-center gap-1 text-xs">
                     <input
                       type="checkbox"
@@ -754,7 +837,7 @@ export default function ComponentViewer({ component_data }: { component_data: Co
                       onChange={() => toggleMeshVisibility(index)}
                       className="rounded"
                     />
-                    <span>Mesh {index + 1}</span>
+                    <span>{isExternalMode ? `External Mesh ${index + 1}` : `Mesh ${index + 1}`}</span>
                   </label>
                 ))}
               </div>
@@ -768,7 +851,14 @@ export default function ComponentViewer({ component_data }: { component_data: Co
           <pointLight position={[-10, 10, -10]} decay={0} intensity={Math.PI * 0.75} />
 
           <Bounds fit clip observe margin={1.2} maxDuration={1}>
-            <VisualizeComponent component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} />
+            <VisualizeComponent 
+              component_data={component_data} 
+              geometryMode={geometryMode} 
+              visibleMeshes={visibleMeshes} 
+              externalMeshes={isExternalMode ? externalMeshes : []}
+              isLoadingExternal={isLoadingExternal}
+              geometryError={geometryError}
+            />
           </Bounds>
 
           <axesHelper args={[0.1]} />
