@@ -1,13 +1,63 @@
 'use client'
 
-import { useState } from 'react'
-import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, Image, Download } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, FileImage, Download } from 'lucide-react'
 
 export default function GHInterfacePage() {
   const [expandedSection, setExpandedSection] = useState<string | null>('getting-started')
+  const [releaseVersion, setReleaseVersion] = useState<string>('')
+  const [isDownloading, setIsDownloading] = useState<boolean>(false)
 
   const toggleSection = (sectionId: string) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId)
+  }
+
+  // Fetch release version on component mount
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        const response = await fetch('/api/backend/downloads/gh-interface/version')
+        if (response.ok) {
+          const data = await response.json()
+          setReleaseVersion(data.version || '')
+        }
+      } catch (error) {
+        console.error('Failed to fetch release version:', error)
+      }
+    }
+    
+    fetchVersion()
+  }, [])
+
+  const handleDownload = async () => {
+    setIsDownloading(true)
+    try {
+      const response = await fetch('/api/backend/downloads/gh-interface')
+      if (response.ok) {
+        // Get filename from Content-Disposition header
+        const contentDisposition = response.headers.get('content-disposition')
+        const filename = contentDisposition 
+          ? contentDisposition.split('filename=')[1]?.replace(/"/g, '')
+          : 'csc-grasshopper-interface.zip'
+        
+        // Create blob and download
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } else {
+        console.error('Download failed:', response.statusText)
+      }
+    } catch (error) {
+      console.error('Download error:', error)
+    } finally {
+      setIsDownloading(false)
+    }
   }
 
   const ComponentCard = ({ 
@@ -18,7 +68,7 @@ export default function GHInterfacePage() {
     outputs, 
     tip 
   }: {
-    icon: any
+    icon: React.ComponentType<{ className?: string }>
     name: string
     description: string
     inputs: Array<{label: string, description: string}>
@@ -28,7 +78,7 @@ export default function GHInterfacePage() {
     <div className="border rounded-lg p-4">
       <div className="w-full h-64 bg-muted rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/25 mb-4">
         <div className="text-center text-muted-foreground">
-          <Image className="h-12 w-12 mx-auto mb-3" />
+          <FileImage className="h-12 w-12 mx-auto mb-3" />
           <p className="text-lg font-medium">{name}</p>
           <p className="text-sm">Component Screenshot</p>
         </div>
@@ -88,10 +138,19 @@ export default function GHInterfacePage() {
             </h4>
             <p className="text-sm text-green-800 dark:text-green-200 mb-3">
               Download the complete Grasshopper interface with all user objects and example files.
+              {releaseVersion && (
+                <span className="block mt-1 font-medium">
+                  Latest version: {releaseVersion}
+                </span>
+              )}
             </p>
             <div className="flex gap-3">
-              <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer">
-                Download Interface (.zip)
+              <button 
+                onClick={handleDownload}
+                disabled={isDownloading}
+                className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer"
+              >
+                {isDownloading ? 'Downloading...' : `Download Interface ${releaseVersion ? `(${releaseVersion})` : '(.zip)'}`}
               </button>
             </div>
           </div>
@@ -500,7 +559,7 @@ export default function GHInterfacePage() {
         </p>
         <ul className="text-sm text-muted-foreground space-y-2">
           <li>• Check the component runtime messages for error details</li>
-          <li>• Ensure you're properly authenticated with CSC_SignIn</li>
+          <li>• Ensure you&apos;re properly authenticated with CSC_SignIn</li>
           <li>• Verify your internet connection for API access</li>
           <li>• Contact the DDU team through the main website</li>
         </ul>
