@@ -122,15 +122,44 @@ async def download_gh_interface(
         async def generate():
             async with httpx.AsyncClient() as client:
                 try:
+                    # Use the GitHub API URL with proper headers
+                    headers = {
+                        'Authorization': f'token {token}',
+                        'Accept': 'application/octet-stream',
+                        'User-Agent': 'CSC-Backend/1.0'
+                    }
+
                     async with client.stream(
                         'GET',
                         download_url,
-                        headers={'Authorization': f'token {token}'},
+                        headers=headers,
                         timeout=60.0
                     ) as response:
                         print(f"Response status: {response.status_code}")
                         print(f"Response headers: {dict(response.headers)}")
+                        content_type = response.headers.get(
+                            'content-type', 'N/A'
+                        )
+                        print(f"Content-Type: {content_type}")
+                        content_length = response.headers.get(
+                            'content-length', 'N/A'
+                        )
+                        print(f"Content-Length: {content_length}")
+
                         response.raise_for_status()
+
+                        # Debug: Check first few bytes to see what
+                        # we're getting
+                        first_chunk = await response.aread(1024)
+                        first_100_hex = first_chunk[:100].hex()
+                        print(f"First 100 bytes (hex): {first_100_hex}")
+                        first_100_text = first_chunk[:100]
+                        print(f"First 100 bytes (text): {first_100_text}")
+
+                        # Yield the first chunk
+                        yield first_chunk
+
+                        # Continue with the rest of the stream
                         async for chunk in response.aiter_bytes(
                             chunk_size=8192
                         ):
