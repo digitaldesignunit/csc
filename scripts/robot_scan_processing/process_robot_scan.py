@@ -1,34 +1,38 @@
 #!/usr/bin/env python3
 """
-3D Scan Data Processing Script
+Robot Scan Data Processing Script
 
-This script processes 3D scan result data from the scans_to_process folder
-and creates CSC components with proper geometry structure.
+This script processes 3D scan data from the robot scanning and prepares it
+for upload to the CSC (Catalogue of Second Chances) backend.
+
+Features:
+- Parses OBJ files with multiple objects and vertex colors
+- Creates primitive meshes for fast rendering
+- Generates reduced meshes for large datasets
+- Handles coordinate system transformations
+- Creates component JSON metadata
+- Moves processed data to output folder
 
 Usage:
-    python scripts/process_scan_data.py
-
-Requirements:
-    - trimesh
-    - numpy
+    python process_robot_scan.py --single <scan_folder> <output_folder>
+    python process_robot_scan.py <input_folder> <output_folder>
 """
 
 import os
 import sys
 import json
+import shutil
 import uuid
+import argparse
+import logging
 from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Tuple
 import numpy as np
-import logging
+import trimesh
+from scipy.spatial import cKDTree
 
-try:
-    import trimesh
-except ImportError:
-    print("Error: trimesh library required. Install with: pip install trimesh")
-    sys.exit(1)
-
-# Setup logging
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -87,9 +91,10 @@ def parse_obj_with_objects(obj_path: str) -> Dict[str, Dict]:
                 # Vertex with possible color
                 parts = line[2:].split()
                 if len(parts) >= 3:
-                    # Position
+                    # Position - swap Y and Z and negate Z to
+                    # match coordinate system
                     x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
-                    vertex = [x, y, z]
+                    vertex = [x, -z, y]  # Swap Y and Z, negate Z
                     global_vertices.append(vertex)
 
                     # Color (if present)
@@ -148,8 +153,9 @@ def triangulate_face(face: List[int]) -> List[List[int]]:
 
 
 def reduce_mesh_trimesh(vertices: np.ndarray, faces: np.ndarray,
-                        target_faces: int) -> Tuple[np.ndarray, np.ndarray]:
-    """Reduce mesh using trimesh library"""
+                        target_faces: int, colors: np.ndarray = None) -> \
+        Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Reduce mesh using trimesh library with color preservation"""
     try:
         # Create trimesh object
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
@@ -157,18 +163,28 @@ def reduce_mesh_trimesh(vertices: np.ndarray, faces: np.ndarray,
         # Calculate reduction ratio
         current_faces = len(faces)
         if current_faces <= target_faces:
-            return vertices, faces
+            return (vertices, faces,
+                    colors if colors is not None else np.array([]))
 
         # Simplify mesh
         simplified = mesh.simplify_quadric_decimation(
             face_count=target_faces
         )
 
-        return simplified.vertices, simplified.faces
+        # Map colors to new vertices if colors were provided
+        if colors is not None and len(colors) > 0:
+            # Find which original vertices are closest to each new vertex
+            tree = cKDTree(vertices)
+            _, indices = tree.query(simplified.vertices)
+            mapped_colors = colors[indices]
+            return (simplified.vertices, simplified.faces, mapped_colors)
+        else:
+            return simplified.vertices, simplified.faces, np.array([])
 
     except Exception as e:
         logger.warning(f"Mesh reduction failed: {e}, using original mesh")
-        return vertices, faces
+        return (vertices, faces,
+                colors if colors is not None else np.array([]))
 
 
 def calculate_bounding_box(meshes_data: List[Dict]) -> List[float]:
@@ -229,10 +245,11 @@ def save_combined_obj_file(meshes_data: List[Dict], filepath: str):
             for j, vertex in enumerate(vertices):
                 if j < len(colors):
                     color = colors[j]
-                    f.write(f"v {vertex[0]} {vertex[1]} {vertex[2]} "
+                    # negate Z again to make coordinate system match
+                    f.write(f"v {vertex[0]} {-vertex[1]} {-vertex[2]} "
                             f"{color[0]} {color[1]} {color[2]}\n")
                 else:
-                    f.write(f"v {vertex[0]} {vertex[1]} {vertex[2]} "
+                    f.write(f"v {vertex[0]} {-vertex[1]} {-vertex[2]} "
                             f"255 255 255\n")
 
             # Write faces (adjust for global vertex offset)
@@ -244,9 +261,34 @@ def save_combined_obj_file(meshes_data: List[Dict], filepath: str):
             vertex_offset += len(vertices)
 
 
+def move_processed_folder(
+        source_folder: str,
+        destination_folder: str,
+        component_id: str
+) -> bool:
+    """Move processed scan folder to destination"""
+    try:
+        source_path = Path(source_folder)
+        dest_path = Path(destination_folder) / component_id
+
+        # Ensure destination directory exists
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Move the folder
+        shutil.move(str(source_path), str(dest_path))
+        logger.info(f"[FOLDER] Moved processed folder: {component_id}")
+        logger.info(f"   From: {source_folder}")
+        logger.info(f"   To: {dest_path}")
+        return True
+
+    except Exception as e:
+        logger.error(f"[ERROR] Failed to move folder {component_id}: {e}")
+        return False
+
+
 def process_scan_folder(scan_folder: str, component_id: str) -> bool:
     """Process a single scan folder"""
-    logger.info(f"🔧 Processing scan folder: {component_id}")
+    logger.info(f"[PROCESSING] Processing scan folder: {component_id}")
 
     # Paths
     metadata_path = os.path.join(scan_folder, 'metadata.json')
@@ -254,74 +296,76 @@ def process_scan_folder(scan_folder: str, component_id: str) -> bool:
     aligned_mesh_path = os.path.join(output_folder, 'aligned_mesh.obj')
     transcode_folder = os.path.join(scan_folder, 'transcode')
 
-    logger.info("📁 Folder structure:")
-    logger.info(f"   📄 Metadata: {os.path.basename(metadata_path)}")
-    logger.info(f"   📁 Output: {os.path.basename(output_folder)}")
-    logger.info("   🎯 Target: transcode/")
+    logger.info("[FOLDER] Folder structure:")
+    logger.info(f"   [FILE] Metadata: {os.path.basename(metadata_path)}")
+    logger.info(f"   [FOLDER] Output: {os.path.basename(output_folder)}")
+    logger.info("   [TARGET] Target: transcode/")
 
     # Create transcode folder
-    logger.info("📁 Creating transcode folder...")
+    logger.info("[FOLDER] Creating transcode folder...")
     os.makedirs(transcode_folder, exist_ok=True)
 
     # Check required files
-    logger.info("🔍 Checking required files...")
+    logger.info("[SEARCH] Checking required files...")
     if not os.path.exists(metadata_path):
-        logger.error(f"❌ Missing metadata.json in {component_id}")
+        logger.error(f"[ERROR] Missing metadata.json in {component_id}")
         return False
-    logger.info("✅ Found metadata.json")
+    logger.info("[OK] Found metadata.json")
 
     if not os.path.exists(aligned_mesh_path):
-        logger.error(f"❌ Missing aligned_mesh.obj in {component_id}")
+        logger.error(f"[ERROR] Missing aligned_mesh.obj in {component_id}")
         return False
-    logger.info("✅ Found aligned_mesh.obj")
+    logger.info("[OK] Found aligned_mesh.obj")
 
     try:
         # Load metadata
         logger.info("📖 Loading metadata.json...")
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
-        logger.info(f"✅ Metadata loaded: {len(metadata)} keys")
+        logger.info(f"[OK] Metadata loaded: {len(metadata)} keys")
 
         # Parse OBJ file
-        logger.info("🔍 Parsing aligned_mesh.obj...")
+        logger.info("[SEARCH] Parsing aligned_mesh.obj...")
         obj_data = parse_obj_with_objects(aligned_mesh_path)
         objects = obj_data['objects']
         marker_points = obj_data['marker_points']
 
-        logger.info("📊 OBJ parsing results:")
-        logger.info(f"   🎯 Objects found: {list(objects.keys())}")
-        logger.info(f"   📍 Marker points: {len(marker_points)}")
+        logger.info("[OBJ] OBJ parsing results:")
+        logger.info(f"   [TARGET] Objects found: {list(objects.keys())}")
+        logger.info(f"   [MARKER POINTS] Marker points: {len(marker_points)}")
 
         # Check for required objects
         if 'object' not in objects:
-            logger.error(f"❌ Missing 'object' in OBJ file for {component_id}")
+            logger.error(
+                f"[ERROR] Missing 'object' in OBJ file for {component_id}"
+            )
             return False
         obj_verts = len(objects['object']['vertices'])
         obj_faces = len(objects['object']['faces'])
-        logger.info(f"✅ Main object found: {obj_verts} vertices, "
+        logger.info(f"[OK] Main object found: {obj_verts} vertices, "
                     f"{obj_faces} faces")
 
         if 'end_effector' not in objects:
-            logger.warning(f"⚠️ Missing 'end_effector' in OBJ "
+            logger.warning(f"[WARNING] Missing 'end_effector' in OBJ "
                            f"for {component_id}")
         else:
             ee_verts = len(objects['end_effector']['vertices'])
             ee_faces = len(objects['end_effector']['faces'])
-            logger.info(f"✅ End effector found: {ee_verts} vertices, "
+            logger.info(f"[OK] End effector found: {ee_verts} vertices, "
                         f"{ee_faces} faces")
 
         # Prepare meshes (object first, end_effector second)
-        logger.info("🔄 Processing meshes...")
+        logger.info("[PROCESSING] Processing meshes...")
         meshes_data = []
         primitive_meshes = []
 
         # Process 'object' mesh (first)
-        logger.info("🎯 Processing main object mesh...")
+        logger.info("[TARGET] Processing main object mesh...")
         obj_mesh = objects['object']
         if obj_mesh['vertices'] and obj_mesh['faces']:
             orig_verts = len(obj_mesh['vertices'])
             orig_faces = len(obj_mesh['faces'])
-            logger.info(f"   📊 Original: {orig_verts} vertices, "
+            logger.info(f"   [OBJ] Original: {orig_verts} vertices, "
                         f"{orig_faces} faces")
             mesh_data = create_mesh_data(
                 obj_mesh['vertices'],
@@ -329,28 +373,35 @@ def process_scan_folder(scan_folder: str, component_id: str) -> bool:
                 obj_mesh['faces']
             )
             meshes_data.append(mesh_data)
-
             # Create primitive version
-            logger.info("   🔧 Creating primitive version...")
+            logger.info("[PROCESSING] Creating primitive version...")
             vertices_array = np.array(obj_mesh['vertices'])
             triangulated = [triangulate_face(f)[0] for f in obj_mesh['faces']
                             if len(f) >= 3]
             faces_array = np.array(triangulated)
 
             if len(faces_array) > 350:
-                logger.info(f"   ⚡ Reducing from {len(faces_array)} "
-                            f"to 350 faces...")
-                prim_vertices, prim_faces = reduce_mesh_trimesh(
-                    vertices_array, faces_array, 350
+                logger.info(
+                    f"   [PROCESSING] Reducing from {len(faces_array)} "
+                    f"to 350 faces..."
                 )
+                prim_vertices, prim_faces, prim_colors = reduce_mesh_trimesh(
+                    vertices_array, faces_array, 350,
+                    np.array(obj_mesh['colors'])
+                )
+                # Swap Y and Z axes for coordinate system consistency
+                prim_vertices = np.array(prim_vertices)
+                prim_vertices[:, [1, 2]] = prim_vertices[:, [2, 1]]
+                prim_vertices[:, 2] = -prim_vertices[:, 2]
+                # Create Mesh Data
                 primitive_mesh = create_mesh_data(
                     prim_vertices.tolist(),
-                    [[255, 255, 255]] * len(prim_vertices),
+                    prim_colors.tolist(),
                     prim_faces.tolist()
                 )
-                logger.info(f"   ✅ Reduced to {len(prim_faces)} faces")
+                logger.info(f"   [OK] Reduced to {len(prim_faces)} faces")
             else:
-                logger.info(f"   ✅ Mesh already small "
+                logger.info(f"   [OK] Mesh already small "
                             f"enough ({len(faces_array)} faces)")
                 primitive_mesh = mesh_data.copy()
 
@@ -358,10 +409,10 @@ def process_scan_folder(scan_folder: str, component_id: str) -> bool:
 
         # Process 'end_effector' mesh (second)
         if 'end_effector' in objects:
-            logger.info("🔧 Processing end_effector mesh...")
+            logger.info("[PROCESSING] Processing end_effector mesh...")
             ee_mesh = objects['end_effector']
             if ee_mesh['vertices'] and ee_mesh['faces']:
-                logger.info(f"   📊 Original: {len(ee_mesh['vertices'])} "
+                logger.info(f"   [OBJ] Original: {len(ee_mesh['vertices'])} "
                             f"vertices, {len(ee_mesh['faces'])} faces")
                 mesh_data = create_mesh_data(
                     ee_mesh['vertices'],
@@ -369,104 +420,107 @@ def process_scan_folder(scan_folder: str, component_id: str) -> bool:
                     ee_mesh['faces']
                 )
                 meshes_data.append(mesh_data)
-
                 # Create primitive version
-                logger.info("   🔧 Creating primitive version...")
+                logger.info("   [PROCESSING] Creating primitive version...")
                 vertices_array = np.array(ee_mesh['vertices'])
                 triangulated = [triangulate_face(f)[0]
                                 for f in ee_mesh['faces'] if len(f) >= 3]
                 faces_array = np.array(triangulated)
-
+                # Reduce mesh
                 if len(faces_array) > 350:
-                    logger.info(f"   ⚡ Reducing from {len(faces_array)} "
-                                f"to 350 faces...")
-                    prim_vertices, prim_faces = reduce_mesh_trimesh(
-                        vertices_array, faces_array, 350
-                    )
+                    logger.info(
+                        f"   [PROCESSING] Reducing from {len(faces_array)} "
+                        f"to 350 faces...")
+                    prim_vertices, prim_faces, prim_colors = \
+                        reduce_mesh_trimesh(
+                            vertices_array, faces_array, 350,
+                            np.array(ee_mesh['colors'])
+                        )
+                    # Swap Y and Z axes for coordinate system consistency
+                    prim_vertices = np.array(prim_vertices)
+                    prim_vertices[:, [1, 2]] = prim_vertices[:, [2, 1]]
+                    prim_vertices[:, 2] = -prim_vertices[:, 2]
+                    # Create Mesh Data
                     primitive_mesh = create_mesh_data(
                         prim_vertices.tolist(),
-                        [[255, 255, 255]] * len(prim_vertices),
+                        prim_colors.tolist(),
                         prim_faces.tolist()
                     )
-                    logger.info(f"   ✅ Reduced to {len(prim_faces)} faces")
+                    logger.info(f"   [OK] Reduced to {len(prim_faces)} faces")
                 else:
-                    logger.info(f"   ✅ Mesh already small enough "
+                    logger.info(f"   [OK] Mesh already small enough "
                                 f"({len(faces_array)} faces)")
                     primitive_mesh = mesh_data.copy()
 
                 primitive_meshes.append(primitive_mesh)
             else:
-                logger.info("   ⚠️ End effector has no geometry")
+                logger.info("   [WARNING] End effector has no geometry")
 
         if not meshes_data:
-            logger.error(f"❌ No valid meshes found for {component_id}")
+            logger.error(f"[ERROR] No valid meshes found for {component_id}")
             return False
-
-        logger.info(f"✅ Processed {len(meshes_data)} meshes total")
-
+        logger.info(f"[OK] Processed {len(meshes_data)} meshes total")
         # Save OBJ files
-        logger.info("💾 Saving OBJ files...")
+        logger.info("[FILE] Saving OBJ files...")
         mesh_obj_path = os.path.join(transcode_folder, 'mesh.obj')
-        logger.info("   📄 Detailed mesh: mesh.obj")
+        logger.info("   [FILE] Detailed mesh: mesh.obj")
         save_combined_obj_file(meshes_data, mesh_obj_path)
-
         # Create reduced OBJ if needed (check if any mesh has > 5000 faces)
         face_counts = [len(mesh['f']) for mesh in meshes_data]
         needs_reduced = any(count > 5000 for count in face_counts)
-        logger.info(f"🔍 Face counts: {face_counts}")
+        logger.info(f"[SEARCH] Face counts: {face_counts}")
 
         if needs_reduced:
-            logger.info("⚡ Creating reduced mesh version "
+            logger.info("[PROCESSING] Creating reduced mesh version "
                         "(>5000 faces detected)...")
             reduced_meshes = []
             for i, mesh_data in enumerate(meshes_data):
                 mesh_faces = len(mesh_data['f'])
                 if mesh_faces > 5000:
-                    logger.info(f"   🔧 Reducing mesh {i+1}: {mesh_faces} "
-                                "→ 1000 faces")
+                    logger.info(
+                        f"   [PROCESSING] Reducing mesh {i+1}: {mesh_faces} "
+                        "-> 1000 faces")
                     # Create reduced version
                     vertices_array = np.array(mesh_data['v'])
                     faces_array = np.array(mesh_data['f'])
-
-                    reduced_vertices, reduced_faces = reduce_mesh_trimesh(
-                        vertices_array, faces_array, 1000
-                    )
-
-                    color_count = len(reduced_vertices)
-                    if len(mesh_data['c']) >= color_count:
-                        colors = mesh_data['c'][:color_count]
-                    else:
-                        colors = [[255, 255, 255]] * color_count
-
+                    reduced_vertices, reduced_faces, reduced_colors = \
+                        reduce_mesh_trimesh(
+                            vertices_array, faces_array, 1000,
+                            np.array(mesh_data['c'])
+                        )
                     reduced_mesh = create_mesh_data(
                         reduced_vertices.tolist(),
-                        colors,
+                        reduced_colors.tolist(),
                         reduced_faces.tolist()
                     )
                     reduced_meshes.append(reduced_mesh)
-                    logger.info(f"   ✅ Mesh {i+1} reduced "
+                    logger.info(f"   [OK] Mesh {i+1} reduced "
                                 f"to {len(reduced_faces)} faces")
                 else:
-                    logger.info(f"   ✅ Mesh {i+1} kept "
+                    logger.info(f"   [OK] Mesh {i+1} kept "
                                 f"original ({mesh_faces} faces)")
                     reduced_meshes.append(mesh_data)
 
             mesh_reduced_path = os.path.join(transcode_folder,
                                              'mesh_reduced.obj')
-            logger.info("   📄 Reduced mesh: mesh_reduced.obj")
+            logger.info("   [FILE] Reduced mesh: mesh_reduced.obj")
             save_combined_obj_file(reduced_meshes, mesh_reduced_path)
         else:
-            logger.info("✅ No reduction needed (all meshes < 5000 faces)")
+            logger.info("[OK] No reduction needed (all meshes < 5000 faces)")
 
         # Create component JSON
-        logger.info("📝 Creating component JSON...")
+        logger.info("[FILE] Creating component JSON...")
         current_time = datetime.utcnow().isoformat() + 'Z'
 
         # Calculate bounding box from original meshes (not primitive)
         bounding_box = calculate_bounding_box(meshes_data)
-        logger.info(f"📏 Bounding box: "
+        logger.info(f"[BOUNDING BOX] Bounding box: "
                     f"[{bounding_box[0]:.3f}, {bounding_box[1]:.3f}, "
                     f"{bounding_box[2]:.3f}]")
+
+        # Swap marker points Y and Z axes like for primitive meshes
+        marker_points = [[point[0], -point[1], -point[2]]
+                         for point in marker_points]
 
         component_data = {
             "_id": component_id,
@@ -512,24 +566,26 @@ def process_scan_folder(scan_folder: str, component_id: str) -> bool:
         # Save component JSON
         component_json_path = os.path.join(transcode_folder,
                                            f"{component_id}.json")
-        logger.info(f"💾 Saving component JSON: {component_id}.json")
+        logger.info(f"[FILE] Saving component JSON: {component_id}.json")
         with open(component_json_path, 'w') as f:
             json.dump(component_data, f, indent=2)
 
         # Summary
-        logger.info(f"🎉 Successfully processed component: {component_id}")
-        logger.info("📊 Summary:")
-        logger.info(f"   🎯 Meshes processed: {len(meshes_data)}")
-        logger.info(f"   🔧 Primitive meshes: {len(primitive_meshes)}")
-        logger.info(f"   📍 Marker points: {len(marker_points)}")
-        logger.info(f"   📏 Bounding box: {bounding_box}")
-        logger.info("   ⚡ Reduced OBJ:"
+        logger.info(f"[OK] Successfully processed component: {component_id}")
+        logger.info("[SUMMARY] Summary:")
+        logger.info(f"   [TARGET] Meshes processed: {len(meshes_data)}")
+        logger.info(
+            f"   [PROCESSING] Primitive meshes: {len(primitive_meshes)}"
+        )
+        logger.info(f"   [MARKER POINTS] Marker points: {len(marker_points)}")
+        logger.info(f"   [BOUNDING BOX] Bounding box: {bounding_box}")
+        logger.info("[PROCESSING] Reduced OBJ:"
                     f" {'Created' if needs_reduced else 'Not needed'}")
-        logger.info("   📂 Output files:")
-        logger.info("      📄 mesh.obj")
+        logger.info("   [FOLDER] Output files:")
+        logger.info("      [FILE] mesh.obj")
         if needs_reduced:
-            logger.info("      📄 mesh_reduced.obj")
-        logger.info(f"      📄 {component_id}.json")
+            logger.info("      [FILE] mesh_reduced.obj")
+        logger.info(f"      [FILE] {component_id}.json")
 
         return True
 
@@ -538,69 +594,150 @@ def process_scan_folder(scan_folder: str, component_id: str) -> bool:
         return False
 
 
-def main():
-    """Main processing function"""
-    logger.info("🚀 Starting 3D scan data processing...")
+def process_single_folder(scan_folder: str, output_folder: str) -> bool:
+    """Process a single scan folder and move it to output folder"""
+    scan_path = Path(scan_folder)
 
-    # Define paths
-    scans_folder = os.path.abspath(
-        os.path.join('..', 'component_geometry', 'scans_to_process'))
-
-    logger.info(f"📂 Scanning folder: {scans_folder}")
-
-    if not os.path.exists(scans_folder):
-        logger.error(f"❌ Scans folder does not exist: {scans_folder}")
+    if not scan_path.exists():
+        logger.error(f"[ERROR] Scan folder does not exist: {scan_folder}")
         return False
 
+    # Extract component ID from folder name
+    component_id = scan_path.name
+
+    if not validate_uuid(component_id):
+        logger.error(f"[ERROR] Invalid UUID folder name: {component_id}")
+        return False
+
+    logger.info(f"[PROCESSING] Processing single scan folder: {component_id}")
+
+    # Process the folder
+    if not process_scan_folder(str(scan_path), component_id):
+        logger.error(f"[ERROR] Failed to process scan folder: {component_id}")
+        return False
+
+    # Move to output folder
+    if not move_processed_folder(str(scan_path), output_folder, component_id):
+        logger.error(
+            f"[ERROR] Failed to move processed folder: {component_id}"
+        )
+        return False
+
+    logger.info(f"[OK] Successfully processed and moved: {component_id}")
+    return True
+
+
+def process_multiple_folders(input_folder: str, output_folder: str) -> bool:
+    """Process all UUID folders in input directory and move them to output"""
+    input_path = Path(input_folder)
+
+    if not input_path.exists():
+        logger.error(f"[ERROR] Input folder does not exist: {input_folder}")
+        return False
+
+    logger.info(f"[FOLDER] Scanning folder: {input_folder}")
+
     # Find UUID folders
-    logger.info("🔍 Searching for UUID-named directories...")
-    all_items = os.listdir(scans_folder)
+    logger.info("[SEARCH] Searching for UUID-named directories...")
+    all_items = list(input_path.iterdir())
     logger.info(f"📋 Found {len(all_items)} items in directory")
 
     uuid_folders = []
     for item in all_items:
-        item_path = os.path.join(scans_folder, item)
-        if os.path.isdir(item_path):
-            if validate_uuid(item):
-                uuid_folders.append((item_path, item))
-                logger.info(f"✅ Valid UUID folder: {item}")
+        if item.is_dir():
+            if validate_uuid(item.name):
+                uuid_folders.append((str(item), item.name))
+                logger.info(f"[OK] Valid UUID folder: {item.name}")
             else:
-                logger.info(f"⚠️ Invalid UUID folder (skipping): {item}")
+                logger.info(
+                    f"[WARNING] Invalid UUID folder (skipping): {item.name}"
+                )
         else:
-            logger.info(f"📄 File (skipping): {item}")
+            logger.info(f"[FILE] File (skipping): {item.name}")
 
     if not uuid_folders:
-        logger.warning("🔍 No UUID folders found in scans_to_process")
+        logger.warning("[SEARCH] No UUID folders found in input directory")
         return True
 
-    logger.info(f"🎯 Processing {len(uuid_folders)} scan folders")
+    logger.info(f"[TARGET] Processing {len(uuid_folders)} scan folders")
 
     # Process each folder
     successful = 0
     failed = 0
 
     for i, (folder_path, component_id) in enumerate(uuid_folders, 1):
-        logger.info(f"📦 [{i}/{len(uuid_folders)}] Processing: {component_id}")
+        logger.info(
+            f"[UPLOAD] [{i}/{len(uuid_folders)}] Processing: {component_id}"
+        )
+        # Process the folder
         if process_scan_folder(folder_path, component_id):
-            successful += 1
-            logger.info(f"✅ [{i}/{len(uuid_folders)}] Success: {component_id}")
+            # Move to output folder
+            if move_processed_folder(folder_path, output_folder, component_id):
+                successful += 1
+                logger.info(
+                    f"[OK] [{i}/{len(uuid_folders)}] Success: {component_id}")
+            else:
+                failed += 1
+                logger.error(
+                    f"[ERROR] [{i}/{len(uuid_folders)}] Failed "
+                    f"to move: {component_id}")
         else:
             failed += 1
-            logger.error(f"❌ [{i}/{len(uuid_folders)}] Failed: {component_id}")
+            logger.error(
+                f"[ERROR] [{i}/{len(uuid_folders)}] Failed "
+                f"to process: {component_id}")
 
     # Summary
     logger.info("=" * 60)
-    logger.info("🏁 PROCESSING SUMMARY")
+    logger.info("[SUMMARY] PROCESSING SUMMARY")
     logger.info("=" * 60)
-    logger.info(f"📂 Total folders found: {len(uuid_folders)}")
-    logger.info(f"✅ Successfully processed: {successful}")
-    logger.info(f"❌ Failed: {failed}")
+    logger.info(f"[FOLDER] Total folders found: {len(uuid_folders)}")
+    logger.info(f"[OK] Successfully processed: {successful}")
+    logger.info(f"[ERROR] Failed: {failed}")
     success_rate = (successful / len(uuid_folders) * 100) \
         if uuid_folders else 0
-    logger.info(f"📊 Success rate: {success_rate:.1f}%")
+    logger.info(f"[STATS] Success rate: {success_rate:.1f}%")
     logger.info("=" * 60)
 
     return failed == 0
+
+
+def main():
+    """Main function with command line argument parsing"""
+    parser = argparse.ArgumentParser(
+        description="Process 3D scan data and create CSC components",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python process_robot_scan.py /path/to/scans_to_process /path/to/scans_processed  # NOQA
+  python process_robot_scan.py --single /path/to/specific_scan /path/to/scans_processed  # NOQA
+        """
+    )
+
+    parser.add_argument('input_folder',
+                        help='Input folder containing scan data '
+                             '(or specific scan folder if --single)')
+    parser.add_argument('output_folder',
+                        help='Output folder for processed scans')
+    parser.add_argument('--single', action='store_true',
+                        help='Process a single scan folder instead of all '
+                             'folders in input directory')
+
+    args = parser.parse_args()
+
+    logger.info("[START] Starting 3D scan data processing...")
+    logger.info(f"[FOLDER] Input: {args.input_folder}")
+    logger.info(f"[FOLDER] Output: {args.output_folder}")
+
+    if args.single:
+        success = process_single_folder(args.input_folder, args.output_folder)
+    else:
+        success = process_multiple_folders(
+            args.input_folder,
+            args.output_folder
+        )
+
+    return success
 
 
 if __name__ == "__main__":
@@ -610,7 +747,10 @@ if __name__ == "__main__":
     success = main()
 
     if success:
-        print("\nProcessing completed successfully!")
+        print("\n[OK] Processing completed successfully!")
     else:
-        print("\nProcessing completed with errors. Check logs for details.")
+        print(
+            "\n[ERROR] Processing completed with errors. "
+            "Check logs for details."
+        )
         sys.exit(1)

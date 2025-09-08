@@ -1,0 +1,14 @@
+# Robot Scan Processing Requirements
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+numpy>=1.21.0
+trimesh>=3.15.0
+scipy>=1.9.0
+
+# Watchdog for folder monitoring
+watchdog>=3.0.0
+
+# HTTP requests for API uploads
+requests>=2.28.0
+urllib3>=1.26.0

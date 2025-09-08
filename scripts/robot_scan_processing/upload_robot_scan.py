@@ -1,0 +1,484 @@
+#!/usr/bin/env python3
+"""
+Robot Scan Upload Script
+
+This script uploads processed scan data to the CSC backend API.
+It uploads component JSON files and OBJ geometry files.
+
+Usage:
+    python upload_robot_scan.py <processed_folder> [--api-base-url URL]
+
+Requirements:
+    - requests
+"""
+
+import sys
+import json
+import argparse
+import logging
+from pathlib import Path
+from typing import Dict, Optional, Tuple
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('scan_upload.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Default API configuration
+DEFAULT_API_BASE_URL = "https://api.ddu.uber.space"
+DEFAULT_TIMEOUT = 30
+CREDENTIALS_FILE = "csc_credentials.json"
+
+
+def load_credentials(credentials_path: Optional[str] = None) -> Dict[str, str]:
+    """Load authentication credentials from JSON file"""
+    if credentials_path is None:
+        credentials_path = CREDENTIALS_FILE
+
+    cred_path = Path(credentials_path)
+
+    if not cred_path.exists():
+        logger.error(f"[ERROR] Credentials file not found: {cred_path}")
+        logger.error("   Please create a csc_credentials.json file with:")
+        logger.error("   {")
+        logger.error("     \"server\": \"http://your-api-url/api/backend\",")
+        logger.error("     \"user\": \"your-username\",")
+        logger.error("     \"pwd\": \"your-password\"")
+        logger.error("   }")
+        sys.exit(1)
+
+    try:
+        with open(cred_path, 'r') as f:
+            credentials = json.load(f)
+
+        # Validate required fields
+        required_fields = ['server', 'user', 'pwd']
+        missing_fields = [field for field in required_fields
+                          if field not in credentials]
+
+        if missing_fields:
+            logger.error(f"[ERROR] Missing required fields in credentials "
+                         f"file: {missing_fields}")
+            sys.exit(1)
+
+        logger.info(f"[OK] Loaded credentials from: {cred_path}")
+        logger.info(f"[SERVER] Server: {credentials['server']}")
+        logger.info(f"[USER] User: {credentials['user']}")
+
+        return credentials
+
+    except json.JSONDecodeError as e:
+        logger.error(f"[ERROR] Invalid JSON in credentials file: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"[ERROR] Error loading credentials: {e}")
+        sys.exit(1)
+
+
+class ScanUploader:
+    """Handles uploading scan data to the CSC backend"""
+
+    def __init__(
+            self,
+            credentials: Dict[str, str],
+            timeout: int = DEFAULT_TIMEOUT):
+        self.api_base_url = credentials['server'].rstrip('/')
+        self.username = credentials['user']
+        self.password = credentials['pwd']
+        self.timeout = timeout
+        self.session = self._create_session()
+
+    def _create_session(self) -> requests.Session:
+        """
+        Create a requests session with retry strategy and JWT authentication
+        """
+        session = requests.Session()
+
+        # Authenticate and get JWT token
+        self.jwt_token = self._authenticate()
+        if not self.jwt_token:
+            raise Exception("Failed to authenticate with API")
+
+        # Set up JWT authentication
+        session.headers.update({
+            'Authorization': f'Bearer {self.jwt_token}'
+        })
+
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+        return session
+
+    def _authenticate(self) -> Optional[str]:
+        """Authenticate with the API and return JWT token"""
+        try:
+            logger.info("[AUTH] Authenticating with API...")
+
+            # Prepare authentication data
+            auth_data = {
+                'username': self.username,
+                'password': self.password
+            }
+
+            # Authenticate
+            response = requests.post(
+                f"{self.api_base_url}/auth/token",
+                data=auth_data,  # Use form data for OAuth2PasswordRequestForm
+                timeout=self.timeout
+            )
+
+            if response.status_code == 200:
+                token_data = response.json()
+                access_token = token_data.get('access_token')
+                if access_token:
+                    logger.info("[OK] Authentication successful")
+                    return access_token
+                else:
+                    logger.error("[ERROR] No access token in response")
+                    return None
+            else:
+                logger.error(
+                    f"[ERROR] Authentication failed: {response.status_code}"
+                )
+                logger.error(f"   Response: {response.text}")
+                return None
+
+        except Exception as e:
+            logger.error(f"[ERROR] Authentication error: {e}")
+            return None
+
+    def test_connection(self) -> bool:
+        """Test connection to the API"""
+        try:
+            response = self.session.get(
+                f"{self.api_base_url}/components",
+                timeout=self.timeout
+            )
+            if response.status_code == 200:
+                logger.info("[OK] API connection successful")
+                return True
+            else:
+                logger.error(
+                    f"[ERROR] API connection failed: {response.status_code}"
+                )
+                return False
+        except Exception as e:
+            logger.error(f"[ERROR] API connection error: {e}")
+            return False
+
+    def upload_component_json(
+        self, component_path: Path
+    ) -> Tuple[bool, Optional[str]]:
+        """Upload component JSON file"""
+        try:
+            logger.info(
+                f"[FILE] Uploading component JSON: {component_path.name}"
+            )
+            # Read component data
+            with open(component_path, 'r') as f:
+                component_data = json.load(f)
+            # Upload component
+            response = self.session.post(
+                f"{self.api_base_url}/components/add/",
+                json=component_data,
+                timeout=self.timeout
+            )
+            if response.status_code == 201:
+                result = response.json()
+                component_id = result.get('_id')
+                logger.info(
+                    f"[OK] Component uploaded successfully: {component_id}"
+                )
+                return True, component_id
+            elif response.status_code == 409:
+                # Component already exists, extract ID from the path
+                component_id = component_path.stem
+                logger.info(
+                    "[OK] Component already exists, using existing "
+                    f"ID: {component_id}"
+                )
+                return True, component_id
+            else:
+                logger.error(
+                    "[ERROR] Failed to upload component: "
+                    f"{response.status_code}"
+                )
+                logger.error(f"   Response: {response.text}")
+                return False, None
+
+        except Exception as e:
+            logger.error(f"[ERROR] Error uploading component JSON: {e}")
+            return False, None
+
+    def upload_geometry_file(
+            self,
+            component_id: str,
+            geometry_path: Path,
+            geometry_type: str
+    ) -> bool:
+        """Upload geometry file (OBJ)"""
+        try:
+            logger.info(
+                f"[UPLOAD] Uploading {geometry_type} geometry: "
+                f"{geometry_path.name}"
+            )
+            # Determine the correct endpoint
+            if geometry_type == "detailed":
+                endpoint = (
+                    f"{self.api_base_url}/components/"
+                    f"{component_id}/geometry/add_detailed"
+                )
+            elif geometry_type == "reduced":
+                endpoint = (
+                    f"{self.api_base_url}/components/"
+                    f"{component_id}/geometry/add_reduced"
+                )
+            else:
+                logger.error(f"[ERROR] Unknown geometry type: {geometry_type}")
+                return False
+            # Upload geometry file
+            with open(geometry_path, 'rb') as f:
+                files = {'mesh_file': (geometry_path.name,
+                                       f,
+                                       'application/octet-stream')}
+                response = self.session.post(
+                    endpoint,
+                    files=files,
+                    timeout=self.timeout * 3  # Longer timeout for large files
+                )
+
+            if response.status_code == 200:
+                logger.info(
+                    f"[OK] {geometry_type.title()} geometry uploaded "
+                    "successfully"
+                )
+                return True
+            else:
+                logger.error(
+                    f"[ERROR] Failed to upload {geometry_type} "
+                    f"geometry: {response.status_code}"
+                )
+                logger.error(f"   Response: {response.text}")
+                return False
+
+        except Exception as e:
+            logger.error(
+                f"[ERROR] Error uploading {geometry_type} geometry: {e}"
+            )
+            return False
+
+    def upload_scan_folder(self, scan_folder: Path) -> bool:
+        """Upload all files from a processed scan folder"""
+        component_id = scan_folder.name
+        logger.info(f"[START] Starting upload for scan: {component_id}")
+
+        # Check if folder contains required files
+        transcode_folder = scan_folder / "transcode"
+        component_json = transcode_folder / f"{component_id}.json"
+
+        if not transcode_folder.exists():
+            logger.error(
+                f"[ERROR] Transcode folder not found: {transcode_folder}"
+            )
+            return False
+
+        if not component_json.exists():
+            logger.error(f"[ERROR] Component JSON not found: {component_json}")
+            return False
+
+        # Upload component JSON
+        success, uploaded_component_id = self.upload_component_json(
+            component_json
+        )
+        if not success:
+            return False
+
+        # Upload geometry files
+        geometry_files = [
+            ("detailed", "mesh.obj"),
+            ("reduced", "mesh_reduced.obj")
+        ]
+
+        upload_success = True
+        for geometry_type, filename in geometry_files:
+            geometry_path = transcode_folder / filename
+            if geometry_path.exists():
+                if not self.upload_geometry_file(
+                        uploaded_component_id,
+                        geometry_path,
+                        geometry_type
+                ):
+                    upload_success = False
+            else:
+                logger.info(
+                    f"[WARNING] {geometry_type.title()} geometry not found: "
+                    f"{filename}"
+                )
+
+        if upload_success:
+            logger.info(f"[OK] Successfully uploaded scan: {component_id}")
+        else:
+            logger.error(
+                f"[ERROR] Some files failed to upload for scan: {component_id}"
+            )
+
+        return upload_success
+
+    def upload_multiple_folders(
+        self,
+        processed_folder: Path
+    ) -> Tuple[int, int]:
+        """Upload all processed scan folders"""
+        if not processed_folder.exists():
+            logger.error(
+                f"[ERROR] Processed folder does not exist: {processed_folder}"
+            )
+            return 0, 0
+
+        # Find all UUID folders
+        uuid_folders = []
+        for item in processed_folder.iterdir():
+            if item.is_dir() and self._is_valid_uuid(item.name):
+                uuid_folders.append(item)
+
+        if not uuid_folders:
+            logger.warning(
+                "[SEARCH] No UUID folders found in processed directory"
+            )
+            return 0, 0
+
+        logger.info(
+            f"[TARGET] Found {len(uuid_folders)} processed scans to upload"
+        )
+        successful = 0
+        failed = 0
+        for i, folder in enumerate(uuid_folders, 1):
+            logger.info(
+                f"[UPLOAD] [{i}/{len(uuid_folders)}] Uploading: {folder.name}"
+            )
+            if self.upload_scan_folder(folder):
+                successful += 1
+                logger.info(
+                    f"[OK] [{i}/{len(uuid_folders)}] Success: {folder.name}"
+                )
+            else:
+                failed += 1
+                logger.error(
+                    f"[ERROR] [{i}/{len(uuid_folders)}] Failed: {folder.name}"
+                )
+
+        return successful, failed
+
+    def _is_valid_uuid(self, folder_name: str) -> bool:
+        """Check if folder name is a valid UUID"""
+        import uuid
+        try:
+            uuid.UUID(folder_name)
+            return True
+        except ValueError:
+            return False
+
+
+def main():
+    """Main function with command line argument parsing"""
+    parser = argparse.ArgumentParser(
+        description="Upload processed scan data to CSC backend API",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python upload_robot_scan.py /path/to/scans_processed
+  python upload_robot_scan.py /path/to/scans_processed --credentials /path/to/credentials.json # NOQA
+        """
+    )
+
+    parser.add_argument('processed_folder',
+                        help='Folder containing processed scan data')
+    parser.add_argument('--credentials',
+                        default=CREDENTIALS_FILE,
+                        help=('Path to credentials JSON file '
+                              f'(default: {CREDENTIALS_FILE})'))
+    parser.add_argument('--timeout',
+                        type=int,
+                        default=DEFAULT_TIMEOUT,
+                        help=('Request timeout in seconds '
+                              f'(default: {DEFAULT_TIMEOUT})'))
+
+    args = parser.parse_args()
+
+    logger.info("[START] Starting scan data upload...")
+    logger.info(f"[FOLDER] Processed folder: {args.processed_folder}")
+
+    # Load credentials
+    credentials = load_credentials(args.credentials)
+
+    # Create uploader
+    uploader = ScanUploader(credentials, args.timeout)
+
+    # Test connection
+    if not uploader.test_connection():
+        logger.error("[ERROR] Cannot connect to API. Exiting.")
+        sys.exit(1)
+
+    # Upload scans
+    processed_path = Path(args.processed_folder)
+
+    # Check if the path is a specific UUID folder or the parent directory
+    if processed_path.is_dir() and processed_path.name.count('-') == 4:
+        # It's a specific UUID folder
+        logger.info(
+            "[TARGET] Single UUID folder detected, uploading directly..."
+        )
+        if uploader.upload_scan_folder(processed_path):
+            successful, failed = 1, 0
+        else:
+            successful, failed = 0, 1
+    else:
+        # It's the parent directory, upload all UUID folders
+        successful, failed = uploader.upload_multiple_folders(processed_path)
+
+    # Summary
+    total = successful + failed
+    logger.info("=" * 60)
+    logger.info("[SUMMARY] UPLOAD SUMMARY")
+    logger.info("=" * 60)
+    logger.info(f"[FOLDER] Total scans found: {total}")
+    logger.info(f"[OK] Successfully uploaded: {successful}")
+    logger.info(f"[ERROR] Failed: {failed}")
+    if total > 0:
+        success_rate = (successful / total * 100)
+        logger.info(f"[STATS] Success rate: {success_rate:.1f}%")
+    logger.info("=" * 60)
+
+    return failed == 0
+
+
+if __name__ == "__main__":
+    print("CSC Robot Scan Upload Script")
+    print("=" * 50)
+
+    success = main()
+
+    if success:
+        print("\n[OK] Upload completed successfully!")
+    else:
+        print(
+            "\n[ERROR] Upload completed with errors. Check logs for details."
+        )
+        sys.exit(1)
