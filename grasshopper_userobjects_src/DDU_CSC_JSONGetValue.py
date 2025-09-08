@@ -7,7 +7,6 @@
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json
-import re
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
 import System  # type: ignore[reportMissingImport] # NOQA
@@ -52,22 +51,17 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
         if not path:
             return data, 'root'
 
-        # Split path by dots and handle array indices
-        parts = re.split(r'\.|\[|\]', path)
-        parts = [part for part in parts if part]  # Remove empty strings
+        # Parse path to handle both dot notation and array indices
+        parts = self.parse_path(path)
 
         current = data
         for part in parts:
-            if part.startswith('[') and part.endswith(']'):
+            if isinstance(part, int):
                 # Array index
-                try:
-                    index = int(part[1:-1])
-                    if isinstance(current, list) and 0 <= index < len(current):
-                        current = current[index]
-                    else:
-                        raise IndexError(f'Array index {index} out of range')
-                except (ValueError, IndexError) as e:
-                    raise KeyError(f'Invalid array index: {part}') from e
+                if isinstance(current, list) and 0 <= part < len(current):
+                    current = current[part]
+                else:
+                    raise IndexError(f'Array index {part} out of range')
             else:
                 # Object key
                 if isinstance(current, dict) and part in current:
@@ -76,6 +70,51 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
                     raise KeyError(f'Key "{part}" not found')
 
         return current, self.get_json_type(current)
+
+    def parse_path(self, path):
+        """Parse a path string into a list of keys and indices."""
+        parts = []
+        current_part = ''
+        i = 0
+
+        while i < len(path):
+            char = path[i]
+
+            if char == '.':
+                # End of current part
+                if current_part:
+                    parts.append(current_part)
+                    current_part = ''
+            elif char == '[':
+                # Start of array index
+                if current_part:
+                    parts.append(current_part)
+                    current_part = ''
+                # Find the closing bracket
+                j = i + 1
+                while j < len(path) and path[j] != ']':
+                    j += 1
+                if j < len(path):
+                    # Extract the index
+                    index_str = path[i+1:j]
+                    try:
+                        index = int(index_str)
+                        parts.append(index)
+                        i = j  # Skip to after the closing bracket
+                    except ValueError:
+                        raise ValueError(f'Invalid array index: {index_str}')
+                else:
+                    raise ValueError('Unclosed array bracket')
+            else:
+                current_part += char
+
+            i += 1
+
+        # Add the last part if any
+        if current_part:
+            parts.append(current_part)
+
+        return parts
 
     def get_json_type(self, value):
         """Get the JSON type of a value."""
@@ -110,9 +149,24 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
         elif value_type == 'object':
             return json.dumps(value)
         elif value_type == 'array':
-            return json.dumps(value)
+            # Convert array to Grasshopper-compatible list
+            return self.convert_array_to_gh_list(value)
         else:
             return str(value)
+
+    def convert_array_to_gh_list(self, array_value):
+        """Convert JSON array to Grasshopper-compatible list."""
+        if not isinstance(array_value, list):
+            return array_value
+
+        converted_list = []
+        for item in array_value:
+            # Recursively convert each item in the array
+            item_type = self.get_json_type(item)
+            converted_item = self.convert_to_gh_type(item, item_type)
+            converted_list.append(converted_item)
+
+        return converted_list
 
     def RunScript(self, JSON: str, KeyPath: str, DefaultValue: str):
         # Initialize param descriptions (this has to be done in RunScript)
@@ -165,7 +219,11 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = 'No key path provided'
                 self._addWarning(msg)
                 self.Component.Message = msg
-                Value.Add(DefaultValue if DefaultValue else '')
+                default_val = DefaultValue if DefaultValue else ''
+                if isinstance(default_val, list):
+                    Value.AddRange(default_val)
+                else:
+                    Value.Add(default_val)
                 ValueType.Add('')
                 Success.Add(False)
                 Error.Add(msg)
@@ -180,7 +238,11 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = f'Invalid JSON format: {str(e)}'
                 self._addError(msg)
                 self.Component.Message = msg
-                Value.Add(DefaultValue if DefaultValue else '')
+                default_val = DefaultValue if DefaultValue else ''
+                if isinstance(default_val, list):
+                    Value.AddRange(default_val)
+                else:
+                    Value.Add(default_val)
                 ValueType.Add('')
                 Success.Add(False)
                 Error.Add(msg)
@@ -197,8 +259,12 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
                     extracted_value, value_type
                 )
 
-                # Add results
-                Value.Add(converted_value)
+                # Add results - check if it's a collection for proper GH
+                # handling
+                if isinstance(converted_value, list):
+                    Value.AddRange(converted_value)
+                else:
+                    Value.Add(converted_value)
                 ValueType.Add(value_type)
                 Success.Add(True)
                 Error.Add('')
@@ -214,7 +280,11 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = f'Key path not found: {str(e)}'
                 self._addWarning(msg)
                 self.Component.Message = msg
-                Value.Add(DefaultValue if DefaultValue else '')
+                default_val = DefaultValue if DefaultValue else ''
+                if isinstance(default_val, list):
+                    Value.AddRange(default_val)
+                else:
+                    Value.Add(default_val)
                 ValueType.Add('')
                 Success.Add(False)
                 Error.Add(msg)
@@ -223,7 +293,11 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = f'Error extracting value: {str(e)}'
                 self._addError(msg)
                 self.Component.Message = msg
-                Value.Add(DefaultValue if DefaultValue else '')
+                default_val = DefaultValue if DefaultValue else ''
+                if isinstance(default_val, list):
+                    Value.AddRange(default_val)
+                else:
+                    Value.Add(default_val)
                 ValueType.Add('')
                 Success.Add(False)
                 Error.Add(msg)
