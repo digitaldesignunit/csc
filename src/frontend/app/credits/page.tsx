@@ -38,11 +38,11 @@ export default function CreditsPage() {
             <h2 className='text-xl font-bold mb-4'>Student Work</h2>
             <ul className='list-disc list-inside mb-4'>
               <li>
-                The <code className='bg-gray-200 px-1 py-0.5 rounded'>csc_labels</code> python code to create the QR-Code labels was developed by <a href='https://instagram.com/mirkodutschke' target='_blank' className='text-blue-500 underline'>Mirko Dutschke</a>. The code has
+                The <code className='bg-accent px-1 py-0.5 rounded'>csc_labels</code> python code to create the QR-Code labels was developed by <a href='https://instagram.com/mirkodutschke' target='_blank' className='text-blue-500 underline'>Mirko Dutschke</a>. The code has
                 been refactored as a python module and integrated by Max Benjamin Eschenbach.
               </li>
               <li>
-                The <code className='bg-gray-200 px-1 py-0.5 rounded'>csc_sheetscan</code> python module was developed based on the scanning setup
+                The <code className='bg-accent px-1 py-0.5 rounded'>csc_sheetscan</code> python module was developed based on the scanning setup
                 for sheets that was developed by <a href='https://instagram.com/mirkodutschke' target='_blank' className='text-blue-500 underline'>Mirko Dutschke</a>. The functional code has been written by Max Benjamin Eschenbach.
               </li>
             </ul>
