@@ -1080,12 +1080,19 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             # Get component schema first
             schema = self.get_component_schema()
 
-            # Process marker points
+            # Process marker points - apply same transformation as geometry
             marker_points_data = []
             if MarkerPoints and len(MarkerPoints) > 0:
                 for point in MarkerPoints:
                     if point is not None:
-                        marker_points_data.append([point.X, point.Y, point.Z])
+                        # Apply the same translation vector used for
+                        # centering geometry
+                        transformed_point = [
+                            point.X + translation_vector[0],
+                            point.Y + translation_vector[1],
+                            point.Z + translation_vector[2]
+                        ]
+                        marker_points_data.append(transformed_point)
 
             # Create component data dictionary based on schema
             COMPDATA = self.build_component_data_from_schema(
