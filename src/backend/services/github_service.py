@@ -76,6 +76,8 @@ class GitHubService:
             ValueError: If no suitable asset is found
         """
         assets = release_info.get('assets', [])
+        print(f"Available assets: {[asset['name'] for asset in assets]}")
+
         if not assets:
             raise ValueError("No assets found in the latest release")
 
@@ -97,7 +99,20 @@ class GitHubService:
         selected_asset = (preferred_assets[0] if preferred_assets
                           else zip_assets[0])
 
-        return selected_asset['browser_download_url']
+        print(f"Selected asset: {selected_asset['name']}")
+        asset_url = selected_asset.get('browser_download_url', 'NOT FOUND')
+        print(f"Asset URL: {asset_url}")
+
+        # Try browser_download_url first, fallback to url if not available
+        download_url = selected_asset.get('browser_download_url')
+        if not download_url:
+            download_url = selected_asset.get('url')
+            if not download_url:
+                raise ValueError(
+                    "No download URL found for the selected asset"
+                )
+
+        return download_url
 
     async def get_asset_filename(self, release_info: Dict) -> str:
         """

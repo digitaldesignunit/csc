@@ -87,24 +87,45 @@ async def download_gh_interface(
         # Get latest release info
         release_info = await github_service.get_latest_release_info()
 
+        if not release_info:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No releases found in the repository"
+            )
+
         # Get download URL and filename
         download_url = github_service.get_release_asset_download_url(
             release_info
         )
         filename = await github_service.get_asset_filename(release_info)
 
+        # Debug logging
+        print(f"Release info: {release_info}")
+        print(f"Download URL: {download_url}")
+        print(f"Filename: {filename}")
+
         # Create a streaming response
         async def generate():
             async with httpx.AsyncClient() as client:
-                async with client.stream(
-                    'GET',
-                    download_url,
-                    headers={'Authorization': f'token {token}'},
-                    timeout=60.0
-                ) as response:
-                    response.raise_for_status()
-                    async for chunk in response.aiter_bytes(chunk_size=8192):
-                        yield chunk
+                try:
+                    async with client.stream(
+                        'GET',
+                        download_url,
+                        headers={'Authorization': f'token {token}'},
+                        timeout=60.0
+                    ) as response:
+                        print(f"Response status: {response.status_code}")
+                        print(f"Response headers: {dict(response.headers)}")
+                        response.raise_for_status()
+                        async for chunk in response.aiter_bytes(
+                            chunk_size=8192
+                        ):
+                            yield chunk
+                except httpx.HTTPStatusError as e:
+                    print(f"HTTP error: {e}")
+                    response_text = await e.response.aread()
+                    print(f"Response text: {response_text}")
+                    raise
 
         # Return streaming response with proper headers
         return StreamingResponse(

@@ -30,3 +30,5 @@ dependencies:
     - python-jose[cryptography]
     - requests
     - uvicorn
+    - httpx
+    - trimesh
