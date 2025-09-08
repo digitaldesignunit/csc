@@ -34,7 +34,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250905
+    Version: 250908
     """
 
     def __init__(self):
@@ -888,7 +888,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             Assembly: bool,
             Color: System.Drawing.Color,
             Location: Rhino.Geometry.Vector3d,
-            Geometry: System.Collections.Generic.List[Rhino.Geometry.GeometryBase]):
+            Geometry: System.Collections.Generic.List[Rhino.Geometry.GeometryBase],
+            MarkerPoints: System.Collections.Generic.List[Rhino.Geometry.Point3d]):
         try:
             # Initialize param descriptions (this has to be done in RunScript)
             self.InputParams[0].Description = (
@@ -920,6 +921,10 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 'Rhino geometry object(s) - single object or list of objects. '
                 'For single: Mesh or Extrusion for sheets, Mesh for rubble. '
                 'For multiple: all must be Meshes.'
+            )
+            self.InputParams[9].Description = (
+                'Marker points as list of Point3d objects for component '
+                'identification and positioning'
             )
 
             # Initialize output param descriptions
@@ -1075,12 +1080,22 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             # Get component schema first
             schema = self.get_component_schema()
 
+            # Process marker points
+            marker_points_data = []
+            if MarkerPoints and len(MarkerPoints) > 0:
+                for point in MarkerPoints:
+                    if point is not None:
+                        marker_points_data.append([point.X, point.Y, point.Z])
+
             # Create component data dictionary based on schema
             COMPDATA = self.build_component_data_from_schema(
                 schema, ComponentID, Type, Material, Complexity, Fragment,
                 Assembly, Color, dimensions, location_data,
                 principal_components
             )
+
+            # Add marker points to component data
+            COMPDATA['marker_points'] = marker_points_data
 
             # Validate component data against schema
             if not self.validate_component_data(COMPDATA, schema):

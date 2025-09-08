@@ -24,7 +24,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250905
+    Version: 250908
     """
 
     def __init__(self):
@@ -171,11 +171,10 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         )
         self.OutputParams[2].Description = 'Component material'
         self.OutputParams[3].Description = (
-            'Rhino geometry objects (extrusion, mesh, multiple meshes, '
-            'polyline)'
+            'Component color as System.Drawing.Color'
         )
         self.OutputParams[4].Description = (
-            'Component color as System.Drawing.Color'
+            'Component location as Point3d (X=latitude, Y=longitude, Z=0)'
         )
         self.OutputParams[5].Description = (
             'Component bounding box as Rhino.Geometry.BoundingBox'
@@ -183,24 +182,40 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams[6].Description = (
             'Component descriptors/metadata as JSON string'
         )
+        self.OutputParams[7].Description = (
+            'Rhino geometry objects (extrusion, mesh, multiple meshes, '
+            'polyline)'
+        )
+        self.OutputParams[8].Description = (
+            'Marker points as list of Point3d objects'
+        )
+        self.OutputParams[9].Description = (
+            'Component attributes as JSON string'
+        )
 
         try:
             # set up output trees and results tuple
             ID = Grasshopper.DataTree[System.Object]()
             Type = Grasshopper.DataTree[System.Object]()
             Material = Grasshopper.DataTree[System.Object]()
-            PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
             Color = Grasshopper.DataTree[System.Object]()
+            Location = Grasshopper.DataTree[System.Object]()
             BoundingBox = Grasshopper.DataTree[System.Object]()
             Descriptors = Grasshopper.DataTree[System.Object]()
+            PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
+            MarkerPoints = Grasshopper.DataTree[System.Object]()
+            Attributes = Grasshopper.DataTree[System.Object]()
             __Results = (
                 ID,
                 Type,
                 Material,
-                PrimitiveGeometry,
                 Color,
+                Location,
                 BoundingBox,
-                Descriptors)
+                Descriptors,
+                PrimitiveGeometry,
+                MarkerPoints,
+                Attributes)
 
             # Validate input
             if not ComponentData or ComponentData.DataCount == 0:
@@ -224,6 +239,28 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         ID.Add(json_comp['_id'], ghp)
                         Type.Add(json_comp['type'], ghp)
                         Material.Add(json_comp['material'], ghp)
+
+                        # create system color from rgb values
+                        color = self.ComponentColor(json_comp)
+                        Color.Add(color, ghp)
+
+                        # process location data
+                        try:
+                            location_data = json_comp.get('location', {})
+                            if (location_data and 'lat' in location_data and
+                                    'lon' in location_data):
+                                location_point = Rhino.Geometry.Point3d(
+                                    location_data['lat'],
+                                    location_data['lon'],
+                                    0.0
+                                )
+                            else:
+                                location_point = Rhino.Geometry.Point3d(
+                                    0.0, 0.0, 0.0)
+                        except (KeyError, TypeError):
+                            location_point = Rhino.Geometry.Point3d(
+                                0.0, 0.0, 0.0)
+                        Location.Add(location_point, ghp)
 
                         # process insertion frame
                         try:
@@ -286,10 +323,6 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                                 self._addWarning(msg)
                                 self.Component.Message = msg
 
-                        # create system color from rgb values
-                        color = self.ComponentColor(json_comp)
-                        Color.Add(color, ghp)
-
                         # construct boundingbox
                         bbx = self.ComponentBoundingBox(json_comp)
 
@@ -304,6 +337,35 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         except KeyError:
                             # If no descriptors, add empty dict as JSON string
                             Descriptors.Add(json.dumps({}), ghp)
+
+                        # process marker points
+                        try:
+                            marker_points_data = json_comp.get(
+                                'marker_points', [])
+                            marker_points_list = []
+                            for point_data in marker_points_data:
+                                if (isinstance(point_data, list) and
+                                        len(point_data) >= 3):
+                                    marker_point = Rhino.Geometry.Point3d(
+                                        point_data[0],
+                                        point_data[1],
+                                        point_data[2]
+                                    )
+                                    marker_points_list.append(marker_point)
+                        except (KeyError, TypeError, IndexError):
+                            # If no marker points or invalid format, add empty
+                            # list
+                            marker_points_list = []
+                        if marker_points_list:
+                            MarkerPoints.AddRange(marker_points_list, ghp)
+
+                        # process attributes
+                        try:
+                            attributes = json_comp.get('attributes', {})
+                            Attributes.Add(json.dumps(attributes), ghp)
+                        except KeyError:
+                            # If no attributes, add empty dict as JSON string
+                            Attributes.Add(json.dumps({}), ghp)
 
                     except json.JSONDecodeError as e:
                         msg = f'Failed to parse component data: {str(e)}'
@@ -337,16 +399,22 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             ID = Grasshopper.DataTree[System.Object]()
             Type = Grasshopper.DataTree[System.Object]()
             Material = Grasshopper.DataTree[System.Object]()
-            PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
             Color = Grasshopper.DataTree[System.Object]()
+            Location = Grasshopper.DataTree[System.Object]()
             BoundingBox = Grasshopper.DataTree[System.Object]()
             Descriptors = Grasshopper.DataTree[System.Object]()
+            PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
+            MarkerPoints = Grasshopper.DataTree[System.Object]()
+            Attributes = Grasshopper.DataTree[System.Object]()
             __Results = (
                 ID,
                 Type,
                 Material,
-                PrimitiveGeometry,
                 Color,
+                Location,
                 BoundingBox,
-                Descriptors)
+                Descriptors,
+                PrimitiveGeometry,
+                MarkerPoints,
+                Attributes)
             return __Results
