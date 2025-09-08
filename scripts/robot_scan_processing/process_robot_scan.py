@@ -518,8 +518,10 @@ def process_scan_folder(scan_folder: str, component_id: str) -> bool:
                     f"[{bounding_box[0]:.3f}, {bounding_box[1]:.3f}, "
                     f"{bounding_box[2]:.3f}]")
 
-        # Swap marker points Y and Z axes like for primitive meshes
-        marker_points = [[point[0], -point[1], -point[2]]
+        # Transform marker points to compensate for rotateX(-Math.PI/2) in
+        # ComponentViewer. To get final result [x, -y, -z] after rotation
+        # [x, y, z] -> [x, z, -y], we need [x, y, z] -> [x, z, -y]
+        marker_points = [[point[0], point[2], -point[1]]
                          for point in marker_points]
 
         component_data = {
