@@ -69,6 +69,28 @@ def get_geometry_directory(config_file: str) -> str:
     return geometry_dir
 
 
+def get_github_repo_url(config_file: str) -> str:
+    """
+    Read GitHub repository URL from config file.
+    """
+    with open(config_file, 'r') as configfile:
+        # Reading from json file
+        dbconfig = json.load(configfile)
+        repo_url = dbconfig['github_repo_url']
+    return repo_url
+
+
+def get_github_repo_token(config_file: str) -> str:
+    """
+    Read GitHub repository token from config file.
+    """
+    with open(config_file, 'r') as configfile:
+        # Reading from json file
+        dbconfig = json.load(configfile)
+        token = dbconfig['github_repo_token']
+    return token
+
+
 def create_logging_timestamp():
     """
     Creates a timestamp in YY:MM:DD-HH:MM:SS format.

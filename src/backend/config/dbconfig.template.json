@@ -10,5 +10,7 @@
     "algorithm": "HS256",
     "access_token_expire_minutes": 60,
     "preview_dir": "/home/your/path/to/preview/directory",
-    "geometry_dir": "/home/your/path/to/component/geometry/directory"
+    "geometry_dir": "/home/your/path/to/component/geometry/directory",
+    "github_repo_url": "your github repo url",
+    "github_repo_token": "your github repo token"
 }
