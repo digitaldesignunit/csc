@@ -314,7 +314,12 @@ async def create_component(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component: ComponentModel = ...,
 ):
-    doc = component.model_dump(by_alias=True, exclude_none=True)
+    # Exclude etag from database storage - it's only for HTTP caching
+    doc = component.model_dump(
+        by_alias=True,
+        exclude_none=True,
+        exclude={'etag'}
+    )
     coll = await get_components_col(request)
     # Check if component with this ID already exists
     existing_component = await coll.find_one({'_id': doc['_id']})
