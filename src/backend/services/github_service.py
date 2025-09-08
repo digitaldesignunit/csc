@@ -103,10 +103,12 @@ class GitHubService:
         asset_url = selected_asset.get('browser_download_url', 'NOT FOUND')
         print(f"Asset URL: {asset_url}")
 
-        # Try browser_download_url first, fallback to url if not available
-        download_url = selected_asset.get('browser_download_url')
+        # Use the GitHub API URL for downloading (requires authentication)
+        # The browser_download_url is for public access, but we need API access
+        download_url = selected_asset.get('url')
         if not download_url:
-            download_url = selected_asset.get('url')
+            # Fallback to browser_download_url if API URL not available
+            download_url = selected_asset.get('browser_download_url')
             if not download_url:
                 raise ValueError(
                     "No download URL found for the selected asset"

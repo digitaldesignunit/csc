@@ -47,13 +47,27 @@ async def get_gh_interface_version(
         # Get latest release info
         release_info = await github_service.get_latest_release_info()
 
+        # Debug: Show asset information
+        assets = release_info.get('assets', [])
+        asset_info = []
+        for asset in assets:
+            asset_info.append({
+                'name': asset['name'],
+                'url': asset.get('url', 'N/A'),
+                'browser_download_url': asset.get(
+                    'browser_download_url', 'N/A'
+                ),
+                'size': asset.get('size', 0)
+            })
+
         # Extract relevant information
         return {
             'version': release_info.get('tag_name', ''),
             'tag_name': release_info.get('tag_name', ''),
             'name': release_info.get('name', ''),
             'published_at': release_info.get('published_at', ''),
-            'html_url': release_info.get('html_url', '')
+            'html_url': release_info.get('html_url', ''),
+            'assets': asset_info
         }
 
     except httpx.HTTPError as e:
@@ -123,8 +137,11 @@ async def download_gh_interface(
                             yield chunk
                 except httpx.HTTPStatusError as e:
                     print(f"HTTP error: {e}")
-                    response_text = await e.response.aread()
-                    print(f"Response text: {response_text}")
+                    try:
+                        response_text = await e.response.aread()
+                        print(f"Response text: {response_text}")
+                    except Exception as read_error:
+                        print(f"Could not read response: {read_error}")
                     raise
 
         # Return streaming response with proper headers
