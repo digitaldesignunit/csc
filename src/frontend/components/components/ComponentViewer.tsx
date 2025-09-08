@@ -548,6 +548,34 @@ const VisualizeSheet = React.memo(({ component_data }: { component_data: Compone
 VisualizeSheet.displayName = 'VisualizeSheet'
 
 /** 
+ * MarkerPoints - renders marker points as red dots
+ */
+const MarkerPoints = React.memo(({
+  markerPoints,
+  visible
+}: {
+  markerPoints: number[][]
+  visible: boolean
+}) => {
+  if (!visible || markerPoints.length === 0) return null
+
+  return (
+    <group scale={[scale, scale, scale]}>
+      {markerPoints.map((point, index) => {
+        const [x, y, z] = point
+        return (
+          <mesh key={index} position={[x, y, z]}>
+            <sphereGeometry args={[5.0, 16, 12]} />
+            <meshBasicMaterial color={0xff0000} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
+})
+MarkerPoints.displayName = 'MarkerPoints'
+
+/** 
  * VisualizeMultipleMeshes - handles multiple meshes with individual visibility controls
  */
 const VisualizeMultipleMeshes = React.memo(({
@@ -731,12 +759,23 @@ export default function ComponentViewer({ component_data }: { component_data: Co
   const [externalMeshes, setExternalMeshes] = useState<THREE.Group[]>([])
   const [isLoadingExternal, setIsLoadingExternal] = useState(false)
   const [geometryError, setGeometryError] = useState<string | null>(null)
+  const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
 
   const isSheet = component_data.type === 'sheet'
   const geometry = component_data.geometry as ComponentGeometry
   const meshes = useMemo(() => (geometry?.meshes || []) as ComponentMesh[], [geometry?.meshes])
   const hasMultipleMeshes = meshes && meshes.length > 0
   const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
+  
+  // Extract marker points data
+  const markerPoints = useMemo(() => {
+    const points = component_data.marker_points
+    if (Array.isArray(points) && points.length > 0) {
+      return points.filter(point => Array.isArray(point) && point.length >= 3)
+    }
+    return []
+  }, [component_data.marker_points])
+  const hasMarkerPoints = markerPoints.length > 0
 
   // Load external geometry centrally
   useEffect(() => {
@@ -799,6 +838,10 @@ export default function ComponentViewer({ component_data }: { component_data: Co
     })
   }
 
+  const toggleMarkerPointsVisibility = () => {
+    setShowMarkerPoints(prev => !prev)
+  }
+
   // Handle the conditional logic AFTER all hooks
   if (!component_data.geometry) {
     return <ComponentViewerSkeleton message="No Geometry Available" />
@@ -843,6 +886,24 @@ export default function ComponentViewer({ component_data }: { component_data: Co
               </div>
             </div>
           )}
+
+          {/* Marker Points Visibility Control */}
+          {hasMarkerPoints && (
+            <div className="mb-1 sm:mb-2 flex flex-col gap-1">
+              <label className="text-xs sm:text-sm">Marker Points:</label>
+              <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+                <label className="flex items-center gap-1 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={showMarkerPoints}
+                    onChange={toggleMarkerPointsVisibility}
+                    className="rounded"
+                  />
+                  <span className="text-xs sm:text-sm">Show ({markerPoints.length})</span>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
 
         <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
@@ -858,6 +919,10 @@ export default function ComponentViewer({ component_data }: { component_data: Co
               externalMeshes={isExternalMode ? externalMeshes : []}
               isLoadingExternal={isLoadingExternal}
               geometryError={geometryError}
+            />
+            <MarkerPoints 
+              markerPoints={markerPoints} 
+              visible={showMarkerPoints} 
             />
           </Bounds>
 
