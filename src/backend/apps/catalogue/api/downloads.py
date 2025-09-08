@@ -133,7 +133,8 @@ async def download_gh_interface(
                         'GET',
                         download_url,
                         headers=headers,
-                        timeout=60.0
+                        timeout=60.0,
+                        follow_redirects=True
                     ) as response:
                         print(f"Response status: {response.status_code}")
                         print(f"Response headers: {dict(response.headers)}")
@@ -148,18 +149,7 @@ async def download_gh_interface(
 
                         response.raise_for_status()
 
-                        # Debug: Check first few bytes to see what
-                        # we're getting
-                        first_chunk = await response.aread(1024)
-                        first_100_hex = first_chunk[:100].hex()
-                        print(f"First 100 bytes (hex): {first_100_hex}")
-                        first_100_text = first_chunk[:100]
-                        print(f"First 100 bytes (text): {first_100_text}")
-
-                        # Yield the first chunk
-                        yield first_chunk
-
-                        # Continue with the rest of the stream
+                        # Stream the file content
                         async for chunk in response.aiter_bytes(
                             chunk_size=8192
                         ):
