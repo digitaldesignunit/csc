@@ -34,7 +34,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250908
+    Version: 250909
     """
 
     def __init__(self):
@@ -566,13 +566,13 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         if platform.system() == 'Windows':
             base_path = os.path.expandvars('%APPDATA%')
             geometry_path = os.path.join(
-                base_path, 'DDU_CSC', 'component_geometry', component_id
+                base_path, 'DDU_CSC', 'create_component_geometry', component_id
             )
         else:  # macOS and Linux
             base_path = os.path.expanduser('~')
             geometry_path = os.path.join(
                 base_path, 'Library', 'Application Support', 'DDU_CSC',
-                'component_geometry', component_id
+                'create_component_geometry', component_id
             )
 
         return geometry_path
@@ -585,6 +585,58 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         folder_path = self.get_geometry_folder_path(component_id)
         os.makedirs(folder_path, exist_ok=True)
         return folder_path
+
+    def clear_create_component_geometry_directory(self):
+        """
+        Clear all files in the create_component_geometry directory.
+        This does NOT affect the regular cache directories.
+        """
+        try:
+            if platform.system() == 'Windows':
+                base_path = os.path.expandvars('%APPDATA%')
+                geometry_dir = os.path.join(
+                    base_path, 'DDU_CSC', 'create_component_geometry'
+                )
+            else:  # macOS and Linux
+                base_path = os.path.expanduser('~')
+                geometry_dir = os.path.join(
+                    base_path, 'Library', 'Application Support', 'DDU_CSC',
+                    'create_component_geometry'
+                )
+
+            if os.path.exists(geometry_dir):
+                # Remove all files and subdirectories
+                for root, dirs, files in os.walk(geometry_dir, topdown=False):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        try:
+                            os.remove(file_path)
+                        except (OSError, IOError):
+                            pass  # Silently continue if file can't be removed
+                    for dir_name in dirs:
+                        dir_path = os.path.join(root, dir_name)
+                        try:
+                            os.rmdir(dir_path)
+                        except (OSError, IOError):
+                            pass  # Silently continue if dir can't be removed
+
+                self._addRemark(
+                    'Cleared create_component_geometry '
+                    f'directory: {geometry_dir}'
+                )
+                return True
+            else:
+                self._addRemark(
+                    'create_component_geometry directory does not exist'
+                )
+                return True
+
+        except Exception as e:
+            self._addWarning(
+                'Failed to clear create_component_geometry '
+                f' directory: {str(e)}'
+            )
+            return False
 
     def reduce_mesh(
         self, mesh: Rhino.Geometry.Mesh, target_face_count: int
@@ -880,6 +932,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         return dimensions, principal_components, translation_vector
 
     def RunScript(self,
+            ClearLocalStorage: bool,
             ComponentID: str,
             Type: str,
             Material: str,
@@ -893,36 +946,41 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         try:
             # Initialize param descriptions (this has to be done in RunScript)
             self.InputParams[0].Description = (
-                'Component ID (must be a valid UUID)'
+                'If set to True, clears all stored locally '
+                'saved geometry files for component creation '
+                '(this does NOT affect the regular cache!)'
             )
             self.InputParams[1].Description = (
-                'Component type (e.g., "sheet", "rubble")'
+                'Component ID (must be a valid UUID)'
             )
             self.InputParams[2].Description = (
-                'Material type (e.g., "steel", "concrete", "wood")'
+                'Component type (e.g., "sheet", "rubble")'
             )
             self.InputParams[3].Description = (
+                'Material type (e.g., "steel", "concrete", "wood")'
+            )
+            self.InputParams[4].Description = (
                 'Complexity level '
                 '(0=simple, 1=normal, 2=complex, 3=very complex)'
             )
-            self.InputParams[4].Description = (
+            self.InputParams[5].Description = (
                 'Fragment status (True for fragments, False for complete)'
             )
-            self.InputParams[5].Description = (
+            self.InputParams[6].Description = (
                 'Assembly status (True for assemblies, False for individual)'
             )
-            self.InputParams[6].Description = (
+            self.InputParams[7].Description = (
                 'Location as Vector3d (X=latitude, Y=longitude, Z ignored)'
             )
-            self.InputParams[7].Description = (
+            self.InputParams[8].Description = (
                 'Component color (System.Drawing.Color)'
             )
-            self.InputParams[8].Description = (
+            self.InputParams[9].Description = (
                 'Rhino geometry object(s) - single object or list of objects. '
                 'For single: Mesh or Extrusion for sheets, Mesh for rubble. '
                 'For multiple: all must be Meshes.'
             )
-            self.InputParams[9].Description = (
+            self.InputParams[10].Description = (
                 'Marker points as list of Point3d objects for component '
                 'identification and positioning'
             )
@@ -936,6 +994,19 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
             # set up output trees and results tuple
             ComponentData = Grasshopper.DataTree[System.Object]()
+
+            # Handle ClearLocalStorage input
+            if ClearLocalStorage:
+                self._addRemark(
+                    'Clearing create_component_geometry directory...'
+                )
+                if self.clear_create_component_geometry_directory():
+                    self.Component.Message = (
+                        'Local storage cleared successfully'
+                    )
+                else:
+                    self.Component.Message = 'Failed to clear local storage'
+                return ComponentData
 
             # Initialize schema validation
             self._addRemark('Initializing component creation with '
