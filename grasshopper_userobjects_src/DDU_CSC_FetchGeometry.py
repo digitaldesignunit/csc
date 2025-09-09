@@ -30,7 +30,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250905
+    Version: 250909
 
     Fetches reduced or detailed geometry from the CSC API.
     Input can be:
@@ -132,21 +132,35 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
 
     def fetch_geometry_from_api(self, auth_core, component_id, detailed=False):
         """
-        Fetch geometry from the API based on detailed flag.
+        Fetch geometry from the API with caching support.
         Returns the geometry data or None if failed.
         """
         try:
-            if detailed:
-                # Try to fetch detailed geometry first
-                response = auth_core.authorized_get(
-                    f'/components/{component_id}/geometry_detailed')
-                if response.status_code == 200:
-                    return {
-                        'type': 'detailed',
-                        'data': response.text,
-                        'format': 'obj'
-                    }
-                elif response.status_code == 404:
+            geometry_type = 'detailed' if detailed else 'reduced'
+
+            # Use cached geometry request
+            response = auth_core.cached_get_geometry(
+                component_id, geometry_type
+            )
+
+            if response.status_code == 200:
+                # Check if this was from cache
+                is_from_cache = hasattr(response, '_data')
+                cache_status = ' (from cache)' if is_from_cache else ''
+
+                self._addRemark(
+                    f'Fetched {geometry_type} geometry for '
+                    f'{component_id}{cache_status}'
+                )
+
+                return {
+                    'type': geometry_type,
+                    'data': response.text,
+                    'format': 'obj'
+                }
+            elif response.status_code == 404:
+                # Geometry not available, try fallback
+                if detailed:
                     # Detailed geometry not available, fall back to reduced
                     self._addRemark(
                         f'Detailed geometry not available for {component_id}, '
@@ -157,33 +171,17 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                         detailed=False
                     )
                 else:
-                    self._addWarning(
-                        f'Failed to fetch detailed '
-                        f'geometry: {response.status_code}')
-                    return None
-            else:
-                # Try to fetch reduced geometry first
-                response = auth_core.authorized_get(
-                    f'/components/{component_id}/geometry_reduced')
-                if response.status_code == 200:
-                    return {
-                        'type': 'reduced',
-                        'data': response.text,
-                        'format': 'obj'
-                    }
-                elif response.status_code == 404:
                     # Reduced geometry not available, fall back to primitive
                     self._addRemark(
                         f'Reduced geometry not available '
                         f'for {component_id}, using primitive...'
                     )
                     return None
-                else:
-                    self._addWarning(
-                        f'Failed to fetch reduced '
-                        f'geometry: {response.status_code}'
-                    )
-                    return None
+            else:
+                self._addWarning(
+                    f'Failed to fetch {geometry_type} '
+                    f'geometry: {response.status_code}')
+                return None
 
         except Exception as e:
             self._addError(f'Error fetching geometry from API: {str(e)}')
@@ -192,54 +190,75 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     def convert_obj_to_meshes(self, obj_content):
         """
         Convert OBJ file content to list of Rhino.Geometry.Mesh objects.
+        Optimized version with improved performance for large files.
         Supports multiple objects (o object_0, o object_1, etc.) and
         v X Y Z R G B format with RGB integer colors.
         Returns list of mesh objects or empty list if conversion fails.
         """
         try:
+            # Pre-allocate data structures for better performance
             meshes = []
-            current_mesh = None
-            current_vertices = []
-            current_faces = []
-            current_normals = []
-            current_vertex_colors = []
             global_vertices = []
             global_normals = []
             global_vertex_colors = []
 
-            lines = obj_content.strip().split('\n')
+            # Current mesh data
+            current_mesh_data = {
+                'vertices': [],
+                'faces': [],
+                'normals': [],
+                'vertex_colors': [],
+                'name': 'default'
+            }
+
+            # Parse lines more efficiently
+            lines = obj_content.splitlines()
+
+            # Pre-process lines to avoid repeated string operations
+            processed_lines = []
             for line in lines:
                 line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                parts = line.split()
-                if not parts:
-                    continue
+                if line and not line.startswith('#'):
+                    parts = line.split()
+                    if parts:
+                        processed_lines.append(parts)
+
+            self._addRemark(f'Processing {len(processed_lines)} OBJ lines...')
+
+            for i, parts in enumerate(processed_lines):
+                # Progress reporting for large files
+                if i % 10000 == 0 and i > 0:
+                    self._addRemark(
+                        f'Processed {i}/{len(processed_lines)} lines...'
+                    )
 
                 if parts[0] == 'o':  # object declaration
                     # Save previous mesh if it exists
-                    if (current_mesh is not None and current_vertices and
-                            current_faces):
-                        self._finalize_mesh(current_mesh, current_vertices,
-                                            current_faces, current_normals,
-                                            current_vertex_colors)
-                        meshes.append(current_mesh)
+                    if (current_mesh_data['vertices'] and
+                            current_mesh_data['faces']):
+                        mesh = self._create_mesh_from_data(current_mesh_data)
+                        if mesh:
+                            meshes.append(mesh)
 
                     # Start new mesh
-                    current_mesh = rg.Mesh()
-                    current_vertices = []
-                    current_faces = []
-                    current_normals = []
-                    current_vertex_colors = []
+                    current_mesh_data = {
+                        'vertices': [],
+                        'faces': [],
+                        'normals': [],
+                        'vertex_colors': [],
+                        'name': (parts[1] if len(parts) > 1
+                                 else f'object_{len(meshes)}')
+                    }
 
                 elif parts[0] == 'v':  # vertex
                     if len(parts) >= 4:
+                        # Use tuple instead of Point3d for better performance
                         x = float(parts[1])
                         y = float(parts[2])
                         z = float(parts[3])
-                        vertex = rg.Point3d(x, y, z)
+                        vertex = (x, y, z)
                         global_vertices.append(vertex)
-                        current_vertices.append(vertex)
+                        current_mesh_data['vertices'].append(vertex)
 
                         # Check for vertex colors in v X Y Z R G B format
                         if len(parts) >= 7:
@@ -249,24 +268,25 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                             b = int(parts[6])
                             color = (r, g, b)
                             global_vertex_colors.append(color)
-                            current_vertex_colors.append(color)
+                            current_mesh_data['vertex_colors'].append(color)
                         else:
                             # No color data, use default white
                             color = (255, 255, 255)
                             global_vertex_colors.append(color)
-                            current_vertex_colors.append(color)
+                            current_mesh_data['vertex_colors'].append(color)
 
                 elif parts[0] == 'vn':  # vertex normal
                     if len(parts) >= 4:
                         nx = float(parts[1])
                         ny = float(parts[2])
                         nz = float(parts[3])
-                        normal = rg.Vector3d(nx, ny, nz)
+                        normal = (nx, ny, nz)
                         global_normals.append(normal)
-                        current_normals.append(normal)
+                        current_mesh_data['normals'].append(normal)
 
                 elif parts[0] == 'f':  # face
                     if len(parts) >= 4:
+                        # Optimized face processing
                         face_vertices = []
                         for i in range(1, len(parts)):
                             # Handle different OBJ face formats
@@ -276,25 +296,26 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                                 # OBJ is 1-indexed, convert to 0-indexed
                                 vertex_index = int(vertex_part) - 1
                                 if 0 <= vertex_index < len(global_vertices):
-                                    # Convert global index to local index for
-                                    # current mesh
-                                    # Find the local index by counting vertices
-                                    # in current mesh
-                                    local_index = (vertex_index -
-                                                   (len(global_vertices) -
-                                                    len(current_vertices)))
-                                    if (0 <= local_index <
-                                            len(current_vertices)):
+                                    # Use direct local index calculation
+                                    vertices_len = len(
+                                        current_mesh_data['vertices']
+                                    )
+                                    local_index = (
+                                        vertex_index -
+                                        (len(global_vertices) - vertices_len)
+                                    )
+                                    if (0 <= local_index < len(
+                                            current_mesh_data['vertices'])):
                                         face_vertices.append(local_index)
                         if len(face_vertices) >= 3:
-                            current_faces.append(face_vertices)
+                            current_mesh_data['faces'].append(face_vertices)
 
             # Handle the last mesh
-            if current_mesh is not None and current_vertices and current_faces:
-                self._finalize_mesh(current_mesh, current_vertices,
-                                    current_faces, current_normals,
-                                    current_vertex_colors)
-                meshes.append(current_mesh)
+            if (current_mesh_data['vertices'] and
+                    current_mesh_data['faces']):
+                mesh = self._create_mesh_from_data(current_mesh_data)
+                if mesh:
+                    meshes.append(mesh)
 
             # If no objects were found, treat as single mesh
             # (backward compatibility)
@@ -386,6 +407,75 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
 
         except Exception as e:
             self._addError(f'Error finalizing mesh: {str(e)}')
+
+    def _create_mesh_from_data(self, mesh_data):
+        """
+        Optimized method to create a Rhino mesh from pre-processed data.
+        Uses bulk operations for better performance.
+        """
+        try:
+            vertices = mesh_data['vertices']
+            faces = mesh_data['faces']
+            normals = mesh_data['normals']
+            vertex_colors = mesh_data['vertex_colors']
+
+            if not vertices or not faces:
+                return None
+
+            # Create mesh
+            mesh = rg.Mesh()
+
+            # Convert tuples to Point3d objects in bulk
+            point3d_vertices = []
+            for x, y, z in vertices:
+                point3d_vertices.append(rg.Point3d(x, y, z))
+
+            # Add vertices in bulk
+            mesh.Vertices.AddVertices(point3d_vertices)
+
+            # Add faces efficiently
+            for face in faces:
+                if len(face) == 3:
+                    mesh.Faces.AddFace(face[0], face[1], face[2])
+                elif len(face) == 4:
+                    mesh.Faces.AddFace(face[0], face[1], face[2], face[3])
+                else:
+                    # Triangulate polygon faces
+                    for i in range(1, len(face) - 1):
+                        mesh.Faces.AddFace(face[0], face[i], face[i + 1])
+
+            # Add normals if available
+            if normals and len(normals) == len(vertices):
+                mesh.Normals.Clear()
+                for nx, ny, nz in normals:
+                    mesh.Normals.Add(rg.Vector3d(nx, ny, nz))
+                mesh.Normals.ComputeNormals()
+            else:
+                mesh.Normals.ComputeNormals()
+
+            # Add vertex colors if available
+            if vertex_colors and len(vertex_colors) == len(vertices):
+                for r, g, b in vertex_colors:
+                    mesh.VertexColors.Add(r, g, b)
+
+            # Apply coordinate system transformation
+            mesh.Rotate(
+                (math.pi / 2),
+                rg.Plane.WorldXY.XAxis,
+                rg.Point3d(0, 0, 0)
+            )
+
+            # Set mesh name
+            mesh.UserDictionary.Set('Name', mesh_data['name'])
+
+            # Compute mesh properties
+            mesh.Compact()
+
+            return mesh
+
+        except Exception as e:
+            self._addError(f'Error creating mesh from data: {str(e)}')
+            return None
 
     def fetch_primitive_geometry(self, auth_core, component_id):
         """
@@ -700,7 +790,8 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     return __Results
 
             self.Component.Message = (
-                f'Fetching geometry for component {component_id}...'
+                f'Fetching geometry for component {component_id} '
+                f'(with cache)...'
             )
 
             # Try to fetch geometry from API first
