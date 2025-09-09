@@ -25,9 +25,9 @@ jobs:
       - name: Get latest version tag
         id: get_tag
         run: |
-          latest_tag=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          latest_tag=$(git tag --list 'gh*' --sort=-v:refname | grep -E '^gh[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
           if [ -z "$latest_tag" ]; then
-            latest_tag="v0.0.0"
+            latest_tag="gh0.0.0.0"
           fi
           echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
 
@@ -35,10 +35,10 @@ jobs:
         id: version
         run: |
           latest="${{ steps.get_tag.outputs.latest_tag }}"
-          version=${latest#v}
-          IFS='.' read -r major minor patch <<< "$version"
-          patch=$((patch + 1))
-          new_version="v$major.$minor.$patch"
+          version=${latest#gh}
+          IFS='.' read -r major minor patch build <<< "$version"
+          build=$((build + 1))
+          new_version="gh$major.$minor.$patch.$build"
           release_name="DDU CSC GrasshopperInterface $new_version"
           zip_name="ddu-csc-grasshopper-interface-${new_version}.zip"
 
