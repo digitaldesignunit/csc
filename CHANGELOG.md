@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1.0] - 2025-01-27
+
+### Versions
+
+- CSC FastAPI Backend:  0.3.1.0 ✨
+- CSC React Frontend:   0.3.0.0
+- CSC Sheetscan Module: 0.0.1.11
+- CSC Grasshopper Interface: 0.2.0.0
+
+### Added
+
+#### CSC FastAPI Backend
+- **Geometry ETag Support**: Added ETag generation and conditional request support for geometry endpoints
+- **HTTP Caching Headers**: Added Cache-Control headers for improved geometry file caching
+- **Conditional Requests**: Support for If-None-Match headers with 304 Not Modified responses
+- **File-based ETags**: ETag generation based on file modification time and size for reliable cache validation
+
+### Changed
+
+#### CSC FastAPI Backend
+- **Geometry Endpoints**: Enhanced `/components/{id}/geometry_detailed` and `/components/{id}/geometry_reduced` with ETag support
+- **Backward Compatibility**: All changes are additive and maintain full backward compatibility with existing clients
+
 ## [0.3.0.0] - 2025-09-05
 
 ### Versions

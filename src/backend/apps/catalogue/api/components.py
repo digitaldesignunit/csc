@@ -7,7 +7,8 @@ from typing import Annotated, Optional
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
 from fastapi import (
-    APIRouter, Depends, HTTPException, Request, status, Query, UploadFile, File
+    APIRouter, Depends, HTTPException, Request, Response, status, Query,
+    UploadFile, File
 )
 from fastapi.responses import JSONResponse, FileResponse
 from pymongo.errors import PyMongoError
@@ -21,7 +22,12 @@ from apps.catalogue.models import (  # NOQA
     User,
 )
 from .auth import get_current_active_user, require_admin
-from utility import generate_component_etag, generate_etag_for_components
+from utility import (
+    generate_component_etag,
+    generate_etag_for_components,
+    generate_geometry_etag,
+    check_geometry_conditional_request
+)
 
 # INIT ROUTER -----------------------------------------------------------------
 
@@ -641,10 +647,22 @@ async def get_component_geometry_detailed(
 ):
     base = request.app.component_geometry_dir
     mesh_path = os.path.join(base, component_id, 'mesh.obj')
+
+    # Generate ETag for the file
+    etag = generate_geometry_etag(mesh_path, component_id)
+
+    # Check for conditional request
+    if check_geometry_conditional_request(request, etag):
+        return Response(
+            status_code=304,
+            headers={'ETag': etag}
+        )
+
     return FileResponse(
         _ensure_file(mesh_path),
         media_type='text/x-obj',
-        filename='mesh.obj'
+        filename='mesh.obj',
+        headers={'ETag': etag, 'Cache-Control': 'public, max-age=3600'}
     )
 
 
@@ -670,10 +688,22 @@ async def get_component_geometry_reduced(
 ):
     base = request.app.component_geometry_dir
     mesh_path = os.path.join(base, component_id, 'mesh_reduced.obj')
+
+    # Generate ETag for the file
+    etag = generate_geometry_etag(mesh_path, component_id)
+
+    # Check for conditional request
+    if check_geometry_conditional_request(request, etag):
+        return Response(
+            status_code=304,
+            headers={'ETag': etag}
+        )
+
     return FileResponse(
         _ensure_file(mesh_path),
         media_type='text/x-obj',
-        filename='mesh_reduced.obj'
+        filename='mesh_reduced.obj',
+        headers={'ETag': etag, 'Cache-Control': 'public, max-age=3600'}
     )
 
 

@@ -5,6 +5,10 @@ import datetime
 import hashlib
 import json
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from fastapi import Request
 
 
 # FUNCTION DEFINITIONS --------------------------------------------------------
@@ -130,6 +134,46 @@ def generate_component_etag(component_data: dict) -> str:
     etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
 
     return etag_hash
+
+
+def generate_geometry_etag(file_path: str, component_id: str) -> str:
+    """
+    Generate ETag for a geometry file using file stats.
+
+    Args:
+        file_path: Path to the geometry file
+        component_id: Component ID for uniqueness
+
+    Returns:
+        ETag string (MD5 hash of file stats + component_id)
+    """
+    try:
+        if not os.path.exists(file_path):
+            return f'geometry-{component_id}-not-found'
+
+        stat = os.stat(file_path)
+        # Use modification time and file size for ETag
+        etag_data = f'{component_id}-{stat.st_mtime}-{stat.st_size}'
+        return hashlib.md5(etag_data.encode('utf-8')).hexdigest()
+    except (OSError, IOError):
+        return f'geometry-{component_id}-error'
+
+
+def check_geometry_conditional_request(request: 'Request', etag: str) -> bool:
+    """
+    Check if request is a conditional request for geometry with If-None-Match.
+
+    Args:
+        request: FastAPI request object
+        etag: Current ETag of the geometry resource
+
+    Returns:
+        True if resource hasn't changed (should return 304), False otherwise
+    """
+    if_none_match = request.headers.get('if-none-match')
+    if if_none_match and if_none_match == etag:
+        return True
+    return False
 
 
 def generate_etag_for_components(components: list) -> str:
