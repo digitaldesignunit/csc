@@ -30,7 +30,7 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250905
+    Version: 250909
     """
 
     def __init__(self):
@@ -71,13 +71,13 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
         if platform.system() == 'Windows':
             base_path = os.path.expandvars('%APPDATA%')
             geometry_path = os.path.join(
-                base_path, 'DDU_CSC', 'component_geometry', component_id
+                base_path, 'DDU_CSC', 'create_component_geometry', component_id
             )
         else:  # macOS and Linux
             base_path = os.path.expanduser('~')
             geometry_path = os.path.join(
                 base_path, 'Library', 'Application Support', 'DDU_CSC',
-                'component_geometry', component_id
+                'create_component_geometry', component_id
             )
         return geometry_path
 
