@@ -307,7 +307,7 @@ export default function ComponentDetailCard({
                 <TooltipTrigger asChild>
                   <Button
                     onClick={handleValidateComponent}
-                    disabled={validating || deleting}
+                    disabled={validating || deleting || component_data.validated}
                     variant="default"
                     className="bg-green-600 hover:bg-green-700 flex-1"
                   >
@@ -316,14 +316,17 @@ export default function ComponentDetailCard({
                     ) : (
                       <>
                         <CheckCircle className="h-4 w-4 mr-2" />
-                        <span>Validate</span>
+                        <span>{component_data.validated ? 'Validated' : 'Validate'}</span>
                       </>
                     )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
                   <div className="text-center text-sm">
-                    Validate this component for public use
+                    {component_data.validated 
+                      ? 'This component is already validated' 
+                      : 'Validate this component for public use'
+                    }
                   </div>
                 </TooltipContent>
               </Tooltip>
