@@ -4,12 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1.0] - 2025-01-27
+## [0.3.1.0] - 2025-09-09
 
 ### Versions
 
-- CSC FastAPI Backend:  0.3.1.0 ✨
-- CSC React Frontend:   0.3.0.0
+- CSC FastAPI Backend:  0.3.1.0
+- CSC React Frontend:   0.3.1.0 ✨
 - CSC Sheetscan Module: 0.0.1.11
 - CSC Grasshopper Interface: 0.2.0.0
 
@@ -21,11 +21,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Conditional Requests**: Support for If-None-Match headers with 304 Not Modified responses
 - **File-based ETags**: ETag generation based on file modification time and size for reliable cache validation
 
+#### CSC React Frontend
+- **Geometry ETag Caching**: Enhanced ComponentViewer with ETag-based conditional requests for geometry files
+- **Smart Cache Validation**: Automatic cache validation using ETag headers to avoid unnecessary re-downloads
+- **Improved Performance**: Reduced bandwidth usage and faster loading for cached geometry files
+
 ### Changed
 
 #### CSC FastAPI Backend
 - **Geometry Endpoints**: Enhanced `/components/{id}/geometry_detailed` and `/components/{id}/geometry_reduced` with ETag support
 - **Backward Compatibility**: All changes are additive and maintain full backward compatibility with existing clients
+
+#### CSC React Frontend
+- **Component Validation UI**: Updated Validate button to only be active for unvalidated components
+- **Enhanced User Feedback**: Dynamic button text and tooltips based on component validation status
+- **Geometry Cache Structure**: Enhanced cache to store ETag metadata alongside geometry data
 
 ## [0.3.0.0] - 2025-09-05
 
