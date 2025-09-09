@@ -6,5 +6,7 @@ from .utility import ( # NOQA401
     get_geometry_directory,
     create_logging_timestamp,
     generate_component_etag,
-    generate_etag_for_components
+    generate_etag_for_components,
+    generate_geometry_etag,
+    check_geometry_conditional_request
 )
