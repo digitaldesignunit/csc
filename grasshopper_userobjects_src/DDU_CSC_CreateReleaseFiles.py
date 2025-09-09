@@ -366,7 +366,8 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
                         status_message)
 
             # Validate inputs
-            if not self.validate_inputs(RemoveGroupName, ClearPanelNames, ReleasePath):
+            if not self.validate_inputs(
+                    RemoveGroupName, ClearPanelNames, ReleasePath):
                 status_message = 'Input validation failed'
                 self.Component.Message = status_message
                 return (success, components_removed, saved_file_path,
