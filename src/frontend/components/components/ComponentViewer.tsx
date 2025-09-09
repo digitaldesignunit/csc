@@ -13,8 +13,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 // Scale factor for converting units to meters in THREE
 const scale = 0.001
 
-// Simple in-memory cache for external geometry
-const externalGeometryCache = new Map<string, THREE.Group[] | null>()
+// Simple in-memory cache for external geometry with ETag support
+interface CachedGeometry {
+  meshes: THREE.Group[] | null
+  etag?: string
+  timestamp: number
+}
+
+const externalGeometryCache = new Map<string, CachedGeometry>()
 
 /* ───────── Helpers ───────── */
 
@@ -218,17 +224,20 @@ async function loadExternalGeometry(
   debugLog(`Loading ${mode} geometry for component ${componentId}`)
   
   const cacheKey = `${componentId}:${mode}`
-  if (externalGeometryCache.has(cacheKey)) {
-    const cached = externalGeometryCache.get(cacheKey)
-    if (cached) {
-      debugLog(`Using cached geometry for ${componentId}: ${cached.length} meshes`)
-      return { success: true, meshes: cached }
-    } else {
-      return { 
-        success: false, 
-        error: 'not_found', 
-        message: `No ${mode} geometry available for this component` 
-      }
+  const cached = externalGeometryCache.get(cacheKey)
+  
+  // Check if we have valid cached data
+  if (cached && cached.meshes) {
+    debugLog(`Using cached geometry for ${componentId}: ${cached.meshes.length} meshes`)
+    return { success: true, meshes: cached.meshes }
+  }
+  
+  // Check if we have cached "not found" state
+  if (cached && cached.meshes === null) {
+    return { 
+      success: false, 
+      error: 'not_found', 
+      message: `No ${mode} geometry available for this component` 
     }
   }
 
@@ -236,9 +245,30 @@ async function loadExternalGeometry(
   const objUrl = `/api/backend/components/${componentId}/${geometryRoute}`
 
   try {
+    // Prepare headers for conditional request
+    const headers: HeadersInit = { credentials: 'include' }
+    if (cached?.etag) {
+      headers['If-None-Match'] = cached.etag
+    }
+
     // Fetch and parse OBJ content manually
     debugLog(`Fetching OBJ content...`)
-    const response = await fetch(objUrl, { credentials: 'include' })
+    const response = await fetch(objUrl, { headers })
+    
+    if (response.status === 304) {
+      // Not modified - use cached data
+      debugLog(`Geometry not modified, using cached data`)
+      if (cached && cached.meshes) {
+        return { success: true, meshes: cached.meshes }
+      } else {
+        return { 
+          success: false, 
+          error: 'not_found', 
+          message: `No ${mode} geometry available for this component` 
+        }
+      }
+    }
+    
     if (!response.ok) {
       throw new Error(`Failed to fetch OBJ: ${response.status} ${response.statusText}`)
     }
@@ -312,8 +342,16 @@ async function loadExternalGeometry(
 
     debugLog(`Created ${threeMeshes.length} meshes from OBJ file`)
 
-    // Cache the individual meshes
-    externalGeometryCache.set(cacheKey, threeMeshes)
+    // Extract ETag from response headers
+    const etag = response.headers.get('ETag')
+    debugLog(`Received ETag: ${etag}`)
+
+    // Cache the individual meshes with ETag and timestamp
+    externalGeometryCache.set(cacheKey, {
+      meshes: threeMeshes,
+      etag: etag || undefined,
+      timestamp: Date.now()
+    })
     
     return { success: true, meshes: threeMeshes }
   } catch (e) {
@@ -335,7 +373,12 @@ async function loadExternalGeometry(
       }
     }
     
-    externalGeometryCache.set(cacheKey, null)
+    // Cache the error state with timestamp
+    externalGeometryCache.set(cacheKey, {
+      meshes: null,
+      etag: undefined,
+      timestamp: Date.now()
+    })
     return { success: false, error: errorType, message }
   }
 }
