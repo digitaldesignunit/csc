@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, FileImage, Download } from 'lucide-react'
 
 export default function GHInterfacePage() {
@@ -66,7 +67,8 @@ export default function GHInterfacePage() {
     description, 
     inputs, 
     outputs, 
-    tip 
+    tip,
+    imagePath
   }: {
     icon: React.ComponentType<{ className?: string }>
     name: string
@@ -74,14 +76,27 @@ export default function GHInterfacePage() {
     inputs: Array<{label: string, description: string}>
     outputs: Array<{label: string, description: string}>
     tip?: string
+    imagePath?: string
   }) => (
     <div className="border rounded-lg p-4">
-      <div className="w-full h-64 bg-muted rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/25 mb-4">
-        <div className="text-center text-muted-foreground">
-          <FileImage className="h-12 w-12 mx-auto mb-3" />
-          <p className="text-lg font-medium">{name}</p>
-          <p className="text-sm">Component Screenshot</p>
-        </div>
+      <div className="w-full h-96 bg-white rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/25 mb-4 overflow-hidden">
+        {imagePath ? (
+          <Image
+            src={imagePath}
+            alt={`${name} component screenshot`}
+            width={800}
+            height={500}
+            className="w-full h-full object-contain sm:object-cover"
+            unoptimized={true}
+            priority={false}
+          />
+        ) : (
+          <div className="text-center text-muted-foreground">
+            <FileImage className="h-12 w-12 mx-auto mb-3" />
+            <p className="text-lg font-medium">{name}</p>
+            <p className="text-sm">Component Screenshot</p>
+          </div>
+        )}
       </div>
       <div>
         <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
@@ -192,6 +207,7 @@ export default function GHInterfacePage() {
               { label: 'Status', description: 'Authentication status and cache info' }
             ]}
             tip="Automatically caches authentication and component data locally for faster access."
+            imagePath="/gh-interface/csc_signin.jpg"
           />
         </div>
       )
@@ -212,6 +228,7 @@ export default function GHInterfacePage() {
             outputs={[
               { label: 'ComponentData', description: 'JSON data for the fetched components' }
             ]}
+            imagePath="/gh-interface/csc_fetchcomponents.jpg"
           />
 
           <ComponentCard
@@ -219,11 +236,12 @@ export default function GHInterfacePage() {
             name="CSC_FetchAllComponents"
             description="Retrieves all components from the catalogue. Use with caution for large datasets."
             inputs={[
-              { label: 'Refresh', description: 'Force refresh from server' }
+              { label: 'None', description: 'This component has no inputs' }
             ]}
             outputs={[
               { label: 'ComponentData', description: 'JSON data for all components' }
             ]}
+            imagePath="/gh-interface/csc_fetchallcomponents.jpg"
           />
 
           <ComponentCard
@@ -231,16 +249,48 @@ export default function GHInterfacePage() {
             name="CSC_FilterComponents"
             description="Filters components by type, material, complexity, and dimensions."
             inputs={[
-              { label: 'ComponentData', description: 'Input component data to filter' },
               { label: 'Type', description: 'Component type (e.g., "sheet", "rubble")' },
               { label: 'Material', description: 'Material type (e.g., "steel", "concrete")' },
               { label: 'Complexity', description: 'Complexity level (0-3)' },
               { label: 'Fragment', description: 'Fragment status (True/False)' },
-              { label: 'Min/Max X/Y/Z', description: 'Bounding box dimensions' }
+              { label: "MinDimensionX", description: "Minimum X dimension" },
+              { label: "MaxDimensionX", description: "Maximum X dimension" },
+              { label: "MinDimensionY", description: "Minimum Y dimension" },
+              { label: "MaxDimensionY", description: "Maximum Y dimension" },
+              { label: "MinDimensionZ", description: "Minimum Z dimension" },
+              { label: "MaxDimensionZ", description: "Maximum Z dimension" },
+              { label: 'ComponentData', description: 'Input component data to filter' },
             ]}
             outputs={[
-              { label: 'FilteredData', description: 'Components matching filter criteria' }
+              { label: 'FilterDescription', description: 'Human-readable description of the applied filters' },
+              { label: 'ComponentData', description: 'Components matching filter criteria' }
             ]}
+            imagePath="/gh-interface/csc_filtercomponents.jpg"
+          />
+
+          <ComponentCard
+            icon={Database}
+            name="CSC_FetchFilteredComponents"
+            description="Fetches components from the catalogue with server-side filtering for better performance."
+            inputs={[
+              { label: 'Type', description: 'Component type filter (e.g., "sheet", "rubble")' },
+              { label: 'Material', description: 'Material type filter (e.g., "steel", "concrete")' },
+              { label: 'Complexity', description: 'Complexity level filter (0-3)' },
+              { label: 'Fragment', description: 'Fragment status filter (True/False)' },
+              { label: 'MinDimensionX', description: 'Minimum X dimension' },
+              { label: 'MaxDimensionX', description: 'Maximum X dimension' },
+              { label: 'MinDimensionY', description: 'Minimum Y dimension' },
+              { label: 'MaxDimensionY', description: 'Maximum Y dimension' },
+              { label: 'MinDimensionZ', description: 'Minimum Z dimension' },
+              { label: 'MaxDimensionZ', description: 'Maximum Z dimension' },
+              { label: 'ReservedStatus', description: 'Reserved status filter (0=not reserved, 1=reserved by current user)' }
+            ]}
+            outputs={[
+              { label: 'FilterDescription', description: 'Human-readable description of the applied filters' },
+              { label: 'ComponentData', description: 'JSON data for filtered components' },
+            ]}
+            tip="More efficient than fetching all components and filtering locally. Use this for large datasets."
+            imagePath="/gh-interface/csc_fetchfilteredcomponents.jpg"
           />
 
           <ComponentCard
@@ -248,11 +298,15 @@ export default function GHInterfacePage() {
             name="CSC_FetchGeometry"
             description="Retrieves geometry data for specific components."
             inputs={[
-              { label: 'ComponentID', description: 'UUID of the component to fetch geometry for' }
+              { label: 'Input', description: 'UUID of the component to fetch geometry for' },
+              { label: 'Detailed', description: 'True for detailed geometry, False for reduced' }
             ]}
             outputs={[
-              { label: 'Geometry', description: 'Rhino geometry objects (meshes, extrusions)' }
+              { label: 'Geometry', description: 'Rhino geometry objects (meshes, extrusions)' },
+              { label: 'GeometryType', description: 'Geometry type: detailed, reduced, or primitive' },
+              { label: 'ComponentID', description: 'Component ID that was processed' }
             ]}
+            imagePath="/gh-interface/csc_fetchgeometry.jpg"
           />
         </div>
       )
@@ -306,12 +360,18 @@ export default function GHInterfacePage() {
               { label: 'ComponentData', description: 'JSON component data from FetchComponents' }
             ]}
             outputs={[
-              { label: 'Geometry', description: 'Rhino geometry objects' },
+              { label: 'ID', description: 'Component ID' },
+              { label: 'Type', description: 'Component type' },
+              { label: 'Material', description: 'Component material' },
+              { label: 'Color', description: 'Component color' },
+              { label: 'Location', description: 'Component location' },
               { label: 'BoundingBox', description: 'Component bounding box' },
-              { label: 'InsertionFrame', description: 'Component insertion frame' },
-              { label: 'PCAFrame', description: 'Principal component analysis frame' },
-              { label: 'Metadata', description: 'Component properties and attributes' }
+              { label: 'Descriptors', description: 'Component descriptors' },
+              { label: 'PrimitiveGeometry', description: 'Component primitive geometry' },
+              { label: 'MarkerPoints', description: 'Component marker points' },
+              { label: 'Attributes', description: 'Component attributes' }
             ]}
+            imagePath="/gh-interface/csc_disassemblecomponent.jpg"
           />
 
           <ComponentCard
@@ -323,7 +383,7 @@ export default function GHInterfacePage() {
               { label: 'XForm', description: 'Rhino transform to apply' }
             ]}
             outputs={[
-              { label: 'TransformedData', description: 'Component data with updated insertion frame' }
+              { label: 'XComponentData', description: 'Component data with updated insertion frame' }
             ]}
           />
         </div>
@@ -374,40 +434,6 @@ export default function GHInterfacePage() {
             outputs={[
               { label: 'Success', description: 'Capture success status' },
               { label: 'FilePath', description: 'Actual file path where image was saved' }
-            ]}
-          />
-        </div>
-      )
-    },
-    {
-      id: 'development-tools',
-      title: 'Development Tools',
-      icon: Code,
-      content: (
-        <div className="space-y-6 pt-2">
-          <ComponentCard
-            icon={Code}
-            name="CSC_ExportScriptsAndSource"
-            description="Exports Grasshopper definitions and source code for development and backup."
-            inputs={[
-              { label: 'ExportPath', description: 'Directory path where to export files' },
-              { label: 'Export', description: 'Execute the export' }
-            ]}
-            outputs={[
-              { label: 'Status', description: 'Export status and file information' }
-            ]}
-          />
-
-          <ComponentCard
-            icon={Code}
-            name="CSC_SaveAndSaveGHX"
-            description="Saves the current Grasshopper definition in both .gh and .ghx formats."
-            inputs={[
-              { label: 'FilePath', description: 'Base file path (without extension)' },
-              { label: 'Save', description: 'Execute the save operation' }
-            ]}
-            outputs={[
-              { label: 'Status', description: 'Save operation status' }
             ]}
           />
         </div>
@@ -561,7 +587,7 @@ export default function GHInterfacePage() {
           <li>• Check the component runtime messages for error details</li>
           <li>• Ensure you&apos;re properly authenticated with CSC_SignIn</li>
           <li>• Verify your internet connection for API access</li>
-          <li>• Contact the DDU team through the main website</li>
+          <li>• Contact <a href="mailto:eschenbach@dg.tu-darmstadt.de?subject=[CSC]%20Support%20Request&body=Please%20describe%20the%20issue%20you%20are%20facing%20in%20detail.%20Include%20any%20error%20messages%20or%20logs%20you%20have%20received." className='text-blue-500 underline'>Max</a> via e-mail or various messenger apps</li>
         </ul>
       </div>
     </div>
