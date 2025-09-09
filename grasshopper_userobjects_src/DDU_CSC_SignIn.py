@@ -33,7 +33,7 @@ ghenv.Component.SubCategory = '1 User'  # type: ignore[reportUnedfinedVariable] 
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 250904
+Version: 250909
 """
 
 
@@ -52,6 +52,7 @@ class _ComponentCache(object):
         self.cache_dir = cache_dir or self._get_default_cache_dir()
         self.components_dir = os.path.join(self.cache_dir, 'components')
         self.metadata_dir = os.path.join(self.cache_dir, 'metadata')
+        self.geometry_dir = os.path.join(self.cache_dir, 'component_geometry')
         self._lock = RLock()
 
         # Ensure cache directories exist
@@ -64,12 +65,16 @@ class _ComponentCache(object):
             return os.path.join(appdata, 'DDU_CSC', 'cache')
         else:  # macOS/Linux
             home = os.path.expanduser('~')
-            return os.path.join(home, 'Library', 'Application Support',
-                                'DDU_CSC', 'cache')
+            return os.path.join(
+                home, 'Library', 'Application Support', 'DDU_CSC', 'cache'
+            )
 
     def _ensure_cache_dirs(self):
         """Create cache directories if they don't exist."""
-        dirs = [self.cache_dir, self.components_dir, self.metadata_dir]
+        dirs = [
+            self.cache_dir, self.components_dir, self.metadata_dir,
+            self.geometry_dir
+        ]
         for directory in dirs:
             if not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)
@@ -299,19 +304,131 @@ class _ComponentCache(object):
                         if os.path.isfile(file_path):
                             total_size += os.path.getsize(file_path)
 
+                # Calculate geometry cache stats
+                geometry_count = 0
+                geometry_size = 0
+                if os.path.exists(self.geometry_dir):
+                    for root, dirs, files in os.walk(self.geometry_dir):
+                        for file in files:
+                            if file.endswith('.obj'):
+                                geometry_count += 1
+                                file_path = os.path.join(root, file)
+                                if os.path.isfile(file_path):
+                                    geometry_size += os.path.getsize(file_path)
+
                 return {
                     'component_count': component_count,
                     'metadata_count': metadata_count,
-                    'total_size_bytes': total_size,
+                    'geometry_count': geometry_count,
+                    'total_size_bytes': total_size + geometry_size,
+                    'geometry_size_bytes': geometry_size,
                     'cache_dir': self.cache_dir
                 }
             except (IOError, OSError):
                 return {
                     'component_count': 0,
                     'metadata_count': 0,
+                    'geometry_count': 0,
                     'total_size_bytes': 0,
+                    'geometry_size_bytes': 0,
                     'cache_dir': self.cache_dir
                 }
+
+    def get_geometry(self, component_id, geometry_type):
+        """
+        Get cached geometry for a component.
+
+        Args:
+            component_id: Component ID
+            geometry_type: 'reduced' or 'detailed'
+
+        Returns:
+            Tuple of (geometry_data, etag, is_from_cache) or
+            (None, None, False) if not found
+        """
+        with self._lock:
+            try:
+                cache_key = f'geometry:{geometry_type}:{component_id}'
+                metadata_file = os.path.join(
+                    self.metadata_dir,
+                    f"{self._get_cache_key_hash(cache_key)}.json"
+                )
+
+                if not os.path.exists(metadata_file):
+                    return None, None, False
+
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+
+                # Check if expired
+                if self._is_expired(metadata.get('cached_at', '')):
+                    return None, None, False
+
+                # Get geometry file path
+                geometry_file = os.path.join(
+                    self.geometry_dir,
+                    geometry_type,
+                    f"{component_id}.obj"
+                )
+
+                if os.path.exists(geometry_file):
+                    with open(geometry_file, 'r', encoding='utf-8') as f:
+                        geometry_data = f.read()
+                    return geometry_data, metadata.get('etag'), True
+
+                return None, None, False
+
+            except (IOError, KeyError):
+                return None, None, False
+
+    def set_geometry(self, component_id, geometry_type, geometry_data, etag):
+        """
+        Cache geometry data for a component.
+
+        Args:
+            component_id: Component ID
+            geometry_type: 'reduced' or 'detailed'
+            geometry_data: OBJ file content as string
+            etag: ETag from server response
+        """
+        with self._lock:
+            try:
+                current_time = datetime.now().isoformat()
+                cache_key = f'geometry:{geometry_type}:{component_id}'
+
+                # Create geometry subdirectory
+                geometry_subdir = os.path.join(
+                    self.geometry_dir, geometry_type
+                )
+                os.makedirs(geometry_subdir, exist_ok=True)
+
+                # Store geometry file
+                geometry_file = os.path.join(
+                    geometry_subdir, f"{component_id}.obj"
+                )
+                with open(geometry_file, 'w', encoding='utf-8') as f:
+                    f.write(geometry_data)
+
+                # Store metadata
+                metadata = {
+                    'cache_key': cache_key,
+                    'cached_at': current_time,
+                    'etag': etag,
+                    'type': 'geometry',
+                    'geometry_type': geometry_type,
+                    'component_id': component_id
+                }
+
+                metadata_file = os.path.join(
+                    self.metadata_dir,
+                    f"{self._get_cache_key_hash(cache_key)}.json"
+                )
+                with open(metadata_file, 'w', encoding='utf-8') as f:
+                    json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+            except (IOError, KeyError):
+                # Silently fail cache writes to not break main functionality
+                pass
 
 
 # AuthCore - Embedded ---------------------------------------------------------
@@ -568,6 +685,80 @@ class _AuthCore(object):
 
         return response
 
+    def cached_get_geometry(self, component_id, geometry_type, timeout=60):
+        """
+        Make a cached GET request for geometry with ETag support.
+
+        Args:
+            component_id: Component ID
+            geometry_type: 'reduced' or 'detailed'
+            timeout: Request timeout
+
+        Returns:
+            Response object with geometry data
+        """
+        if not self.is_valid():
+            raise RuntimeError(
+                'Access token missing or expired. Please sign in again.'
+            )
+
+        # If cache is disabled, make regular request
+        if not self._cache:
+            path = f'/components/{component_id}/geometry_{geometry_type}'
+            return self.authorized_get(path, timeout=timeout)
+
+        # Check cache first
+        cached_data, cached_etag, is_from_cache = self._cache.get_geometry(
+            component_id, geometry_type)
+
+        # Prepare headers
+        headers = self.auth_header()
+
+        # Add conditional request header if we have cached data
+        if is_from_cache and cached_etag:
+            headers['If-None-Match'] = cached_etag
+
+        # Make request
+        path = f'/components/{component_id}/geometry_{geometry_type}'
+        response = requests.get(
+            self.base_url + path,
+            headers=headers,
+            timeout=timeout
+        )
+
+        # Handle response
+        if response.status_code == 304 and is_from_cache:
+            # Not modified - return cached data
+            class MockResponse:
+                def __init__(self, data, etag):
+                    self.status_code = 200
+                    self._data = data
+                    self._etag = etag
+
+                @property
+                def text(self):
+                    return self._data
+
+                @property
+                def headers(self):
+                    return {'ETag': self._etag} if self._etag else {}
+
+            return MockResponse(cached_data, cached_etag)
+
+        elif response.status_code == 200:
+            # Data changed or first request - cache the response
+            try:
+                geometry_data = response.text
+                etag = response.headers.get('ETag')
+                self._cache.set_geometry(
+                    component_id, geometry_type, geometry_data, etag
+                )
+            except (ValueError, KeyError):
+                # If we can't cache, just return response
+                pass
+
+        return response
+
     def get_component_schema(self, force_refresh=False):
         """
         Get component schema with caching support.
@@ -680,7 +871,9 @@ class CSC_SignIn(Grasshopper.Kernel.GH_ScriptInstance):
             auth_core = None
         if auth_core is None:
             # Create new AuthCore instance with default settings
-            auth_core = _AuthCore(base_url='https://api.ddu.uber.space')
+            auth_core = _AuthCore(
+                base_url='https://api.ddu.uber.space'
+            )
             sc.sticky['CSC_AuthCore'] = auth_core
         return auth_core
 
@@ -775,12 +968,19 @@ class CSC_SignIn(Grasshopper.Kernel.GH_ScriptInstance):
                     cache_stats = auth_core.get_cache_stats()
                     cache_enabled = auth_core.is_cache_enabled()
                     comp_count = cache_stats["component_count"]
+                    geometry_count = cache_stats["geometry_count"]
                     size_kb = cache_stats["total_size_bytes"] // 1024
+                    geometry_size_kb = (
+                        cache_stats["geometry_size_bytes"] // 1024
+                    )
 
                     # Add cache status to messages
                     cache_status = (
                         f'Cache: {"Enabled" if cache_enabled else "Disabled"}'
-                        f' | Components: {comp_count} | Size: {size_kb}KB')
+                        f' | Components: {comp_count}'
+                        f' | Geometry: {geometry_count} files'
+                        f' | Size: {size_kb}KB'
+                        f' | Geometry: {geometry_size_kb}KB')
                     status_messages.append(cache_status)
                     Status = status_messages
                     return (Status,)
@@ -834,12 +1034,19 @@ class CSC_SignIn(Grasshopper.Kernel.GH_ScriptInstance):
                     cache_stats = auth_core.get_cache_stats()
                     cache_enabled = auth_core.is_cache_enabled()
                     comp_count = cache_stats["component_count"]
+                    geometry_count = cache_stats["geometry_count"]
                     size_kb = cache_stats["total_size_bytes"] // 1024
+                    geometry_size_kb = (
+                        cache_stats["geometry_size_bytes"] // 1024
+                    )
 
                     # Add cache status to messages
                     cache_status = (
                         f'Cache: {"Enabled" if cache_enabled else "Disabled"}'
-                        f' | Components: {comp_count} | Size: {size_kb}KB')
+                        f' | Components: {comp_count}'
+                        f' | Geometry: {geometry_count} files'
+                        f' | Size: {size_kb}KB'
+                        f' | Geometry: {geometry_size_kb}KB')
                     status_messages.append(cache_status)
 
                     self.Component.Message = f'Signed in as: {username}'
