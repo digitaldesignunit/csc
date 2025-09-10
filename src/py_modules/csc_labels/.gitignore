@@ -20,7 +20,7 @@ __pycache__/
 /viz/
 
 # OUTPUT
-src/csc_labels/output/
+output/
 
 # MISC
 _archive
