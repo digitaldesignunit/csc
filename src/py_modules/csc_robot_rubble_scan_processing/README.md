@@ -1,4 +1,4 @@
-# Robot Scan Processing System
+# Robot Rubble Scan Processing System
 
 This system automatically processes 3D scan data from robots and uploads it to the CSC backend API.
 
