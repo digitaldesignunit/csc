@@ -30,7 +30,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250909
+    Version: 250911
 
     Fetches reduced or detailed geometry from the CSC API.
     Input can be:
@@ -138,6 +138,24 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         try:
             geometry_type = 'detailed' if detailed else 'reduced'
 
+            # Check binary cache first
+            if auth_core._cache:
+                (cached_meshes,
+                 cached_etag,
+                 is_from_binary_cache) = auth_core._cache.get_geometry_binary(
+                    component_id, geometry_type
+                )
+                if is_from_binary_cache and cached_meshes:
+                    self._addRemark(
+                        f'Fetched {geometry_type} geometry for '
+                        f'{component_id} (from binary cache)'
+                    )
+                    return {
+                        'type': geometry_type,
+                        'data': cached_meshes,
+                        'format': 'rhino_meshes'
+                    }
+
             # Use cached geometry request
             response = auth_core.cached_get_geometry(
                 component_id, geometry_type
@@ -187,6 +205,64 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             self._addError(f'Error fetching geometry from API: {str(e)}')
             return None
 
+    def convert_meshes_to_obj(self, meshes):
+        """
+        Convert Rhino.Geometry.Mesh objects to OBJ file content.
+        This is used for compatibility when returning cached binary data
+        as OBJ text.
+        """
+        try:
+            if not meshes:
+                return "# No geometry data available"
+
+            obj_lines = []
+            vertex_offset = 0
+
+            for mesh_idx, mesh in enumerate(meshes):
+                # Add object declaration
+                obj_lines.append(f"o object_{mesh_idx}")
+
+                # Add vertices
+                for i in range(mesh.Vertices.Count):
+                    vertex = mesh.Vertices[i]
+                    obj_lines.append(f"v {vertex.X} {vertex.Y} {vertex.Z}")
+                # Add vertex colors if available
+                if mesh.VertexColors.Count > 0:
+                    for i in range(mesh.Vertices.Count):
+                        if i < mesh.VertexColors.Count:
+                            color = mesh.VertexColors[i]
+                            obj_lines.append(
+                                f"v {mesh.Vertices[i].X} "
+                                f"{mesh.Vertices[i].Y} "
+                                f"{mesh.Vertices[i].Z} "
+                                f"{color.R} {color.G} {color.B}"
+                            )
+                        else:
+                            vertex = mesh.Vertices[i]
+                            obj_lines.append(
+                                f"v {vertex.X} {vertex.Y} {vertex.Z}"
+                            )
+                # Add faces (adjust indices for OBJ format)
+                for i in range(mesh.Faces.Count):
+                    face = mesh.Faces[i]
+                    if face.IsTriangle:
+                        obj_lines.append(
+                            f"f {face.A + vertex_offset + 1} "
+                            f"{face.B + vertex_offset + 1} "
+                            f"{face.C + vertex_offset + 1}"
+                        )
+                    elif face.IsQuad:
+                        obj_lines.append(
+                            f"f {face.A + vertex_offset + 1} "
+                            f"{face.B + vertex_offset + 1} "
+                            f"{face.C + vertex_offset + 1} "
+                            f"{face.D + vertex_offset + 1}"
+                        )
+                vertex_offset += mesh.Vertices.Count
+            return "\n".join(obj_lines)
+        except Exception as e:
+            return f"# Error converting meshes to OBJ: {str(e)}"
+
     def convert_obj_to_meshes(self, obj_content):
         """
         Convert OBJ file content to list of Rhino.Geometry.Mesh objects.
@@ -196,6 +272,8 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         Returns list of mesh objects or empty list if conversion fails.
         """
         try:
+            if not obj_content or not obj_content.strip():
+                return []
             # Pre-allocate data structures for better performance
             meshes = []
             global_vertices = []
@@ -223,14 +301,8 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     if parts:
                         processed_lines.append(parts)
 
-            self._addRemark(f'Processing {len(processed_lines)} OBJ lines...')
-
+            # Process lines without excessive logging
             for i, parts in enumerate(processed_lines):
-                # Progress reporting for large files
-                if i % 10000 == 0 and i > 0:
-                    self._addRemark(
-                        f'Processed {i}/{len(processed_lines)} lines...'
-                    )
 
                 if parts[0] == 'o':  # object declaration
                     # Save previous mesh if it exists
@@ -349,9 +421,6 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     meshes.append(single_mesh)
 
             if not meshes:
-                self._addWarning(
-                    'No valid vertices or faces found in OBJ data'
-                )
                 return []
 
             return meshes
@@ -821,7 +890,13 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
 
             # Process geometry based on format
             geometry_objects = []
-            if geometry_data['format'] == 'obj':
+            if geometry_data['format'] == 'rhino_meshes':
+                # Use cached Rhino meshes directly
+                geometry_objects = geometry_data['data']
+                if not geometry_objects:
+                    self._addError('No cached meshes found')
+                    return __Results
+            elif geometry_data['format'] == 'obj':
                 # Convert OBJ to meshes (can be multiple)
                 geometry_objects = self.convert_obj_to_meshes(
                     geometry_data['data']

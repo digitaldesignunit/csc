@@ -11,6 +11,8 @@ import json
 import base64
 import os
 import hashlib
+import pickle
+import math
 from threading import RLock
 import uuid
 from datetime import datetime, timedelta
@@ -33,7 +35,7 @@ ghenv.Component.SubCategory = '1 User'  # type: ignore[reportUnedfinedVariable] 
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 250909
+Version: 250911
 """
 
 
@@ -105,6 +107,165 @@ class _ComponentCache(object):
             Tuple of (data, etag, is_from_cache) or
             (None, None, False) if not found
         """
+        # Try binary cache first
+        return self.get_binary(cache_key)
+
+    def set(self, cache_key, data, etag=None, filters=None):
+        """
+        Store data in cache.
+
+        Args:
+            cache_key: Cache key
+            data: Data to cache
+            etag: ETag for the data
+            filters: Optional filter parameters
+        """
+        # Use binary cache
+        self.set_binary(cache_key, data, etag, filters)
+
+    def invalidate(self, pattern=None):
+        """
+        Invalidate cache entries.
+
+        Args:
+            pattern: Optional pattern to match cache keys (None = clear all)
+        """
+        with self._lock:
+            try:
+                if pattern is None:
+                    # Clear all cache
+                    for directory in [
+                            self.components_dir,
+                            self.metadata_dir,
+                            self.geometry_dir
+                    ]:
+                        if os.path.exists(directory):
+                            for filename in os.listdir(directory):
+                                file_path = os.path.join(directory, filename)
+                                if os.path.isfile(file_path):
+                                    os.remove(file_path)
+                                elif os.path.isdir(file_path):
+                                    # Remove subdirectories
+                                    # (geometry type folders)
+                                    import shutil
+                                    shutil.rmtree(
+                                        file_path,
+                                        ignore_errors=True
+                                    )
+                else:
+                    # Clear specific pattern
+                    pattern_hash = self._get_cache_key_hash(pattern)
+                    metadata_file = os.path.join(
+                        self.metadata_dir, f"{pattern_hash}.json"
+                    )
+                    if os.path.exists(metadata_file):
+                        os.remove(metadata_file)
+
+            except (IOError, OSError):
+                pass
+
+    def get_cache_stats(self):
+        """Get cache statistics."""
+        with self._lock:
+            try:
+                component_count = len(
+                    [f for f in os.listdir(self.components_dir)
+                     if f.endswith('.pkl')]
+                )
+                metadata_count = len(
+                    [f for f in os.listdir(self.metadata_dir)
+                     if f.endswith('.json')]
+                )
+
+                # Calculate total cache size
+                total_size = 0
+                for directory in [self.components_dir, self.metadata_dir]:
+                    for filename in os.listdir(directory):
+                        file_path = os.path.join(directory, filename)
+                        if os.path.isfile(file_path):
+                            total_size += os.path.getsize(file_path)
+
+                # Calculate geometry cache stats
+                geometry_count = 0
+                geometry_size = 0
+                if os.path.exists(self.geometry_dir):
+                    for root, dirs, files in os.walk(self.geometry_dir):
+                        for file in files:
+                            if file.endswith('.pkl'):
+                                geometry_count += 1
+                                file_path = os.path.join(root, file)
+                                if os.path.isfile(file_path):
+                                    geometry_size += os.path.getsize(file_path)
+
+                return {
+                    'component_count': component_count,
+                    'metadata_count': metadata_count,
+                    'geometry_count': geometry_count,
+                    'total_size_bytes': total_size + geometry_size,
+                    'geometry_size_bytes': geometry_size,
+                    'cache_dir': self.cache_dir
+                }
+            except (IOError, OSError):
+                return {
+                    'component_count': 0,
+                    'metadata_count': 0,
+                    'geometry_count': 0,
+                    'total_size_bytes': 0,
+                    'geometry_size_bytes': 0,
+                    'cache_dir': self.cache_dir
+                }
+
+    def get_geometry(self, component_id, geometry_type):
+        """
+        Get cached geometry for a component.
+
+        Args:
+            component_id: Component ID
+            geometry_type: 'reduced' or 'detailed'
+
+        Returns:
+            Tuple of (geometry_data, etag, is_from_cache) or
+            (None, None, False) if not found
+        """
+        # Try binary cache first
+        return self.get_geometry_binary(component_id, geometry_type)
+
+    def set_geometry(self, component_id, geometry_type, geometry_data, etag):
+        """
+        Cache geometry data for a component.
+
+        Args:
+            component_id: Component ID
+            geometry_type: 'reduced' or 'detailed'
+            geometry_data: OBJ file content as string
+            etag: ETag from server response
+        """
+        # Convert OBJ string to Rhino meshes and store as binary
+        try:
+            meshes = self._convert_obj_to_meshes(geometry_data)
+            if meshes:  # Only store if conversion succeeded
+                self.set_geometry_binary(
+                    component_id,
+                    geometry_type,
+                    meshes,
+                    etag
+                )
+        except Exception as e:
+            # Don't cache anything if conversion fails
+            self._addError(
+                f"Error converting OBJ to meshes: {str(e)}")
+
+    def get_binary(self, cache_key):
+        """
+        Get cached data from binary cache.
+
+        Args:
+            cache_key: Cache key (e.g., 'component:uuid')
+
+        Returns:
+            Tuple of (data, etag, is_from_cache) or
+            (None, None, False) if not found
+        """
         with self._lock:
             try:
                 # Check metadata cache first
@@ -128,12 +289,12 @@ class _ComponentCache(object):
                     # Individual component
                     component_id = cache_key.split(':', 1)[1]
                     component_file = os.path.join(
-                        self.components_dir, f"{component_id}.json"
+                        self.components_dir, f"{component_id}.pkl"
                     )
 
                     if os.path.exists(component_file):
-                        with open(component_file, 'r', encoding='utf-8') as f:
-                            component_data = json.load(f)
+                        with open(component_file, 'rb') as f:
+                            component_data = pickle.load(f)
                         return component_data, metadata.get('etag'), True
 
                 elif (cache_key == 'all_components' or
@@ -144,14 +305,11 @@ class _ComponentCache(object):
                         comp_id = comp_ref.get('id')
                         if comp_id:
                             comp_file = os.path.join(
-                                self.components_dir, f"{comp_id}.json"
+                                self.components_dir, f"{comp_id}.pkl"
                             )
                             if os.path.exists(comp_file):
-                                with open(
-                                    comp_file, 'r',
-                                    encoding='utf-8'
-                                ) as f:
-                                    components.append(json.load(f))
+                                with open(comp_file, 'rb') as f:
+                                    components.append(pickle.load(f))
 
                     return components, metadata.get('etag'), True
 
@@ -161,12 +319,12 @@ class _ComponentCache(object):
 
                 return None, None, False
 
-            except (IOError, json.JSONDecodeError, KeyError):
+            except (IOError, pickle.PickleError, KeyError):
                 return None, None, False
 
-    def set(self, cache_key, data, etag=None, filters=None):
+    def set_binary(self, cache_key, data, etag=None, filters=None):
         """
-        Store data in cache.
+        Store data in binary cache.
 
         Args:
             cache_key: Cache key
@@ -182,12 +340,12 @@ class _ComponentCache(object):
                     # Individual component
                     component_id = cache_key.split(':', 1)[1]
                     component_file = os.path.join(
-                        self.components_dir, f"{component_id}.json"
+                        self.components_dir, f"{component_id}.pkl"
                     )
 
-                    # Store component data
-                    with open(component_file, 'w', encoding='utf-8') as f:
-                        json.dump(data, f, indent=2, ensure_ascii=False)
+                    # Store component data as pickle
+                    with open(component_file, 'wb') as f:
+                        pickle.dump(data, f)
 
                     # Store metadata
                     metadata = {
@@ -204,17 +362,12 @@ class _ComponentCache(object):
                     for component in data:
                         comp_id = component.get('_id') or component.get('id')
                         if comp_id:
-                            # Store individual component
+                            # Store individual component as pickle
                             comp_file = os.path.join(
-                                self.components_dir, f"{comp_id}.json"
+                                self.components_dir, f"{comp_id}.pkl"
                             )
-                            with open(comp_file, 'w', encoding='utf-8') as f:
-                                json.dump(
-                                    component,
-                                    f,
-                                    indent=2,
-                                    ensure_ascii=False
-                                )
+                            with open(comp_file, 'wb') as f:
+                                pickle.dump(component, f)
 
                             # Add reference to metadata
                             components.append({
@@ -251,99 +404,20 @@ class _ComponentCache(object):
                 with open(metadata_file, 'w', encoding='utf-8') as f:
                     json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-            except (IOError, KeyError):
+            except (IOError, pickle.PickleError, KeyError):
                 # Silently fail cache writes to not break main functionality
                 pass
 
-    def invalidate(self, pattern=None):
+    def get_geometry_binary(self, component_id, geometry_type):
         """
-        Invalidate cache entries.
-
-        Args:
-            pattern: Optional pattern to match cache keys (None = clear all)
-        """
-        with self._lock:
-            try:
-                if pattern is None:
-                    # Clear all cache
-                    for directory in [self.components_dir, self.metadata_dir]:
-                        for filename in os.listdir(directory):
-                            file_path = os.path.join(directory, filename)
-                            if os.path.isfile(file_path):
-                                os.remove(file_path)
-                else:
-                    # Clear specific pattern
-                    pattern_hash = self._get_cache_key_hash(pattern)
-                    metadata_file = os.path.join(
-                        self.metadata_dir, f"{pattern_hash}.json"
-                    )
-                    if os.path.exists(metadata_file):
-                        os.remove(metadata_file)
-
-            except (IOError, OSError):
-                pass
-
-    def get_cache_stats(self):
-        """Get cache statistics."""
-        with self._lock:
-            try:
-                component_count = len(
-                    [f for f in os.listdir(self.components_dir)
-                     if f.endswith('.json')]
-                )
-                metadata_count = len(
-                    [f for f in os.listdir(self.metadata_dir)
-                     if f.endswith('.json')]
-                )
-
-                # Calculate total cache size
-                total_size = 0
-                for directory in [self.components_dir, self.metadata_dir]:
-                    for filename in os.listdir(directory):
-                        file_path = os.path.join(directory, filename)
-                        if os.path.isfile(file_path):
-                            total_size += os.path.getsize(file_path)
-
-                # Calculate geometry cache stats
-                geometry_count = 0
-                geometry_size = 0
-                if os.path.exists(self.geometry_dir):
-                    for root, dirs, files in os.walk(self.geometry_dir):
-                        for file in files:
-                            if file.endswith('.obj'):
-                                geometry_count += 1
-                                file_path = os.path.join(root, file)
-                                if os.path.isfile(file_path):
-                                    geometry_size += os.path.getsize(file_path)
-
-                return {
-                    'component_count': component_count,
-                    'metadata_count': metadata_count,
-                    'geometry_count': geometry_count,
-                    'total_size_bytes': total_size + geometry_size,
-                    'geometry_size_bytes': geometry_size,
-                    'cache_dir': self.cache_dir
-                }
-            except (IOError, OSError):
-                return {
-                    'component_count': 0,
-                    'metadata_count': 0,
-                    'geometry_count': 0,
-                    'total_size_bytes': 0,
-                    'geometry_size_bytes': 0,
-                    'cache_dir': self.cache_dir
-                }
-
-    def get_geometry(self, component_id, geometry_type):
-        """
-        Get cached geometry for a component.
+        Get cached geometry from binary cache.
 
         Args:
             component_id: Component ID
             geometry_type: 'reduced' or 'detailed'
 
         Returns:
-            Tuple of (geometry_data, etag, is_from_cache) or
+            Tuple of (meshes, etag, is_from_cache) or
             (None, None, False) if not found
         """
         with self._lock:
@@ -368,27 +442,46 @@ class _ComponentCache(object):
                 geometry_file = os.path.join(
                     self.geometry_dir,
                     geometry_type,
-                    f"{component_id}.obj"
+                    f"{component_id}.pkl"
                 )
 
                 if os.path.exists(geometry_file):
-                    with open(geometry_file, 'r', encoding='utf-8') as f:
-                        geometry_data = f.read()
-                    return geometry_data, metadata.get('etag'), True
+                    with open(geometry_file, 'rb') as f:
+                        mesh_json_strings = pickle.load(f)
+
+                    # Reconstruct meshes from JSON using FromJSON
+                    meshes = []
+                    for json_string in mesh_json_strings:
+                        try:
+                            mesh = Rhino.Geometry.Mesh.FromJSON(json_string)
+                            if mesh:
+                                meshes.append(mesh)
+                        except Exception as e:
+                            # Log error but continue with other meshes
+                            self._addError(
+                                f"Error reconstructing mesh "
+                                f"from JSON: {str(e)}")
+                            continue
+
+                    # If no meshes could be reconstructed, return failure
+                    if not meshes:
+                        return None, None, False
+
+                    return meshes, metadata.get('etag'), True
 
                 return None, None, False
 
-            except (IOError, KeyError):
+            except (IOError, pickle.PickleError, KeyError):
                 return None, None, False
 
-    def set_geometry(self, component_id, geometry_type, geometry_data, etag):
+    def set_geometry_binary(self, component_id, geometry_type, meshes, etag):
         """
-        Cache geometry data for a component.
+        Cache geometry data as binary.
 
         Args:
             component_id: Component ID
             geometry_type: 'reduced' or 'detailed'
-            geometry_data: OBJ file content as string
+            meshes: List of Rhino.Geometry.Mesh objects
             etag: ETag from server response
         """
         with self._lock:
@@ -402,12 +495,24 @@ class _ComponentCache(object):
                 )
                 os.makedirs(geometry_subdir, exist_ok=True)
 
-                # Store geometry file
+                # Convert meshes to JSON strings using ToJSON
+                mesh_json_strings = []
+                for mesh in meshes:
+                    # Use ToJSON with SerializationOptions to include user data
+                    options = Rhino.FileIO.SerializationOptions()
+                    options.WriteUserData = True
+                    options.WriteRenderMeshes = True
+                    options.WriteAnalysisMeshes = True
+
+                    json_string = mesh.ToJSON(options)
+                    mesh_json_strings.append(json_string)
+
+                # Store JSON strings as pickle
                 geometry_file = os.path.join(
-                    geometry_subdir, f"{component_id}.obj"
+                    geometry_subdir, f"{component_id}.pkl"
                 )
-                with open(geometry_file, 'w', encoding='utf-8') as f:
-                    f.write(geometry_data)
+                with open(geometry_file, 'wb') as f:
+                    pickle.dump(mesh_json_strings, f)
 
                 # Store metadata
                 metadata = {
@@ -426,9 +531,296 @@ class _ComponentCache(object):
                 with open(metadata_file, 'w', encoding='utf-8') as f:
                     json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-            except (IOError, KeyError):
+            except (IOError, pickle.PickleError, KeyError):
                 # Silently fail cache writes to not break main functionality
                 pass
+
+    def _convert_obj_to_meshes(self, obj_content):
+        """
+        Convert OBJ file content to list of Rhino.Geometry.Mesh objects.
+        Optimized version with improved performance for large files.
+        Supports multiple objects (o object_0, o object_1, etc.) and
+        v X Y Z R G B format with RGB integer colors.
+        Returns list of mesh objects or empty list if conversion fails.
+        """
+        try:
+            if not obj_content or not obj_content.strip():
+                return []
+
+            # Pre-allocate data structures for better performance
+            meshes = []
+            global_vertices = []
+            global_normals = []
+            global_vertex_colors = []
+
+            # Current mesh data
+            current_mesh_data = {
+                'vertices': [],
+                'faces': [],
+                'normals': [],
+                'vertex_colors': [],
+                'name': 'default'
+            }
+
+            # Parse lines more efficiently
+            lines = obj_content.splitlines()
+
+            # Pre-process lines to avoid repeated string operations
+            processed_lines = []
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    parts = line.split()
+                    if parts:
+                        processed_lines.append(parts)
+
+            # Process lines without excessive logging
+            for i, parts in enumerate(processed_lines):
+                if parts[0] == 'o':  # object declaration
+                    # Save previous mesh if it exists
+                    if (current_mesh_data['vertices'] and
+                            current_mesh_data['faces']):
+                        mesh = self._create_mesh_from_data(current_mesh_data)
+                        if mesh:
+                            meshes.append(mesh)
+
+                    # Start new mesh
+                    current_mesh_data = {
+                        'vertices': [],
+                        'faces': [],
+                        'normals': [],
+                        'vertex_colors': [],
+                        'name': (parts[1] if len(parts) > 1
+                                 else f'object_{len(meshes)}')
+                    }
+
+                elif parts[0] == 'v':  # vertex
+                    if len(parts) >= 4:
+                        # Use tuple instead of Point3d for better performance
+                        x = float(parts[1])
+                        y = float(parts[2])
+                        z = float(parts[3])
+                        vertex = (x, y, z)
+                        global_vertices.append(vertex)
+                        current_mesh_data['vertices'].append(vertex)
+
+                        # Check for vertex colors in v X Y Z R G B format
+                        if len(parts) >= 7:
+                            # Extract RGB integer values
+                            r = int(parts[4])
+                            g = int(parts[5])
+                            b = int(parts[6])
+                            color = (r, g, b)
+                            global_vertex_colors.append(color)
+                            current_mesh_data['vertex_colors'].append(color)
+                        else:
+                            # No color data, use default white
+                            color = (255, 255, 255)
+                            global_vertex_colors.append(color)
+                            current_mesh_data['vertex_colors'].append(color)
+
+                elif parts[0] == 'vn':  # vertex normal
+                    if len(parts) >= 4:
+                        nx = float(parts[1])
+                        ny = float(parts[2])
+                        nz = float(parts[3])
+                        normal = (nx, ny, nz)
+                        global_normals.append(normal)
+                        current_mesh_data['normals'].append(normal)
+
+                elif parts[0] == 'f':  # face
+                    if len(parts) >= 4:
+                        # Optimized face processing
+                        face_vertices = []
+                        for i in range(1, len(parts)):
+                            # Handle different OBJ face formats
+                            # (v, v/vt, v//vn, v/vt/vn)
+                            vertex_part = parts[i].split('/')[0]
+                            if vertex_part:
+                                # OBJ is 1-indexed, convert to 0-indexed
+                                vertex_index = int(vertex_part) - 1
+                                if 0 <= vertex_index < len(global_vertices):
+                                    # Use direct local index calculation
+                                    vertices_len = len(
+                                        current_mesh_data['vertices']
+                                    )
+                                    local_index = (
+                                        vertex_index -
+                                        (len(global_vertices) - vertices_len)
+                                    )
+                                    if (0 <= local_index < len(
+                                            current_mesh_data['vertices'])):
+                                        face_vertices.append(local_index)
+                        if len(face_vertices) >= 3:
+                            current_mesh_data['faces'].append(face_vertices)
+
+            # Handle the last mesh
+            if (current_mesh_data['vertices'] and
+                    current_mesh_data['faces']):
+                mesh = self._create_mesh_from_data(current_mesh_data)
+                if mesh:
+                    meshes.append(mesh)
+
+            # If no objects were found, treat as single mesh
+            # (backward compatibility)
+            if not meshes and global_vertices:
+                # Collect all faces from the global context
+                global_faces = []
+                for line in lines:
+                    line = line.strip()
+                    if (not line or line.startswith('#') or
+                            line.startswith('o')):
+                        continue
+                    parts = line.split()
+                    if not parts or parts[0] != 'f':
+                        continue
+                    if len(parts) >= 4:
+                        face_vertices = []
+                        for i in range(1, len(parts)):
+                            vertex_part = parts[i].split('/')[0]
+                            if vertex_part:
+                                vertex_index = int(vertex_part) - 1
+                                if 0 <= vertex_index < len(global_vertices):
+                                    face_vertices.append(vertex_index)
+                        if len(face_vertices) >= 3:
+                            global_faces.append(face_vertices)
+
+                if global_faces:
+                    single_mesh = Rhino.Geometry.Mesh()
+                    self._finalize_mesh(single_mesh, global_vertices,
+                                        global_faces, global_normals,
+                                        global_vertex_colors)
+                    meshes.append(single_mesh)
+
+            if not meshes:
+                return []
+
+            return meshes
+
+        except Exception as e:
+            self._addError(
+                f"Error converting OBJ to meshes: {str(e)}")
+            return []
+
+    def _create_mesh_from_data(self, mesh_data):
+        """
+        Optimized method to create a Rhino mesh from pre-processed data.
+        Uses bulk operations for better performance.
+        """
+        try:
+            vertices = mesh_data['vertices']
+            faces = mesh_data['faces']
+            normals = mesh_data['normals']
+            vertex_colors = mesh_data['vertex_colors']
+
+            if not vertices or not faces:
+                return None
+
+            # Create mesh
+            mesh = Rhino.Geometry.Mesh()
+
+            # Convert tuples to Point3d objects in bulk
+            point3d_vertices = []
+            for x, y, z in vertices:
+                point3d_vertices.append(Rhino.Geometry.Point3d(x, y, z))
+
+            # Add vertices in bulk
+            mesh.Vertices.AddVertices(point3d_vertices)
+
+            # Add faces efficiently
+            for face in faces:
+                if len(face) == 3:
+                    mesh.Faces.AddFace(face[0], face[1], face[2])
+                elif len(face) == 4:
+                    mesh.Faces.AddFace(face[0], face[1], face[2], face[3])
+                else:
+                    # Triangulate polygon faces
+                    for i in range(1, len(face) - 1):
+                        mesh.Faces.AddFace(face[0], face[i], face[i + 1])
+
+            # Add normals if available
+            if normals and len(normals) == len(vertices):
+                mesh.Normals.Clear()
+                for nx, ny, nz in normals:
+                    mesh.Normals.Add(Rhino.Geometry.Vector3d(nx, ny, nz))
+                mesh.Normals.ComputeNormals()
+            else:
+                mesh.Normals.ComputeNormals()
+
+            # Add vertex colors if available
+            if vertex_colors and len(vertex_colors) == len(vertices):
+                for r, g, b in vertex_colors:
+                    mesh.VertexColors.Add(r, g, b)
+
+            # Apply coordinate system transformation
+            mesh.Rotate(
+                (math.pi / 2),
+                Rhino.Geometry.Plane.WorldXY.XAxis,
+                Rhino.Geometry.Point3d(0, 0, 0)
+            )
+
+            # Set mesh name
+            mesh.UserDictionary.Set('Name', mesh_data['name'])
+
+            # Compute mesh properties
+            mesh.Compact()
+
+            return mesh
+
+        except Exception as e:
+            self._addError(
+                f"Error creating mesh from data: {str(e)}")
+            return None
+
+    def _finalize_mesh(self, mesh, vertices, faces, normals, vertex_colors):
+        """
+        Helper method to finalize a mesh with vertices, faces, normals,
+        and colors.
+        """
+        try:
+            # Add vertices
+            for vertex in vertices:
+                mesh.Vertices.Add(vertex)
+
+            # Add faces
+            for face in faces:
+                if len(face) == 3:
+                    mesh.Faces.AddFace(face[0], face[1], face[2])
+                elif len(face) == 4:
+                    mesh.Faces.AddFace(face[0], face[1], face[2], face[3])
+                else:
+                    # Triangulate polygon faces
+                    for i in range(1, len(face) - 1):
+                        mesh.Faces.AddFace(face[0], face[i], face[i + 1])
+
+            # Add normals if available
+            if normals and len(normals) == len(vertices):
+                mesh.Normals.Clear()
+                for normal in normals:
+                    mesh.Normals.Add(normal)
+                mesh.Normals.ComputeNormals()
+            else:
+                mesh.Normals.ComputeNormals()
+
+            # Add vertex colors if available
+            if vertex_colors and len(vertex_colors) == len(vertices):
+                for color in vertex_colors:
+                    r, g, b = color
+                    mesh.VertexColors.Add(r, g, b)
+
+            # rotate around x-axis to normalize for Rhino
+            mesh.Rotate(
+                (math.pi / 2),
+                Rhino.Geometry.Plane.WorldXY.XAxis,
+                Rhino.Geometry.Point3d(0, 0, 0)
+            )
+            # Compute mesh properties
+            mesh.Compact()
+
+        except Exception as e:
+            self._addError(
+                f"Error finalizing mesh: {str(e)}")
+            return None
 
 
 # AuthCore - Embedded ---------------------------------------------------------
@@ -707,15 +1099,17 @@ class _AuthCore(object):
             path = f'/components/{component_id}/geometry_{geometry_type}'
             return self.authorized_get(path, timeout=timeout)
 
-        # Check cache first
-        cached_data, cached_etag, is_from_cache = self._cache.get_geometry(
+        # Check binary cache first
+        (cached_meshes,
+         cached_etag,
+         is_from_binary_cache) = self._cache.get_geometry_binary(
             component_id, geometry_type)
 
         # Prepare headers
         headers = self.auth_header()
 
         # Add conditional request header if we have cached data
-        if is_from_cache and cached_etag:
+        if is_from_binary_cache and cached_etag:
             headers['If-None-Match'] = cached_etag
 
         # Make request
@@ -727,8 +1121,15 @@ class _AuthCore(object):
         )
 
         # Handle response
-        if response.status_code == 304 and is_from_cache:
-            # Not modified - return cached data
+        if response.status_code == 304 and is_from_binary_cache:
+            # Not modified - return cached data as OBJ text
+            # Convert cached meshes back to OBJ for compatibility
+            try:
+                obj_text = self._convert_meshes_to_obj(cached_meshes)
+            except Exception:
+                # Fallback: return empty OBJ
+                obj_text = "# No geometry data available"
+
             class MockResponse:
                 def __init__(self, data, etag):
                     self.status_code = 200
@@ -743,13 +1144,14 @@ class _AuthCore(object):
                 def headers(self):
                     return {'ETag': self._etag} if self._etag else {}
 
-            return MockResponse(cached_data, cached_etag)
+            return MockResponse(obj_text, cached_etag)
 
         elif response.status_code == 200:
             # Data changed or first request - cache the response
             try:
                 geometry_data = response.text
                 etag = response.headers.get('ETag')
+                # Use the updated set_geometry method which converts to binary
                 self._cache.set_geometry(
                     component_id, geometry_type, geometry_data, etag
                 )
@@ -831,6 +1233,69 @@ class _AuthCore(object):
                 if is_from_cache:
                     return cached_schema
             return None
+
+    def _convert_meshes_to_obj(self, meshes):
+        """
+        Convert Rhino.Geometry.Mesh objects to OBJ file content.
+        This is used for compatibility when returning cached binary data
+        as OBJ text.
+        """
+        try:
+            if not meshes:
+                return "# No geometry data available"
+
+            obj_lines = []
+            vertex_offset = 0
+
+            for mesh_idx, mesh in enumerate(meshes):
+                # Add object declaration
+                obj_lines.append(f"o object_{mesh_idx}")
+
+                # Add vertices
+                for i in range(mesh.Vertices.Count):
+                    vertex = mesh.Vertices[i]
+                    obj_lines.append(f"v {vertex.X} {vertex.Y} {vertex.Z}")
+
+                # Add vertex colors if available
+                if mesh.VertexColors.Count > 0:
+                    for i in range(mesh.Vertices.Count):
+                        if i < mesh.VertexColors.Count:
+                            color = mesh.VertexColors[i]
+                            obj_lines.append(
+                                f"v {mesh.Vertices[i].X} "
+                                f"{mesh.Vertices[i].Y} "
+                                f"{mesh.Vertices[i].Z} "
+                                f"{color.R} {color.G} {color.B}"
+                            )
+                        else:
+                            vertex = mesh.Vertices[i]
+                            obj_lines.append(
+                                f"v {vertex.X} {vertex.Y} {vertex.Z}"
+                            )
+
+                # Add faces (adjust indices for OBJ format)
+                for i in range(mesh.Faces.Count):
+                    face = mesh.Faces[i]
+                    if face.IsTriangle:
+                        obj_lines.append(
+                            f"f {face.A + vertex_offset + 1} "
+                            f"{face.B + vertex_offset + 1} "
+                            f"{face.C + vertex_offset + 1}"
+                        )
+                    elif face.IsQuad:
+                        obj_lines.append(
+                            f"f {face.A + vertex_offset + 1} "
+                            f"{face.B + vertex_offset + 1} "
+                            f"{face.C + vertex_offset + 1} "
+                            f"{face.D + vertex_offset + 1}"
+                        )
+
+                vertex_offset += mesh.Vertices.Count
+
+            return "\n".join(obj_lines)
+
+        except Exception as e:
+            return f"# Error converting meshes to OBJ: {str(e)}"
 
 
 # SignIn Grasshopper Component ------------------------------------------------

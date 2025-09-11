@@ -26,7 +26,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250905
+    Version: 250911
     """
 
     def __init__(self):
@@ -148,6 +148,41 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     def ComponentColor(self, json_comp: dict) -> System.Drawing.Color:
         return System.Drawing.Color.FromArgb(255, *json_comp['color'])
 
+    def get_auth_core_from_sticky(self):
+        """Get AuthCore instance from sticky storage."""
+        auth_core = sc.sticky.get('CSC_AuthCore')
+        if auth_core is None:
+            self._addWarning(
+                'No authentication found. Using primitive geometry only.'
+            )
+            return None
+        return auth_core
+
+    def fetch_cached_geometry(self, auth_core, component_id, detailed=True):
+        """Fetch cached geometry from binary cache."""
+        try:
+            if not auth_core or not auth_core._cache:
+                return None
+
+            geometry_type = 'detailed' if detailed else 'reduced'
+            (cached_meshes,
+             cached_etag,
+             is_from_cache) = auth_core._cache.get_geometry_binary(
+                component_id, geometry_type
+            )
+
+            # Check if we got valid meshes from cache
+            if is_from_cache and cached_meshes and len(cached_meshes) > 0:
+                self._addRemark(
+                    f'Using cached {geometry_type} geometry '
+                    f'for {component_id}'
+                )
+                return cached_meshes
+            return None
+        except Exception as e:
+            self._addWarning(f'Error fetching cached geometry: {str(e)}')
+            return None
+
     def RunScript(self,
             Bake: bool,
             ComponentData: System.Collections.Generic.List[str]):
@@ -171,6 +206,9 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
             self.Component.Message = 'Baking components...'
             baked_count = 0
+
+            # Get AuthCore for cached geometry
+            auth_core = self.get_auth_core_from_sticky()
 
             # set document
             sc.doc = Rhino.RhinoDoc.ActiveDoc
@@ -201,34 +239,82 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                         Rhino.Geometry.Plane.WorldXY,
                         iplane)
 
+                    # Try to get cached geometry first
+                    cached_meshes = self.fetch_cached_geometry(
+                        auth_core,
+                        comp_id,
+                        detailed=True
+                    )
+                    if not cached_meshes:
+                        # Fall back to reduced geometry
+                        cached_meshes = self.fetch_cached_geometry(
+                            auth_core,
+                            comp_id,
+                            detailed=False
+                        )
+
                     # create component geometry
                     geo_ids = []
-                    for key in sorted(json_comp['geometry'].keys()):
-                        if key == 'extrusion':
-                            xtr = self.ComponentExtrusion(json_comp)
-                            xtr.Transform(xform)
-                            geo_ids.append(sc.doc.Objects.Add(xtr))
-                        elif key == 'mesh':
-                            # Handle single mesh (backward compatibility)
-                            mesh = self.ComponentMesh(json_comp)
-                            mesh.Transform(xform)
-                            geo_ids.append(sc.doc.Objects.Add(mesh))
-                        elif key == 'meshes':
-                            # Handle multiple meshes
-                            meshes = self.ComponentMeshes(json_comp)
-                            for j, mesh in enumerate(meshes):
+                    if cached_meshes:
+                        # Use cached geometry
+                        for j, mesh in enumerate(cached_meshes):
+                            try:
+                                # Create a copy to avoid modifying
+                                # the cached mesh
+                                mesh_copy = mesh.Duplicate()
+                                if mesh_copy and mesh_copy.IsValid:
+                                    mesh_copy.Transform(xform)
+                                    geo_id = sc.doc.Objects.Add(mesh_copy)
+                                    if geo_id != System.Guid.Empty:
+                                        geo_ids.append(geo_id)
+                                        # Add mesh index as user text
+                                        rs.SetUserText(
+                                            geo_id,
+                                            'csc_mesh_index',
+                                            str(j))
+                                    else:
+                                        self._addWarning(
+                                            f'Failed to add mesh '
+                                            f'{j} to document'
+                                        )
+                                else:
+                                    self._addWarning(
+                                        f'Invalid mesh {j} in cached geometry'
+                                    )
+                            except Exception as e:
+                                self._addWarning(
+                                    'Error processing cached '
+                                    f'mesh {j}: {str(e)}'
+                                )
+                                continue
+                    else:
+                        # Fall back to primitive geometry
+                        for key in sorted(json_comp['geometry'].keys()):
+                            if key == 'extrusion':
+                                xtr = self.ComponentExtrusion(json_comp)
+                                xtr.Transform(xform)
+                                geo_ids.append(sc.doc.Objects.Add(xtr))
+                            elif key == 'mesh':
+                                # Handle single mesh (backward compatibility)
+                                mesh = self.ComponentMesh(json_comp)
                                 mesh.Transform(xform)
-                                geo_id = sc.doc.Objects.Add(mesh)
-                                geo_ids.append(geo_id)
-                                # Add mesh index as user text
-                                rs.SetUserText(geo_id, 'csc_mesh_index',
-                                               str(j))
-                        else:
-                            msg = (f'Missing implementation for geometry '
-                                   f'of type \'{key}\'!')
-                            self._addWarning(msg)
-                            self.Component.Message = msg
-                            continue
+                                geo_ids.append(sc.doc.Objects.Add(mesh))
+                            elif key == 'meshes':
+                                # Handle multiple meshes
+                                meshes = self.ComponentMeshes(json_comp)
+                                for j, mesh in enumerate(meshes):
+                                    mesh.Transform(xform)
+                                    geo_id = sc.doc.Objects.Add(mesh)
+                                    geo_ids.append(geo_id)
+                                    # Add mesh index as user text
+                                    rs.SetUserText(geo_id, 'csc_mesh_index',
+                                                   str(j))
+                            else:
+                                msg = (f'Missing implementation for geometry '
+                                       f'of type \'{key}\'!')
+                                self._addWarning(msg)
+                                self.Component.Message = msg
+                                continue
 
                     # add objects to document
                     # create layers if they are not present
@@ -283,7 +369,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 self.Component.Message = 'No components were baked'
                 self._addWarning('No components were baked')
             # restore document context
-            sc.doc = ghdoc
+            sc.doc = ghdoc  # type: ignore[reportUnedfinedVariable] # NOQA
         else:
             self.Component.Message = 'Bake toggle is off'
             self._addRemark('Bake toggle is off - no components baked')
