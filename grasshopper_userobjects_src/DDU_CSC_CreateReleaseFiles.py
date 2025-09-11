@@ -26,7 +26,7 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250909
+    Version: 250911
 
     This component can be used to create a Grasshopper release file in a
     separate folder.
@@ -139,13 +139,13 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
                         target_groups.append(doc_obj)
                         for grp_obj in doc_obj.Objects():
                             target_objects.append(grp_obj)
-                elif doc_obj.NickName in panel_names:
+                elif panel_names and doc_obj.NickName in panel_names:
                     # ensure matching type
                     if str(doc_obj.GetType()) == paneltype_str:
                         target_panels.append(doc_obj)
         except Exception as e:
             self._addError(f'Error finding groups and objects: {str(e)}')
-            return None, None
+            return None, None, None
         # return target groups and objects
         return target_groups, target_objects, target_panels
 
@@ -266,6 +266,8 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             self._addError('Save path cannot be empty')
             return False
 
+        if not clear_panel_names:
+            clear_panel_names = []
         for cpn in clear_panel_names:
             if not isinstance(cpn, str):
                 self._addError('ClearPanelNames contains non-string')
@@ -394,8 +396,8 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             # Step 2: Find the specified group
             self.Component.Message = 'Finding groups...'
             (target_groups,
-             target_objects,
-             target_panels) = self.find_groups_and_objects(
+                target_objects,
+                target_panels) = self.find_groups_and_objects(
                 copied_doc,
                 RemoveGroupName,
                 ClearPanelNames
