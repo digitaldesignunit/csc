@@ -25,10 +25,10 @@ framework
 
 ## Current Versions
 
-- **CSC FastAPI Backend**: 0.2.2.0
-- **CSC React Frontend**: 0.2.0.9
+- **CSC FastAPI Backend**: 0.3.1.0
+- **CSC React Frontend**: 0.3.1.0
 - **CSC Sheetscan Module**: 0.0.1.11
-- **CSC Grasshopper Interface**: 0.1.0.0 ✨
+- **CSC Grasshopper Interface**: 0.2.0.1
 
 ---
 

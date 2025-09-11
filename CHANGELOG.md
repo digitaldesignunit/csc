@@ -4,12 +4,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1.1] - 2025-09-11
+
+### Versions
+
+- CSC FastAPI Backend:  0.3.1.0
+- CSC React Frontend:   0.3.1.0
+- CSC Sheetscan Module: 0.0.1.11
+- CSC Grasshopper Interface: 0.2.0.1
+
+### Added
+
+#### CSC Grasshopper Interface
+- **Binary Geometry Caching**: Implemented high-performance binary caching for geometry data using Rhino's JSON serialization
+- **JSON Mesh Serialization**: Added support for serializing Rhino meshes to JSON with full user data preservation
+- **Enhanced Error Handling**: Improved error handling for mesh reconstruction and geometry processing
+- **Cache Validation**: Added comprehensive validation for cached geometry data before use
+
+### Changed
+
+#### CSC Grasshopper Interface
+- **Cache Storage Format**: Migrated from OBJ text files to pickled JSON strings for maximum performance
+- **Mesh Processing**: Optimized mesh duplication and transformation for cached geometry baking
+- **Error Recovery**: Enhanced error recovery to continue processing when individual meshes fail
+- **Debug Output**: Cleaned up excessive debug logging while preserving important status messages
+
+### Fixed
+
+#### CSC Grasshopper Interface
+- **BakeComponents Error**: Fixed "does not exist in ObjectTable" error when baking cached geometry
+- **Mesh Reconstruction**: Fixed issues with reconstructing meshes from JSON when some meshes fail
+- **Cache Validation**: Fixed validation logic to properly handle empty or invalid cached data
+- **Cross-Component Imports**: Removed circular import dependencies between Grasshopper components
+
+### Technical Details
+
+#### Binary Caching Implementation
+- Uses `Rhino.Geometry.Mesh.ToJSON()` with `SerializationOptions` for full data preservation
+- Stores pickled JSON strings instead of raw mesh objects for pickle compatibility
+- Implements `Rhino.Geometry.Mesh.FromJSON()` for mesh reconstruction
+- Maintains ETag compatibility with existing caching system
+
+#### Performance Improvements
+- Eliminated OBJ parsing overhead for cached geometry
+- Reduced file I/O operations through binary storage
+- Improved mesh processing with bulk operations
+- Enhanced error handling prevents cascade failures
+
 ## [0.3.1.0] - 2025-09-09
 
 ### Versions
 
 - CSC FastAPI Backend:  0.3.1.0
-- CSC React Frontend:   0.3.1.0 ✨
+- CSC React Frontend:   0.3.1.0
 - CSC Sheetscan Module: 0.0.1.11
 - CSC Grasshopper Interface: 0.2.0.0
 
