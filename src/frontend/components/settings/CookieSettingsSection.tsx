@@ -75,7 +75,7 @@ export default function CookieSettingsSection() {
           </div>
 
           <div className="p-4 border rounded-lg bg-muted/30">
-            <h4 className="font-medium mb-2">What We DON'T Use</h4>
+            <h4 className="font-medium mb-2">What We DON&apos;T Use</h4>
             <ul className="text-sm text-muted-foreground space-y-1 ml-4">
               <li>❌ No analytics or tracking cookies</li>
               <li>❌ No advertising or marketing cookies</li>
@@ -91,7 +91,7 @@ export default function CookieSettingsSection() {
             <h4 className="font-medium mb-1">Cookie Banner</h4>
             <p className="text-sm text-muted-foreground">
               {bannerDismissed 
-                ? "You've acknowledged our cookie notice. Want to see it again?" 
+                ? "You&apos;ve acknowledged our cookie notice. Want to see it again?" 
                 : "The cookie banner is currently visible."}
             </p>
           </div>
