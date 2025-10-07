@@ -6,6 +6,7 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import Providers from './providers'
 import SessionMonitor from '@/components/auth/SessionMonitor'
+import CookieNotice from '@/components/common/CookieNotice'
 import { ThemeProvider } from 'next-themes'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -31,6 +32,7 @@ export default function RootLayout({
         >
           <Providers>
             <SessionMonitor />
+            <CookieNotice />
             <div className="flex-grow flex flex-col md:flex-row">
               {/* Desktop Sidebar - hidden on mobile */}
               <div className="hidden md:block md:w-[250px] md:flex-shrink-0 md:border-r">

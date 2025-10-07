@@ -1,4 +1,5 @@
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import CookieSettingsSection from '@/components/settings/CookieSettingsSection'
 
 export default function SettingsPage() {
   return (
@@ -6,9 +7,11 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Settings</CardTitle>
-          <CardDescription>These are the Settings</CardDescription>
+          <CardDescription>Manage your account and privacy preferences</CardDescription>
         </CardHeader>
       </Card>
+      
+      <CookieSettingsSection />
     </div>
   )
 }
