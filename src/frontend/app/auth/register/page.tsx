@@ -81,7 +81,9 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">
+                E-Mail (<span className="text-red-600">must be @*.tu-darmstadt.de!</span>)
+              </Label>
               <Input
                 id="email"
                 type="email"

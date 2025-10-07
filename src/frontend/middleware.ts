@@ -6,11 +6,31 @@ export async function middleware(req: NextRequest) {
   // Use the SAME secret as in NextAuth config
   const secret = process.env.API_SECRET
   const token = await getToken({ req, secret })
+  
   if (!token) {
     const url = new URL('/auth/signin', req.url)
     url.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search)
     return NextResponse.redirect(url)
   }
+
+  // Check if API token is expired
+  if (token.error === 'ApiTokenExpired') {
+    console.log('[Middleware] API token expired, redirecting to signin')
+    const url = new URL('/auth/signin', req.url)
+    url.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search)
+    url.searchParams.set('error', 'SessionExpired')
+    return NextResponse.redirect(url)
+  }
+
+  // Additional check for API token expiry time
+  if (token.apiTokenExpiresAt && Date.now() >= Number(token.apiTokenExpiresAt)) {
+    console.log('[Middleware] API token expired (time check), redirecting to signin')
+    const url = new URL('/auth/signin', req.url)
+    url.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search)
+    url.searchParams.set('error', 'SessionExpired')
+    return NextResponse.redirect(url)
+  }
+
   return NextResponse.next()
 }
 

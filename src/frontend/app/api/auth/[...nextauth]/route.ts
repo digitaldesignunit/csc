@@ -275,7 +275,11 @@ const authOptions: AuthOptions = {
     signIn: '/auth/signin',
     error: '/auth/signin',
   },
-  session: { strategy: 'jwt' },
+  session: { 
+    strategy: 'jwt',
+    maxAge: 24 * 60 * 60, // 24 hours session max age
+    updateAge: 2 * 60 * 60, // Update session every 2 hours
+  },
   secret: NEXTAUTH_SECRET,
   callbacks: {
     async jwt({ token, user }) {

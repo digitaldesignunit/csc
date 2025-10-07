@@ -23,18 +23,18 @@ export default function ValidationPage() {
   const [componentData, setComponentData] = useState<Record<string, ComponentModel>>({})
   const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(new Set())
 
-  // Redirect non-admin users
+  // Redirect non-admin users or expired sessions
   useEffect(() => {
     if (status === 'loading') return
     
-    if (!session?.user || session.user.role !== 'admin') {
+    if (!session?.user || session.user.role !== 'admin' || session.error === 'ApiTokenExpired') {
       router.push('/')
     }
   }, [session, status, router])
 
   // Fetch unvalidated components
   useEffect(() => {
-    if (session?.user?.role === 'admin') {
+    if (session?.user?.role === 'admin' && !session.error) {
       fetchUnvalidatedComponents()
     }
   }, [session])
@@ -143,7 +143,7 @@ export default function ValidationPage() {
     )
   }
 
-  if (!session?.user || session.user.role !== 'admin') {
+  if (!session?.user || session.user.role !== 'admin' || session.error === 'ApiTokenExpired') {
     return null // Will redirect
   }
 

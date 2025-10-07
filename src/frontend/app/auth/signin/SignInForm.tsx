@@ -48,6 +48,9 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
         case 'Configuration':
           setError('Authentication service is not properly configured.')
           break
+        case 'SessionExpired':
+          setError('Your session has expired. Please sign in again.')
+          break
         case 'Default':
           setError('An error occurred during sign in. Please try again.')
           break

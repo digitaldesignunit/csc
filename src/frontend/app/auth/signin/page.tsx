@@ -3,6 +3,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 import SignInForm from './SignInForm'
+import SessionExpiredNotice from '@/components/auth/SessionExpiredNotice'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -18,5 +19,10 @@ function toSafePathServer(raw: string | string[] | undefined): string {
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams
   const callbackUrl = toSafePathServer(sp?.callbackUrl)
-  return <SignInForm callbackUrl={callbackUrl} />
+  return (
+    <div>
+      <SessionExpiredNotice />
+      <SignInForm callbackUrl={callbackUrl} />
+    </div>
+  )
 }

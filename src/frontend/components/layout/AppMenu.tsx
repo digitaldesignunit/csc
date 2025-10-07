@@ -50,8 +50,8 @@ export default function AppMenu() {
         </div>
       </div>
 
-      {/* User Navigation - Only visible to logged in users */}
-      {session && (
+      {/* User Navigation - Only visible to logged in users with valid sessions */}
+      {session && !session.error && (
         <div className="space-y-2">
           <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
             User Tools
