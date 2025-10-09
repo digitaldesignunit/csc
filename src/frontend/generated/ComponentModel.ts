@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2025-10-09T17:05:58.114Z
+// Generated on: 2025-10-09T17:55:20.159Z
 // Source: https://api.ddu.uber.space/schema/component
 
 export type ComponentBoundingBox = number[];
@@ -60,6 +60,7 @@ export interface ComponentModel {
   geometry: ComponentGeometry; // Component geometry data (mesh, extrusion, etc.)
   color?: number[] | unknown; // RGB color values as [R, G, B] integers (0-255)
   bbx: ComponentBoundingBox; // Bounding box maximum extents as [X, Y, Z] float values (dimensions of the component)
+  bbx_origin: number[]; // Bounding box center/origin as [X, Y, Z] float values (vector from world origin to bbx center in PCA space)
   location?: ComponentLocation | unknown; // Geographic location data (lat/lon coordinates)
   descriptors?: Record<string, unknown> | unknown; // Component descriptors and metadata
   processes?: Record<string, unknown> | unknown; // Manufacturing or processing information
