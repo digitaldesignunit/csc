@@ -1,5 +1,4 @@
-import NextAuth, { DefaultSession } from 'next-auth';
-import type { JWT as NextAuthJWT } from "next-auth/jwt"
+import { DefaultSession } from 'next-auth';
 
 declare module 'next-auth/jwt' {
   interface JWT {
