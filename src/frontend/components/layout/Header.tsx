@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Menu, X, BookOpenText } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import Image from 'next/image'
 import AppMenu from '@/components/layout/AppMenu'
 import ThemeToggle from '@/components/common/ThemeToggle'
 import UserItem from '@/components/auth/UserItem'
@@ -9,6 +11,12 @@ import UserItem from '@/components/auth/UserItem'
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const { theme, systemTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     const checkScreenSize = () => {
@@ -39,13 +47,26 @@ export default function Header() {
     }
   }, [])
 
+  // Determine logo based on theme
+  const currentTheme = theme === 'system' ? systemTheme : theme
+  const isDark = currentTheme === 'dark'
+  const logoSrc = isDark ? '/ddu_logo_white.png' : '/ddu_logo_black.png'
+
   return (
     <>
       {/* Main Header */}
       <div className='flex items-center justify-between gap-4 p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
         {/* Left side - Logo and Title */}
         <div className='flex items-center gap-3'>
-          <BookOpenText className="h-6 w-6 text-primary" />
+          {mounted && isMobile && (
+            <Image
+              src={logoSrc}
+              alt="Digital Design Unit"
+              width={40}
+              height={40}
+              className="flex-shrink-0"
+            />
+          )}
           <h1 className='text-xl font-bold text-foreground'>Catalogue of Second Chances</h1>
         </div>
 
