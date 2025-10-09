@@ -1,11 +1,11 @@
 'use client'
 
 import React from 'react'
-import { Card, type CardProps } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import BackgroundMesh from './BackgroundMesh'
 import { cn } from '@/lib/utils'
 
-interface BackgroundCardProps extends CardProps {
+interface BackgroundCardProps extends React.ComponentProps<"div"> {
   backgroundProps?: {
     meshType?: 'box' | 'sphere' | 'torus' | 'octahedron'
     color?: string
@@ -35,7 +35,6 @@ export default function BackgroundCard({
       {...props}
     >
       <BackgroundMesh
-        meshType={meshType}
         color={color}
         opacity={opacity}
         rotationSpeed={rotationSpeed}
