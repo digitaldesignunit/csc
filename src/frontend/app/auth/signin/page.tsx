@@ -2,6 +2,7 @@
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+import BackgroundMesh from '@/components/components/BackgroundMesh'
 import SignInForm from './SignInForm'
 import SessionExpiredNotice from '@/components/auth/SessionExpiredNotice'
 
@@ -20,7 +21,14 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
   const sp = await searchParams
   const callbackUrl = toSafePathServer(sp?.callbackUrl)
   return (
-    <div>
+    <div className="relative h-full">
+      {/* Background Mesh */}
+      <BackgroundMesh
+        className="absolute inset-0 -z-10"
+        opacity={0.08}
+        rotationSpeed={0.15}
+        intensity={0.2}
+      />
       <SessionExpiredNotice />
       <SignInForm callbackUrl={callbackUrl} />
     </div>

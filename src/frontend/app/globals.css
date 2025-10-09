@@ -41,6 +41,8 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
 
+  --color-background-mesh: var(--background-mesh-color);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -88,6 +90,9 @@
   --chart-3: #8a8a8a;  /* gray */
   --chart-4: #00c2ff;  /* cyan-ish for variety */
   --chart-5: #ffa600;  /* amber */
+
+  /* background mesh */
+  --background-mesh-color: #4080ff;  /* blue for light mode */
 
   /* sidebar */
   --sidebar: #ffffff;
@@ -139,6 +144,9 @@
   --chart-3: #a6a6a6;
   --chart-4: #00d2ff;
   --chart-5: #ffb347;
+
+  /* background mesh */
+  --background-mesh-color: #ef509c;  /* pink for dark mode */
 
   /* sidebar */
   --sidebar: #0f0f0f;

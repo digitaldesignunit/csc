@@ -1,5 +1,6 @@
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import CookieSettingsSection from '@/components/settings/CookieSettingsSection'
+import ThemeSettingsSection from '@/components/settings/ThemeSettingsSection'
 
 export default function SettingsPage() {
   return (
@@ -11,6 +12,7 @@ export default function SettingsPage() {
         </CardHeader>
       </Card>
       
+      <ThemeSettingsSection />
       <CookieSettingsSection />
     </div>
   )

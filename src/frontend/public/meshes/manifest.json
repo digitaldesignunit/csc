@@ -1,0 +1,41 @@
+{
+  "meshes": [
+    {
+      "id": "0aad9436-ead8-4651-81a1-8b435012d799",
+      "filename": "0aad9436-ead8-4651-81a1-8b435012d799_reduced.glb",
+      "type": "reduced"
+    },
+    {
+      "id": "0dd38d21-87ea-4c1d-a0b8-7245b45cd633",
+      "filename": "0dd38d21-87ea-4c1d-a0b8-7245b45cd633_reduced.glb",
+      "type": "reduced"
+    },
+    {
+      "id": "153b9ae8-f858-4e8f-a7c2-bbec658c4a60",
+      "filename": "153b9ae8-f858-4e8f-a7c2-bbec658c4a60_reduced.glb",
+      "type": "reduced"
+    },
+    {
+      "id": "eb011945-0315-449c-8117-c4e1e4292c9b",
+      "filename": "eb011945-0315-449c-8117-c4e1e4292c9b_reduced.glb",
+      "type": "reduced"
+    },
+    {
+      "id": "c4dfa0c4-4691-4dbb-a834-62240e3e4972",
+      "filename": "c4dfa0c4-4691-4dbb-a834-62240e3e4972_reduced.glb",
+      "type": "reduced"
+    },
+    {
+      "id": "b9521122-5d01-4392-bd51-026b9cc5fbf0",
+      "filename": "b9521122-5d01-4392-bd51-026b9cc5fbf0_reduced.glb",
+      "type": "reduced"
+    },
+    {
+      "id": "6dc08bb0-4ae3-42e6-8cd9-23b49f624706",
+      "filename": "6dc08bb0-4ae3-42e6-8cd9-23b49f624706_reduced.glb",
+      "type": "reduced"
+    }
+  ],
+  "total_count": 7,
+  "converted_at": "C:\\Users\\EFESTWIN\\source\\repos\\csc"
+}

@@ -1,9 +1,17 @@
+import BackgroundMesh from '@/components/components/BackgroundMesh'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function ImprintPage() {
   return (
-    <div className='grid gap-[32px] m-2'>
-      <Card>
+    <div className='relative min-h-screen grid gap-[32px] m-2'>
+      {/* Background Mesh */}
+      <BackgroundMesh
+        className="absolute inset-0 -z-10"
+        opacity={0.08}
+        rotationSpeed={0.15}
+        intensity={0.2}
+      />
+      <Card className='bg-card/75'>
         <CardHeader>
           <CardTitle>Imprint</CardTitle>
           <CardDescription>

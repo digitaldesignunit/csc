@@ -29,6 +29,7 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [focusedField, setFocusedField] = useState<string | null>(null)
   const searchParams = useSearchParams()
 
   // Check for error messages in URL (from NextAuth redirects)
@@ -112,31 +113,39 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
   }
 
   return (
-    <div className="flex min-h-screen items-start sm:items-center justify-center bg-background p-4 pt-8 sm:pt-4">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-[70vh] md:min-h-[88vh] items-start sm:items-center justify-center p-4 pt-8 sm:pt-4">
+      <Card className="w-full max-w-md bg-card/75">
         <CardHeader>
           <CardTitle>Sign In</CardTitle>
         </CardHeader>
         <CardContent>
           {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
+            <div className="gap-1 flex flex-col">
               <Label htmlFor="identifier">Email or Username</Label>
               <Input
                 id="identifier"
                 type="text"
+                className="backdrop-blur placeholder:opacity-40"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
+                onFocus={() => setFocusedField('identifier')}
+                onBlur={() => setFocusedField(null)}
+                placeholder={focusedField === 'identifier' ? '' : 're-usevelt'}
                 required
               />
             </div>
-            <div>
+            <div className="gap-1 flex flex-col">
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 type="password"
+                className="backdrop-blur placeholder:opacity-40"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField(null)}
+                placeholder={focusedField === 'password' ? '' : '••••••••••'}
                 required
               />
             </div>

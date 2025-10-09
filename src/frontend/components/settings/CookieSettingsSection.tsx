@@ -70,7 +70,7 @@ export default function CookieSettingsSection() {
               <li>• Authentication and session management</li>
               <li>• Security features and CSRF protection</li>
               <li>• Basic functionality and user preferences</li>
-              <li>• Theme settings (light/dark mode)</li>
+              <li>• Theme settings (light/dark/system mode)</li>
             </ul>
           </div>
 
@@ -91,7 +91,7 @@ export default function CookieSettingsSection() {
             <h4 className="font-medium mb-1">Cookie Banner</h4>
             <p className="text-sm text-muted-foreground">
               {bannerDismissed 
-                ? "You&apos;ve acknowledged our cookie notice. Want to see it again?" 
+                ? "You have acknowledged our cookie notice. Want to see it again?" 
                 : "The cookie banner is currently visible."}
             </p>
           </div>

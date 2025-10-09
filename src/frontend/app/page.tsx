@@ -4,13 +4,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
+import BackgroundMesh from '@/components/components/BackgroundMesh'
 
 export default function Home() {
   const { data: session, status } = useSession()
 
   return (
-    <div className='grid gap-[32px] m-2'>
-      <Card>
+    <div className='relative min-h-[70vh] md:min-h-[88vh]'>
+      {/* Background Mesh */}
+      <BackgroundMesh
+        className="absolute inset-0 -z-10"
+        opacity={0.08}
+        rotationSpeed={0.15}
+        intensity={0.2}
+      />
+      
+      <div className='grid gap-[32px] m-2 relative z-10 place-items-center'>
+        <Card className="w-full max-w-2xl bg-card/75">
         <CardHeader>
           <CardTitle>Catalogue of Second Chances</CardTitle>
           <CardDescription>
@@ -36,7 +46,7 @@ export default function Home() {
 
       {/* Only show Access card when user is not logged in */}
       {status !== 'loading' && !session?.user && (
-        <Card>
+        <Card className="w-full max-w-2xl bg-card/75">
           <CardHeader>
             <CardTitle>Access</CardTitle>
             <CardDescription>
@@ -60,6 +70,7 @@ export default function Home() {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   )
 }

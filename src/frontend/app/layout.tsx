@@ -24,11 +24,11 @@ export default function RootLayout({
       <body className={`${inter.className} min-h-screen flex flex-col`}>
         <ThemeProvider
           attribute="class"         // adds "light"/"dark" on <html>
-          defaultTheme="light"      // server renders neutral; client sets "light"
-          enableSystem={false}      // ignore OS to avoid surprises
+          defaultTheme="system"     // server renders neutral; client sets "system"
+          enableSystem={true}       // enable system theme detection
           disableTransitionOnChange // no flicker on toggle
           storageKey="csc-theme"   // use a new key so old `theme=dark` is ignored
-          themes={['light','dark']} // explicit
+          themes={['light','dark','system']} // explicit themes including system
         >
           <Providers>
             <SessionMonitor />
