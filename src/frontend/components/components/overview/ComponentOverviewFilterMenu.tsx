@@ -12,6 +12,7 @@ import { Filter } from 'lucide-react'
 interface ComponentOverviewFilterMenuProps {
   defaultMaterial: string
   defaultCompType: string
+  defaultDataset: string
 }
 
 /**
@@ -27,6 +28,7 @@ interface ComponentOverviewFilterMenuProps {
 export default function ComponentOverviewFilterMenu({
   defaultMaterial,
   defaultCompType,
+  defaultDataset,
 }: ComponentOverviewFilterMenuProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -34,6 +36,7 @@ export default function ComponentOverviewFilterMenu({
   // Local state to store all the current filters
   const [material, setMaterial] = useState(defaultMaterial)
   const [compType, setCompType] = useState(defaultCompType)
+  const [dataset, setDataset] = useState(defaultDataset)
   const [complexity, setComplexity] = useState('')
   const [fragment, setFragment] = useState('')
   const [bbxMinX, setBbxMinX] = useState('')
@@ -42,18 +45,38 @@ export default function ComponentOverviewFilterMenu({
   const [bbxMaxX, setBbxMaxX] = useState('')
   const [bbxMaxY, setBbxMaxY] = useState('')
   const [bbxMaxZ, setBbxMaxZ] = useState('')
+  
+  // State for available datasets
+  const [availableDatasets, setAvailableDatasets] = useState<string[]>([])
 
   // Count active filters for badge display
   const activeFiltersCount = [
-    material, compType, complexity, fragment,
+    material, compType, dataset, complexity, fragment,
     bbxMinX, bbxMinY, bbxMinZ, bbxMaxX, bbxMaxY, bbxMaxZ
   ].filter(Boolean).length
+
+  // Fetch available datasets on component mount
+  useEffect(() => {
+    const fetchDatasets = async () => {
+      try {
+        const response = await fetch('/api/backend/datasets')
+        if (response.ok) {
+          const datasets = await response.json()
+          setAvailableDatasets(datasets)
+        }
+      } catch (error) {
+        console.error('Failed to fetch datasets:', error)
+      }
+    }
+    fetchDatasets()
+  }, [])
 
   // Whenever the searchParams themselves change (due to another component),
   // we sync our local state so our inputs reflect the updated query string.
   useEffect(() => {
     const newMaterial = searchParams.get('material') || ''
     const newCompType = searchParams.get('comptype') || ''
+    const newDataset = searchParams.get('dataset') || ''
     const newComplexity = searchParams.get('complexity') || ''
     const newFragment = searchParams.get('fragment') || ''
     const newBbxMinX = searchParams.get('bbx_min_x') || ''
@@ -65,6 +88,7 @@ export default function ComponentOverviewFilterMenu({
 
     setMaterial(newMaterial)
     setCompType(newCompType)
+    setDataset(newDataset)
     setComplexity(newComplexity)
     setFragment(newFragment)
     setBbxMinX(newBbxMinX)
@@ -81,6 +105,7 @@ export default function ComponentOverviewFilterMenu({
     // Set all filter parameters
     if (material) params.set('material', material)
     if (compType) params.set('comptype', compType)
+    if (dataset) params.set('dataset', dataset)
     if (complexity) params.set('complexity', complexity)
     if (fragment) params.set('fragment', fragment)
     if (bbxMinX) params.set('bbx_min_x', bbxMinX)
@@ -102,6 +127,7 @@ export default function ComponentOverviewFilterMenu({
     // Remove all filter parameters from the URL
     params.delete('material')
     params.delete('comptype')
+    params.delete('dataset')
     params.delete('complexity')
     params.delete('fragment')
     params.delete('bbx_min_x')
@@ -114,6 +140,7 @@ export default function ComponentOverviewFilterMenu({
     // Reset local state
     setMaterial('')
     setCompType('')
+    setDataset('')
     setComplexity('')
     setFragment('')
     setBbxMinX('')
@@ -147,7 +174,7 @@ export default function ComponentOverviewFilterMenu({
           <AccordionContent>
             <div className="space-y-4 pt-2">
               {/* Basic Filters Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="materialInput" className="text-sm font-medium">Material</Label>
                   <Input
@@ -168,6 +195,25 @@ export default function ComponentOverviewFilterMenu({
                     onChange={(e) => setCompType(e.target.value)}
                     className="h-8"
                   />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="datasetInput" className="text-sm font-medium">Dataset</Label>
+                  <select
+                    id="datasetInput"
+                    value={dataset}
+                    onChange={(e) => setDataset(e.target.value)}
+                    className="h-8 px-3 py-1 text-sm border border-input rounded-md bg-background"
+                  >
+                    <option value="">Any dataset</option>
+                    {availableDatasets.length > 0 ? (
+                      availableDatasets.map((ds) => (
+                        <option key={ds} value={ds}>{ds}</option>
+                      ))
+                    ) : (
+                      <option value="" disabled>Loading datasets...</option>
+                    )}
+                  </select>
                 </div>
 
                 <div className="flex flex-col gap-2">

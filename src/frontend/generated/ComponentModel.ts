@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2025-10-07T12:37:45.790Z
+// Generated on: 2025-10-09T17:05:58.114Z
 // Source: https://api.ddu.uber.space/schema/component
 
 export type ComponentBoundingBox = number[];
@@ -53,6 +53,7 @@ export interface ComponentModel {
   lastmodified: string; // ISO timestamp when component was last modified
   type: string; // Type of component (sheet, beam, slab, rubble, column)
   material: string; // Material type of the component
+  dataset: string; // Dataset name that this component belongs to
   complexity: number; // Complexity level (0-3, where 0 is simplest)
   fragment: boolean; // Whether this component is a fragment
   assembly: boolean; // Whether this component is an assembly

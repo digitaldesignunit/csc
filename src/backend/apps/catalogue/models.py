@@ -310,6 +310,10 @@ class ComponentModel(BaseModel):
         description=("Bounding box maximum extents as [X, Y, Z] float values "
                      "(dimensions of the component)")
     )
+    bbx_origin: List[float] = Field(
+        description=("Bounding box center/origin as [X, Y, Z] float values "
+                     "(vector from world origin to bbx center in PCA space)")
+    )
     location: Optional[ComponentLocation] = Field(
         {
             'lat': 0.0,
@@ -401,6 +405,7 @@ class ComponentModel(BaseModel):
                 },
                 "color": [128, 128, 128],
                 "bbx": [1.0, 1.0, 0.2],
+                "bbx_origin": [0.5, 0.5, 0.1],
                 "location": {
                     "lat": 37.81627937,
                     "lon": 144.95373531},
@@ -439,6 +444,7 @@ class UpdateComponentModel(BaseModel):
     color: Optional[List[int]]
     validated: Optional[bool]
     bbx: Optional[ComponentBoundingBox]
+    bbx_origin: Optional[List[float]]
     iframe: Optional[ComponentFrame]
     pca_frame: Optional[ComponentFrame]
     reserved: Optional[str]

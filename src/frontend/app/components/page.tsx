@@ -17,6 +17,7 @@ type SearchParams = {
   sortkey?: string
   comptype?: string
   material?: string
+  dataset?: string
   complexity?: string
   fragment?: string
   bbx_min_x?: string
@@ -28,10 +29,10 @@ type SearchParams = {
 }
 
 async function fetchComponentsAndTotal({
-  page, size, sortkey, comptype, material, validated = 1,
+  page, size, sortkey, comptype, material, dataset, validated = 1,
   complexity, fragment, bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z,
 }: {
-  page: number; size: number; sortkey: string; comptype: string; material: string; validated?: number
+  page: number; size: number; sortkey: string; comptype: string; material: string; dataset: string; validated?: number
   complexity?: string; fragment?: string; bbx_min_x?: string; bbx_min_y?: string; bbx_min_z?: string
   bbx_max_x?: string; bbx_max_y?: string; bbx_max_z?: string
 }) {
@@ -45,12 +46,14 @@ async function fetchComponentsAndTotal({
     sortkey,
     comptype,
     material,
+    dataset,
     validated: String(validated),
   })
   
   const countParams = new URLSearchParams({
     comptype,
     material,
+    dataset,
     validated: String(validated),
   })
 
@@ -119,6 +122,7 @@ export default async function ComponentsPage({
   const sortkey = sp?.sortkey ?? '_id'
   const comptype = sp?.comptype ?? ''
   const material = sp?.material ?? ''
+  const dataset = sp?.dataset ?? ''
   const complexity = sp?.complexity ?? ''
   const fragment = sp?.fragment ?? ''
   const bbx_min_x = sp?.bbx_min_x ?? ''
@@ -129,7 +133,7 @@ export default async function ComponentsPage({
   const bbx_max_z = sp?.bbx_max_z ?? ''
 
   const { items, total } = await fetchComponentsAndTotal({
-    page, size, sortkey, comptype, material, validated: 1,
+    page, size, sortkey, comptype, material, dataset, validated: 1,
     complexity, fragment, bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z,
   })
 
@@ -141,7 +145,7 @@ export default async function ComponentsPage({
 
   return (
     <div className="grid gap-2 m-2">
-      <ComponentOverviewFilterMenu defaultMaterial={material} defaultCompType={comptype} />
+      <ComponentOverviewFilterMenu defaultMaterial={material} defaultCompType={comptype} defaultDataset={dataset} />
       <Card className="w-full overflow-x-auto p-0">
         <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={items} />
       </Card>

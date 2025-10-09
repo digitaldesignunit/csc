@@ -54,6 +54,21 @@ export const ComponentOverviewColumns: ColumnDef<ComponentModel>[] = [
     },
   },
   {
+    accessorKey: 'dataset',
+    header: () => <ComponentOverviewDataTableHeader header='Dataset' />,
+    meta: { colClassName: 'w-[160px] sm:w-[180px] md:w-[220px]' },
+    cell: ({ row }) => {
+      const component_dataset: string = row.getValue('dataset') ?? ''
+      return (
+        <ComponentOverviewDataTableFilterCell
+          param='dataset'
+          value={component_dataset}
+          titletext='Click to filter by this dataset'
+        />
+      )
+    },
+  },
+  {
     accessorKey: 'bbx',
     header: () => <ComponentOverviewDataTableHeader header='X' />,
     meta: { colClassName: 'w-[84px] sm:w-[96px] text-left' },
