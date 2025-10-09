@@ -121,10 +121,19 @@ export default function BackgroundMesh({
   color,
   opacity = 0.1
 }: BackgroundMeshProps) {
-  const { theme } = useTheme()
+  const { theme, systemTheme } = useTheme()
   
-  // Simple theme-aware color selection
-  const meshColor = color || (theme === 'dark' ? '#4080ff' : '#ef509c')
+  // Theme-aware color selection that handles system theme
+  const getMeshColor = () => {
+    if (color) return color
+    
+    // If theme is system, use systemTheme to determine color
+    const effectiveTheme = theme === 'system' ? systemTheme : theme
+    
+    return effectiveTheme === 'dark' ? '#4080ff' : '#ef509c'
+  }
+  
+  const meshColor = getMeshColor()
   
   return (
     <div className={`absolute inset-0 pointer-events-none ${className}`}>
