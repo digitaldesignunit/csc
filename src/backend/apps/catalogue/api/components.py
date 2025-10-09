@@ -331,14 +331,13 @@ async def get_unique_datasets(
     try:
         pipeline = [
             {"$group": {"_id": "$dataset"}},
-            {"$sort": {"_id": 1}},
-            {"$project": {"dataset": "$_id", "_id": 0}}
+            {"$sort": {"_id": 1}}
         ]
-        cursor = coll.aggregate(pipeline)
-        datasets = [doc["dataset"] async for doc in cursor]
+        cursor = await coll.aggregate(pipeline)
+        datasets = [doc["_id"] async for doc in cursor if doc.get("_id")]
         return JSONResponse(status_code=200, content=datasets)
-    except PyMongoError as e:
-        raise HTTPException(status_code=500, detail=f'DB error: {e}')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
 
 
 @router.get('/componenttypes', summary='Get unique component types')
@@ -352,14 +351,13 @@ async def get_unique_component_types(
     try:
         pipeline = [
             {"$group": {"_id": "$type"}},
-            {"$sort": {"_id": 1}},
-            {"$project": {"type": "$_id", "_id": 0}}
+            {"$sort": {"_id": 1}}
         ]
-        cursor = coll.aggregate(pipeline)
-        types = [doc["type"] async for doc in cursor]
+        cursor = await coll.aggregate(pipeline)
+        types = [doc["_id"] async for doc in cursor if doc.get("_id")]
         return JSONResponse(status_code=200, content=types)
-    except PyMongoError as e:
-        raise HTTPException(status_code=500, detail=f'DB error: {e}')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
 
 
 @router.get('/materials', summary='Get unique material names')
@@ -373,14 +371,13 @@ async def get_unique_materials(
     try:
         pipeline = [
             {"$group": {"_id": "$material"}},
-            {"$sort": {"_id": 1}},
-            {"$project": {"material": "$_id", "_id": 0}}
+            {"$sort": {"_id": 1}}
         ]
-        cursor = coll.aggregate(pipeline)
-        materials = [doc["material"] async for doc in cursor]
+        cursor = await coll.aggregate(pipeline)
+        materials = [doc["_id"] async for doc in cursor if doc.get("_id")]
         return JSONResponse(status_code=200, content=materials)
-    except PyMongoError as e:
-        raise HTTPException(status_code=500, detail=f'DB error: {e}')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
 
 
 # ADD COMPONENT ROUTES --------------------------------------------------------
