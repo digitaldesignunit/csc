@@ -45,6 +45,7 @@ ALLOWED_COMPONENT_SORTKEYS = [
     "_id",
     "type",
     "material",
+    "dataset",
     "color",
     "created",
     "lastmodified",
@@ -285,6 +286,9 @@ class ComponentModel(BaseModel):
     material: str = Field(
         description="Material type of the component"
     )
+    dataset: str = Field(
+        description="Dataset name that this component belongs to"
+    )
     complexity: int = Field(
         description="Complexity level (0-3, where 0 is simplest)"
     )
@@ -374,6 +378,7 @@ class ComponentModel(BaseModel):
                 "lastmodified": "2024-01-15T10:30:00Z",
                 "type": "slab",
                 "material": "concrete",
+                "dataset": "sas_cita_scans",
                 "complexity": 2,
                 "fragment": False,
                 "assembly": False,
@@ -426,6 +431,7 @@ class UpdateComponentModel(BaseModel):
     componenttype: Optional[str]
     lastmodified: str
     material: Optional[str]
+    dataset: Optional[str]
     geometry: Optional[ComponentGeometry]
     complexity: Optional[float]
     fragment: Optional[bool]

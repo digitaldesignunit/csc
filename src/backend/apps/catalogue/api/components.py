@@ -44,6 +44,7 @@ async def get_components_col(request: Request):
 def build_component_match_stage(
     comptype: Optional[str] = None,
     material: Optional[str] = None,
+    dataset: Optional[str] = None,
     validated: Optional[int] = None,
     complexity: Optional[int] = None,
     fragment: Optional[bool] = None,
@@ -62,6 +63,8 @@ def build_component_match_stage(
         match_stage['type'] = {"$regex": f"^{comptype}$", "$options": "i"}
     if material:
         match_stage['material'] = {"$regex": f"^{material}$", "$options": "i"}
+    if dataset:
+        match_stage['dataset'] = {"$regex": f"^{dataset}$", "$options": "i"}
     if validated == 1:
         match_stage['validated'] = True
     elif validated == -1:
@@ -249,6 +252,7 @@ async def count_components(
     current_user: Annotated[User, Depends(get_current_active_user)],
     comptype: Optional[str] = Query(None, description='Component type filter'),
     material: Optional[str] = Query(None, description='Material type filter'),
+    dataset: Optional[str] = Query(None, description='Dataset name filter'),
     validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
     complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
     fragment: Optional[bool] = Query(None, description='Is fragment'),
@@ -265,6 +269,8 @@ async def count_components(
         query['type'] = comptype
     if material:
         query['material'] = material
+    if dataset:
+        query['dataset'] = dataset
     if validated == 1:
         query['validated'] = True
     elif validated == -1:
@@ -310,6 +316,71 @@ async def count_components(
         raise HTTPException(status_code=500, detail=f'DB error: {e}')
 
     return {'count': count}
+
+
+# UNIQUE VALUE ROUTES --------------------------------------------------------
+
+@router.get('/datasets', summary='Get unique dataset names')
+async def get_unique_datasets(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Get a unique list of all dataset names in the database."""
+    coll = await get_components_col(request)
+
+    try:
+        pipeline = [
+            {"$group": {"_id": "$dataset"}},
+            {"$sort": {"_id": 1}},
+            {"$project": {"dataset": "$_id", "_id": 0}}
+        ]
+        cursor = coll.aggregate(pipeline)
+        datasets = [doc["dataset"] async for doc in cursor]
+        return JSONResponse(status_code=200, content=datasets)
+    except PyMongoError as e:
+        raise HTTPException(status_code=500, detail=f'DB error: {e}')
+
+
+@router.get('/componenttypes', summary='Get unique component types')
+async def get_unique_component_types(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Get a unique list of all component types in the database."""
+    coll = await get_components_col(request)
+
+    try:
+        pipeline = [
+            {"$group": {"_id": "$type"}},
+            {"$sort": {"_id": 1}},
+            {"$project": {"type": "$_id", "_id": 0}}
+        ]
+        cursor = coll.aggregate(pipeline)
+        types = [doc["type"] async for doc in cursor]
+        return JSONResponse(status_code=200, content=types)
+    except PyMongoError as e:
+        raise HTTPException(status_code=500, detail=f'DB error: {e}')
+
+
+@router.get('/materials', summary='Get unique material names')
+async def get_unique_materials(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Get a unique list of all material names in the database."""
+    coll = await get_components_col(request)
+
+    try:
+        pipeline = [
+            {"$group": {"_id": "$material"}},
+            {"$sort": {"_id": 1}},
+            {"$project": {"material": "$_id", "_id": 0}}
+        ]
+        cursor = coll.aggregate(pipeline)
+        materials = [doc["material"] async for doc in cursor]
+        return JSONResponse(status_code=200, content=materials)
+    except PyMongoError as e:
+        raise HTTPException(status_code=500, detail=f'DB error: {e}')
 
 
 # ADD COMPONENT ROUTES --------------------------------------------------------
@@ -408,6 +479,7 @@ async def get_components_shallow(
     sortkey: str = Query('_id', description='Sort key'),
     comptype: str = Query('', description='Component type filter'),
     material: str = Query('', description='Material type filter'),
+    dataset: str = Query('', description='Dataset name filter'),
     validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
     complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
     fragment: Optional[bool] = Query(None, description='Is fragment'),
@@ -426,6 +498,7 @@ async def get_components_shallow(
     match_stage = build_component_match_stage(
         comptype=comptype,
         material=material,
+        dataset=dataset,
         validated=validated,
         complexity=complexity,
         fragment=fragment,
@@ -462,6 +535,7 @@ async def get_components(
     sortkey: str = Query('_id', description='Sort key'),
     comptype: str = Query('', description='Component type filter'),
     material: str = Query('', description='Material type filter'),
+    dataset: str = Query('', description='Dataset name filter'),
     validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
     complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
     fragment: Optional[bool] = Query(None, description='Is fragment'),
@@ -480,6 +554,7 @@ async def get_components(
     match_stage = build_component_match_stage(
         comptype=comptype,
         material=material,
+        dataset=dataset,
         validated=validated,
         complexity=complexity,
         fragment=fragment,
