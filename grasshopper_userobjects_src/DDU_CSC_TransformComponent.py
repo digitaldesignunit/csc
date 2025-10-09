@@ -18,14 +18,16 @@ ghenv.Component.Name = 'TransformComponent'  # type: ignore[reportUnedfinedVaria
 ghenv.Component.NickName = 'TransformComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Transforms component insertion frames using Rhino transforms'
+)
 
 
 class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250905
-    Description: Transforms component insertion frames using Rhino transforms
+    Version: 251009
     """
 
     def __init__(self):

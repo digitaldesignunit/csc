@@ -28,7 +28,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250904
+    Version: 251009
     """
 
     def __init__(self):
@@ -65,6 +65,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             self,
             Type,
             Material,
+            Dataset,
             Complexity,
             Fragment,
             MinDimensionX,
@@ -87,6 +88,10 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         # Add material filter if provided
         if Material and Material.strip():
             params['material'] = Material.strip()
+
+        # Add dataset filter if provided
+        if Dataset and Dataset.strip():
+            params['dataset'] = Dataset.strip()
 
         # Add complexity filter if provided
         if Complexity is not None:
@@ -128,6 +133,8 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             description.append(f'\nType: {filter_params["comptype"]}')
         if filter_params.get('material'):
             description.append(f'\nMaterial: {filter_params["material"]}')
+        if filter_params.get('dataset'):
+            description.append(f'\nDataset: {filter_params["dataset"]}')
         if filter_params.get('complexity') is not None:
             description.append(f'\nComplexity: {filter_params["complexity"]}')
         if filter_params.get('fragment') is not None:
@@ -162,6 +169,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     def RunScript(self,
             Type: str,
             Material: str,
+            Dataset: str,
             Complexity: int,
             Fragment: bool,
             MinDimensionX: float,
@@ -179,30 +187,34 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Material type filter (e.g., "concrete", "steel", "wood")'
         )
         self.InputParams[2].Description = (
-            'Complexity level filter (0-3, where 0=simple, 3=complex)'
+            'Dataset name filter (e.g., "sas_cita_scans", '
+            '"mineral_composite_sheets")'
         )
         self.InputParams[3].Description = (
-            'Fragment status filter (True for fragments, False for complete)'
+            'Complexity level filter (0-3, where 0=simple, 3=complex)'
         )
         self.InputParams[4].Description = (
-            'Minimum X dimension filter (bounding box)'
+            'Fragment status filter (True for fragments, False for complete)'
         )
         self.InputParams[5].Description = (
-            'Maximum X dimension filter (bounding box)'
+            'Minimum X dimension filter (bounding box)'
         )
         self.InputParams[6].Description = (
-            'Minimum Y dimension filter (bounding box)'
+            'Maximum X dimension filter (bounding box)'
         )
         self.InputParams[7].Description = (
-            'Maximum Y dimension filter (bounding box)'
+            'Minimum Y dimension filter (bounding box)'
         )
         self.InputParams[8].Description = (
-            'Minimum Z dimension filter (bounding box)'
+            'Maximum Y dimension filter (bounding box)'
         )
         self.InputParams[9].Description = (
-            'Maximum Z dimension filter (bounding box)'
+            'Minimum Z dimension filter (bounding box)'
         )
         self.InputParams[10].Description = (
+            'Maximum Z dimension filter (bounding box)'
+        )
+        self.InputParams[11].Description = (
             'Reservation status filter: -1=ignore, 0=not reserved, '
             '1=reserved by current user'
         )
@@ -234,7 +246,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
             # Build filter query parameters
             filter_params = self.build_filter_query_params(
-                Type, Material, Complexity, Fragment,
+                Type, Material, Dataset, Complexity, Fragment,
                 MinDimensionX, MaxDimensionX, MinDimensionY,
                 MaxDimensionY, MinDimensionZ, MaxDimensionZ,
                 ReservedStatus

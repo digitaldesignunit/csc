@@ -34,7 +34,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250909
+    Version: 251009
     """
 
     def __init__(self):
@@ -95,6 +95,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 'name': {'type': 'string'},
                 'type': {'type': 'string'},
                 'material': {'type': 'string'},
+                'dataset': {'type': 'string'},
                 'created': {'type': 'string', 'format': 'date-time'},
                 'lastmodified': {'type': 'string', 'format': 'date-time'},
                 'complexity': {'type': 'integer', 'minimum': 0, 'maximum': 3},
@@ -156,6 +157,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 },
                 'color': {'type': 'array', 'items': {'type': 'integer'}},
                 'bbx': {'type': 'array', 'items': {'type': 'number'}},
+                'bbx_origin': {'type': 'array', 'items': {'type': 'number'}},
                 'location': {'type': 'object'},
                 'descriptors': {'type': 'object'},
                 'processes': {'type': 'object'},
@@ -169,9 +171,10 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 'validated': {'type': 'boolean'},
                 'etag': {'type': 'string'}
             },
-            'required': ['type', 'material', 'created', 'lastmodified',
-                         'complexity', 'fragment', 'assembly', 'geometry',
-                         'bbx', 'iframe', 'pca_frame', 'reserved', 'validated']
+            'required': ['type', 'material', 'dataset', 'created',
+                         'lastmodified', 'complexity', 'fragment', 'assembly',
+                         'geometry', 'bbx', 'bbx_origin', 'iframe',
+                         'pca_frame', 'reserved', 'validated']
         }
 
     def validate_component_data(self, component_data, schema):
@@ -236,6 +239,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             ComponentID: str,
             Type: str,
             Material: str,
+            Dataset: str,
             Complexity: int,
             Fragment: bool,
             Assembly: bool,
@@ -263,6 +267,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 component_data[field_name] = Type
             elif field_name == 'material':
                 component_data[field_name] = Material
+            elif field_name == 'dataset':
+                component_data[field_name] = Dataset
             elif field_name == 'created':
                 component_data[field_name] = current_time
             elif field_name == 'lastmodified':
@@ -279,6 +285,9 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 component_data[field_name] = [Color.R, Color.G, Color.B]
             elif field_name == 'bbx':
                 component_data[field_name] = dimensions
+            elif field_name == 'bbx_origin':
+                # This will be set later after PCA computation
+                component_data[field_name] = [0.0, 0.0, 0.0]  # Placeholder
             elif field_name == 'location':
                 component_data[field_name] = location_data
             elif field_name == 'descriptors':
@@ -353,7 +362,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     def compute_minimum_bounding_box_3d(self, points):
         """
         Compute minimum bounding box for 3D points using PCA.
-        Returns dimensions sorted by length (X=longest, Y=second, Z=shortest).
+        Returns unsorted dimensions and bounding box origin.
         """
         # Apply PCA to find principal axes
         pca = PCA(n_components=3)
@@ -374,11 +383,15 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         min_bounds = np.min(pca_points, axis=0)
         max_bounds = np.max(pca_points, axis=0)
 
-        # Compute dimensions (sorted by length: X=longest, Y=second,
-        # Z=shortest)
+        # Compute unsorted dimensions (keep original PCA axis order)
         dimensions = max_bounds - min_bounds
 
-        return dimensions.tolist(), sorted_components
+        # Find bounding box center in PCA space
+        # Since component is centered at origin, bbx_origin is just the
+        # bounding box center in PCA space
+        bbx_origin = (min_bounds + max_bounds) / 2.0
+
+        return dimensions.tolist(), sorted_components, bbx_origin.tolist()
 
     def minimum_bounding_rectangle(self, points):
         """
@@ -445,6 +458,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         """
         Compute minimum axis-aligned bounding box for extrusions using the
         minimum bounding rectangle method to find optimal 2D orientation.
+        Returns unsorted dimensions and bounding box origin.
         """
         # Extract only X and Y coordinates for 2D analysis
         points_2d = points[:, :2]
@@ -475,6 +489,18 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         x_dim = max_x - min_x
         y_dim = max_y - min_y
 
+        # Find bounding box center in rotated 2D space
+        bbx_center_2d = [(min_x + max_x) / 2.0, (min_y + max_y) / 2.0]
+
+        # Find Z center (since component is centered, this should be near 0)
+        min_z = np.min(points[:, 2])
+        max_z = np.max(points[:, 2])
+        z_center = (min_z + max_z) / 2.0
+
+        # Since component is centered at origin, bbx_origin is the bounding
+        # box center in rotated 2D space + Z center
+        bbx_origin_2d = [bbx_center_2d[0], bbx_center_2d[1], z_center]
+
         # Ensure X is the longest dimension for consistency
         if x_dim >= y_dim:
             dimensions = [x_dim, y_dim, height]
@@ -496,7 +522,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 [0, 0, 1]                          # Z axis stays vertical
             ])
 
-        return dimensions, principal_components
+        return dimensions, principal_components, bbx_origin_2d
 
     def rhino_xform(self, transformation_matrix) -> Rhino.Geometry.Transform:
         """
@@ -896,10 +922,11 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         """
         Compute PCA for multiple meshes as a whole assembly.
         Centers the assembly at origin before computing PCA.
-        Returns dimensions, principal components, and translation vector.
+        Returns dimensions, principal components, translation vector,
+        and bbx_origin.
         """
         if not meshes or len(meshes) == 0:
-            return None, None, None
+            return None, None, None, None
 
         # Collect all points from all meshes
         all_points = []
@@ -910,7 +937,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 all_points.append([vertex.X, vertex.Y, vertex.Z])
 
         if not all_points:
-            return None, None, None
+            return None, None, None, None
 
         # Convert to numpy array
         import numpy as np
@@ -925,17 +952,18 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         centered_points = points_array + translation_vector
 
         # Compute PCA for the centered combined geometry
-        dimensions, principal_components = (
+        dimensions, principal_components, bbx_origin = (
             self.compute_minimum_bounding_box_3d(centered_points)
         )
 
-        return dimensions, principal_components, translation_vector
+        return dimensions, principal_components, translation_vector, bbx_origin
 
     def RunScript(self,
             ClearLocalStorage: bool,
             ComponentID: str,
             Type: str,
             Material: str,
+            Dataset: str,
             Complexity: int,
             Fragment: bool,
             Assembly: bool,
@@ -960,27 +988,31 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 'Material type (e.g., "steel", "concrete", "wood")'
             )
             self.InputParams[4].Description = (
+                'Dataset that this component belongs to '
+                '(i.e. my_rubble_dataset)'
+            )
+            self.InputParams[5].Description = (
                 'Complexity level '
                 '(0=simple, 1=normal, 2=complex, 3=very complex)'
             )
-            self.InputParams[5].Description = (
+            self.InputParams[6].Description = (
                 'Fragment status (True for fragments, False for complete)'
             )
-            self.InputParams[6].Description = (
+            self.InputParams[7].Description = (
                 'Assembly status (True for assemblies, False for individual)'
             )
-            self.InputParams[7].Description = (
+            self.InputParams[8].Description = (
                 'Location as Vector3d (X=latitude, Y=longitude, Z ignored)'
             )
-            self.InputParams[8].Description = (
+            self.InputParams[9].Description = (
                 'Component color (System.Drawing.Color)'
             )
-            self.InputParams[9].Description = (
+            self.InputParams[10].Description = (
                 'Rhino geometry object(s) - single object or list of objects. '
                 'For single: Mesh or Extrusion for sheets, Mesh for rubble. '
                 'For multiple: all must be Meshes.'
             )
-            self.InputParams[10].Description = (
+            self.InputParams[11].Description = (
                 'Marker points as list of Point3d objects for component '
                 'identification and positioning'
             )
@@ -1030,6 +1062,11 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 return ComponentData
             if not Material:
                 msg = 'Input Material failed to collect data!'
+                self._addWarning(msg)
+                self.Component.Message = msg
+                return ComponentData
+            if not Dataset:
+                msg = 'Input Dataset failed to collect data!'
                 self._addWarning(msg)
                 self.Component.Message = msg
                 return ComponentData
@@ -1117,34 +1154,36 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             if len(Geometry) == 1:
                 # Handle single geometry (existing logic)
                 single_geometry = Geometry[0]
-                points, compute_3d = self.process_geometry(single_geometry)
 
-                # Center geometry at world origin
+                # Center geometry at world origin FIRST
                 (centered_geometry, translation_vector) = (
                     self.center_geometry_at_origin(single_geometry)
                 )
 
-                # Centered points
-                centered_points = points - translation_vector
+                # Extract points from the CENTERED geometry
+                points, compute_3d = self.process_geometry(centered_geometry)
+
+                # Points are already centered since we processed centered
+                # geometry
+                centered_points = points
 
                 # Compute minimum bounding box and PCA transformation
                 if compute_3d:
-                    dimensions, principal_components = (
+                    dimensions, principal_components, bbx_origin = (
                         self.compute_minimum_bounding_box_3d(centered_points))
                 else:
                     # 2D APPROACH, i.e. used for Extrusions
                     height = centered_geometry.PathStart.DistanceTo(
                         centered_geometry.PathEnd
                     )
-                    dimensions, principal_components = (
+                    dimensions, principal_components, bbx_origin = (
                         self.compute_minimum_bounding_box_2d(
                             centered_points, height)
                     )
             else:
                 # Handle multiple meshes - compute PCA for whole assembly
-                dimensions, principal_components, translation_vector = (
-                    self.compute_pca_for_multiple_meshes(Geometry)
-                )
+                (dimensions, principal_components, translation_vector,
+                 bbx_origin) = self.compute_pca_for_multiple_meshes(Geometry)
                 centered_geometry = None  # Not used for multiple meshes
                 compute_3d = True  # Always 3D for multiple meshes
 
@@ -1167,10 +1206,13 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
             # Create component data dictionary based on schema
             COMPDATA = self.build_component_data_from_schema(
-                schema, ComponentID, Type, Material, Complexity, Fragment,
-                Assembly, Color, dimensions, location_data,
+                schema, ComponentID, Type, Material, Dataset, Complexity,
+                Fragment, Assembly, Color, dimensions, location_data,
                 principal_components
             )
+
+            # Set the computed bbx_origin
+            COMPDATA['bbx_origin'] = bbx_origin
 
             # Add marker points to component data
             COMPDATA['marker_points'] = marker_points_data
@@ -1337,6 +1379,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             msg = f'Unexpected error: {str(e)}'
             self._addError(msg)
             self.Component.Message = msg
+            raise e
 
         # Return empty results if there was an error
         ComponentData = Grasshopper.DataTree[System.Object]()

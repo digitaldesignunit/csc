@@ -21,29 +21,87 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 250822
+    Version: 251009
     """
 
     def get_source_version(self, source):
         """
         Attempts to get the first instance of the word "version"
-        (or, "Version") in a multi line string. Then attempts to extract an
-        integer from this line where the word "version" exists. So format
-        version YYMMDD in the docstring like so (or any other integer system):
+        (or, "Version") in a multi line string. Then attempts to extract a
+        version string from this line where the word "version" exists.
+        Supports formats like:
             Version: 160121
+            Version: 251009.1
+            Version: 251009a
         """
+        import re
+
         # Get first line with version in it
         src_lower = source.lower()
         version_str = [ln for ln in src_lower.split('\n') if "version" in ln]
         if version_str:
-            # Get the first substring integer and return it
-            version_int = [
-                int(s) for s in version_str[0].split() if s.isdigit()
-            ]
-            if version_int:
-                return int(version_int[0])
-        else:
+            # Extract version string using regex to handle complex formats
+            # Look for patterns like: 251009, 251009.1, 251009a, etc.
+            version_match = re.search(
+                r'(\d+(?:\.\d+)?[a-zA-Z]?)', version_str[0])
+            if version_match:
+                version_text = version_match.group(1)
+                return self._parse_version_string(version_text)
+        return None
+
+    def _parse_version_string(self, version_str):
+        """
+        Parse a version string into a comparable format.
+        Handles formats like: 251009, 251009.1, 251009a
+
+        Returns a tuple that can be used for comparison:
+        - (251009,) for "251009"
+        - (251009, 1) for "251009.1"
+        - (251009, 0, 'a') for "251009a"
+        """
+        import re
+
+        # Split into base number and suffix
+        match = re.match(r'(\d+)(?:\.(\d+))?([a-zA-Z]*)', version_str)
+        if not match:
             return None
+
+        base_num = int(match.group(1))
+        dot_num = int(match.group(2)) if match.group(2) else 0
+        letter_suffix = match.group(3).lower() if match.group(3) else ''
+
+        # Convert letter to number for comparison (a=1, b=2, etc.)
+        letter_num = ord(letter_suffix) - ord('a') + 1 if letter_suffix else 0
+
+        return (base_num, dot_num, letter_num)
+
+    def _compare_versions(self, version1, version2):
+        """
+        Compare two version tuples.
+
+        Returns:
+            -1 if version1 < version2
+             0 if version1 == version2
+             1 if version1 > version2
+        """
+        if version1 is None and version2 is None:
+            return 0
+        if version1 is None:
+            return -1
+        if version2 is None:
+            return 1
+
+        # Compare tuple elements in order
+        for i in range(max(len(version1), len(version2))):
+            v1_elem = version1[i] if i < len(version1) else 0
+            v2_elem = version2[i] if i < len(version2) else 0
+
+            if v1_elem < v2_elem:
+                return -1
+            elif v1_elem > v2_elem:
+                return 1
+
+        return 0
 
     def process_document_objects(self, ghdocument, verbose=False):
         """
@@ -98,47 +156,55 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             if objtype_str == ghpycomp_str:
                 source = obj.Code
                 if source:
-                    print((f'Found Source for OLD GHPY Component "{nickname}" '
-                           f'({iguid})') if verbose else None)
+                    if verbose:
+                        print(
+                            (f'Found Source for OLD GHPY Component '
+                             f'"{nickname}" ({iguid})'))
                     scriptcomp = [id_ghpycomp, nickname, name, obj, source]
                     script_components[iguid] = scriptcomp
             # OLD C# COMPONENT
             elif objtype_str == cscomp_str:
                 source = obj.ScriptSource.ScriptCode
                 if source:
-                    print((f'Found Source for OLD CS Component "{nickname}" '
-                           f'({iguid})') if verbose else None)
+                    if verbose:
+                        print(
+                            (f'Found Source for OLD CS Component "{nickname}" '
+                             f'({iguid})'))
                     scriptcomp = [id_cscomp, nickname, name, obj, source]
                     script_components[iguid] = scriptcomp
             # NEW C#9 COMPONENT
             elif objtype_str == cs9comp_str:
                 bres, source = obj.TryGetSource()
                 if bres:
-                    print((f'Found Source for CS9 Component "{nickname}" '
-                           f'({iguid})') if verbose else None)
+                    if verbose:
+                        print((f'Found Source for CS9 Component "{nickname}" '
+                               f'({iguid})'))
                     scriptcomp = [id_cs9comp, nickname, name, obj, source]
                     script_components[iguid] = scriptcomp
             # NEW IRONPYTHON COMPONENT
             elif objtype_str == ipycomp_str:
                 bres, source = obj.TryGetSource()
                 if bres:
-                    print((f'Found Source for IPY2 Component "{nickname}" '
-                           f'({iguid})') if verbose else None)
+                    if verbose:
+                        print((f'Found Source for IPY2 Component "{nickname}" '
+                               f'({iguid})'))
                     scriptcomp = [id_ipycomp, nickname, name, obj, source]
                     script_components[iguid] = scriptcomp
             # NEW PYTHON3 COMPONENT
             elif objtype_str == py3comp_str:
                 bres, source = obj.TryGetSource()
                 if bres:
-                    print((f'Found Source for PY3 Component "{nickname}" '
-                           f'({iguid})') if verbose else None)
+                    if verbose:
+                        print((f'Found Source for PY3 Component "{nickname}" '
+                               f'({iguid})'))
                     scriptcomp = [id_py3comp, nickname, name, obj, source]
                     script_components[iguid] = scriptcomp
             # CLUSTER COMPONENT
             elif objtype_str == clustercomp_str:
                 # RECURSIVELY STEP THROUGH CLUSTERS AND LOOK FOR SCRIPTS ...
-                print((f'Processing CLUSTER "{nickname}" ({name}, '
-                      f'{iguid}) ...') if verbose else None)
+                if verbose:
+                    print((f'Processing CLUSTER "{nickname}" ({name}, '
+                           f'{iguid}) ...'))
                 cluster_scripts = self.process_document_objects(
                     obj.Document(''), verbose=verbose
                 )
@@ -216,7 +282,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                         f'{existing_version}!')
                     # REPLACE FOUND "NONE" VERSION WITH NAMED VERSION!
                     raise
-                elif version < existing_version:
+                elif self._compare_versions(version, existing_version) < 0:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
                     VersionDebug.append(
                         f'    - VERSION {version} < {existing_version}! '
@@ -224,7 +290,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                     # REPLACE THE SOURCE OF THE LOWER VERSION
                     # WITH HIGHER VERSION SOURCE!
                     continue
-                elif version > existing_version:
+                elif self._compare_versions(version, existing_version) > 0:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
                     VersionDebug.append(
                         f'    - VERSION {version} > ALREADY FOUND VERSION '

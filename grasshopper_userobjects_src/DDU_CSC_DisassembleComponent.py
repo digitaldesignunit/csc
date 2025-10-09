@@ -24,7 +24,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250908
+    Version: 251009
     """
 
     def __init__(self):
@@ -148,16 +148,65 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         xtx = json_comp['bbx'][0]
         xty = json_comp['bbx'][1]
         xtz = json_comp['bbx'][2]
-        Rhino.Geometry.BoundingBox()
+
+        # Get bbx_origin (center of bounding box in PCA space)
+        bbx_origin = json_comp.get('bbx_origin', [0.0, 0.0, 0.0])
+
+        # Create bounding box at bbx_origin in PCA space
         bbx = Rhino.Geometry.BoundingBox(
-            -xtx * 0.5,
-            -xty * 0.5,
-            -xtz * 0.5,
-            xtx * 0.5,
-            xty * 0.5,
-            xtz * 0.5
+            bbx_origin[0] - xtx * 0.5,
+            bbx_origin[1] - xty * 0.5,
+            bbx_origin[2] - xtz * 0.5,
+            bbx_origin[0] + xtx * 0.5,
+            bbx_origin[1] + xty * 0.5,
+            bbx_origin[2] + xtz * 0.5
         )
+
+        # Convert bounding box to Box for transformation
+        bbx = Rhino.Geometry.Box(bbx)
+
+        # Transform from PCA space back to original component space
+        try:
+            pca_frame = json_comp.get('pca_frame', {})
+            if pca_frame:
+                # Create PCA frame plane at world origin
+                pca_origin = Rhino.Geometry.Point3d(
+                    *pca_frame.get('o', [0, 0, 0]))
+                pca_x = Rhino.Geometry.Vector3d(
+                    *pca_frame.get('x', [1, 0, 0]))
+                pca_y = Rhino.Geometry.Vector3d(
+                    *pca_frame.get('y', [0, 1, 0]))
+
+                pca_plane = Rhino.Geometry.Plane(pca_origin, pca_x, pca_y)
+
+                # Create forward transform (from PCA space to original space)
+                pca_transform = (
+                    Rhino.Geometry.Transform.PlaneToPlane(
+                        Rhino.Geometry.Plane.WorldXY, pca_plane))
+
+                bbx.Transform(pca_transform)
+
+        except (KeyError, TypeError, ValueError) as e:
+            # If PCA frame is missing or invalid, use bounding box as-is
+            self._addWarning(f'Could not apply PCA frame transform: {str(e)}')
+
         return bbx
+
+    def ComponentPCAPlane(self, json_comp: dict) -> Rhino.Geometry.Plane:
+        """Get PCA plane at world origin from component data."""
+        try:
+            pca_frame = json_comp.get('pca_frame', {})
+            if pca_frame:
+                pca_x = Rhino.Geometry.Vector3d(
+                    *pca_frame.get('x', [1, 0, 0]))
+                pca_y = Rhino.Geometry.Vector3d(
+                    *pca_frame.get('y', [0, 1, 0]))
+                return Rhino.Geometry.Plane(
+                    Rhino.Geometry.Point3d.Origin, pca_x, pca_y)
+            else:
+                return Rhino.Geometry.Plane.WorldXY
+        except (KeyError, TypeError, ValueError):
+            return Rhino.Geometry.Plane.WorldXY
 
     def RunScript(self, ComponentData: Grasshopper.DataTree[str]):
         # Initialize param descriptions (this has to be done in RunScript)
@@ -180,16 +229,19 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'Component bounding box as Rhino.Geometry.BoundingBox'
         )
         self.OutputParams[6].Description = (
-            'Component descriptors/metadata as JSON string'
+            'PCA frame at world origin as Rhino.Geometry.Plane'
         )
         self.OutputParams[7].Description = (
+            'Component descriptors/metadata as JSON string'
+        )
+        self.OutputParams[8].Description = (
             'Rhino geometry objects (extrusion, mesh, multiple meshes, '
             'polyline)'
         )
-        self.OutputParams[8].Description = (
+        self.OutputParams[9].Description = (
             'Marker points as list of Point3d objects'
         )
-        self.OutputParams[9].Description = (
+        self.OutputParams[10].Description = (
             'Component attributes as JSON string'
         )
 
@@ -201,6 +253,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             Color = Grasshopper.DataTree[System.Object]()
             Location = Grasshopper.DataTree[System.Object]()
             BoundingBox = Grasshopper.DataTree[System.Object]()
+            PCAFrame = Grasshopper.DataTree[System.Object]()
             Descriptors = Grasshopper.DataTree[System.Object]()
             PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
             MarkerPoints = Grasshopper.DataTree[System.Object]()
@@ -212,6 +265,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 Color,
                 Location,
                 BoundingBox,
+                PCAFrame,
                 Descriptors,
                 PrimitiveGeometry,
                 MarkerPoints,
@@ -330,6 +384,10 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         bbx.Transform(xform)
                         BoundingBox.Add(bbx, ghp)
 
+                        # get PCA plane at world origin
+                        pca_plane = self.ComponentPCAPlane(json_comp)
+                        PCAFrame.Add(pca_plane, ghp)
+
                         # add descriptors
                         try:
                             descriptors = json_comp.get('descriptors', {})
@@ -402,6 +460,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             Color = Grasshopper.DataTree[System.Object]()
             Location = Grasshopper.DataTree[System.Object]()
             BoundingBox = Grasshopper.DataTree[System.Object]()
+            PCAFrame = Grasshopper.DataTree[System.Object]()
             Descriptors = Grasshopper.DataTree[System.Object]()
             PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
             MarkerPoints = Grasshopper.DataTree[System.Object]()
@@ -413,6 +472,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 Color,
                 Location,
                 BoundingBox,
+                PCAFrame,
                 Descriptors,
                 PrimitiveGeometry,
                 MarkerPoints,

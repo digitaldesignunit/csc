@@ -30,7 +30,7 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250909
+    Version: 251009
     """
 
     def __init__(self):
@@ -249,8 +249,8 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
         # Validate required fields for component creation
         required_fields = [
-            'type', 'material', 'complexity', 'fragment', 'assembly',
-            'geometry', 'bbx', 'iframe'
+            'type', 'material', 'dataset', 'complexity', 'fragment',
+            'assembly', 'geometry', 'bbx', 'bbx_origin', 'iframe'
         ]
         missing_fields = []
         for field in required_fields:
@@ -272,20 +272,24 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = msg
             return AddedComponentData
 
-        # Check if geometry has either mesh or meshes (but not both)
+        # Check if geometry has mesh, meshes, or extrusion
         has_mesh = 'mesh' in geometry
         has_meshes = 'meshes' in geometry
+        has_extrusion = 'extrusion' in geometry
 
-        if not has_mesh and not has_meshes:
-            msg = ('Component geometry must contain either mesh or '
-                   'meshes field.')
+        # Count how many geometry types are present
+        geometry_types_count = sum([has_mesh, has_meshes, has_extrusion])
+
+        if geometry_types_count == 0:
+            msg = ('Component geometry must contain either mesh, meshes, or '
+                   'extrusion field.')
             self._addError(msg)
             self.Component.Message = msg
             return AddedComponentData
 
-        if has_mesh and has_meshes:
-            msg = ('Component geometry cannot contain both mesh and '
-                   'meshes fields.')
+        if geometry_types_count > 1:
+            msg = ('Component geometry must contain only one of: mesh, '
+                   'meshes, or extrusion.')
             self._addError(msg)
             self.Component.Message = msg
             return AddedComponentData
@@ -308,6 +312,11 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
             if not isinstance(component_json['assembly'], bool):
                 validation_errors.append('assembly must be a boolean')
 
+        # Check dataset is string
+        if 'dataset' in component_json:
+            if not isinstance(component_json['dataset'], str):
+                validation_errors.append('dataset must be a string')
+
         # Check bbx is list of 3 numbers
         if 'bbx' in component_json:
             bbx = component_json['bbx']
@@ -315,6 +324,16 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 validation_errors.append('bbx must be a list of 3 numbers')
             elif not all(isinstance(x, (int, float)) for x in bbx):
                 validation_errors.append('bbx must contain only numbers')
+
+        # Check bbx_origin is list of 3 numbers
+        if 'bbx_origin' in component_json:
+            bbx_origin = component_json['bbx_origin']
+            if not isinstance(bbx_origin, list) or len(bbx_origin) != 3:
+                validation_errors.append(
+                    'bbx_origin must be a list of 3 numbers')
+            elif not all(isinstance(x, (int, float)) for x in bbx_origin):
+                validation_errors.append(
+                    'bbx_origin must contain only numbers')
 
         # Check color format if present
         if 'color' in component_json:

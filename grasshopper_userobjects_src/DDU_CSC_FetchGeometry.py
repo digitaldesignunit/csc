@@ -30,7 +30,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250911
+    Version: 251009
 
     Fetches reduced or detailed geometry from the CSC API.
     Input can be:
@@ -931,10 +931,9 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     geometry_object,
                     component_data
                 )
-                # Add mesh index for multiple meshes
-                if len(geometry_objects) > 1:
-                    if hasattr(geometry_object, 'SetUserString'):
-                        geometry_object.SetUserString('csc_mesh_index', str(i))
+                # Add mesh index for all geometry objects (0 for single mesh)
+                if hasattr(geometry_object, 'SetUserString'):
+                    geometry_object.SetUserString('csc_mesh_index', str(i))
 
             # Add all geometry objects to outputs
             for geometry_object in geometry_objects:

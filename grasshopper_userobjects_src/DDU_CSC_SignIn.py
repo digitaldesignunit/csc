@@ -35,7 +35,7 @@ ghenv.Component.SubCategory = '1 User'  # type: ignore[reportUnedfinedVariable] 
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 250911
+Version: 251007
 """
 
 
@@ -1441,11 +1441,11 @@ class CSC_SignIn(Grasshopper.Kernel.GH_ScriptInstance):
 
                     # Add cache status to messages
                     cache_status = (
-                        f'Cache: {"Enabled" if cache_enabled else "Disabled"}'
-                        f' | Components: {comp_count}'
-                        f' | Geometry: {geometry_count} files'
-                        f' | Size: {size_kb}KB'
-                        f' | Geometry: {geometry_size_kb}KB')
+                        f'Cache: {"Enabled" if cache_enabled else "Disabled"}\n'
+                        f' | Components: {comp_count}\n'
+                        f' | Geometry: {geometry_count} files\n'
+                        f' | Size: {size_kb} kB\n'
+                        f' | Geometry: {geometry_size_kb} kB\n')
                     status_messages.append(cache_status)
                     Status = status_messages
                     return (Status,)
@@ -1507,11 +1507,11 @@ class CSC_SignIn(Grasshopper.Kernel.GH_ScriptInstance):
 
                     # Add cache status to messages
                     cache_status = (
-                        f'Cache: {"Enabled" if cache_enabled else "Disabled"}'
-                        f' | Components: {comp_count}'
-                        f' | Geometry: {geometry_count} files'
-                        f' | Size: {size_kb}KB'
-                        f' | Geometry: {geometry_size_kb}KB')
+                        f'Cache: {"Enabled" if cache_enabled else "Disabled"}\n'
+                        f' | Components: {comp_count}\n'
+                        f' | Geometry: {geometry_count} files\n'
+                        f' | Size: {size_kb} kB\n'
+                        f' | Geometry: {geometry_size_kb} kB\n')
                     status_messages.append(cache_status)
 
                     self.Component.Message = f'Signed in as: {username}'
