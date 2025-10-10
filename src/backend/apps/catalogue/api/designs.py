@@ -34,6 +34,10 @@ async def get_components_col(request: Request):
     return request.app.mongodb_components
 
 
+async def get_users_col(request: Request):
+    return request.app.mongodb_users
+
+
 # HELPER FUNCTIONS ------------------------------------------------------------
 
 def get_current_timestamp() -> str:
@@ -85,11 +89,10 @@ async def enrich_design_with_creator(design: dict, users_col) -> dict:
 
 @router.get("/designs", response_model=List[dict])
 async def get_designs(
-    request: Request,
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
     designs_col=Depends(get_designs_col),
-    users_col=Depends(lambda request: request.app.mongodb_users),
+    users_col=Depends(get_users_col),
 ):
     """Get all designs (public gallery)."""
     try:
@@ -122,11 +125,10 @@ async def get_designs(
 @router.get("/designs/user/{user_id}", response_model=List[dict])
 async def get_user_designs(
     user_id: str,
-    request: Request,
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
     designs_col=Depends(get_designs_col),
-    users_col=Depends(lambda request: request.app.mongodb_users),
+    users_col=Depends(get_users_col),
 ):
     """Get designs created by a specific user."""
     try:
@@ -159,9 +161,8 @@ async def get_user_designs(
 @router.get("/designs/{design_id}", response_model=dict)
 async def get_design(
     design_id: str,
-    request: Request,
     designs_col=Depends(get_designs_col),
-    users_col=Depends(lambda request: request.app.mongodb_users),
+    users_col=Depends(get_users_col),
 ):
     """Get a single design by ID."""
     try:
@@ -200,11 +201,10 @@ async def get_design(
 @router.post("/designs", response_model=dict)
 async def create_design(
     design_data: CreateDesignRequest,
-    request: Request,
     current_user: User = Depends(get_current_active_user),
     designs_col=Depends(get_designs_col),
     components_col=Depends(get_components_col),
-    users_col=Depends(lambda request: request.app.mongodb_users),
+    users_col=Depends(get_users_col),
 ):
     """Create a new design."""
     try:
@@ -260,11 +260,10 @@ async def create_design(
 async def update_design(
     design_id: str,
     design_data: UpdateDesignModel,
-    request: Request,
     current_user: User = Depends(get_current_active_user),
     designs_col=Depends(get_designs_col),
     components_col=Depends(get_components_col),
-    users_col=Depends(lambda request: request.app.mongodb_users),
+    users_col=Depends(get_users_col),
 ):
     """Update an existing design (owner only)."""
     try:
@@ -344,7 +343,6 @@ async def update_design(
 @router.delete("/designs/{design_id}")
 async def delete_design(
     design_id: str,
-    request: Request,
     current_user: User = Depends(get_current_active_user),
     designs_col=Depends(get_designs_col),
 ):
