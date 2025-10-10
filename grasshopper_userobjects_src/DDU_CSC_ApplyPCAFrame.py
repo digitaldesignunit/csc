@@ -218,10 +218,10 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
             # Create transformed component data
             transformed_component_data = component_data.copy()
 
-            # Update iframe with the inverse PCA transform
+            # Update iframe to preserve translation but update orientation
             try:
                 # Get existing iframe or create default
-                iframe = transformed_component_data.get('iframe', {
+                original_iframe = transformed_component_data.get('iframe', {
                     'o': [0.0, 0.0, 0.0],
                     'x': [1.0, 0.0, 0.0],
                     'y': [0.0, 1.0, 0.0],
@@ -229,38 +229,107 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                 })
 
                 # Convert iframe to plane
-                iframe_plane = self.FrameDictToPlane(iframe)
+                iframe_plane = self.FrameDictToPlane(original_iframe)
 
-                # Apply inverse PCA transform to iframe
-                iframe_plane.Transform(pca_transform)
+                # Apply the SAME transformations to the iframe plane that we
+                # apply to the geometry
+                # For JSON input, just apply inverse PCA
+                if not input_is_geometry:
+                    iframe_plane.Transform(pca_transform)
+                    transformed_component_data['iframe'] = (
+                        self.PlaneToFrameDict(iframe_plane))
 
-                # Update iframe in component data
-                transformed_component_data['iframe'] = self.PlaneToFrameDict(
-                    iframe_plane)
-
-                self._addRemark('Updated iframe with inverse PCA transform')
+                self._addRemark('Updated iframe with PCA orientation')
             except Exception as e:
                 self._addWarning(f'Could not update iframe: {str(e)}')
 
             # Handle output based on input type
             if input_is_geometry:
-                # Transform geometry objects and update their userdata
-                for geometry in geometry_objects:
-                    transformed_geometry = (
-                        self.apply_pca_transform_to_geometry(
-                            geometry, pca_transform))
+                # For geometry input, we need to:
+                # 1. Transform back to original space (inverse iframe)
+                # 2. Apply PCA transformation
+                # 3. Apply iframe transformation again
+                try:
+                    # Get the original iframe
+                    original_iframe = component_data.get('iframe', {
+                        'o': [0.0, 0.0, 0.0],
+                        'x': [1.0, 0.0, 0.0],
+                        'y': [0.0, 1.0, 0.0],
+                        'z': [0.0, 0.0, 1.0]
+                    })
 
-                    # Update userdata with transformed component data
-                    if hasattr(transformed_geometry, 'SetUserString'):
-                        transformed_geometry.SetUserString(
-                            'csc_component',
-                            json.dumps(transformed_component_data))
+                    # Convert iframe to plane
+                    iframe_plane = self.FrameDictToPlane(original_iframe)
 
-                    Output.Add(
-                        transformed_geometry,
-                        Grasshopper.Kernel.Data.GH_Path(0))
-                self._addRemark(f'Transformed {len(geometry_objects)} '
-                                'geometry objects with updated userdata')
+                    # Create iframe transform (from original space to world
+                    # space)
+                    iframe_transform = (
+                        Rhino.Geometry.Transform.PlaneToPlane(
+                            Rhino.Geometry.Plane.WorldXY, iframe_plane))
+
+                    # Create inverse iframe transform (from world space to
+                    # original space)
+                    inverse_iframe_transform = (
+                        Rhino.Geometry.Transform.PlaneToPlane(
+                            iframe_plane, Rhino.Geometry.Plane.WorldXY))
+
+                    # Apply the SAME transformations to the iframe plane that
+                    # we apply to the geometry
+                    compound_iframe_plane = self.FrameDictToPlane(
+                        original_iframe)
+                    compound_iframe_plane.Transform(inverse_iframe_transform)
+                    compound_iframe_plane.Transform(pca_transform)
+                    compound_iframe_plane.Transform(iframe_transform)
+
+                    # Update the component data with the transformed iframe
+                    transformed_component_data['iframe'] = (
+                        self.PlaneToFrameDict(compound_iframe_plane))
+
+                    # Transform geometry objects: inverse iframe -> PCA ->
+                    # iframe
+                    for geometry in geometry_objects:
+                        # Step 1: Transform back to original space
+                        geometry.Transform(inverse_iframe_transform)
+
+                        # Step 2: Apply PCA transformation
+                        transformed_geometry = (
+                            self.apply_pca_transform_to_geometry(
+                                geometry, pca_transform))
+
+                        # Step 3: Apply iframe transformation again
+                        transformed_geometry.Transform(iframe_transform)
+
+                        # Update userdata with transformed component data
+                        if hasattr(transformed_geometry, 'SetUserString'):
+                            transformed_geometry.SetUserString(
+                                'csc_component',
+                                json.dumps(transformed_component_data))
+
+                        Output.Add(
+                            transformed_geometry,
+                            Grasshopper.Kernel.Data.GH_Path(0))
+
+                    self._addRemark(f'Transformed {len(geometry_objects)} '
+                                    'geometry objects with PCA and iframe')
+                except Exception as e:
+                    self._addWarning(
+                        f'Could not apply iframe transform: {str(e)}')
+                    # Fallback to just PCA transformation
+                    for geometry in geometry_objects:
+                        transformed_geometry = (
+                            self.apply_pca_transform_to_geometry(
+                                geometry, pca_transform))
+
+                        if hasattr(transformed_geometry, 'SetUserString'):
+                            transformed_geometry.SetUserString(
+                                'csc_component',
+                                json.dumps(transformed_component_data))
+
+                        Output.Add(
+                            transformed_geometry,
+                            Grasshopper.Kernel.Data.GH_Path(0))
+                    self._addRemark(f'Transformed {len(geometry_objects)} '
+                                    'geometry objects with PCA only')
             else:
                 # Output transformed component data as JSON
                 Output.Add(

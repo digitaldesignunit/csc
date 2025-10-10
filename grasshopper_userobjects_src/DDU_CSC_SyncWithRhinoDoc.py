@@ -56,6 +56,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     def find_objects_with_csc_component(self, doc):
         """
         Find all objects in the document that have the 'csc_component' userkey.
+        Also find text tags that are grouped with these components.
         Groups objects by component ID to handle multiple meshes correctly.
         Returns a list of tuples: (component_id, component_data, objects_list,
                                    combined_path)
@@ -111,6 +112,28 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                                 f'for object {obj.Id}: {str(e)}'
                             )
                             continue
+
+            # Now find text tags that are grouped with these components
+            for component_id, data in components_dict.items():
+                # Get all groups in the document
+                groups = sc.doc.Groups
+                for i in range(groups.Count):
+                    group = groups[i]
+                    if group and group.Name == component_id:
+                        # This group belongs to our component
+                        # Get all objects in this group
+                        group_objects = rs.ObjectsByGroup(component_id)
+                        for obj_id in group_objects:
+                            obj = sc.doc.Objects.Find(obj_id)
+                            if obj and rs.IsText(obj):
+                                # This is a text tag for our component
+                                obj_path = self.get_object_path(obj, doc)
+                                data['objects'].append(obj)
+                                data['paths'].append(obj_path)
+                                self._addRemark(
+                                    f'Found text tag for component {component_id}'
+                                )
+
         except Exception as e:
             self._addError(
                 f'Error searching for objects with csc_component: {str(e)}'
@@ -152,15 +175,45 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
 
     def update_component_frame(self, objects_list, component_data):
         """
-        Update the component's iframe based on the combined bounding box
-        of all objects from the same component.
+        Update the component's iframe based on text tag plane if available,
+        otherwise fall back to combined bounding box of all objects.
         Returns updated component data.
         """
         try:
             if not objects_list:
                 return component_data
 
-            # Calculate combined bounding box for all objects
+            # First, try to find a text object (tag) and use its plane
+            for obj in objects_list:
+                if rs.IsText(obj):
+                    try:
+                        tagplane = rs.coercegeometry(obj).Plane
+                        tagframe = {
+                            'o': [tagplane.OriginX,
+                                  tagplane.OriginY,
+                                  tagplane.OriginZ],
+                            'x': [tagplane.XAxis.X,
+                                  tagplane.XAxis.Y,
+                                  tagplane.XAxis.Z],
+                            'y': [tagplane.YAxis.X,
+                                  tagplane.YAxis.Y,
+                                  tagplane.YAxis.Z],
+                            'z': [tagplane.ZAxis.X,
+                                  tagplane.ZAxis.Y,
+                                  tagplane.ZAxis.Z]
+                        }
+                        # Update the iframe in component data
+                        if 'iframe' not in component_data:
+                            component_data['iframe'] = {}
+                        component_data['iframe'].update(tagframe)
+                        return component_data
+                    except Exception as e:
+                        self._addWarning(
+                            f'Error extracting plane from text tag: {str(e)}'
+                        )
+                        continue
+
+            # Fallback: Calculate combined bounding box for all objects
             combined_bbox = None
             for obj in objects_list:
                 if hasattr(obj, 'Geometry'):

@@ -29,7 +29,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 251010a
     """
 
     def __init__(self):
@@ -391,6 +391,8 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
                         # get PCA plane at world origin
                         pca_plane = self.ComponentPCAPlane(json_comp)
+                        # apply iframe transform to PCA plane
+                        pca_plane.Transform(xform)
                         PCAFrame.Add(pca_plane, ghp)
 
                         # add descriptors
@@ -414,6 +416,8 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                                         point_data[1],
                                         point_data[2]
                                     )
+                                    # apply iframe transform to marker point
+                                    marker_point.Transform(xform)
                                     marker_points_list.append(marker_point)
                         except (KeyError, TypeError, IndexError):
                             # If no marker points or invalid format, add empty

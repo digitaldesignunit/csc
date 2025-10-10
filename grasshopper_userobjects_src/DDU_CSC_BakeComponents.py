@@ -340,6 +340,24 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                             'csc_component',
                             ComponentData[i])
 
+                    # create tag
+                    tag = Rhino.Geometry.TextEntity()
+                    tag.Text = comp_id
+                    tag.Plane = iplane
+                    # specify height in millimeters
+                    usf = Rhino.RhinoMath.UnitScale(
+                        Rhino.UnitSystem.Millimeters,
+                        sc.doc.ModelUnitSystem)
+                    tag.TextHeight = 10.0 * usf
+                    tag.Justification = (
+                        Rhino.Geometry.TextJustification.MiddleCenter
+                    )
+                    id_tag = sc.doc.Objects.Add(tag)
+
+                    # add tag to geometry IDs for grouping
+                    if id_tag != System.Guid.Empty:
+                        geo_ids.append(id_tag)
+
                     # create group
                     if len(geo_ids) > 1:
                         _ = sc.doc.Groups.Add(
