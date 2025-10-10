@@ -20,13 +20,18 @@ ghenv.Component.Name = 'BakeComponents'  # type: ignore[reportUnedfinedVariable]
 ghenv.Component.NickName = 'BakeComponents'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Bakes fetched components into the Rhino document as actual geometry. '
+    'Creates layers, groups, and attaches component data as user text. '
+    'Prioritizes cached geometry over primitive representations.'
+)
 
 
 class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250911
+    Version: 251010
     """
 
     def __init__(self):

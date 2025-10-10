@@ -18,13 +18,18 @@ ghenv.Component.Name = 'JSONGetValue'  # type: ignore[reportUnedfinedVariable] #
 ghenv.Component.NickName = 'JSONGetValue'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '6 JSON Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Extracts a specific value from a JSON string using dot-notation key '
+    'paths (e.g., "geometry.meshes[0].v"). Converts JSON values to '
+    'appropriate native Grasshopper data types where possible.'
+)
 
 
 class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250908
+    Version: 251010
     """
 
     def __init__(self):

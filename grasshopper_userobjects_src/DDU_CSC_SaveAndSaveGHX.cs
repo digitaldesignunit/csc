@@ -33,7 +33,7 @@ public class Script_Instance : GH_ScriptInstance
 
     Author: Max Eschenbach
     License: MIT License
-    Version: 250820
+    Version: 251010
     */
     #endregion
 
@@ -44,6 +44,10 @@ public class Script_Instance : GH_ScriptInstance
         this.Component.NickName = "SaveAndSaveGHX";
         this.Component.Category = "DDU_CSC";
         this.Component.SubCategory = "0 Development";
+        this.Component.Description = (
+            "Saves the current Grasshopper document in multiple formats: .gh (binary), " +
+            ".ghx (XML), and creates timestamped archive copies. Handles directory " +
+            "creation and error reporting.");
 
         // This output will tell us if the save succeeded or failed.
         // The active Grasshopper document in this scripting component context

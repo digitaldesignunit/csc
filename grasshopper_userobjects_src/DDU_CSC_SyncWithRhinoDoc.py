@@ -20,13 +20,18 @@ ghenv.Component.Name = 'SyncWithRhinoDoc'  # type: ignore[reportUnedfinedVariabl
 ghenv.Component.NickName = 'SyncWithRhinoDoc'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Scans the active Rhino document for objects with csc_component user '
+    'data and updates their iframe (insertion frame) based on current '
+    'geometry position in Rhino.'
+)
 
 
 class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250905
+    Version: 251010
     """
 
     def __init__(self):

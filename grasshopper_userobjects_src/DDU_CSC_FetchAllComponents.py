@@ -22,13 +22,17 @@ ghenv.Component.Name = 'FetchAllComponents'  # type: ignore[reportUnedfinedVaria
 ghenv.Component.NickName = 'FetchAllComponents'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '2 Catalogue Interface'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Fetches all available components from the remote catalogue API with '
+    'caching support. Returns all components as a list of JSON strings.'
+)
 
 
 class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250904
+    Version: 251010
     """
 
     def __init__(self):

@@ -18,13 +18,18 @@ ghenv.Component.Name = 'JSONKeys'  # type: ignore[reportUnedfinedVariable] # NOQ
 ghenv.Component.NickName = 'JSONKeys'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '6 JSON Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Extracts all keys and their paths from a JSON string up to a specified '
+    'maximum depth. Returns keys, types, and full dot-notation paths as '
+    'separate data trees.'
+)
 
 
 class CSC_JSONKeys(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250908
+    Version: 251010
     """
 
     def __init__(self):

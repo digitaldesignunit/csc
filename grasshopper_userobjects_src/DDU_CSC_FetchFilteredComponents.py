@@ -22,13 +22,18 @@ ghenv.Component.Name = 'FetchFilteredComponents'  # type: ignore[reportUnedfined
 ghenv.Component.NickName = 'FetchFilteredComponents'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '2 Catalogue Interface'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Fetches components from the remote catalogue based on filter criteria '
+    '(type, material, dataset, complexity, dimensions, reservation status). '
+    'Builds query parameters and returns filtered results.'
+)
 
 
 class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251009
+    Version: 251010
     """
 
     def __init__(self):

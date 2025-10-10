@@ -21,7 +21,9 @@ ghenv.Component.NickName = 'ViewCaptureToFile'  # type: ignore[reportUnedfinedVa
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '8 Visualisation'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
-    'Captures the active Rhino view to an image file'
+    'Captures the active Rhino viewport to an image file (PNG). Supports '
+    'custom dimensions, background colors, and visibility options for '
+    'grid/axes. Creates organized capture folders with timestamps.'
 )
 
 
@@ -29,7 +31,7 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Anders Holden Deleuran (updated 2025 by Max Benjamin Eschenbach)
     License: MIT License
-    Version: 251009
+    Version: 251010
     """
 
     def __init__(self):

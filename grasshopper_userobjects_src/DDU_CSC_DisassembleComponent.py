@@ -18,13 +18,18 @@ ghenv.Component.Name = 'DisassembleComponent'  # type: ignore[reportUnedfinedVar
 ghenv.Component.NickName = 'DisassembleComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Parses component data (JSON) and outputs individual fields as '
+    'Grasshopper-native types. Reconstructs geometry, bounding boxes, '
+    'PCA frames, and metadata from component JSON.'
+)
 
 
 class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251009
+    Version: 251010
     """
 
     def __init__(self):

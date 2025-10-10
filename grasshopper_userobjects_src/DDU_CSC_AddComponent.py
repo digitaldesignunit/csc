@@ -24,13 +24,19 @@ ghenv.Component.Name = 'AddComponent'  # type: ignore[reportUnedfinedVariable] #
 ghenv.Component.NickName = 'AddComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '2 Catalogue Interface'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Adds a new component to the remote database. Takes component data '
+    '(JSON), validates it, uploads associated geometry files (detailed '
+    'and reduced OBJ meshes), and makes an authenticated POST request '
+    'to add the component to the catalogue.'
+)
 
 
 class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251009
+    Version: 251010
     """
 
     def __init__(self):

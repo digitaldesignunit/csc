@@ -19,8 +19,9 @@ ghenv.Component.NickName = 'GetComponentData'  # type: ignore[reportUnedfinedVar
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
-    'Extracts component data from geometry userdata with '
-    'error handling'
+    ' Extracts the csc_component user data (JSON string) from Rhino '
+    'geometry objects. Safely retrieves and parses component data stored '
+    'as user strings.'
 )
 
 
@@ -28,7 +29,7 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251009
+    Version: 251010
     """
 
     def __init__(self):

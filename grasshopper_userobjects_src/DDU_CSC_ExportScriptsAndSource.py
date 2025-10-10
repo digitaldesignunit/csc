@@ -15,13 +15,18 @@ ghenv.Component.Name = "ExportScriptsAndSource"  # type: ignore[reportUnedfinedV
 ghenv.Component.NickName = "ExportScriptsAndSource"  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = "DDU_CSC"  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = "0 Development"  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Analyzes the current Grasshopper document to identify script components, '
+    'extracts their source code, and can export them as Grasshopper User '
+    'Objects (.ghuser) and raw source files (.py, .c'
+)
 
 
 class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 251009
+    Version: 251010
     """
 
     def get_source_version(self, source):

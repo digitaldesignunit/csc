@@ -21,18 +21,25 @@ import Rhino  # type: ignore[reportMissingImport] # NOQA
 ghenv.Component.Name = 'VariationalShapeApproximation'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.NickName = 'VSA'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '7 Geometry Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.SubCategory = '0 Development'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    """
+    Implements the Variational Shape Approximation (VSA) algorithm to
+    segment a mesh into planar regions. Returns colored visualization
+    mesh, proxy planes, and error metrics.
+
+    Variational Shape Approximation (VSA) implementation based on:
+    Cohen-Steiner D, Alliez P, Desbrun M (2004) Variational shape
+    approximation. ACM Trans Graph (TOG) 23(3):905-914
+    """
+)
 
 
 class CSC_VariationalShapeApproximation(Grasshopper.Kernel.GH_ScriptInstance):
     """
-    Variational Shape Approximation (VSA) implementation based on:
-    Cohen-Steiner D, Alliez P, Desbrun M (2004) Variational shape
-    approximation. ACM Trans Graph (TOG) 23(3):905–914
-
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251007
+    Version: 251010
     """
 
     def __init__(self):

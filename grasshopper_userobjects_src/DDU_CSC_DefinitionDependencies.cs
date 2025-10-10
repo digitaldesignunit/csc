@@ -32,7 +32,7 @@ public class Script_Instance : GH_ScriptInstance
 
     Author: Giulio Piacentino (updated by Anders Holden Deleuran , updated 2025 by Max Benjamin Eschenbach)
     License: Apache License 2.0
-    Version: 250820
+    Version: 251010
     */
     #endregion
 
@@ -43,6 +43,10 @@ public class Script_Instance : GH_ScriptInstance
         this.Component.NickName = "DefinitionDependencies";
         this.Component.Category = "DDU_CSC";
         this.Component.SubCategory = "0 Development";
+        this.Component.Description = (
+            "Identifies and lists all core and add-on Grasshopper libraries " +
+            "used in the current Grasshopper document. Categorizes libraries " +
+            "and returns their names and versions.");
 
         List<string> coreLibs = new List<string>();
         List<string> addLibs = new List<string>();

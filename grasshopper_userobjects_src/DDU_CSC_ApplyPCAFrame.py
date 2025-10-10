@@ -19,8 +19,9 @@ ghenv.Component.NickName = 'ApplyPCAFrame'  # type: ignore[reportUnedfinedVariab
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
-    'Applies inverse PCA transformation to align geometry and '
-    'bounding box with world coordinate system'
+    'Applies an inverse PCA transformation to align geometry or component '
+    'data with the world coordinate system. Takes either component JSON or '
+    'Rhino geometry and transforms it to align with the world XY plane.'
 )
 
 
@@ -28,7 +29,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251009
+    Version: 251010
     """
 
     def __init__(self):

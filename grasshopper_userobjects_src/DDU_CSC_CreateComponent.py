@@ -28,13 +28,18 @@ ghenv.Component.Name = 'CreateComponent'  # type: ignore[reportUnedfinedVariable
 ghenv.Component.NickName = 'CreateComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Creates a complete component JSON string from input geometry. '
+    'Computes PCA orientation, handles mesh reduction, saves geometry '
+    'files locally, and builds component data according to the schema.'
+)
 
 
 class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251009
+    Version: 251010
     """
 
     def __init__(self):
@@ -359,9 +364,9 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         centered_geometry.Transform(translation_xform)
         return centered_geometry, translation_vector
 
-    def compute_minimum_bounding_box_3d(self, points):
+    def compute_obb_3d(self, points):
         """
-        Compute minimum bounding box for 3D points using PCA.
+        Compute object oriented bounding box for 3D points using PCA.
         Returns unsorted dimensions and bounding box origin.
         """
         # Apply PCA to find principal axes
@@ -454,9 +459,9 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
         return best_rectangle, best_angle
 
-    def compute_minimum_bounding_box_2d(self, points, height):
+    def compute_obb_2d(self, points, height):
         """
-        Compute minimum axis-aligned bounding box for extrusions using the
+        Compute object oriented bounding box for extrusions using the
         minimum bounding rectangle method to find optimal 2D orientation.
         Returns unsorted dimensions and bounding box origin.
         """
@@ -678,7 +683,13 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         return reduced_mesh
 
     def process_mesh_geometry(
-        self, geometry: Rhino.Geometry.Mesh, component_id: str
+        self,
+        geometry: Rhino.Geometry.Mesh,
+        component_id: str,
+        mesh_primitive_threshold: int = 8000,
+        mesh_reduced_threshold: int = 15000,
+        mesh_reduced_target: int = 10000,
+        mesh_primitive_target: int = 500
     ) -> tuple:
         """
         Process mesh geometry and create reduced/primitive versions if needed.
@@ -708,15 +719,24 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         processed_geometry = geometry
 
         # Determine what versions to create based on face count
-        if face_count > 5000:
+        if face_count > mesh_reduced_threshold:
             # Create both reduced and primitive versions
             if not files_exist:
-                reduced_mesh = self.reduce_mesh(processed_geometry, 1000)
-            primitive_mesh = self.reduce_mesh(processed_geometry, 350)
+                reduced_mesh = self.reduce_mesh(
+                    processed_geometry,
+                    mesh_reduced_target
+                )
+            primitive_mesh = self.reduce_mesh(
+                processed_geometry,
+                mesh_primitive_target
+            )
             files_saved = not files_exist  # Only save if files don't exist
-        elif face_count > 500:
+        elif face_count > mesh_primitive_threshold:
             # Create only primitive version
-            primitive_mesh = self.reduce_mesh(processed_geometry, 350)
+            primitive_mesh = self.reduce_mesh(
+                processed_geometry,
+                mesh_primitive_target
+            )
             files_saved = not files_exist  # Only save if files don't exist
         else:
             # Use original as primitive, no files saved
@@ -750,7 +770,14 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
         return processed_geometry, reduced_mesh, primitive_mesh, files_saved
 
-    def process_multiple_meshes_geometry(self, meshes, component_id):
+    def process_multiple_meshes_geometry(
+            self,
+            meshes,
+            component_id,
+            mesh_primitive_threshold: int = 8000,
+            mesh_reduced_threshold: int = 15000,
+            mesh_reduced_target: int = 10000,
+            mesh_primitive_target: int = 500):
         """
         Process multiple meshes for geometry reduction and file saving.
         Returns list of primitive meshes and files_saved status.
@@ -778,9 +805,11 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         # Check if any mesh needs file saving
         # Save detailed files if any mesh has > 500 faces
         # Save reduced files if any mesh has > 5000 faces
-        needs_detailed_saving = any(mesh is not None and mesh.Faces.Count > 500
+        needs_detailed_saving = any(mesh is not None and
+                                    mesh.Faces.Count > mesh_primitive_target
                                     for mesh in meshes)
-        needs_reduced_saving = any(mesh is not None and mesh.Faces.Count > 5000
+        needs_reduced_saving = any(mesh is not None and
+                                   mesh.Faces.Count > mesh_reduced_threshold
                                    for mesh in meshes)
         needs_file_saving = needs_detailed_saving or needs_reduced_saving
 
@@ -798,17 +827,26 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             face_count = processed_mesh.Faces.Count
 
             # Create versions based on face count (matching single mesh logic)
-            if face_count > 5000:
+            if face_count > mesh_reduced_threshold:
                 # Create both reduced and primitive versions
                 if not files_exist and needs_file_saving:
-                    reduced_mesh = self.reduce_mesh(processed_mesh, 1000)
+                    reduced_mesh = self.reduce_mesh(
+                        processed_mesh,
+                        mesh_reduced_target
+                    )
                 else:
                     reduced_mesh = None
-                primitive_mesh = self.reduce_mesh(processed_mesh, 350)
-            elif face_count > 500:
+                primitive_mesh = self.reduce_mesh(
+                    processed_mesh,
+                    mesh_primitive_target
+                )
+            elif face_count > mesh_primitive_threshold:
                 # Create only primitive version
                 reduced_mesh = None
-                primitive_mesh = self.reduce_mesh(processed_mesh, 350)
+                primitive_mesh = self.reduce_mesh(
+                    processed_mesh,
+                    mesh_primitive_target
+                )
             else:
                 # Use original as primitive, no files saved
                 reduced_mesh = None
@@ -953,7 +991,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
         # Compute PCA for the centered combined geometry
         dimensions, principal_components, bbx_origin = (
-            self.compute_minimum_bounding_box_3d(centered_points)
+            self.compute_obb_3d(centered_points)
         )
 
         return dimensions, principal_components, translation_vector, bbx_origin
@@ -971,6 +1009,19 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             Location: Rhino.Geometry.Vector3d,
             Geometry: System.Collections.Generic.List[Rhino.Geometry.GeometryBase],
             MarkerPoints: System.Collections.Generic.List[Rhino.Geometry.Point3d]):
+
+        # MESH REDUCTION SETTINGS
+        # If mesh has tc above this but below reduced threshold,
+        # only the primitive version will be computed
+        MESH_PRIMITIVE_THRESHOLD = 8000
+        # If mesh has tc above this, reduced and primitive versions
+        # will be created
+        MESH_REDUCED_THRESHOLD = 15000
+        # target tc for reduced mesh
+        MESH_REDUCED_TARGET = 10000
+        # target tc for primitive mesh
+        MESH_PRIMITIVE_TARGET = 500
+
         try:
             # Initialize param descriptions (this has to be done in RunScript)
             self.InputParams[0].Description = (
@@ -1167,17 +1218,17 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 # geometry
                 centered_points = points
 
-                # Compute minimum bounding box and PCA transformation
+                # Compute object oriented bounding box and PCA transformation
                 if compute_3d:
                     dimensions, principal_components, bbx_origin = (
-                        self.compute_minimum_bounding_box_3d(centered_points))
+                        self.compute_obb_3d(centered_points))
                 else:
                     # 2D APPROACH, i.e. used for Extrusions
                     height = centered_geometry.PathStart.DistanceTo(
                         centered_geometry.PathEnd
                     )
                     dimensions, principal_components, bbx_origin = (
-                        self.compute_minimum_bounding_box_2d(
+                        self.compute_obb_2d(
                             centered_points, height)
                     )
             else:
@@ -1234,7 +1285,11 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                      files_saved) = (
                         self.process_mesh_geometry(
                             centered_geometry,
-                            ComponentID
+                            ComponentID,
+                            mesh_primitive_threshold=MESH_PRIMITIVE_THRESHOLD,
+                            mesh_reduced_threshold=MESH_REDUCED_THRESHOLD,
+                            mesh_reduced_target=MESH_REDUCED_TARGET,
+                            mesh_primitive_target=MESH_PRIMITIVE_TARGET
                         )
                     )
 
@@ -1322,7 +1377,13 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 # Process multiple meshes (now centered)
                 primitive_meshes, files_saved = (
                     self.process_multiple_meshes_geometry(
-                        centered_meshes, ComponentID)
+                        centered_meshes,
+                        ComponentID,
+                        mesh_primitive_threshold=MESH_PRIMITIVE_THRESHOLD,
+                        mesh_reduced_threshold=MESH_REDUCED_THRESHOLD,
+                        mesh_reduced_target=MESH_REDUCED_TARGET,
+                        mesh_primitive_target=MESH_PRIMITIVE_TARGET
+                    )
                 )
 
                 # Create meshes array for JSON geometry data

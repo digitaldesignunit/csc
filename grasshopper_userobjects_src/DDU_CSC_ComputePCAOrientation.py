@@ -21,13 +21,18 @@ ghenv.Component.Name = 'ComputePCAOrientation'  # type: ignore[reportUnedfinedVa
 ghenv.Component.NickName = 'ComputePCAOrientation'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '7 Geometry Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Computes Principal Component Analysis (PCA) orientation for input '
+    'geometry. Returns the object oriented bounding box obtained using PCA, '
+    'aligned geometry, translation vector, and PCA transformation matrix.'
+)
 
 
 class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 250828
+    Version: 251010
     """
 
     def __init__(self):
@@ -73,9 +78,9 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         centered_geometry.Transform(translation_xform)
         return centered_geometry, translation_vector
 
-    def compute_minimum_bounding_box_3d(self, points):
+    def compute_obb_3d(self, points):
         """
-        Compute minimum bounding box for 3D points using PCA.
+        Compute object oriented bounding box for 3D points using PCA.
         Returns dimensions sorted by length (X=longest, Y=second, Z=shortest).
         """
         # Apply PCA to find principal axes
@@ -185,7 +190,7 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
 
     def RunScript(self, Geometry: Rhino.Geometry.GeometryBase):
         # set up output variables
-        MinimumBBX = Grasshopper.DataTree[System.Object]()
+        ObjectOrientedBBX = Grasshopper.DataTree[System.Object]()
         AlignedGeometry = Grasshopper.DataTree[System.Object]()
         AlignedBBX = Grasshopper.DataTree[System.Object]()
         TranslationVector = Grasshopper.DataTree[System.Object]()
@@ -197,7 +202,7 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
             )
             # Initialize output param descriptions
             self.OutputParams[0].Description = (
-                'Minimum bounding box, obtained using PCA, '
+                'Object oriented bounding box, obtained using PCA, '
                 ' at the location of the input geometry'
             )
             self.OutputParams[1].Description = (
@@ -205,8 +210,8 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
                 'world origin'
             )
             self.OutputParams[2].Description = (
-                'Minimum bounding box transformed using the computed PCA '
-                'frame, centered at the world origin'
+                'Object oriented bounding box transformed using the computed '
+                'PCA frame, centered at the world origin'
             )
             self.OutputParams[3].Description = (
                 'Translation vector that was used to move the geometry '
@@ -222,13 +227,13 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = 'Input Geometry failed to collect data!'
                 self._addWarning(msg)
                 self.Component.Message = msg
-                return (MinimumBBX, AlignedGeometry,
+                return (ObjectOrientedBBX, AlignedGeometry,
                         AlignedBBX, TranslationVector, PCAXForm)
             elif not Geometry.IsValid:
                 msg = 'Input Geometry is invalid!'
                 self._addError(msg)
                 self.Component.Message = msg
-                return (MinimumBBX, AlignedGeometry,
+                return (ObjectOrientedBBX, AlignedGeometry,
                         AlignedBBX, TranslationVector, PCAXForm)
             # Process geometry to extract points
             points, compute_3d = self.process_geometry(Geometry)
@@ -241,9 +246,9 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
             )
             # Centered points
             centered_points = points - translation_vector
-            # Compute minimum bounding box and PCA transformation
+            # Compute object oriented bounding box and PCA transformation
             dimensions, principal_components = (
-                self.compute_minimum_bounding_box_3d(centered_points)
+                self.compute_obb_3d(centered_points)
             )
             # Create PCA transformation matrix and XForm
             # The principal components define the new coordinate system
@@ -260,18 +265,18 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
             # Now "transform back" the PCA-oriented bounding box
             # NOTE: we have to convert to a Rhino.Geometry.Box for the
             # correctly applying the transformation!
-            MinimumBBX = Rhino.Geometry.Box(
+            ObjectOrientedBBX = Rhino.Geometry.Box(
                 AlignedGeometry.GetBoundingBox(True)
             )
             _res, invPCAXForm = PCAXForm.TryGetInverse()
             if not _res:
                 raise RuntimeError('Failed to get Inverse of PCA Transform!')
-            MinimumBBX.Transform(invPCAXForm)
-            MinimumBBX.Transform(
+            ObjectOrientedBBX.Transform(invPCAXForm)
+            ObjectOrientedBBX.Transform(
                 Rhino.Geometry.Transform.Translation(-TranslationVector)
             )
             # return output
-            return (MinimumBBX, AlignedGeometry,
+            return (ObjectOrientedBBX, AlignedGeometry,
                     AlignedBBX, TranslationVector, PCAXForm)
         except ValueError as e:
             msg = f'Validation error: {str(e)}'
@@ -282,5 +287,5 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
             self._addError(msg)
             self.Component.Message = msg
         # Return empty results if there was an error
-        return (MinimumBBX, AlignedGeometry,
+        return (ObjectOrientedBBX, AlignedGeometry,
                 AlignedBBX, TranslationVector, PCAXForm)

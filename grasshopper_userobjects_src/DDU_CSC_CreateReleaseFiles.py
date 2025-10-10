@@ -20,14 +20,8 @@ ghenv.Component.Name = 'CreateReleaseFiles'  # type: ignore[reportUnedfinedVaria
 ghenv.Component.NickName = 'CreateReleaseFiles'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '0 Development'  # type: ignore[reportUnedfinedVariable] # NOQA
-
-
-class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
     """
-    Author: Max Benjamin Eschenbach
-    License: MIT License
-    Version: 250911
-
     This component can be used to create a Grasshopper release file in a
     separate folder.
 
@@ -40,6 +34,15 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
 
     The filename can be specified, otherwise a timestamp-based filename will be
     generated.
+    """
+)
+
+
+class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
+    """
+    Author: Max Benjamin Eschenbach
+    License: MIT License
+    Version: 251010
     """
 
     def __init__(self):

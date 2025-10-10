@@ -18,13 +18,18 @@ ghenv.Component.Name = 'FilterComponents'  # type: ignore[reportUnedfinedVariabl
 ghenv.Component.NickName = 'FilterComponents'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '2 Catalogue Interface'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+    'Filters a list of component data based on various criteria (type, '
+    'material, dataset, complexity, fragment, bounding box dimensions). '
+    'Works with local component data.'
+)
 
 
 class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251009
+    Version: 251010
     """
 
     def __init__(self):

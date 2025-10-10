@@ -24,13 +24,18 @@ ghenv.Component.Name = 'FetchGeometry'  # type: ignore[reportUnedfinedVariable] 
 ghenv.Component.NickName = 'FetchGeometry'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '2 Catalogue Interface'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQ
+    'Fetches detailed, reduced, or primitive geometry for a component from '
+    'the API or local cache. Converts OBJ data to Rhino geometry objects and '
+    'applies iframe transformations from the component json.'
+)
 
 
 class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251009
+    Version: 251010
 
     Fetches reduced or detailed geometry from the CSC API.
     Input can be:
