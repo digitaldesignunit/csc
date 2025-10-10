@@ -30,6 +30,9 @@ ghenv.Component.Name = 'CSC_SignIn'
 ghenv.Component.NickName = 'CSC_SignIn'
 ghenv.Component.Category = 'DDU_CSC'
 ghenv.Component.SubCategory = '1 User'
+ghenv.Component.Description = (
+    'Component Description'
+)
 ```
 
 ### Component SubCategories (Python)
