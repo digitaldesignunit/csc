@@ -456,6 +456,32 @@ class UpdateComponentModel(BaseModel):
 
 # DESIGNS ---------------------------------------------------------------------
 
+class DesignInsertionFrame(BaseModel):
+    """Insertion frame defining component orientation in design space."""
+    o: List[float] = Field(
+        description="Origin point as [x, y, z] coordinates"
+    )
+    x: List[float] = Field(
+        description="X-axis vector as [x, y, z] coordinates"
+    )
+    y: List[float] = Field(
+        description="Y-axis vector as [x, y, z] coordinates"
+    )
+    z: List[float] = Field(
+        description="Z-axis vector as [x, y, z] coordinates"
+    )
+
+
+class DesignComponent(BaseModel):
+    """Component reference with its insertion frame in the design."""
+    component: str = Field(
+        description="Component ID (GUID) reference"
+    )
+    iframe: DesignInsertionFrame = Field(
+        description="Insertion frame defining component orientation"
+    )
+
+
 class DesignModel(BaseModel):
     # globally unique ID (GUID stored in Mongo as _id)
     id: str = Field(
@@ -483,8 +509,8 @@ class DesignModel(BaseModel):
     lastmodified: str = Field(
         description="ISO timestamp when design was last modified"
     )
-    # components and respetive insertion frames
-    components: List[Dict] = Field(
+    # components and respective insertion frames
+    components: List[DesignComponent] = Field(
         description="List of components and their insertion frames"
     )
 
@@ -496,25 +522,63 @@ class DesignModel(BaseModel):
                 "_id": "550e8400-e29b-41d4-a716-446655440000",
                 "name": "Design A",
                 "description": "One of many beautiful designs",
+                "creator": "550e8400-e29b-41d4-a716-446655440002",
                 "created": "2024-01-15T10:30:00Z",
                 "lastmodified": "2024-01-15T10:30:00Z",
                 "components": [
                     {
                         "component": "550e8400-e29b-41d4-a716-446655440000",
                         "iframe": {
-                            "x": 0,
-                            "y": 0,
-                            "z": 0
+                            "o": [0.0, 0.0, 0.0],
+                            "x": [1.0, 0.0, 0.0],
+                            "y": [0.0, 1.0, 0.0],
+                            "z": [0.0, 0.0, 1.0]
                         }
                     },
                     {
                         "component": "550e8400-e29b-41d4-a716-446655440001",
                         "iframe": {
-                            "x": 0,
-                            "y": 0,
-                            "z": 0
+                            "o": [100.0, 0.0, 0.0],
+                            "x": [1.0, 0.0, 0.0],
+                            "y": [0.0, 1.0, 0.0],
+                            "z": [0.0, 0.0, 1.0]
                         }
                     }
                 ]
             }
         }
+
+
+class CreateDesignRequest(BaseModel):
+    """Request model for creating a new design."""
+    name: Optional[str] = Field(
+        None,
+        description="Human readable design name (optional)"
+    )
+    description: Optional[str] = Field(
+        None,
+        description="Design description (optional)"
+    )
+    components: List[DesignComponent] = Field(
+        description="List of components and their insertion frames"
+    )
+
+
+class UpdateDesignModel(BaseModel):
+    """Model for updating an existing design."""
+    name: Optional[str] = Field(
+        None,
+        description="Human readable design name (optional)"
+    )
+    description: Optional[str] = Field(
+        None,
+        description="Design description (optional)"
+    )
+    components: Optional[List[DesignComponent]] = Field(
+        None,
+        description="List of components and their insertion frames"
+    )
+
+    class Config:
+        extra = "allow"
+        populate_by_name = True
