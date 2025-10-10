@@ -1,11 +1,11 @@
 #!/usr/bin/env python3.9
+import uuid
 from datetime import datetime, timezone
 from typing import List
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from pymongo.errors import PyMongoError
-from bson import ObjectId
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalogue.models import (  # NOQA
@@ -50,12 +50,9 @@ async def validate_component_ids(
 ) -> bool:
     """Validate that all component IDs exist in the database."""
     try:
-        # Convert string IDs to ObjectId for MongoDB query
-        object_ids = [ObjectId(cid) for cid in component_ids]
-
-        # Count how many components exist with these IDs
+        # Query using GUID strings directly (not ObjectIds)
         count = await components_col.count_documents(
-            {"_id": {"$in": object_ids}}
+            {"_id": {"$in": component_ids}}
         )
 
         return count == len(component_ids)
@@ -69,7 +66,7 @@ async def enrich_design_with_creator(design: dict, users_col) -> dict:
         creator_id = design.get('creator')
         if creator_id:
             creator = await users_col.find_one(
-                {"_id": ObjectId(creator_id)}
+                {"_id": creator_id}
             )
             if creator:
                 design['creator_username'] = creator.get(
@@ -166,7 +163,7 @@ async def get_design(
 ):
     """Get a single design by ID."""
     try:
-        design = await designs_col.find_one({"_id": ObjectId(design_id)})
+        design = await designs_col.find_one({"_id": design_id})
 
         if not design:
             raise HTTPException(
@@ -216,9 +213,11 @@ async def create_design(
                 detail="One or more component IDs do not exist"
             )
 
-        # Create design document
+        # Create design document with UUID
         now = get_current_timestamp()
+        design_id = str(uuid.uuid4())
         design_doc = {
+            "_id": design_id,
             "name": design_data.name,
             "description": design_data.description,
             "creator": current_user.id,
@@ -228,14 +227,12 @@ async def create_design(
         }
 
         # Insert design
-        result = await designs_col.insert_one(design_doc)
-        design_id = str(result.inserted_id)
+        await designs_col.insert_one(design_doc)
 
         # Fetch the created design
         created_design = await designs_col.find_one(
-            {"_id": ObjectId(design_id)}
+            {"_id": design_id}
         )
-        created_design['_id'] = str(created_design['_id'])
         enriched_design = await enrich_design_with_creator(
             created_design, users_col
         )
@@ -268,7 +265,7 @@ async def update_design(
     """Update an existing design (owner only)."""
     try:
         # Check if design exists and user is owner
-        design = await designs_col.find_one({"_id": ObjectId(design_id)})
+        design = await designs_col.find_one({"_id": design_id})
 
         if not design:
             raise HTTPException(
@@ -306,13 +303,13 @@ async def update_design(
 
         # Update design
         await designs_col.update_one(
-            {"_id": ObjectId(design_id)},
+            {"_id": design_id},
             {"$set": update_doc}
         )
 
         # Fetch updated design
         updated_design = await designs_col.find_one(
-            {"_id": ObjectId(design_id)}
+            {"_id": design_id}
         )
         updated_design['_id'] = str(updated_design['_id'])
         enriched_design = await enrich_design_with_creator(
@@ -349,7 +346,7 @@ async def delete_design(
     """Delete a design (owner only)."""
     try:
         # Check if design exists and user is owner
-        design = await designs_col.find_one({"_id": ObjectId(design_id)})
+        design = await designs_col.find_one({"_id": design_id})
 
         if not design:
             raise HTTPException(
@@ -365,7 +362,7 @@ async def delete_design(
             )
 
         # Delete design
-        await designs_col.delete_one({"_id": ObjectId(design_id)})
+        await designs_col.delete_one({"_id": design_id})
 
         return {"message": "Design deleted successfully"}
 
