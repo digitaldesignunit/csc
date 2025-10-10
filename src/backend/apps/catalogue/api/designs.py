@@ -474,3 +474,32 @@ async def delete_design(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error deleting design: {str(e)}"
         )
+
+
+@router.get('/schema/design', summary='Get DesignModel schema')
+async def get_design_schema(request: Request):
+    """Get the OpenAPI schema for DesignModel"""
+
+    schema = DesignModel.model_json_schema()
+
+    # Generate ETag for schema (hash of the schema content)
+    schema_string = json.dumps(schema, sort_keys=True, separators=(',', ':'))
+    etag = hashlib.md5(schema_string.encode('utf-8')).hexdigest()
+
+    # Check for conditional request
+    if check_conditional_request(request, etag):
+        return JSONResponse(
+            status_code=304,
+            content=None,
+            headers={'ETag': etag}
+        )
+
+    # Return schema with ETag header
+    return JSONResponse(
+        status_code=200,
+        content=schema,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=86400'  # 24 hour cache
+        }
+    )
