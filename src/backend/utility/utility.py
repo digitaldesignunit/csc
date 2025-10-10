@@ -202,3 +202,65 @@ def generate_etag_for_components(components: list) -> str:
     etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
 
     return etag_hash
+
+
+def generate_design_etag(design_data: dict) -> str:
+    """
+    Generate ETag for a design using hybrid hash approach.
+
+    Creates a hash from lastmodified timestamp and key design fields
+    (id, name, creator, components) for efficient cache validation.
+
+    Args:
+        design_data: Design data dictionary
+
+    Returns:
+        ETag string (hex digest of MD5 hash)
+    """
+    # Extract key fields for ETag generation
+    key_fields = {
+        'lastmodified': design_data.get('lastmodified', ''),
+        'id': design_data.get('_id', design_data.get('id', '')),
+        'name': design_data.get('name', ''),
+        'creator': design_data.get('creator', ''),
+        'components_count': len(design_data.get('components', [])),
+        'created': design_data.get('created', '')
+    }
+
+    # Create a consistent string representation
+    etag_string = json.dumps(key_fields, sort_keys=True,
+                             separators=(',', ':'))
+
+    # Generate MD5 hash
+    etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
+
+    return etag_hash
+
+
+def generate_etag_for_designs(designs: list) -> str:
+    """
+    Generate ETag for a list of designs using the individual design
+    ETag function.
+
+    Args:
+        designs: List of design dictionaries
+
+    Returns:
+        ETag string (MD5 hash of design ETags)
+    """
+    if not designs:
+        return hashlib.md5(b'').hexdigest()
+
+    design_etags = []
+    for design in designs:
+        etag = generate_design_etag(design)
+        design_etags.append(etag)
+
+    # Sort for consistent hashing
+    design_etags.sort()
+
+    # Create hash of all design ETags
+    etag_string = json.dumps(design_etags, separators=(',', ':'))
+    etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
+
+    return etag_hash

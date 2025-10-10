@@ -8,5 +8,7 @@ from .utility import ( # NOQA401
     generate_component_etag,
     generate_etag_for_components,
     generate_geometry_etag,
-    check_geometry_conditional_request
+    check_geometry_conditional_request,
+    generate_design_etag,
+    generate_etag_for_designs
 )
