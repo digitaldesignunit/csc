@@ -40,7 +40,7 @@ ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 251010
+Version: 251010.1
 """
 
 
@@ -58,6 +58,7 @@ class _ComponentCache(object):
         self.ttl_hours = ttl_hours
         self.cache_dir = cache_dir or self._get_default_cache_dir()
         self.components_dir = os.path.join(self.cache_dir, 'components')
+        self.designs_dir = os.path.join(self.cache_dir, 'designs')
         self.metadata_dir = os.path.join(self.cache_dir, 'metadata')
         self.geometry_dir = os.path.join(self.cache_dir, 'component_geometry')
         self._lock = RLock()
@@ -79,8 +80,8 @@ class _ComponentCache(object):
     def _ensure_cache_dirs(self):
         """Create cache directories if they don't exist."""
         dirs = [
-            self.cache_dir, self.components_dir, self.metadata_dir,
-            self.geometry_dir
+            self.cache_dir, self.components_dir, self.designs_dir,
+            self.metadata_dir, self.geometry_dir
         ]
         for directory in dirs:
             if not os.path.exists(directory):
@@ -318,6 +319,18 @@ class _ComponentCache(object):
 
                     return components, metadata.get('etag'), True
 
+                elif cache_key.startswith('design:'):
+                    # Individual design
+                    design_id = cache_key.split(':', 1)[1]
+                    design_file = os.path.join(
+                        self.designs_dir, f"{design_id}.pkl"
+                    )
+
+                    if os.path.exists(design_file):
+                        with open(design_file, 'rb') as f:
+                            design_data = pickle.load(f)
+                        return design_data, metadata.get('etag'), True
+
                 elif cache_key == 'schema:component':
                     # Schema data is stored directly in metadata
                     return metadata.get('data'), metadata.get('etag'), True
@@ -389,6 +402,25 @@ class _ComponentCache(object):
                         'type': 'collection',
                         'components': components,
                         'filters': filters
+                    }
+
+                elif cache_key.startswith('design:'):
+                    # Individual design
+                    design_id = cache_key.split(':', 1)[1]
+                    design_file = os.path.join(
+                        self.designs_dir, f"{design_id}.pkl"
+                    )
+
+                    # Store design data as pickle
+                    with open(design_file, 'wb') as f:
+                        pickle.dump(data, f)
+
+                    # Store metadata
+                    metadata = {
+                        'cache_key': cache_key,
+                        'cached_at': current_time,
+                        'etag': etag,
+                        'type': 'design'
                     }
 
                 elif cache_key == 'schema:component':
