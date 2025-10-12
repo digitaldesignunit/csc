@@ -78,15 +78,6 @@ export default async function DesignsPage({
         <Card>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Design Assemblies
-                </CardTitle>
-                <CardDescription>
-                  Community-created design assemblies and their components
-                </CardDescription>
-              </div>
               <Link href="/designs/create">
                 <Button className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />

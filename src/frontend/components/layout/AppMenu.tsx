@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Home, Package, Search, Palette, Award, FileText, User, Shield, QrCode, Terminal, Box } from 'lucide-react'
+import { Home, Package, Search, Award, FileText, User, Shield, QrCode, Terminal, Box } from 'lucide-react'
 
 export default function AppMenu() {
   const router = useRouter()
@@ -114,8 +114,8 @@ export default function AppMenu() {
               onClick={() => handleNavigation('/designs')}
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
-              <Palette className="h-4 w-4" />
-              Designs
+              <Box className="h-4 w-4" />
+              Browse Designs
             </div>
           </div>
         </div>
