@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useMemo, useState, useEffect } from 'react'
+import React, { useRef, useMemo, useState, useEffect, Suspense } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import { useTheme } from 'next-themes'
@@ -25,6 +25,39 @@ const MESH_FILES = [
   '6dc08bb0-4ae3-42e6-8cd9-23b49f624706_reduced.glb'
 ]
 
+// Fallback mesh component for when GLTF loading fails
+const FallbackMesh = ({ 
+  color, 
+  opacity, 
+  rotationSpeed 
+}: {
+  color: string
+  opacity: number
+  rotationSpeed: number
+}) => {
+  const meshRef = useRef<THREE.Group>(null)
+  
+  useFrame((state, delta) => {
+    if (meshRef.current) {
+      meshRef.current.rotateY(rotationSpeed * delta)
+    }
+  })
+
+  return (
+    <group ref={meshRef}>
+      <mesh>
+        <sphereGeometry args={[1, 32, 32]} />
+        <meshBasicMaterial 
+          color={color}
+          transparent={true}
+          opacity={opacity}
+          wireframe={true}
+        />
+      </mesh>
+    </group>
+  )
+}
+
 // Rotating mesh component that loads random GLTF files
 const RotatingMesh = ({ 
   color = '#3b82f6', 
@@ -44,9 +77,9 @@ const RotatingMesh = ({
     setSelectedMesh(randomMesh)
   }, [])
   
-  // Load the GLB file with error handling
+  // Load the GLB file - useGLTF handles errors internally
   const gltf = useGLTF(selectedMesh ? `/meshes/${selectedMesh}` : '/meshes/0aad9436-ead8-4651-81a1-8b435012d799_reduced.glb')
-  const scene = gltf.scene
+  const scene = gltf?.scene
   
   // Debug logging
   useEffect(() => {
@@ -92,19 +125,9 @@ const RotatingMesh = ({
     return cloned
   }, [scene, color, opacity])
 
+  // If no scene available, use fallback
   if (!clonedScene) {
-    // Fallback to a simple sphere if GLTF loading fails
-    return (
-      <mesh ref={meshRef}>
-        <sphereGeometry args={[1, 32, 32]} />
-        <meshBasicMaterial 
-          color={color}
-          transparent={true}
-          opacity={opacity}
-          wireframe={true}
-        />
-      </mesh>
-    )
+    return <FallbackMesh color={color} opacity={opacity} rotationSpeed={rotationSpeed} />
   }
 
   return (
@@ -143,11 +166,13 @@ export default function BackgroundMesh({
         gl={{ alpha: true, antialias: true }}
       >
         <ambientLight intensity={intensity} />
-        <RotatingMesh 
-          color={meshColor}
-          opacity={opacity}
-          rotationSpeed={rotationSpeed}
-        />
+        <Suspense fallback={<FallbackMesh color={meshColor} opacity={opacity} rotationSpeed={rotationSpeed} />}>
+          <RotatingMesh 
+            color={meshColor}
+            opacity={opacity}
+            rotationSpeed={rotationSpeed}
+          />
+        </Suspense>
       </Canvas>
     </div>
   )
