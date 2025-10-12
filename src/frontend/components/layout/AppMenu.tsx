@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Home, Package, Search, Palette, Award, FileText, User, Shield, QrCode, Terminal } from 'lucide-react'
+import { Home, Package, Search, Palette, Award, FileText, User, Shield, QrCode, Terminal, Box } from 'lucide-react'
 
 export default function AppMenu() {
   const router = useRouter()
@@ -34,7 +34,7 @@ export default function AppMenu() {
 
   return (
     <div className="space-y-4">
-      {/* Main Navigation */}
+      {/* MAIN Section */}
       <div className="space-y-2">
         <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
           Main
@@ -47,29 +47,43 @@ export default function AppMenu() {
             <Home className="h-4 w-4" />
             Home / About
           </div>
+          
+          {/* Dashboard and GH Interface - Only visible to logged in users with valid sessions */}
+          {session && !session.error && (
+            <>
+              <div
+                onClick={() => handleNavigation('/dashboard')}
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              >
+                <User className="h-4 w-4" />
+                Dashboard
+              </div>
+              
+              <div
+                onClick={() => handleNavigation('/gh-interface')}
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              >
+                <Terminal className="h-4 w-4" />
+                GH Interface
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* User Navigation - Only visible to logged in users with valid sessions */}
+      {/* COMPONENTS Section - Only visible to logged in users */}
       {session && !session.error && (
         <div className="space-y-2">
           <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
-            User Tools
+            Components
           </h3>
           <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
-            <div
-              onClick={() => handleNavigation('/dashboard')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
-            >
-              <User className="h-4 w-4" />
-              Dashboard
-            </div>
             <div
               onClick={() => handleNavigation('/components')}
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Package className="h-4 w-4" />
-              Components
+              Browse Components
             </div>
             <div
               onClick={() => handleNavigation('/findcomponent')}
@@ -85,19 +99,23 @@ export default function AppMenu() {
               <QrCode className="h-4 w-4" />
               Identify Component
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* DESIGNS Section - Only visible to logged in users */}
+      {session && !session.error && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
+            Designs
+          </h3>
+          <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
             <div
               onClick={() => handleNavigation('/designs')}
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Palette className="h-4 w-4" />
               Designs
-            </div>
-            <div
-              onClick={() => handleNavigation('/gh-interface')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
-            >
-              <Terminal className="h-4 w-4" />
-              GH Interface
             </div>
           </div>
         </div>
@@ -121,7 +139,7 @@ export default function AppMenu() {
         </div>
       )}
 
-      {/* Misc Navigation */}
+      {/* OTHER Section */}
       <div className="space-y-2">
         <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
           Other
