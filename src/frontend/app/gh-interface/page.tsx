@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import { resolveStatic } from '@/lib/utils'
 import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, FileImage, Download } from 'lucide-react'
 
 export default function GHInterfacePage() {
@@ -12,6 +13,8 @@ export default function GHInterfacePage() {
   const toggleSection = (sectionId: string) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId)
   }
+
+  // Use shared resolveStatic from utils
 
   // Fetch release version on component mount
   useEffect(() => {
@@ -207,7 +210,7 @@ export default function GHInterfacePage() {
               { label: 'Status', description: 'Authentication status and cache info' }
             ]}
             tip="Automatically caches authentication and component data locally for faster access."
-            imagePath="/gh-interface/csc_signin.jpg"
+            imagePath={resolveStatic('/gh-interface/csc_signin.jpg')}
           />
         </div>
       )
@@ -228,7 +231,7 @@ export default function GHInterfacePage() {
             outputs={[
               { label: 'ComponentData', description: 'JSON data for the fetched components' }
             ]}
-            imagePath="/gh-interface/csc_fetchcomponents.jpg"
+            imagePath={resolveStatic('/gh-interface/csc_fetchcomponents.jpg')}
           />
 
           <ComponentCard
@@ -241,7 +244,7 @@ export default function GHInterfacePage() {
             outputs={[
               { label: 'ComponentData', description: 'JSON data for all components' }
             ]}
-            imagePath="/gh-interface/csc_fetchallcomponents.jpg"
+            imagePath={resolveStatic('/gh-interface/csc_fetchallcomponents.jpg')}
           />
 
           <ComponentCard
@@ -265,7 +268,7 @@ export default function GHInterfacePage() {
               { label: 'FilterDescription', description: 'Human-readable description of the applied filters' },
               { label: 'ComponentData', description: 'Components matching filter criteria' }
             ]}
-            imagePath="/gh-interface/csc_filtercomponents.jpg"
+            imagePath={resolveStatic('/gh-interface/csc_filtercomponents.jpg')}
           />
 
           <ComponentCard
@@ -290,7 +293,7 @@ export default function GHInterfacePage() {
               { label: 'ComponentData', description: 'JSON data for filtered components' },
             ]}
             tip="More efficient than fetching all components and filtering locally. Use this for large datasets."
-            imagePath="/gh-interface/csc_fetchfilteredcomponents.jpg"
+            imagePath={resolveStatic('/gh-interface/csc_fetchfilteredcomponents.jpg')}
           />
 
           <ComponentCard
@@ -306,7 +309,7 @@ export default function GHInterfacePage() {
               { label: 'GeometryType', description: 'Geometry type: detailed, reduced, or primitive' },
               { label: 'ComponentID', description: 'Component ID that was processed' }
             ]}
-            imagePath="/gh-interface/csc_fetchgeometry.jpg"
+            imagePath={resolveStatic('/gh-interface/csc_fetchgeometry.jpg')}
           />
         </div>
       )
@@ -371,7 +374,7 @@ export default function GHInterfacePage() {
               { label: 'MarkerPoints', description: 'Component marker points' },
               { label: 'Attributes', description: 'Component attributes' }
             ]}
-            imagePath="/gh-interface/csc_disassemblecomponent.jpg"
+            imagePath={resolveStatic('/gh-interface/csc_disassemblecomponent.jpg')}
           />
 
           <ComponentCard

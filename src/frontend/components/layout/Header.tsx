@@ -7,6 +7,7 @@ import Image from 'next/image'
 import AppMenu from '@/components/layout/AppMenu'
 import ThemeToggle from '@/components/common/ThemeToggle'
 import UserItem from '@/components/auth/UserItem'
+import { resolveStatic } from '@/lib/utils'
 
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -50,7 +51,7 @@ export default function Header() {
   // Determine logo based on theme
   const currentTheme = theme === 'system' ? systemTheme : theme
   const isDark = currentTheme === 'dark'
-  const logoSrc = isDark ? '/ddu_logo_white.png' : '/ddu_logo_black.png'
+  const logoSrc = isDark ? resolveStatic('/logo/ddu_logo_white.png') : resolveStatic('/logo/ddu_logo_black.png')
 
   return (
     <>

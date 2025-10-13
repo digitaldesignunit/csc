@@ -5,6 +5,7 @@ import { useTheme } from 'next-themes'
 import Image from 'next/image'
 import UserItem from '@/components/auth/UserItem'
 import AppMenu from '@/components/layout/AppMenu'
+import { resolveStatic } from '@/lib/utils'
 
 export default function Sidebar() {
   const [isVisible, setIsVisible] = useState(false)
@@ -34,7 +35,7 @@ export default function Sidebar() {
   // Determine logo based on theme
   const currentTheme = theme === 'system' ? systemTheme : theme
   const isDark = currentTheme === 'dark'
-  const logoSrc = isDark ? '/ddu_logo_white.png' : '/ddu_logo_black.png'
+  const logoSrc = isDark ? resolveStatic('/logo/ddu_logo_white.png') : resolveStatic('/logo/ddu_logo_black.png')
 
   return (
     <div className='fixed top-0 left-0 flex flex-col gap-2 w-[250px] h-screen p-2 justify-between overflow-hidden border-r bg-background z-40'>

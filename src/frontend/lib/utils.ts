@@ -185,6 +185,17 @@ export function componentBounds(component_bbx: ComponentBoundingBox): Array<numb
   return [bnds_x, bnds_y, bnds_z]
 }
 
+// Resolve a static asset URL: use NEXT_STATIC_BASE_URL in production, fallback to Next public path locally
+export function resolveStatic(path: string): string {
+  const base = process.env.NEXT_STATIC_BASE_URL || ''
+  // In SSR, window is undefined; assume production if base is set
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  if (isLocal || !base) return path
+  const normalizedBase = base.endsWith('/') ? base : base + '/'
+  const cleanedPath = path.startsWith('/') ? path.slice(1) : path
+  return normalizedBase + cleanedPath
+}
+
 export function generateGrasshopperPanelXML(componentId: string): string {
   return `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <Archive name="Root">
