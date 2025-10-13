@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { Menu, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import Image from 'next/image'
 import AppMenu from '@/components/layout/AppMenu'
 import ThemeToggle from '@/components/common/ThemeToggle'
 import UserItem from '@/components/auth/UserItem'
@@ -60,12 +59,16 @@ export default function Header() {
         {/* Left side - Logo and Title */}
         <div className='flex items-center gap-3'>
           {mounted && isMobile && (
-            <Image
+            <img
               src={logoSrc}
               alt="Digital Design Unit"
               width={40}
               height={40}
               className="flex-shrink-0"
+              onError={(e) => {
+                console.error('Failed to load DDU logo:', logoSrc)
+                e.currentTarget.style.display = 'none'
+              }}
             />
           )}
           <h1 className='text-xl font-bold text-foreground'>Catalogue of Second Chances</h1>

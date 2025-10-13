@@ -6,19 +6,11 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'public.ddu.uber.space',
-        pathname: '**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'https://public.ddu.uber.space/csc_assets/component_preview',
-        pathname: '**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'https://public.ddu.uber.space/csc_assets/component_geometry',
-        pathname: '**',
+        pathname: '/csc_assets/**',
       },
     ],
+    // Disable image optimization for local development and problematic images
+    unoptimized: process.env.NODE_ENV === 'development',
   },
 };
 
