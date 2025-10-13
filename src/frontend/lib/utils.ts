@@ -187,10 +187,20 @@ export function componentBounds(component_bbx: ComponentBoundingBox): Array<numb
 
 // Resolve a static asset URL: use NEXT_STATIC_BASE_URL in production, fallback to Next public path locally
 export function resolveStatic(path: string): string {
-  const base = process.env.NEXT_STATIC_BASE_URL || ''
-  // In SSR, window is undefined; assume production if base is set
+  // Prefer client-exposed var; fall back to legacy server var
+  const base = (process.env.NEXT_PUBLIC_STATIC_BASE_URL || process.env.NEXT_STATIC_BASE_URL || '').trim()
+
+  // If already an absolute URL or data URI, return as-is
+  const lower = path.toLowerCase()
+  if (lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('data:')) {
+    return path
+  }
+
+  // In dev (localhost) or no base configured, return original path
   const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   if (isLocal || !base) return path
+
+  // Normalize and concatenate
   const normalizedBase = base.endsWith('/') ? base : base + '/'
   const cleanedPath = path.startsWith('/') ? path.slice(1) : path
   return normalizedBase + cleanedPath
