@@ -26,27 +26,24 @@ const MESH_FILES = [
   '6dc08bb0-4ae3-42e6-8cd9-23b49f624706_reduced.glb'
 ]
 
-// No visible fallback while loading; we fade-in once loaded
-
 // Rotating mesh component that loads random GLTF files
 const RotatingMesh = ({ 
   color = '#3b82f6', 
   opacity = 0.1,
-  rotationSpeed = 0.5 
+  rotationSpeed = 0.5,
+  onVisibilityChange
 }: {
   color: string
   opacity: number
   rotationSpeed: number
+  onVisibilityChange: (visible: boolean) => void
 }) => {
   const meshRef = useRef<THREE.Group>(null)
   const [selectedMesh, setSelectedMesh] = useState<string>('')
-  const [currentOpacity, setCurrentOpacity] = useState<number>(0)
-  const targetOpacityRef = useRef<number>(opacity)
-  const fadeInSpeed = 0.25
+  const [isVisible, setIsVisible] = useState<boolean>(false)
   
   // Resolve mesh base URL: use env for remote, local public when on localhost
   const meshBaseUrl = useMemo(() => {
-    // resolveStatic will prepend NEXT_STATIC_BASE_URL in prod; locally remains as provided
     const basePath = '/backgroundmeshes/'
     const resolved = resolveStatic(basePath)
     return resolved.endsWith('/') ? resolved : resolved + '/'
@@ -62,7 +59,6 @@ const RotatingMesh = ({
   useEffect(() => {
     if (!selectedMesh) return
     try {
-      // Attempt to preload if available at runtime
       const anyUseGltf = useGLTF as unknown as { preload?: (path: string) => void }
       anyUseGltf.preload?.(`${meshBaseUrl}${selectedMesh}`)
     } catch {
@@ -91,45 +87,15 @@ const RotatingMesh = ({
     if (meshRef.current) {
       // Rotate around the random axis
       meshRef.current.rotateOnAxis(rotationAxis, rotationSpeed * delta)
-      
-      // Incrementally increase opacity until target reached
-      if (currentOpacity < targetOpacityRef.current) {
-        const next = Math.min(targetOpacityRef.current, currentOpacity + fadeInSpeed * delta)
-        if (next !== currentOpacity) setCurrentOpacity(next)
-      }
-      
-      // Apply opacity and styling to all mesh materials
-      meshRef.current.traverse((child: THREE.Object3D) => {
-        if (child instanceof THREE.Mesh) {
-          const mesh = child as THREE.Mesh
-          const mat = mesh.material as THREE.Material | THREE.Material[]
-          if (Array.isArray(mat)) {
-            mat.forEach(m => {
-              const mb = m as THREE.MeshBasicMaterial
-              mb.transparent = true
-              mb.opacity = currentOpacity
-              mb.wireframe = true
-              mb.color = new THREE.Color(color)
-            })
-          } else if (mat) {
-            const mb = mat as THREE.MeshBasicMaterial
-            mb.transparent = true
-            mb.opacity = currentOpacity
-            mb.wireframe = true
-            mb.color = new THREE.Color(color)
-          }
-        }
-      })
     }
   })
 
-  // Clone the scene; materials will be set and faded in during frames
-  const clonedScene = useMemo(() => {
-    if (!scene) return null
+
+  // Set up materials when scene is available
+  useEffect(() => {
+    if (!scene) return
     
-    const cloned = scene.clone()
-    // Initialize materials to invisible basic wireframe, color applied each frame
-    cloned.traverse((child: THREE.Object3D) => {
+    scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         // Ensure vertex normals are present and up to date
         const geom = child.geometry as THREE.BufferGeometry
@@ -146,33 +112,32 @@ const RotatingMesh = ({
         child.material = new THREE.MeshBasicMaterial({
           color: new THREE.Color(color),
           transparent: true,
-          opacity: 0,
+          opacity: opacity,
           wireframe: true
         })
       }
     })
-    
-    return cloned
-  }, [scene, color])
+  }, [scene, color, opacity])
 
-  // When scene becomes available, reset current opacity for fresh fade-in
+  // When scene becomes available, trigger CSS fade-in
   useEffect(() => {
-    if (clonedScene) setCurrentOpacity(0)
-  }, [clonedScene])
-
-  // Update target when prop changes
-  useEffect(() => {
-    targetOpacityRef.current = opacity
-  }, [opacity])
+    if (scene) {
+      // Small delay to ensure scene is ready
+      setTimeout(() => {
+        setIsVisible(true)
+        onVisibilityChange(true)
+      }, 100)
+    }
+  }, [scene, onVisibilityChange])
 
   // If not loaded, render nothing (no fallback). We'll fade in when ready
-  if (!clonedScene) {
+  if (!scene) {
     return null
   }
 
   return (
     <group ref={meshRef}>
-      <primitive object={clonedScene} />
+      <primitive object={scene} />
     </group>
   )
 }
@@ -185,6 +150,7 @@ export default function BackgroundMesh({
   opacity = 0.1
 }: BackgroundMeshProps) {
   const { theme, systemTheme } = useTheme()
+  const [isVisible, setIsVisible] = useState<boolean>(false)
   
   // Theme-aware color selection that handles system theme
   const getMeshColor = () => {
@@ -199,7 +165,13 @@ export default function BackgroundMesh({
   const meshColor = getMeshColor()
   
   return (
-    <div className={`absolute inset-0 pointer-events-none ${className}`}>
+    <div 
+      className={`absolute inset-0 pointer-events-none ${className}`}
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transition: 'opacity 0.5s ease-in-out'
+      }}
+    >
       <Canvas
         camera={{ position: [0, 0, 0.8], fov: 50 }}
         style={{ background: 'transparent' }}
@@ -211,6 +183,7 @@ export default function BackgroundMesh({
             color={meshColor}
             opacity={opacity}
             rotationSpeed={rotationSpeed}
+            onVisibilityChange={setIsVisible}
           />
         </Suspense>
       </Canvas>
