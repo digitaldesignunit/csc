@@ -85,16 +85,16 @@ export default function CreditsPage() {
             <h2 className='text-xl font-bold mb-4'>Open Source & Third Party Libraries</h2>
             <ul className='list-disc list-inside mb-4'>
               <li>
-                <strong>Frontend Framework:</strong> <a href='https://nextjs.org/' target='_blank' className='text-blue-500 underline'>Next.js</a> - React framework for production
+                <strong>Frontend Framework:</strong> <a href='https://nextjs.org/' target='_blank' className='text-blue-500 underline'>Next.js</a> - React framework
               </li>
               <li>
-                <strong>UI Components:</strong> <a href='https://ui.shadcn.com/' target='_blank' className='text-blue-500 underline'>shadcn/ui</a> - Re-usable components built with Radix UI and Tailwind CSS
+                <strong>UI Components:</strong> <a href='https://ui.shadcn.com/' target='_blank' className='text-blue-500 underline'>shadcn/ui</a> - Re-usable React components
               </li>
               <li>
                 <strong>3D Graphics:</strong> <a href='https://react-three-fiber.pmnd.rs/' target='_blank' className='text-blue-500 underline'>React Three Fiber</a> & <a href='https://github.com/pmndrs/drei' target='_blank' className='text-blue-500 underline'>Drei</a> - React renderer for Three.js
               </li>
               <li>
-                <strong>Styling:</strong> <a href='https://tailwindcss.com/' target='_blank' className='text-blue-500 underline'>Tailwind CSS</a> - Utility-first CSS framework
+                <strong>Styling:</strong> <a href='https://tailwindcss.com/' target='_blank' className='text-blue-500 underline'>Tailwind CSS</a> - CSS framework
               </li>
               <li>
                 <strong>Authentication:</strong> <a href='https://next-auth.js.org/' target='_blank' className='text-blue-500 underline'>NextAuth.js</a> - Authentication for Next.js
@@ -103,7 +103,7 @@ export default function CreditsPage() {
                 <strong>Database:</strong> <a href='https://www.mongodb.com/' target='_blank' className='text-blue-500 underline'>MongoDB</a> - NoSQL database
               </li>
               <li>
-                <strong>Backend Framework:</strong> <a href='https://fastapi.tiangolo.com/' target='_blank' className='text-blue-500 underline'>FastAPI</a> - Modern Python web framework
+                <strong>Backend Framework:</strong> <a href='https://fastapi.tiangolo.com/' target='_blank' className='text-blue-500 underline'>FastAPI</a> - Python web framework for building APIs
               </li>
               <li>
                 <strong>Computer Vision:</strong> <a href='https://opencv.org/' target='_blank' className='text-blue-500 underline'>OpenCV</a> - Computer vision and machine learning library
@@ -121,7 +121,7 @@ export default function CreditsPage() {
                 <strong>Data Validation:</strong> <a href='https://pydantic.dev/' target='_blank' className='text-blue-500 underline'>Pydantic</a> - Data validation using Python type annotations
               </li>
               <li>
-                <strong>Icons:</strong> <a href='https://lucide.dev/' target='_blank' className='text-blue-500 underline'>Lucide React</a> - Beautiful & consistent icon toolkit
+                <strong>Icons:</strong> <a href='https://lucide.dev/' target='_blank' className='text-blue-500 underline'>Lucide React</a> - Icon toolkit for React
               </li>
             </ul>
           </section>
