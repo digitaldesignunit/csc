@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
+import Image from 'next/image'
 import UserItem from '@/components/auth/UserItem'
 import AppMenu from '@/components/layout/AppMenu'
 import { resolveStatic } from '@/lib/utils'
@@ -42,15 +43,15 @@ export default function Sidebar() {
       <div className='flex flex-col gap-3'>
         {mounted && (
           <div className='flex justify-center'>
-            <img
+            <Image
               src={logoSrc}
               alt="Digital Design Unit"
               width={56}
               height={56}
               className="flex-shrink-0"
+              priority
               onError={(e) => {
                 console.error('Failed to load DDU logo:', logoSrc)
-                e.currentTarget.style.display = 'none'
               }}
             />
           </div>

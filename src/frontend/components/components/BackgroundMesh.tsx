@@ -40,7 +40,6 @@ const RotatingMesh = ({
 }) => {
   const meshRef = useRef<THREE.Group>(null)
   const [selectedMesh, setSelectedMesh] = useState<string>('')
-  const [isVisible, setIsVisible] = useState<boolean>(false)
   
   // Resolve mesh base URL: use env for remote, local public when on localhost
   const meshBaseUrl = useMemo(() => {
@@ -124,7 +123,6 @@ const RotatingMesh = ({
     if (scene) {
       // Small delay to ensure scene is ready
       setTimeout(() => {
-        setIsVisible(true)
         onVisibilityChange(true)
       }, 100)
     }
