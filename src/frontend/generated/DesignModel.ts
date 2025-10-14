@@ -1,35 +1,8 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2025-10-14T13:48:58.083Z
+// Generated on: 2025-10-14T14:01:11.379Z
 // Source: https://api.ddu.uber.space/schema/design
 
-export interface ComponentExtrusion {
-  profile: ComponentPolylinePoints; // Extrusion profile points
-  height: number; // Extrusion height
-}
-
-export interface ComponentGeometry {
-  mesh?: ComponentMesh | unknown; // Mesh geometry (single mesh - backward compat)
-  meshes?: ComponentMesh[] | unknown; // Array of mesh geometries (multiple meshes)
-  extrusion?: ComponentExtrusion | unknown; // Extrusion geometry
-}
-
-export interface ComponentMesh {
-  v: ComponentMeshVertices; // Mesh vertices
-  f: ComponentMeshFaces; // Mesh faces
-  c?: ComponentMeshColors | unknown; // Mesh vertex colors
-}
-
-export type ComponentMeshColors = number[][];
-
-
-export type ComponentMeshFaces = number[][];
-
-
-export type ComponentMeshVertices = number[][];
-
-
-export type ComponentPolylinePoints = number[][];
-
+import { ComponentExtrusion, ComponentGeometry, ComponentMesh, ComponentMeshColors, ComponentMeshFaces, ComponentMeshVertices, ComponentPolylinePoints } from './ComponentModel';
 
 export interface DesignAdditionalGeometry {
   id?: string; // Globally unique identifier for this additional geometry item

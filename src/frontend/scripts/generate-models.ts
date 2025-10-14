@@ -68,6 +68,16 @@ type Schema = Record<string, unknown> & {
   allOf?: Schema[]
 }
 
+const SHARED_COMPONENT_DEFS = new Set([
+  'ComponentExtrusion',
+  'ComponentGeometry',
+  'ComponentMesh',
+  'ComponentMeshColors',
+  'ComponentMeshFaces',
+  'ComponentMeshVertices',
+  'ComponentPolylinePoints',
+]);
+
 function generateTypeScriptInterface(
   schema: Record<string, unknown>,
   rootInterfaceName: string,
@@ -82,12 +92,25 @@ function generateTypeScriptInterface(
   let interfaceCode = `// Auto-generated from backend OpenAPI schema
 // Generated on: ${new Date().toISOString()}
 // Source: ${BACKEND_URL}${schemaPath}
+`;
 
+  // If generating DesignModel, import shared component defs instead of duplicating
+  if (rootInterfaceName === 'DesignModel') {
+    interfaceCode += `
+import { ComponentExtrusion, ComponentGeometry, ComponentMesh, ComponentMeshColors, ComponentMeshFaces, ComponentMeshVertices, ComponentPolylinePoints } from './ComponentModel';
+`;
+  }
+
+  interfaceCode += `
 `;
 
   // Generate nested interfaces first
   if ($defs) {
     for (const [defName, defSchema] of Object.entries($defs)) {
+      if (rootInterfaceName === 'DesignModel' && SHARED_COMPONENT_DEFS.has(defName)) {
+        // Skip generating shared types; they are imported from ComponentModel
+        continue;
+      }
       interfaceCode += generateNestedInterface(defName, defSchema as Record<string, unknown>, $defs);
       interfaceCode += '\n\n';
     }
