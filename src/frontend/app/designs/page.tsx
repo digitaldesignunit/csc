@@ -146,6 +146,22 @@ export default async function DesignsPage({
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total Additional Geometry
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {items.reduce((sum, design) => sum + (design.additional_geometry?.length || 0), 0)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Additional meshes across all designs
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
                 Average Components
               </CardTitle>
             </CardHeader>
@@ -169,7 +185,8 @@ export default async function DesignsPage({
 
 function DesignCard({ design }: { design: DesignModel }) {
   const designId = design._id || design.id
-  const componentCount = design.components?.length || 0
+  const componentCount = Array.isArray(design.components) ? design.components.length : 0
+  const addGeomCount = Array.isArray(design.additional_geometry) ? design.additional_geometry.length : 0
 
   return (
     <div className="border rounded-lg hover:bg-muted/50 transition-colors">
@@ -177,17 +194,20 @@ function DesignCard({ design }: { design: DesignModel }) {
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <h3 className="font-medium text-sm sm:text-base truncate">
-              {design.name || 'Unnamed Design'}
+              {String(design.name ?? 'Unnamed Design')}
             </h3>
             <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
               {componentCount} component{componentCount !== 1 ? 's' : ''}
             </span>
+            <span className="text-xs bg-secondary/10 text-secondary-foreground px-2 py-1 rounded">
+              {addGeomCount} add. geom.
+            </span>
           </div>
           <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
             <p className="line-clamp-2">
-              {design.description || 'No description provided'}
+              {String(design.description ?? 'No description provided')}
             </p>
-            <p>Created by: {design.creator_username || 'Unknown'}</p>
+            <p>Created by: {String((design as any).creator_username ?? 'Unknown')}</p>
             <p>Modified: {formatTimestamp(design.lastmodified)}</p>
           </div>
         </div>

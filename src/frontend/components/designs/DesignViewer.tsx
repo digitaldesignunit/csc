@@ -660,6 +660,26 @@ export default function DesignViewer({
                 </group>
               )
             })}
+
+            {/* Render additional geometry embedded in the design */}
+            {(Array.isArray(design.additional_geometry) ? design.additional_geometry : []).map((item) => {
+              try {
+                const meshes = convertGeometryToMeshes(item.geometry as unknown, (item as any).id || 'additional')
+                if (!meshes || meshes.length === 0) return null
+                return (
+                  <group key={`add_${(item as any).id}`} scale={[scale, scale, scale]}>
+                    <group matrix={createTransformMatrix((item as any).iframe)} matrixAutoUpdate={false}>
+                      {meshes.map((meshGroup, index) => (
+                        <primitive key={`add_${(item as any).id}_${index}`} object={meshGroup} />
+                      ))}
+                    </group>
+                  </group>
+                )
+              } catch (e) {
+                debugLog('Failed to render additional_geometry item', (item as any)?.id, e)
+                return null
+              }
+            })}
           </Bounds>
 
           <axesHelper args={[0.1]} />
