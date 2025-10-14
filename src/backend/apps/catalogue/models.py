@@ -482,6 +482,28 @@ class DesignComponent(BaseModel):
     )
 
 
+class DesignAdditionalGeometry(BaseModel):
+    """Design-scoped additional geometry item (static meshes)."""
+    id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description=(
+            "Globally unique identifier for this additional geometry item"
+        )
+    )
+    name: Optional[str] = Field(
+        None, description="Optional human-readable name"
+    )
+    iframe: DesignInsertionFrame = Field(
+        description="Insertion frame defining geometry orientation"
+    )
+    geometry: ComponentGeometry = Field(
+        description=(
+            "Geometry data. Use 'meshes' array; if single mesh, provide array "
+            "with one entry."
+        )
+    )
+
+
 class DesignModel(BaseModel):
     # globally unique ID (GUID stored in Mongo as _id)
     id: str = Field(
@@ -512,6 +534,14 @@ class DesignModel(BaseModel):
     # components and respective insertion frames
     components: List[DesignComponent] = Field(
         description="List of components and their insertion frames"
+    )
+    # additional geometry (design-scoped)
+    additional_geometry: List[DesignAdditionalGeometry] = Field(
+        default_factory=list,
+        description=(
+            "List of additional static meshes embedded in the design. "
+            "Always present; may be empty."
+        )
     )
 
     class Config:
@@ -544,6 +574,26 @@ class DesignModel(BaseModel):
                             "z": [0.0, 0.0, 1.0]
                         }
                     }
+                ],
+                "additional_geometry": [
+                    {
+                        "id": "550e8400-e29b-41d4-a716-446655440099",
+                        "name": "connector A",
+                        "iframe": {
+                            "o": [0.0, 0.0, 0.0],
+                            "x": [1.0, 0.0, 0.0],
+                            "y": [0.0, 1.0, 0.0],
+                            "z": [0.0, 0.0, 1.0]
+                        },
+                        "geometry": {
+                            "meshes": [
+                                {
+                                    "v": [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+                                    "f": [[0, 1, 2]]
+                                }
+                            ]
+                        }
+                    }
                 ]
             }
         }
@@ -562,6 +612,13 @@ class CreateDesignRequest(BaseModel):
     components: List[DesignComponent] = Field(
         description="List of components and their insertion frames"
     )
+    additional_geometry: List[DesignAdditionalGeometry] = Field(
+        default_factory=list,
+        description=(
+            "List of additional static meshes embedded in the design. "
+            "Always present; may be empty."
+        )
+    )
 
 
 class UpdateDesignModel(BaseModel):
@@ -577,6 +634,12 @@ class UpdateDesignModel(BaseModel):
     components: Optional[List[DesignComponent]] = Field(
         None,
         description="List of components and their insertion frames"
+    )
+    additional_geometry: Optional[List[DesignAdditionalGeometry]] = Field(
+        None,
+        description=(
+            "List of additional static meshes embedded in the design"
+        )
     )
 
     class Config:

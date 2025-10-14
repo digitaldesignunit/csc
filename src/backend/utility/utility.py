@@ -132,7 +132,6 @@ def generate_component_etag(component_data: dict) -> str:
 
     # Generate MD5 hash
     etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
-
     return etag_hash
 
 
@@ -224,6 +223,9 @@ def generate_design_etag(design_data: dict) -> str:
         'name': design_data.get('name', ''),
         'creator': design_data.get('creator', ''),
         'components_count': len(design_data.get('components', [])),
+        'additional_geometry_count': len(
+            design_data.get('additional_geometry', [])
+        ),
         'created': design_data.get('created', '')
     }
 

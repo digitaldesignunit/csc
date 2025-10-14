@@ -1,7 +1,8 @@
 #!/usr/bin/env python3.9
-import uuid
 from datetime import datetime, timezone
 from typing import List
+import json
+import hashlib
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
 from fastapi import (
@@ -16,7 +17,6 @@ from apps.catalogue.models import (  # NOQA
     DesignModel,
     CreateDesignRequest,
     UpdateDesignModel,
-    DesignComponent,
     User,
 )
 from .auth import get_current_active_user
@@ -296,25 +296,62 @@ async def create_design(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="One or more component IDs do not exist"
             )
+        # Enforce limits for additional geometry
+        additional_geometry = getattr(design_data, 'additional_geometry', [])
+        if additional_geometry is None:
+            additional_geometry = []
+        if len(additional_geometry) > 25:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum of 25 additional geometries exceeded"
+            )
 
-        # Create design document with UUID
+        # Rough size check (approximate JSON size) for 10MB limit
+        try:
+            approx_size_bytes = len(
+                json.dumps(
+                    design_data.model_dump(
+                        by_alias=True,
+                        exclude_none=True
+                    )
+                )
+            )
+        except Exception:
+            approx_size_bytes = 0
+        if approx_size_bytes > 10 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Design payload exceeds 10MB limit"
+            )
+
+        # Create design document (UUID provided by client)
         now = get_current_timestamp()
-        design_id = str(uuid.uuid4())
         design_doc = {
-            "_id": design_id,
+            "_id": design_data.id,
             "name": design_data.name,
             "description": design_data.description,
             "creator": current_user.id,
             "created": now,
             "lastmodified": now,
-            "components": [comp.dict() for comp in design_data.components]
+            "components": [
+                comp.model_dump(
+                    by_alias=True, exclude_none=True, exclude={'etag'}
+                )
+                for comp in design_data.components
+            ],
+            "additional_geometry": [
+                item.model_dump(
+                    by_alias=True, exclude_none=True, exclude={'etag'}
+                )
+                for item in additional_geometry
+            ]
         }
 
         # Insert design
         await designs_col.insert_one(design_doc)
 
         # Fetch the created design
-        created_design = await designs_col.find_one({"_id": design_id})
+        created_design = await designs_col.find_one({"_id": design_data.id})
         created_design['_id'] = str(created_design['_id'])
         enriched_design = await enrich_design_with_creator(
             created_design, users_col
@@ -390,7 +427,44 @@ async def update_design(
             update_data["description"] = design_data.description
         if design_data.components is not None:
             update_data["components"] = [
-                comp.dict() for comp in design_data.components]
+                comp.model_dump(
+                    by_alias=True, exclude_none=True, exclude={'etag'}
+                )
+                for comp in design_data.components
+            ]
+        if getattr(design_data, 'additional_geometry', None) is not None:
+            ag = getattr(design_data, 'additional_geometry')
+            if ag is None:
+                ag = []
+            if len(ag) > 25:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Maximum of 25 additional geometries exceeded"
+                )
+            # Approximate size check combining existing + update data
+            try:
+                prospective = dict(existing_design)
+                prospective.update(update_data)
+                prospective["additional_geometry"] = [
+                    item.model_dump(
+                        by_alias=True, exclude_none=True, exclude={'etag'}
+                    )
+                    for item in ag
+                ]
+                approx_size_bytes = len(json.dumps(prospective))
+            except Exception:
+                approx_size_bytes = 0
+            if approx_size_bytes > 10 * 1024 * 1024:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Design payload exceeds 10MB limit"
+                )
+            update_data["additional_geometry"] = [
+                item.model_dump(
+                    by_alias=True, exclude_none=True, exclude={'etag'}
+                )
+                for item in ag
+            ]
 
         # Update design
         await designs_col.update_one(
