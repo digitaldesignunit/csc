@@ -103,7 +103,7 @@ export default async function DesignsPage({
                 
                 <div className="grid gap-4">
                   {items.map((design) => (
-                    <DesignCard key={design._id || design.id} design={design} />
+                    <DesignCard key={design._id} design={design} />
                   ))}
                 </div>
               </div>
@@ -184,7 +184,7 @@ export default async function DesignsPage({
 }
 
 function DesignCard({ design }: { design: DesignModel }) {
-  const designId = design._id || design.id
+  const designId = design._id
   const componentCount = Array.isArray(design.components) ? design.components.length : 0
   const addGeomCount = Array.isArray(design.additional_geometry) ? design.additional_geometry.length : 0
 

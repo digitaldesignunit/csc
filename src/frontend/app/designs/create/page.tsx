@@ -81,7 +81,7 @@ export default function CreateDesignPage() {
 
       if (response.ok) {
         const createdDesign = await response.json()
-        router.push(`/designs/${createdDesign._id || createdDesign.id}`)
+        router.push(`/designs/${createdDesign._id}`)
       } else {
         const error = await response.text()
         alert(`Failed to create design: ${error}`)

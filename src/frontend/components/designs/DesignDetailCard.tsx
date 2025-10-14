@@ -21,7 +21,7 @@ export default function DesignDetailCard({
 
   const handleCopyToClipboard = async () => {
     try {
-      const designId = design._id || design.id || ''
+      const designId = design._id || ''
       await navigator.clipboard.writeText(designId)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
@@ -119,14 +119,16 @@ export default function DesignDetailCard({
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Name</span>
                   <span className="text-xs font-semibold text-foreground bg-primary/10 px-2 py-1 rounded-md">
-                    {design.name || 'Unnamed Design'}
+                    {typeof design.name === 'string' ? design.name : 'Unnamed Design'}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Creator</span>
                   <span className="text-xs font-semibold text-foreground bg-secondary/10 px-2 py-1 rounded-md">
-                    {design.creator_username || 'Unknown'}
+                    {('creator_username' in design && typeof (design as Record<string, unknown>).creator_username === 'string')
+                      ? String((design as Record<string, unknown>).creator_username)
+                      : 'Unknown'}
                   </span>
                 </div>
 
@@ -158,12 +160,12 @@ export default function DesignDetailCard({
               </div>
 
               {/* Description Section */}
-              {design.description && (
+              {typeof design.description === 'string' && design.description.length > 0 && (
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-foreground">Description</h3>
                   <div className="p-2 bg-muted/30 rounded-lg border border-border/50">
                     <div className="text-xs text-foreground">
-                      {design.description}
+                      {typeof design.description === 'string' ? design.description : 'No description provided'}
                     </div>
                   </div>
                 </div>

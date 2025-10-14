@@ -56,6 +56,18 @@ export * from './DesignModel';
   }
 }
 
+type Schema = Record<string, unknown> & {
+  $ref?: string
+  type?: string
+  enum?: unknown[]
+  items?: Schema
+  properties?: Record<string, Schema>
+  required?: string[]
+  anyOf?: Schema[]
+  oneOf?: Schema[]
+  allOf?: Schema[]
+}
+
 function generateTypeScriptInterface(
   schema: Record<string, unknown>,
   rootInterfaceName: string,
@@ -85,8 +97,8 @@ function generateTypeScriptInterface(
 
   // Add properties
   for (const [propName, propSchema] of Object.entries(properties)) {
-    const isRequired = required.includes(propName);
-    const typeAnnotation = getTypeScriptType(propSchema as Record<string, unknown>, $defs);
+    const isRequired = (required as string[]).includes(propName);
+    const typeAnnotation = getTypeScriptType(propSchema as Schema, $defs);
     const comment = (propSchema as Record<string, unknown>).description ? ` // ${(propSchema as Record<string, unknown>).description}` : '';
 
     interfaceCode += `  ${propName}${isRequired ? '' : '?'}: ${typeAnnotation};${comment}\n`;
@@ -125,15 +137,15 @@ function generateNestedInterface(name: string, schema: Record<string, unknown>, 
 
   // Handle RootModel types (like ComponentBoundingBox) that don't have properties
   if (!properties) {
-    const typeAnnotation = getTypeScriptType(schema, $defs);
+    const typeAnnotation = getTypeScriptType(schema as Schema, $defs);
     return `export type ${name} = ${typeAnnotation};\n`;
   }
 
   let interfaceCode = `export interface ${name} {\n`;
 
   for (const [propName, propSchema] of Object.entries(properties)) {
-    const isRequired = required.includes(propName);
-    const typeAnnotation = getTypeScriptType(propSchema as Record<string, unknown>, $defs);
+    const isRequired = (required as string[]).includes(propName);
+    const typeAnnotation = getTypeScriptType(propSchema as Schema, $defs);
     const comment = (propSchema as Record<string, unknown>).description ? ` // ${(propSchema as Record<string, unknown>).description}` : '';
 
     interfaceCode += `  ${propName}${isRequired ? '' : '?'}: ${typeAnnotation};${comment}\n`;
@@ -143,73 +155,71 @@ function generateNestedInterface(name: string, schema: Record<string, unknown>, 
   return interfaceCode;
 }
 
-function getTypeScriptType(schema: Record<string, unknown>, $defs?: Record<string, unknown>): string {
+function getTypeScriptType(schema: Schema, $defs?: Record<string, unknown>): string {
   // Handle $ref references
-  if ((schema as any).$ref) {
-    const refPath = (schema as any).$ref as string;
+  if (schema.$ref && typeof schema.$ref === 'string') {
+    const refPath = schema.$ref;
     if (refPath.startsWith('#/$defs/')) {
       const refName = refPath.replace('#/$defs/', '');
       return refName;
     }
   }
 
-  if ((schema as any).type === 'string') {
-    if ((schema as any).enum) {
-      return ((schema as any).enum as unknown[]).map((v: unknown) => `'${v}'`).join(' | ');
+  if (schema.type === 'string') {
+    if (Array.isArray(schema.enum)) {
+      return (schema.enum as unknown[]).map((v: unknown) => `'${String(v)}'`).join(' | ');
     }
     return 'string';
   }
 
-  if ((schema as any).type === 'integer' || (schema as any).type === 'number') {
-    if ((schema as any).enum) {
-      return ((schema as any).enum as unknown[]).join(' | ');
+  if (schema.type === 'integer' || schema.type === 'number') {
+    if (Array.isArray(schema.enum)) {
+      return (schema.enum as unknown[]).map((v) => String(v)).join(' | ');
     }
     return 'number';
   }
 
-  if ((schema as any).type === 'boolean') {
+  if (schema.type === 'boolean') {
     return 'boolean';
   }
 
-  if ((schema as any).type === 'array') {
-    const itemType = getTypeScriptType(((schema as any).items as Record<string, unknown>), $defs);
+  if (schema.type === 'array') {
+    const itemType = getTypeScriptType((schema.items as Schema) ?? {}, $defs);
     return `${itemType}[]`;
   }
 
-  if ((schema as any).type === 'object') {
-    // Check if this is a specific nested type with properties
-    if ((schema as any).properties) {
-      return generateNestedInterface('Anonymous', (schema as any) as { properties: Record<string, unknown>; required?: string[] });
+  if (schema.type === 'object') {
+    if (schema.properties && typeof schema.properties === 'object') {
+      // Generate an anonymous interface for nested object with properties
+      return generateNestedInterface('Anonymous', { properties: schema.properties, required: schema.required } as unknown as Record<string, unknown>);
     }
     return 'Record<string, unknown>';
   }
 
-  // Handle anyOf, oneOf, allOf
-  if ((schema as any).anyOf) {
-    const types = (((schema as any).anyOf as Record<string, unknown>[])).map((s: Record<string, unknown>) => getTypeScriptType(s, $defs));
-    const filteredTypes = (types as string[]).filter((t: string) => t !== 'any');
-    if (filteredTypes.length === 0) return 'unknown';
-    if (filteredTypes.length === 1) return filteredTypes[0];
-    return filteredTypes.join(' | ');
+  if (Array.isArray(schema.anyOf)) {
+    const types = (schema.anyOf as Schema[]).map((s: Schema) => getTypeScriptType(s, $defs));
+    const filtered = types.filter((t: string) => t !== 'any');
+    if (filtered.length === 0) return 'unknown';
+    if (filtered.length === 1) return filtered[0];
+    return filtered.join(' | ');
   }
 
-  if ((schema as any).oneOf) {
-    const types = (((schema as any).oneOf as Record<string, unknown>[])).map((s: Record<string, unknown>) => getTypeScriptType(s, $defs));
-    const filteredTypes = (types as string[]).filter((t: string) => t !== 'any');
-    if (filteredTypes.length === 0) return 'unknown';
-    if (filteredTypes.length === 1) return filteredTypes[0];
-    return filteredTypes.join(' | ');
+  if (Array.isArray(schema.oneOf)) {
+    const types = (schema.oneOf as Schema[]).map((s: Schema) => getTypeScriptType(s, $defs));
+    const filtered = types.filter((t: string) => t !== 'any');
+    if (filtered.length === 0) return 'unknown';
+    if (filtered.length === 1) return filtered[0];
+    return filtered.join(' | ');
   }
 
-  if ((schema as any).allOf) {
-    const types = (((schema as any).allOf as Record<string, unknown>[])).map((s: Record<string, unknown>) => getTypeScriptType(s, $defs));
-    const filteredTypes = (types as string[]).filter((t: string) => t !== 'any');
-    if (filteredTypes.length === 0) return 'unknown';
-    if (filteredTypes.length === 1) return filteredTypes[0];
-    return filteredTypes.join(' & ');
+  if (Array.isArray(schema.allOf)) {
+    const types = (schema.allOf as Schema[]).map((s: Schema) => getTypeScriptType(s, $defs));
+    const filtered = types.filter((t: string) => t !== 'any');
+    if (filtered.length === 0) return 'unknown';
+    if (filtered.length === 1) return filtered[0];
+    return filtered.join(' & ');
   }
 
-  // Default fallback - use 'unknown' instead of 'any'
   return 'unknown';
 }
 
