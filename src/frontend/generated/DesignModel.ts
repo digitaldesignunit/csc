@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2025-10-14T12:28:56.169Z
+// Generated on: 2025-10-14T13:48:58.083Z
 // Source: https://api.ddu.uber.space/schema/design
 
 export interface ComponentExtrusion {
