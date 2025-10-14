@@ -486,6 +486,7 @@ class DesignAdditionalGeometry(BaseModel):
     """Design-scoped additional geometry item (static meshes)."""
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
+        alias="_id",
         description=(
             "Globally unique identifier for this additional geometry item"
         )

@@ -75,8 +75,8 @@ export default async function DesignsPage({
 
       <div className="grid gap-6">
         {/* Design Overview Section */}
-        <Card>
-          <CardHeader>
+      <Card>
+        <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <Link href="/designs/create">
                 <Button className="w-full sm:w-auto">
@@ -176,7 +176,7 @@ export default async function DesignsPage({
                 Components per design
               </p>
             </CardContent>
-          </Card>
+      </Card>
         </div>
       </div>
     </div>
