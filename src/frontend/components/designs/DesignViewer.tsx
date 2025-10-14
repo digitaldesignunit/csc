@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
 import { DesignModel, DesignComponent } from '@/generated/DesignModel'
+import { DesignAdditionalGeometry, DesignInsertionFrame } from '@/generated/DesignModel'
 import { Card } from '@/components/ui/card'
 import { Bounds, OrbitControls } from '@react-three/drei'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -662,21 +663,25 @@ export default function DesignViewer({
             })}
 
             {/* Render additional geometry embedded in the design */}
-            {(Array.isArray(design.additional_geometry) ? design.additional_geometry : []).map((item) => {
+            {(
+              Array.isArray(design.additional_geometry)
+                ? (design.additional_geometry as DesignAdditionalGeometry[])
+                : []
+            ).map((item, idx) => {
               try {
-                const meshes = convertGeometryToMeshes(item.geometry as unknown, (item as any).id || 'additional')
+                const meshes = convertGeometryToMeshes(item.geometry as unknown, item.id || `additional_${idx}`)
                 if (!meshes || meshes.length === 0) return null
                 return (
-                  <group key={`add_${(item as any).id}`} scale={[scale, scale, scale]}>
-                    <group matrix={createTransformMatrix((item as any).iframe)} matrixAutoUpdate={false}>
+                  <group key={`add_${item.id ?? idx}`} scale={[scale, scale, scale]}>
+                    <group matrix={createTransformMatrix(item.iframe as DesignInsertionFrame)} matrixAutoUpdate={false}>
                       {meshes.map((meshGroup, index) => (
-                        <primitive key={`add_${(item as any).id}_${index}`} object={meshGroup} />
+                        <primitive key={`add_${item.id ?? idx}_${index}`} object={meshGroup} />
                       ))}
                     </group>
                   </group>
                 )
               } catch (e) {
-                debugLog('Failed to render additional_geometry item', (item as any)?.id, e)
+                debugLog('Failed to render additional_geometry item', item?.id, e)
                 return null
               }
             })}

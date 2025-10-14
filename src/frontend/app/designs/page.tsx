@@ -207,7 +207,11 @@ function DesignCard({ design }: { design: DesignModel }) {
             <p className="line-clamp-2">
               {String(design.description ?? 'No description provided')}
             </p>
-            <p>Created by: {String((design as any).creator_username ?? 'Unknown')}</p>
+            <p>
+              Created by: {('creator_username' in design && typeof (design as Record<string, unknown>).creator_username === 'string')
+                ? String((design as Record<string, unknown>).creator_username)
+                : 'Unknown'}
+            </p>
             <p>Modified: {formatTimestamp(design.lastmodified)}</p>
           </div>
         </div>
