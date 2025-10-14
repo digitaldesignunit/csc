@@ -40,7 +40,7 @@ ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 251010.1
+Version: 251014
 """
 
 
@@ -203,12 +203,25 @@ class _ComponentCache(object):
                                 if os.path.isfile(file_path):
                                     geometry_size += os.path.getsize(file_path)
 
+                # Calculate design cache stats
+                design_count = 0
+                design_size = 0
+                if os.path.exists(self.designs_dir):
+                    for filename in os.listdir(self.designs_dir):
+                        if filename.endswith('.pkl'):
+                            design_count += 1
+                            file_path = os.path.join(self.designs_dir, filename)
+                            if os.path.isfile(file_path):
+                                design_size += os.path.getsize(file_path)
+
                 return {
                     'component_count': component_count,
                     'metadata_count': metadata_count,
                     'geometry_count': geometry_count,
-                    'total_size_bytes': total_size + geometry_size,
+                    'design_count': design_count,
+                    'total_size_bytes': total_size + geometry_size + design_size,
                     'geometry_size_bytes': geometry_size,
+                    'design_size_bytes': design_size,
                     'cache_dir': self.cache_dir
                 }
             except (IOError, OSError):
@@ -216,8 +229,10 @@ class _ComponentCache(object):
                     'component_count': 0,
                     'metadata_count': 0,
                     'geometry_count': 0,
+                    'design_count': 0,
                     'total_size_bytes': 0,
                     'geometry_size_bytes': 0,
+                    'design_size_bytes': 0,
                     'cache_dir': self.cache_dir
                 }
 
@@ -335,6 +350,10 @@ class _ComponentCache(object):
                     # Schema data is stored directly in metadata
                     return metadata.get('data'), metadata.get('etag'), True
 
+                elif cache_key == 'schema:design':
+                    # Schema data is stored directly in metadata
+                    return metadata.get('data'), metadata.get('etag'), True
+
                 return None, None, False
 
             except (IOError, pickle.PickleError, KeyError):
@@ -424,6 +443,16 @@ class _ComponentCache(object):
                     }
 
                 elif cache_key == 'schema:component':
+                    # Schema data - store directly in metadata
+                    metadata = {
+                        'cache_key': cache_key,
+                        'cached_at': current_time,
+                        'etag': etag,
+                        'type': 'schema',
+                        'data': data
+                    }
+
+                elif cache_key == 'schema:design':
                     # Schema data - store directly in metadata
                     metadata = {
                         'cache_key': cache_key,
@@ -1271,6 +1300,79 @@ class _AuthCore(object):
                     return cached_schema
             return None
 
+    def get_design_schema(self, force_refresh=False):
+        """
+        Get design schema with caching support.
+
+        Args:
+            force_refresh: Force refresh of schema even if cached
+
+        Returns:
+            Design schema dictionary or None if failed
+        """
+        if not self.is_valid():
+            raise RuntimeError(
+                'Access token missing or expired. Please sign in again.'
+            )
+
+        # If cache is disabled, make regular request
+        # (schema endpoint is unprotected)
+        if not self._cache:
+            try:
+                response = requests.get(f'{self.base_url}/schema/design')
+                if response.status_code == 200:
+                    return response.json()
+                return None
+            except Exception:
+                return None
+
+        # Check cache first (unless force refresh)
+        if not force_refresh:
+            cached_schema, cached_etag, is_from_cache = self._cache.get(
+                'schema:design')
+            if is_from_cache:
+                return cached_schema
+
+        # Make request to get schema (unprotected endpoint)
+        try:
+            # Prepare headers for conditional request
+            headers = {}
+            if not force_refresh:
+                cached_schema, cached_etag, is_from_cache = self._cache.get(
+                    'schema:design')
+                if is_from_cache and cached_etag:
+                    headers['If-None-Match'] = cached_etag
+
+            response = requests.get(f'{self.base_url}/schema/design',
+                                    headers=headers)
+
+            if response.status_code == 304 and not force_refresh:
+                # Not modified - return cached data
+                cached_schema, _, is_from_cache = self._cache.get(
+                    'schema:design')
+                if is_from_cache:
+                    return cached_schema
+
+            elif response.status_code == 200:
+                # Data changed or first request - cache the response
+                try:
+                    data = response.json()
+                    etag = response.headers.get('ETag')
+                    self._cache.set('schema:design', data, etag)
+                    return data
+                except (ValueError, KeyError):
+                    return None
+
+            return None
+        except Exception:
+            # If request fails and we have cached schema, return cached version
+            if not force_refresh:
+                cached_schema, _, is_from_cache = self._cache.get(
+                    'schema:design')
+                if is_from_cache:
+                    return cached_schema
+            return None
+
     def _convert_meshes_to_obj(self, meshes):
         """
         Convert Rhino.Geometry.Mesh objects to OBJ file content.
@@ -1471,18 +1573,22 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                     cache_enabled = auth_core.is_cache_enabled()
                     comp_count = cache_stats["component_count"]
                     geometry_count = cache_stats["geometry_count"]
+                    design_count = cache_stats["design_count"]
                     size_kb = cache_stats["total_size_bytes"] // 1024
                     geometry_size_kb = (
                         cache_stats["geometry_size_bytes"] // 1024
                     )
+                    design_size_kb = cache_stats["design_size_bytes"] // 1024
 
                     # Add cache status to messages
                     cache_status = (
                         f'Cache: {"Enabled" if cache_enabled else "Disabled"}\n'
                         f' | Components: {comp_count}\n'
                         f' | Geometry: {geometry_count} files\n'
+                        f' | Designs: {design_count} files\n'
                         f' | Size: {size_kb} kB\n'
-                        f' | Geometry: {geometry_size_kb} kB\n')
+                        f' | Geometry: {geometry_size_kb} kB\n'
+                        f' | Designs: {design_size_kb} kB\n')
                     status_messages.append(cache_status)
                     Status = status_messages
                     return (Status,)
@@ -1537,18 +1643,22 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                     cache_enabled = auth_core.is_cache_enabled()
                     comp_count = cache_stats["component_count"]
                     geometry_count = cache_stats["geometry_count"]
+                    design_count = cache_stats["design_count"]
                     size_kb = cache_stats["total_size_bytes"] // 1024
                     geometry_size_kb = (
                         cache_stats["geometry_size_bytes"] // 1024
                     )
+                    design_size_kb = cache_stats["design_size_bytes"] // 1024
 
                     # Add cache status to messages
                     cache_status = (
                         f'Cache: {"Enabled" if cache_enabled else "Disabled"}\n'
                         f' | Components: {comp_count}\n'
                         f' | Geometry: {geometry_count} files\n'
+                        f' | Designs: {design_count} files\n'
                         f' | Size: {size_kb} kB\n'
-                        f' | Geometry: {geometry_size_kb} kB\n')
+                        f' | Geometry: {geometry_size_kb} kB\n'
+                        f' | Designs: {design_size_kb} kB\n')
                     status_messages.append(cache_status)
 
                     self.Component.Message = f'Signed in as: {username}'
