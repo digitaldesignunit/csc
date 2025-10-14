@@ -254,7 +254,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
         # Validate DesignName (mandatory)
         if not DesignName or not DesignName.strip():
             msg = 'Design name is mandatory and cannot be empty.'
-            self._addError(msg)
+            self._addWarning(msg)
             self.Component.Message = msg
             return DesignJSON
 
@@ -264,8 +264,8 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
 
         # Validate ComponentData
         if not ComponentData:
-            msg = 'Component data list cannot be empty.'
-            self._addError(msg)
+            msg = 'Input ComponentData failed to collect data!'
+            self._addWarning(msg)
             self.Component.Message = msg
             return
 
