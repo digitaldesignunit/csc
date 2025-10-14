@@ -206,7 +206,7 @@ export function resolveStatic(path: string): string {
   return normalizedBase + cleanedPath
 }
 
-export function generateGrasshopperPanelXML(componentId: string): string {
+export function generateGrasshopperPanelXML(panelTitle: string, componentId: string): string {
   return `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <Archive name="Root">
   <!--Grasshopper archive-->
@@ -313,7 +313,7 @@ export function generateGrasshopperPanelXML(componentId: string): string {
                     <item name="Description" type_name="gh_string" type_code="10">A panel for custom notes and text values</item>
                     <item name="InstanceGuid" type_name="gh_guid" type_code="9">ecb48a8a-add9-485e-9337-f4f48cb8944a</item>
                     <item name="Name" type_name="gh_string" type_code="10">Panel</item>
-                    <item name="NickName" type_name="gh_string" type_code="10">ComponentID</item>
+                    <item name="NickName" type_name="gh_string" type_code="10">${panelTitle}</item>
                     <item name="Optional" type_name="gh_bool" type_code="1">false</item>
                     <item name="ScrollRatio" type_name="gh_double" type_code="6">0</item>
                     <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>

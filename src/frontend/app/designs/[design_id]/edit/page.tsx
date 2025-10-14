@@ -37,8 +37,8 @@ export default function EditDesignPage({ params }: EditDesignPageProps) {
         const response = await fetch(`/api/backend/designs/${id}`)
         if (response.ok) {
           const design: DesignModel = await response.json()
-          setName(design.name || '')
-          setDescription(design.description || '')
+          setName(typeof design.name === 'string' ? design.name : '')
+          setDescription(typeof design.description === 'string' ? design.description : '')
           setComponents(design.components || [])
         } else {
           alert('Failed to load design')

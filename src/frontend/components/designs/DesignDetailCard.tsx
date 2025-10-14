@@ -32,8 +32,8 @@ export default function DesignDetailCard({
 
   const handleCopyAsGrasshopperPanel = async () => {
     try {
-      const designId = design._id || design.id || ''
-      const grasshopperXML = generateGrasshopperPanelXML(designId)
+      const designId = design._id || ''
+      const grasshopperXML = generateGrasshopperPanelXML('DesignID', designId)
       await navigator.clipboard.writeText(grasshopperXML)
       setGrasshopperCopied(true)
       setTimeout(() => setGrasshopperCopied(false), 2000)
@@ -42,7 +42,7 @@ export default function DesignDetailCard({
     }
   }
 
-  const designId = design._id || design.id || ''
+  const designId = design._id || ''
 
   return (
     <Card className="w-full overflow-x-auto">

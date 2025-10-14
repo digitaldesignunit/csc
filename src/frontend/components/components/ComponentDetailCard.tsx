@@ -46,7 +46,7 @@ export default function ComponentDetailCard({
 
   const handleCopyAsGrasshopperPanel = async () => {
     try {
-      const grasshopperXML = generateGrasshopperPanelXML(component_data._id || '')
+      const grasshopperXML = generateGrasshopperPanelXML('ComponentID', component_data._id || '')
       await navigator.clipboard.writeText(grasshopperXML)
       setGrasshopperCopied(true)
       setTimeout(() => setGrasshopperCopied(false), 2000)
