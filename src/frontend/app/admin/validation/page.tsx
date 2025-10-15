@@ -337,7 +337,7 @@ export default function ValidationPage() {
                               Interactive 3D view with orbit controls. Use mouse to rotate, scroll to zoom.
                             </p>
                           </div>
-                          <div className="h-[320px] sm:h-[400px] lg:h-[420px] w-full">
+                          <div className="h-full w-full">
                             {loadingPreviews.has(component._id!) ? (
                               <div className="flex items-center justify-center h-full">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

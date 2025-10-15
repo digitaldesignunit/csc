@@ -261,7 +261,8 @@ function convertGeometryToMeshes(geometry: unknown, componentId: string): THREE.
       
       // Create face material
       const faceMaterial = new THREE.MeshBasicMaterial({ 
-        color: (geo?.color as number) || 0x888888 
+        color: (geo?.color as number) || 0x888888,
+        side: THREE.DoubleSide
       })
       
       // Create edge material
@@ -297,7 +298,8 @@ function convertGeometryToMeshes(geometry: unknown, componentId: string): THREE.
           const faces = (mesh.f as number[][]).flat()
           threeGeometry.setIndex(faces)
           
-          // Note: No rotateX needed here - coordinate system conversion is handled by iframe transformation
+          threeGeometry.computeVertexNormals()
+          threeGeometry.normalizeNormals()
           
           // Set colors if available
           let material: THREE.MeshBasicMaterial
@@ -306,17 +308,30 @@ function convertGeometryToMeshes(geometry: unknown, componentId: string): THREE.
             const colors = (mesh.c as number[][]).flat()
             const normalizedColors = normalizeColors(colors)
             threeGeometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
-            material = new THREE.MeshBasicMaterial({ vertexColors: true })
+            material = new THREE.MeshBasicMaterial({ 
+              vertexColors: true,
+              side: THREE.DoubleSide
+            })
           } else {
             // Use a default color
-            material = new THREE.MeshBasicMaterial({ color: 0x888888 })
+            material = new THREE.MeshBasicMaterial({ 
+              color: 0x888888,
+              side: THREE.DoubleSide
+            })
           }
           
           const threeMesh = new THREE.Mesh(threeGeometry, material)
           threeMesh.name = `mesh_${index}_${componentId}`
           
+          // Create edge geometry and material
+          const edgeGeometry = new THREE.EdgesGeometry(threeGeometry)
+          const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+          const edgeMesh = new THREE.LineSegments(edgeGeometry, edgeMaterial)
+          edgeMesh.name = `mesh_edge_${index}_${componentId}`
+          
           const group = new THREE.Group()
           group.add(threeMesh)
+          group.add(edgeMesh)
           meshes.push(group)
         }
       })
@@ -334,7 +349,8 @@ function convertGeometryToMeshes(geometry: unknown, componentId: string): THREE.
       const faces = (mesh.f as number[][]).flat()
       threeGeometry.setIndex(faces)
       
-      // Note: No rotateX needed here - coordinate system conversion is handled by iframe transformation
+      threeGeometry.computeVertexNormals()
+      threeGeometry.normalizeNormals()
       
       // Set colors if available
       let material: THREE.MeshBasicMaterial
@@ -343,17 +359,30 @@ function convertGeometryToMeshes(geometry: unknown, componentId: string): THREE.
         const colors = (mesh.c as number[][]).flat()
         const normalizedColors = normalizeColors(colors)
         threeGeometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
-        material = new THREE.MeshBasicMaterial({ vertexColors: true })
+        material = new THREE.MeshBasicMaterial({ 
+          vertexColors: true,
+          side: THREE.DoubleSide
+        })
       } else {
         // Use a default color
-        material = new THREE.MeshBasicMaterial({ color: 0x888888 })
+        material = new THREE.MeshBasicMaterial({ 
+          color: 0x888888,
+          side: THREE.DoubleSide
+        })
       }
       
       const threeMesh = new THREE.Mesh(threeGeometry, material)
       threeMesh.name = `mesh_${componentId}`
       
+      // Create edge geometry and material
+      const edgeGeometry = new THREE.EdgesGeometry(threeGeometry)
+      const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+      const edgeMesh = new THREE.LineSegments(edgeGeometry, edgeMaterial)
+      edgeMesh.name = `mesh_edge_${componentId}`
+      
       const group = new THREE.Group()
       group.add(threeMesh)
+      group.add(edgeMesh)
       meshes.push(group)
     }
     
@@ -482,16 +511,27 @@ export default function DesignViewer({
   const [loadingStates, setLoadingStates] = useState<Map<string, boolean>>(new Map())
   const [errorStates, setErrorStates] = useState<Map<string, string>>(new Map())
   const [visibleComponents, setVisibleComponents] = useState<Map<string, boolean>>(new Map())
+  const [visibleAdditionalGeometry, setVisibleAdditionalGeometry] = useState<Map<string, boolean>>(new Map())
+  const [showEdges, setShowEdges] = useState<boolean>(true)
   const [isLoading, setIsLoading] = useState(true)
 
   // Initialize visibility states
   useEffect(() => {
-    const initialVisibility = new Map<string, boolean>()
+    const initialComponentVisibility = new Map<string, boolean>()
     design.components.forEach(comp => {
-      initialVisibility.set(comp.component, true)
+      initialComponentVisibility.set(comp.component, true)
     })
-    setVisibleComponents(initialVisibility)
-  }, [design.components])
+    setVisibleComponents(initialComponentVisibility)
+
+    const initialAdditionalGeometryVisibility = new Map<string, boolean>()
+    if (Array.isArray(design.additional_geometry)) {
+      design.additional_geometry.forEach((item, index) => {
+        const itemId = item.id || `additional_${index}`
+        initialAdditionalGeometryVisibility.set(itemId, true)
+      })
+    }
+    setVisibleAdditionalGeometry(initialAdditionalGeometryVisibility)
+  }, [design.components, design.additional_geometry])
 
   // Load all component geometries
   useEffect(() => {
@@ -542,9 +582,21 @@ export default function DesignViewer({
     })
   }
 
+  const toggleAdditionalGeometryVisibility = (itemId: string) => {
+    setVisibleAdditionalGeometry(prev => {
+      const newMap = new Map(prev)
+      newMap.set(itemId, !newMap.get(itemId))
+      return newMap
+    })
+  }
+
   const allComponentsVisible = useMemo(() => {
     return Array.from(visibleComponents.values()).every(visible => visible)
   }, [visibleComponents])
+
+  const allAdditionalGeometryVisible = useMemo(() => {
+    return Array.from(visibleAdditionalGeometry.values()).every(visible => visible)
+  }, [visibleAdditionalGeometry])
 
   const toggleAllComponents = () => {
     const newVisibility = !allComponentsVisible
@@ -553,6 +605,20 @@ export default function DesignViewer({
       design.components.forEach(comp => {
         newMap.set(comp.component, newVisibility)
       })
+      return newMap
+    })
+  }
+
+  const toggleAllAdditionalGeometry = () => {
+    const newVisibility = !allAdditionalGeometryVisible
+    setVisibleAdditionalGeometry(prev => {
+      const newMap = new Map(prev)
+      if (Array.isArray(design.additional_geometry)) {
+        design.additional_geometry.forEach((item, index) => {
+          const itemId = item.id || `additional_${index}`
+          newMap.set(itemId, newVisibility)
+        })
+      }
       return newMap
     })
   }
@@ -585,6 +651,16 @@ export default function DesignViewer({
                 Show All
               </label>
             </div>
+            <div className="flex items-center space-x-2 mt-1">
+              <input
+                id="toggle-edges"
+                type="checkbox"
+                checked={showEdges}
+                onChange={() => setShowEdges(prev => !prev)}
+                className="rounded"
+              />
+              <label htmlFor="toggle-edges" className="text-xs">Show Edges</label>
+            </div>
           </div>
           
           {/* Component Visibility Controls */}
@@ -613,6 +689,43 @@ export default function DesignViewer({
               })}
             </div>
           </div>
+
+          {/* Additional Geometry Visibility Controls */}
+          {Array.isArray(design.additional_geometry) && design.additional_geometry.length > 0 && (
+            <div className="mb-1 sm:mb-2 flex flex-col gap-1">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="toggle-all-additional"
+                  checked={allAdditionalGeometryVisible}
+                  onCheckedChange={toggleAllAdditionalGeometry}
+                />
+                <label htmlFor="toggle-all-additional" className="text-xs">
+                  Show All Additional Geometry
+                </label>
+              </div>
+              <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+                {design.additional_geometry.map((item, index) => {
+                  const itemId = item.id || `additional_${index}`
+                  const isVisible = visibleAdditionalGeometry.get(itemId) ?? true
+                  const itemName = typeof item.name === 'string' && item.name.trim() 
+                    ? item.name 
+                    : `Additional Geometry ${index + 1}`
+
+                  return (
+                    <label key={itemId} className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={isVisible}
+                        onChange={() => toggleAdditionalGeometryVisibility(itemId)}
+                        className="rounded"
+                      />
+                      <span className="truncate">{itemName}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
@@ -654,9 +767,17 @@ export default function DesignViewer({
               return (
                 <group key={comp.component} scale={[scale, scale, scale]}>
                   <group matrix={createTransformMatrix(comp.iframe)} matrixAutoUpdate={false}>
-                    {meshes.map((meshGroup, index) => (
-                      <primitive key={`${comp.component}_${index}`} object={meshGroup} />
-                    ))}
+                    {meshes.map((meshGroup, index) => {
+                      // Toggle Edges (assumes edge objects are LineSegments named with 'edge')
+                      meshGroup.traverse(obj => {
+                        if ((obj as THREE.LineSegments).isLineSegments && obj.name.includes('edge')) {
+                          obj.visible = showEdges
+                        }
+                      })
+                      return (
+                        <primitive key={`${comp.component}_${index}`} object={meshGroup} />
+                      )
+                    })}
                   </group>
                 </group>
               )
@@ -669,14 +790,26 @@ export default function DesignViewer({
                 : []
             ).map((item, idx) => {
               try {
-                const meshes = convertGeometryToMeshes(item.geometry as unknown, item.id || `additional_${idx}`)
+                const itemId = item.id || `additional_${idx}`
+                const isVisible = visibleAdditionalGeometry.get(itemId) ?? true
+                
+                if (!isVisible) return null
+                
+                const meshes = convertGeometryToMeshes(item.geometry as unknown, itemId)
                 if (!meshes || meshes.length === 0) return null
                 return (
-                  <group key={`add_${item.id ?? idx}`} scale={[scale, scale, scale]}>
+                  <group key={`add_${itemId}`} scale={[scale, scale, scale]}>
                     <group matrix={createTransformMatrix(item.iframe as DesignInsertionFrame)} matrixAutoUpdate={false}>
-                      {meshes.map((meshGroup, index) => (
-                        <primitive key={`add_${item.id ?? idx}_${index}`} object={meshGroup} />
-                      ))}
+                      {meshes.map((meshGroup, index) => {
+                        meshGroup.traverse(obj => {
+                          if ((obj as THREE.LineSegments).isLineSegments && obj.name.includes('edge')) {
+                            obj.visible = showEdges
+                          }
+                        })
+                        return (
+                          <primitive key={`add_${itemId}_${index}`} object={meshGroup} />
+                        )
+                      })}
                     </group>
                   </group>
                 )

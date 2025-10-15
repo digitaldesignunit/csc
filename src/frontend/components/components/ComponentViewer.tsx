@@ -329,10 +329,17 @@ async function loadExternalGeometry(
       // Create mesh
       const mesh = new THREE.Mesh(geometry, material)
       mesh.name = meshData.name
-      
-      // Create group and add mesh
+
+      // Create group and add mesh (and edges support)
       const object = new THREE.Group()
       object.add(mesh)
+      {
+        const edgeGeometry = new THREE.EdgesGeometry(geometry)
+        const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+        const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial)
+        edges.name = `${meshData.name}_edges`
+        object.add(edges)
+      }
       
       // Apply scaling
       object.scale.set(scale, scale, scale)
@@ -392,7 +399,8 @@ const VisualizeMesh = React.memo(({
   visibleMeshes = [],
   externalMeshes = [],
   isLoadingExternal = false,
-  geometryError = null
+  geometryError = null,
+  showEdges
 }: {
   component_data: ComponentModel
   geometryMode: GeometryMode
@@ -400,6 +408,7 @@ const VisualizeMesh = React.memo(({
   externalMeshes?: THREE.Group[]
   isLoadingExternal?: boolean
   geometryError?: string | null
+  showEdges: boolean
 }) => {
   const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
 
@@ -516,7 +525,9 @@ const VisualizeMesh = React.memo(({
     return (
       <>
         <mesh visible geometry={mesh_geometry} material={mesh_material} />
-        <lineSegments geometry={edge_geometry} material={edge_material} />
+        {showEdges && (
+          <lineSegments geometry={edge_geometry} material={edge_material} />
+        )}
       </>
     )
   } else {
@@ -524,7 +535,9 @@ const VisualizeMesh = React.memo(({
     return (
       <group scale={[scale, scale, scale]}>
         <mesh visible geometry={mesh_geometry} material={mesh_material} />
-        <lineSegments geometry={edge_geometry} material={edge_material} />
+        {showEdges && (
+          <lineSegments geometry={edge_geometry} material={edge_material} />
+        )}
       </group>
     )
   }
@@ -626,7 +639,8 @@ const VisualizeMultipleMeshes = React.memo(({
   visibleMeshes = [],
   externalMeshes = [],
   isLoadingExternal = false,
-  geometryError = null
+  geometryError = null,
+  showEdges
 }: {
   component_data: ComponentModel
   geometryMode: GeometryMode
@@ -634,6 +648,7 @@ const VisualizeMultipleMeshes = React.memo(({
   externalMeshes?: THREE.Group[]
   isLoadingExternal?: boolean
   geometryError?: string | null
+  showEdges: boolean
 }) => {
   const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
   const geometry = component_data.geometry as ComponentGeometry
@@ -736,7 +751,9 @@ const VisualizeMultipleMeshes = React.memo(({
         return (
           <group key={index}>
             <mesh geometry={geometry} material={material} />
-            <lineSegments geometry={edgeGeometry} material={edgeMaterial} />
+            {showEdges && (
+              <lineSegments geometry={edgeGeometry} material={edgeMaterial} />
+            )}
           </group>
         )
       })}
@@ -754,7 +771,8 @@ function VisualizeComponent({
   visibleMeshes = [],
   externalMeshes = [],
   isLoadingExternal = false,
-  geometryError = null
+  geometryError = null,
+  showEdges
 }: {
   component_data: ComponentModel
   geometryMode: GeometryMode
@@ -762,6 +780,7 @@ function VisualizeComponent({
   externalMeshes?: THREE.Group[]
   isLoadingExternal?: boolean
   geometryError?: string | null
+  showEdges: boolean
 }) {
   if (!component_data.geometry) return null
   
@@ -778,16 +797,16 @@ function VisualizeComponent({
   if (hasExtrusion) {
     return <VisualizeSheet component_data={component_data} />
   } else if (hasMultipleMeshes) {
-    return <VisualizeMultipleMeshes component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} />
+    return <VisualizeMultipleMeshes component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
   } else if (hasMesh) {
-    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} />
+    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
   }
   
   // Fallback to type-based logic if geometry inference fails
   if (component_data.type === 'sheet') {
     return <VisualizeSheet component_data={component_data} />
   } else {
-    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} />
+    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
   }
 }
 
@@ -802,6 +821,7 @@ export default function ComponentViewer({ component_data }: { component_data: Co
   const [isLoadingExternal, setIsLoadingExternal] = useState(false)
   const [geometryError, setGeometryError] = useState<string | null>(null)
   const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
+  const [showEdges, setShowEdges] = useState<boolean>(true)
 
   const isSheet = component_data.type === 'sheet'
   const geometry = component_data.geometry as ComponentGeometry
@@ -825,6 +845,8 @@ export default function ComponentViewer({ component_data }: { component_data: Co
     if (isExternalMode && component_data.type !== 'sheet' && component_data._id) {
       setIsLoadingExternal(true)
       setGeometryError(null)
+      // For external geometry default: hide edges
+      setShowEdges(false)
       loadExternalGeometry(component_data._id.toString(), geometryMode)
         .then((result) => {
           if (isMounted) {
@@ -853,6 +875,8 @@ export default function ComponentViewer({ component_data }: { component_data: Co
       setExternalMeshes([])
       setIsLoadingExternal(false)
       setGeometryError(null)
+      // For primitive default: show edges
+      setShowEdges(true)
       // Initialize visibility state for primitive meshes
       if (hasMultipleMeshes && meshes) {
         setVisibleMeshes(new Array(meshes.length).fill(true))
@@ -883,6 +907,18 @@ export default function ComponentViewer({ component_data }: { component_data: Co
   const toggleMarkerPointsVisibility = () => {
     setShowMarkerPoints(prev => !prev)
   }
+
+  // Apply edge visibility to external meshes by toggling child LineSegments visibility
+  useEffect(() => {
+    if (!isExternalMode) return
+    externalMeshes.forEach(group => {
+      group.traverse(obj => {
+        if ((obj as THREE.LineSegments).isLineSegments && obj.name.endsWith('_edges')) {
+          obj.visible = showEdges
+        }
+      })
+    })
+  }, [showEdges, isExternalMode, externalMeshes])
 
   // Handle the conditional logic AFTER all hooks
   if (!component_data.geometry) {
@@ -926,6 +962,16 @@ export default function ComponentViewer({ component_data }: { component_data: Co
                   </label>
                 ))}
               </div>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  id="toggle-edges"
+                  type="checkbox"
+                  checked={showEdges}
+                  onChange={() => setShowEdges(prev => !prev)}
+                  className="rounded"
+                />
+                <label htmlFor="toggle-edges" className="text-xs">Show Edges</label>
+              </div>
             </div>
           )}
 
@@ -961,6 +1007,7 @@ export default function ComponentViewer({ component_data }: { component_data: Co
               externalMeshes={isExternalMode ? externalMeshes : []}
               isLoadingExternal={isLoadingExternal}
               geometryError={geometryError}
+              showEdges={showEdges}
             />
             <MarkerPoints 
               markerPoints={markerPoints} 
