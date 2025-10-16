@@ -73,18 +73,59 @@ export default async function DesignsPage({
         </p>
       </div>
 
+      {/* Design Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">{items.length}</div>
+            <p className="text-xs text-muted-foreground">Designs</p>
+          </div>
+        </Card>
+        
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">
+              {items.reduce((sum, design) => sum + (design.components?.length || 0), 0)}
+            </div>
+            <p className="text-xs text-muted-foreground">Components</p>
+          </div>
+        </Card>
+        
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">
+              {items.reduce((sum, design) => sum + (design.additional_geometry?.length || 0), 0)}
+            </div>
+            <p className="text-xs text-muted-foreground">Additional Geometries</p>
+          </div>
+        </Card>
+        
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">
+              {items.length > 0 
+                ? Math.round(items.reduce((sum, design) => sum + (design.components?.length || 0), 0) / items.length)
+                : 0
+              }
+            </div>
+            <p className="text-xs text-muted-foreground">Avg. Components/Design</p>
+          </div>
+        </Card>
+      </div>
+
       <div className="grid gap-6">
         {/* Design Overview Section */}
-      <Card>
-        <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <Card>
+          <CardHeader>
+            {/* No create new design button for now */}
+            {/* <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <Link href="/designs/create">
                 <Button className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   Create New Design
                 </Button>
               </Link>
-            </div>
+            </div> */}
           </CardHeader>
           <CardContent>
             {items.length === 0 ? (
@@ -94,13 +135,7 @@ export default async function DesignsPage({
                 <p>Be the first to create a design assembly!</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <p className="text-sm text-muted-foreground">
-                    {items.length} design{items.length !== 1 ? 's' : ''} available
-                  </p>
-                </div>
-                
+              <div className="space-y-4">                
                 <div className="grid gap-4">
                   {items.map((design) => (
                     <DesignCard key={design._id} design={design} />
@@ -110,74 +145,6 @@ export default async function DesignsPage({
             )}
           </CardContent>
         </Card>
-
-        {/* Design Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Designs
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{items.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Design assemblies available
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Components
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {items.reduce((sum, design) => sum + (design.components?.length || 0), 0)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Components across all designs
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Additional Geometry
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {items.reduce((sum, design) => sum + (design.additional_geometry?.length || 0), 0)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Additional meshes across all designs
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Average Components
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {items.length > 0 
-                  ? Math.round(items.reduce((sum, design) => sum + (design.components?.length || 0), 0) / items.length)
-                  : 0
-                }
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Components per design
-              </p>
-            </CardContent>
-      </Card>
-        </div>
       </div>
     </div>
   )
@@ -196,10 +163,10 @@ function DesignCard({ design }: { design: DesignModel }) {
             <h3 className="font-medium text-sm sm:text-base truncate">
               {String(design.name ?? 'Unnamed Design')}
             </h3>
-            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+            <span className="text-xs bg-primary/40 text-primary px-2 py-1 rounded">
               {componentCount} component{componentCount !== 1 ? 's' : ''}
             </span>
-            <span className="text-xs bg-secondary/10 text-secondary-foreground px-2 py-1 rounded">
+            <span className="text-xs bg-secondary/40 text-secondary-foreground px-2 py-1 rounded">
               {addGeomCount} add. geom.
             </span>
           </div>
@@ -207,11 +174,21 @@ function DesignCard({ design }: { design: DesignModel }) {
             <p className="line-clamp-2">
               {String(design.description ?? 'No description provided')}
             </p>
+            <p className="break-all">
+              ID: <Link 
+                href={`/designs/${design._id}`}
+                className="text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-1 transition-colors"
+              >
+                {design._id}
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </p>
             <p>
               Created by: {('creator_username' in design && typeof (design as Record<string, unknown>).creator_username === 'string')
                 ? String((design as Record<string, unknown>).creator_username)
                 : 'Unknown'}
             </p>
+            <p>Created: {formatTimestamp(design.created)}</p>
             <p>Modified: {formatTimestamp(design.lastmodified)}</p>
           </div>
         </div>

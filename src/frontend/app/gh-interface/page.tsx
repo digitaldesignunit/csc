@@ -148,7 +148,7 @@ export default function GHInterfacePage() {
       title: 'Getting Started',
       icon: BookOpen,
       content: (
-        <div className="space-y-6 pt-2">
+        <div className="space-y-6 pt-2" >
           <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
             <h4 className="font-semibold text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
               <Download className="h-4 w-4" />
@@ -538,8 +538,8 @@ export default function GHInterfacePage() {
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-4 flex items-center gap-3">
-          <Terminal className="h-8 w-8" />
-          Grasshopper Interface Tutorial
+          <Terminal className="h-8 w-8 text-primary" />
+          Grasshopper Interface
         </h1>
         <p className="text-lg text-muted-foreground">
           Learn how to use the DDU CSC Grasshopper components to work with the Catalogue of Second Chances.
@@ -552,7 +552,7 @@ export default function GHInterfacePage() {
           const isExpanded = expandedSection === section.id
           
           return (
-            <div key={section.id} className="border rounded-lg">
+            <div key={section.id} className="border rounded-lg bg-muted">
               <button
                 onClick={() => toggleSection(section.id)}
                 className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-muted/50 transition-colors"

@@ -45,10 +45,13 @@ export default function DashboardPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold text-foreground">User Dashboard</h1>
-        <p className="text-muted-foreground">
-          Welcome back, {username}! Manage your account and view your activities.
+      <div className="mb-6 sm:mb-8">
+        <div className="flex items-center gap-2 sm:gap-3 mb-2">
+          <User className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold">User Dashboard</h1>
+        </div>
+        <p className="text-muted-foreground text-sm sm:text-base">
+        Welcome back, {username}! Manage your account and view your activities.
         </p>
       </div>
 

@@ -73,12 +73,12 @@ export default async function DesignDetailPage({
                 <div className="flex items-center space-x-3">
                   <span className="text-sm text-muted-foreground">#{index + 1}</span>
                   <div>
-                    <div className="font-medium">Component {comp.component}</div>
-                    <div className="text-sm text-muted-foreground break-all">
-                      UUID: {comp.component}
-                    </div>
+                    <div className="font-small">{comp.component}</div>
                     <div className="text-sm text-muted-foreground">
-                      Position: [{comp.iframe.o.map(v => v.toFixed(2)).join(', ')}]
+                      o: [{comp.iframe.o.map(v => v.toFixed(2)).join(', ')}] <br />
+                      x: [{comp.iframe.x.map(v => v.toFixed(2)).join(', ')}] <br />
+                      y: [{comp.iframe.y.map(v => v.toFixed(2)).join(', ')}] <br />
+                      z: [{comp.iframe.z.map(v => v.toFixed(2)).join(', ')}] <br />
                     </div>
                   </div>
                 </div>

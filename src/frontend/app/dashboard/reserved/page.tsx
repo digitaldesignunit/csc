@@ -164,48 +164,45 @@ export default function ReservedComponentsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Reserved</CardTitle>
-            <Bookmark className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{reservedComponents.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Components in your projects
-            </p>
-          </CardContent>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">{reservedComponents.length}</div>
+            <p className="text-xs text-muted-foreground">Total Reserved</p>
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Component Types</CardTitle>
-            <Package className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">
               {new Set(reservedComponents.map(c => c.type)).size}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Unique types reserved
-            </p>
-          </CardContent>
+            <p className="text-xs text-muted-foreground">Component Types</p>
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Account</CardTitle>
-            <User className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
+        <Card className="p-3">
+          <div className="text-center">
             <div className="text-sm font-medium">{username}</div>
-            <p className="text-xs text-muted-foreground">
-              Your account
-            </p>
-          </CardContent>
+            <p className="text-xs text-muted-foreground">Account</p>
+          </div>
         </Card>
       </div>
+
+      {/* Help Text */}
+      <Card className="bg-muted/30">
+        <CardContent>
+          <div className="text-sm text-muted-foreground space-y-2">
+            <p>
+              <strong>How reservations work:</strong> When you reserve a component, it&apos;s marked as reserved. You can release components at any time to make them available again.
+            </p>
+            <p>
+              <strong>Note:</strong> Reserved components are still available and visible in the catalogue but show as 
+              reserved to you!
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Main Content */}
       <Card>
@@ -270,21 +267,7 @@ export default function ReservedComponentsPage() {
         </CardContent>
       </Card>
 
-      {/* Help Text */}
-      <Card className="bg-muted/30">
-        <CardContent className="pt-6">
-          <div className="text-sm text-muted-foreground space-y-2">
-            <p>
-              <strong>How reservations work:</strong> When you reserve a component, it&apos;s marked as unavailable 
-              to other users. You can release components at any time to make them available again.
-            </p>
-            <p>
-              <strong>Note:</strong> Reserved components are still visible in the catalogue but show as 
-              unavailable to other users.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      
     </div>
   )
 }

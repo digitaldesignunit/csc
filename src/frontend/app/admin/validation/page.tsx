@@ -11,6 +11,7 @@ import { CheckCircle, Package, Shield, Eye, ChevronDown, ChevronUp, Trash2, Exte
 import { ComponentModel } from '@/generated/ComponentModel'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { formatTimestamp } from '@/lib/utils'
 
 export default function ValidationPage() {
   const { data: session, status } = useSession()
@@ -159,6 +160,30 @@ export default function ValidationPage() {
         </p>
       </div>
 
+      {/* Admin Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">{components.length}</div>
+            <p className="text-xs text-muted-foreground">Pending Validation</p>
+          </div>
+        </Card>
+        
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">-</div>
+            <p className="text-xs text-muted-foreground">Total Components</p>
+          </div>
+        </Card>
+        
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">-</div>
+            <p className="text-xs text-muted-foreground">Validated Today</p>
+          </div>
+        </Card>
+      </div>
+
       <div className="grid gap-6">
         {/* Component Validation Section */}
         <Card>
@@ -218,13 +243,15 @@ export default function ValidationPage() {
                                 </Link>
                               )}
                             </h3>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
                             <Badge variant="secondary" className="text-xs">{component.type}</Badge>
-                            <Badge variant="outline" className="text-xs">{component.material}</Badge>
-                            {component.complexity !== undefined && 
-                             component.complexity !== null && 
-                             typeof component.complexity === 'number' && (
-                              <Badge variant="outline" className="text-xs">Complexity: {component.complexity}</Badge>
-                            )}
+                              <Badge variant="outline" className="text-xs">{component.material}</Badge>
+                              {component.complexity !== undefined && 
+                              component.complexity !== null && 
+                              typeof component.complexity === 'number' && (
+                                <Badge variant="outline" className="text-xs">Complexity: {component.complexity}</Badge>
+                              )}
                           </div>
                           <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
                             <p className="break-all">
@@ -236,16 +263,7 @@ export default function ValidationPage() {
                                 <ExternalLink className="h-3 w-3" />
                               </Link>
                             </p>
-                            <p>Created: {new Date(component.created).toLocaleString('de-DE', { 
-                              timeZone: 'Europe/Berlin',
-                              day: '2-digit',
-                              month: '2-digit', 
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              second: '2-digit',
-                              hour12: false
-                            })}</p>
+                            <p>Created: {formatTimestamp(component.created)}</p>
                             <p>Fragment: {component.fragment ? 'Yes' : 'No'}</p>
                             <p>Assembly: {component.assembly ? 'Yes' : 'No'}</p>
                           </div>
@@ -362,50 +380,6 @@ export default function ValidationPage() {
           </CardContent>
         </Card>
 
-        {/* Admin Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Pending Validation
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{components.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Components awaiting review
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Components
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">-</div>
-              <p className="text-xs text-muted-foreground">
-                All components in system
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Validated Today
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">-</div>
-              <p className="text-xs text-muted-foreground">
-                Components validated today
-              </p>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   )
