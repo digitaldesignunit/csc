@@ -26,7 +26,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 251016.1
+    Version: 251016.3
     """
 
     def get_source_version(self, source):
@@ -264,10 +264,11 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             category = obj.Category
             version = self.get_source_version(source)
             script_id = nickname + ' ' + name
+            category_match = category == set_category
+            version_present = version is not None
             # NOT SEEN YET SCRIPT COMPONENTS
             if script_id not in unique_script_components:
                 version_present = True
-                category_match = True
                 if script_type == 'GHPY':
                     OldScriptsDebug.append(
                         f'{script_type} - {nickname} ({name})')
@@ -277,9 +278,8 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                     OldScriptsDebug.append(
                         f'{script_type} - {nickname} ({name})')
                     OldScriptsDebug.append('    - IS AN OLD C# SCRIPT!')
-                if category != set_category:
+                if not category_match:
                     # create debug info messages
-                    category_match = False
                     if category == 'Maths':
                         CategoryDebug.append(
                             f'{script_type} - {nickname} ({name})')
@@ -291,8 +291,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                         CategoryDebug.append(
                             f'    - {category} OUT OF SET CATEGORY '
                             f'{set_category} (No Export)!')
-                if version is None:
-                    version_present = False
+                if not version_present:
                     # create debug info messages
                     VersionDebug.append(
                         ' '.join([script_type, nickname, name]))
@@ -342,7 +341,12 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                         f'    - VERSION {version} > ALREADY FOUND VERSION '
                         f'{existing_version}!')
                     # REPLACE THE OBJECT IN DICT WITH NEWER VERSION
-                    raise
+                    if category_match and version_present:
+                        InfoMessages.append(
+                            f'Updated in Dict: {script_type} - {nickname} '
+                            f'({existing_version} -> {version})'
+                        )
+                        unique_script_components[script_id] = values
         return (unique_script_components, OldScriptsDebug, CategoryDebug,
                 VersionDebug, InfoMessages, UpdateMessages)
 
