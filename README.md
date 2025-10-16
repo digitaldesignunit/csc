@@ -311,6 +311,63 @@ To add the cronjob to your crontab run:
 This will run the preview generation script every 30 minutes and write the
 results to a logging file.
 
+## OpenAPI Model Generation
+
+This project uses OpenAPI schema generation to keep frontend TypeScript models in sync with backend Pydantic models.
+
+### How It Works
+
+1. **Backend**: Pydantic models are enhanced with OpenAPI documentation and Field descriptions
+2. **Schema Endpoint**: `/schema/component` endpoint exposes the ComponentModel schema
+3. **Frontend Generation**: Script fetches schema and generates TypeScript interfaces
+4. **Auto-sync**: Models are automatically kept in sync
+
+### Usage
+
+#### Generate Models
+
+```bash
+# Generate ComponentModel from backend
+npm run generate:models
+```
+
+#### Development Workflow
+
+1. **Update Backend Model**: Modify Pydantic model in `src/backend/apps/catalogue/models.py`
+2. **Restart Backend**: Restart FastAPI to regenerate OpenAPI schema
+3. **Generate Frontend Models**: Run `npm run generate:models`
+4. **Use Generated Models**: Import from `src/generated/ComponentModel`
+
+#### Import Generated Models
+
+```typescript
+// Instead of importing from components/common/models
+// import { ComponentData } from '@/components/common/models';
+
+// Import from generated models
+import { ComponentModel, ComponentType, ComponentComplexity } from '@/generated/ComponentModel';
+
+// Use the generated interface
+const component: ComponentModel = {
+  _id: "uuid",
+  type: "slab",
+  material: "concrete",
+  // ... other properties
+};
+```
+
+### File Structure
+
+```
+src/frontend/
+├── scripts/
+│   └── generate-models.ts    # Generation script
+├── generated/                 # Auto-generated models
+│   ├── ComponentModel.ts     # Generated ComponentModel interface
+│   └── index.ts             # Export index
+└── package.json              # Contains generate:models script
+```
+
 ## Testing
 
 To run all available tests, call
