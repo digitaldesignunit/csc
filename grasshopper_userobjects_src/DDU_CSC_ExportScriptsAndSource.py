@@ -26,7 +26,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 251016
+    Version: 251016.1
     """
 
     def get_source_version(self, source):
@@ -218,26 +218,31 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
 
         return script_components
 
-    def replace_scriptcomp_source(script_comp, new_source):
+    def replace_scriptcomp_source(
+            self, script_comp_values, new_source, new_obj):
         """
         Replaces source code of gh scriptable components.
         """
         # extract data
-        script_type, nickname, name, obj, source = script_comp
+        script_type, nickname, name, obj, source = script_comp_values
         # check for type and decide action
-        if script_type == "GHPY":
-            pass
-        elif script_type == "CS":
-            pass
-        elif script_type == "IPY2":
-            pass
-        elif script_type == "PY3":
+        if (script_type == "PY3" or
+                script_type == 'IPY2' or
+                script_type == 'CS9'):
+            # set the source code
             obj.SetSource(new_source)
-            rml = obj.Component.RuntimeMessageLevel.Warning
-            msg = 'My source just got replaced!'
+            # infer component param inputs from RunScript signature
+            obj.SetParametersFromScript()
+            # call parameter maintenance helper
+            obj.VariableParameterMaintenance()
+            rml = obj.RuntimeMessageLevel.Warning
+            msg = 'My source just got replaced with a new version!'
             obj.AddRuntimeMessage(rml, msg)
-        elif script_type == "CS9":
-            pass
+        elif script_type == 'GHPY':
+            return False
+        elif script_type == 'CS':
+            return False
+        return True
 
     def process_script_components(
             self,
@@ -252,6 +257,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         CategoryDebug = []
         VersionDebug = []
         InfoMessages = []
+        UpdateMessages = []
 
         for iguid, values in script_components.items():
             script_type, nickname, name, obj, source = values
@@ -297,6 +303,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             # ALREADY SEEN SCRIPT COMPONENTS
             else:
                 existing_source = unique_script_components[script_id][4]
+                existing_obj = unique_script_components[script_id][3]
                 existing_version = self.get_source_version(existing_source)
                 if version is None:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
@@ -312,11 +319,23 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
                     VersionDebug.append(
                         f'    - VERSION {version} < {existing_version}! '
-                        'Continuing...')
+                        'Updating Source...')
                     # REPLACE THE SOURCE OF THE LOWER VERSION
                     # WITH HIGHER VERSION SOURCE!
-                    self.replace_scriptcomp_source(values, existing_source)
-                    continue
+                    repres = self.replace_scriptcomp_source(
+                        values,
+                        existing_source,
+                        existing_obj
+                    )
+                    if repres:
+                        UpdateMessages.append(
+                            f'Updated source for {nickname}: '
+                            f'{version} -> {existing_version}'
+                        )
+                    else:
+                        UpdateMessages.append(
+                            f'Could not update source for {nickname}!'
+                        )
                 elif self._compare_versions(version, existing_version) > 0:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
                     VersionDebug.append(
@@ -325,7 +344,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                     # REPLACE THE OBJECT IN DICT WITH NEWER VERSION
                     raise
         return (unique_script_components, OldScriptsDebug, CategoryDebug,
-                VersionDebug, InfoMessages)
+                VersionDebug, InfoMessages, UpdateMessages)
 
     def export_scriptcomp_usrobj(self, scriptcomp, usrobjpath, iconpath=''):
         """
@@ -398,10 +417,11 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             SourceFolder,
             IconPath: str):
         # Init outputs
-        OldScriptsDebug = Grasshopper.DataTree[object]()
-        CategoryDebug = Grasshopper.DataTree[object]()
-        VersionDebug = Grasshopper.DataTree[object]()
-        InfoMessages = Grasshopper.DataTree[object]()
+        OldScriptsDebug = Grasshopper.DataTree[str]()
+        CategoryDebug = Grasshopper.DataTree[str]()
+        VersionDebug = Grasshopper.DataTree[str]()
+        InfoMessages = Grasshopper.DataTree[str]()
+        UpdateMessages = Grasshopper.DataTree[str]()
 
         # Iterate the canvas and get to the GHPython components
         grasshopper_document = ghenv.Component.OnPingDocument()  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -427,7 +447,8 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
              OldScriptsDebug,
              CategoryDebug,
              VersionDebug,
-             InfoMessages) = self.process_script_components(
+             InfoMessages,
+             UpdateMessages) = self.process_script_components(
                 script_components, Category)
 
         # HERE LOOP OVER UNIQUE COMPONENTS
@@ -438,7 +459,10 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                 loc = self.export_scriptcomp_source(scriptcomp, srcpath)
                 res = self.export_scriptcomp_usrobj(
                     scriptcomp, usrobjpath, iconpath)
-                print(res, loc)
+                if res:
+                    print(f'Exported: {scriptcomp[1]} - {loc} Lines of Code')
+                else:
+                    raise RuntimeError(f'Export failed for {scriptcomp[1]}!')
         elif ExportUserObjectsAndSource and not RunComponentAnalysis:
             rml = ghenv.Component.RuntimeMessageLevel.Warning  # type: ignore[reportUnedfinedVariable] # NOQA
             ghenv.Component.AddRuntimeMessage(  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -446,4 +470,5 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                 'UserObjects and Source cannot be exported without running '
                 'Component Analysis!')
 
-        return OldScriptsDebug, CategoryDebug, VersionDebug, InfoMessages
+        return (OldScriptsDebug, CategoryDebug,
+                VersionDebug, InfoMessages, UpdateMessages)
