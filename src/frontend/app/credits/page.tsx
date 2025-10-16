@@ -1,5 +1,5 @@
 import BackgroundMesh from '@/components/components/BackgroundMesh'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Award, Users, Code, ExternalLink, BookOpen } from 'lucide-react'
 
 export default function CreditsPage() {

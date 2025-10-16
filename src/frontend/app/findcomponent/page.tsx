@@ -33,7 +33,7 @@ export default async function FindComponent({ searchParams }: FindComponentProps
               QR Code Scanner
             </CardTitle>
             <CardDescription>
-              Use your device's camera to scan component QR codes
+              Use your device&apos;s camera to scan component QR codes
             </CardDescription>
           </CardHeader>
           <CardContent className='p-1'>

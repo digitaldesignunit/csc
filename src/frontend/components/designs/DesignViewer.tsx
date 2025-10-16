@@ -752,13 +752,11 @@ async function loadComponentGeometry(
 
 interface DesignViewerProps {
   design: DesignModel
-  mode?: 'primitive' | 'reduced' | 'detailed'
   className?: string
 }
 
 export default function DesignViewer({ 
   design, 
-  mode = 'primitive',
   className = ''
 }: DesignViewerProps) {
   const [geometryMode, setGeometryMode] = useState<'primitive' | 'reduced' | 'detailed'>('primitive')

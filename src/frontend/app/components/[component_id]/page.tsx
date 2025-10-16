@@ -1,8 +1,7 @@
 // app/components/[component_id]/page.tsx
 import ComponentDetailCard from '@/components/components/ComponentDetailCard'
 import ComponentViewer from '@/components/components/ComponentViewer'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Package, Eye, Info } from 'lucide-react'
+import { Package } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 
