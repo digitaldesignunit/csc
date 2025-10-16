@@ -53,7 +53,7 @@ export default async function DesignDetailPage({
   return (
     <div className="grid gap-2 m-2">
       {/* 3D Viewer - First section like ComponentViewer */}
-      <DesignViewer design={design} mode="reduced" />
+      <DesignViewer design={design} />
 
       {/* Design Details - Second section like ComponentDetailCard */}
       <DesignDetailCard design={design} canEdit={canEdit} />
