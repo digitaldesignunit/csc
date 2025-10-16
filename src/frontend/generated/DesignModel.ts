@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2025-10-16T05:37:33.598Z
+// Generated on: 2025-10-16T09:43:48.465Z
 // Source: https://api.ddu.uber.space/schema/design
 
 import { ComponentExtrusion, ComponentGeometry, ComponentMesh, ComponentMeshColors, ComponentMeshFaces, ComponentMeshVertices, ComponentPolylinePoints } from './ComponentModel';
