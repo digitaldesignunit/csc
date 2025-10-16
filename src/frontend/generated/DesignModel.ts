@@ -1,11 +1,11 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2025-10-14T14:01:11.379Z
+// Generated on: 2025-10-16T05:37:33.598Z
 // Source: https://api.ddu.uber.space/schema/design
 
 import { ComponentExtrusion, ComponentGeometry, ComponentMesh, ComponentMeshColors, ComponentMeshFaces, ComponentMeshVertices, ComponentPolylinePoints } from './ComponentModel';
 
 export interface DesignAdditionalGeometry {
-  id?: string; // Globally unique identifier for this additional geometry item
+  _id?: string; // Globally unique identifier for this additional geometry item
   name?: string | unknown; // Optional human-readable name
   iframe: DesignInsertionFrame; // Insertion frame defining geometry orientation
   geometry: ComponentGeometry; // Geometry data. Use 'meshes' array; if single mesh, provide array with one entry.
