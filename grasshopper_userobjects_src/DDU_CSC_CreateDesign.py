@@ -34,7 +34,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251014
+    Version: 251016
     """
 
     def __init__(self):
@@ -64,7 +64,6 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 "_id": {"type": "string"},
                 "name": {"type": "string"},
                 "description": {"type": "string"},
-                "creator": {"type": "string"},
                 "created": {"type": "string"},
                 "lastmodified": {"type": "string"},
                 "components": {
@@ -90,11 +89,125 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                         },
                         "required": ["component", "iframe"]
                     }
+                },
+                "additional_geometry": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "name": {"type": "string"},
+                            "iframe": {
+                                "type": "object",
+                                "properties": {
+                                    "o": {"type": "array",
+                                          "items": {"type": "number"}},
+                                    "x": {"type": "array",
+                                          "items": {"type": "number"}},
+                                    "y": {"type": "array",
+                                          "items": {"type": "number"}},
+                                    "z": {"type": "array",
+                                          "items": {"type": "number"}}
+                                },
+                                "required": ["o", "x", "y", "z"]
+                            },
+                            "geometry": {
+                                "type": "object",
+                                "properties": {
+                                    "meshes": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "v": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "number"}
+                                                    }
+                                                },
+                                                "f": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "integer"}
+                                                    }
+                                                },
+                                                "c": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "integer"}
+                                                    }
+                                                }
+                                            },
+                                            "required": ["v", "f"]
+                                        }
+                                    }
+                                },
+                                "required": ["meshes"]
+                            }
+                        },
+                        "required": ["id", "iframe", "geometry"]
+                    }
                 }
             },
-            "required": ["_id", "creator", "created", "lastmodified",
-                         "components"]
+            "required": ["_id", "created", "lastmodified",
+                         "components", "additional_geometry"]
         }
+
+    # Helpers -----------------------------------------------------------------
+    def _compute_mesh_centroid(self, mesh):
+        try:
+            vmp = Rhino.Geometry.VolumeMassProperties.Compute(mesh)
+            if vmp and vmp.Centroid:
+                return vmp.Centroid
+        except Exception:
+            pass
+        bbox = mesh.GetBoundingBox(True)
+        return bbox.Center
+
+    def _center_mesh_at_origin(self, mesh):
+        centered = mesh.Duplicate()
+        c = self._compute_mesh_centroid(centered)
+        xform = Rhino.Geometry.Transform.Translation(-c.X, -c.Y, -c.Z)
+        centered.Transform(xform)
+        return centered, c
+
+    def _reduce_mesh_for_design(self, mesh):
+        """Reduce mesh if faces > 350, targeting ~250 faces."""
+        try:
+            faces = mesh.Faces.Count
+            if faces > 350:
+                reduced = mesh.Duplicate()
+                # Parameters mirror CreateComponent.reduce_mesh behavior
+                reduced.Reduce(250, True, 5, False, True)
+                reduced.Faces.ConvertQuadsToTriangles()
+                reduced.Compact()
+                return reduced
+            return mesh
+        except Exception:
+            return mesh
+
+    def _mesh_to_meshes_geometry(self, mesh):
+        """
+        Convert a Rhino mesh to geometry.meshes entry (single-item array).
+        Returns a dictionary with a single mesh entry.
+        """
+        try:
+            vertices = [[p.X, p.Y, p.Z] for p in mesh.Vertices]
+            faces = [[f[0], f[1], f[2]] for f in mesh.Faces]
+            return {
+                'meshes': [{
+                    'v': vertices,
+                    'f': faces
+                }]
+            }
+        except Exception:
+            return {'meshes': []}
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -155,8 +268,10 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
 
     def create_design_payload(self, design_name: str, design_description: str,
                               component_data_list: List[str],
-                              auth_core) -> Optional[Dict[str, Any]]:
-        """Create design payload from component data."""
+                              auth_core,
+                              additional_meshes=None
+                              ) -> Optional[Dict[str, Any]]:
+        """Create design payload from component data and additional meshes."""
         try:
             # Get design schema
             schema = self.get_design_schema(auth_core)
@@ -166,27 +281,15 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
             for i, component_json in enumerate(component_data_list):
                 try:
                     component_data = json.loads(component_json)
-
-                    # Validate component structure
                     if not self.validate_component_data(
                             component_data, schema):
                         self._addWarning(f'Invalid component at index {i}')
                         continue
-
-                    # Extract component ID and iframe
                     component_id = component_data['_id']
                     iframe = component_data['iframe']
-
-                    # Create design component entry
-                    design_component = {
-                        'component': component_id,
-                        'iframe': iframe
-                    }
-                    components.append(design_component)
-
-                except json.JSONDecodeError as e:
-                    self._addWarning(f'Invalid JSON at index {i}: {str(e)}')
-                    continue
+                    components.append(
+                        {'component': component_id, 'iframe': iframe}
+                    )
                 except Exception as e:
                     self._addWarning(
                         f'Error processing component {i}: {str(e)}'
@@ -197,24 +300,50 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addError('No valid components found')
                 return None
 
-            # Get current user ID from auth core
-            user_id = auth_core.get_user_id()
-            if not user_id:
-                self._addError('Could not get user ID from authentication')
-                return None
+            # Build additional_geometry entries
+            additional_geometry = []
+            if additional_meshes:
+                try:
+                    for idx, m in enumerate(additional_meshes):
+                        if m is None:
+                            continue
+                        if not isinstance(m, Rhino.Geometry.Mesh):
+                            self._addWarning(
+                                'AdditionalGeometry contains '
+                                'non-mesh; skipping'
+                            )
+                            continue
+                        centered, centroid = self._center_mesh_at_origin(m)
+                        primitive = self._reduce_mesh_for_design(centered)
+                        geom = self._mesh_to_meshes_geometry(primitive)
+                        iframe = {
+                            'o': [centroid.X, centroid.Y, centroid.Z],
+                            'x': [1.0, 0.0, 0.0],
+                            'y': [0.0, 1.0, 0.0],
+                            'z': [0.0, 0.0, 1.0]
+                        }
+                        additional_geometry.append({
+                            'id': str(uuid.uuid4()),
+                            'iframe': iframe,
+                            'geometry': geom
+                        })
+                except Exception as e:
+                    self._addWarning(
+                        f'Error processing AdditionalGeometry: {str(e)}'
+                    )
 
             # Generate timestamps
             current_time = datetime.utcnow().isoformat() + 'Z'
 
-            # Create design payload
+            # Create design payload (client supplies UUID)
             design_payload = {
                 '_id': str(uuid.uuid4()),
                 'name': design_name,
                 'description': design_description,
-                'creator': user_id,
                 'created': current_time,
                 'lastmodified': current_time,
-                'components': components
+                'components': components,
+                'additional_geometry': additional_geometry
             }
 
             return design_payload
@@ -226,11 +355,13 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
     def RunScript(self,
             DesignName: str,
             DesignDescription: str,
-            ComponentData: System.Collections.Generic.List[str]):
+            ComponentData: System.Collections.Generic.List[str],
+            AdditionalGeometry: System.Collections.Generic.List[Rhino.Geometry.Mesh]):
         # Initialize param descriptions
         self.InputParams[0].Description = 'Design name (mandatory)'
         self.InputParams[1].Description = 'Design description (optional)'
         self.InputParams[2].Description = 'List of component JSON strings'
+        self.InputParams[3].Description = 'AdditionalGeometry (List of Mesh)'
         self.OutputParams[0].Description = (
             'Design JSON string ready for posting'
         )
@@ -267,7 +398,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
             msg = 'Input ComponentData failed to collect data!'
             self._addWarning(msg)
             self.Component.Message = msg
-            return
+            return DesignJSON
 
         try:
             # Create design payload
@@ -275,7 +406,8 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 DesignName.strip(),
                 DesignDescription.strip(),
                 ComponentData,
-                auth_core
+                auth_core,
+                AdditionalGeometry
             )
 
             if design_payload is None:
@@ -284,9 +416,10 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
             # Convert to JSON string
             DesignJSON = json.dumps(design_payload, indent=2)
 
+            add_count = len(design_payload.get('additional_geometry', []))
             self.Component.Message = (
                 f'Design created: {len(design_payload["components"])} '
-                'components'
+                f'components, {add_count} add. geom.'
             )
 
             return DesignJSON
