@@ -26,7 +26,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 251010
+    Version: 251016
     """
 
     def get_source_version(self, source):
@@ -218,6 +218,27 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
 
         return script_components
 
+    def replace_scriptcomp_source(script_comp, new_source):
+        """
+        Replaces source code of gh scriptable components.
+        """
+        # extract data
+        script_type, nickname, name, obj, source = script_comp
+        # check for type and decide action
+        if script_type == "GHPY":
+            pass
+        elif script_type == "CS":
+            pass
+        elif script_type == "IPY2":
+            pass
+        elif script_type == "PY3":
+            obj.SetSource(new_source)
+            rml = obj.Component.RuntimeMessageLevel.Warning
+            msg = 'My source just got replaced!'
+            obj.AddRuntimeMessage(rml, msg)
+        elif script_type == "CS9":
+            pass
+
     def process_script_components(
             self,
             script_components: dict,
@@ -294,6 +315,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                         'Continuing...')
                     # REPLACE THE SOURCE OF THE LOWER VERSION
                     # WITH HIGHER VERSION SOURCE!
+                    self.replace_scriptcomp_source(values, existing_source)
                     continue
                 elif self._compare_versions(version, existing_version) > 0:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
