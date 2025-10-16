@@ -156,7 +156,7 @@ export default function ValidationPage() {
           <h1 className="text-2xl sm:text-3xl font-bold">Validation Dashboard</h1>
         </div>
         <p className="text-muted-foreground text-sm sm:text-base">
-          Manage component validation
+          Review and validate pending components before they become publicly available
         </p>
       </div>
 
@@ -187,7 +187,7 @@ export default function ValidationPage() {
       <div className="grid gap-6">
         {/* Component Validation Section */}
         <Card>
-          <CardHeader>
+          {/* <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
               Component Validation
@@ -195,7 +195,7 @@ export default function ValidationPage() {
             <CardDescription>
               Review and validate pending components before they become publicly available
             </CardDescription>
-          </CardHeader>
+          </CardHeader> */}
           <CardContent>
             {loading ? (
               <div className="flex items-center justify-center py-8">
@@ -210,9 +210,6 @@ export default function ValidationPage() {
             ) : (
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <p className="text-sm text-muted-foreground">
-                    {components.length} component{components.length !== 1 ? 's' : ''} pending validation
-                  </p>
                   <Button
                     onClick={fetchUnvalidatedComponents}
                     variant="outline"

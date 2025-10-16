@@ -4,6 +4,7 @@ import { ComponentModel } from '@/generated/ComponentModel'
 import { ComponentOverviewColumns } from '@/components/components/overview/ComponentOverviewColumns'
 import { Card } from '@/components/ui/card'
 import ComponentOverviewFilterMenu from '@/components/components/overview/ComponentOverviewFilterMenu'
+import { Package } from 'lucide-react'
 
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -144,12 +145,28 @@ export default async function ComponentsPage({
   // }
 
   return (
-    <div className="grid gap-2 m-2">
-      <ComponentOverviewFilterMenu defaultMaterial={material} defaultCompType={comptype} defaultDataset={dataset} />
-      <Card className="w-full overflow-x-auto p-0">
-        <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={items} />
-      </Card>
-      <ComponentOverviewPagination pageNum={page} pageSize={size} total={total} />
+    <div className="container mx-auto p-6 space-y-6 max-w-full">
+      {/* Header */}
+      <div className="mb-6 sm:mb-8">
+        <div className="flex items-center gap-2 sm:gap-3 mb-2">
+          <Package className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold">Browse Components</h1>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="space-y-6">
+        {/* Filter Section */}
+        <ComponentOverviewFilterMenu defaultMaterial={material} defaultCompType={comptype} defaultDataset={dataset} />
+
+        {/* Components Table */}
+        <Card className="w-full overflow-x-auto p-0">
+          <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={items} />
+        </Card>
+
+        {/* Pagination */}
+        <ComponentOverviewPagination pageNum={page} pageSize={size} total={total} />
+      </div>
     </div>
   )
 }

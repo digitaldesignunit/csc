@@ -1,6 +1,8 @@
 // app/components/[component_id]/page.tsx
 import ComponentDetailCard from '@/components/components/ComponentDetailCard'
 import ComponentViewer from '@/components/components/ComponentViewer'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Package, Eye, Info } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 
@@ -45,9 +47,22 @@ export default async function ComponentDetailPage({
   const component_data = await res.json()
 
   return (
-    <div className="grid gap-2 m-2">
-      <ComponentViewer component_data={component_data} />
-      <ComponentDetailCard component_data={component_data} />
+    <div className="container mx-auto p-6 space-y-6 max-w-full">
+      {/* Header */}
+      <div className="mb-6 sm:mb-8">
+        <div className="flex items-center gap-2 sm:gap-3 mb-2">
+          <Package className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold">Component Details</h1>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="space-y-6">
+            <ComponentViewer component_data={component_data} />
+            <ComponentDetailCard component_data={component_data} />
+          </div>
+        
+      
     </div>
   )
 }

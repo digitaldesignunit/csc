@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Bookmark, ArrowLeft, Package, User } from 'lucide-react'
+import { Bookmark, ArrowLeft, Package, User, ReceiptText } from 'lucide-react'
 import Link from 'next/link'
 import { ComponentOverviewDataTable } from '@/components/components/overview/ComponentOverviewDataTable'
 import { ComponentOverviewColumns } from '@/components/components/overview/ComponentOverviewColumns'
@@ -139,22 +139,18 @@ export default function ReservedComponentsPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="sm" className="p-2">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <h1 className="text-3xl font-bold text-foreground">Reserved Components</h1>
+        {/* Header */}
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+            <Bookmark className="h-8 w-8 text-primary" />
+            <h1 className="text-2xl sm:text-3xl font-bold">Reserved Components</h1>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm sm:text-base">
             Components reserved by {username}
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="text-sm">
             <Bookmark className="h-3 w-3 mr-1" />
@@ -206,12 +202,6 @@ export default function ReservedComponentsPage() {
 
       {/* Main Content */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bookmark className="h-5 w-5 text-primary" />
-            Reserved Components List
-          </CardTitle>
-        </CardHeader>
         <CardContent>
           {loading ? (
             <div className="flex items-center justify-center h-32">

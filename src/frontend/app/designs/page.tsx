@@ -5,7 +5,8 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { formatTimestamp } from '@/lib/utils'
-import { Package, Plus, ExternalLink } from 'lucide-react'
+import { Package, ExternalLink } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -160,19 +161,21 @@ function DesignCard({ design }: { design: DesignModel }) {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-4 gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <h3 className="font-medium text-sm sm:text-base truncate">
+            <h3 className="font-medium text-base truncate">
               {String(design.name ?? 'Unnamed Design')}
             </h3>
-            <span className="text-xs bg-primary/40 text-primary px-2 py-1 rounded">
+          </div>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <Badge className="text-xs">
               {componentCount} component{componentCount !== 1 ? 's' : ''}
-            </span>
-            <span className="text-xs bg-secondary/40 text-secondary-foreground px-2 py-1 rounded">
+            </Badge>
+            <Badge variant="secondary"className="text-xs">
               {addGeomCount} add. geom.
-            </span>
+            </Badge>
           </div>
           <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
             <p className="line-clamp-2">
-              {String(design.description ?? 'No description provided')}
+              <strong>{String(design.description ?? 'No description provided')}</strong>
             </p>
             <p className="break-all">
               ID: <Link 

@@ -157,21 +157,21 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Component Lookup */}
+        {/* Find Component */}
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-primary" />
-              Component Lookup
+              <Search className="h-5 w-5 text-primary" />
+              Find Component
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Look up specific components using QR codes or reference IDs.
+              Find a physical component based on its <b>Component ID</b>.
             </p>
             <Link href="/findcomponent">
               <Button className="w-full" variant="outline">
-                Lookup Component
+                Find Component
               </Button>
             </Link>
           </CardContent>
