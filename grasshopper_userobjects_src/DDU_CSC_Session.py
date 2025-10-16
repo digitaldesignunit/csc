@@ -40,7 +40,7 @@ ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 251014
+Version: 251016
 """
 
 
@@ -210,7 +210,8 @@ class _ComponentCache(object):
                     for filename in os.listdir(self.designs_dir):
                         if filename.endswith('.pkl'):
                             design_count += 1
-                            file_path = os.path.join(self.designs_dir, filename)
+                            file_path = os.path.join(
+                                self.designs_dir, filename)
                             if os.path.isfile(file_path):
                                 design_size += os.path.getsize(file_path)
 
@@ -219,7 +220,8 @@ class _ComponentCache(object):
                     'metadata_count': metadata_count,
                     'geometry_count': geometry_count,
                     'design_count': design_count,
-                    'total_size_bytes': total_size + geometry_size + design_size,
+                    'total_size_bytes': (total_size + geometry_size +
+                                         design_size),
                     'geometry_size_bytes': geometry_size,
                     'design_size_bytes': design_size,
                     'cache_dir': self.cache_dir
@@ -1237,10 +1239,11 @@ class _AuthCore(object):
         Returns:
             Component schema dictionary or None if failed
         """
-        if not self.is_valid():
+        # Schema endpoints are unprotected, so we can access without auth
+        # But we still need to check if we have a valid base_url
+        if not self.base_url:
             raise RuntimeError(
-                'Access token missing or expired. Please sign in again.'
-            )
+                'Base URL not configured. Please sign in first.')
 
         # If cache is disabled, make regular request
         # (schema endpoint is unprotected)
@@ -1310,10 +1313,11 @@ class _AuthCore(object):
         Returns:
             Design schema dictionary or None if failed
         """
-        if not self.is_valid():
+        # Schema endpoints are unprotected, so we can access without auth
+        # But we still need to check if we have a valid base_url
+        if not self.base_url:
             raise RuntimeError(
-                'Access token missing or expired. Please sign in again.'
-            )
+                'Base URL not configured. Please sign in first.')
 
         # If cache is disabled, make regular request
         # (schema endpoint is unprotected)
@@ -1578,11 +1582,14 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                     geometry_size_kb = (
                         cache_stats["geometry_size_bytes"] // 1024
                     )
-                    design_size_kb = cache_stats["design_size_bytes"] // 1024
+                    design_size_kb = (
+                        cache_stats["design_size_bytes"] // 1024
+                    )
 
                     # Add cache status to messages
                     cache_status = (
-                        f'Cache: {"Enabled" if cache_enabled else "Disabled"}\n'
+                        'Cache: '
+                        f'{"Enabled" if cache_enabled else "Disabled"}\n'
                         f' | Components: {comp_count}\n'
                         f' | Geometry: {geometry_count} files\n'
                         f' | Designs: {design_count} files\n'
@@ -1648,11 +1655,14 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                     geometry_size_kb = (
                         cache_stats["geometry_size_bytes"] // 1024
                     )
-                    design_size_kb = cache_stats["design_size_bytes"] // 1024
+                    design_size_kb = (
+                        cache_stats["design_size_bytes"] // 1024
+                    )
 
                     # Add cache status to messages
                     cache_status = (
-                        f'Cache: {"Enabled" if cache_enabled else "Disabled"}\n'
+                        f'Cache: '
+                        f'{"Enabled" if cache_enabled else "Disabled"}\n'
                         f' | Components: {comp_count}\n'
                         f' | Geometry: {geometry_count} files\n'
                         f' | Designs: {design_count} files\n'
