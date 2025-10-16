@@ -602,6 +602,9 @@ class DesignModel(BaseModel):
 
 class CreateDesignRequest(BaseModel):
     """Request model for creating a new design."""
+    id: str = Field(
+        description="Design ID (UUID provided by client)"
+    )
     name: Optional[str] = Field(
         None,
         description="Human readable design name (optional)"
