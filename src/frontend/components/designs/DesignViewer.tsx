@@ -66,88 +66,6 @@ type GeometryLoadResult = {
   message: string
 }
 
-/**
- * Parse OBJ file manually to extract multiple meshes with vertices, faces, and colors
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function parseOBJ(objContent: string): { meshes: { vertices: number[], faces: number[], colors: number[], name: string }[] } {
-  const lines = objContent.split('\n')
-  const meshes: { vertices: number[], faces: number[], colors: number[], name: string }[] = []
-  
-  let currentMesh: { vertices: number[], faces: number[], colors: number[], name: string } | null = null
-  const globalVertices: number[] = []
-  const globalColors: number[] = []
-  
-  for (const line of lines) {
-    const trimmed = line.trim()
-    
-    // Parse object/group definition: o name or g name
-    if (trimmed.startsWith('o ') || trimmed.startsWith('g ')) {
-      // Save previous mesh if it exists
-      if (currentMesh && currentMesh.faces.length > 0) {
-        meshes.push(currentMesh)
-      }
-      
-      // Start new mesh
-      const name = trimmed.split(/\s+/).slice(1).join(' ') || `Mesh ${meshes.length + 1}`
-      currentMesh = { vertices: [], faces: [], colors: [], name }
-    }
-    
-    // Parse vertices: v x y z [r g b]
-    if (trimmed.startsWith('v ')) {
-      const parts = trimmed.split(/\s+/)
-      if (parts.length >= 4) {
-        const x = parseFloat(parts[1])
-        const y = parseFloat(parts[2])
-        const z = parseFloat(parts[3])
-        
-        globalVertices.push(x, y, z)
-        
-        // Check for vertex colors
-        if (parts.length >= 7) {
-          const r = parseFloat(parts[4])
-          const g = parseFloat(parts[5])
-          const b = parseFloat(parts[6])
-          globalColors.push(r, g, b)
-        }
-      }
-    }
-    
-    // Parse faces: f v1 v2 v3 [v4 ...]
-    if (trimmed.startsWith('f ') && currentMesh) {
-      const parts = trimmed.split(/\s+/).slice(1)
-      const faceIndices: number[] = []
-      
-      for (const part of parts) {
-        // Handle vertex/texture/normal indices (v/vt/vn or v//vn or v)
-        const vertexIndex = parseInt(part.split('/')[0])
-        if (!isNaN(vertexIndex) && vertexIndex > 0) {
-          faceIndices.push(vertexIndex - 1) // Convert to 0-based index
-        }
-      }
-      
-      // Triangulate faces (simple fan triangulation)
-      if (faceIndices.length >= 3) {
-        for (let i = 1; i < faceIndices.length - 1; i++) {
-          currentMesh.faces.push(faceIndices[0], faceIndices[i], faceIndices[i + 1])
-        }
-      }
-    }
-  }
-  
-  // Add the last mesh if it exists
-  if (currentMesh && currentMesh.faces.length > 0) {
-    meshes.push(currentMesh)
-  }
-  
-  // Assign global vertices and colors to each mesh
-  for (const mesh of meshes) {
-    mesh.vertices = [...globalVertices]
-    mesh.colors = [...globalColors]
-  }
-  
-  return { meshes }
-}
 
 /**
  * Create transformation matrix from iframe, converting from Rhino XYZ to Three.js coordinate system
@@ -394,6 +312,337 @@ function convertGeometryToMeshes(geometry: unknown, componentId: string): THREE.
 }
 
 /**
+ * Parse OBJ file manually to extract multiple meshes with vertices, faces, and colors
+ */
+function parseOBJ(objContent: string): { meshes: { vertices: number[], faces: number[], colors: number[], name: string }[] } {
+  const lines = objContent.split('\n')
+  const meshes: { vertices: number[], faces: number[], colors: number[], name: string }[] = []
+  
+  let currentMesh: { vertices: number[], faces: number[], colors: number[], name: string } | null = null
+  const globalVertices: number[] = []
+  const globalColors: number[] = []
+  
+  for (const line of lines) {
+    const trimmed = line.trim()
+    
+    // Parse object/group definition: o name or g name
+    if (trimmed.startsWith('o ') || trimmed.startsWith('g ')) {
+      // Save previous mesh if it exists
+      if (currentMesh && currentMesh.faces.length > 0) {
+        meshes.push(currentMesh)
+      }
+      
+      // Start new mesh
+      const name = trimmed.split(/\s+/).slice(1).join(' ') || `Mesh ${meshes.length + 1}`
+      currentMesh = { vertices: [], faces: [], colors: [], name }
+    }
+    
+    // Parse vertex with colors: v x y z r g b
+    if (trimmed.startsWith('v ') && !trimmed.startsWith('vt ') && !trimmed.startsWith('vn ')) {
+      const parts = trimmed.split(/\s+/)
+      if (parts.length >= 4) {
+        // Position
+        globalVertices.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]))
+        
+        // Colors (if present)
+        if (parts.length >= 7) {
+          const r = parseFloat(parts[4])
+          const g = parseFloat(parts[5])
+          const b = parseFloat(parts[6])
+          if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+            globalColors.push(r, g, b)
+          } else {
+            globalColors.push(0.5, 0.5, 0.5) // Default gray
+          }
+        } else {
+          globalColors.push(0.5, 0.5, 0.5) // Default gray
+        }
+      }
+    }
+    // Parse faces: f v1 v2 v3 (1-indexed)
+    else if (trimmed.startsWith('f ')) {
+      if (!currentMesh) {
+        // If no object/group defined, create a default mesh
+        currentMesh = { vertices: [], faces: [], colors: [], name: 'Default Mesh' }
+      }
+      
+      const parts = trimmed.split(/\s+/)
+      if (parts.length >= 4) {
+        // Convert from 1-indexed to 0-indexed and handle negative indices
+        const faceIndices: number[] = []
+        for (let i = 1; i < parts.length; i++) {
+          const faceIndex = parseInt(parts[i].split('/')[0])
+          const index = faceIndex < 0 ? globalVertices.length / 3 + faceIndex : faceIndex - 1
+          faceIndices.push(index)
+        }
+        
+        // Triangulate faces (convert quads to triangles)
+        if (faceIndices.length === 3) {
+          // Triangle - add as-is
+          currentMesh.faces.push(...faceIndices)
+        } else if (faceIndices.length === 4) {
+          // Quad - split into two triangles
+          currentMesh.faces.push(faceIndices[0], faceIndices[1], faceIndices[2])
+          currentMesh.faces.push(faceIndices[0], faceIndices[2], faceIndices[3])
+        } else if (faceIndices.length > 4) {
+          // N-gon - fan triangulation
+          for (let i = 1; i < faceIndices.length - 1; i++) {
+            currentMesh.faces.push(faceIndices[0], faceIndices[i], faceIndices[i + 1])
+          }
+        }
+      }
+    }
+  }
+  
+  // Save the last mesh if it exists
+  if (currentMesh && currentMesh.faces.length > 0) {
+    meshes.push(currentMesh)
+  }
+  
+  // If no meshes were created (no object/group definitions), create a single mesh from all data
+  if (meshes.length === 0 && globalVertices.length > 0) {
+    const singleMesh = { vertices: globalVertices, faces: [], colors: globalColors, name: 'Single Mesh' }
+    // We need to reconstruct faces from the global data - this is a fallback
+    meshes.push(singleMesh)
+  }
+  
+  // For each mesh, extract the relevant vertices and colors based on face indices
+  for (const mesh of meshes) {
+    if (mesh.faces.length > 0) {
+      const usedVertices = new Set<number>()
+      
+      // Find all unique vertex indices used by this mesh
+      for (let i = 0; i < mesh.faces.length; i++) {
+        usedVertices.add(mesh.faces[i])
+      }
+      
+      // Create mapping from old indices to new indices
+      const vertexMap = new Map<number, number>()
+      const newVertices: number[] = []
+      const newColors: number[] = []
+      
+      let newIndex = 0
+      for (const oldIndex of usedVertices) {
+        vertexMap.set(oldIndex, newIndex)
+        newIndex++
+        
+        // Copy vertex data
+        if (oldIndex * 3 + 2 < globalVertices.length) {
+          newVertices.push(
+            globalVertices[oldIndex * 3],
+            globalVertices[oldIndex * 3 + 1],
+            globalVertices[oldIndex * 3 + 2]
+          )
+        }
+        
+        // Copy color data
+        if (oldIndex * 3 + 2 < globalColors.length) {
+          newColors.push(
+            globalColors[oldIndex * 3],
+            globalColors[oldIndex * 3 + 1],
+            globalColors[oldIndex * 3 + 2]
+          )
+        }
+      }
+      
+      // Update face indices to use new mapping
+      mesh.faces = mesh.faces.map(oldIndex => vertexMap.get(oldIndex) || 0)
+      mesh.vertices = newVertices
+      mesh.colors = newColors
+    }
+  }
+  
+  debugLog(`Parsed OBJ: ${meshes.length} meshes, ${globalVertices.length / 3} total vertices, ${globalColors.length / 3} total colors`)
+  return { meshes }
+}
+
+/**
+ * Load external geometry (reduced or detailed) for a component
+ */
+async function loadExternalGeometry(
+  componentId: string,
+  mode: 'reduced' | 'detailed'
+): Promise<GeometryLoadResult> {
+  debugLog(`Loading ${mode} geometry for component ${componentId}`)
+  
+  const cacheKey = `${componentId}_${mode}`
+  const cached = externalGeometryCache.get(cacheKey)
+  
+  // Check if we have valid cached data
+  if (cached && cached.meshes) {
+    debugLog(`Using cached geometry for ${componentId}: ${cached.meshes.length} meshes`)
+    return { success: true, meshes: cached.meshes }
+  }
+  
+  // Check if we have cached "not found" state
+  if (cached && cached.meshes === null) {
+    return { 
+      success: false, 
+      error: 'not_found', 
+      message: `No ${mode} geometry available for this component` 
+    }
+  }
+
+  const geometryRoute = mode === 'reduced' ? 'geometry_reduced' : 'geometry_detailed'
+  const objUrl = `/api/backend/components/${componentId}/${geometryRoute}`
+
+  try {
+    // Prepare headers for conditional request
+    const headers: HeadersInit = { credentials: 'include' }
+    if (cached?.etag) {
+      headers['If-None-Match'] = cached.etag
+    }
+
+    // Fetch and parse OBJ content manually
+    debugLog(`Fetching OBJ content...`)
+    const response = await fetch(objUrl, { headers })
+    
+    if (response.status === 304) {
+      // Not modified - use cached data
+      debugLog(`Geometry not modified, using cached data`)
+      if (cached && cached.meshes) {
+        return { success: true, meshes: cached.meshes }
+      } else {
+        return { 
+          success: false, 
+          error: 'not_found', 
+          message: `No ${mode} geometry available for this component` 
+        }
+      }
+    }
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch OBJ: ${response.status} ${response.statusText}`)
+    }
+    
+    const objContent = await response.text()
+    const { meshes: parsedMeshes } = parseOBJ(objContent)
+    
+    if (parsedMeshes.length === 0) {
+      throw new Error('No meshes found in OBJ file')
+    }
+
+    const threeMeshes: THREE.Group[] = []
+
+    for (const meshData of parsedMeshes) {
+      if (meshData.vertices.length === 0) continue
+
+      // Build BufferGeometry manually
+      const geometry = new THREE.BufferGeometry()
+      
+      // Set positions
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(meshData.vertices, 3))
+      
+      // Set faces (indices)
+      if (meshData.faces.length > 0) {
+        geometry.setIndex(meshData.faces)
+      }
+      
+      // Set colors if available
+      if (meshData.colors.length > 0) {
+        // Normalize colors using smart normalization
+        const normalizedColors = normalizeColors(meshData.colors)
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
+        debugLog(`Applied ${normalizedColors.length / 3} normalized vertex colors to ${meshData.name}`)
+      }
+
+      // Apply coordinate system transformation (Rhino Y-up to Three.js Z-up)
+      geometry.rotateX(-Math.PI / 2)
+      
+      // Compute normals to fix see-through faces
+      geometry.computeVertexNormals()
+      geometry.normalizeNormals()
+      
+      // Debug geometry info
+      debugLog(`${meshData.name} stats: ${meshData.vertices.length / 3} vertices, ${meshData.faces.length / 3} triangles`)
+
+      // Create material with proper settings
+      const material = meshData.colors.length > 0
+        ? new THREE.MeshBasicMaterial({
+            vertexColors: true,
+            side: THREE.DoubleSide,
+            transparent: false,
+            opacity: 1.0
+          })
+        : new THREE.MeshBasicMaterial({ 
+            color: 0x888888, 
+            side: THREE.DoubleSide,
+            transparent: false,
+            opacity: 1.0
+          })
+
+      // Create mesh
+      const mesh = new THREE.Mesh(geometry, material)
+      mesh.name = meshData.name
+
+      // Create group and add mesh (and edges support)
+      const object = new THREE.Group()
+      object.add(mesh)
+      {
+        const edgeGeometry = new THREE.EdgesGeometry(geometry)
+        const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+        const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial)
+        edges.name = `${meshData.name}_edges`
+        object.add(edges)
+      }
+      
+      // Don't apply scaling here - it will be handled by the group scale in rendering
+      threeMeshes.push(object)
+    }
+
+    debugLog(`Created ${threeMeshes.length} meshes from OBJ file`)
+    threeMeshes.forEach((mesh, index) => {
+      debugLog(`External mesh ${index}:`, {
+        name: mesh.name,
+        children: mesh.children.length,
+        position: mesh.position,
+        visible: mesh.visible,
+        scale: mesh.scale
+      })
+    })
+
+    // Extract ETag from response headers
+    const etag = response.headers.get('ETag')
+    debugLog(`Received ETag: ${etag}`)
+
+    // Cache the individual meshes with ETag and timestamp
+    externalGeometryCache.set(cacheKey, {
+      meshes: threeMeshes,
+      etag: etag || undefined,
+      timestamp: Date.now()
+    })
+    
+    return { success: true, meshes: threeMeshes }
+  } catch (e) {
+    debugLog(`Failed to load external geometry:`, e)
+    
+    let errorType: 'not_found' | 'network_error' | 'parse_error' = 'network_error'
+    let message = `Failed to load ${mode} geometry`
+    
+    if (e instanceof Error) {
+      if (e.message.includes('404') || e.message.includes('not found')) {
+        errorType = 'not_found'
+        message = `No ${mode} geometry available for this component`
+      } else if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+        errorType = 'network_error'
+        message = `Network error loading ${mode} geometry`
+      } else {
+        errorType = 'parse_error'
+        message = `Error parsing ${mode} geometry data`
+      }
+    }
+    
+    // Cache the error state with timestamp
+    externalGeometryCache.set(cacheKey, {
+      meshes: null,
+      etag: undefined,
+      timestamp: Date.now()
+    })
+    return { success: false, error: errorType, message }
+  }
+}
+
+/**
  * Load geometry for a single component
  */
 async function loadComponentGeometry(
@@ -412,79 +661,84 @@ async function loadComponentGeometry(
   try {
     const baseUrl = window.location.origin
     
-    // ALWAYS fetch the full component JSON and extract primitive geometry
-    debugLog(`Loading full component data for ${componentId} to extract primitive geometry`)
-    
-    const response = await fetch(`${baseUrl}/api/backend/components/${componentId}`, {
-      cache: 'no-store',
-      headers: {
-        'If-None-Match': cached?.etag || '',
-      },
-    })
-    
-    if (response.status === 304) {
-      debugLog(`Component data unchanged for ${componentId}, using cache`)
-      return { success: true, meshes: cached?.meshes || [] }
-    }
-    
-    if (!response.ok) {
-      debugLog(`Failed to load component data for ${componentId}: ${response.status}`)
-      return { success: false, error: 'network_error', message: `HTTP ${response.status}` }
-    }
-    
-    const componentData = await response.json()
-    const etag = response.headers.get('etag') || undefined
-    
-    debugLog(`Component data for ${componentId}:`, componentData)
-    debugLog(`Geometry structure:`, componentData.geometry)
-    
-    // Extract geometry data using the same logic as ComponentViewer
-    const geometry = componentData.geometry
-    const extrusion = geometry?.extrusion
-    const mesh = geometry?.mesh
-    const meshes = geometry?.meshes
-    
-    const hasExtrusion = extrusion?.profile && extrusion?.height
-    const hasMesh = mesh?.v && mesh?.f
-    const hasMultipleMeshes = meshes && Array.isArray(meshes) && meshes.length > 0
-    
-    debugLog(`Geometry analysis for ${componentId}:`, {
-      hasExtrusion,
-      hasMesh,
-      hasMultipleMeshes,
-      extrusion: !!extrusion,
-      mesh: !!mesh,
-      meshes: meshes?.length || 0
-    })
-    
-    if (!hasExtrusion && !hasMesh && !hasMultipleMeshes) {
-      debugLog(`No usable geometry found in component ${componentId}`)
-      debugLog(`Geometry object structure:`, JSON.stringify(geometry, null, 2))
-      return { success: false, error: 'not_found', message: 'No usable geometry found in component data' }
-    }
-    
-    // Convert geometry to THREE.js meshes using ComponentViewer logic
-    const threeMeshes = convertGeometryToMeshes(geometry, componentId)
-    
-    debugLog(`Converted to ${threeMeshes.length} THREE.js meshes for ${componentId}`)
-    threeMeshes.forEach((mesh, index) => {
-      debugLog(`Mesh ${index}:`, {
-        name: mesh.name,
-        children: mesh.children.length,
-        position: mesh.position,
-        visible: mesh.visible
+    if (mode === 'primitive') {
+      // ALWAYS fetch the full component JSON and extract primitive geometry
+      debugLog(`Loading full component data for ${componentId} to extract primitive geometry`)
+      
+      const response = await fetch(`${baseUrl}/api/backend/components/${componentId}`, {
+        cache: 'no-store',
+        headers: {
+          'If-None-Match': cached?.etag || '',
+        },
       })
-    })
-    
-    // Cache the result
-    externalGeometryCache.set(cacheKey, {
-      meshes: threeMeshes,
-      etag,
-      timestamp: Date.now()
-    })
-    
-    debugLog(`Successfully loaded ${threeMeshes.length} primitive meshes for ${componentId}`)
-    return { success: true, meshes: threeMeshes }
+      
+      if (response.status === 304) {
+        debugLog(`Component data unchanged for ${componentId}, using cache`)
+        return { success: true, meshes: cached?.meshes || [] }
+      }
+      
+      if (!response.ok) {
+        debugLog(`Failed to load component data for ${componentId}: ${response.status}`)
+        return { success: false, error: 'network_error', message: `HTTP ${response.status}` }
+      }
+      
+      const componentData = await response.json()
+      const etag = response.headers.get('etag') || undefined
+      
+      debugLog(`Component data for ${componentId}:`, componentData)
+      debugLog(`Geometry structure:`, componentData.geometry)
+      
+      // Extract geometry data using the same logic as ComponentViewer
+      const geometry = componentData.geometry
+      const extrusion = geometry?.extrusion
+      const mesh = geometry?.mesh
+      const meshes = geometry?.meshes
+      
+      const hasExtrusion = extrusion?.profile && extrusion?.height
+      const hasMesh = mesh?.v && mesh?.f
+      const hasMultipleMeshes = meshes && Array.isArray(meshes) && meshes.length > 0
+      
+      debugLog(`Geometry analysis for ${componentId}:`, {
+        hasExtrusion,
+        hasMesh,
+        hasMultipleMeshes,
+        extrusion: !!extrusion,
+        mesh: !!mesh,
+        meshes: meshes?.length || 0
+      })
+      
+      if (!hasExtrusion && !hasMesh && !hasMultipleMeshes) {
+        debugLog(`No usable geometry found in component ${componentId}`)
+        debugLog(`Geometry object structure:`, JSON.stringify(geometry, null, 2))
+        return { success: false, error: 'not_found', message: 'No usable geometry found in component data' }
+      }
+      
+      // Convert geometry to THREE.js meshes using ComponentViewer logic
+      const threeMeshes = convertGeometryToMeshes(geometry, componentId)
+      
+      debugLog(`Converted to ${threeMeshes.length} THREE.js meshes for ${componentId}`)
+      threeMeshes.forEach((mesh, index) => {
+        debugLog(`Mesh ${index}:`, {
+          name: mesh.name,
+          children: mesh.children.length,
+          position: mesh.position,
+          visible: mesh.visible
+        })
+      })
+      
+      // Cache the result
+      externalGeometryCache.set(cacheKey, {
+        meshes: threeMeshes,
+        etag,
+        timestamp: Date.now()
+      })
+      
+      debugLog(`Successfully loaded ${threeMeshes.length} primitive meshes for ${componentId}`)
+      return { success: true, meshes: threeMeshes }
+    } else {
+      // Load external geometry (reduced or detailed)
+      return await loadExternalGeometry(componentId, mode)
+    }
     
   } catch (error) {
     debugLog(`Error loading geometry for ${componentId}:`, error)
@@ -507,6 +761,7 @@ export default function DesignViewer({
   mode = 'primitive',
   className = ''
 }: DesignViewerProps) {
+  const [geometryMode, setGeometryMode] = useState<'primitive' | 'reduced' | 'detailed'>('primitive')
   const [loadedComponents, setLoadedComponents] = useState<Map<string, THREE.Group[]>>(new Map())
   const [loadingStates, setLoadingStates] = useState<Map<string, boolean>>(new Map())
   const [errorStates, setErrorStates] = useState<Map<string, string>>(new Map())
@@ -526,14 +781,14 @@ export default function DesignViewer({
     const initialAdditionalGeometryVisibility = new Map<string, boolean>()
     if (Array.isArray(design.additional_geometry)) {
       design.additional_geometry.forEach((item, index) => {
-        const itemId = item.id || `additional_${index}`
+        const itemId = item._id || `additional_${index}`
         initialAdditionalGeometryVisibility.set(itemId, true)
       })
     }
     setVisibleAdditionalGeometry(initialAdditionalGeometryVisibility)
   }, [design.components, design.additional_geometry])
 
-  // Load all component geometries
+  // Load all component geometries one by one
   useEffect(() => {
     const loadAllGeometries = async () => {
       setIsLoading(true)
@@ -547,32 +802,49 @@ export default function DesignViewer({
       })
       setLoadingStates(new Map(newLoadingStates))
 
-      // Load each component
+      // Set default edge visibility based on geometry mode
+      if (geometryMode === 'primitive') {
+        setShowEdges(true) // Show edges for primitive geometry
+      } else {
+        setShowEdges(false) // Hide edges for external geometry by default
+      }
+
+      // Load each component one by one to avoid overwhelming the system
       for (const comp of design.components) {
         try {
-          const result = await loadComponentGeometry(comp.component, mode)
+          debugLog(`Loading ${geometryMode} geometry for component ${comp.component}`)
+          const result = await loadComponentGeometry(comp.component, geometryMode)
           
           if (result.success) {
             newLoadedComponents.set(comp.component, result.meshes)
             newErrorStates.delete(comp.component)
+            debugLog(`Successfully loaded ${result.meshes.length} meshes for component ${comp.component}`)
           } else {
             newErrorStates.set(comp.component, result.message)
+            debugLog(`Failed to load geometry for component ${comp.component}: ${result.message}`)
           }
         } catch (error) {
-          newErrorStates.set(comp.component, error instanceof Error ? error.message : 'Unknown error')
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          newErrorStates.set(comp.component, errorMessage)
+          debugLog(`Error loading geometry for component ${comp.component}:`, errorMessage)
         }
         
         newLoadingStates.set(comp.component, false)
         setLoadingStates(new Map(newLoadingStates))
+        
+        // Update loaded components state after each component
+        setLoadedComponents(new Map(newLoadedComponents))
+        setErrorStates(new Map(newErrorStates))
+        
+        // Small delay to prevent overwhelming the system
+        await new Promise(resolve => setTimeout(resolve, 100))
       }
 
-      setLoadedComponents(newLoadedComponents)
-      setErrorStates(newErrorStates)
       setIsLoading(false)
     }
 
     loadAllGeometries()
-  }, [design.components, mode])
+  }, [design.components, geometryMode])
 
   const toggleComponentVisibility = (componentId: string) => {
     setVisibleComponents(prev => {
@@ -615,13 +887,27 @@ export default function DesignViewer({
       const newMap = new Map(prev)
       if (Array.isArray(design.additional_geometry)) {
         design.additional_geometry.forEach((item, index) => {
-          const itemId = item.id || `additional_${index}`
+          const itemId = item._id || `additional_${index}`
           newMap.set(itemId, newVisibility)
         })
       }
       return newMap
     })
   }
+
+  // Apply edge visibility to external meshes by toggling child LineSegments visibility
+  useEffect(() => {
+    if (geometryMode === 'primitive') return
+    loadedComponents.forEach(componentMeshes => {
+      componentMeshes.forEach(group => {
+        group.traverse(obj => {
+          if ((obj as THREE.LineSegments).isLineSegments && obj.name.endsWith('_edges')) {
+            obj.visible = showEdges
+          }
+        })
+      })
+    })
+  }, [showEdges, geometryMode, loadedComponents])
 
   if (isLoading) {
     return (
@@ -661,6 +947,21 @@ export default function DesignViewer({
               />
               <label htmlFor="toggle-edges" className="text-xs">Show Edges</label>
             </div>
+          </div>
+          
+          {/* Geometry Mode Selector */}
+          <div className="mb-1 sm:mb-2 flex flex-col gap-1">
+            <label htmlFor="geometryModeSelect" className="text-xs sm:text-sm">Geometry Resolution:</label>
+            <select
+              id="geometryModeSelect"
+              value={geometryMode}
+              onChange={(e) => setGeometryMode(e.target.value as 'primitive' | 'reduced' | 'detailed')}
+              className="w-full rounded border bg-accent-foreground p-1 text-xs sm:text-sm"
+            >
+              <option value="primitive">Primitive</option>
+              <option value="reduced">Reduced</option>
+              <option value="detailed">Detailed</option>
+            </select>
           </div>
           
           {/* Component Visibility Controls */}
@@ -705,7 +1006,7 @@ export default function DesignViewer({
               </div>
               <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
                 {design.additional_geometry.map((item, index) => {
-                  const itemId = item.id || `additional_${index}`
+                  const itemId = item._id || `additional_${index}`
                   const isVisible = visibleAdditionalGeometry.get(itemId) ?? true
                   const itemName = typeof item.name === 'string' && item.name.trim() 
                     ? item.name 
@@ -763,17 +1064,21 @@ export default function DesignViewer({
               }
 
               debugLog(`Rendering component ${comp.component} with ${meshes.length} meshes`)
+              debugLog(`Geometry mode: ${geometryMode}, Component iframe:`, comp.iframe)
 
               return (
                 <group key={comp.component} scale={[scale, scale, scale]}>
                   <group matrix={createTransformMatrix(comp.iframe)} matrixAutoUpdate={false}>
                     {meshes.map((meshGroup, index) => {
-                      // Toggle Edges (assumes edge objects are LineSegments named with 'edge')
-                      meshGroup.traverse(obj => {
-                        if ((obj as THREE.LineSegments).isLineSegments && obj.name.includes('edge')) {
-                          obj.visible = showEdges
-                        }
-                      })
+                      // For external geometry, edges are already handled by the edge visibility effect
+                      // For primitive geometry, apply edge visibility here
+                      if (geometryMode === 'primitive') {
+                        meshGroup.traverse(obj => {
+                          if ((obj as THREE.LineSegments).isLineSegments && obj.name.includes('edge')) {
+                            obj.visible = showEdges
+                          }
+                        })
+                      }
                       return (
                         <primitive key={`${comp.component}_${index}`} object={meshGroup} />
                       )
@@ -790,7 +1095,7 @@ export default function DesignViewer({
                 : []
             ).map((item, idx) => {
               try {
-                const itemId = item.id || `additional_${idx}`
+                const itemId = item._id || `additional_${idx}`
                 const isVisible = visibleAdditionalGeometry.get(itemId) ?? true
                 
                 if (!isVisible) return null
@@ -814,7 +1119,7 @@ export default function DesignViewer({
                   </group>
                 )
               } catch (e) {
-                debugLog('Failed to render additional_geometry item', item?.id, e)
+                debugLog('Failed to render additional_geometry item', item?._id, e)
                 return null
               }
             })}
