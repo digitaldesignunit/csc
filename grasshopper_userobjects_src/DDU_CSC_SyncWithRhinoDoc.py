@@ -31,7 +31,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 251016
     """
 
     def __init__(self):
@@ -64,7 +64,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
         components_dict = {}
         try:
             # Get all objects in the document
-            all_objects = rs.AllObjects()
+            all_objects = doc.Objects
             for obj in all_objects:
                 if obj is None:
                     continue
@@ -90,7 +90,6 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                             # Parse the JSON data
                             parsed_data = json.loads(component_data)
                             component_id = parsed_data.get('_id', 'unknown')
-
                             # Group objects by component ID
                             if component_id not in components_dict:
                                 components_dict[component_id] = {
@@ -98,7 +97,6 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                                     'objects': [],
                                     'paths': []
                                 }
-
                             # Add object to the component group
                             obj_path = self.get_object_path(obj, doc)
                             components_dict[component_id]['objects'].append(
@@ -113,10 +111,9 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                             )
                             continue
 
-            # Now find text tags that are grouped with these components
             for component_id, data in components_dict.items():
                 # Get all groups in the document
-                groups = sc.doc.Groups
+                groups = doc.Groups
                 for i in range(groups.Count):
                     group = groups[i]
                     if group and group.Name == component_id:
@@ -124,14 +121,15 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                         # Get all objects in this group
                         group_objects = rs.ObjectsByGroup(component_id)
                         for obj_id in group_objects:
-                            obj = sc.doc.Objects.Find(obj_id)
+                            obj = rs.coercegeometry(obj_id)
                             if obj and rs.IsText(obj):
                                 # This is a text tag for our component
                                 obj_path = self.get_object_path(obj, doc)
                                 data['objects'].append(obj)
                                 data['paths'].append(obj_path)
                                 self._addRemark(
-                                    f'Found text tag for component {component_id}'
+                                    'Found text tag for component '
+                                    f'{component_id}'
                                 )
 
         except Exception as e:
@@ -187,7 +185,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
             for obj in objects_list:
                 if rs.IsText(obj):
                     try:
-                        tagplane = rs.coercegeometry(obj).Plane
+                        tagplane = rs.TextObjectPlane(obj)
                         tagframe = {
                             'o': [tagplane.OriginX,
                                   tagplane.OriginY,
@@ -261,14 +259,15 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
             'with updated iframe information based on current object positions'
         )
 
+        # init outputs
+        DocumentComponents = Grasshopper.DataTree[str]()
+
         # Set scriptcontext to Rhino document
         sc.doc = Rhino.RhinoDoc.ActiveDoc
 
         if not Sync:
             # Return empty results if not syncing
-            LAST_SYNC = Grasshopper.DataTree[System.Object]()
-            __Results = (LAST_SYNC,)
-            return __Results
+            return DocumentComponents
 
         try:
             self.Component.Message = 'Searching for components in document...'
@@ -281,11 +280,8 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addWarning(msg)
                 self.Component.Message = msg
                 # Return empty results
-                LAST_SYNC = Grasshopper.DataTree[System.Object]()
-                __Results = (LAST_SYNC,)
-                return __Results
+                return DocumentComponents
             # Create output datatree
-            LAST_SYNC = Grasshopper.DataTree[System.Object]()
             # Process each component (now grouped by component ID)
             for i, (component_id, component_data, objects_list,
                     combined_path) in enumerate(objects_with_component):
@@ -298,7 +294,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                     # Create datatree path
                     ghp = Grasshopper.Kernel.Data.GH_Path(i)
                     # Add updated component data to datatree
-                    LAST_SYNC.Add(json.dumps(updated_data), ghp)
+                    DocumentComponents.Add(json.dumps(updated_data), ghp)
 
                     # Log success message with object count
                     object_count = len(objects_list)
@@ -321,12 +317,12 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                     continue
 
             # Update success message
-            if LAST_SYNC.DataCount > 0:
+            if DocumentComponents.DataCount > 0:
                 self.Component.Message = (
-                    f'Synced {LAST_SYNC.DataCount} component(s)'
+                    f'Synced {DocumentComponents.DataCount} component(s)'
                 )
                 self._addRemark(
-                    f'Successfully synced {LAST_SYNC.DataCount} '
+                    f'Successfully synced {DocumentComponents.DataCount} '
                     'components with document'
                 )
             else:
@@ -334,8 +330,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addWarning('No components were successfully synced')
 
             # Return results
-            __Results = (LAST_SYNC,)
-            return __Results
+            return DocumentComponents
 
         except Exception as e:
             msg = f'Unexpected error during sync: {str(e)}'
@@ -343,10 +338,8 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = msg
 
             # Return empty results if there was an error
-            LAST_SYNC = Grasshopper.DataTree[System.Object]()
-            __Results = (LAST_SYNC,)
-            return __Results
+            return DocumentComponents
 
         finally:
             # Restore scriptcontext to Grasshopper document
-            sc.doc = ghdoc  # type: ignore[reportUnedfinedVariable] # NOQA
+            sc.doc = self.Component.OnPingDocument()  # type: ignore[reportUnedfinedVariable] # NOQA
