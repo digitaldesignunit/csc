@@ -34,7 +34,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251016
+    Version: 251016.2
     """
 
     def __init__(self):
@@ -213,25 +213,30 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
         """Get AuthCore instance from sticky storage."""
         auth_core = sc.sticky.get('CSC_AuthCore')
         if auth_core is None:
-            msg = ('No authentication found. Please use CSC_Session component '
-                   'first.')
-            self._addError(msg)
-            self.Component.Message = msg
+            self._addWarning('No authentication found. '
+                             'Using hardcoded schema.')
             return None
         return auth_core
 
-    def get_design_schema(self, auth_core):
-        """Get design schema with fallback."""
-        try:
-            # Try to get schema from cache
-            schema = auth_core.get_design_schema()
-            if schema:
-                return schema
-        except Exception:
-            pass
+    def get_design_schema(self):
+        """Get design schema from cache or fallback to hardcoded schema."""
+        # Try to get schema from AuthCore cache first
+        auth_core = self.get_auth_core_from_sticky()
+        if auth_core and hasattr(auth_core, 'get_design_schema'):
+            try:
+                schema = auth_core.get_design_schema()
+                if schema:
+                    self._addRemark('Using cached design schema')
+                    return schema
+                else:
+                    self._addWarning('Failed to get cached schema, '
+                                     'using hardcoded schema')
+            except Exception as e:
+                self._addWarning(f'Error fetching cached schema: {str(e)}, '
+                                 'using hardcoded schema')
 
-        # Use hardcoded fallback
-        self._addRemark('Using hardcoded design schema fallback')
+        # Fallback to hardcoded schema
+        self._addRemark('Using hardcoded design schema')
         return self._get_hardcoded_schema()
 
     def validate_component_data(self, component_data: Dict[str, Any],
@@ -268,13 +273,12 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
 
     def create_design_payload(self, design_name: str, design_description: str,
                               component_data_list: List[str],
-                              auth_core,
                               additional_meshes=None
                               ) -> Optional[Dict[str, Any]]:
         """Create design payload from component data and additional meshes."""
         try:
             # Get design schema
-            schema = self.get_design_schema(auth_core)
+            schema = self.get_design_schema()
 
             # Parse and validate component data
             components = []
@@ -369,19 +373,6 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
         # Init outputs
         DesignJSON = Grasshopper.DataTree[str]()
 
-        # Get AuthCore instance from sticky storage
-        auth_core = self.get_auth_core_from_sticky()
-        if auth_core is None:
-            return DesignJSON
-
-        # Check if authentication is valid
-        if not auth_core.is_valid():
-            msg = ('Authentication expired. Please use CSC_Session '
-                   'component to refresh.')
-            self._addError(msg)
-            self.Component.Message = msg
-            return DesignJSON
-
         # Validate DesignName (mandatory)
         if not DesignName or not DesignName.strip():
             msg = 'Design name is mandatory and cannot be empty.'
@@ -406,7 +397,6 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 DesignName.strip(),
                 DesignDescription.strip(),
                 ComponentData,
-                auth_core,
                 AdditionalGeometry
             )
 
