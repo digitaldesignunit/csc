@@ -31,7 +31,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 251015.2
     """
 
     def __init__(self):
@@ -227,6 +227,15 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                     # extract ID
                     comp_id = json_comp['_id']
 
+                    # check document for existing groups with this comp id
+                    ex_grps = sc.doc.Groups
+                    for grp in ex_grps:
+                        if grp.Name == comp_id:
+                            raise RuntimeError(
+                                f'Component {comp_id} already exists in '
+                                'the document!'
+                            )
+
                     # get insertion plane
                     try:
                         # try to extract insertion frame
@@ -353,10 +362,12 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                         Rhino.Geometry.TextJustification.MiddleCenter
                     )
                     id_tag = sc.doc.Objects.Add(tag)
-
                     # add tag to geometry IDs for grouping
                     if id_tag != System.Guid.Empty:
                         geo_ids.append(id_tag)
+
+                    # set layer to tag
+                    rs.ObjectLayer(id_tag, layer)
 
                     # create group
                     if len(geo_ids) > 1:
@@ -375,7 +386,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                             f'({mesh_count} meshes)')
 
                 except json.JSONDecodeError as e:
-                    msg = f'Failed to parse component data: {str(e)}'
+                    msg = f'Failed to parse component data for {comp_id}: {str(e)}'
                     self._addError(msg)
                     self.Component.Message = msg
                 except Exception as e:
@@ -392,7 +403,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 self.Component.Message = 'No components were baked'
                 self._addWarning('No components were baked')
             # restore document context
-            sc.doc = ghdoc  # type: ignore[reportUnedfinedVariable] # NOQA
+            sc.doc = self.Component.OnPingDocument()
         else:
             self.Component.Message = 'Bake toggle is off'
             self._addRemark('Bake toggle is off - no components baked')
