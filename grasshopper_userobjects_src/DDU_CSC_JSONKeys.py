@@ -29,7 +29,7 @@ class CSC_JSONKeys(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 251016
     """
 
     def __init__(self):
