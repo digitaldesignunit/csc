@@ -31,7 +31,7 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Anders Holden Deleuran (updated 2025 by Max Benjamin Eschenbach)
     License: MIT License
-    Version: 251010
+    Version: 251015
     """
 
     def __init__(self):
@@ -61,6 +61,8 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
         Check/makes a "Captures" folder in the GH def folder and a subfolder
         in the format 'YYMMDD'.
         """
+        # get ghdoc
+        ghdoc = self.Component.OnPingDocument()
         # construct timestamp for subfolder
         date = datetime.date.today()
         yy = str(date.year)[-2:]
@@ -108,6 +110,8 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
         """
         # Set the script context to the current Rhino doc
         sc.doc = Rhino.RhinoDoc.ActiveDoc
+        # define ghdoc
+        ghdoc = self.Component.OnPingDocument()
         # Get the active view and set image dimensions
         activeView = sc.doc.Views.ActiveView
         # Perform the capture
