@@ -118,118 +118,132 @@ export default function DashboardPage() {
       {/* Main Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Reserved Components */}
-        <Card className="hover:shadow-lg transition-shadow">
+        <Card className="hover:shadow-lg transition-shadow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bookmark className="h-5 w-5 text-primary" />
               Reserved Components
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col flex-1">
             <p className="text-sm text-muted-foreground">
               View and manage all components you have reserved for your projects.
             </p>
-            <Link href="/dashboard/reserved">
-              <Button className="w-full" variant="default">
-                View Reserved Components
-              </Button>
-            </Link>
+            <div className="mt-auto pt-4">
+              <Link href="/dashboard/reserved">
+                <Button className="w-full" variant="default">
+                  View Reserved Components
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
 
         {/* Component Search */}
-        <Card className="hover:shadow-lg transition-shadow">
+        <Card className="hover:shadow-lg transition-shadow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Search className="h-5 w-5 text-primary" />
               Find Components
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col flex-1">
             <p className="text-sm text-muted-foreground">
               Search and browse the component catalogue to find what you need.
             </p>
-            <Link href="/components">
-              <Button className="w-full" variant="outline">
-                Browse Catalogue
-              </Button>
-            </Link>
+            <div className="mt-auto pt-4">
+              <Link href="/components">
+                <Button className="w-full" variant="outline">
+                  Browse Catalogue
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
 
         {/* Find Component */}
-        <Card className="hover:shadow-lg transition-shadow">
+        <Card className="hover:shadow-lg transition-shadow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Search className="h-5 w-5 text-primary" />
               Find Component
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col flex-1">
             <p className="text-sm text-muted-foreground">
               Find a physical component based on its <b>Component ID</b>.
             </p>
-            <Link href="/findcomponent">
-              <Button className="w-full" variant="outline">
-                Find Component
-              </Button>
-            </Link>
+            <div className="mt-auto pt-4">
+              <Link href="/findcomponent">
+                <Button className="w-full" variant="outline">
+                  Find Component
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
 
         {/* Account Settings */}
-        <Card className="hover:shadow-lg transition-shadow">
+        <Card className="hover:shadow-lg transition-shadow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5 text-primary" />
               Account Settings
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col flex-1">
             <p className="text-sm text-muted-foreground">
               Manage your account preferences and profile information.
             </p>
-            <Link href="/settings">
-              <Button className="w-full" variant="outline">
-                Manage Account
-              </Button>
-            </Link>
+            <div className="mt-auto pt-4">
+              <Link href="/settings">
+                <Button className="w-full" variant="outline">
+                  Manage Account
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
 
         {/* Recent Activity */}
-        <Card className="hover:shadow-lg transition-shadow">
+        <Card className="hover:shadow-lg transition-shadow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
               Recent Activity
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col flex-1">
             <p className="text-sm text-muted-foreground">
               View your recent component interactions and reservations.
             </p>
-            <Button className="w-full" variant="outline" disabled>
-              Coming Soon
-            </Button>
+            <div className="mt-auto pt-4">
+              <Button className="w-full" variant="outline" disabled>
+                Coming Soon
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
         {/* Help & Support */}
-        <Card className="hover:shadow-lg transition-shadow">
+        <Card className="hover:shadow-lg transition-shadow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5 text-primary" />
               Help & Support
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col flex-1">
             <p className="text-sm text-muted-foreground">
               Get help with using the system or report issues.
             </p>
-            <Button className="w-full" variant="outline" disabled>
-              Coming Soon
-            </Button>
+            <div className="mt-auto pt-4">
+              <Link href={`mailto:eschenbach@dg.tu-darmstadt.de?subject=[CSC]%20Support%20Request%20by%20user%20'${username}'&body=Please%20describe%20the%20issue%20you%20are%20facing%20in%20detail.%20Include%20any%20error%20messages%20or%20logs%20you%20have%20received.`}>
+                <Button className="w-full" variant="outline">
+                  Get Help!
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -243,7 +257,7 @@ export default function DashboardPage() {
           <div className="flex flex-wrap gap-2">
             <Link href="/components">
               <Badge variant="outline" className="cursor-pointer hover:bg-primary hover:text-primary-foreground">
-                Component Catalogue
+                Browse Components
               </Badge>
             </Link>
             <Link href="/dashboard/reserved">
@@ -253,7 +267,7 @@ export default function DashboardPage() {
             </Link>
             <Link href="/findcomponent">
               <Badge variant="outline" className="cursor-pointer hover:bg-primary hover:text-primary-foreground">
-                Component Lookup
+                Find Component
               </Badge>
             </Link>
             <Link href="/settings">
