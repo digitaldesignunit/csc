@@ -386,11 +386,12 @@ async def resend_verification(
 
     # Send verification email
     try:
-        email_config_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        email_config_path = os.path.normpath(os.path.abspath(os.path.join(
+            os.path.dirname(__file__),
+            "..", "..", "..",
             'config',
             'email_config.json'
-        )
+        )))
         email_config = load_email_config(email_config_path)
         dev_mode = email_config.get('dev_mode', False)
         
