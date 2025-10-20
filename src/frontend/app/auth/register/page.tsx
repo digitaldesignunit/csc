@@ -58,7 +58,7 @@ export default function RegisterPage() {
     if (!res.ok) {
       setError(data.error || "Registration failed. Please try again.");
     } else {
-      router.push("/auth/signin");
+      router.push("/auth/verification-pending");
     }
   }
 

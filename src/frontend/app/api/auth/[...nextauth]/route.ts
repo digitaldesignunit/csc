@@ -31,6 +31,7 @@ type DBUser = {
   role?: string
   disabled?: boolean
   hashed_password?: string
+  email_verified?: boolean
 }
 
 type AuthorizedUserPayload = {
@@ -188,6 +189,12 @@ async function authorizeUser(credentials?: { identifier: string; password: strin
   }
   if (!ok) {
     console.error('[NextAuth][Auth] Password mismatch', { identifier })
+    return null
+  }
+
+  // 4.5) Check email verification
+  if (!user.email_verified) {
+    console.error('[NextAuth][Auth] Email not verified', { identifier, _id: String(user._id) })
     return null
   }
 

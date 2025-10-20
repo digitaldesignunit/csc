@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -28,6 +29,7 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [isVerificationError, setIsVerificationError] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [focusedField, setFocusedField] = useState<string | null>(null)
   const searchParams = useSearchParams()
@@ -39,24 +41,31 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
       switch (errorParam) {
         case 'CredentialsSignin':
           setError('Invalid email/username or password. Please try again.')
+          setIsVerificationError(false)
           break
         case 'AccessDenied':
           setError('Access denied. Please check your credentials.')
+          setIsVerificationError(false)
           break
         case 'Verification':
           setError('Please verify your email address before signing in.')
+          setIsVerificationError(true)
           break
         case 'Configuration':
           setError('Authentication service is not properly configured.')
+          setIsVerificationError(false)
           break
         case 'SessionExpired':
           setError('Your session has expired. Please sign in again.')
+          setIsVerificationError(false)
           break
         case 'Default':
           setError('An error occurred during sign in. Please try again.')
+          setIsVerificationError(false)
           break
         default:
           setError('Sign in failed. Please try again.')
+          setIsVerificationError(false)
       }
     }
   }, [searchParams])
@@ -64,6 +73,7 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setIsVerificationError(false)
     
     // Client-side validation
     if (!identifier.trim()) {
@@ -92,18 +102,23 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
         switch (result.error) {
           case 'CredentialsSignin':
             setError('Invalid email/username or password. Please check your credentials and try again.')
+            setIsVerificationError(false)
             break
           case 'AccessDenied':
             setError('Access denied. Please contact an administrator if you believe this is an error.')
+            setIsVerificationError(false)
             break
           case 'Verification':
             setError('Please verify your email address before signing in.')
+            setIsVerificationError(true)
             break
           case 'Configuration':
             setError('Authentication service is not properly configured. Please try again later.')
+            setIsVerificationError(false)
             break
           default:
             setError('Sign in failed. Please try again or contact support if the problem persists.')
+            setIsVerificationError(false)
         }
       } else if (result?.ok) {
         // Successful sign in, redirect manually
@@ -119,7 +134,19 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
           <CardTitle>Sign In</CardTitle>
         </CardHeader>
         <CardContent>
-          {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
+          {error && (
+            <div className="mb-4 space-y-2">
+              <p className="text-sm text-destructive">{error}</p>
+              {isVerificationError && (
+                <p className="text-sm text-muted-foreground">
+                  Need a new verification link?{' '}
+                  <Link href="/auth/verification-pending" className="text-primary hover:underline font-medium">
+                    Resend verification email
+                  </Link>
+                </p>
+              )}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="gap-1 flex flex-col">
               <Label htmlFor="identifier">Email or Username</Label>
