@@ -890,10 +890,6 @@ export default function ComponentViewer({ component_data }: { component_data: Co
     return visibleMeshes.length > 0 && visibleMeshes.every(v => v)
   }, [visibleMeshes])
 
-  const toggleMarkerPointsVisibility = () => {
-    setShowMarkerPoints(prev => !prev)
-  }
-
   // Apply edge visibility to external meshes by toggling child LineSegments visibility
   useEffect(() => {
     if (!isExternalMode) return

@@ -42,7 +42,7 @@ function VerifyEmailContent() {
           setStatus('error')
           setMessage(data.detail || 'Verification failed. The token may be invalid or expired.')
         }
-      } catch (err) {
+      } catch {
         setStatus('error')
         setMessage('Network error. Please try again.')
       }

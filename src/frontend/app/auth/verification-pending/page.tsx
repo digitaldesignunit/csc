@@ -36,7 +36,7 @@ export default function VerificationPendingPage() {
         setMessage('Verification email sent! Please check your inbox.')
         setEmail('')
       }
-    } catch (err) {
+    } catch {
       setError('Network error. Please try again.')
     } finally {
       setLoading(false)

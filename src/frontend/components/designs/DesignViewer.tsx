@@ -930,12 +930,10 @@ async function loadComponentGeometry(
 
 interface DesignViewerProps {
   design: DesignModel
-  className?: string
 }
 
 export default function DesignViewer({ 
-  design, 
-  className = ''
+  design
 }: DesignViewerProps) {
   const [geometryMode, setGeometryMode] = useState<'primitive' | 'reduced' | 'detailed'>('primitive')
   const [loadedComponents, setLoadedComponents] = useState<Map<string, THREE.Group[]>>(new Map())
@@ -967,7 +965,6 @@ export default function DesignViewer({
   useEffect(() => {
     const loadAllGeometries = async () => {
       const newLoadedComponents = new Map<string, THREE.Group[]>()
-      const newLoadingStates = new Map<string, boolean>()
       const newErrorStates = new Map<string, string>()
 
       // Set default edge visibility based on geometry mode

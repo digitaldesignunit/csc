@@ -3,8 +3,6 @@ import React from 'react'
 interface LoadingSpinnerProps {
   size?: number
   borderWidth?: number
-  lightColor?: string
-  darkColor?: string
 }
 
 /**
@@ -12,9 +10,7 @@ interface LoadingSpinnerProps {
  */
 export function LoadingSpinner({ 
   size = 24, 
-  borderWidth = 3,
-  lightColor = 'rgba(0, 0, 0, 0.15)',
-  darkColor = 'rgba(0, 0, 0, 0.7)'
+  borderWidth = 3
 }: LoadingSpinnerProps) {
   return (
     <div
