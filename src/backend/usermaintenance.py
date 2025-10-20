@@ -15,7 +15,6 @@ Run this script as a cron job (e.g., daily at 2 AM):
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os
 import sys
-import json
 from datetime import datetime, timedelta, timezone
 import asyncio
 
@@ -23,46 +22,21 @@ import asyncio
 from pymongo import AsyncMongoClient
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-try:
-    from utility import create_logging_timestamp as logts
-except ImportError:
-    print('Import Error: utility module not found, '
-          'continuing without logging...')
+from utility import (
+    sanitize_path,
+    get_db_connectionstring,
+    create_logging_timestamp as logts
+)
 
+# ENVIRONMENT SETTINGS --------------------------------------------------------
 
-# CONFIGURATION ---------------------------------------------------------------
+_HERE = os.path.dirname(sanitize_path(__file__))
+"""str: Path to directory of this particular file."""
 
-def load_db_config():
-    """
-    Load database configuration from config file.
-    """
-    # Get the backend directory
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    backend_dir = os.path.join(script_dir, '..', 'src', 'backend')
-    config_file = os.path.join(backend_dir, 'config', 'dbconfig.json')
+_CONFIG_DIR = sanitize_path(os.path.join(_HERE, "config"))
 
-    if not os.path.exists(config_file):
-        raise FileNotFoundError(f'Config file not found: {config_file}')
-
-    with open(config_file, 'r', encoding='utf-8-sig') as f:
-        config = json.load(f)
-
-    return config
-
-
-def get_connection_string(config):
-    """
-    Build MongoDB connection string from config.
-    """
-    user = config.get('user', '')
-    password = config.get('password', '')
-    host = config.get('host', 'localhost')
-    port = config.get('port', 27017)
-
-    if user and password:
-        return f'mongodb://{user}:{password}@{host}:{port}'
-    else:
-        return f'mongodb://{host}:{port}'
+_CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
+"""str: Default configuration file."""
 
 
 # MAIN CLEANUP LOGIC ----------------------------------------------------------
@@ -84,8 +58,7 @@ async def cleanup_unverified_users(dry_run=False):
     print('-' * 80)
 
     # Load config and connect to MongoDB
-    config = load_db_config()
-    connection_string = get_connection_string(config)
+    connection_string = get_db_connectionstring(_CONFIGFILE)
 
     client = AsyncMongoClient(
         connection_string,
