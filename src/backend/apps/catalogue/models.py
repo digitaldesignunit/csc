@@ -3,6 +3,7 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from typing import Optional, List, Dict, Union, Literal
 import uuid
+from datetime import datetime
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from pydantic import BaseModel, Field, EmailStr, RootModel, model_validator
@@ -28,6 +29,9 @@ class User(BaseModel):
     full_name: Optional[str] = None
     disabled: Optional[bool] = None
     role: Role = "user"
+    email_verified: bool = False
+    verification_token: Optional[str] = None
+    verification_token_expires: Optional[datetime] = None
 
     class Config:
         populate_by_name = True

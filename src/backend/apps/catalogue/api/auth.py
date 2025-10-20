@@ -3,6 +3,7 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from datetime import datetime, timedelta, timezone
 import re
+import os
 from typing import Annotated
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
@@ -13,6 +14,13 @@ from passlib.context import CryptContext
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalogue.models import Token, User, UserInDB # NOQA
+from services.email_service import (
+    generate_verification_token,
+    get_token_expiry,
+    send_verification_email,
+    send_verification_resent_email,
+    load_email_config
+)
 
 # INIT ROUTER -----------------------------------------------------------------
 
@@ -200,6 +208,13 @@ async def login_for_access_token(
             headers={'WWW-Authenticate': 'Bearer'},
         )
 
+    # Check if email is verified
+    if not user.get('email_verified', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Email not verified. Please check your email for verification link.',
+        )
+
     token = create_access_token(
         secret=request.app.state.jwt_secret,
         algorithm=request.app.state.jwt_algorithm,
@@ -236,6 +251,10 @@ async def register_user(
         raise HTTPException(status.HTTP_409_CONFLICT,
                             'User with this email or username already exists')
 
+    # Generate verification token
+    verification_token = generate_verification_token()
+    verification_token_expires = get_token_expiry(hours=24)
+
     new_id = str(__import__('uuid').uuid4())
     doc = {
         '_id': new_id,
@@ -245,6 +264,149 @@ async def register_user(
         'hashed_password': get_password_hash(password),
         'disabled': False,
         'role': 'user',
+        'email_verified': False,
+        'verification_token': verification_token,
+        'verification_token_expires': verification_token_expires,
     }
     await users.insert_one(doc)
+
+    # Send verification email
+    try:
+        email_config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            'config',
+            'email_config.json'
+        )
+        email_config = load_email_config(email_config_path)
+        dev_mode = email_config.get('dev_mode', False)
+        
+        send_verification_email(
+            email_config,
+            email,
+            full_name,
+            verification_token,
+            dev_mode=dev_mode
+        )
+    except Exception as e:
+        print(f'{ts()} [AUTH] Failed to send verification email: {str(e)}')
+        # Continue anyway - user is created, they can request resend
+
     return User(**doc)  # maps _id->id
+
+
+@router.get('/verify-email',
+            summary='Verify email address with token')
+async def verify_email(
+    token: str,
+    users=Depends(users_coll),
+):
+    """
+    Verify user's email address using the token sent via email.
+    """
+    if not token:
+        raise HTTPException(400, 'Verification token is required')
+
+    # Find user with this token
+    user = await users.find_one({
+        'verification_token': token,
+    })
+
+    if not user:
+        raise HTTPException(400, 'Invalid or expired verification token')
+
+    # Check if token is expired
+    if user.get('verification_token_expires'):
+        expires = user['verification_token_expires']
+        # Handle both datetime objects and strings
+        if isinstance(expires, str):
+            expires = datetime.fromisoformat(expires.replace('Z', '+00:00'))
+        
+        if datetime.now(timezone.utc) > expires:
+            raise HTTPException(400, 'Verification token has expired. Please request a new one.')
+
+    # Update user: mark as verified, clear token
+    await users.update_one(
+        {'_id': user['_id']},
+        {
+            '$set': {'email_verified': True},
+            '$unset': {'verification_token': '', 'verification_token_expires': ''}
+        }
+    )
+
+    print(f'{ts()} [AUTH] Email verified for user: {user.get("email")}')
+    
+    return {
+        'message': 'Email verified successfully. You can now sign in.',
+        'email': user.get('email')
+    }
+
+
+@router.post('/resend-verification',
+             summary='Resend verification email')
+async def resend_verification(
+    request: Request,
+    payload: dict,  # { email }
+    users=Depends(users_coll),
+):
+    """
+    Resend verification email to user.
+    """
+    email = (payload.get('email') or '').strip().lower()
+
+    if not email:
+        raise HTTPException(400, 'Email is required')
+
+    # Find user
+    user = await users.find_one({'email': email})
+
+    if not user:
+        # Don't reveal if user exists or not (security)
+        return {
+            'message': 'If an unverified account exists with this email, a verification email has been sent.'
+        }
+
+    # Check if already verified
+    if user.get('email_verified', False):
+        raise HTTPException(400, 'Email is already verified. You can sign in.')
+
+    # Generate new verification token
+    verification_token = generate_verification_token()
+    verification_token_expires = get_token_expiry(hours=24)
+
+    # Update user with new token
+    await users.update_one(
+        {'_id': user['_id']},
+        {
+            '$set': {
+                'verification_token': verification_token,
+                'verification_token_expires': verification_token_expires,
+            }
+        }
+    )
+
+    # Send verification email
+    try:
+        email_config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            'config',
+            'email_config.json'
+        )
+        email_config = load_email_config(email_config_path)
+        dev_mode = email_config.get('dev_mode', False)
+        
+        send_verification_resent_email(
+            email_config,
+            email,
+            user.get('full_name', 'User'),
+            verification_token,
+            dev_mode=dev_mode
+        )
+        
+        print(f'{ts()} [AUTH] Verification email resent to: {email}')
+    except Exception as e:
+        print(f'{ts()} [AUTH] Failed to resend verification email: {str(e)}')
+        raise HTTPException(500, 'Failed to send verification email. Please try again later.')
+
+    return {
+        'message': 'If an unverified account exists with this email, a verification email has been sent.'
+    }
