@@ -76,7 +76,7 @@ def create_verification_email_html(
         <p>Thank you for registering with the Catalogue of Second Chances. To complete your registration and activate your account, please verify your email address by clicking the button below:</p>
 
         <div style="text-align: center; margin: 30px 0;">
-            <a href="{verification_url}" 
+            <a href="{verification_url}"
                style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
                 Verify Email Address
             </a>
@@ -194,7 +194,6 @@ def send_verification_email(
             server.login(config['smtp_user'], config['smtp_password'])
             server.send_message(msg)
 
-        print(f'[EMAIL] Verification email sent to: {to_email}')
         return True
 
     except Exception as e:
