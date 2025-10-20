@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Bounds, OrbitControls, Html } from '@react-three/drei'
 import { rgbToHex } from '@/lib/utils'
 import ComponentViewerSkeleton from './ComponentViewerSkeleton'
-import { Skeleton } from '@/components/ui/skeleton'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 // Scale factor for converting units to meters in THREE
 const scale = 0.001
@@ -471,19 +471,7 @@ const VisualizeMesh = React.memo(({
       return (
         <mesh>
           <Html center>
-            <div
-              style={{
-                minWidth: '200px',
-                padding: '8px',
-                background: 'rgba(255,255,255,0.8)',
-                borderRadius: '4px',
-                textAlign: 'center',
-              }}
-            >
-              <Skeleton className="h-full rounded-xl m-2 flex items-center justify-center">
-                <strong>Loading {geometryMode} geometry...</strong>
-              </Skeleton>
-            </div>
+            <LoadingSpinner />
           </Html>
         </mesh>
       )
@@ -658,19 +646,7 @@ const VisualizeMultipleMeshes = React.memo(({
     return (
       <mesh>
         <Html center>
-          <div
-            style={{
-              minWidth: '200px',
-              padding: '8px',
-              background: 'rgba(255,255,255,0.8)',
-              borderRadius: '4px',
-              textAlign: 'center',
-            }}
-          >
-            <Skeleton className="h-full rounded-xl m-2 flex items-center justify-center">
-              <strong>Loading {geometryMode} geometry...</strong>
-            </Skeleton>
-          </div>
+          <LoadingSpinner />
         </Html>
       </mesh>
     )

@@ -6,9 +6,9 @@ import * as THREE from 'three'
 import { DesignModel, DesignComponent } from '@/generated/DesignModel'
 import { DesignAdditionalGeometry, DesignInsertionFrame } from '@/generated/DesignModel'
 import { Card } from '@/components/ui/card'
-import { Bounds, OrbitControls } from '@react-three/drei'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Bounds, OrbitControls, Html } from '@react-three/drei'
 import { Checkbox } from '@/components/ui/checkbox'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 // Scale factor for converting units to meters in THREE
 const scale = 0.001
@@ -133,6 +133,184 @@ function createTransformMatrix(iframe: DesignComponent['iframe']): THREE.Matrix4
   )
   
   return matrix
+}
+
+/**
+ * Convert geometry data to THREE.js meshes for additional geometry (no coordinate system transformation)
+ */
+function convertAdditionalGeometryToMeshes(geometry: unknown, itemId: string): THREE.Group[] {
+  const meshes: THREE.Group[] = []
+  
+  try {
+    debugLog(`Converting additional geometry for ${itemId}:`, geometry)
+    
+    const geo = geometry as Record<string, unknown> | null
+    const extrusion = geo?.extrusion as Record<string, unknown> | undefined
+    const mesh = geo?.mesh as Record<string, unknown> | undefined
+    const meshesArray = geo?.meshes as unknown[] | undefined
+    
+    const hasExtrusion = extrusion?.profile && extrusion?.height
+    const hasMesh = mesh?.v && mesh?.f
+    const hasMultipleMeshes = meshesArray && Array.isArray(meshesArray) && meshesArray.length > 0
+    
+    if (hasExtrusion) {
+      debugLog(`Processing additional extrusion geometry for ${itemId}`)
+      // Handle extrusion geometry
+      const points = extrusion.profile as number[][]
+      const height = extrusion.height as number
+      const shape = new THREE.Shape()
+      
+      shape.moveTo(points[0][0], points[0][1])
+      points.forEach((p: number[], i: number) => {
+        if (i > 0) shape.lineTo(p[0], p[1])
+      })
+      
+      // Create extrusion geometry
+      const extrudeSettings = { 
+        steps: 2, 
+        depth: height, 
+        bevelEnabled: false 
+      }
+      const extrudeGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
+      extrudeGeometry.translate(0, 0, -height * 0.5)
+      // No coordinate system transformation for additional geometry
+      extrudeGeometry.computeVertexNormals()
+      extrudeGeometry.normalizeNormals()
+      
+      // Create face material
+      const faceMaterial = new THREE.MeshBasicMaterial({ 
+        color: (geo?.color as number) || 0x888888,
+        side: THREE.DoubleSide
+      })
+      
+      // Create edge material
+      const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+      
+      // Create face mesh
+      const faceMesh = new THREE.Mesh(extrudeGeometry, faceMaterial)
+      faceMesh.name = `extrusion_face_${itemId}`
+      
+      // Create edge geometry
+      const edgeGeometry = new THREE.EdgesGeometry(extrudeGeometry)
+      const edgeMesh = new THREE.LineSegments(edgeGeometry, edgeMaterial)
+      edgeMesh.name = `extrusion_edge_${itemId}`
+      
+      const group = new THREE.Group()
+      group.add(faceMesh)
+      group.add(edgeMesh)
+      meshes.push(group)
+      
+    } else if (hasMultipleMeshes) {
+      debugLog(`Processing additional multiple meshes for ${itemId}`)
+      // Handle array of meshes
+      meshesArray.forEach((meshData: unknown, index: number) => {
+        const mesh = meshData as Record<string, unknown>
+        if (mesh.v && mesh.f) {
+          const threeGeometry = new THREE.BufferGeometry()
+          
+          // Convert vertices from [[x,y,z], [x,y,z], ...] to [x,y,z,x,y,z,...]
+          const vertices = (mesh.v as number[][]).flat()
+          threeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+          
+          // Convert faces from [[a,b,c], [a,b,c], ...] to [a,b,c,a,b,c,...]
+          const faces = (mesh.f as number[][]).flat()
+          threeGeometry.setIndex(faces)
+          
+          // No coordinate system transformation for additional geometry
+          threeGeometry.computeVertexNormals()
+          threeGeometry.normalizeNormals()
+          
+          // Set colors if available
+          let material: THREE.MeshBasicMaterial
+          if (mesh.c && Array.isArray(mesh.c) && mesh.c.length > 0) {
+            // Convert colors from [[r,g,b], [r,g,b], ...] to [r,g,b,r,g,b,...]
+            const colors = (mesh.c as number[][]).flat()
+            const normalizedColors = normalizeColors(colors)
+            threeGeometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
+            material = new THREE.MeshBasicMaterial({ 
+              vertexColors: true,
+              side: THREE.DoubleSide
+            })
+          } else {
+            // Use a default color
+            material = new THREE.MeshBasicMaterial({ 
+              color: 0x888888,
+              side: THREE.DoubleSide
+            })
+          }
+          
+          const threeMesh = new THREE.Mesh(threeGeometry, material)
+          threeMesh.name = `mesh_${index}_${itemId}`
+          
+          // Create edge geometry and material
+          const edgeGeometry = new THREE.EdgesGeometry(threeGeometry)
+          const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+          const edgeMesh = new THREE.LineSegments(edgeGeometry, edgeMaterial)
+          edgeMesh.name = `mesh_edge_${index}_${itemId}`
+          
+          const group = new THREE.Group()
+          group.add(threeMesh)
+          group.add(edgeMesh)
+          meshes.push(group)
+        }
+      })
+      
+    } else if (hasMesh) {
+      debugLog(`Processing additional single mesh for ${itemId}`)
+      // Handle single mesh
+      const threeGeometry = new THREE.BufferGeometry()
+      
+      // Convert vertices from [[x,y,z], [x,y,z], ...] to [x,y,z,x,y,z,...]
+      const vertices = (mesh.v as number[][]).flat()
+      threeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+      
+      // Convert faces from [[a,b,c], [a,b,c], ...] to [a,b,c,a,b,c,...]
+      const faces = (mesh.f as number[][]).flat()
+      threeGeometry.setIndex(faces)
+      
+      // No coordinate system transformation for additional geometry
+      threeGeometry.computeVertexNormals()
+      threeGeometry.normalizeNormals()
+      
+      // Set colors if available
+      let material: THREE.MeshBasicMaterial
+      if (mesh.c && Array.isArray(mesh.c) && mesh.c.length > 0) {
+        // Convert colors from [[r,g,b], [r,g,b], ...] to [r,g,b,r,g,b,...]
+        const colors = (mesh.c as number[][]).flat()
+        const normalizedColors = normalizeColors(colors)
+        threeGeometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
+        material = new THREE.MeshBasicMaterial({ 
+          vertexColors: true,
+          side: THREE.DoubleSide
+        })
+      } else {
+        // Use a default color
+        material = new THREE.MeshBasicMaterial({ 
+          color: 0x888888,
+          side: THREE.DoubleSide
+        })
+      }
+      
+      const threeMesh = new THREE.Mesh(threeGeometry, material)
+      threeMesh.name = `mesh_${itemId}`
+      
+      // Create edge geometry and material
+      const edgeGeometry = new THREE.EdgesGeometry(threeGeometry)
+      const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+      const edgeMesh = new THREE.LineSegments(edgeGeometry, edgeMaterial)
+      edgeMesh.name = `mesh_edge_${itemId}`
+      
+      const group = new THREE.Group()
+      group.add(threeMesh)
+      group.add(edgeMesh)
+      meshes.push(group)
+    }
+    
+  } catch (error) {
+    debugLog(`Error converting additional geometry for ${itemId}:`, error)
+  }
+  
+  return meshes
 }
 
 /**
@@ -546,8 +724,8 @@ async function loadExternalGeometry(
         debugLog(`Applied ${normalizedColors.length / 3} normalized vertex colors to ${meshData.name}`)
       }
 
-      // Apply coordinate system transformation (Rhino Y-up to Three.js Z-up)
-      geometry.rotateX(-Math.PI / 2)
+      // Apply coordinate transformation for external geometry
+      geometry.rotateX(Math.PI / 2)
       
       // Compute normals to fix see-through faces
       geometry.computeVertexNormals()
@@ -766,7 +944,6 @@ export default function DesignViewer({
   const [visibleComponents, setVisibleComponents] = useState<Map<string, boolean>>(new Map())
   const [visibleAdditionalGeometry, setVisibleAdditionalGeometry] = useState<Map<string, boolean>>(new Map())
   const [showEdges, setShowEdges] = useState<boolean>(true)
-  const [isLoading, setIsLoading] = useState(true)
 
   // Initialize visibility states
   useEffect(() => {
@@ -786,19 +963,12 @@ export default function DesignViewer({
     setVisibleAdditionalGeometry(initialAdditionalGeometryVisibility)
   }, [design.components, design.additional_geometry])
 
-  // Load all component geometries one by one
+  // Load component geometries when mode changes
   useEffect(() => {
     const loadAllGeometries = async () => {
-      setIsLoading(true)
       const newLoadedComponents = new Map<string, THREE.Group[]>()
       const newLoadingStates = new Map<string, boolean>()
       const newErrorStates = new Map<string, string>()
-
-      // Set loading states
-      design.components.forEach(comp => {
-        newLoadingStates.set(comp.component, true)
-      })
-      setLoadingStates(new Map(newLoadingStates))
 
       // Set default edge visibility based on geometry mode
       if (geometryMode === 'primitive') {
@@ -809,6 +979,13 @@ export default function DesignViewer({
 
       // Load each component one by one to avoid overwhelming the system
       for (const comp of design.components) {
+        // Set loading state for this component
+        setLoadingStates(prev => {
+          const newMap = new Map(prev)
+          newMap.set(comp.component, true)
+          return newMap
+        })
+
         try {
           debugLog(`Loading ${geometryMode} geometry for component ${comp.component}`)
           const result = await loadComponentGeometry(comp.component, geometryMode)
@@ -827,18 +1004,34 @@ export default function DesignViewer({
           debugLog(`Error loading geometry for component ${comp.component}:`, errorMessage)
         }
         
-        newLoadingStates.set(comp.component, false)
-        setLoadingStates(new Map(newLoadingStates))
+        // Update states for this component
+        setLoadingStates(prev => {
+          const newMap = new Map(prev)
+          newMap.set(comp.component, false)
+          return newMap
+        })
         
-        // Update loaded components state after each component
-        setLoadedComponents(new Map(newLoadedComponents))
-        setErrorStates(new Map(newErrorStates))
+        setLoadedComponents(prev => {
+          const newMap = new Map(prev)
+          if (newLoadedComponents.has(comp.component)) {
+            newMap.set(comp.component, newLoadedComponents.get(comp.component)!)
+          }
+          return newMap
+        })
+        
+        setErrorStates(prev => {
+          const newMap = new Map(prev)
+          if (newErrorStates.has(comp.component)) {
+            newMap.set(comp.component, newErrorStates.get(comp.component)!)
+          } else {
+            newMap.delete(comp.component)
+          }
+          return newMap
+        })
         
         // Small delay to prevent overwhelming the system
         await new Promise(resolve => setTimeout(resolve, 100))
       }
-
-      setIsLoading(false)
     }
 
     loadAllGeometries()
@@ -907,16 +1100,6 @@ export default function DesignViewer({
     })
   }, [showEdges, geometryMode, loadedComponents])
 
-  if (isLoading) {
-    return (
-      <Card className={`p-4 ${className}`}>
-        <div className="space-y-4">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </Card>
-    )
-  }
 
   return (
     <Card className="flex flex-col w-full overflow-x-auto">
@@ -1032,7 +1215,7 @@ export default function DesignViewer({
           <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI * 0.75} />
           <pointLight position={[-10, 10, -10]} decay={0} intensity={Math.PI * 0.75} />
 
-          <Bounds fit clip observe margin={1.2} maxDuration={1}>
+          <Bounds fit clip margin={1.2} maxDuration={1}>
             {design.components.map((comp) => {
               const meshes = loadedComponents.get(comp.component) || []
               const isVisible = visibleComponents.get(comp.component) ?? true
@@ -1046,18 +1229,57 @@ export default function DesignViewer({
                 error
               })
 
+              if (!isVisible) {
+                debugLog(`Component ${comp.component} not visible, skipping render`)
+                return null
+              }
+
               if (isLoading) {
-                debugLog(`Component ${comp.component} is loading, skipping render`)
-                return null // Will be handled by loading state
+                debugLog(`Component ${comp.component} is loading, showing loading indicator`)
+                return (
+                  <group key={comp.component} scale={[scale, scale, scale]}>
+                    <group matrix={createTransformMatrix(comp.iframe)} matrixAutoUpdate={false}>
+                      <mesh>
+                        <Html center>
+                          <LoadingSpinner />
+                        </Html>
+                      </mesh>
+                    </group>
+                  </group>
+                )
               }
 
               if (error) {
                 debugLog(`Component ${comp.component} has error:`, error)
-                return null // Error state
+                return (
+                  <group key={comp.component} scale={[scale, scale, scale]}>
+                    <group matrix={createTransformMatrix(comp.iframe)} matrixAutoUpdate={false}>
+                      <mesh>
+                        <Html center>
+                          <div
+                            style={{
+                              minWidth: '200px',
+                              padding: '12px',
+                              background: 'rgba(255,255,255,0.9)',
+                              borderRadius: '4px',
+                              textAlign: 'center',
+                              border: '1px solid #e5e7eb',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                            }}
+                          >
+                            <div style={{ color: '#6b7280', fontSize: '14px', marginBottom: '8px' }}>
+                              <strong>{error}</strong>
+                            </div>
+                          </div>
+                        </Html>
+                      </mesh>
+                    </group>
+                  </group>
+                )
               }
 
-              if (!isVisible || meshes.length === 0) {
-                debugLog(`Component ${comp.component} not visible or no meshes:`, { isVisible, meshCount: meshes.length })
+              if (meshes.length === 0) {
+                debugLog(`Component ${comp.component} has no meshes:`, { meshCount: meshes.length })
                 return null
               }
 
@@ -1098,7 +1320,7 @@ export default function DesignViewer({
                 
                 if (!isVisible) return null
                 
-                const meshes = convertGeometryToMeshes(item.geometry as unknown, itemId)
+                const meshes = convertAdditionalGeometryToMeshes(item.geometry as unknown, itemId)
                 if (!meshes || meshes.length === 0) return null
                 return (
                   <group key={`add_${itemId}`} scale={[scale, scale, scale]}>

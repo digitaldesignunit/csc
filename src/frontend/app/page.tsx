@@ -25,14 +25,15 @@ export default function Home() {
 
       {/* Background Mesh */}
       <BackgroundMesh
-        className="absolute inset-0 -z-10"
-        opacity={0.08}
-        rotationSpeed={0.15}
-        intensity={0.2}
-      />
+          className="absolute inset-0 -z-10"
+          opacity={0.08}
+          rotationSpeed={0.15}
+          intensity={0.2}
+        />
 
       {/* Main Content */}
       <div className="relative z-10 space-y-6">
+        
         {/* About Section */}
         <Card className="bg-card/75">
           <CardHeader>

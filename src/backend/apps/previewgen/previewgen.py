@@ -3,6 +3,7 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from io import BytesIO
 import os
+from typing import Tuple
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import matplotlib.pyplot as plt
@@ -20,7 +21,16 @@ except ImportError:
 
 # FUNCTION DEFINITIONS --------------------------------------------------------
 
-def create_extrusion_component_mesh(component_data: dict):
+def create_extrusion_component_mesh(
+    component_data: dict
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Create a 3D mesh for an extrusion component.
+
+    Returns:
+        all_points: (V, 3) float array of vertex positions
+        faces: (F, 3) int array of triangle indices
+    """
     # Convert polyline to numpy array and add z-coordinate (0)
     points = np.array(component_data['geometry']['extrusion']['profile'])
     num_points = len(points)
@@ -44,7 +54,7 @@ def create_extrusion_component_mesh(component_data: dict):
     # Create faces for the top and bottom
     faces.append(points_3d_bottom.tolist())
     faces.append(points_3d_top.tolist())
-    return all_points, faces
+    return (all_points, faces)
 
 
 def convert_mesh_component_mesh(component_data: dict):
