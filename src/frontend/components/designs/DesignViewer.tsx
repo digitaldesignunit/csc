@@ -7,8 +7,8 @@ import { DesignModel, DesignComponent } from '@/generated/DesignModel'
 import { DesignAdditionalGeometry, DesignInsertionFrame } from '@/generated/DesignModel'
 import { Card } from '@/components/ui/card'
 import { Bounds, OrbitControls, Html } from '@react-three/drei'
-import { Checkbox } from '@/components/ui/checkbox'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { ViewerMenu, MenuSection, CheckboxControl, SelectControl, ScrollableCheckboxList } from '@/components/viewer/ViewerMenu'
 
 // Scale factor for converting units to meters in THREE
 const scale = 0.001
@@ -1101,116 +1101,118 @@ export default function DesignViewer({
   }, [showEdges, geometryMode, loadedComponents])
 
 
-  return (
-    <Card className="flex flex-col w-full overflow-x-auto">
-      <div className="relative h-[30dvh] sm:h-[40dvh]">
-        {/* Overlay UI */}
-        <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-10 bg-accent-foreground bg-opacity-90 p-1 sm:p-2 rounded shadow text-xs sm:text-sm max-w-[calc(100%-0.5rem)] sm:max-w-[calc(100%-1rem)]">
-          <div className="mb-1 sm:mb-2 flex flex-col gap-1">
-            <label className="text-xs sm:text-sm">Design Assembly</label>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="toggle-all"
-                checked={allComponentsVisible}
-                onCheckedChange={toggleAllComponents}
-              />
-              <label htmlFor="toggle-all" className="text-xs">
-                Show All
-              </label>
-            </div>
-            <div className="flex items-center space-x-2 mt-1">
-              <input
-                id="toggle-edges"
-                type="checkbox"
-                checked={showEdges}
-                onChange={() => setShowEdges(prev => !prev)}
-                className="rounded"
-              />
-              <label htmlFor="toggle-edges" className="text-xs">Show Edges</label>
-            </div>
-          </div>
-          
-          {/* Geometry Mode Selector */}
-          <div className="mb-1 sm:mb-2 flex flex-col gap-1">
-            <label htmlFor="geometryModeSelect" className="text-xs sm:text-sm">Geometry Resolution:</label>
-            <select
-              id="geometryModeSelect"
-              value={geometryMode}
-              onChange={(e) => setGeometryMode(e.target.value as 'primitive' | 'reduced' | 'detailed')}
-              className="w-full rounded border bg-accent-foreground p-1 text-xs sm:text-sm"
-            >
-              <option value="primitive">Primitive</option>
-              <option value="reduced">Reduced</option>
-              <option value="detailed">Detailed</option>
-            </select>
-          </div>
-          
-          {/* Component Visibility Controls */}
-          <div className="mb-1 sm:mb-2 flex flex-col gap-1">
-            <label className="text-xs sm:text-sm">Component Visibility:</label>
-            <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-              {design.components.map((comp, index) => {
-                const isVisible = visibleComponents.get(comp.component) ?? true
-                const isLoading = loadingStates.get(comp.component) ?? false
-                const error = errorStates.get(comp.component)
-
-                return (
-                  <label key={comp.component} className="flex items-center gap-1 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={isVisible}
-                      onChange={() => toggleComponentVisibility(comp.component)}
-                      disabled={isLoading || !!error}
-                      className="rounded"
-                    />
-                    <span className="truncate">
-                      {isLoading ? 'Loading...' : error ? `Error: ${error}` : `Component ${index + 1}`}
-                    </span>
-                  </label>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Additional Geometry Visibility Controls */}
+  // Build menu sections
+  const menuSections: MenuSection[] = [
+    // Geometry Resolution section
+    {
+      id: 'geometry-mode',
+      content: (
+        <SelectControl
+          id="geometryModeSelect"
+          label="Geometry Resolution:"
+          value={geometryMode}
+          onChange={(e) => setGeometryMode(e.target.value as 'primitive' | 'reduced' | 'detailed')}
+          options={[
+            { value: 'primitive', label: 'Primitive' },
+            { value: 'reduced', label: 'Reduced' },
+            { value: 'detailed', label: 'Detailed' }
+          ]}
+        />
+      )
+    },
+    // Global toggles section
+    {
+      id: 'global-toggles',
+      content: (
+        <div className="flex flex-col gap-1">
+          <CheckboxControl
+            id="toggle-all"
+            label="Show All Components"
+            checked={allComponentsVisible}
+            onChange={toggleAllComponents}
+          />
+          <CheckboxControl
+            id="toggle-edges"
+            label="Show Edges"
+            checked={showEdges}
+            onChange={(checked) => setShowEdges(checked)}
+          />
           {Array.isArray(design.additional_geometry) && design.additional_geometry.length > 0 && (
-            <div className="mb-1 sm:mb-2 flex flex-col gap-1">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="toggle-all-additional"
-                  checked={allAdditionalGeometryVisible}
-                  onCheckedChange={toggleAllAdditionalGeometry}
-                />
-                <label htmlFor="toggle-all-additional" className="text-xs">
-                  Show All Additional Geometry
-                </label>
-              </div>
-              <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-                {design.additional_geometry.map((item, index) => {
-                  const itemId = item._id || `additional_${index}`
-                  const isVisible = visibleAdditionalGeometry.get(itemId) ?? true
-                  const itemName = typeof item.name === 'string' && item.name.trim() 
-                    ? item.name 
-                    : `Additional Geometry ${index + 1}`
-
-                  return (
-                    <label key={itemId} className="flex items-center gap-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={isVisible}
-                        onChange={() => toggleAdditionalGeometryVisibility(itemId)}
-                        className="rounded"
-                      />
-                      <span className="truncate">{itemName}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
+            <CheckboxControl
+              id="toggle-all-additional"
+              label="Show All Additional Geometry"
+              checked={allAdditionalGeometryVisible}
+              onChange={toggleAllAdditionalGeometry}
+            />
           )}
         </div>
+      )
+    },
+    // Component Visibility section
+    {
+      id: 'component-visibility',
+      title: 'Component Visibility',
+      collapsible: true,
+      defaultExpanded: true,
+      itemCount: design.components.length,
+      content: (
+        <ScrollableCheckboxList
+          items={design.components.map((comp, index) => {
+            const isVisible = visibleComponents.get(comp.component) ?? true
+            const isLoading = loadingStates.get(comp.component) ?? false
+            const error = errorStates.get(comp.component)
+            return {
+              id: comp.component,
+              label: isLoading ? 'Loading...' : error ? `Error: ${error}` : `Component ${index + 1}`,
+              checked: isVisible,
+              disabled: isLoading || !!error
+            }
+          })}
+          onToggle={toggleComponentVisibility}
+        />
+      )
+    }
+  ]
 
-        <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
+  // Add Additional Geometry section if present
+  if (Array.isArray(design.additional_geometry) && design.additional_geometry.length > 0) {
+    menuSections.push({
+      id: 'additional-geometry',
+      title: 'Additional Geometry',
+      collapsible: true,
+      defaultExpanded: true,
+      itemCount: design.additional_geometry.length,
+      content: (
+        <ScrollableCheckboxList
+          items={design.additional_geometry.map((item, index) => {
+            const itemId = item._id || `additional_${index}`
+            const isVisible = visibleAdditionalGeometry.get(itemId) ?? true
+            const itemName = typeof item.name === 'string' && item.name.trim() 
+              ? item.name 
+              : `Additional Geometry ${index + 1}`
+            return {
+              id: itemId,
+              label: itemName,
+              checked: isVisible
+            }
+          })}
+          onToggle={toggleAdditionalGeometryVisibility}
+        />
+      )
+    })
+  }
+
+  return (
+    <div className="flex flex-col md:flex-row gap-2 w-full">
+      {/* Menu - left on desktop, top on mobile */}
+      <div className="w-full md:w-64 md:flex-shrink-0 order-2 md:order-1 md:h-[50dvh]">
+        <ViewerMenu sections={menuSections} className="h-full" />
+      </div>
+
+      {/* Viewport - right on desktop, bottom on mobile */}
+      <Card className="flex-1 overflow-hidden order-1 md:order-2 h-[30dvh] sm:h-[40dvh] md:h-[50dvh] p-0">
+        <div className="relative w-full h-full">
+          <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
           <ambientLight intensity={Math.PI / 2} />
           <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI * 0.75} />
           <pointLight position={[-10, 10, -10]} decay={0} intensity={Math.PI * 0.75} />
@@ -1351,5 +1353,6 @@ export default function DesignViewer({
         </Canvas>
       </div>
     </Card>
+    </div>
   )
 }

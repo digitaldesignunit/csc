@@ -9,6 +9,7 @@ import { Bounds, OrbitControls, Html } from '@react-three/drei'
 import { rgbToHex } from '@/lib/utils'
 import ComponentViewerSkeleton from './ComponentViewerSkeleton'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { ViewerMenu, MenuSection, SelectControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
 
 // Scale factor for converting units to meters in THREE
 const scale = 0.001
@@ -880,6 +881,15 @@ export default function ComponentViewer({ component_data }: { component_data: Co
     })
   }
 
+  const toggleAllMeshes = () => {
+    const allVisible = visibleMeshes.every(v => v)
+    setVisibleMeshes(prev => prev.map(() => !allVisible))
+  }
+
+  const allMeshesVisible = useMemo(() => {
+    return visibleMeshes.length > 0 && visibleMeshes.every(v => v)
+  }, [visibleMeshes])
+
   const toggleMarkerPointsVisibility = () => {
     setShowMarkerPoints(prev => !prev)
   }
@@ -901,76 +911,103 @@ export default function ComponentViewer({ component_data }: { component_data: Co
     return <ComponentViewerSkeleton message="No Geometry Available" />
   }
 
-  return (
-    <Card className="flex flex-col w-full overflow-x-auto">
-      <div className="relative h-[30dvh] sm:h-[40dvh]">
-        {/* Overlay UI */}
-        <div className="absolute top-1 left-1 sm:top-2 sm:left-2 z-10 bg-accent-foreground bg-opacity-90 p-1 sm:p-2 rounded shadow text-xs sm:text-sm max-w-[calc(100%-0.5rem)] sm:max-w-[calc(100%-1rem)]">
-          <div className="mb-1 sm:mb-2 flex flex-col gap-1">
-            <label htmlFor="geometryModeSelect" className="text-xs sm:text-sm">Geometry Resolution:</label>
-            <select
-              id="geometryModeSelect"
-              value={geometryMode}
-              onChange={onModeChange}
-              disabled={isSheet}
-              className="w-full rounded border bg-accent-foreground p-1 text-xs sm:text-sm"
-            >
-              <option value="primitive">Primitive</option>
-              <option value="reduced">Reduced</option>
-              <option value="detailed">Detailed</option>
-            </select>
-          </div>
-          
-          {/* Mesh Visibility Controls */}
-          {((hasMultipleMeshes && geometryMode === 'primitive') || (isExternalMode && externalMeshes.length > 0)) && (
-            <div className="mb-1 sm:mb-2 flex flex-col gap-1">
-              <label className="text-xs sm:text-sm">Mesh Visibility:</label>
-              <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-                {(isExternalMode ? Array.from({ length: externalMeshes.length }, (_, i) => i) : meshes.map((_, i) => i)).map((index: number) => (
-                  <label key={index} className="flex items-center gap-1 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={visibleMeshes[index] || false}
-                      onChange={() => toggleMeshVisibility(index)}
-                      className="rounded"
-                    />
-                    <span>{isExternalMode ? `External Mesh ${index + 1}` : `Mesh ${index + 1}`}</span>
-                  </label>
-                ))}
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <input
-                  id="toggle-edges"
-                  type="checkbox"
-                  checked={showEdges}
-                  onChange={() => setShowEdges(prev => !prev)}
-                  className="rounded"
-                />
-                <label htmlFor="toggle-edges" className="text-xs">Show Edges</label>
-              </div>
-            </div>
-          )}
+  // Build menu sections
+  const menuSections: MenuSection[] = [
+    // Geometry Resolution section
+    {
+      id: 'geometry-mode',
+      content: (
+        <SelectControl
+          id="geometryModeSelect"
+          label="Geometry Resolution:"
+          value={geometryMode}
+          onChange={onModeChange}
+          disabled={isSheet}
+          options={[
+            { value: 'primitive', label: 'Primitive' },
+            { value: 'reduced', label: 'Reduced' },
+            { value: 'detailed', label: 'Detailed' }
+          ]}
+        />
+      )
+    }
+  ]
 
-          {/* Marker Points Visibility Control */}
-          {hasMarkerPoints && (
-            <div className="mb-1 sm:mb-2 flex flex-col gap-1">
-              <label className="text-xs sm:text-sm">Marker Points:</label>
-              <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-                <label className="flex items-center gap-1 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={showMarkerPoints}
-                    onChange={toggleMarkerPointsVisibility}
-                    className="rounded"
-                  />
-                  <span className="text-xs sm:text-sm">Show ({markerPoints.length})</span>
-                </label>
-              </div>
-            </div>
-          )}
+  // Add global toggles if mesh visibility section will be shown
+  if ((hasMultipleMeshes && geometryMode === 'primitive') || (isExternalMode && externalMeshes.length > 0)) {
+    menuSections.push({
+      id: 'global-toggles',
+      content: (
+        <div className="flex flex-col gap-1">
+          <CheckboxControl
+            id="toggle-all-meshes"
+            label="Show All Meshes"
+            checked={allMeshesVisible}
+            onChange={toggleAllMeshes}
+          />
+          <CheckboxControl
+            id="toggle-edges"
+            label="Show Edges"
+            checked={showEdges}
+            onChange={(checked) => setShowEdges(checked)}
+          />
         </div>
+      )
+    })
+  }
 
-        <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
+  // Add Mesh Visibility section if applicable
+  if ((hasMultipleMeshes && geometryMode === 'primitive') || (isExternalMode && externalMeshes.length > 0)) {
+    const meshCount = isExternalMode ? externalMeshes.length : meshes.length
+    menuSections.push({
+      id: 'mesh-visibility',
+      title: 'Mesh Visibility',
+      collapsible: true,
+      defaultExpanded: true,
+      itemCount: meshCount,
+      content: (
+        <ScrollableCheckboxList
+          items={(isExternalMode 
+            ? Array.from({ length: externalMeshes.length }, (_, i) => i) 
+            : meshes.map((_, i) => i)
+          ).map((index: number) => ({
+            id: String(index),
+            label: isExternalMode ? `External Mesh ${index + 1}` : `Mesh ${index + 1}`,
+            checked: visibleMeshes[index] || false
+          }))}
+          onToggle={(id) => toggleMeshVisibility(Number(id))}
+        />
+      )
+    })
+  }
+
+  // Add Marker Points section if applicable
+  if (hasMarkerPoints) {
+    menuSections.push({
+      id: 'marker-points',
+      title: 'Marker Points:',
+      content: (
+        <CheckboxControl
+          id="toggle-marker-points"
+          label={`Show (${markerPoints.length})`}
+          checked={showMarkerPoints}
+          onChange={(checked) => setShowMarkerPoints(checked)}
+        />
+      )
+    })
+  }
+
+  return (
+    <div className="flex flex-col md:flex-row gap-2 w-full">
+      {/* Menu - left on desktop, top on mobile */}
+      <div className="w-full md:w-64 md:flex-shrink-0 order-2 md:order-1 md:h-[50dvh]">
+        <ViewerMenu sections={menuSections} className="h-full" />
+      </div>
+
+      {/* Viewport - right on desktop, bottom on mobile */}
+      <Card className="flex-1 overflow-hidden order-1 md:order-2 h-[30dvh] sm:h-[40dvh] md:h-[50dvh] p-0">
+        <div className="relative w-full h-full">
+          <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
           <ambientLight intensity={Math.PI / 2} />
           <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI * 0.75} />
           <pointLight position={[-10, 10, -10]} decay={0} intensity={Math.PI * 0.75} />
@@ -997,5 +1034,6 @@ export default function ComponentViewer({ component_data }: { component_data: Co
         </Canvas>
       </div>
     </Card>
+    </div>
   )
 }

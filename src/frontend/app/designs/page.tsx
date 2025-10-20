@@ -5,7 +5,7 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { formatTimestamp } from '@/lib/utils'
-import { Package, ExternalLink } from 'lucide-react'
+import { ExternalLink, Layers2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 export const runtime = 'nodejs'
@@ -66,7 +66,7 @@ export default async function DesignsPage({
     <div className="container mx-auto p-4 sm:p-6">
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <Package className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <Layers2 className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
           <h1 className="text-2xl sm:text-3xl font-bold">Designs</h1>
         </div>
         <p className="text-muted-foreground text-sm sm:text-base">
@@ -131,7 +131,7 @@ export default async function DesignsPage({
           <CardContent>
             {items.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                <Layers2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                 <p className="text-lg font-medium">No designs yet</p>
                 <p>Be the first to create a design assembly!</p>
               </div>
