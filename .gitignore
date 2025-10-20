@@ -25,6 +25,7 @@ __pycache__/
 
 # DATABASE CONFIG FILE FOR DEVELOPMENT
 /src/backend/config/dbconfig.json
+/src/backend/config/email_config.json
 /src/backend/apps/catalogue/hash_pwd.py
 
 
