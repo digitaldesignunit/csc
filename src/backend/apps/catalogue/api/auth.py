@@ -212,7 +212,10 @@ async def login_for_access_token(
     if not user.get('email_verified', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Email not verified. Please check your email for verification link.',
+            detail=(
+                'Email not verified. Please check your email '
+                'for verification link.'
+            ),
         )
 
     token = create_access_token(
@@ -279,7 +282,7 @@ async def register_user(
         )
         email_config = load_email_config(email_config_path)
         dev_mode = email_config.get('dev_mode', False)
-        
+
         send_verification_email(
             email_config,
             email,
@@ -320,21 +323,31 @@ async def verify_email(
         # Handle both datetime objects and strings
         if isinstance(expires, str):
             expires = datetime.fromisoformat(expires.replace('Z', '+00:00'))
-        
+        elif isinstance(expires, datetime):
+            # Make timezone-aware if it isn't already
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+
         if datetime.now(timezone.utc) > expires:
-            raise HTTPException(400, 'Verification token has expired. Please request a new one.')
+            raise HTTPException(
+                400,
+                'Verification token has expired. Please request a new one.'
+            )
 
     # Update user: mark as verified, clear token
     await users.update_one(
         {'_id': user['_id']},
         {
             '$set': {'email_verified': True},
-            '$unset': {'verification_token': '', 'verification_token_expires': ''}
+            '$unset': {
+                'verification_token': '',
+                'verification_token_expires': ''
+            }
         }
     )
 
     print(f'{ts()} [AUTH] Email verified for user: {user.get("email")}')
-    
+
     return {
         'message': 'Email verified successfully. You can now sign in.',
         'email': user.get('email')
@@ -362,12 +375,18 @@ async def resend_verification(
     if not user:
         # Don't reveal if user exists or not (security)
         return {
-            'message': 'If an unverified account exists with this email, a verification email has been sent.'
+            'message': (
+                'If an unverified account exists with this email, '
+                'a verification email has been sent.'
+            ),
         }
 
     # Check if already verified
     if user.get('email_verified', False):
-        raise HTTPException(400, 'Email is already verified. You can sign in.')
+        raise HTTPException(
+            400,
+            'Email is already verified. You can sign in.'
+        )
 
     # Generate new verification token
     verification_token = generate_verification_token()
@@ -386,15 +405,17 @@ async def resend_verification(
 
     # Send verification email
     try:
+        print(os.path.dirname(__file__))
         email_config_path = os.path.normpath(os.path.abspath(os.path.join(
             os.path.dirname(__file__),
             "..", "..", "..",
             'config',
             'email_config.json'
         )))
+        print(email_config_path)
         email_config = load_email_config(email_config_path)
         dev_mode = email_config.get('dev_mode', False)
-        
+
         send_verification_resent_email(
             email_config,
             email,
@@ -402,12 +423,18 @@ async def resend_verification(
             verification_token,
             dev_mode=dev_mode
         )
-        
+
         print(f'{ts()} [AUTH] Verification email resent to: {email}')
     except Exception as e:
         print(f'{ts()} [AUTH] Failed to resend verification email: {str(e)}')
-        raise HTTPException(500, 'Failed to send verification email. Please try again later.')
+        raise HTTPException(
+            500,
+            'Failed to send verification email. Please try again later.'
+        )
 
     return {
-        'message': 'If an unverified account exists with this email, a verification email has been sent.'
+        'message': (
+            'If an unverified account exists with this email, '
+            'a verification email has been sent.'
+        ),
     }
