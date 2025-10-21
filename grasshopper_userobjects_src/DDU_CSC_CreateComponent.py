@@ -39,7 +39,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251021
+    Version: 251021.4
     """
 
     def __init__(self):
@@ -376,13 +376,15 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         # Get principal components (eigenvectors)
         principal_components = pca.components_
 
-        # Sort components by explained variance (largest first)
-        explained_variance = pca.explained_variance_
-        sorted_indices = np.argsort(-explained_variance)
-        sorted_components = principal_components[sorted_indices]
+        # Ensure right-handed coordinate system
+        # Check if determinant is positive (right-handed)
+        det = np.linalg.det(principal_components)
+        if det < 0:
+            # Flip the third component to ensure right-handedness
+            principal_components[2] = -principal_components[2]
 
-        # Transform points to PCA space
-        pca_points = np.dot(points, sorted_components.T)
+        # Transform points to PCA space using original component order
+        pca_points = np.dot(points, principal_components.T)
 
         # Find bounds in PCA space
         min_bounds = np.min(pca_points, axis=0)
@@ -396,7 +398,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         # bounding box center in PCA space
         bbx_origin = (min_bounds + max_bounds) / 2.0
 
-        return dimensions.tolist(), sorted_components, bbx_origin.tolist()
+        return dimensions.tolist(), principal_components, bbx_origin.tolist()
 
     def minimum_bounding_rectangle(self, points):
         """
@@ -715,32 +717,29 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 f'Skipping file saving but computing primitive geometry.'
             )
 
-        # Generate vertex colors from texture (not implemented yet))
-        processed_geometry = geometry
-
         # Determine what versions to create based on face count
         if face_count > mesh_reduced_threshold:
             # Create both reduced and primitive versions
             if not files_exist:
                 reduced_mesh = self.reduce_mesh(
-                    processed_geometry,
+                    geometry,
                     mesh_reduced_target
                 )
             primitive_mesh = self.reduce_mesh(
-                processed_geometry,
+                geometry,
                 mesh_primitive_target
             )
             files_saved = not files_exist  # Only save if files don't exist
         elif face_count > mesh_primitive_threshold:
             # Create only primitive version
             primitive_mesh = self.reduce_mesh(
-                processed_geometry,
+                geometry,
                 mesh_primitive_target
             )
             files_saved = not files_exist  # Only save if files don't exist
         else:
             # Use original as primitive, no files saved
-            primitive_mesh = processed_geometry
+            primitive_mesh = geometry
 
         # Save files if needed and files don't already exist
         if files_saved:
@@ -750,7 +749,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 # Save original/detailed mesh with object declaration
                 detailed_obj_path = os.path.join(folder_path, 'mesh.obj')
                 self.save_multiple_meshes_as_obj(
-                    [processed_geometry], detailed_obj_path
+                    [geometry], detailed_obj_path
                 )
 
                 # Save reduced mesh if created
@@ -768,7 +767,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addWarning(f'Failed to save geometry files: {str(e)}')
                 files_saved = False
 
-        return processed_geometry, reduced_mesh, primitive_mesh, files_saved
+        return geometry, reduced_mesh, primitive_mesh, files_saved
 
     def process_multiple_meshes_geometry(
             self,
@@ -820,37 +819,34 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 reduced_meshes.append(None)
                 continue
 
-            # Generate vertex colors from texture (not implemented yet)
-            processed_mesh = mesh
-
             # Determine face count for this mesh
-            face_count = processed_mesh.Faces.Count
+            face_count = mesh.Faces.Count
 
             # Create versions based on face count (matching single mesh logic)
             if face_count > mesh_reduced_threshold:
                 # Create both reduced and primitive versions
                 if not files_exist and needs_file_saving:
                     reduced_mesh = self.reduce_mesh(
-                        processed_mesh,
+                        mesh,
                         mesh_reduced_target
                     )
                 else:
                     reduced_mesh = None
                 primitive_mesh = self.reduce_mesh(
-                    processed_mesh,
+                    mesh,
                     mesh_primitive_target
                 )
             elif face_count > mesh_primitive_threshold:
                 # Create only primitive version
                 reduced_mesh = None
                 primitive_mesh = self.reduce_mesh(
-                    processed_mesh,
+                    mesh,
                     mesh_primitive_target
                 )
             else:
                 # Use original as primitive, no files saved
                 reduced_mesh = None
-                primitive_mesh = processed_mesh
+                primitive_mesh = mesh
 
             primitive_meshes.append(primitive_mesh)
             reduced_meshes.append(reduced_mesh)
@@ -1003,36 +999,19 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         Returns dimensions, principal components, translation vector,
         and bbx_origin.
         """
-        if not meshes or len(meshes) == 0:
-            return None, None, None, None
-
-        # Find the first non-None mesh
-        first_mesh = None
-        for mesh in meshes:
-            if mesh is not None:
-                first_mesh = mesh
-                break
-
-        if first_mesh is None:
-            return None, None, None, None
-
+        # Retrieve the first mesh
+        mesh = meshes[0]
         # Use the same centering approach as single mesh case
         # Center the first mesh at origin using volume centroid
-        (centered_first_mesh, translation_vector) = (
-            self.center_geometry_at_origin(first_mesh)
+        (centered_mesh, translation_vector) = (
+            self.center_geometry_at_origin(mesh)
         )
-
         # Extract points from the centered first mesh
-        points, compute_3d = self.process_geometry(centered_first_mesh)
-
-        # Points are already centered since we processed centered geometry
-        centered_points = points
-
+        centered_points, compute_3d = self.process_geometry(centered_mesh)
         # Compute PCA for the centered first mesh only
         dimensions, principal_components, bbx_origin = (
             self.compute_obb_3d(centered_points)
         )
-
         return dimensions, principal_components, translation_vector, bbx_origin
 
     def RunScript(self,
@@ -1213,7 +1192,6 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                     if not isinstance(single_geometry, Rhino.Geometry.Mesh):
                         msg = ('The "rubble" type expects a Mesh as '
                                'geometry input! Please ensure and try again.')
-                        print(msg)
                         raise ValueError(msg)
                 elif Type == 'sheet':
                     if not isinstance(
@@ -1224,7 +1202,6 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                             'The "sheet" type expects a Mesh or Extrusion as '
                             'geometry input! Please ensure and try again.'
                         )
-                        print(msg)
                         raise ValueError(msg)
             else:
                 # Multiple objects - all must be meshes
@@ -1235,7 +1212,6 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                             f'The geometry input at index {i} is not a Mesh! '
                             'For multiple objects, all must be '
                             'Rhino.Geometry.Mesh objects.')
-                        print(msg)
                         raise ValueError(msg)
 
             self.Component.Message = f'Processing {Type} component...'
@@ -1244,19 +1220,14 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             if len(Geometry) == 1:
                 # Handle single geometry (existing logic)
                 single_geometry = Geometry[0]
-
                 # Center geometry at world origin FIRST
                 (centered_geometry, translation_vector) = (
                     self.center_geometry_at_origin(single_geometry)
                 )
-
-                # Extract points from the CENTERED geometry
-                points, compute_3d = self.process_geometry(centered_geometry)
-
-                # Points are already centered since we processed centered
-                # geometry
-                centered_points = points
-
+                # Extract CENTEREDpoints from the CENTERED geometry
+                centered_points, compute_3d = self.process_geometry(
+                    centered_geometry
+                )
                 # Compute object oriented bounding box and PCA transformation
                 if compute_3d:
                     dimensions, principal_components, bbx_origin = (
@@ -1275,7 +1246,6 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 # Assembly parameter
                 if Assembly:
                     # Assembly=True: compute PCA for whole assembly
-                    # (current behavior)
                     (dimensions, principal_components, translation_vector,
                      bbx_origin) = self.compute_pca_for_multiple_meshes(
                          Geometry)
