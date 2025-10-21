@@ -86,27 +86,16 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         # Apply PCA to find principal axes
         pca = PCA(n_components=3)
         pca.fit(points)
-
         # Get principal components (eigenvectors)
         principal_components = pca.components_
-
-        # Sort components by explained variance (largest first)
-        explained_variance = pca.explained_variance_
-        sorted_indices = np.argsort(-explained_variance)
-        sorted_components = principal_components[sorted_indices]
-
         # Transform points to PCA space
-        pca_points = np.dot(points, sorted_components.T)
-
+        pca_points = np.dot(points, principal_components.T)
         # Find bounds in PCA space
         min_bounds = np.min(pca_points, axis=0)
         max_bounds = np.max(pca_points, axis=0)
-
-        # Compute dimensions (sorted by length: X=longest, Y=second,
-        # Z=shortest)
+        # Compute dimensions
         dimensions = max_bounds - min_bounds
-
-        return dimensions.tolist(), sorted_components
+        return dimensions.tolist(), principal_components
 
     def rhino_xform(self, transformation_matrix) -> Rhino.Geometry.Transform:
         """
