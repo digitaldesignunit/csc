@@ -29,7 +29,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010a
+    Version: 251021.2
     """
 
     def __init__(self):
@@ -77,37 +77,6 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         cxt.Translate(Rhino.Geometry.Vector3d(
             0, 0, json_comp['geometry']['extrusion']['height'] * -0.5))
         return cxt
-
-    def ComponentMesh(self, json_comp: dict) -> Rhino.Geometry.Mesh:
-        """Create a single mesh from geometry.mesh field (backward compat)."""
-        mesh = Rhino.Geometry.Mesh()
-        vl = json_comp['geometry']['mesh']['v']
-        fl = json_comp['geometry']['mesh']['f']
-        [mesh.Vertices.Add(*v) for v in vl]
-        [mesh.Faces.AddFace(*f) for f in fl]
-        # Try to get mesh-specific colors first
-        try:
-            cl = json_comp['geometry']['mesh']['c']
-            [mesh.VertexColors.Add(
-                System.Drawing.Color.FromArgb(*c)) for c in cl]
-        except KeyError:
-            # Fallback: use component color for all vertices
-            try:
-                component_color = System.Drawing.Color.FromArgb(
-                    255, *json_comp['color'])
-                for _ in range(len(vl)):
-                    mesh.VertexColors.Add(component_color)
-            except (KeyError, TypeError):
-                # If even component color fails, use a default gray
-                default_color = System.Drawing.Color.Gray
-                for _ in range(len(vl)):
-                    mesh.VertexColors.Add(default_color)
-                self._addWarning(
-                    f'Mesh {json_comp["_id"]} using default gray color')
-        mesh.RebuildNormals()
-        mesh.UnifyNormals()
-        mesh.Compact()
-        return mesh
 
     def ComponentMeshes(self, json_comp: dict) -> list[Rhino.Geometry.Mesh]:
         """Create multiple meshes from geometry.meshes field."""
@@ -347,15 +316,6 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                                 xtr.SetUserString('csc_component', comp)
                                 # add to datatree
                                 PrimitiveGeometry.Add(xtr, ghp)
-                            elif key == 'mesh':
-                                # Handle single mesh (backward compatibility)
-                                mesh = self.ComponentMesh(json_comp)
-                                # transform to iframe
-                                mesh.Transform(xform)
-                                # set user string
-                                mesh.SetUserString('csc_component', comp)
-                                # add to datatree
-                                PrimitiveGeometry.Add(mesh, ghp)
                             elif key == 'meshes':
                                 # Handle multiple meshes
                                 meshes = self.ComponentMeshes(json_comp)
@@ -368,14 +328,6 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                                                        str(i))
                                     # add to datatree
                                     PrimitiveGeometry.Add(mesh, ghp)
-                            elif key == 'polyline':
-                                pl = self.ComponentExtrusionProfile(json_comp)
-                                # transform to iframe
-                                pl.Transform(xform)
-                                # set user string
-                                pl.SetUserString('csc_component', comp)
-                                # add to datatree
-                                PrimitiveGeometry.Add(pl, ghp)
                             else:
                                 msg = (f'Missing implementation for geometry '
                                        f'of type \'{key}\'!')
