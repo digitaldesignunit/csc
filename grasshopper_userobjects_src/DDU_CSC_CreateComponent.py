@@ -39,7 +39,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 251021
     """
 
     def __init__(self):
@@ -978,7 +978,6 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             return None, None, None, None
 
         # Convert to numpy array
-        import numpy as np
         points_array = np.array(all_points)
 
         # Center the assembly at origin (like single meshes)
@@ -990,6 +989,46 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         centered_points = points_array + translation_vector
 
         # Compute PCA for the centered combined geometry
+        dimensions, principal_components, bbx_origin = (
+            self.compute_obb_3d(centered_points)
+        )
+
+        return dimensions, principal_components, translation_vector, bbx_origin
+
+    def compute_pca_for_first_mesh_only(self, meshes):
+        """
+        Compute PCA for only the first mesh, but apply transformations to all
+        meshes.
+        Centers only the first mesh at origin before computing PCA.
+        Returns dimensions, principal components, translation vector,
+        and bbx_origin.
+        """
+        if not meshes or len(meshes) == 0:
+            return None, None, None, None
+
+        # Find the first non-None mesh
+        first_mesh = None
+        for mesh in meshes:
+            if mesh is not None:
+                first_mesh = mesh
+                break
+
+        if first_mesh is None:
+            return None, None, None, None
+
+        # Use the same centering approach as single mesh case
+        # Center the first mesh at origin using volume centroid
+        (centered_first_mesh, translation_vector) = (
+            self.center_geometry_at_origin(first_mesh)
+        )
+
+        # Extract points from the centered first mesh
+        points, compute_3d = self.process_geometry(centered_first_mesh)
+
+        # Points are already centered since we processed centered geometry
+        centered_points = points
+
+        # Compute PCA for the centered first mesh only
         dimensions, principal_components, bbx_origin = (
             self.compute_obb_3d(centered_points)
         )
@@ -1232,9 +1271,20 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                             centered_points, height)
                     )
             else:
-                # Handle multiple meshes - compute PCA for whole assembly
-                (dimensions, principal_components, translation_vector,
-                 bbx_origin) = self.compute_pca_for_multiple_meshes(Geometry)
+                # Handle multiple meshes - choose PCA computation based on
+                # Assembly parameter
+                if Assembly:
+                    # Assembly=True: compute PCA for whole assembly
+                    # (current behavior)
+                    (dimensions, principal_components, translation_vector,
+                     bbx_origin) = self.compute_pca_for_multiple_meshes(
+                         Geometry)
+                else:
+                    # Assembly=False: compute PCA only for first mesh, but
+                    # apply to all meshes
+                    (dimensions, principal_components, translation_vector,
+                     bbx_origin) = self.compute_pca_for_first_mesh_only(
+                         Geometry)
                 centered_geometry = None  # Not used for multiple meshes
                 compute_3d = True  # Always 3D for multiple meshes
 
