@@ -29,7 +29,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 251021
     """
 
     def __init__(self):
@@ -279,7 +279,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                         original_iframe)
                     compound_iframe_plane.Transform(inverse_iframe_transform)
                     compound_iframe_plane.Transform(pca_transform)
-                    compound_iframe_plane.Transform(iframe_transform)
+                    #compound_iframe_plane.Transform(iframe_transform)
 
                     # Update the component data with the transformed iframe
                     transformed_component_data['iframe'] = (
@@ -304,10 +304,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                             transformed_geometry.SetUserString(
                                 'csc_component',
                                 json.dumps(transformed_component_data))
-
-                        Output.Add(
-                            transformed_geometry,
-                            Grasshopper.Kernel.Data.GH_Path(0))
+                        Output = transformed_geometry
 
                     self._addRemark(f'Transformed {len(geometry_objects)} '
                                     'geometry objects with PCA and iframe')
@@ -325,17 +322,12 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                                 'csc_component',
                                 json.dumps(transformed_component_data))
 
-                        Output.Add(
-                            transformed_geometry,
-                            Grasshopper.Kernel.Data.GH_Path(0))
+                        Output = transformed_geometry
                     self._addRemark(f'Transformed {len(geometry_objects)} '
                                     'geometry objects with PCA only')
             else:
                 # Output transformed component data as JSON
-                Output.Add(
-                    json.dumps(transformed_component_data),
-                    Grasshopper.Kernel.Data.GH_Path(0)
-                )
+                Output = json.dumps(transformed_component_data)
                 self._addRemark('Output transformed ComponentData as JSON')
 
             # Update success message
