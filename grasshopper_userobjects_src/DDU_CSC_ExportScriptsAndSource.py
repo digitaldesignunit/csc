@@ -26,7 +26,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 251016.3
+    Version: 251021
     """
 
     def get_source_version(self, source):
@@ -219,12 +219,12 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         return script_components
 
     def replace_scriptcomp_source(
-            self, script_comp_values, new_source, new_obj):
+            self, old_script_comp_values, new_source):
         """
         Replaces source code of gh scriptable components.
         """
         # extract data
-        script_type, nickname, name, obj, source = script_comp_values
+        script_type, nickname, name, obj, source = old_script_comp_values
         # check for type and decide action
         if (script_type == "PY3" or
                 script_type == 'IPY2' or
@@ -323,8 +323,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                     # WITH HIGHER VERSION SOURCE!
                     repres = self.replace_scriptcomp_source(
                         values,
-                        existing_source,
-                        existing_obj
+                        existing_source
                     )
                     if repres:
                         UpdateMessages.append(
@@ -341,8 +340,22 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                         f'    - VERSION {version} > ALREADY FOUND VERSION '
                         f'{existing_version}!')
                     # REPLACE THE OBJECT IN DICT WITH NEWER VERSION
+                    # AND UPDATE OLD VERSION!
                     if category_match and version_present:
-                        InfoMessages.append(
+                        # REPLACE THE SOURCE OF THE LOWER VERSION
+                        # WITH HIGHER VERSION SOURCE!
+                        existing_values = unique_script_components[script_id]
+                        repres = self.replace_scriptcomp_source(
+                            existing_values,
+                            source,
+                        )
+                        if repres:
+                            UpdateMessages.append(
+                                f'Updated source for {nickname}: '
+                                f'{version} -> {existing_version}'
+                            )
+                        # THEN UPDATE DICT!
+                        UpdateMessages.append(
                             f'Updated in Dict: {script_type} - {nickname} '
                             f'({existing_version} -> {version})'
                         )
