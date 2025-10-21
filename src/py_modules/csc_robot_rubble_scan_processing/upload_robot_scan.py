@@ -1,20 +1,16 @@
 #!/usr/bin/env python3
 """
-Robot Scan Upload Script
+Robot Scan Upload Module
 
-This script uploads processed scan data to the CSC backend API.
-It uploads component JSON files and OBJ geometry files.
+Uploads processed scan data to the CSC backend API.
 
-Usage:
-    python upload_robot_scan.py <processed_folder> [--api-base-url URL]
-
-Requirements:
-    - requests
+Programmatic Usage:
+    from upload_robot_scan import upload_scan_by_path
+    success = upload_scan_by_path('/path/to/uuid-folder', credentials)
 """
 
 import sys
 import json
-import argparse
 import logging
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -341,51 +337,6 @@ class ScanUploader:
 
         return upload_success
 
-    def upload_multiple_folders(
-        self,
-        processed_folder: Path
-    ) -> Tuple[int, int]:
-        """Upload all processed scan folders"""
-        if not processed_folder.exists():
-            logger.error(
-                f"[ERROR] Processed folder does not exist: {processed_folder}"
-            )
-            return 0, 0
-
-        # Find all UUID folders
-        uuid_folders = []
-        for item in processed_folder.iterdir():
-            if item.is_dir() and self._is_valid_uuid(item.name):
-                uuid_folders.append(item)
-
-        if not uuid_folders:
-            logger.warning(
-                "[SEARCH] No UUID folders found in processed directory"
-            )
-            return 0, 0
-
-        logger.info(
-            f"[TARGET] Found {len(uuid_folders)} processed scans to upload"
-        )
-        successful = 0
-        failed = 0
-        for i, folder in enumerate(uuid_folders, 1):
-            logger.info(
-                f"[UPLOAD] [{i}/{len(uuid_folders)}] Uploading: {folder.name}"
-            )
-            if self.upload_scan_folder(folder):
-                successful += 1
-                logger.info(
-                    f"[OK] [{i}/{len(uuid_folders)}] Success: {folder.name}"
-                )
-            else:
-                failed += 1
-                logger.error(
-                    f"[ERROR] [{i}/{len(uuid_folders)}] Failed: {folder.name}"
-                )
-
-        return successful, failed
-
     def _is_valid_uuid(self, folder_name: str) -> bool:
         """Check if folder name is a valid UUID"""
         import uuid
@@ -396,89 +347,80 @@ class ScanUploader:
             return False
 
 
-def main():
-    """Main function with command line argument parsing"""
-    parser = argparse.ArgumentParser(
-        description="Upload processed scan data to CSC backend API",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python upload_robot_scan.py /path/to/scans_processed
-  python upload_robot_scan.py /path/to/scans_processed --credentials /path/to/credentials.json # NOQA
-        """
-    )
+def upload_scan_by_path(scan_folder_path: str, credentials: Dict[str, str],
+                        timeout: int = DEFAULT_TIMEOUT) -> bool:
+    """
+    Upload a single scan folder by its path (programmatic interface).
 
-    parser.add_argument('processed_folder',
-                        help='Folder containing processed scan data')
-    parser.add_argument('--credentials',
-                        default=CREDENTIALS_FILE,
-                        help=('Path to credentials JSON file '
-                              f'(default: {CREDENTIALS_FILE})'))
-    parser.add_argument('--timeout',
-                        type=int,
-                        default=DEFAULT_TIMEOUT,
-                        help=('Request timeout in seconds '
-                              f'(default: {DEFAULT_TIMEOUT})'))
+    This function provides a programmatic interface for uploading scan data
+    without requiring command-line arguments or folder watching.
 
-    args = parser.parse_args()
+    Args:
+        scan_folder_path (str): Path to the UUID-named scan folder to upload
+        credentials (Dict[str, str]): API credentials containing 'server',
+            'user', 'pwd'
+        timeout (int): Request timeout in seconds (default: 30)
 
-    logger.info("[START] Starting scan data upload...")
-    logger.info(f"[FOLDER] Processed folder: {args.processed_folder}")
+    Returns:
+        bool: True if upload was successful, False otherwise
 
-    # Load credentials
-    credentials = load_credentials(args.credentials)
+    Example:
+        credentials = {
+            'server': 'https://api.ddu.uber.space',
+            'user': 'your-username',
+            'pwd': 'your-password'
+        }
+        success = upload_scan_by_path('/path/to/scan/folder/uuid-12345',
+                                      credentials)
+    """
+    scan_path = Path(scan_folder_path)
 
-    # Create uploader
-    uploader = ScanUploader(credentials, args.timeout)
+    if not scan_path.exists():
+        logger.error(f"[ERROR] Scan folder does not exist: {scan_folder_path}")
+        return False
 
-    # Test connection
-    if not uploader.test_connection():
-        logger.error("[ERROR] Cannot connect to API. Exiting.")
-        sys.exit(1)
+    # Extract component ID from folder name
+    component_id = scan_path.name
 
-    # Upload scans
-    processed_path = Path(args.processed_folder)
+    # Validate UUID
+    import uuid
+    try:
+        uuid.UUID(component_id)
+    except ValueError:
+        logger.error(f"[ERROR] Invalid UUID folder name: {component_id}")
+        return False
 
-    # Check if the path is a specific UUID folder or the parent directory
-    if processed_path.is_dir() and processed_path.name.count('-') == 4:
-        # It's a specific UUID folder
-        logger.info(
-            "[TARGET] Single UUID folder detected, uploading directly..."
-        )
-        if uploader.upload_scan_folder(processed_path):
-            successful, failed = 1, 0
-        else:
-            successful, failed = 0, 1
-    else:
-        # It's the parent directory, upload all UUID folders
-        successful, failed = uploader.upload_multiple_folders(processed_path)
+    logger.info(f"[UPLOAD] Uploading scan folder: {component_id}")
 
-    # Summary
-    total = successful + failed
-    logger.info("=" * 60)
-    logger.info("[SUMMARY] UPLOAD SUMMARY")
-    logger.info("=" * 60)
-    logger.info(f"[FOLDER] Total scans found: {total}")
-    logger.info(f"[OK] Successfully uploaded: {successful}")
-    logger.info(f"[ERROR] Failed: {failed}")
-    if total > 0:
-        success_rate = (successful / total * 100)
-        logger.info(f"[STATS] Success rate: {success_rate:.1f}%")
-    logger.info("=" * 60)
+    # Create uploader and upload
+    try:
+        uploader = ScanUploader(credentials, timeout)
 
-    return failed == 0
+        # Test connection
+        if not uploader.test_connection():
+            logger.error("[ERROR] Cannot connect to API")
+            return False
+
+        # Upload the scan folder
+        return uploader.upload_scan_folder(scan_path)
+
+    except Exception as e:
+        logger.error(f"[ERROR] Upload error: {e}")
+        return False
 
 
 if __name__ == "__main__":
-    print("CSC Robot Scan Upload Script")
-    print("=" * 50)
+    # Simple CLI for testing
+    import sys
+    if len(sys.argv) < 2:
+        print("Usage: python upload_robot_scan.py <scan_folder_path> "
+              "[credentials_file]")
+        sys.exit(1)
 
-    success = main()
+    scan_path = sys.argv[1]
+    credentials_file = sys.argv[2] if len(sys.argv) > 2 else None
 
-    if success:
-        print("\n[OK] Upload completed successfully!")
-    else:
-        print(
-            "\n[ERROR] Upload completed with errors. Check logs for details."
-        )
+    credentials = load_credentials(credentials_file)
+    success = upload_scan_by_path(scan_path, credentials)
+    if not success:
         sys.exit(1)
