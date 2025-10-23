@@ -1,9 +1,14 @@
+# -*- coding: utf-8 -*-
 #! python3
 # venv: DDU_CSC
-# r: requests==2.31.0
-# r: numpy==1.26.4
-# r: scipy==1.13.0
-# r: scikit-learn==1.4.2
+print('ENV OK!')
+# r: charset_normalizer
+# r: requests
+# r: numpy
+# r: scipy
+# r: scikit-learn
+# r: robust-laplacian
+# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os
@@ -42,7 +47,7 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 251023
     """
 
     def __init__(self):
@@ -66,6 +71,43 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+
+    def _initializeParamDescriptions(self):
+        """Sets input/output param descriptions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Run the document copy, object removal, and save operation'
+        )
+        self.InputParams[1].Description = (
+            'Name of the group(s) to remove for relese file'
+        )
+        self.InputParams[2].Description = (
+            'List of names of optional GH_Panel objects to clear,'
+            ' (i.e. for passwords)'
+        )
+        self.InputParams[3].Description = (
+            'Folder path where to save the modified release document'
+        )
+        self.InputParams[4].Description = (
+            'Optional filename for the saved document '
+            '(without .gh extension)'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Success status of the operation (True/False)'
+        )
+        self.OutputParams[1+i].Description = (
+            'Number of components removed'
+        )
+        self.OutputParams[2+i].Description = (
+            'Full path of the saved document'
+        )
+        self.OutputParams[3+i].Description = (
+            'Status message describing the operation result'
+        )
 
     def copy_document(self, source_doc):
         """
@@ -151,6 +193,41 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             return None, None, None
         # return target groups and objects
         return target_groups, target_objects, target_panels
+
+    def remove_all_groups_and_objects_except(self, doc, group_name):
+        """
+        Find all groups and objects in the document except
+        the ones with the specified name.
+        """
+        # get type for groups as string for verification
+        grouptype = Grasshopper.Kernel.Special.GH_Group
+        grouptype_str = str(grouptype).split("'")[1]
+        # loop over all document objects
+        doc_objects = list(doc.Objects)
+        target_groups = []
+        target_objects = []
+        try:
+            for doc_obj in doc_objects:
+                # ensure matching group name
+                if doc_obj.NickName == group_name:
+                    # ensure matching type
+                    if str(doc_obj.GetType()) == grouptype_str:
+                        # get the translation vector
+                        tx = float((doc_obj.Attributes.Bounds.Width / 2) + 100.0 - float(doc_obj.Attributes.Pivot.X))
+                        ty = float((doc_obj.Attributes.Bounds.Height / 2) + 100.0 - float(doc_obj.Attributes.Pivot.Y))
+                        target_objects.append(doc_obj)
+                        for grp_obj in doc_obj.Objects():
+                            pos = grp_obj.Attributes.Pivot
+                            pos_x = float(pos.X) + tx
+                            pos_y = float(pos.Y) + ty
+                            grp_obj.Attributes.Pivot = System.Drawing.PointF(pos_x, pos_y)
+                            target_objects.append(grp_obj)
+            objects_to_remove = [o for o in doc_objects if o not in target_objects]
+            comps_removed = self.remove_objects_from_doc(doc, objects_to_remove)
+        except Exception as e:
+            self._addError(f'Error removing groups and objects: {str(e)}')
+            return None
+        return comps_removed
 
     def remove_objects_from_doc(self, doc, objects, groups=None):
         """
@@ -313,49 +390,11 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             RemoveGroupName: str,
             ClearPanelNames: System.Collections.Generic.List[str],
             ReleasePath: str,
-            Filename: str):
-        """
-        Main execution method for the component.
-
-        Args:
-            Run: Boolean trigger to Run the operation
-            RemoveGroupName: Name of the group to remove components from
-            ReleasePath: Path where to save the modified document
-            Filename: Optional filename for the saved document
-        """
-        # Initialize param descriptions# Initialize param descriptions
-        self.InputParams[0].Description = (
-            'Run the document copy, object removal, and save operation'
-        )
-        self.InputParams[1].Description = (
-            'Name of the group(s) to remove for relese file'
-        )
-        self.InputParams[2].Description = (
-            'List of names of optional GH_Panel objects to clear,'
-            ' (i.e. for passwords)'
-        )
-        self.InputParams[3].Description = (
-            'Folder path where to save the modified release document'
-        )
-        self.InputParams[4].Description = (
-            'Optional filename for the saved document '
-            '(without .gh extension)'
-        )
-
-        # Initialize output param descriptions
-        self.OutputParams[0].Description = (
-            'Success status of the operation (True/False)'
-        )
-        self.OutputParams[1].Description = (
-            'Number of components removed'
-        )
-        self.OutputParams[2].Description = (
-            'Full path of the saved document'
-        )
-        self.OutputParams[3].Description = (
-            'Status message describing the operation result'
-        )
-
+            Filename: str,
+            ExampleGroupNames: System.Collections.Generic.List[str],
+            ExampleFileNames: System.Collections.Generic.List[str]):
+        # Initialize param descriptions
+        self._initializeParamDescriptions()
         try:
             # Initialize output variables
             success = False
@@ -431,14 +470,15 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             if components_removed == 0:
                 status_message = (
                     'No components were removed from '
-                    f'group "{RemoveGroupName}"'
+                    f'group "{RemoveGroupName}."'
                 )
                 self._addWarning(status_message)
             else:
                 status_message = (
                     f'Removed {components_removed} components from group '
-                    f'"{RemoveGroupName}"'
+                    f'"{RemoveGroupName}."'
                 )
+
             # Step 5: Save the modified document
             self.Component.Message = 'Saving document...'
             save_success, saved_file_path = self.save_document(
@@ -451,12 +491,32 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
                     os.path.abspath(saved_file_path)
                 )
                 success = True
-                status_message += f' and saved to: {saved_file_path}'
+                status_message += f'\n Saved release file to: {saved_file_path}'
                 self.Component.Message = 'Operation completed successfully'
             else:
-                status_message += ' but failed to save document'
+                status_message += '\n Failed to save document!'
                 self.Component.Message = 'Save operation failed'
 
+            # Step 6: Create example files
+            if ExampleGroupNames:
+                self.Component.Message = 'Processing Example Exports...'
+                for i, example_name in enumerate(ExampleGroupNames):
+                    example_doc = self.copy_document(current_doc)
+                    self.remove_all_groups_and_objects_except(example_doc, example_name)
+                    save_success, saved_file_path = self.save_document(
+                        example_doc,
+                        ReleasePath,
+                        ExampleFileNames[i]
+                    )
+                    if save_success:
+                        saved_file_path = os.path.normpath(
+                            os.path.abspath(saved_file_path)
+                        )
+                        success = True
+                        status_message += f'Saved example file to: {saved_file_path}'
+                    else:
+                        status_message += ' Failed to save example document!'
+            self.Component.Message = 'Operation completed successfully'
             return (success, components_removed, saved_file_path,
                     status_message)
 

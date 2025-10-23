@@ -1,9 +1,14 @@
+# -*- coding: utf-8 -*-
 #! python3
 # venv: DDU_CSC
-# r: requests==2.31.0
-# r: numpy==1.26.4
-# r: scipy==1.13.0
-# r: scikit-learn==1.4.2
+print('ENV OK!')
+# r: charset_normalizer
+# r: requests
+# r: numpy
+# r: scipy
+# r: scikit-learn
+# r: robust-laplacian
+# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json
@@ -25,9 +30,16 @@ ghenv.Component.NickName = 'FetchGeometry'  # type: ignore[reportUnedfinedVariab
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '2 Catalogue Interface'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQ
-    'Fetches detailed, reduced, or primitive geometry for a component from '
-    'the API or local cache. Converts OBJ data to Rhino geometry objects and '
-    'applies iframe transformations from the component json.'
+    'Fetches reduced or detailed geometry from the CSC API.\n'
+    'Input can be:\n'
+    '- A geometry object with \'csc_component\' userstring containing'
+    '  component JSON\n'
+    '- A JSON string directly\n'
+    '- Just the component _id\n\n'
+
+    'Outputs the fetched geometry (detailed if detailed=True,'
+    'otherwise reduced)\n'
+    'Falls back to primitive geometry if no additional geometry exists.'
 )
 
 
@@ -35,18 +47,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
-
-    Fetches reduced or detailed geometry from the CSC API.
-    Input can be:
-    - A geometry object with 'csc_component' userstring containing
-      component JSON
-    - A JSON string directly
-    - Just the component _id
-
-    Outputs the fetched geometry (detailed if detailed=True,
-    otherwise reduced)
-    Falls back to primitive geometry if no additional geometry exists.
+    Version: 251023
     """
 
     def __init__(self):

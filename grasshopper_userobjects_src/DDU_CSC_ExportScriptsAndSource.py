@@ -1,5 +1,19 @@
+# -*- coding: utf-8 -*-
+#! python3
+# venv: DDU_CSC
+print('ENV OK!')
+# r: charset_normalizer
+# r: requests
+# r: numpy
+# r: scipy
+# r: scikit-learn
+# r: robust-laplacian
+# r: potpourri3d
+
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os
+import re
+from functools import cmp_to_key
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
 import System  # type: ignore[reportMissingImport] # NOQA
@@ -26,7 +40,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 251021
+    Version: 251023
     """
 
     def get_source_version(self, source):
@@ -39,8 +53,6 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             Version: 251009.1
             Version: 251009a
         """
-        import re
-
         # Get first line with version in it
         src_lower = source.lower()
         version_str = [ln for ln in src_lower.split('\n') if "version" in ln]
@@ -64,8 +76,6 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         - (251009, 1) for "251009.1"
         - (251009, 0, 'a') for "251009a"
         """
-        import re
-
         # Split into base number and suffix
         match = re.match(r'(\d+)(?:\.(\d+))?([a-zA-Z]*)', version_str)
         if not match:
@@ -107,6 +117,15 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                 return 1
 
         return 0
+
+    def _expand_path(self, path):
+        """
+        Expand environment variables in a path string.
+        Handles %APPDATA%, %USERPROFILE%, %TEMP%, etc.
+        """
+        if not path:
+            return path
+        return os.path.expandvars(path)
 
     def process_document_objects(self, ghdocument, verbose=False):
         """
@@ -215,10 +234,10 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                 )
                 # add cluster script dict to main dict
                 script_components.update(cluster_scripts)
-
+        # return results
         return script_components
 
-    def replace_scriptcomp_source(
+    def _replace_scriptcomp_source(
             self, old_script_comp_values, new_source):
         """
         Replaces source code of gh scriptable components.
@@ -251,7 +270,6 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         """
         Process found script components and get unique components.
         """
-        unique_script_components = {}
 
         OldScriptsDebug = []
         CategoryDebug = []
@@ -259,16 +277,21 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         InfoMessages = []
         UpdateMessages = []
 
+        versioned_script_components = {}
+        unique_script_components = {}
+
         for iguid, values in script_components.items():
+            # extract data from dict object
             script_type, nickname, name, obj, source = values
             category = obj.Category
             version = self.get_source_version(source)
-            script_id = nickname + ' ' + name
             category_match = category == set_category
             version_present = version is not None
+            # script id will be used as key for the unique dict
+            script_id = nickname + '_' + name + '_' + script_type
             # NOT SEEN YET SCRIPT COMPONENTS
-            if script_id not in unique_script_components:
-                version_present = True
+            if script_id not in versioned_script_components:
+                version_present = version is not None
                 if script_type == 'GHPY':
                     OldScriptsDebug.append(
                         f'{script_type} - {nickname} ({name})')
@@ -298,68 +321,83 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                     VersionDebug.append('    - HAS NO VERSION! (No Export)')
                 if category_match and version_present:
                     InfoMessages.append(f'{script_type} - {nickname} ({name})')
-                    unique_script_components[script_id] = values
+                    versioned_script_components[script_id] = [values]
             # ALREADY SEEN SCRIPT COMPONENTS
             else:
-                existing_source = unique_script_components[script_id][4]
-                existing_obj = unique_script_components[script_id][3]
+                existing_source = versioned_script_components[script_id][0][4]
                 existing_version = self.get_source_version(existing_source)
                 if version is None:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
                     VersionDebug.append('    - HAS NO VERSION!')
+                    # NO VERSION, CONTINUE!
+                    continue
                 elif existing_version is None and version is not None:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
                     VersionDebug.append(
                         f'    - VERSION {version} > ALREADY FOUND VERSION '
                         f'{existing_version}!')
                     # REPLACE FOUND "NONE" VERSION WITH NAMED VERSION!
-                    raise
+                    raise NotImplementedError(
+                        'Correcting missing Version is not implemented yet!'
+                    )
                 elif self._compare_versions(version, existing_version) < 0:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
                     VersionDebug.append(
                         f'    - VERSION {version} < {existing_version}! '
                         'Updating Source...')
-                    # REPLACE THE SOURCE OF THE LOWER VERSION
-                    # WITH HIGHER VERSION SOURCE!
-                    repres = self.replace_scriptcomp_source(
-                        values,
-                        existing_source
-                    )
-                    if repres:
-                        UpdateMessages.append(
-                            f'Updated source for {nickname}: '
-                            f'{version} -> {existing_version}'
-                        )
-                    else:
-                        UpdateMessages.append(
-                            f'Could not update source for {nickname}!'
-                        )
+                    versioned_script_components[script_id].append(values)
                 elif self._compare_versions(version, existing_version) > 0:
                     VersionDebug.append(f'{script_type} - {nickname} ({name})')
                     VersionDebug.append(
                         f'    - VERSION {version} > ALREADY FOUND VERSION '
                         f'{existing_version}!')
-                    # REPLACE THE OBJECT IN DICT WITH NEWER VERSION
-                    # AND UPDATE OLD VERSION!
-                    if category_match and version_present:
-                        # REPLACE THE SOURCE OF THE LOWER VERSION
-                        # WITH HIGHER VERSION SOURCE!
-                        existing_values = unique_script_components[script_id]
-                        repres = self.replace_scriptcomp_source(
-                            existing_values,
-                            source,
-                        )
-                        if repres:
-                            UpdateMessages.append(
-                                f'Updated source for {nickname}: '
-                                f'{version} -> {existing_version}'
-                            )
-                        # THEN UPDATE DICT!
+                    versioned_script_components[script_id].append(values)
+        # LOOP OVER VERSIONED COMPONENTS AND UPDATE OLD SOURCES
+        # THEN UPDATE UNIQUE COMPONENT DICT
+        for script_id, versioned_comps in versioned_script_components.items():
+            # check if multiple versions were found
+            if len(versioned_comps) == 1:
+                # ONLY ONE VERSION -> ADD TO UNIQUE DICT
+                unique_script_components[script_id] = versioned_comps[0]
+            else:
+                # MULTIPLE VERSIONS -> SORT, CHECK AND DECIDE
+                versions = [self.get_source_version(vc[4])
+                            for vc in versioned_comps]
+                sorted_versions, sorted_comps = zip(*sorted(
+                    zip(versions, versioned_comps),
+                    key=cmp_to_key(
+                        lambda x, y: self._compare_versions(x[0], y[0])
+                    ),
+                    reverse=True
+                ))
+                # convert to lists
+                sorted_versions = list(sorted_versions)
+                sorted_comps = list(sorted_comps)
+                # pop latest script version
+                latest_version = sorted_versions.pop(0)
+                latest_comp = sorted_comps.pop(0)
+                latest_source = latest_comp[4]
+                # loop over remaining (older) versions and replace source
+                for k, old_comp in enumerate(sorted_comps):
+                    # REPLACE THE SOURCE OF THE LOWER VERSIONS
+                    # WITH LATEST VERSIONS SOURCE!
+                    repres = self._replace_scriptcomp_source(
+                        old_comp,
+                        latest_source,
+                    )
+                    if repres:
                         UpdateMessages.append(
-                            f'Updated in Dict: {script_type} - {nickname} '
-                            f'({existing_version} -> {version})'
+                            f'Updated source for {latest_comp[1]}: '
+                            f'{sorted_versions[k]} -> {latest_version}'
                         )
-                        unique_script_components[script_id] = values
+                # THEN UPDATE DICT!
+                UpdateMessages.append(
+                    f'Updated in Dict: {latest_comp[0]} - '
+                    f'{latest_comp[1]} ({sorted_versions[k]} '
+                    f'-> {latest_version})'
+                )
+                unique_script_components[script_id] = latest_comp
+        # return unique result dict and message arrays
         return (unique_script_components, OldScriptsDebug, CategoryDebug,
                 VersionDebug, InfoMessages, UpdateMessages)
 
@@ -389,6 +427,8 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             uo.SetDataFromObject(obj)
             uo.Path = os.path.join(
                 usrobjpath, obj.Category + '_' + obj.Name + '.ghuser')
+            # Ensure the directory exists before saving
+            os.makedirs(usrobjpath, exist_ok=True)
             uo.SaveToFile()
         except Exception as e:
             print(e)
@@ -430,7 +470,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             RunComponentAnalysis: bool,
             ExportUserObjectsAndSource: bool,
             Category: str,
-            UserObjFolder,
+            UserObjFolders: System.Collections.Generic.List[object],
             SourceFolder,
             IconPath: str):
         # Init outputs
@@ -444,12 +484,16 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         grasshopper_document = ghenv.Component.OnPingDocument()  # type: ignore[reportUnedfinedVariable] # NOQA
         gh_dir = os.path.dirname(grasshopper_document.FilePath)
 
-        usrobjpath = os.path.normpath(
-            os.path.abspath(os.path.join(gh_dir, UserObjFolder)))
+        usrobjpaths = [
+            os.path.normpath(os.path.abspath(
+                os.path.join(gh_dir, self._expand_path(uof))))
+            for uof in UserObjFolders]
         srcpath = os.path.normpath(
-            os.path.abspath(os.path.join(gh_dir, SourceFolder)))
+            os.path.abspath(os.path.join(
+                gh_dir, self._expand_path(SourceFolder))))
         iconpath = os.path.normpath(
-            os.path.abspath(os.path.join(gh_dir, IconPath)))
+            os.path.abspath(os.path.join(
+                gh_dir, self._expand_path(IconPath))))
 
         if RunComponentAnalysis:
             # loop over all objects on the grasshopper canvas
@@ -470,13 +514,19 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
 
         # HERE LOOP OVER UNIQUE COMPONENTS
         if ExportUserObjectsAndSource and RunComponentAnalysis:
-            # - SAVE USEROBJECT
-            # - SAVE SOURCE
             for script_id, scriptcomp in unique_script_components.items():
+                # SAVE SOURCE
                 loc = self.export_scriptcomp_source(scriptcomp, srcpath)
-                res = self.export_scriptcomp_usrobj(
-                    scriptcomp, usrobjpath, iconpath)
-                if res:
+                # SAVE USEROBJECT IN ALL PATHS
+                unionres = True
+                for uo_path in usrobjpaths:
+                    print(uo_path)
+                    res = self.export_scriptcomp_usrobj(
+                        scriptcomp, uo_path, iconpath)
+                    if not res:
+                        unionres = False
+                        break
+                if unionres:
                     print(f'Exported: {scriptcomp[1]} - {loc} Lines of Code')
                 else:
                     raise RuntimeError(f'Export failed for {scriptcomp[1]}!')

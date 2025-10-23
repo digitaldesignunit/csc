@@ -1,9 +1,14 @@
+# -*- coding: utf-8 -*-
 #! python3
 # venv: DDU_CSC
-# r: requests==2.31.0
-# r: numpy==1.26.4
-# r: scipy==1.13.0
-# r: scikit-learn==1.4.2
+print('ENV OK!')
+# r: charset_normalizer
+# r: requests
+# r: numpy
+# r: scipy
+# r: scikit-learn
+# r: robust-laplacian
+# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json
@@ -17,7 +22,7 @@ import Rhino  # type: ignore[reportMissingImport] # NOQA
 ghenv.Component.Name = 'JSONGetValue'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.NickName = 'JSONGetValue'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '6 JSON Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.SubCategory = '6 Data Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
     'Extracts a specific value from a JSON string using dot-notation key '
     'paths (e.g., "geometry.meshes[0].v"). Converts JSON values to '
@@ -29,7 +34,7 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 251023
     """
 
     def __init__(self):

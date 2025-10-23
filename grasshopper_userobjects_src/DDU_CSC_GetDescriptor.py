@@ -1,9 +1,14 @@
+# -*- coding: utf-8 -*-
 #! python3
 # venv: DDU_CSC
-# r: requests==2.31.0
-# r: numpy==1.26.4
-# r: scipy==1.13.0
-# r: scikit-learn==1.4.2
+print('ENV OK!')
+# r: charset_normalizer
+# r: requests
+# r: numpy
+# r: scipy
+# r: scikit-learn
+# r: robust-laplacian
+# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json
@@ -17,7 +22,7 @@ import Rhino  # type: ignore[reportMissingImport] # NOQA
 ghenv.Component.Name = 'GetDescriptor'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.NickName = 'GetDescriptor'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '6 JSON Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.SubCategory = '6 Data Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
     'Retrieves a specific descriptor from multiple component_data inputs. '
     'Accepts a list of component_data JSON strings or geometries with '
@@ -32,10 +37,13 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251021
+    Version: 251023
     """
 
     def __init__(self):
+        """
+        Initialize this component and set component parameters.
+        """
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -43,16 +51,42 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+
+    def _initializeParamDescriptions(self):
+        """Sets input/output param descriptions."""
+        # Initialize input param descriptions
+        # Set "No type hint"
+        self.InputParams[0].TypeHints.Select(System.Object)
+        self.Component.VariableParameterMaintenance()
+        self.InputParams[0].Description = (
+            'List of component data as JSON strings OR geometries with '
+            'attached component_data userdata'
+        )
+        self.InputParams[1].Description = (
+            'Key string to retrieve from the descriptors array in '
+            'component_data'
+        )
+
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Descriptor value for the specified key, or empty if not found'
+        )
 
     def extract_component_data_from_geometry(self, geometry):
         """
@@ -163,20 +197,7 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
             Input: System.Collections.Generic.List[object],
             DescriptorKey: str):
         # Initialize param descriptions (this has to be done in RunScript)
-        self.InputParams[0].Description = (
-            'List of component data as JSON strings OR geometries with '
-            'attached component_data userdata'
-        )
-        self.InputParams[1].Description = (
-            'Key string to retrieve from the descriptors array in '
-            'component_data'
-        )
-
-        # Initialize output param descriptions
-        self.OutputParams[0].Description = (
-            'Descriptor value for the specified key, or empty if not found'
-        )
-
+        self._initializeParamDescriptions()
         try:
             # set up output trees and results tuple
             DescriptorValues = Grasshopper.DataTree[System.Object]()

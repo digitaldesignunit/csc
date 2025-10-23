@@ -1,9 +1,14 @@
+# -*- coding: utf-8 -*-
 #! python3
 # venv: DDU_CSC
-# r: requests==2.31.0
-# r: numpy==1.26.4
-# r: scipy==1.13.0
-# r: scikit-learn==1.4.2
+print('ENV OK!')
+# r: charset_normalizer
+# r: requests
+# r: numpy
+# r: scipy
+# r: scikit-learn
+# r: robust-laplacian
+# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json
@@ -29,10 +34,13 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251021
+    Version: 251023
     """
 
     def __init__(self):
+        """
+        Initialize this component and set component parameters.
+        """
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -40,19 +48,39 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
-        """Add a remark message to the component runtime messages."""
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
-        """Add a warning message to the component runtime messages."""
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
-        """Add an error message to the component runtime messages."""
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+
+    def _initializeParamDescriptions(self):
+        """Sets input/output param descriptions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'ComponentData (JSON string) or geometry objects with '
+            'component userdata'
+        )
+        # Set "No type hint"
+        self.InputParams[0].TypeHints.Select(System.Object)
+        self.Component.VariableParameterMaintenance()
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Transformed ComponentData (if input was JSON) or '
+            'transformed geometry with updated userdata '
+            '(if input was geometry)'
+        )
 
     def PlaneToFrameDict(self, plane: Rhino.Geometry.Plane) -> dict:
         """
@@ -98,10 +126,9 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
             Component data dictionary or None
         """
         try:
-            if hasattr(geometry, 'GetUserString'):
-                userdata = geometry.GetUserString('csc_component')
-                if userdata:
-                    return json.loads(userdata)
+            userdata = geometry.GetUserString('csc_component')
+            if userdata:
+                return json.loads(userdata)
         except Exception as e:
             self._addWarning(f'Could not extract component data: {str(e)}')
         return None
@@ -130,28 +157,9 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         return geometry
 
     def RunScript(self, Input):
-        """
-        Main execution method for applying PCA frame transformation.
-
-        Args:
-            Input: Either ComponentData (JSON string) or geometry objects
-
-        Returns:
-            Transformed ComponentData and/or geometry objects
-        """
         # Initialize param descriptions
-        self.InputParams[0].Description = (
-            'ComponentData (JSON string) or geometry objects with '
-            'component userdata'
-        )
-
-        # Initialize output param descriptions
-        self.OutputParams[0].Description = (
-            'Transformed ComponentData (if input was JSON) or '
-            'transformed geometry with updated userdata '
-            '(if input was geometry)'
-        )
-
+        self._initializeParamDescriptions()
+        
         # Set up output tree
         Output = Grasshopper.DataTree[System.Object]()
 
@@ -279,7 +287,6 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                         original_iframe)
                     compound_iframe_plane.Transform(inverse_iframe_transform)
                     compound_iframe_plane.Transform(pca_transform)
-                    #compound_iframe_plane.Transform(iframe_transform)
 
                     # Update the component data with the transformed iframe
                     transformed_component_data['iframe'] = (
