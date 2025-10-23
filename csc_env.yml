@@ -24,7 +24,9 @@ dependencies:
     - qreader
     - open3d>=0.15.1
     - passlib[bcrypt]
+    - robust-laplacian>=1.0.0
     - potpourri3d>=1.0.0
+    - polyscope
     - pydantic
     - python-multipart
     - python-jose[cryptography]
