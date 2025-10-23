@@ -39,10 +39,11 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -50,16 +51,42 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Design name (mandatory)'
+        )
+        self.InputParams[1].Description = (
+            'Design description (optional)'
+        )
+        self.InputParams[2].Description = (
+            'List of component JSON strings'
+        )
+        self.InputParams[3].Description = (
+            'AdditionalGeometry (List of Mesh)'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Design JSON string ready for posting'
+        )
 
     def _get_hardcoded_schema(self):
         """Get hardcoded design schema fallback."""
@@ -164,7 +191,6 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                          "components", "additional_geometry"]
         }
 
-    # Helpers -----------------------------------------------------------------
     def _compute_mesh_centroid(self, mesh):
         try:
             vmp = Rhino.Geometry.VolumeMassProperties.Compute(mesh)
@@ -366,15 +392,6 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
             DesignDescription: str,
             ComponentData: System.Collections.Generic.List[str],
             AdditionalGeometry: System.Collections.Generic.List[Rhino.Geometry.Mesh]):
-        # Initialize param descriptions
-        self.InputParams[0].Description = 'Design name (mandatory)'
-        self.InputParams[1].Description = 'Design description (optional)'
-        self.InputParams[2].Description = 'List of component JSON strings'
-        self.InputParams[3].Description = 'AdditionalGeometry (List of Mesh)'
-        self.OutputParams[0].Description = (
-            'Design JSON string ready for posting'
-        )
-
         # Init outputs
         DesignJSON = Grasshopper.DataTree[str]()
 

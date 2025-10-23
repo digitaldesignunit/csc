@@ -44,10 +44,11 @@ class CSC_VariationalShapeApproximation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
-    def __init__(self):
+    ef __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -55,16 +56,60 @@ class CSC_VariationalShapeApproximation(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        # Initialize param descriptions
+        self.InputParams[0].Description = (
+            'Input mesh to approximate using VSA'
+            )
+        self.InputParams[1].Description = (
+            'Mode: True for fixed number of '
+            'regions, False for error threshold'
+        )
+        self.InputParams[2].Description = (
+            'Value: Number of regions '
+            '(Mode=True) or L2,1 error threshold '
+            '(Mode=False, try 0.001-0.01 for good results)'
+        )
+        self.InputParams[3].Description = (
+            'Maximum number of VSA iterations '
+            '(default: 50)'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Region visualization mesh with '
+            'colored regions'
+        )
+        self.OutputParams[1+i].Description = (
+            'Proxy planes representing each '
+            'region'
+        )
+        self.OutputParams[2+i].Description = (
+            'Error metrics: [final_error, '
+            'initial_error, reduction_ratio]'
+        )
+        self.OutputParams[3+i].Description = (
+            'Statistics: [num_regions, '
+            'iterations, convergence_info]'
+        )
 
     def extract_mesh_data(self, mesh: Rhino.Geometry.Mesh) -> Tuple[
             np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -820,42 +865,11 @@ class CSC_VariationalShapeApproximation(Grasshopper.Kernel.GH_ScriptInstance):
             Mode: bool,
             Value: float,
             MaxIterations: int):
-        """
-        Run VSA algorithm.
-
-        Inputs:
-        - Mesh: Input mesh to approximate
-        - Mode: True for fixed number of regions, False for threshold-based
-        - Value: Number of regions (Mode=True) or error threshold (Mode=False)
-        - MaxIterations: Maximum number of iterations
-        """
-
-        # Initialize param descriptions
-        self.InputParams[0].Description = 'Input mesh to approximate using VSA'
-        self.InputParams[1].Description = ('Mode: True for fixed number of '
-                                          'regions, False for error threshold')
-        self.InputParams[2].Description = ('Value: Number of regions '
-                                          '(Mode=True) or L2,1 error threshold '
-                                          '(Mode=False, try 0.001-0.01 for good results)')
-        self.InputParams[3].Description = ('Maximum number of VSA iterations '
-                                          '(default: 50)')
-
-        # Initialize output param descriptions
-        self.OutputParams[0].Description = ('Region visualization mesh with '
-                                           'colored regions')
-        self.OutputParams[1].Description = ('Proxy planes representing each '
-                                           'region')
-        self.OutputParams[2].Description = ('Error metrics: [final_error, '
-                                           'initial_error, reduction_ratio]')
-        self.OutputParams[3].Description = ('Statistics: [num_regions, '
-                                           'iterations, convergence_info]')
-
         # Set up output variables
         RegionVisualization = None
         ProxyPlanes = []
         ErrorMetrics = []
         Statistics = []
-
         try:
             # Input validation
             if not Mesh or not Mesh.IsValid:

@@ -36,10 +36,11 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -47,16 +48,34 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Trigger to sync components with Rhino document'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'DataTree containing all component data found in the document, '
+            'with updated iframe information based on current object positions'
+        )
 
     def find_objects_with_csc_component(self, doc):
         """
@@ -230,13 +249,15 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                                 combined_bbox = (
                                     Rhino.Geometry.BoundingBox.Union(
                                         combined_bbox, bbox))
+            # convert to box
+            combined_bbox = Rhino.Geometry.Box(combined_bbox)
 
             if combined_bbox and combined_bbox.IsValid:
                 # Create frame based on combined bounding box
                 center = combined_bbox.Center
-                x_axis = combined_bbox.XAxis
-                y_axis = combined_bbox.YAxis
-                z_axis = combined_bbox.ZAxis
+                x_axis = combined_bbox.Plane.XAxis
+                y_axis = combined_bbox.Plane.YAxis
+                z_axis = combined_bbox.Plane.ZAxis
 
                 # Update the iframe in component data
                 if 'iframe' not in component_data:
@@ -255,26 +276,16 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
         return component_data
 
     def RunScript(self, Sync: bool):
-        # Initialize param descriptions (this has to be done in RunScript)
-        self.InputParams[0].Description = (
-            'Trigger to sync components with Rhino document'
-        )
-        self.OutputParams[0].Description = (
-            'DataTree containing all component data found in the document, '
-            'with updated iframe information based on current object positions'
-        )
-
         # init outputs
         DocumentComponents = Grasshopper.DataTree[str]()
-
-        # Set scriptcontext to Rhino document
-        sc.doc = Rhino.RhinoDoc.ActiveDoc
-
         if not Sync:
             # Return empty results if not syncing
+            self.Component.Message = 'Sync Toggle is False'
             return DocumentComponents
-
         try:
+            # Set scriptcontext to Rhino document
+            sc.doc = Rhino.RhinoDoc.ActiveDoc
+
             self.Component.Message = 'Searching for components in document...'
             # Find all objects with csc_component userkey
             objects_with_component = self.find_objects_with_csc_component(

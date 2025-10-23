@@ -34,10 +34,11 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -45,16 +46,50 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'JSON string to extract value from'
+        )
+        self.InputParams[1].Description = (
+            'Dot-notation path to the desired value '
+            '(e.g., "descriptors.material.type")'
+        )
+        self.InputParams[2].Description = (
+            'Default value to return if key path is not found (optional)'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Extracted value converted to appropriate Grasshopper type'
+        )
+        self.OutputParams[1+i].Description = (
+            'Data type of the extracted value '
+            '(string, number, boolean, object, array, null)'
+        )
+        self.OutputParams[2+i].Description = (
+            'True if extraction was successful, False otherwise'
+        )
+        self.OutputParams[3+i].Description = (
+            'Error message if extraction failed, empty string if successful'
+        )
 
     def get_value_by_path(self, data, path):
         """Get value from JSON data using dot-notation path."""
@@ -179,41 +214,13 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
         return converted_list
 
     def RunScript(self, JSON: str, KeyPath: str, DefaultValue: str):
-        # Initialize param descriptions (this has to be done in RunScript)
-        self.InputParams[0].Description = (
-            'JSON string to extract value from'
-        )
-        self.InputParams[1].Description = (
-            'Dot-notation path to the desired value '
-            '(e.g., "descriptors.material.type")'
-        )
-        self.InputParams[2].Description = (
-            'Default value to return if key path is not found (optional)'
-        )
-
-        # Initialize output param descriptions
-        self.OutputParams[0].Description = (
-            'Extracted value converted to appropriate Grasshopper type'
-        )
-        self.OutputParams[1].Description = (
-            'Data type of the extracted value '
-            '(string, number, boolean, object, array, null)'
-        )
-        self.OutputParams[2].Description = (
-            'True if extraction was successful, False otherwise'
-        )
-        self.OutputParams[3].Description = (
-            'Error message if extraction failed, empty string if successful'
-        )
-
+        # set up output trees and results tuple
+        Value = Grasshopper.DataTree[System.Object]()
+        ValueType = Grasshopper.DataTree[System.Object]()
+        Success = Grasshopper.DataTree[System.Object]()
+        Error = Grasshopper.DataTree[System.Object]()
+        __Results = (Value, ValueType, Success, Error)
         try:
-            # set up output trees and results tuple
-            Value = Grasshopper.DataTree[System.Object]()
-            ValueType = Grasshopper.DataTree[System.Object]()
-            Success = Grasshopper.DataTree[System.Object]()
-            Error = Grasshopper.DataTree[System.Object]()
-            __Results = (Value, ValueType, Success, Error)
-
             # Validate input
             if not JSON:
                 msg = 'No JSON input provided'
@@ -318,12 +325,5 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
         except Exception as e:
             msg = f'Unexpected error during value extraction: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
-
             # Return empty results if there was an error
-            Value = Grasshopper.DataTree[System.Object]()
-            ValueType = Grasshopper.DataTree[System.Object]()
-            Success = Grasshopper.DataTree[System.Object]()
-            Error = Grasshopper.DataTree[System.Object]()
-            __Results = (Value, ValueType, Success, Error)
             return __Results

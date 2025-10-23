@@ -44,10 +44,11 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -55,16 +56,75 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'If set to True, clears all stored locally '
+            'saved geometry files for component creation '
+            '(this does NOT affect the regular cache!)'
+        )
+        self.InputParams[1].Description = (
+            'Component ID (must be a valid UUID)'
+        )
+        self.InputParams[2].Description = (
+            'Component type (e.g., "sheet", "rubble")'
+        )
+        self.InputParams[3].Description = (
+            'Material type (e.g., "steel", "concrete", "wood")'
+        )
+        self.InputParams[4].Description = (
+            'Dataset that this component belongs to '
+            '(i.e. my_rubble_dataset)'
+        )
+        self.InputParams[5].Description = (
+            'Complexity level '
+            '(0=simple, 1=normal, 2=complex, 3=very complex)'
+        )
+        self.InputParams[6].Description = (
+            'Fragment status (True for fragments, False for complete)'
+        )
+        self.InputParams[7].Description = (
+            'Assembly status (True for assemblies, False for individual)'
+        )
+        self.InputParams[8].Description = (
+            'Location as Vector3d (X=latitude, Y=longitude, Z ignored)'
+        )
+        self.InputParams[9].Description = (
+            'Component color (System.Drawing.Color)'
+        )
+        self.InputParams[10].Description = (
+            'Rhino geometry object(s) - single object or list of objects. '
+            'For single: Mesh or Extrusion for sheets, Mesh for rubble. '
+            'For multiple: all must be Meshes.'
+        )
+        self.InputParams[11].Description = (
+            'Marker points as list of Point3d objects for component '
+            'identification and positioning'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Component data as JSON string adhering to ComponentModel '
+            'structure. Contains geometry, PCA frame, bounding box, '
+            'and metadata.'
+        )
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -1045,62 +1105,9 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         # target tc for primitive mesh
         MESH_PRIMITIVE_TARGET = 500
 
+        # set up output trees and results tuple
+        ComponentData = Grasshopper.DataTree[System.Object]()
         try:
-            # Initialize param descriptions (this has to be done in RunScript)
-            self.InputParams[0].Description = (
-                'If set to True, clears all stored locally '
-                'saved geometry files for component creation '
-                '(this does NOT affect the regular cache!)'
-            )
-            self.InputParams[1].Description = (
-                'Component ID (must be a valid UUID)'
-            )
-            self.InputParams[2].Description = (
-                'Component type (e.g., "sheet", "rubble")'
-            )
-            self.InputParams[3].Description = (
-                'Material type (e.g., "steel", "concrete", "wood")'
-            )
-            self.InputParams[4].Description = (
-                'Dataset that this component belongs to '
-                '(i.e. my_rubble_dataset)'
-            )
-            self.InputParams[5].Description = (
-                'Complexity level '
-                '(0=simple, 1=normal, 2=complex, 3=very complex)'
-            )
-            self.InputParams[6].Description = (
-                'Fragment status (True for fragments, False for complete)'
-            )
-            self.InputParams[7].Description = (
-                'Assembly status (True for assemblies, False for individual)'
-            )
-            self.InputParams[8].Description = (
-                'Location as Vector3d (X=latitude, Y=longitude, Z ignored)'
-            )
-            self.InputParams[9].Description = (
-                'Component color (System.Drawing.Color)'
-            )
-            self.InputParams[10].Description = (
-                'Rhino geometry object(s) - single object or list of objects. '
-                'For single: Mesh or Extrusion for sheets, Mesh for rubble. '
-                'For multiple: all must be Meshes.'
-            )
-            self.InputParams[11].Description = (
-                'Marker points as list of Point3d objects for component '
-                'identification and positioning'
-            )
-
-            # Initialize output param descriptions
-            self.OutputParams[0].Description = (
-                'Component data as JSON string adhering to ComponentModel '
-                'structure. Contains geometry, PCA frame, bounding box, '
-                'and metadata.'
-            )
-
-            # set up output trees and results tuple
-            ComponentData = Grasshopper.DataTree[System.Object]()
-
             # Handle ClearLocalStorage input
             if ClearLocalStorage:
                 self._addRemark(
@@ -1122,38 +1129,31 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             if not ComponentID:
                 msg = 'Input ComponentID failed to collect data!'
                 self._addWarning(msg)
-                self.Component.Message = msg
                 return ComponentData
             elif not self.validate_uuid(ComponentID):
                 msg = 'Input ComponentID is not a valid UUID! Aborting...'
                 self._addError(msg)
-                self.Component.Message = msg
                 return ComponentData
             if not Type:
                 msg = 'Input Type failed to collect data!'
                 self._addWarning(msg)
-                self.Component.Message = msg
                 return ComponentData
             if not Material:
                 msg = 'Input Material failed to collect data!'
                 self._addWarning(msg)
-                self.Component.Message = msg
                 return ComponentData
             if not Dataset:
                 msg = 'Input Dataset failed to collect data!'
                 self._addWarning(msg)
-                self.Component.Message = msg
                 return ComponentData
             if Complexity is None:
                 msg = 'Input Complexity failed to collect data!'
                 self._addWarning(msg)
-                self.Component.Message = msg
                 return ComponentData
             if (not isinstance(Complexity, int) or
                     Complexity < 0 or Complexity > 3):
                 msg = 'Input Complexity must be an integer between 0 and 3!'
                 self._addError(msg)
-                self.Component.Message = msg
                 return ComponentData
 
             # Set defaults for Fragment and Assembly if not provided
@@ -1179,14 +1179,12 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             if not Geometry:
                 msg = 'Input Geometry failed to collect data!'
                 self._addWarning(msg)
-                self.Component.Message = msg
                 return ComponentData
 
             # TYPE FILTERING
             if not Geometry or len(Geometry) == 0:
                 msg = 'Input Geometry is invalid!'
                 self._addError(msg)
-                self.Component.Message = msg
                 return ComponentData
 
             # Check if single or multiple objects
@@ -1454,19 +1452,14 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         except ValueError as e:
             msg = f'Validation error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
 
         except RuntimeError as e:
             msg = f'Runtime error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
 
         except Exception as e:
             msg = f'Unexpected error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
             raise e
 
-        # Return empty results if there was an error
-        ComponentData = Grasshopper.DataTree[System.Object]()
         return ComponentData

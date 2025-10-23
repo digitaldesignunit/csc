@@ -34,10 +34,11 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -45,19 +46,36 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
-        """Add a remark message to the component runtime messages."""
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
-        """Add a warning message to the component runtime messages."""
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
-        """Add an error message to the component runtime messages."""
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Component data as JSON string from previous components.'
+        )
+        self.InputParams[1].Description = (
+            'Rhino transform to apply to the component insertion frame.'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Transformed component data as JSON string!'
+        )
 
     def PlaneToFrameDict(self, plane: Rhino.Geometry.Plane) -> dict:
         """
@@ -81,33 +99,6 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
         return iframe
 
     def RunScript(self, ComponentData: str, XForm: Rhino.Geometry.Transform):
-        """
-        Main execution method for transforming component insertion frames.
-
-        This method takes a component JSON string and a Rhino transform,
-        applies the transform to the component's insertion frame, and
-        returns the updated component data as a JSON string.
-
-        Args:
-            ComponentData: JSON string containing component data
-            XForm: Rhino transform to apply to the insertion frame
-
-        Returns:
-            JSON string of the transformed component data
-        """
-        # Initialize param descriptions (this has to be done in RunScript)
-        self.InputParams[0].Description = (
-            'Component data as JSON string from previous components.'
-        )
-        self.InputParams[1].Description = (
-            'Rhino transform to apply to the component insertion frame.'
-        )
-
-        # Initialize output param descriptions
-        self.OutputParams[0].Description = (
-            'Transformed component data as JSON string'
-        )
-
         # set up output trees and results tuple
         XComponentData = System.Collections.Generic.List[System.Object]()
 
@@ -157,14 +148,6 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
             # Convert back to JSON string for output
             XComponentData = json.dumps(jcomp)
-
-            # Update component message to indicate success
-            self.Component.Message = (
-                'Component insertion frame transformed successfully'
-            )
-            self._addRemark(
-                'Successfully transformed component insertion frame'
-            )
 
             return XComponentData
 

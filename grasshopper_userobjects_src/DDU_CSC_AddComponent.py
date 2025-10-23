@@ -41,10 +41,11 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 251023
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -52,17 +53,36 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Component data as JSON string to add to the database'
+        )
+        self.InputParams[1].Description = (
+            'Toggle to execute the add operation'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'The added component data returned from the server as JSON'
+        )
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
         auth_core = sc.sticky.get('CSC_AuthCore')
@@ -210,14 +230,6 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
             return False
 
     def RunScript(self, ComponentData: str, Run: bool):
-        # Initialize param descriptions (this has to be done in RunScript)
-        self.InputParams[0].Description = (
-            'Component data as JSON string to add to the database')
-        self.InputParams[1].Description = (
-            'Toggle to execute the add operation')
-        self.OutputParams[0].Description = (
-            'The added component data returned from the server as JSON')
-
         # Set up output trees and results tuple
         AddedComponentData = Grasshopper.DataTree[System.Object]()
 
@@ -272,7 +284,6 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
             fields_str = ", ".join(missing_fields)
             msg = f'Component data missing required fields: {fields_str}'
             self._addError(msg)
-            self.Component.Message = msg
             return AddedComponentData
 
         # Validate geometry structure
@@ -280,7 +291,6 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
         if not geometry:
             msg = 'Component data must contain a geometry field.'
             self._addError(msg)
-            self.Component.Message = msg
             return AddedComponentData
 
         # Check if geometry has mesh, meshes, or extrusion
@@ -295,14 +305,12 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
             msg = ('Component geometry must contain either mesh, meshes, or '
                    'extrusion field.')
             self._addError(msg)
-            self.Component.Message = msg
             return AddedComponentData
 
         if geometry_types_count > 1:
             msg = ('Component geometry must contain only one of: mesh, '
                    'meshes, or extrusion.')
             self._addError(msg)
-            self.Component.Message = msg
             return AddedComponentData
 
         # Validate field types
@@ -517,5 +525,4 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = msg
 
         # Return empty results if there was an error
-        AddedComponentData = Grasshopper.DataTree[System.Object]()
         return AddedComponentData

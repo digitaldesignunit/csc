@@ -40,8 +40,83 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
+
+    def __init__(self):
+        """Initialize this component and set component parameters."""
+        super().__init__()
+        # initialize props
+        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.InputParams = self.Component.Params.Input
+        self.OutputParams = self.Component.Params.Output
+
+    def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
+        rml = self.Component.RuntimeMessageLevel.Remark
+        self.AddRuntimeMessage(rml, msg)
+
+    def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
+        rml = self.Component.RuntimeMessageLevel.Warning
+        self.AddRuntimeMessage(rml, msg)
+
+    def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
+        rml = self.Component.RuntimeMessageLevel.Error
+        self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Run the analysis of all scriptable components within '
+            'the document.\n'
+            'Updates all recognized \'old\' script versions '
+            'to the latest available script version within the doc.'
+        )
+        self.InputParams[1].Description = (
+            'Export scripts as source files and UserObjects.\n'
+            'NOTE: Only runs if RunComponentAnalysis is True!'
+        )
+        self.InputParams[2].Description = (
+            'Target category for component export. Will only '
+            'export components that have this category set.'
+        )
+        self.InputParams[3].Description = (
+            'Folders to save UserObjects in.\n'
+            'NOTE: Resolves environment variables and relative'
+            'paths based on the GH document.'
+        )
+        self.InputParams[4].Description = (
+            'Folder to save script source files in.\n'
+            'NOTE: Resolves environment variables and relative'
+            'paths based on the GH document.'
+        )
+        self.InputParams[5].Description = (
+            '24x24 png icon to set to the script components '
+            'and UserObjects.'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Debug messages concerning deprecated script components.'
+        )
+        self.OutputParams[1+i].Description = (
+            'Debug messages concerning different categories.'
+        )
+        self.OutputParams[2+i].Description = (
+            'Debug messages concerning script versions.'
+        )
+        self.OutputParams[3+i].Description = (
+            'General info messages'
+        )
+        self.OutputParams[4+i].Description = (
+            'Messages concering replaced script sources '
+            '(updated components)'
+        )
 
     def get_source_version(self, source):
         """
@@ -539,3 +614,4 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
 
         return (OldScriptsDebug, CategoryDebug,
                 VersionDebug, InfoMessages, UpdateMessages)
+

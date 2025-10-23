@@ -47,10 +47,11 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -72,8 +73,8 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
-    def _initializeParamDescriptions(self):
-        """Sets input/output param descriptions."""
+    def BeforeRunScript(self):
+        """Performs some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
             'Run the document copy, object removal, and save operation'
@@ -393,135 +394,127 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             Filename: str,
             ExampleGroupNames: System.Collections.Generic.List[str],
             ExampleFileNames: System.Collections.Generic.List[str]):
-        # Initialize param descriptions
-        self._initializeParamDescriptions()
-        try:
-            # Initialize output variables
-            success = False
-            components_removed = 0
-            saved_file_path = ''
-            status_message = ''
+            
+        # Initialize output variables
+        success = False
+        components_removed = 0
+        saved_file_path = ''
+        status_message = ''
 
-            # Check if execution is requested
-            if not Run:
-                status_message = 'Run is False - operation not performed'
-                self.Component.Message = status_message
-                return (success, components_removed, saved_file_path,
-                        status_message)
-
-            # Validate inputs
-            if not self.validate_inputs(
-                    RemoveGroupName, ClearPanelNames, ReleasePath):
-                status_message = 'Input validation failed'
-                self.Component.Message = status_message
-                return (success, components_removed, saved_file_path,
-                        status_message)
-
-            # Get the current Grasshopper document
-            current_doc = self.Component.OnPingDocument()
-            if current_doc is None:
-                status_message = 'No active Grasshopper document found'
-                self._addError(status_message)
-                self.Component.Message = status_message
-                return (success, components_removed, saved_file_path,
-                        status_message)
-
-            # Step 1: Copy the current document
-            self.Component.Message = 'Copying document...'
-            copied_doc = self.copy_document(current_doc)
-            if copied_doc is None:
-                status_message = 'Failed to copy document'
-                self.Component.Message = status_message
-                return (success, components_removed, saved_file_path,
-                        status_message)
-
-            # Step 2: Find the specified group
-            self.Component.Message = 'Finding groups...'
-            (target_groups,
-                target_objects,
-                target_panels) = self.find_groups_and_objects(
-                copied_doc,
-                RemoveGroupName,
-                ClearPanelNames
-            )
-            if target_groups is None or target_objects is None:
-                status_message = 'Failed to find groups and objects'
-                self.Component.Message = status_message
-                return (success, components_removed, saved_file_path,
-                        status_message)
-
-            # Step 3: Clear Panels if ClearPanelNames were supplied
-            if target_panels:
-                self.Component.Message = 'Clearing Panels...'
-                panels_cleared = self.clear_panels(copied_doc, target_panels)
-                if panels_cleared == 0:
-                    status_message = (
-                        'No panels have been cleared!'
-                    )
-                    self._addWarning(status_message)
-
-            # Step 4: Remove components from the group
-            self.Component.Message = 'Removing components...'
-            components_removed = self.remove_objects_from_doc(
-                copied_doc,
-                target_objects,
-                target_groups
-            )
-            if components_removed == 0:
-                status_message = (
-                    'No components were removed from '
-                    f'group "{RemoveGroupName}."'
-                )
-                self._addWarning(status_message)
-            else:
-                status_message = (
-                    f'Removed {components_removed} components from group '
-                    f'"{RemoveGroupName}."'
-                )
-
-            # Step 5: Save the modified document
-            self.Component.Message = 'Saving document...'
-            save_success, saved_file_path = self.save_document(
-                copied_doc,
-                ReleasePath,
-                Filename
-            )
-            if save_success:
-                saved_file_path = os.path.normpath(
-                    os.path.abspath(saved_file_path)
-                )
-                success = True
-                status_message += f'\n Saved release file to: {saved_file_path}'
-                self.Component.Message = 'Operation completed successfully'
-            else:
-                status_message += '\n Failed to save document!'
-                self.Component.Message = 'Save operation failed'
-
-            # Step 6: Create example files
-            if ExampleGroupNames:
-                self.Component.Message = 'Processing Example Exports...'
-                for i, example_name in enumerate(ExampleGroupNames):
-                    example_doc = self.copy_document(current_doc)
-                    self.remove_all_groups_and_objects_except(example_doc, example_name)
-                    save_success, saved_file_path = self.save_document(
-                        example_doc,
-                        ReleasePath,
-                        ExampleFileNames[i]
-                    )
-                    if save_success:
-                        saved_file_path = os.path.normpath(
-                            os.path.abspath(saved_file_path)
-                        )
-                        success = True
-                        status_message += f'Saved example file to: {saved_file_path}'
-                    else:
-                        status_message += ' Failed to save example document!'
-            self.Component.Message = 'Operation completed successfully'
+        # Check if execution is requested
+        if not Run:
+            status_message = 'Run is False - operation not performed'
+            self.Component.Message = status_message
             return (success, components_removed, saved_file_path,
                     status_message)
 
-        except Exception as e:
-            error_msg = f'Unexpected error: {str(e)}'
-            self._addError(error_msg)
-            self.Component.Message = 'Operation failed'
-            return (False, 0, '', error_msg)
+        # Validate inputs
+        if not self.validate_inputs(
+                RemoveGroupName, ClearPanelNames, ReleasePath):
+            status_message = 'Input validation failed'
+            self.Component.Message = status_message
+            return (success, components_removed, saved_file_path,
+                    status_message)
+
+        # Get the current Grasshopper document
+        current_doc = self.Component.OnPingDocument()
+        if current_doc is None:
+            status_message = 'No active Grasshopper document found'
+            self._addError(status_message)
+            self.Component.Message = status_message
+            return (success, components_removed, saved_file_path,
+                    status_message)
+
+        # Step 1: Copy the current document
+        self.Component.Message = 'Copying document...'
+        copied_doc = self.copy_document(current_doc)
+        if copied_doc is None:
+            status_message = 'Failed to copy document'
+            self.Component.Message = status_message
+            return (success, components_removed, saved_file_path,
+                    status_message)
+
+        # Step 2: Find the specified group
+        self.Component.Message = 'Finding groups...'
+        (target_groups,
+            target_objects,
+            target_panels) = self.find_groups_and_objects(
+            copied_doc,
+            RemoveGroupName,
+            ClearPanelNames
+        )
+        if target_groups is None or target_objects is None:
+            status_message = 'Failed to find groups and objects'
+            self.Component.Message = status_message
+            return (success, components_removed, saved_file_path,
+                    status_message)
+
+        # Step 3: Clear Panels if ClearPanelNames were supplied
+        if target_panels:
+            self.Component.Message = 'Clearing Panels...'
+            panels_cleared = self.clear_panels(copied_doc, target_panels)
+            if panels_cleared == 0:
+                status_message = ('No panels have been cleared!')
+                self._addWarning(status_message)
+
+        # Step 4: Remove components from the group
+        self.Component.Message = 'Removing components...'
+        components_removed = self.remove_objects_from_doc(
+            copied_doc,
+            target_objects,
+            target_groups
+        )
+        if components_removed == 0:
+            status_message = (
+                'No components were removed from '
+                f'group "{RemoveGroupName}."'
+            )
+            self._addWarning(status_message)
+        else:
+            status_message = (
+                f'Removed {components_removed} components from group '
+                f'"{RemoveGroupName}."'
+            )
+
+        # Step 5: Save the modified document
+        self.Component.Message = 'Saving document...'
+        save_success, saved_file_path = self.save_document(
+            copied_doc,
+            ReleasePath,
+            Filename
+        )
+        if save_success:
+            saved_file_path = os.path.normpath(
+                os.path.abspath(saved_file_path)
+            )
+            success = True
+            status_message += f'\n Saved release file to: {saved_file_path}'
+            self.Component.Message = 'Operation completed successfully'
+        else:
+            status_message += '\n Failed to save document!'
+            self.Component.Message = 'Save operation failed'
+
+        # Step 6: Create example files
+        if ExampleGroupNames:
+            self.Component.Message = 'Processing Example Exports...'
+            for i, example_name in enumerate(ExampleGroupNames):
+                example_doc = self.copy_document(current_doc)
+                self.remove_all_groups_and_objects_except(example_doc, example_name)
+                save_success, saved_file_path = self.save_document(
+                    example_doc,
+                    ReleasePath,
+                    ExampleFileNames[i]
+                )
+                if save_success:
+                    saved_file_path = os.path.normpath(
+                        os.path.abspath(saved_file_path)
+                    )
+                    success = True
+                    status_message += f'Saved example file to: {saved_file_path}'
+                else:
+                    status_message += ' Failed to save example document!'
+        # set message
+        self.Component.Message = 'Operation completed successfully'
+        # return results
+        return (success, components_removed, saved_file_path,
+                status_message)

@@ -37,10 +37,11 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -48,16 +49,31 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'The ComponentData that was fetched from the server as JSON. '
+            'Use \'DisassembleComponent\' to access the individual fields '
+            'ready for Grasshopper'
+        )
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -71,12 +87,6 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
         return auth_core
 
     def RunScript(self):
-        # Initialize param descriptions (this has to be done in RunScript)
-        self.OutputParams[0].Description = (
-            'The ComponentData that was fetched from the server as JSON. '
-            'Use \'DisassembleComponent\' to access the individual fields '
-            'ready for Grasshopper')
-
         # Get AuthCore instance from sticky storage
         auth_core = self.get_auth_core_from_sticky()
         if auth_core is None:

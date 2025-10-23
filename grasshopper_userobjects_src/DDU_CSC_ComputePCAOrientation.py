@@ -37,10 +37,11 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -48,16 +49,50 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Input Rhino Geometry'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Object oriented bounding box, obtained using PCA, '
+            ' at the location of the input geometry'
+        )
+        self.OutputParams[1+i].Description = (
+            'Input geometry transformed using PCA method and centered at '
+            'world origin'
+        )
+        self.OutputParams[2+i].Description = (
+            'Object oriented bounding box transformed using the computed '
+            'PCA frame, centered at the world origin'
+        )
+        self.OutputParams[3+i].Description = (
+            'Translation vector that was used to move the geometry '
+            'to the world origin'
+        )
+        self.OutputParams[4+i].Description = (
+            'PCA frame that was used to transform the geometry '
+            'converted to a Rhino XForm.'
+        )
 
     def center_geometry_at_origin(self, geometry):
         """
@@ -190,43 +225,16 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         TranslationVector = Grasshopper.DataTree[System.Object]()
         PCAXForm = Grasshopper.DataTree[System.Object]()
         try:
-            # Initialize param descriptions (this has to be done in RunScript)
-            self.InputParams[0].Description = (
-                'Input Rhino Geometry'
-            )
-            # Initialize output param descriptions
-            self.OutputParams[0].Description = (
-                'Object oriented bounding box, obtained using PCA, '
-                ' at the location of the input geometry'
-            )
-            self.OutputParams[1].Description = (
-                'Input geometry transformed using PCA method and centered at '
-                'world origin'
-            )
-            self.OutputParams[2].Description = (
-                'Object oriented bounding box transformed using the computed '
-                'PCA frame, centered at the world origin'
-            )
-            self.OutputParams[3].Description = (
-                'Translation vector that was used to move the geometry '
-                'to the world origin'
-            )
-            self.OutputParams[4].Description = (
-                'PCA frame that was used to transform the geometry '
-                'converted to a Rhino XForm.'
-            )
             # sanitize input and abort if not present
             self.Component.Message = None
             if not Geometry:
                 msg = 'Input Geometry failed to collect data!'
                 self._addWarning(msg)
-                self.Component.Message = msg
                 return (ObjectOrientedBBX, AlignedGeometry,
                         AlignedBBX, TranslationVector, PCAXForm)
             elif not Geometry.IsValid:
                 msg = 'Input Geometry is invalid!'
                 self._addError(msg)
-                self.Component.Message = msg
                 return (ObjectOrientedBBX, AlignedGeometry,
                         AlignedBBX, TranslationVector, PCAXForm)
             # Process geometry to extract points
@@ -275,11 +283,9 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         except ValueError as e:
             msg = f'Validation error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
         except RuntimeError as e:
             msg = f'Runtime error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
         # Return empty results if there was an error
         return (ObjectOrientedBBX, AlignedGeometry,
                 AlignedBBX, TranslationVector, PCAXForm)

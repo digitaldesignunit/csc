@@ -34,13 +34,11 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
-        """
-        Initialize this component and set component parameters.
-        """
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -62,8 +60,8 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
-    def _initializeParamDescriptions(self):
-        """Sets input/output param descriptions."""
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
             'ComponentData (JSON string) or geometry objects with '
@@ -157,9 +155,6 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         return geometry
 
     def RunScript(self, Input):
-        # Initialize param descriptions
-        self._initializeParamDescriptions()
-        
         # Set up output tree
         Output = Grasshopper.DataTree[System.Object]()
 

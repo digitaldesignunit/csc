@@ -34,10 +34,11 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -45,16 +46,64 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'The ComponentData that was fetched from the server as JSON.'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Component ID (GUID)'
+        )
+        self.OutputParams[1+i].Description = (
+            'Component type (sheet, beam, slab, etc.)'
+        )
+        self.OutputParams[2+i].Description = (
+            'Component material'
+        )
+        self.OutputParams[3+i].Description = (
+            'Component color as System.Drawing.Color'
+        )
+        self.OutputParams[4+i].Description = (
+            'Component location as Point3d (X=latitude, Y=longitude, Z=0)'
+        )
+        self.OutputParams[5+i].Description = (
+            'Component bounding box as Rhino.Geometry.BoundingBox'
+        )
+        self.OutputParams[6+i].Description = (
+            'PCA frame at world origin as Rhino.Geometry.Plane'
+        )
+        self.OutputParams[7+i].Description = (
+            'Component descriptors/metadata as JSON string'
+        )
+        self.OutputParams[8+i].Description = (
+            'Rhino geometry objects (extrusion, mesh, multiple meshes, '
+            'polyline)'
+        )
+        self.OutputParams[9+i].Description = (
+            'Marker points as list of Point3d objects'
+        )
+        self.OutputParams[10+i].Description = (
+            'Component attributes as JSON string'
+        )
 
     def ComponentExtrusionProfile(
             self,
@@ -188,72 +237,34 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             return Rhino.Geometry.Plane.WorldXY
 
     def RunScript(self, ComponentData: Grasshopper.DataTree[str]):
-        # Initialize param descriptions (this has to be done in RunScript)
-        self.InputParams[0].Description = (
-            'The ComponentData that was fetched from the server as JSON.')
-
-        # Initialize output param descriptions
-        self.OutputParams[0].Description = 'Component ID (GUID)'
-        self.OutputParams[1].Description = (
-            'Component type (sheet, beam, slab, etc.)'
-        )
-        self.OutputParams[2].Description = 'Component material'
-        self.OutputParams[3].Description = (
-            'Component color as System.Drawing.Color'
-        )
-        self.OutputParams[4].Description = (
-            'Component location as Point3d (X=latitude, Y=longitude, Z=0)'
-        )
-        self.OutputParams[5].Description = (
-            'Component bounding box as Rhino.Geometry.BoundingBox'
-        )
-        self.OutputParams[6].Description = (
-            'PCA frame at world origin as Rhino.Geometry.Plane'
-        )
-        self.OutputParams[7].Description = (
-            'Component descriptors/metadata as JSON string'
-        )
-        self.OutputParams[8].Description = (
-            'Rhino geometry objects (extrusion, mesh, multiple meshes, '
-            'polyline)'
-        )
-        self.OutputParams[9].Description = (
-            'Marker points as list of Point3d objects'
-        )
-        self.OutputParams[10].Description = (
-            'Component attributes as JSON string'
-        )
-
+        # set up output trees and results tuple
+        ID = Grasshopper.DataTree[System.Object]()
+        Type = Grasshopper.DataTree[System.Object]()
+        Material = Grasshopper.DataTree[System.Object]()
+        Color = Grasshopper.DataTree[System.Object]()
+        Location = Grasshopper.DataTree[System.Object]()
+        BoundingBox = Grasshopper.DataTree[System.Object]()
+        PCAFrame = Grasshopper.DataTree[System.Object]()
+        Descriptors = Grasshopper.DataTree[System.Object]()
+        PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
+        MarkerPoints = Grasshopper.DataTree[System.Object]()
+        Attributes = Grasshopper.DataTree[System.Object]()
+        __Results = (
+            ID,
+            Type,
+            Material,
+            Color,
+            Location,
+            BoundingBox,
+            PCAFrame,
+            Descriptors,
+            PrimitiveGeometry,
+            MarkerPoints,
+            Attributes)
         try:
-            # set up output trees and results tuple
-            ID = Grasshopper.DataTree[System.Object]()
-            Type = Grasshopper.DataTree[System.Object]()
-            Material = Grasshopper.DataTree[System.Object]()
-            Color = Grasshopper.DataTree[System.Object]()
-            Location = Grasshopper.DataTree[System.Object]()
-            BoundingBox = Grasshopper.DataTree[System.Object]()
-            PCAFrame = Grasshopper.DataTree[System.Object]()
-            Descriptors = Grasshopper.DataTree[System.Object]()
-            PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
-            MarkerPoints = Grasshopper.DataTree[System.Object]()
-            Attributes = Grasshopper.DataTree[System.Object]()
-            __Results = (
-                ID,
-                Type,
-                Material,
-                Color,
-                Location,
-                BoundingBox,
-                PCAFrame,
-                Descriptors,
-                PrimitiveGeometry,
-                MarkerPoints,
-                Attributes)
-
             # Validate input
             if not ComponentData or ComponentData.DataCount == 0:
-                msg = ('No component data provided. Please connect '
-                       'FetchComponent output.')
+                msg = ('Input ComponentData failed to collect Data')
                 self._addWarning(msg)
                 self.Component.Message = msg
                 return __Results
@@ -337,7 +348,6 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                                 msg = (f'Missing implementation for geometry '
                                        f'of type \'{key}\'!')
                                 self._addWarning(msg)
-                                self.Component.Message = msg
 
                         # construct boundingbox
                         bbx = self.ComponentBoundingBox(json_comp)
@@ -394,11 +404,9 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                     except json.JSONDecodeError as e:
                         msg = f'Failed to parse component data: {str(e)}'
                         self._addError(msg)
-                        self.Component.Message = msg
                     except Exception as e:
                         msg = f'Error processing component: {str(e)}'
                         self._addError(msg)
-                        self.Component.Message = msg
 
             # Update success message
             total_components = sum(
@@ -417,30 +425,4 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         except Exception as e:
             msg = f'Unexpected error during disassembly: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
-
-            # Return empty results if there was an error
-            ID = Grasshopper.DataTree[System.Object]()
-            Type = Grasshopper.DataTree[System.Object]()
-            Material = Grasshopper.DataTree[System.Object]()
-            Color = Grasshopper.DataTree[System.Object]()
-            Location = Grasshopper.DataTree[System.Object]()
-            BoundingBox = Grasshopper.DataTree[System.Object]()
-            PCAFrame = Grasshopper.DataTree[System.Object]()
-            Descriptors = Grasshopper.DataTree[System.Object]()
-            PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
-            MarkerPoints = Grasshopper.DataTree[System.Object]()
-            Attributes = Grasshopper.DataTree[System.Object]()
-            __Results = (
-                ID,
-                Type,
-                Material,
-                Color,
-                Location,
-                BoundingBox,
-                PCAFrame,
-                Descriptors,
-                PrimitiveGeometry,
-                MarkerPoints,
-                Attributes)
             return __Results

@@ -34,10 +34,11 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -45,19 +46,34 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
-        """Add a remark message to the component runtime messages."""
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
-        """Add a warning message to the component runtime messages."""
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
-        """Add an error message to the component runtime messages."""
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Geometry objects with component userdata'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Component data as JSON strings extracted from '
+            'geometry userdata'
+        )
 
     def extract_component_data_from_geometry(self, geometry):
         """
@@ -86,26 +102,6 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
 
     def RunScript(self,
             Geometry: System.Collections.Generic.List[Rhino.Geometry.GeometryBase]):
-        """
-        Main execution method for extracting component data from geometry.
-
-        Args:
-            Geometry: Geometry objects with component userdata
-
-        Returns:
-            Component data as JSON strings
-        """
-        # Initialize param descriptions
-        self.InputParams[0].Description = (
-            'Geometry objects with component userdata'
-        )
-
-        # Initialize output param descriptions
-        self.OutputParams[0].Description = (
-            'Component data as JSON strings extracted from '
-            'geometry userdata'
-        )
-
         # Set up output tree
         ComponentData = Grasshopper.DataTree[System.Object]()
 
@@ -117,8 +113,6 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
             return ComponentData
 
         try:
-            self.Component.Message = 'Extracting component data...'
-
             # Handle single geometry or list of geometries
             successful_extractions = 0
 
@@ -155,19 +149,10 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addError(msg)
                 self.Component.Message = msg
             elif successful_extractions == len(Geometry):
-                self.Component.Message = (
-                    f'Successfully extracted component data from '
-                    f'{successful_extractions} geometry objects'
-                )
                 self._addRemark(f'Extracted component data from '
                                 f'{successful_extractions} out of '
                                 f'{len(Geometry)} geometry objects')
             else:
-                self.Component.Message = (
-                    f'Extracted component data from '
-                    f'{successful_extractions} out of '
-                    f'{len(Geometry)} geometry objects'
-                )
                 self._addWarning('Some geometry objects did not contain '
                                  'valid component data')
 
@@ -176,5 +161,4 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
         except Exception as e:
             msg = f'Unexpected error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
             return ComponentData

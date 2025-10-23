@@ -37,13 +37,11 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
-        """
-        Initialize this component and set component parameters.
-        """
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -65,8 +63,8 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
-    def _initializeParamDescriptions(self):
-        """Sets input/output param descriptions."""
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
         # Initialize input param descriptions
         # Set "No type hint"
         self.InputParams[0].TypeHints.Select(System.Object)
@@ -196,12 +194,9 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
     def RunScript(self,
             Input: System.Collections.Generic.List[object],
             DescriptorKey: str):
-        # Initialize param descriptions (this has to be done in RunScript)
-        self._initializeParamDescriptions()
+        # set up output trees and results tuple
+        DescriptorValues = Grasshopper.DataTree[System.Object]()
         try:
-            # set up output trees and results tuple
-            DescriptorValues = Grasshopper.DataTree[System.Object]()
-
             # Validate inputs
             if not Input:
                 msg = 'No input provided'
@@ -295,8 +290,4 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
         except Exception as e:
             msg = f'Unexpected error during descriptor extraction: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
-
-            # Return empty results if there was an error
-            DescriptorValues = Grasshopper.DataTree[System.Object]()
             return DescriptorValues

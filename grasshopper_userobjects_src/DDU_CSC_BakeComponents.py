@@ -36,10 +36,11 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -47,16 +48,29 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Toggle to bake components to Rhino'
+        )
+        self.InputParams[1].Description = (
+            'Component data from FetchComponents'
+        )
 
     def ComponentExtrusionProfile(
             self,
@@ -84,39 +98,6 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
         cxt.Translate(Rhino.Geometry.Vector3d(
             0, 0, json_comp['geometry']['extrusion']['height'] * -0.5))
         return cxt
-
-    def ComponentMesh(self, json_comp: dict) -> Rhino.Geometry.Mesh:
-        """Create a single mesh from geometry.mesh field (backward compat)."""
-        mesh = Rhino.Geometry.Mesh()
-        vl = json_comp['geometry']['mesh']['v']
-        fl = json_comp['geometry']['mesh']['f']
-        [mesh.Vertices.Add(*v) for v in vl]
-        [mesh.Faces.AddFace(*f) for f in fl]
-
-        # Try to get mesh-specific colors first
-        try:
-            cl = json_comp['geometry']['mesh']['c']
-            [mesh.VertexColors.Add(
-                System.Drawing.Color.FromArgb(*c)) for c in cl]
-        except KeyError:
-            # Fallback: use component color for all vertices
-            try:
-                component_color = System.Drawing.Color.FromArgb(
-                    255, *json_comp['color'])
-                for _ in range(len(vl)):
-                    mesh.VertexColors.Add(component_color)
-            except (KeyError, TypeError):
-                # If even component color fails, use a default gray
-                default_color = System.Drawing.Color.Gray
-                for _ in range(len(vl)):
-                    mesh.VertexColors.Add(default_color)
-                self._addWarning(
-                    f'Mesh {json_comp["_id"]} using default gray color')
-
-        mesh.RebuildNormals()
-        mesh.UnifyNormals()
-        mesh.Compact()
-        return mesh
 
     def ComponentMeshes(self, json_comp: dict) -> list:
         """Create multiple meshes from geometry.meshes field."""
@@ -196,15 +177,6 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     def RunScript(self,
             Bake: bool,
             ComponentData: System.Collections.Generic.List[str]):
-        # Initialize param descriptions (this has to be done in RunScript)
-        self.InputParams[0].Description = 'Toggle to bake components to Rhino'
-        self.InputParams[1].Description = (
-            'Component data from FetchComponents'
-        )
-        # Initialize output param descriptions
-        if hasattr(self, 'OutputParams') and len(self.OutputParams) > 0:
-            self.OutputParams[0].Description = 'Baking status message'
-
         # bake toggle
         if Bake:
             if not ComponentData or len(ComponentData) == 0:
@@ -313,11 +285,6 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                                 xtr = self.ComponentExtrusion(json_comp)
                                 xtr.Transform(xform)
                                 geo_ids.append(sc.doc.Objects.Add(xtr))
-                            elif key == 'mesh':
-                                # Handle single mesh (backward compatibility)
-                                mesh = self.ComponentMesh(json_comp)
-                                mesh.Transform(xform)
-                                geo_ids.append(sc.doc.Objects.Add(mesh))
                             elif key == 'meshes':
                                 # Handle multiple meshes
                                 meshes = self.ComponentMeshes(json_comp)

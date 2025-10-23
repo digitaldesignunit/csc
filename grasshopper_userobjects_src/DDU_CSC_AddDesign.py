@@ -39,10 +39,11 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -50,16 +51,36 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Design data as JSON string to add to the database'
+        )
+        self.InputParams[1].Description = (
+            'Toggle to execute the add operation'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'The added design data returned from the server as JSON'
+        )
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -73,14 +94,6 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
         return auth_core
 
     def RunScript(self, DesignData: str, Run: bool):
-        # Initialize param descriptions (this has to be done in RunScript)
-        self.InputParams[0].Description = (
-            'Design data as JSON string to add to the database')
-        self.InputParams[1].Description = (
-            'Toggle to execute the add operation')
-        self.OutputParams[0].Description = (
-            'The added design data returned from the server as JSON')
-
         # Set up output trees and results tuple
         AddedDesignData = Grasshopper.DataTree[System.Object]()
 
@@ -101,7 +114,6 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
         if not DesignData:
             msg = 'Input parameter DesignData failed to collect data'
             self._addWarning(msg)
-            self.Component.Message = msg
             return AddedDesignData
 
         # Validate JSON format
@@ -110,7 +122,6 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
         except json.JSONDecodeError:
             msg = 'DesignData must be valid JSON format.'
             self._addError(msg)
-            self.Component.Message = msg
             return AddedDesignData
 
         # Extract design ID for validation
@@ -118,7 +129,6 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
         if not design_id:
             msg = 'Design data must contain a valid _id field.'
             self._addError(msg)
-            self.Component.Message = msg
             return AddedDesignData
 
         # Validate required fields for design creation
@@ -134,7 +144,6 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
             fields_str = ", ".join(missing_fields)
             msg = f'Design data missing required fields: {fields_str}'
             self._addError(msg)
-            self.Component.Message = msg
             return AddedDesignData
 
         # Validate components structure
@@ -142,13 +151,11 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
         if not isinstance(components, list):
             msg = 'Design components must be a list.'
             self._addError(msg)
-            self.Component.Message = msg
             return AddedDesignData
 
         if len(components) == 0:
             msg = 'Design must contain at least one component.'
             self._addError(msg)
-            self.Component.Message = msg
             return AddedDesignData
 
         # Validate each component entry
@@ -156,19 +163,16 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
             if not isinstance(comp, dict):
                 msg = f'Component at index {i} must be a dictionary.'
                 self._addError(msg)
-                self.Component.Message = msg
                 return AddedDesignData
 
             if 'component' not in comp:
                 msg = f'Component at index {i} missing "component" field.'
                 self._addError(msg)
-                self.Component.Message = msg
                 return AddedDesignData
 
             if 'iframe' not in comp:
                 msg = f'Component at index {i} missing "iframe" field.'
                 self._addError(msg)
-                self.Component.Message = msg
                 return AddedDesignData
 
             # Validate iframe structure
@@ -176,7 +180,6 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
             if not isinstance(iframe, dict):
                 msg = f'Component at index {i} iframe must be a dictionary.'
                 self._addError(msg)
-                self.Component.Message = msg
                 return AddedDesignData
 
             required_iframe_fields = ['o', 'x', 'y', 'z']
@@ -194,7 +197,6 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
                     msg = (f'Component at index {i} iframe {field} must '
                            'be 3D vector')
                     self._addError(msg)
-                    self.Component.Message = msg
                     return AddedDesignData
 
         # Validate additional_geometry if present
@@ -202,13 +204,11 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
         if not isinstance(additional_geometry, list):
             msg = 'Design additional_geometry must be a list.'
             self._addError(msg)
-            self.Component.Message = msg
             return AddedDesignData
 
         if len(additional_geometry) > 25:
             msg = 'Design cannot have more than 25 additional geometries.'
             self._addError(msg)
-            self.Component.Message = msg
             return AddedDesignData
 
         # Validate each additional geometry entry
@@ -216,27 +216,23 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
             if not isinstance(ag, dict):
                 msg = f'Additional geometry at index {i} must be a dictionary.'
                 self._addError(msg)
-                self.Component.Message = msg
                 return AddedDesignData
 
             if 'id' not in ag:
                 msg = f'Additional geometry at index {i} missing "id" field.'
                 self._addError(msg)
-                self.Component.Message = msg
                 return AddedDesignData
 
             if 'iframe' not in ag:
                 msg = (f'Additional geometry at index {i} missing '
                        '"iframe" field.')
                 self._addError(msg)
-                self.Component.Message = msg
                 return AddedDesignData
 
             if 'geometry' not in ag:
                 msg = (f'Additional geometry at index {i} missing '
                        '"geometry" field.')
                 self._addError(msg)
-                self.Component.Message = msg
                 return AddedDesignData
 
             # Validate iframe structure for additional geometry
@@ -245,7 +241,6 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = (f'Additional geometry at index {i} iframe must be '
                        'a dictionary.')
                 self._addError(msg)
-                self.Component.Message = msg
                 return AddedDesignData
 
             required_iframe_fields = ['o', 'x', 'y', 'z']
@@ -254,7 +249,6 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
                     msg = (f'Additional geometry at index {i} iframe missing '
                            f'{field} field.')
                     self._addError(msg)
-                    self.Component.Message = msg
                     return AddedDesignData
 
                 if (not isinstance(iframe[field], list) or
@@ -262,7 +256,6 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
                     msg = (f'Additional geometry at index {i} iframe {field} '
                            'must be 3D vector.')
                     self._addError(msg)
-                    self.Component.Message = msg
                     return AddedDesignData
 
         # Check payload size (rough estimate)

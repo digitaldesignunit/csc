@@ -38,10 +38,11 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -49,16 +50,72 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Component type filter (e.g., "beam", "slab", "column")'
+        )
+        self.InputParams[1].Description = (
+            'Material type filter (e.g., "concrete", "steel", "wood")'
+        )
+        self.InputParams[2].Description = (
+            'Dataset name filter (e.g., "sas_cita_scans", '
+            '"mineral_composite_sheets")'
+        )
+        self.InputParams[3].Description = (
+            'Complexity level filter (0-3, where 0=simple, 3=complex)'
+        )
+        self.InputParams[4].Description = (
+            'Fragment status filter (True for fragments, False for complete)'
+        )
+        self.InputParams[5].Description = (
+            'Minimum X dimension filter (bounding box)'
+        )
+        self.InputParams[6].Description = (
+            'Maximum X dimension filter (bounding box)'
+        )
+        self.InputParams[7].Description = (
+            'Minimum Y dimension filter (bounding box)'
+        )
+        self.InputParams[8].Description = (
+            'Maximum Y dimension filter (bounding box)'
+        )
+        self.InputParams[9].Description = (
+            'Minimum Z dimension filter (bounding box)'
+        )
+        self.InputParams[10].Description = (
+            'Maximum Z dimension filter (bounding box)'
+        )
+        self.InputParams[11].Description = (
+            'Reservation status filter: -1=ignore, 0=not reserved, '
+            '1=reserved by current user'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Human-readable description of the applied filters and query'
+        )
+        self.OutputParams[1+i].Description = (
+            'The ComponentData that was fetched from the server as JSON. '
+            'Use \'DisassembleComponent\' to access the individual fields '
+            'ready for Grasshopper')
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -189,54 +246,6 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             MinDimensionZ: float,
             MaxDimensionZ: float,
             ReservedStatus):
-        # Initialize param descriptions (this has to be done in RunScript)
-        self.InputParams[0].Description = (
-            'Component type filter (e.g., "beam", "slab", "column")'
-        )
-        self.InputParams[1].Description = (
-            'Material type filter (e.g., "concrete", "steel", "wood")'
-        )
-        self.InputParams[2].Description = (
-            'Dataset name filter (e.g., "sas_cita_scans", '
-            '"mineral_composite_sheets")'
-        )
-        self.InputParams[3].Description = (
-            'Complexity level filter (0-3, where 0=simple, 3=complex)'
-        )
-        self.InputParams[4].Description = (
-            'Fragment status filter (True for fragments, False for complete)'
-        )
-        self.InputParams[5].Description = (
-            'Minimum X dimension filter (bounding box)'
-        )
-        self.InputParams[6].Description = (
-            'Maximum X dimension filter (bounding box)'
-        )
-        self.InputParams[7].Description = (
-            'Minimum Y dimension filter (bounding box)'
-        )
-        self.InputParams[8].Description = (
-            'Maximum Y dimension filter (bounding box)'
-        )
-        self.InputParams[9].Description = (
-            'Minimum Z dimension filter (bounding box)'
-        )
-        self.InputParams[10].Description = (
-            'Maximum Z dimension filter (bounding box)'
-        )
-        self.InputParams[11].Description = (
-            'Reservation status filter: -1=ignore, 0=not reserved, '
-            '1=reserved by current user'
-        )
-
-        # Initialize output param descriptions
-        self.OutputParams[0].Description = (
-            'Human-readable description of the applied filters and query'
-        )
-        self.OutputParams[1].Description = (
-            'The ComponentData that was fetched from the server as JSON. '
-            'Use \'DisassembleComponent\' to access the individual fields '
-            'ready for Grasshopper')
 
         # Get AuthCore instance from sticky storage
         auth_core = self.get_auth_core_from_sticky()

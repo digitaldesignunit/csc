@@ -31,17 +31,15 @@ ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
 )
 
 
-class CSC_ComputeTSNE(Grasshopper.Kernel.GH_ScriptInstance):
+class CSC_ComputePCA(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
-        """
-        Initialize this component and set component parameters.
-        """
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -63,8 +61,8 @@ class CSC_ComputeTSNE(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
-    def _initializeParamDescriptions(self):
-        """Sets input/output param descriptions."""
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
             'Data to be reduced using PCA as a DataTree, where '
@@ -83,8 +81,6 @@ class CSC_ComputeTSNE(Grasshopper.Kernel.GH_ScriptInstance):
             )
 
     def RunScript(self, Data: Grasshopper.DataTree[float], Components: int):
-        # Initialize param descriptions
-        self._initializeParamDescriptions()
         # set up output variables
         EmbedddedData = Grasshopper.DataTree[System.Object]()
         try:

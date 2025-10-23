@@ -47,10 +47,11 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023
+    Version: 251023.1
     """
 
     def __init__(self):
+        """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
         self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
@@ -58,16 +59,46 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
+        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
+        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
+        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+    
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Input can be:\n'
+            '- A geometry object with \'csc_component\' userstring\n'
+            '- A JSON string containing component data\n'
+            '- Just the component _id'
+        )
+        self.InputParams[1].Description = (
+            'True for detailed geometry, False for reduced'
+        )
+        # Initialize output param descriptions
+        i = 0
+        if self.OutputParams[0].Name == 'out':
+            i += 1
+        self.OutputParams[0+i].Description = (
+            'Fetched geometry as Rhino.Geometry.GeometryBase objects '
+            '(can be multiple meshes)'
+        )
+        self.OutputParams[1+i].Description = (
+            'Geometry type: detailed, reduced, or primitive'
+        )
+        self.OutputParams[2+i].Description = (
+            'Component ID that was processed'
+        )
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -775,25 +806,6 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             self._addWarning(f'Failed to set user string: {str(e)}')
 
     def RunScript(self, Input, Detailed: bool):
-        # Initialize param descriptions (this has to be done in RunScript)
-        self.InputParams[0].Description = (
-            'Input can be:\n'
-            '- A geometry object with \'csc_component\' userstring\n'
-            '- A JSON string containing component data\n'
-            '- Just the component _id'
-        )
-        self.InputParams[1].Description = (
-            'True for detailed geometry, False for reduced'
-        )
-        self.OutputParams[0].Description = (
-            'Fetched geometry as Rhino.Geometry.GeometryBase objects '
-            '(can be multiple meshes)'
-        )
-        self.OutputParams[1].Description = (
-            'Geometry type: detailed, reduced, or primitive'
-        )
-        self.OutputParams[2].Description = 'Component ID that was processed'
-
         # Get AuthCore instance from sticky storage
         auth_core = self.get_auth_core_from_sticky()
         if auth_core is None:
