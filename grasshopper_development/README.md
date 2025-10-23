@@ -3,14 +3,34 @@
 ## Copy-Paste Info for Grasshopper Development
 
 ### Python Virtual Environment
-
 ```
+# -*- coding: utf-8 -*-
 #! python3
 # venv: DDU_CSC
-# r: requests==2.31.0
-# r: numpy==1.26.4
-# r: scipy==1.13.0
-# r: scikit-learn==1.4.2
+print('ENV OK!')
+# r: charset_normalizer
+# r: requests
+# r: numpy
+# r: scipy
+# r: scikit-learn
+# r: robust-laplacian
+# r: potpourri3d
+```
+
+And a versioned environment, sometimes it only works like that...
+
+```
+# -*- coding: utf-8 -*-
+#! python3
+# venv: DDU_CSC
+print('ENV OK!')
+# r: charset_normalizer==3.4.4
+# r: requests==2.32.5
+# r: numpy==2.0.2
+# r: scipy==1.13.1
+# r: scikit-learn==1.6.1
+# r: robust-laplacian==1.0.0
+# r: potpourri3d==1.0.0
 ```
 
 ### Author & Version
@@ -43,7 +63,7 @@ ghenv.Component.SubCategory = '2 Catalogue Interface'
 ghenv.Component.SubCategory = '3 Component Operations'
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'
 
-ghenv.Component.SubCategory = '6 JSON Tools'
+ghenv.Component.SubCategory = '6 Data Tools'
 ghenv.Component.SubCategory = '7 Geometry Tools'
 ghenv.Component.SubCategory = '8 Visualisation'
 ghenv.Component.SubCategory = '9 Admin Actions'
