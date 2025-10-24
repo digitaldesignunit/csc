@@ -63,7 +63,10 @@ _CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, 'dbconfig.json'))
 
 # DESCRIPTOR CONFIGURATION ----------------------------------------------------
 
-DESCRIPTORS_TO_COMPUTE = ['boxscore']
+DESCRIPTORS_TO_COMPUTE = [
+    'boxscore',
+    'spherescore'
+]
 """List of descriptor names to compute if missing."""
 
 DESCRIPTOR_PARAMS = {
