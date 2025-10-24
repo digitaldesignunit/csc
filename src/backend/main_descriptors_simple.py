@@ -45,7 +45,10 @@ from apps.descriptors.boxscore import (
     compute_boxscore,
     compute_boxscore_with_metadata
 )
-
+from apps.descriptors.spherescore import (
+    compute_spherescore,
+    compute_spherescore_with_metadata
+)
 
 # ENVIRONMENT SETTINGS --------------------------------------------------------
 
@@ -65,6 +68,9 @@ DESCRIPTORS_TO_COMPUTE = ['boxscore']
 
 DESCRIPTOR_PARAMS = {
     'boxscore': {
+        'factor': 100.0
+    },
+    'spherescore': {
         'factor': 100.0
     }
 }
@@ -297,10 +303,20 @@ def compute_descriptors_for_mesh(
                 results['boxscore'] = float(score)
                 log(f'Computed boxscore: {score:.6f}')
 
-            # Add more descriptors here as they are implemented
-            # elif desc_name == 'spherescore':
-            #     score = compute_spherescore(mesh, **params)
-            #     results['spherescore'] = float(score)
+            elif desc_name == 'spherescore':
+                params = DESCRIPTOR_PARAMS.get('spherescore', {})
+                log(f'Computing spherescore with parameters: {params}')
+                spherescore_data = compute_spherescore_with_metadata(mesh, **params)
+                score = spherescore_data['score']
+                vsphere = spherescore_data['vsphere']
+                vhull = spherescore_data['vhull']
+                factor = spherescore_data['factor']
+                print(f'vsphere: {vsphere}')
+                print(f'vhull: {vhull}')
+                print(f'factor: {factor}')
+                print(f'score: {score}')
+                results['spherescore'] = float(score)
+                log(f'Computed spherescore: {score:.6f}')
 
         except Exception as e:
             log(f'Failed to compute {desc_name}: {e}', prefix='ERROR')

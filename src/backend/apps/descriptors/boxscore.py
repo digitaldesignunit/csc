@@ -50,37 +50,27 @@ def compute_boxscore(
     """
     if factor < 100:
         raise ValueError(f'Factor must be >= 100, got {factor}')
-
     if len(mesh.vertices) == 0:
         raise ValueError('Mesh has no vertices')
     if len(mesh.faces) == 0:
         raise ValueError('Mesh has no faces')
-
     # Compute convex hull
     try:
         hull = mesh.convex_hull
     except Exception as e:
         raise ValueError(f'Failed to compute convex hull: {e}')
-
-    # Get hull volume
     vhull = hull.volume
-
     # Compute oriented bounding box
     try:
         obb = mesh.bounding_box_oriented
     except Exception as e:
         raise ValueError(f'Failed to compute oriented bounding box: {e}')
-
-    # Get OBB volume
     vbox = obb.volume
-
     # Avoid division by zero
     if vbox == 0:
         raise ValueError('Oriented bounding box has zero volume')
-
     # Compute BoxScore
     score = abs((vbox - vhull) / vbox * factor)
-
     return score
 
 
