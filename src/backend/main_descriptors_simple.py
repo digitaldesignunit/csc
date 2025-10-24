@@ -302,11 +302,13 @@ def compute_descriptors_for_mesh(
                 print(f'score: {score}')
                 results['boxscore'] = float(score)
                 log(f'Computed boxscore: {score:.6f}')
-
             elif desc_name == 'spherescore':
                 params = DESCRIPTOR_PARAMS.get('spherescore', {})
                 log(f'Computing spherescore with parameters: {params}')
-                spherescore_data = compute_spherescore_with_metadata(mesh, **params)
+                spherescore_data = compute_spherescore_with_metadata(
+                    mesh,
+                    **params
+                )
                 score = spherescore_data['score']
                 vsphere = spherescore_data['vsphere']
                 vhull = spherescore_data['vhull']

@@ -133,16 +133,16 @@ def create_mesh_from_extrusion(
 
     num_points = len(profile_array)
 
-    # Create bottom vertices (Z=0)
+    # Create bottom vertices (Z=-height/2)
     bottom_vertices = np.hstack([
         profile_array,
-        np.zeros((num_points, 1))
+        np.full((num_points, 1), -height/2)
     ])
 
-    # Create top vertices (Z=height)
+    # Create top vertices (Z=height/2)
     top_vertices = np.hstack([
         profile_array,
-        np.full((num_points, 1), height)
+        np.full((num_points, 1), height/2)
     ])
 
     # Combine all vertices
@@ -291,25 +291,20 @@ def apply_pca_frame_transform(
                 f'pca_frame[{key}] must be [x, y, z], '
                 f'got length {len(pca_frame[key])}'
             )
-
     # Extract frame components
     origin = np.array(pca_frame['o'], dtype=np.float64)
     x_axis = np.array(pca_frame['x'], dtype=np.float64)
     y_axis = np.array(pca_frame['y'], dtype=np.float64)
     z_axis = np.array(pca_frame['z'], dtype=np.float64)
-
     # Normalize axes (ensure they are unit vectors)
     x_axis_norm = np.linalg.norm(x_axis)
     y_axis_norm = np.linalg.norm(y_axis)
     z_axis_norm = np.linalg.norm(z_axis)
-
     if x_axis_norm < 1e-10 or y_axis_norm < 1e-10 or z_axis_norm < 1e-10:
         raise ValueError('PCA frame axes must be non-zero')
-
     x_axis = x_axis / x_axis_norm
     y_axis = y_axis / y_axis_norm
     z_axis = z_axis / z_axis_norm
-
     # Build the transformation to align mesh with PCA axes
     # We want to rotate the mesh so that PCA axes become world XYZ axes
     #
@@ -330,16 +325,13 @@ def apply_pca_frame_transform(
     # Build PCA frame transformation matrix (world -> PCA frame basis)
     # When PCA axes are orthonormal, rotation part is just the transpose
     pca_rotation = np.column_stack([x_axis, y_axis, z_axis])
-
     # Full transformation matrix
     pca_transform = np.eye(4)
     pca_transform[:3, :3] = pca_rotation.T  # Transpose for world->PCA
     pca_transform[:3, 3] = -pca_rotation.T @ origin  # Transform origin
-
     # Apply transformation to mesh
     mesh_transformed = mesh.copy()
     mesh_transformed.apply_transform(pca_transform)
-
     return mesh_transformed
 
 
@@ -389,15 +381,10 @@ def prepare_mesh_for_descriptor(
         trimesh.Trimesh object ready for descriptor computation
     """
     prepared_mesh = mesh.copy()
-
-    # Center if requested
-    if center:
-        prepared_mesh, _ = center_mesh(prepared_mesh)
-
-    # Apply PCA frame if provided
     if pca_frame is not None:
         prepared_mesh = apply_pca_frame_transform(prepared_mesh, pca_frame)
-
+    if center:
+        prepared_mesh, _ = center_mesh(prepared_mesh)
     return prepared_mesh
 
 
@@ -421,13 +408,9 @@ def load_primitive_mesh_for_descriptor(
     Returns:
         trimesh.Trimesh object ready for descriptor computation
     """
-    # Load mesh
     mesh = load_mesh_from_primitive(vertices, faces)
-
-    # Apply PCA frame if provided (mesh is already centered)
     if pca_frame is not None:
         mesh = apply_pca_frame_transform(mesh, pca_frame)
-
     return mesh
 
 
@@ -450,13 +433,9 @@ def load_obj_mesh_for_descriptor(
     Returns:
         trimesh.Trimesh object ready for descriptor computation
     """
-    # Load mesh (already centered, coordinates converted to Rhino)
     mesh = load_mesh_from_obj(filepath)
-
-    # Apply PCA frame if provided (mesh is already centered)
     if pca_frame is not None:
         mesh = apply_pca_frame_transform(mesh, pca_frame)
-
     return mesh
 
 
@@ -480,11 +459,7 @@ def load_extrusion_mesh_for_descriptor(
     Returns:
         trimesh.Trimesh object ready for descriptor computation
     """
-    # Create mesh from extrusion (already centered at origin)
     mesh = create_mesh_from_extrusion(profile, height)
-
-    # Apply PCA frame if provided (mesh is already centered)
     if pca_frame is not None:
         mesh = apply_pca_frame_transform(mesh, pca_frame)
-
     return mesh
