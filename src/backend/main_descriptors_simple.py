@@ -41,7 +41,10 @@ from apps.descriptors.geometry import (
     load_obj_mesh_for_descriptor,
     load_extrusion_mesh_for_descriptor
 )
-from apps.descriptors.boxscore import compute_boxscore
+from apps.descriptors.boxscore import (
+    compute_boxscore,
+    compute_boxscore_with_metadata
+)
 
 
 # ENVIRONMENT SETTINGS --------------------------------------------------------
@@ -281,7 +284,16 @@ def compute_descriptors_for_mesh(
         try:
             if desc_name == 'boxscore':
                 params = DESCRIPTOR_PARAMS.get('boxscore', {})
-                score = compute_boxscore(mesh, **params)
+                log(f'Computing boxscore with parameters: {params}')
+                bxscore_data = compute_boxscore_with_metadata(mesh, **params)
+                score = bxscore_data['score']
+                vbox = bxscore_data['vbox']
+                vhull = bxscore_data['vhull']
+                factor = bxscore_data['factor']
+                print(f'vbox: {vbox}')
+                print(f'vhull: {vhull}')
+                print(f'factor: {factor}')
+                print(f'score: {score}')
                 results['boxscore'] = float(score)
                 log(f'Computed boxscore: {score:.6f}')
 
