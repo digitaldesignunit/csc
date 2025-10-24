@@ -4,6 +4,7 @@
 from typing import Dict
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
+import numpy as np
 import trimesh
 
 
@@ -66,10 +67,10 @@ def compute_spherescore_with_metadata(
     vhull = hull.volume
     # Compute sphere
     try:
-        sphere = trimesh.nsphere.minimum_nsphere(mesh.vertices)
+        center, radius = trimesh.nsphere.minimum_nsphere(mesh.vertices)
+        vsphere = 4 / 3 * np.pi * np.power(radius, 3)
     except Exception as e:
         raise ValueError(f'Failed to compute minimum n-sphere: {e}')
-    vsphere = sphere.volume
     if (vhull > vsphere):
         vhull = 0
     # Compute SphereScore
