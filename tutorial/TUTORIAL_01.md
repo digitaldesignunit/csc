@@ -1,5 +1,8 @@
 # CSC - Tutorial 01
 
+# --> ONE HOUR PER GROUP, 4 GROUPS!
+# TUESDAY!
+
 ## Prerequisites
 
 - Install Rhino 8 and/or update your Rhino 8 to the latest version. This should be something like Version 8 SR23.
