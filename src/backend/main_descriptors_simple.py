@@ -22,6 +22,7 @@ import os
 import sys
 from typing import Optional, Dict, List
 from datetime import datetime, timezone
+import random
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from pymongo import AsyncMongoClient
@@ -90,7 +91,8 @@ def log(message: str, prefix: str = 'DESCRIPTORS'):
 
 async def find_component_with_missing_descriptors(
     mongodb_components,
-    descriptor_names: List[str]
+    descriptor_names: List[str],
+    dry_run: bool = False
 ) -> Optional[Dict]:
     """
     Find one component that is missing any of the specified descriptors.
@@ -107,23 +109,21 @@ async def find_component_with_missing_descriptors(
     # - The descriptors field doesn't exist
     # - The descriptors field exists but the specific descriptor is missing
     # - The descriptors field exists but the specific descriptor is null
-
     or_conditions = []
-
     # Check if descriptors field doesn't exist
     or_conditions.append({'descriptors': {'$exists': False}})
-
     # Check for each specific descriptor
     for desc_name in descriptor_names:
         field_path = f'descriptors.{desc_name}'
         or_conditions.append({field_path: {'$exists': False}})
         or_conditions.append({field_path: None})
-
     query = {'$or': or_conditions}
-
+    # Find all components matching the query and select a random oneon dry-run
+    if dry_run:
+        components = await mongodb_components.find(query).to_list(None)
+        return random.choice(components)
     # Find one component matching the query
     component = await mongodb_components.find_one(query)
-
     return component
 
 
@@ -184,7 +184,6 @@ def load_geometry_for_descriptor(
     """
     component_id = str(component['_id'])
     pca_frame = component.get('pca_frame')
-
     # Try mesh.obj first (highest quality)
     if geometry_paths['mesh']:
         try:
@@ -195,10 +194,10 @@ def load_geometry_for_descriptor(
             )
             log(f'Successfully loaded mesh.obj '
                 f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
+            log(f'Mesh center: {mesh.centroid}')
             return mesh
         except Exception as e:
             log(f'Failed to load mesh.obj: {e}', prefix='WARNING')
-
     # Try mesh_reduced.obj (medium quality)
     if geometry_paths['mesh_reduced']:
         try:
@@ -209,17 +208,15 @@ def load_geometry_for_descriptor(
             )
             log(f'Successfully loaded mesh_reduced.obj '
                 f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
+            log(f'Mesh center: {mesh.centroid}')
             return mesh
         except Exception as e:
             log(f'Failed to load mesh_reduced.obj: {e}', prefix='WARNING')
-
     # Fallback to primitive geometry from JSON
     try:
         log(f'Using primitive geometry for component {component_id}')
-
         # Get geometry from component
         geometry = component.get('geometry', {})
-
         # Handle both 'meshes' (new format) and 'mesh' (old format)
         if 'meshes' in geometry and geometry['meshes']:
             # Use first mesh from meshes array
@@ -233,8 +230,8 @@ def load_geometry_for_descriptor(
             )
             log(f'Successfully loaded primitive mesh geometry '
                 f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
+            log(f'Mesh center: {mesh.centroid}')
             return mesh
-
         elif 'mesh' in geometry and geometry['mesh']:
             # Old single mesh format
             mesh_data = geometry['mesh']
@@ -247,8 +244,8 @@ def load_geometry_for_descriptor(
             )
             log(f'Successfully loaded primitive mesh geometry '
                 f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
+            log(f'Mesh center: {mesh.centroid}')
             return mesh
-
         elif 'extrusion' in geometry and geometry['extrusion']:
             # Extrusion geometry (for sheet components)
             extrusion_data = geometry['extrusion']
@@ -261,8 +258,8 @@ def load_geometry_for_descriptor(
             )
             log(f'Successfully loaded extrusion geometry '
                 f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
+            log(f'Mesh center: {mesh.centroid}')
             return mesh
-
         else:
             log(f'No geometry found in component {component_id}',
                 prefix='ERROR')
@@ -411,38 +408,29 @@ async def compute_descriptors(dry_run: bool = False) -> bool:
         connection_string,
         serverSelectionTimeoutMS=5000
     )
-
     try:
         await client.aconnect()
         await client.admin.command('ping')
         log('Connected to MongoDB')
-
         db = client['csc']
         mongodb_components = db['components']
-
-        # Get geometry directory
         geometry_dir = get_geometry_directory(_CONFIGFILE)
         log(f'Geometry directory: {geometry_dir}')
-
-        # Find component with missing descriptors
         log(f'Looking for components missing descriptors: '
             f'{", ".join(DESCRIPTORS_TO_COMPUTE)}')
-
         component = await find_component_with_missing_descriptors(
             mongodb_components,
-            DESCRIPTORS_TO_COMPUTE
+            DESCRIPTORS_TO_COMPUTE,
+            dry_run=dry_run
         )
-
         if not component:
             log('No components with missing descriptors found')
             return False
-
         component_id = str(component['_id'])
         component_name = component.get('name', 'Unnamed Component')
         log(f'Found component: {component_id}')
         log(f'  Name: {component_name}')
         log(f'  Type: {component.get("type", "unknown")}')
-
         # Check which descriptors are missing
         current_descriptors = component.get('descriptors', {})
         missing_descriptors = [
@@ -451,10 +439,8 @@ async def compute_descriptors(dry_run: bool = False) -> bool:
             current_descriptors.get(desc) is None
         ]
         log(f'Missing descriptors: {", ".join(missing_descriptors)}')
-
         # Get geometry paths
         geometry_paths = get_geometry_paths(geometry_dir, component_id)
-
         # Load geometry
         log('Loading geometry...')
         mesh = load_geometry_for_descriptor(
@@ -462,7 +448,6 @@ async def compute_descriptors(dry_run: bool = False) -> bool:
             geometry_paths,
             geometry_dir
         )
-
         if mesh is None:
             log(f'Failed to load geometry for component {component_id}',
                 prefix='ERROR')
