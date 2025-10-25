@@ -13,6 +13,8 @@ interface BackgroundMeshProps {
   rotationSpeed?: number
   color?: string
   opacity?: number
+  scale?: number
+  fixed?: boolean
 }
 
 // Available mesh files
@@ -31,11 +33,13 @@ const RotatingMesh = ({
   color = '#3b82f6', 
   opacity = 0.1,
   rotationSpeed = 0.5,
+  scale = 1.0,
   onVisibilityChange
 }: {
   color: string
   opacity: number
   rotationSpeed: number
+  scale: number
   onVisibilityChange: (visible: boolean) => void
 }) => {
   const meshRef = useRef<THREE.Group>(null)
@@ -134,7 +138,7 @@ const RotatingMesh = ({
   }
 
   return (
-    <group ref={meshRef}>
+    <group ref={meshRef} scale={[scale, scale, scale]}>
       <primitive object={scene} />
     </group>
   )
@@ -145,7 +149,9 @@ export default function BackgroundMesh({
   intensity = 0.3,
   rotationSpeed = 0.5,
   color,
-  opacity = 0.1
+  opacity = 0.1,
+  scale = 1.0,
+  fixed = false
 }: BackgroundMeshProps) {
   const { theme, systemTheme } = useTheme()
   const [isVisible, setIsVisible] = useState<boolean>(false)
@@ -164,7 +170,7 @@ export default function BackgroundMesh({
   
   return (
     <div 
-      className={`absolute inset-0 pointer-events-none ${className}`}
+      className={`${fixed ? 'fixed' : 'absolute'} inset-0 pointer-events-none ${className}`}
       style={{
         opacity: isVisible ? 1 : 0,
         transition: 'opacity 0.5s ease-in-out'
@@ -181,6 +187,7 @@ export default function BackgroundMesh({
             color={meshColor}
             opacity={opacity}
             rotationSpeed={rotationSpeed}
+            scale={scale}
             onVisibilityChange={setIsVisible}
           />
         </Suspense>

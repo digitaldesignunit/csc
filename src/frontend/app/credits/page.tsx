@@ -4,28 +4,30 @@ import { Award, Users, Code, ExternalLink, BookOpen } from 'lucide-react'
 
 export default function CreditsPage() {
   return (
-    <div className="container mx-auto p-6 space-y-6 max-w-6xl">
-      {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <Award className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold">Credits</h1>
-        </div>
-        <p className="text-muted-foreground text-sm sm:text-base">
-          Credits, Sources & References for the <em>Catalogue of Second Chances</em>
-        </p>
-      </div>
-
+    <div className="relative min-h-full">
       {/* Background Mesh */}
       <BackgroundMesh
         className="absolute inset-0 -z-10"
         opacity={0.08}
         rotationSpeed={0.15}
         intensity={0.2}
+        scale={0.7}
       />
 
-      {/* Main Content */}
-      <div className="relative z-10 space-y-6">
+      <div className="container mx-auto p-6 space-y-6 max-w-6xl">
+        {/* Header */}
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+            <Award className="h-8 w-8 text-primary" />
+            <h1 className="text-2xl sm:text-3xl font-bold">Credits</h1>
+          </div>
+          <p className="text-muted-foreground text-sm sm:text-base">
+            Credits, Sources & References for the <em>Catalogue of Second Chances</em>
+          </p>
+        </div>
+
+        {/* Main Content */}
+        <div className="relative z-10 space-y-6">
         <Card className="bg-card/75">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -175,6 +177,7 @@ export default function CreditsPage() {
             </ul>
           </CardContent>
         </Card>
+        </div>
       </div>
     </div>
   )

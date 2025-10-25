@@ -71,6 +71,7 @@ export default function RegisterPage() {
         opacity={0.08}
         rotationSpeed={0.15}
         intensity={0.2}
+        scale={1.0}
       />
       <Card className="w-full max-w-md bg-card/75">
           <CardHeader>

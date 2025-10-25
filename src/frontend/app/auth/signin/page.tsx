@@ -28,6 +28,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
         opacity={0.08}
         rotationSpeed={0.15}
         intensity={0.2}
+        scale={1.1}
       />
       <SessionExpiredNotice />
       <SignInForm callbackUrl={callbackUrl} />
