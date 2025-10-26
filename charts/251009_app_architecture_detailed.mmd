@@ -1,0 +1,88 @@
+---
+config:
+  layout: elk
+---
+flowchart TB
+ subgraph subGraph0["Frontend Layer"]
+        NextJS["Next.js Frontend<br>Port 3000<br>React + TypeScript"]
+        ThreeJS["Three.js 3D Viewer<br>React Three Fiber"]
+        AuthUI["NextAuth.js<br>Authentication UI"]
+  end
+ subgraph subGraph1["Backend Layer"]
+        FastAPI["FastAPI Backend<br>Port 8000<br>Python 3.9"]
+        JWT["JWT Authentication<br>Bearer Tokens"]
+  end
+ subgraph subGraph2["Database Layer"]
+        MongoDB[("MongoDB Atlas<br>Cloud Database")]
+        ComponentsDB[("Components Collection<br>Component Data")]
+        UsersDB[("Users Collection<br>User Accounts")]
+        DesignsDB[("Designs Collection<br>Design Projects")]
+  end
+ subgraph subGraph3["File Storage Layer"]
+        PreviewDir["Preview Images<br>WebP Format<br>800x800px"]
+        GeometryDir["High-Res Meshes<br>OBJ Files<br>Detailed &amp; Reduced"]
+        PublicMeshes["Public Meshes<br>GLB/GLTF Files<br>Frontend Assets"]
+  end
+ subgraph subGraph4["Preview Generation"]
+        PreviewGen["Preview Generator<br>Python Script<br>Matplotlib + NumPy"]
+        CronJob["Cron Job<br>Auto-generate Previews"]
+  end
+ subgraph subGraph5["Grasshopper Interface"]
+        UserObjects["Grasshopper User Objects<br>Python Components"]
+        AuthCore["AuthCore<br>JWT Management<br>Local Caching"]
+        ComponentCache["Component Cache<br>Local Storage<br>Binary Format"]
+  end
+ subgraph subGraph6["Uberspace Web Server"]
+        Supervisor["Supervisor<br>Process Manager"]
+        Gunicorn["Gunicorn<br>WSGI Server"]
+        Nginx["Nginx<br>Reverse Proxy"]
+  end
+ subgraph subGraph7["External Services"]
+        Uberspace["Uberspace Hosting<br>Web Server"]
+  end
+    WebUser["Web User"] --> NextJS
+    GrasshopperUser["Grasshopper User<br>Rhino/Grasshopper"] --> UserObjects
+    NextJS --> ThreeJS & AuthUI & PublicMeshes & PublicMeshes
+    NextJS -- API Calls --> FastAPI
+    AuthUI -- JWT Tokens --> JWT
+    FastAPI --> JWT & MongoDB & PreviewDir & GeometryDir
+    MongoDB --> ComponentsDB & UsersDB & DesignsDB
+    PreviewGen --> ComponentsDB & PreviewDir
+    CronJob --> PreviewGen
+    UserObjects -- HTTP Requests --> FastAPI
+    UserObjects --> AuthCore
+    AuthCore --> ComponentCache
+    AuthCore -- Cached Requests --> FastAPI
+    Supervisor --> Gunicorn & NextJS
+    Gunicorn --> FastAPI
+    Nginx --> NextJS & FastAPI
+    Uberspace --> Nginx
+    NextJS -. Component Data<br>Geometry<br>Previews .-> ComponentsDB
+    FastAPI -. "High-Res Meshes<br>OBJ Files" .-> GeometryDir
+    PreviewGen -. Generated Images<br>WebP Format .-> PreviewDir
+    UserObjects -. Cached Components<br>Binary Data .-> ComponentCache
+     NextJS:::frontend
+     ThreeJS:::frontend
+     AuthUI:::frontend
+     FastAPI:::backend
+     JWT:::backend
+     MongoDB:::database
+     ComponentsDB:::database
+     UsersDB:::database
+     DesignsDB:::database
+     PreviewDir:::storage
+     GeometryDir:::storage
+     PublicMeshes:::storage
+     UserObjects:::grasshopper
+     AuthCore:::grasshopper
+     ComponentCache:::grasshopper
+     Supervisor:::server
+     Gunicorn:::server
+     Nginx:::server
+     Uberspace:::server
+    classDef frontend fill:#e1f5fe
+    classDef backend fill:#f3e5f5
+    classDef database fill:#e8f5e8
+    classDef storage fill:#fff3e0
+    classDef grasshopper fill:#fce4ec
+    classDef server fill:#f1f8e9

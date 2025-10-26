@@ -1,0 +1,28 @@
+---
+config:
+  layout: fixed
+---
+flowchart TB
+    GrasshopperInterface["Rhino/Grasshopper Interface"] --> Backend["FastAPI Backend<br>Python + JWT Auth"]
+    Frontend["Next.js Frontend<br>React + Three.js"] -- <br> --> Backend
+    Frontend --o Uberspace["Uberspace Server"]
+    Backend --> Database[("MongoDB Atlas<br>Component Primitives, Metadata &amp; User Data")] & FileStorage["File Storage<br>Hi-Res Meshes &amp; Previews"]
+    FileStorage --o Uberspace
+    WebBrowser["Web Browser"] --> Frontend
+    User(("User")) --> WebBrowser & GrasshopperInterface
+    Backend --o Uberspace
+    Uberspace@{ shape: hex}
+    WebBrowser@{ shape: rect}
+     GrasshopperInterface:::interface
+     Backend:::app
+     Frontend:::app
+     Uberspace:::server
+     Database:::data
+     FileStorage:::data
+     WebBrowser:::interface
+     User:::user
+    classDef app fill:#f3e5f5
+    classDef data fill:#e8f5e8
+    classDef server fill:#fff3e0
+    classDef interface fill:#e3f2fd
+    classDef user fill:#d8fdfd
