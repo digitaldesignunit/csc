@@ -50,6 +50,15 @@ from apps.descriptors.spherescore import (
     compute_spherescore,
     compute_spherescore_with_metadata
 )
+from apps.descriptors.linescore import (
+    compute_linescore,
+    compute_linescore_with_metadata
+)
+from apps.descriptors.planescore import (
+    compute_planescore,
+    compute_planescore_with_metadata
+)
+    
 
 # ENVIRONMENT SETTINGS --------------------------------------------------------
 
@@ -66,7 +75,9 @@ _CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, 'dbconfig.json'))
 
 DESCRIPTORS_TO_COMPUTE = [
     'boxscore',
-    'spherescore'
+    'spherescore',
+    'linescore',
+    'planescore'
 ]
 """List of descriptor names to compute if missing."""
 
@@ -75,6 +86,12 @@ DESCRIPTOR_PARAMS = {
         'factor': 100.0
     },
     'spherescore': {
+        'factor': 100.0
+    },
+    'linescore': {
+        'factor': 100.0
+    },
+    'planescore': {
         'factor': 100.0
     }
 }
@@ -288,20 +305,15 @@ def compute_descriptors_for_mesh(
 
     for desc_name in descriptor_names:
         try:
+            # ///// BOXSCORE /////
             if desc_name == 'boxscore':
                 params = DESCRIPTOR_PARAMS.get('boxscore', {})
                 log(f'Computing boxscore with parameters: {params}')
-                bxscore_data = compute_boxscore_with_metadata(mesh, **params)
-                score = bxscore_data['score']
-                vbox = bxscore_data['vbox']
-                vhull = bxscore_data['vhull']
-                factor = bxscore_data['factor']
-                print(f'vbox: {vbox}')
-                print(f'vhull: {vhull}')
-                print(f'factor: {factor}')
-                print(f'score: {score}')
+                boxscore_data = compute_boxscore_with_metadata(mesh, **params)
+                score = boxscore_data['score']
                 results['boxscore'] = float(score)
                 log(f'Computed boxscore: {score:.6f}')
+            # ///// SPHERESCORE /////
             elif desc_name == 'spherescore':
                 params = DESCRIPTOR_PARAMS.get('spherescore', {})
                 log(f'Computing spherescore with parameters: {params}')
@@ -310,15 +322,30 @@ def compute_descriptors_for_mesh(
                     **params
                 )
                 score = spherescore_data['score']
-                vsphere = spherescore_data['vsphere']
-                vhull = spherescore_data['vhull']
-                factor = spherescore_data['factor']
-                print(f'vsphere: {vsphere}')
-                print(f'vhull: {vhull}')
-                print(f'factor: {factor}')
-                print(f'score: {score}')
                 results['spherescore'] = float(score)
                 log(f'Computed spherescore: {score:.6f}')
+            # ///// LINESCORE /////
+            elif desc_name == 'linescore':
+                params = DESCRIPTOR_PARAMS.get('linescore', {})
+                log(f'Computing linescore with parameters: {params}')
+                linescore_data = compute_linescore_with_metadata(
+                    mesh,
+                    **params
+                )
+                score = linescore_data['score']
+                results['linescore'] = float(score)
+                log(f'Computed linescore: {score:.6f}')
+            # ///// PLANESCORE /////
+            elif desc_name == 'planescore':
+                params = DESCRIPTOR_PARAMS.get('planescore', {})
+                log(f'Computing planescore with parameters: {params}')
+                planescore_data = compute_planescore_with_metadata(
+                    mesh,
+                    **params
+                )
+                score = planescore_data['score']
+                results['planescore'] = float(score)
+                log(f'Computed planescore: {score:.6f}')
 
         except Exception as e:
             log(f'Failed to compute {desc_name}: {e}', prefix='ERROR')

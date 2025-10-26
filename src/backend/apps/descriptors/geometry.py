@@ -197,7 +197,10 @@ def create_mesh_from_extrusion(
     return mesh
 
 
-def load_mesh_from_obj(filepath: str) -> trimesh.Trimesh:
+def load_mesh_from_obj(
+    filepath: str,
+    use_first_only: bool = False
+) -> trimesh.Trimesh:
     """
     Load a mesh from an OBJ file and convert to Rhino coordinate system.
 
@@ -209,6 +212,9 @@ def load_mesh_from_obj(filepath: str) -> trimesh.Trimesh:
 
     Args:
         filepath: path to .obj file
+        use_first_only: if True and OBJ contains multiple objects,
+                        only use the first object. If False, concatenate
+                        all objects. Default False (concatenate).
 
     Returns:
         trimesh.Trimesh object in Rhino coordinate system (centered)
@@ -219,11 +225,26 @@ def load_mesh_from_obj(filepath: str) -> trimesh.Trimesh:
     """
     try:
         # Load mesh using trimesh (handles OBJ format natively)
-        mesh = trimesh.load(filepath, force='mesh')
+        loaded = trimesh.load(filepath)
     except FileNotFoundError:
         raise FileNotFoundError(f'OBJ file not found: {filepath}')
     except Exception as e:
         raise ValueError(f'Failed to load OBJ file {filepath}: {e}')
+
+    # Handle Scene (multiple objects) vs single Trimesh
+    if isinstance(loaded, trimesh.Scene):
+        if use_first_only:
+            # Get only the first mesh from the scene
+            # NOTE: trimesh loads OBJ objects in REVERSE order, so the last
+            # item in the geometry dict is actually the first object saved
+            if len(loaded.geometry) == 0:
+                raise ValueError(f'OBJ file contains no geometry: {filepath}')
+            mesh = list(loaded.geometry.values())[-1]
+        else:
+            # Concatenate all meshes in the scene
+            mesh = loaded.dump(concatenate=True)
+    else:
+        mesh = loaded
 
     if not isinstance(mesh, trimesh.Trimesh):
         raise ValueError(
@@ -416,7 +437,8 @@ def load_primitive_mesh_for_descriptor(
 
 def load_obj_mesh_for_descriptor(
     filepath: str,
-    pca_frame: Optional[Dict[str, List[float]]] = None
+    pca_frame: Optional[Dict[str, List[float]]] = None,
+    is_assembly: bool = True
 ) -> trimesh.Trimesh:
     """
     Load and prepare an OBJ mesh for descriptor computation.
@@ -429,11 +451,13 @@ def load_obj_mesh_for_descriptor(
     Args:
         filepath: path to .obj file
         pca_frame: optional PCA frame dictionary to align mesh
+        is_assembly: if True, concatenate all objects in OBJ. If False,
+                     use only the first object. Default True.
 
     Returns:
         trimesh.Trimesh object ready for descriptor computation
     """
-    mesh = load_mesh_from_obj(filepath)
+    mesh = load_mesh_from_obj(filepath, use_first_only=not is_assembly)
     if pca_frame is not None:
         mesh = apply_pca_frame_transform(mesh, pca_frame)
     return mesh
