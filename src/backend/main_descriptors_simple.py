@@ -43,22 +43,18 @@ from apps.descriptors.geometry import (
     load_extrusion_mesh_for_descriptor
 )
 from apps.descriptors.boxscore import (
-    compute_boxscore,
     compute_boxscore_with_metadata
 )
 from apps.descriptors.spherescore import (
-    compute_spherescore,
     compute_spherescore_with_metadata
 )
 from apps.descriptors.linescore import (
-    compute_linescore,
     compute_linescore_with_metadata
 )
 from apps.descriptors.planescore import (
-    compute_planescore,
     compute_planescore_with_metadata
 )
-    
+
 
 # ENVIRONMENT SETTINGS --------------------------------------------------------
 
@@ -211,7 +207,6 @@ def load_geometry_for_descriptor(
             )
             log(f'Successfully loaded mesh.obj '
                 f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
-            log(f'Mesh center: {mesh.centroid}')
             return mesh
         except Exception as e:
             log(f'Failed to load mesh.obj: {e}', prefix='WARNING')
@@ -225,7 +220,6 @@ def load_geometry_for_descriptor(
             )
             log(f'Successfully loaded mesh_reduced.obj '
                 f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
-            log(f'Mesh center: {mesh.centroid}')
             return mesh
         except Exception as e:
             log(f'Failed to load mesh_reduced.obj: {e}', prefix='WARNING')
@@ -247,7 +241,6 @@ def load_geometry_for_descriptor(
             )
             log(f'Successfully loaded primitive mesh geometry '
                 f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
-            log(f'Mesh center: {mesh.centroid}')
             return mesh
         elif 'mesh' in geometry and geometry['mesh']:
             # Old single mesh format
@@ -261,7 +254,6 @@ def load_geometry_for_descriptor(
             )
             log(f'Successfully loaded primitive mesh geometry '
                 f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
-            log(f'Mesh center: {mesh.centroid}')
             return mesh
         elif 'extrusion' in geometry and geometry['extrusion']:
             # Extrusion geometry (for sheet components)
@@ -275,7 +267,6 @@ def load_geometry_for_descriptor(
             )
             log(f'Successfully loaded extrusion geometry '
                 f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
-            log(f'Mesh center: {mesh.centroid}')
             return mesh
         else:
             log(f'No geometry found in component {component_id}',
@@ -308,49 +299,55 @@ def compute_descriptors_for_mesh(
             # ///// BOXSCORE /////
             if desc_name == 'boxscore':
                 params = DESCRIPTOR_PARAMS.get('boxscore', {})
-                log(f'Computing boxscore with parameters: {params}')
                 boxscore_data = compute_boxscore_with_metadata(mesh, **params)
                 score = boxscore_data['score']
                 results['boxscore'] = float(score)
-                log(f'Computed boxscore: {score:.6f}')
+                log(
+                    f'    Computed boxscore: {score:.6f} with '
+                    f'parameters: {params}'
+                )
             # ///// SPHERESCORE /////
             elif desc_name == 'spherescore':
                 params = DESCRIPTOR_PARAMS.get('spherescore', {})
-                log(f'Computing spherescore with parameters: {params}')
                 spherescore_data = compute_spherescore_with_metadata(
                     mesh,
                     **params
                 )
                 score = spherescore_data['score']
                 results['spherescore'] = float(score)
-                log(f'Computed spherescore: {score:.6f}')
+                log(
+                    f'    Computed spherescore: {score:.6f} with '
+                    f'parameters: {params}'
+                )
             # ///// LINESCORE /////
             elif desc_name == 'linescore':
                 params = DESCRIPTOR_PARAMS.get('linescore', {})
-                log(f'Computing linescore with parameters: {params}')
                 linescore_data = compute_linescore_with_metadata(
                     mesh,
                     **params
                 )
                 score = linescore_data['score']
                 results['linescore'] = float(score)
-                log(f'Computed linescore: {score:.6f}')
+                log(
+                    f'    Computed linescore: {score:.6f} with '
+                    f'parameters: {params}'
+                )
             # ///// PLANESCORE /////
             elif desc_name == 'planescore':
                 params = DESCRIPTOR_PARAMS.get('planescore', {})
-                log(f'Computing planescore with parameters: {params}')
                 planescore_data = compute_planescore_with_metadata(
                     mesh,
                     **params
                 )
                 score = planescore_data['score']
                 results['planescore'] = float(score)
-                log(f'Computed planescore: {score:.6f}')
-
+                log(
+                    f'    Computed planescore: {score:.6f} with '
+                    f'parameters: {params}'
+                )
         except Exception as e:
             log(f'Failed to compute {desc_name}: {e}', prefix='ERROR')
             results[desc_name] = None
-
     return results
 
 
@@ -442,7 +439,6 @@ async def compute_descriptors(dry_run: bool = False) -> bool:
         db = client['csc']
         mongodb_components = db['components']
         geometry_dir = get_geometry_directory(_CONFIGFILE)
-        log(f'Geometry directory: {geometry_dir}')
         log(f'Looking for components missing descriptors: '
             f'{", ".join(DESCRIPTORS_TO_COMPUTE)}')
         component = await find_component_with_missing_descriptors(
