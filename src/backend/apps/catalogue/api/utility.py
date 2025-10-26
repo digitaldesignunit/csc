@@ -49,3 +49,23 @@ async def get_previewgen_log(request: Request):
         return ptr
     except FileNotFoundError:
         return 'No previewgen_cronjob.log file found. No errors present.' + fp
+
+
+@router.get('/descriptors_simple_log',
+            response_description='Get Descriptors Simple Cronjob log',
+            response_class=PlainTextResponse)
+async def get_descriptors_simple_cronjob_log(request: Request):
+    backend_dir = os.path.normpath(
+        os.path.abspath(str(Path(__file__).parents[3]))
+    )
+    fp = os.path.normpath(os.path.abspath(
+        os.path.join(backend_dir, 'logs', 'descriptors_simple_cronjob.log'))
+    )
+    try:
+        with open(fp, 'r') as errorlog:
+            lines = [line.rstrip() for line in errorlog]
+        ptr = '\n'.join(lines[-200:])
+        return ptr
+    except FileNotFoundError:
+        return ('No descriptors_simple_cronjob.log file found. '
+                'No errors present.' + fp)
