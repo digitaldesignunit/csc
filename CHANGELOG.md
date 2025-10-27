@@ -10,7 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - CSC FastAPI Backend:  0.4.0.0
 - CSC React Frontend:   0.4.0.0
-- CSC Sheetscan Module: 0.0.1.11
 - CSC Grasshopper Interface: 0.4.0.0
 
 ### Added
