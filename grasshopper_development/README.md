@@ -57,6 +57,7 @@ ghenv.Component.Description = (
 
 ### Component SubCategories (Python)
 
+```
 ghenv.Component.SubCategory = '0 Development'
 ghenv.Component.SubCategory = '1 User'
 ghenv.Component.SubCategory = '2 Catalogue Interface'
@@ -67,3 +68,4 @@ ghenv.Component.SubCategory = '6 Data Tools'
 ghenv.Component.SubCategory = '7 Geometry Tools'
 ghenv.Component.SubCategory = '8 Visualisation'
 ghenv.Component.SubCategory = '9 Admin Actions'
+```
