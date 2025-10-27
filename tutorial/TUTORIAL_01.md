@@ -57,10 +57,17 @@
 
 - You will now have 5 minutes to download the files, open the rhino example file and the grasshopper example file
 
+## Grasshopper Interface #1: Getting Started
 
+So now we will look at a first basic example that shows us how to user the Grasshopper interface.
 
+## Grasshopper Interface #2: Component Reservation System
 
-So now
+...
+
+## Web Interface: Identifying Components
+
+Let's say we have a physical component that we want to identify
 
 ## Resources
 
