@@ -41,8 +41,7 @@ export default function CreditsPage() {
               This piece of software and the underlying research is part of the
               PhD thesis of <a href='https://www.researchgate.net/profile/Max-Eschenbach' target='_blank' className='text-blue-500 underline'>Max Benjamin Eschenbach</a> at
               the <a href='https://www.dg.architektur.tu-darmstadt.de/fachgebiet_ddu/index.de.jsp' target='_blank' className='text-blue-500 underline'>Digital Design Unit (DDU)</a>
-              , <a href='https://www.tu-darmstadt.de/' target='_blank' className='text-blue-500 underline'>Technical University of Darmstadt</a>.
-              DDU is chaired by Prof. Dr.-Ing. Oliver Tessmann, who is also the supervisor of the PhD Thesis.
+              , supervised and chaired by Prof. Dr.-Ing. Oliver Tessmann, at the <a href='https://www.tu-darmstadt.de/' target='_blank' className='text-blue-500 underline'>Technical University of Darmstadt</a>.
             </p>
           </CardContent>
         </Card>
@@ -120,6 +119,9 @@ export default function CreditsPage() {
                 Another huge inspiration and reference is the <a href='https://epfl-enac.github.io/MANSLAB-IBOIS-EESD-timberstone/' target='_blank' className='text-blue-500 underline'>Timberstone Project</a>, which is the origin of abovementioned Catalogue Explorer.
               </li>
               <li>
+                The simple shape descriptors (BoxScore, SphereScore, PlaneScore, LineScore) are computed based on the reference implementation of <a href='https://github.com/keithjlee/DigitalCircularityToolkit' target='_blank' className='text-blue-500 underline'>DigitalCircularityToolkit</a> by <a href='https://github.com/keithjlee' target='_blank' className='text-blue-500 underline'>Keith J. Lee</a>.
+              </li>
+              <li>
                 Huge thanks to <a href='https://sandrosiefert.com/beyond-debris/' target='_blank' className='text-blue-500 underline'>Sandro Siefert</a> for his inspirational work and the contribution of his debris dataset. Looking forward to continue this research with you!
               </li>
             </ul>
@@ -160,7 +162,7 @@ export default function CreditsPage() {
                 <strong>Computer Vision:</strong> <a href='https://opencv.org/' target='_blank' className='text-blue-500 underline'>OpenCV</a> - Computer vision and machine learning library
               </li>
               <li>
-                <strong>Mesh Processing:</strong> <a href='https://trimsh.org/' target='_blank' className='text-blue-500 underline'>Trimesh</a> - Python library for loading and using triangular meshes
+                <strong>Mesh Processing:</strong> <a href='https://trimesh.org/' target='_blank' className='text-blue-500 underline'>Trimesh</a> - Python library for loading and using triangular meshes
               </li>
               <li>
                 <strong>Scientific Computing:</strong> <a href='https://numpy.org/' target='_blank' className='text-blue-500 underline'>NumPy</a>, <a href='https://scipy.org/' target='_blank' className='text-blue-500 underline'>SciPy</a>, <a href='https://scikit-learn.org/' target='_blank' className='text-blue-500 underline'>scikit-learn</a> - Scientific computing libraries
