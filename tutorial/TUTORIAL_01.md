@@ -36,7 +36,7 @@
 
 - Once you are registered, please sign-in with your account credentials
 
-## Web Interface Overview
+## Web Interface Overview (~10 min.)
 
 - Browsing for Components
 - Filtering Components
@@ -59,7 +59,7 @@
 
 ## Grasshopper Interface #1: Getting Started
 
-So now we will look at a first basic example that shows us how to user the Grasshopper interface.
+- So now we will look at a first basic example that shows us how to use the Grasshopper interface.
 
 ## Grasshopper Interface #2: Component Reservation System
 
@@ -67,12 +67,11 @@ So now we will look at a first basic example that shows us how to user the Grass
 
 ## Web Interface: Identifying Components
 
-Let's say we have a physical component that we want to identify
+- Let's say we have a physical component that we want to identify
 
 ## Resources
 
 - https://ddu.uber.space --> The web frontend of our component database
-- 
 
 ### For Nerds and Deep Divers (Optional!)
 
