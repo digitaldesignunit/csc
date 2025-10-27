@@ -11,7 +11,7 @@ export default function Home() {
   const { data: session, status } = useSession()
 
   return (
-    <div className="relative min-h-full">
+    <div className="relative min-h-[80vh] md:min-h-[90vh]">
       {/* Background Mesh */}
       <BackgroundMesh
         className="absolute inset-0 -z-10"

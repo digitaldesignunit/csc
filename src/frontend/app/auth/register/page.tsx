@@ -64,7 +64,7 @@ export default function RegisterPage() {
 
   return (
     
-      <div className="relative flex min-h-[70vh] md:min-h-[88vh] items-start sm:items-center justify-center p-4 pt-8 sm:pt-4">
+      <div className="relative flex min-h-[80vh] md:min-h-[90vh] items-start sm:items-center justify-center p-4 pt-8 sm:pt-4">
       {/* Background Mesh */}
       <BackgroundMesh
         className="absolute inset-0 -z-10"

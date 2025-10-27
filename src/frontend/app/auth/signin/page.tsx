@@ -21,7 +21,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
   const sp = await searchParams
   const callbackUrl = toSafePathServer(sp?.callbackUrl)
   return (
-    <div className="relative h-full">
+    <div className="relative min-h-[80vh] md:min-h-[90vh]">
       {/* Background Mesh */}
       <BackgroundMesh
         className="absolute inset-0 -z-10"
