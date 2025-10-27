@@ -223,7 +223,7 @@ export default function GHInterfacePage() {
               { label: 'Status', description: 'Authentication status and cache info' }
             ]}
             tip="Automatically caches authentication and component data locally for faster access."
-            imagePath={resolveStatic('/gh-interface/csc_signin.jpg')}
+            imagePath={resolveStatic('/gh-interface/csc_session.jpg')}
           />
         </div>
       )
@@ -583,14 +583,49 @@ export default function GHInterfacePage() {
       icon: BookOpen,
       content: (
         <div className="space-y-6 pt-2">
+
+          <div className="border rounded-lg p-4">
+            <h4 className="font-semibold text-lg mb-3">Exploring Components</h4>
+            <div className="space-y-3">
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                <li>Authenticate with <strong>CSC_Session</strong></li>
+                <li>Fetch all available components with <strong>CSC_FetchAllComponents</strong></li>
+                <li>Filter results with <strong>CSC_FilterComponents</strong></li>
+                <li>Work with geometry using <strong>CSC_DisassembleComponent</strong></li>
+              </ol>
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-4">
+            <h4 className="font-semibold text-lg mb-3">Working with Reserved Components</h4>
+            <div className="space-y-3">
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                <li>Authenticate with <strong>CSC_Session</strong></li>
+                <li>Fetch all your reserved components with <strong>CSC_FetchFilteredComponents</strong></li>
+                <li>Work with geometry using <strong>CSC_DisassembleComponent</strong></li>
+                <li>Release unused components using the web interface to make them available again</li>
+              </ol>
+            </div>
+          </div>
+
           <div className="border rounded-lg p-4">
             <h4 className="font-semibold text-lg mb-3">Creating Components</h4>
             <div className="space-y-3">
               <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
                 <li>Authenticate with <strong>CSC_Session</strong></li>
-                <li>Process geometry with <strong>CSC_CreateComponent</strong></li>
+                <li>Process your own geometry with <strong>CSC_CreateComponent</strong></li>
                 <li>Save to database with <strong>CSC_AddComponent</strong></li>
-                <li>Convert back to geometry with <strong>CSC_DisassembleComponent</strong></li>
+              </ol>
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-4">
+            <h4 className="font-semibold text-lg mb-3">Exploring Data</h4>
+            <div className="space-y-3">
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                <li>Fetch component data with <strong>CSC_FetchComponents</strong></li>
+                <li>Extract available descriptors with <strong>CSC_GetDescriptor</strong></li>
+                <li>Process the data in your Grasshopper definition, i.e. by categorizing and sorting components</li>
               </ol>
             </div>
           </div>
@@ -608,29 +643,6 @@ export default function GHInterfacePage() {
             </div>
           </div>
 
-          <div className="border rounded-lg p-4">
-            <h4 className="font-semibold text-lg mb-3">Finding Components</h4>
-            <div className="space-y-3">
-              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                <li>Authenticate with <strong>CSC_Session</strong></li>
-                <li>Fetch components with <strong>CSC_FetchAllComponents</strong></li>
-                <li>Filter results with <strong>CSC_FilterComponents</strong></li>
-                <li>Work with geometry using <strong>CSC_DisassembleComponent</strong></li>
-              </ol>
-            </div>
-          </div>
-
-          <div className="border rounded-lg p-4">
-            <h4 className="font-semibold text-lg mb-3">Exploring Data</h4>
-            <div className="space-y-3">
-              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                <li>Fetch component data with <strong>CSC_FetchComponents</strong></li>
-                <li>View available fields with <strong>CSC_JSONKeys</strong></li>
-                <li>Extract specific values with <strong>CSC_JSONGetValue</strong></li>
-                <li>Process the data in your Grasshopper definition</li>
-              </ol>
-            </div>
-          </div>
         </div>
       )
     }
