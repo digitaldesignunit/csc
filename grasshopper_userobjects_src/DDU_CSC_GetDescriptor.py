@@ -37,7 +37,7 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.1
+    Version: 251027
     """
 
     def __init__(self):
@@ -65,10 +65,10 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
 
     def BeforeRunScript(self):
         """Perform some setup actions."""
-        # Initialize input param descriptions
         # Set "No type hint"
         self.InputParams[0].TypeHints.Select(System.Object)
         self.Component.VariableParameterMaintenance()
+        # Initialize input param descriptions
         self.InputParams[0].Description = (
             'List of component data as JSON strings OR geometries with '
             'attached component_data userdata'
@@ -77,7 +77,6 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
             'Key string to retrieve from the descriptors array in '
             'component_data'
         )
-
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
@@ -151,7 +150,8 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
 
         # Single float value
         if isinstance(descriptor_value, (int, float)):
-            result_tree.Add(float(descriptor_value))
+            ghp = Grasshopper.Kernel.Data.GH_Path(0)
+            result_tree.Add(float(descriptor_value), ghp)
 
         # List of floats
         elif isinstance(descriptor_value, list):
@@ -169,25 +169,26 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
                     # Paths: (0;0), (0;1), (1;0), (1;1)
                     for i, sublist in enumerate(descriptor_value):
                         for j, inner_list in enumerate(sublist):
-                            path = Grasshopper.Kernel.Data.GH_Path(i, j)
+                            ghp = Grasshopper.Kernel.Data.GH_Path(i, j)
                             for value in inner_list:
-                                result_tree.Add(float(value), path)
+                                result_tree.Add(float(value), ghp)
                 else:
                     # 2D structure: [[1,2,3], [9,8,7]]
                     # Paths: (0) for first sublist, (1) for second sublist
                     for i, sublist in enumerate(descriptor_value):
-                        path = Grasshopper.Kernel.Data.GH_Path(i)
+                        ghp = Grasshopper.Kernel.Data.GH_Path(i)
                         for value in sublist:
-                            result_tree.Add(float(value), path)
+                            result_tree.Add(float(value), ghp)
             else:
                 # Simple list of floats: [1,2,3]
                 # Single branch: (0)
                 path = Grasshopper.Kernel.Data.GH_Path(0)
                 for value in descriptor_value:
-                    result_tree.Add(float(value), path)
+                    result_tree.Add(float(value), ghp)
         else:
             # Fallback for other types
-            result_tree.Add(float(descriptor_value))
+            ghp = Grasshopper.Kernel.Data.GH_Path(0)
+            result_tree.Add(float(descriptor_value), ghp)
 
         return result_tree
 
@@ -257,9 +258,12 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
                         # Merge the converted tree into the output
                         for i in range(converted_tree.BranchCount):
                             original_path = converted_tree.Path(i)
+                            # get runcount for first GH Tree index
+                            rc = self.Component.RunCount - 1
                             # Prepend input index to the path
                             new_path = Grasshopper.Kernel.Data.GH_Path(
                                 0,
+                                rc,
                                 input_index,
                                 *original_path.Indices)
                             branch_data = converted_tree.Branch(i)

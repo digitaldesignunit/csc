@@ -34,7 +34,7 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.1
+    Version: 251027
     """
 
     def __init__(self):
@@ -147,33 +147,35 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 return False
 
         # Bounding box filters
+        # Note: bbx is stored as [X, Y, Z] where X, Y, Z are dimensions
         bbx = component_data.get('bbx')
-        if (bbx and isinstance(bbx, list) and len(bbx) >= 2):
-            bbx_min = bbx[0]
-            bbx_max = bbx[1]
+        if (bbx and isinstance(bbx, list) and len(bbx) >= 3):
+            bbx_x = bbx[0]
+            bbx_y = bbx[1]
+            bbx_z = bbx[2]
 
             # X dimension filters
             if filter_params.get('min_x') is not None:
-                if bbx_max[0] < filter_params['min_x']:
+                if bbx_x < filter_params['min_x']:
                     return False
             if filter_params.get('max_x') is not None:
-                if bbx_min[0] > filter_params['max_x']:
+                if bbx_x > filter_params['max_x']:
                     return False
 
             # Y dimension filters
             if filter_params.get('min_y') is not None:
-                if bbx_max[1] < filter_params['min_y']:
+                if bbx_y < filter_params['min_y']:
                     return False
             if filter_params.get('max_y') is not None:
-                if bbx_min[1] > filter_params['max_y']:
+                if bbx_y > filter_params['max_y']:
                     return False
 
             # Z dimension filters
             if filter_params.get('min_z') is not None:
-                if bbx_max[2] < filter_params['min_z']:
+                if bbx_z < filter_params['min_z']:
                     return False
             if filter_params.get('max_z') is not None:
-                if bbx_min[2] > filter_params['max_z']:
+                if bbx_z > filter_params['max_z']:
                     return False
 
         return True

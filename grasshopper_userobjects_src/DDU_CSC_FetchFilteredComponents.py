@@ -38,7 +38,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.1
+    Version: 251027
     """
 
     def __init__(self):
@@ -316,7 +316,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 # Loop over all components and add them to the data tree
                 for i, json_comp in enumerate(json_comps):
                     # Create datatree path
-                    ghp = Grasshopper.Kernel.Data.GH_Path(i)
+                    ghp = Grasshopper.Kernel.Data.GH_Path(0, i)
                     # Add component data to the datatree
                     ComponentData.Add(json.dumps(json_comp), ghp)
 

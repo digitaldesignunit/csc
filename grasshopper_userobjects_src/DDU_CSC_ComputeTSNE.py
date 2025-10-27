@@ -35,7 +35,7 @@ class CSC_ComputeTSNE(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.2
+    Version: 251027
     """
 
     def __init__(self):
@@ -133,7 +133,7 @@ class CSC_ComputeTSNE(Grasshopper.Kernel.GH_ScriptInstance):
         try:
             # sanitize input and abort if not present
             self.Component.Message = None
-            if not Data:
+            if not Data or Data.DataCount == 0:
                 msg = 'Input Data failed to collect data!'
                 self._addWarning(msg)
                 return EmbedddedData
