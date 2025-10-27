@@ -80,7 +80,7 @@ export default function GHInterfacePage() {
     imagePath?: string
   }) => (
     <div className="border rounded-lg p-4 bg-white/60 dark:bg-gray-900">
-      <div className="w-full h-96 bg-white rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/25 mb-4 overflow-hidden">
+      <div className="w-full h-110 bg-white rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/25 mb-4 overflow-hidden">
         {imagePath ? (
           <Image
             src={imagePath}
@@ -204,7 +204,7 @@ export default function GHInterfacePage() {
     },
     {
       id: 'authentication',
-      title: 'Authentication Components',
+      title: 'Session Components',
       icon: Settings,
       content: (
         <div className="space-y-6 pt-2">
@@ -345,6 +345,7 @@ export default function GHInterfacePage() {
               { label: 'AdditionalGeometry', description: 'Additional geometry as Rhino meshes' }
             ]}
             tip="Designs contain both component references and embedded additional geometry. Components are automatically updated with the design's iframe."
+            imagePath={resolveStatic('/gh-interface/csc_fetchdesign.jpg')}
           />
         </div>
       )
@@ -377,6 +378,7 @@ export default function GHInterfacePage() {
               { label: 'ComponentData', description: 'Component data as JSON string adhering to ComponentModel structure. Contains geometry, PCA frame, bounding box, and metadata.' }
             ]}
             tip="Automatically centers geometry at origin, computes PCA frames, handles mesh reduction, and saves geometry files locally for complex meshes."
+            imagePath={resolveStatic('/gh-interface/csc_createcomponent.jpg')}
           />
 
           <ComponentCard
@@ -391,6 +393,7 @@ export default function GHInterfacePage() {
               { label: 'AddedComponentData', description: 'The added component data returned from the server as JSON' }
             ]}
             tip="Validates component data before posting to the database. Requires authentication."
+            imagePath={resolveStatic('/gh-interface/csc_addcomponent.jpg')}
           />
 
           <ComponentCard
@@ -429,6 +432,53 @@ export default function GHInterfacePage() {
               { label: 'XComponentData', description: 'Transformed component data as JSON string' }
             ]}
             tip="Updates the component's insertion frame with the applied transformation while preserving all other component data."
+            imagePath={resolveStatic('/gh-interface/csc_transformcomponent.jpg')}
+          />
+
+          <ComponentCard
+            icon={Code}
+            name="CSC_ArrangeComponents"
+            description="Arranges components in an even square grid based on their bounding boxes. Calculates grid cell size from the largest component dimension."
+            inputs={[
+              { label: 'ComponentData', description: 'Component data as JSON strings' },
+              { label: 'Spacing', description: 'Additional spacing between grid cells (default: 100.0)' },
+              { label: 'InsertionPoint', description: 'Insertion point (starting corner of grid, default: 0,0,0)' }
+            ]}
+            outputs={[
+              { label: 'GridCells', description: 'Grid cell outlines as polylines' },
+              { label: 'GridPlanes', description: 'XY planes at center of each grid cell' },
+              { label: 'XForm', description: 'Transformations from world origin to grid cell planes' }
+            ]}
+            tip="Automatically determines optimal grid size based on component bounding boxes."
+            imagePath={resolveStatic('/gh-interface/csc_arrangecomponents.jpg')}
+          />
+
+          <ComponentCard
+            icon={Code}
+            name="CSC_GetComponentData"
+            description="Extracts the csc_component user data (JSON string) from Rhino geometry objects. Safely retrieves and parses component data stored as user strings."
+            inputs={[
+              { label: 'Geometry', description: 'Geometry objects with component userdata' }
+            ]}
+            outputs={[
+              { label: 'ComponentData', description: 'Component data as JSON strings extracted from geometry userdata' }
+            ]}
+            tip="Useful for retrieving component information from geometry that was previously processed by CSC components."
+            imagePath={resolveStatic('/gh-interface/csc_getcomponentdata.jpg')}
+          />
+
+          <ComponentCard
+            icon={Code}
+            name="CSC_ApplyPCAFrame"
+            description="Applies an inverse PCA transformation to align geometry or component data with the world coordinate system. Takes either component JSON or Rhino geometry and transforms it to align with the world XY plane."
+            inputs={[
+              { label: 'Input', description: 'ComponentData (JSON string) or geometry objects with component userdata' }
+            ]}
+            outputs={[
+              { label: 'Output', description: 'Transformed ComponentData (if input was JSON) or transformed geometry with updated userdata (if input was geometry)' }
+            ]}
+            tip="Handles both JSON component data and geometry objects with component userdata automatically."
+            imagePath={resolveStatic('/gh-interface/csc_applypcaframe.jpg')}
           />
 
           <ComponentCard
@@ -445,6 +495,7 @@ export default function GHInterfacePage() {
               { label: 'DesignJSON', description: 'Design JSON string ready for posting' }
             ]}
             tip="Automatically processes additional geometry meshes by centering them, computing iframes, and performing mesh reduction if needed."
+            imagePath={resolveStatic('/gh-interface/csc_createdesign.jpg')}
           />
 
           <ComponentCard
@@ -459,6 +510,20 @@ export default function GHInterfacePage() {
               { label: 'AddedDesignData', description: 'The added design data returned from the server as JSON' }
             ]}
             tip="Validates design data including component references and additional geometry before posting to the database."
+            imagePath={resolveStatic('/gh-interface/csc_adddesign.jpg')}
+          />
+
+          <ComponentCard
+            icon={Code}
+            name="CSC_CreateUUID"
+            description="Creates new UUIDs on request using an asynchronous callback mechanism."
+            inputs={[
+              { label: 'Refresh', description: 'If set to True, generates a new UUID' }
+            ]}
+            outputs={[
+              { label: 'UUID', description: 'The current UUID' }
+            ]}
+            tip="UUIDs are cached and only regenerated when Refresh is toggled."
           />
         </div>
       )
@@ -481,6 +546,7 @@ export default function GHInterfacePage() {
               { label: 'None', description: 'This component has no outputs' }
             ]}
             tip="Converts Grasshopper component data into actual Rhino objects in the document."
+            imagePath={resolveStatic('/gh-interface/csc_bakecomponents.jpg')}
           />
 
           <ComponentCard
@@ -494,27 +560,9 @@ export default function GHInterfacePage() {
               { label: 'ComponentData', description: 'DataTree containing all component data found in the document, with updated iframe information based on current object positions' }
             ]}
             tip="Updates component iframe information based on current object positions in the Rhino document."
+            imagePath={resolveStatic('/gh-interface/csc_syncwithrhinodoc.jpg')}
           />
 
-          <ComponentCard
-            icon={Settings}
-            name="CSC_ViewCaptureToFile"
-            description="Captures the current Rhino view to an image file for documentation."
-            inputs={[
-              { label: 'Toggle', description: 'Toggle to execute the view capture operation' },
-              { label: 'Width', description: 'Image width in pixels (default: 1920 if not provided)' },
-              { label: 'Height', description: 'Image height in pixels (default: 1080 if not provided)' },
-              { label: 'BackgroundColor', description: 'Background color for the viewport capture' },
-              { label: 'Grid', description: 'Show grid in the captured image' },
-              { label: 'WorldAxes', description: 'Show world axes in the captured image' },
-              { label: 'CPlaneAxes', description: 'Show construction plane axes in the captured image' },
-              { label: 'OpenFile', description: 'Open the captured file after creation' }
-            ]}
-            outputs={[
-              { label: 'FilePath', description: 'Path to the captured image file' }
-            ]}
-            tip="Captures the current Rhino viewport with customizable settings for documentation purposes."
-          />
         </div>
       )
     },
@@ -573,6 +621,55 @@ export default function GHInterfacePage() {
               { label: 'PCAXForm', description: 'PCA frame that was used to transform the geometry converted to a Rhino XForm.' }
             ]}
             tip="Computes PCA-based orientation for geometry alignment and provides transformation data for positioning."
+          />
+
+          <ComponentCard
+            icon={HelpCircle}
+            name="CSC_ComputePCA"
+            description="Computes principal component analysis (PCA) for dimensionality reduction."
+            inputs={[
+              { label: 'Data', description: 'Data to be reduced using PCA as a DataTree, where each Branch represents one DataPoint' },
+              { label: 'Components', description: 'Dimension of the embedded space (default: 2)' }
+            ]}
+            outputs={[
+              { label: 'EmbeddedData', description: 'The transformed data as a DataTree, where each Branch represents one embedded DataPoint' }
+            ]}
+            tip="Useful for dimensionality reduction of high-dimensional data into lower-dimensional spaces."
+          />
+
+          <ComponentCard
+            icon={HelpCircle}
+            name="CSC_ComputeTSNE"
+            description="Computes T-distributed Stochastic Neighbor Embedding for nonlinear dimensionality reduction."
+            inputs={[
+              { label: 'Data', description: 'Data to be reduced using t-SNE as a DataTree, where each Branch represents one DataPoint' },
+              { label: 'Components', description: 'Dimension of the embedded space' },
+              { label: 'Perplexity', description: 'The perplexity is related to the number of nearest neighbors. Consider selecting a value between 5 and 50. Defaults to 30' },
+              { label: 'EarlyExaggeration', description: 'Controls how tight natural clusters in the original space are in the embedded space. Defaults to 12' },
+              { label: 'LearningRate', description: 'The learning rate for t-SNE is usually in the range (10.0, 1000.0). Defaults to 200' },
+              { label: 'Iterations', description: 'Maximum number of iterations for the optimization. Should be at least 250. Defaults to 1000' },
+              { label: 'Method', description: 'Barnes-Hut approximation (0) runs in O(NlogN) time. Exact method (1) runs in O(N^2) time. Defaults to 0' },
+              { label: 'Initialization', description: 'Initialization method. Random (0) or PCA (1). Defaults to 0' },
+              { label: 'RandomSeed', description: 'Determines the random number generator. Pass an int for reproducible results. Defaults to None' }
+            ]}
+            outputs={[
+              { label: 'EmbeddedData', description: 'The transformed data as a DataTree, where each Branch represents one embedded DataPoint' }
+            ]}
+            tip="T-SNE is great for visualizing high-dimensional data in 2D or 3D by preserving local neighborhood structure."
+          />
+
+          <ComponentCard
+            icon={HelpCircle}
+            name="CSC_GetDescriptor"
+            description="Retrieves a specific descriptor from multiple component_data inputs. Accepts a list of component_data JSON strings or geometries with attached component_data. Returns the descriptor values for the specified key from the descriptors array. Handles single values, lists, and nested lists by mapping them to appropriate Grasshopper data structures with input indices as the first path level."
+            inputs={[
+              { label: 'Input', description: 'List of component data as JSON strings OR geometries with attached component_data userdata' },
+              { label: 'DescriptorKey', description: 'Key string to retrieve from the descriptors array in component_data' }
+            ]}
+            outputs={[
+              { label: 'DescriptorValues', description: 'Descriptor value for the specified key, or empty if not found. Output is structured as a DataTree with input indices as the first path level' }
+            ]}
+            tip="Handles complex nested data structures automatically and preserves data tree paths from the input structure."
           />
         </div>
       )

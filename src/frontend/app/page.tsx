@@ -46,8 +46,8 @@ export default function Home() {
           </CardHeader>
           <CardContent className="space-y-4 text-base leading-relaxed">
             <p>
-              The <i>Catalogue of Second Chances</i> is a digital repository designed to store and make accessible digitized representations of building components. 
-              It supports practices of reuse and circularity in architecture by providing structured access to component data.
+              The <i>Catalogue of Second Chances</i> is a digital repository designed to store, browse and access digitized representations of building components. 
+              It aims to promote reuse and circularity in architecture by providing structured access to component data.
             </p>
             <p>
               The catalogue can be accessed in two ways: through this web interface, and from within the parametric design environment 
@@ -55,8 +55,7 @@ export default function Home() {
               where it serves as a testbed for workflows involving reuse, digital documentation, and component-based design.
             </p>
             <p>
-              The aim is not only to facilitate browsing and retrieval of components, but also to support experimental approaches to cataloguing, 
-              data modeling, and digital reuse practices in architectural contexts.
+              The catalogue is created and maintained as a case-study for the PhD thesis of Max Benjamin Eschenbach. For more information, please visit the <Link href="/credits" className='text-blue-500 underline'>Credits</Link> page.
             </p>
           </CardContent>
         </Card>
