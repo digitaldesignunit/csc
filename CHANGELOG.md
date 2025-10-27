@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1.3] - 2025-10-09
+## [0.4.0.0] - 2025-10-27
 
 ### Versions
 
@@ -14,16 +14,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### CSC FastAPI Backend
+
+- **Descriptor Computation**: Sphere score based on DCT approach
+- **Geometry Maintenance**: Automated maintenance script and cronjob configuration
+- **Utility Routes**: Descriptor output log checking endpoint
+- **Email Service**: Enhanced email service integration
+
 #### CSC React Frontend
 
-- **BackgroundMesh**: Animated mesh on some pages as background.
-- **Theme Toggle**: Switch between light, dark, and system.
+- **BackgroundMesh**: Animated mesh on some pages as background with scale factor control
+- **Theme Toggle**: Switch between light, dark, and system
+- **Favicons**: Updated favicon set for all platforms
+- **Architecture Charts**: Mermaid diagrams for documentation
+
+#### CSC Grasshopper Interface
+
+- **ComputeTSNE**: T-SNE computation component for dimensionality reduction
+- **GetDescriptor**: Descriptor extraction component
+- **CreateUUID**: UUID generation component
+- **Enhanced Parameter Descriptions**: Better input parameter documentation
 
 ### Changed
 
+#### CSC FastAPI Backend
+
+- **PCA Frame**: Ensure right-handedness of PCA frame transformations
+- **Environment Configuration**: Updated environment specifications
+
 #### CSC React Frontend
 
-- **Input Placeholders**: Improved registration form placeholders.
+- **Input Placeholders**: Improved registration form placeholders
+- **Next.js**: Updated to latest 15.x version
+- **Next Auth**: Updated authentication system
+- **Design Viewer**: Refactored design and component viewer interfaces
+
+#### CSC Grasshopper Interface
+
+- **Assembly Behavior**: Changed assembly behavior
+- **Component Updates**: Small fixes across components
+- **Dev Files**: Updated development files
+- **User Object Re-export**: Re-exported user objects with updates
 
 ## [0.3.1.2] - 2025-10-07
 
