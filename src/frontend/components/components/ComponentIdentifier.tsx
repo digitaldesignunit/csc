@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useRef, MutableRefObject } from 'react'
-import { Html5Qrcode, Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
+import React, { useState, useRef } from 'react'
+import { Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { Button } from '@/components/ui/button'
 import { CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -29,7 +29,6 @@ const ComponentIdentifier: React.FC = () => {
   const [status, setStatus] = useState<ScanStatus>('neutral')
   const [isChecking, setIsChecking] = useState(false)
 
-  const html5QrCodeRef: MutableRefObject<Html5Qrcode | null> = useRef(null)
   const qrScannerRef = useRef<QRScannerRef | null>(null)
   const elementId = 'identifier-reader'
   const cameraContainerId = 'identifier-cameracontainer'
@@ -39,13 +38,6 @@ const ComponentIdentifier: React.FC = () => {
   const MSG_FOUND = 'Component found! Opening...'
   const MSG_NOT_FOUND = 'Component not found in database.'
   const MSG_ERROR = 'Error occurred while checking component.'
-
-  const ensureInstance = () => {
-    if (!html5QrCodeRef.current) {
-      html5QrCodeRef.current = new Html5Qrcode(elementId)
-    }
-    return html5QrCodeRef.current
-  }
 
   const checkComponentExists = async (componentId: string): Promise<boolean> => {
     try {

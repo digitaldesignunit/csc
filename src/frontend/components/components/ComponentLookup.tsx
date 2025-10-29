@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useRef, MutableRefObject, useEffect } from 'react'
-import { Html5Qrcode, Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
+import React, { useState, useRef, useEffect } from 'react'
+import { Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { Button } from '@/components/ui/button'
 import { CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -31,7 +31,6 @@ const ComponentLookup: React.FC<Props> = ({ presetReferenceID }) => {
   const [isScanning, setIsScanning] = useState(false)
   const [status, setStatus] = useState<ScanStatus>('neutral')
 
-  const html5QrCodeRef: MutableRefObject<Html5Qrcode | null> = useRef(null)
   const qrScannerRef = useRef<QRScannerRef | null>(null)
   const elementId = 'reader'
   const cameraContainerId = 'cameracontainer'
@@ -49,13 +48,6 @@ const ComponentLookup: React.FC<Props> = ({ presetReferenceID }) => {
       setComparisonResult(MSG_REF_SCANNED)
     }
   }, [presetReferenceID, referenceID, comparisonResult])
-
-  const ensureInstance = () => {
-    if (!html5QrCodeRef.current) {
-      html5QrCodeRef.current = new Html5Qrcode(elementId)
-    }
-    return html5QrCodeRef.current
-  }
 
   const startScanningForReference = () => {
     document.getElementById(elementId)?.scrollIntoView()

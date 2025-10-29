@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, MutableRefObject, useCallback, forwardRef, useImperativeHandle } from 'react'
+import React, { useRef, MutableRefObject, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react'
 import { Html5Qrcode, Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 
 interface QRScannerProps {
@@ -22,6 +22,15 @@ export interface QRScannerRef {
   stopScanning: () => Promise<void>
 }
 
+const defaultConfig = {
+  aspectRatio: 1,
+  fps: 10,
+  qrbox: { width: 300, height: 300 },
+  rememberLastUsedCamera: true,
+  supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+  formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+}
+
 /**
  * Enhanced QR Scanner component using html5-qrcode with inverted QR code support
  * Uses html5-qrcode's built-in scanning with additional image inversion processing
@@ -34,16 +43,7 @@ const QRScanner = forwardRef<QRScannerRef, QRScannerProps>(({
 }, ref) => {
   const html5QrCodeRef: MutableRefObject<Html5Qrcode | null> = useRef(null)
 
-  const defaultConfig = {
-    aspectRatio: 1,
-    fps: 10,
-    qrbox: { width: 300, height: 300 },
-    rememberLastUsedCamera: true,
-    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-  }
-
-  const mergedConfig = { ...defaultConfig, ...config }
+  const mergedConfig = useMemo(() => ({ ...defaultConfig, ...config }), [config])
 
   const ensureInstance = useCallback(() => {
     if (!html5QrCodeRef.current) {
