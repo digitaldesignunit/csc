@@ -33,7 +33,8 @@ from utility import (
     sanitize_path,
     get_db_connectionstring,
     get_geometry_directory,
-    create_logging_timestamp as logts
+    create_logging_timestamp as logts,
+    get_current_timestamp_z
 )
 
 # Import descriptor computation modules
@@ -380,7 +381,7 @@ async def update_component_descriptors(
         updated_descriptors = {**current_descriptors, **descriptors}
 
         # Update lastmodified timestamp
-        now = datetime.now(timezone.utc).isoformat() + 'Z'
+        now = get_current_timestamp_z()
 
         # Update in database
         result = await mongodb_components.update_one(

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3.9
-from datetime import datetime, timezone
 from typing import List
 import json
 import hashlib
@@ -22,7 +21,8 @@ from apps.catalogue.models import (  # NOQA
 from .auth import get_current_active_user
 from utility import (
     generate_design_etag,
-    generate_etag_for_designs
+    generate_etag_for_designs,
+    get_current_timestamp_z
 )
 
 # INIT ROUTER -----------------------------------------------------------------
@@ -48,8 +48,8 @@ async def get_users_col(request: Request):
 # HELPER FUNCTIONS ------------------------------------------------------------
 
 def get_current_timestamp() -> str:
-    """Get current ISO timestamp."""
-    return datetime.now(timezone.utc).isoformat()
+    """Deprecated; use get_current_timestamp_z from utility instead."""
+    return get_current_timestamp_z()
 
 
 def check_conditional_request(request: Request, etag: str) -> bool:
@@ -325,7 +325,7 @@ async def create_design(
             )
 
         # Create design document (UUID provided by client)
-        now = get_current_timestamp()
+        now = get_current_timestamp_z()
         design_doc = {
             "_id": design_data.id,
             "name": design_data.name,
@@ -419,7 +419,7 @@ async def update_design(
                 )
 
         # Prepare update data
-        update_data = {"lastmodified": get_current_timestamp()}
+        update_data = {"lastmodified": get_current_timestamp_z()}
 
         if design_data.name is not None:
             update_data["name"] = design_data.name

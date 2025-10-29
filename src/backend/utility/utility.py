@@ -103,6 +103,16 @@ def create_logging_timestamp():
     return timestamp
 
 
+def get_current_timestamp_z() -> str:
+    """
+    Return current UTC time as ISO 8601 string with 'Z', no offset, no
+    subseconds.
+
+    Example: '2024-06-21T09:31:39Z'
+    """
+    return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+
+
 def generate_component_etag(component_data: dict) -> str:
     """
     Generate ETag for a component using hybrid hash approach.
