@@ -6,6 +6,7 @@ from .health import router as health_router
 from .utility import router as utility_router
 from .reserve import router as reserve_router
 from .downloads import router as downloads_router
+from .ghupdates import router as ghupdates_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix='/auth', tags=['auth'])
@@ -15,3 +16,4 @@ api_router.include_router(health_router, tags=['health'])
 api_router.include_router(utility_router, tags=['utility'])
 api_router.include_router(reserve_router, tags=['reserve'])
 api_router.include_router(downloads_router, tags=['downloads'])
+api_router.include_router(ghupdates_router, tags=['ghupdates'])

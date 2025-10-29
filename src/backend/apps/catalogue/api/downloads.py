@@ -114,9 +114,9 @@ async def download_gh_interface(
         filename = await github_service.get_asset_filename(release_info)
 
         # Debug logging
-        print(f"Release info: {release_info}")
-        print(f"Download URL: {download_url}")
-        print(f"Filename: {filename}")
+        # print(f"Release info: {release_info}")
+        # print(f"Download URL: {download_url}")
+        # print(f"Filename: {filename}")
 
         # Create a streaming response
         async def generate():
@@ -136,19 +136,17 @@ async def download_gh_interface(
                         timeout=60.0,
                         follow_redirects=True
                     ) as response:
-                        print(f"Response status: {response.status_code}")
-                        print(f"Response headers: {dict(response.headers)}")
-                        content_type = response.headers.get(
-                            'content-type', 'N/A'
-                        )
-                        print(f"Content-Type: {content_type}")
-                        content_length = response.headers.get(
-                            'content-length', 'N/A'
-                        )
-                        print(f"Content-Length: {content_length}")
-
+                        # print(f"Response status: {response.status_code}")
+                        # print(f"Response headers: {dict(response.headers)}")
+                        # content_type = response.headers.get(
+                        #     'content-type', 'N/A'
+                        # )
+                        # print(f"Content-Type: {content_type}")
+                        # content_length = response.headers.get(
+                        #     'content-length', 'N/A'
+                        # )
+                        # print(f"Content-Length: {content_length}")
                         response.raise_for_status()
-
                         # Stream the file content
                         async for chunk in response.aiter_bytes(
                             chunk_size=8192
