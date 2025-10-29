@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import QRScanner, { QRScannerRef } from '@/components/qr/QRScanner'
 
 interface Props {
   presetReferenceID?: string
@@ -31,6 +32,7 @@ const ComponentLookup: React.FC<Props> = ({ presetReferenceID }) => {
   const [status, setStatus] = useState<ScanStatus>('neutral')
 
   const html5QrCodeRef: MutableRefObject<Html5Qrcode | null> = useRef(null)
+  const qrScannerRef = useRef<QRScannerRef | null>(null)
   const elementId = 'reader'
   const cameraContainerId = 'cameracontainer'
 
@@ -57,71 +59,48 @@ const ComponentLookup: React.FC<Props> = ({ presetReferenceID }) => {
 
   const startScanningForReference = () => {
     document.getElementById(elementId)?.scrollIntoView()
-    const instance = ensureInstance()
-    if (!referenceID && !isScanning && instance) {
+    if (!referenceID && !isScanning && qrScannerRef.current) {
       setIsScanning(true)
-      Html5Qrcode.getCameras()
-        .then((cameras) => {
-          if (cameras.length) {
-            instance
-              .start(
-                { facingMode: 'environment' },
-                config,
-                (decodedText) => {
-                  setReferenceID(decodedText)
-                  setStatus('ok')
-                  setComparisonResult(MSG_REF_SCANNED)
-                  stopScanning() // stop after capturing reference
-                },
-                undefined
-              )
-              .catch((err) => console.error('Error starting QR scan: ', err))
-          } else {
-            console.error('No cameras found.')
-          }
-        })
-        .catch((err) => console.error('Error getting cameras: ', err))
+      qrScannerRef.current.startScanning()
     }
   }
 
   const startScanningForComparison = () => {
     document.getElementById(elementId)?.scrollIntoView()
-    const instance = ensureInstance()
-    if (referenceID && !isScanning && instance) {
+    if (referenceID && !isScanning && qrScannerRef.current) {
       setIsScanning(true)
-      Html5Qrcode.getCameras()
-        .then((cameras) => {
-          if (cameras.length) {
-            instance
-              .start(
-                { facingMode: 'environment' },
-                config,
-                (decodedText) => {
-                  const match = decodedText === referenceID
-                  setCurrentID(decodedText)
-                  setStatus(match ? 'ok' : 'bad')
-                  setComparisonResult(match ? MSG_MATCH : MSG_MISMATCH)
-                  if (match) stopScanning()
-                },
-                undefined
-              )
-              .catch((err) => console.error('Error starting QR scan: ', err))
-          } else {
-            console.error('No cameras found.')
-          }
-        })
-        .catch((err) => console.error('Error getting cameras: ', err))
+      qrScannerRef.current.startScanning()
     }
   }
 
   const stopScanning = () => {
-    html5QrCodeRef.current
-      ?.stop()
-      .then(() => {
-        setIsScanning(false)
-        html5QrCodeRef.current?.clear()
-      })
-      .catch((err) => console.error('Failed to stop scanning.', err))
+    if (qrScannerRef.current) {
+      qrScannerRef.current.stopScanning()
+      setIsScanning(false)
+    }
+  }
+
+  const handleQRScanSuccess = (decodedText: string) => {
+    if (!referenceID) {
+      // Scanning for reference
+      setReferenceID(decodedText)
+      setStatus('ok')
+      setComparisonResult(MSG_REF_SCANNED)
+      stopScanning()
+    } else {
+      // Scanning for comparison
+      const match = decodedText === referenceID
+      setCurrentID(decodedText)
+      setStatus(match ? 'ok' : 'bad')
+      setComparisonResult(match ? MSG_MATCH : MSG_MISMATCH)
+      if (match) stopScanning()
+    }
+  }
+
+  const handleQRScanError = (error: string) => {
+    console.error('QR scan error:', error)
+    setStatus('bad')
+    setIsScanning(false)
   }
 
   const resetScanner = () => {
@@ -206,7 +185,13 @@ const ComponentLookup: React.FC<Props> = ({ presetReferenceID }) => {
         id={cameraContainerId}
         className={`mt-4 p-0 relative w-full max-w-[500px] h-[500px] border-8 rounded-xl ${borderClass} bg-card`}
       >
-        <div id={elementId} className="rounded-lg" />
+        <QRScanner
+          ref={qrScannerRef}
+          elementId={elementId}
+          onScanSuccess={handleQRScanSuccess}
+          onScanError={handleQRScanError}
+          config={config}
+        />
         {!isScanning && (
           <div className="absolute inset-0 bg-muted/60 flex items-center justify-center text-center rounded">
             <span className="whitespace-pre-wrap text-sm text-muted-foreground">

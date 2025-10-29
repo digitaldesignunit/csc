@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
 import { QrCode, Search } from 'lucide-react'
+import QRScanner, { QRScannerRef } from '@/components/qr/QRScanner'
 
 type ScanStatus = 'neutral' | 'scanning' | 'found' | 'not_found' | 'error'
 
@@ -29,6 +30,7 @@ const ComponentIdentifier: React.FC = () => {
   const [isChecking, setIsChecking] = useState(false)
 
   const html5QrCodeRef: MutableRefObject<Html5Qrcode | null> = useRef(null)
+  const qrScannerRef = useRef<QRScannerRef | null>(null)
   const elementId = 'identifier-reader'
   const cameraContainerId = 'identifier-cameracontainer'
 
@@ -82,47 +84,18 @@ const ComponentIdentifier: React.FC = () => {
 
   const startScanning = () => {
     document.getElementById(elementId)?.scrollIntoView()
-    const instance = ensureInstance()
-    if (!isScanning && instance) {
+    if (!isScanning && qrScannerRef.current) {
       setIsScanning(true)
       setStatus('scanning')
-      Html5Qrcode.getCameras()
-        .then((cameras) => {
-          if (cameras.length) {
-            instance
-              .start(
-                { facingMode: 'environment' },
-                config,
-                handleScannedCode,
-                undefined
-              )
-              .catch((err) => {
-                console.error('Error starting QR scan: ', err)
-                setStatus('error')
-                setIsScanning(false)
-              })
-          } else {
-            console.error('No cameras found.')
-            setStatus('error')
-            setIsScanning(false)
-          }
-        })
-        .catch((err) => {
-          console.error('Error getting cameras: ', err)
-          setStatus('error')
-          setIsScanning(false)
-        })
+      qrScannerRef.current.startScanning()
     }
   }
 
   const stopScanning = () => {
-    html5QrCodeRef.current
-      ?.stop()
-      .then(() => {
-        setIsScanning(false)
-        html5QrCodeRef.current?.clear()
-      })
-      .catch((err) => console.error('Failed to stop scanning.', err))
+    if (qrScannerRef.current) {
+      qrScannerRef.current.stopScanning()
+      setIsScanning(false)
+    }
   }
 
   const resetScanner = () => {
@@ -238,7 +211,18 @@ const ComponentIdentifier: React.FC = () => {
         id={cameraContainerId}
         className={`mt-4 p-0 relative w-full max-w-[500px] h-[500px] border-8 rounded-xl ${borderClass} bg-card`}
       >
-        <div id={elementId} className="rounded-lg" />
+        <QRScanner
+          ref={qrScannerRef}
+          elementId={elementId}
+          onScanSuccess={handleScannedCode}
+          onScanError={(error) => {
+            console.error('QR scan error:', error)
+            setStatus('error')
+            setIsScanning(false)
+          }}
+          config={config
+          }
+        />
         {!isScanning && (
           <div className="absolute inset-0 bg-muted/60 flex items-center justify-center text-center rounded">
             <span className="whitespace-pre-wrap text-sm text-muted-foreground">
