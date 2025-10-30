@@ -73,6 +73,17 @@ def get_geometry_directory(config_file: str) -> str:
     return geometry_dir
 
 
+def get_gh_xml_cache_directory(config_file: str) -> str:
+    """
+    Read GH XML cache directory from config file.
+    """
+    with open(config_file, 'r') as configfile:
+        # Reading from json file
+        dbconfig = json.load(configfile)
+        gh_xml_cache_dir = sanitize_path(dbconfig['gh_xml_cache_dir'])
+    return gh_xml_cache_dir
+
+
 def get_github_repo_url(config_file: str) -> str:
     """
     Read GitHub repository URL from config file.

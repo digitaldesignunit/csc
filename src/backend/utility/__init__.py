@@ -4,6 +4,7 @@ from .utility import ( # NOQA401
     get_db_connectionstring,
     get_preview_directory,
     get_geometry_directory,
+    get_gh_xml_cache_directory,
     create_logging_timestamp,
     get_current_timestamp_z,
     generate_component_etag,

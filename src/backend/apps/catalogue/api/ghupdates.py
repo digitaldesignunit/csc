@@ -6,9 +6,10 @@ import os
 import re
 from typing import Annotated, List, Optional
 import json
+import hashlib
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response, StreamingResponse
 import httpx
 
@@ -273,6 +274,102 @@ async def get_src_code(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f'Failed to fetch source from GitHub: {e}',
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+def _compute_dir_etag(dir_path: str) -> str:
+    """
+    Compute a simple ETag over filenames and mtimes in a directory.
+    """
+    h = hashlib.sha256()
+    try:
+        for name in sorted(os.listdir(dir_path)):
+            if not name.lower().endswith('.xml'):
+                continue
+            full = os.path.join(dir_path, name)
+            try:
+                st = os.stat(full)
+            except OSError:
+                continue
+            h.update(name.encode('utf-8', 'ignore'))
+            h.update(str(int(st.st_mtime)).encode('ascii'))
+    except FileNotFoundError:
+        pass
+    return 'W/"' + h.hexdigest()[:16] + '"'
+
+
+@router.get('/ghupdates/xml_names', response_model=List[str])
+async def list_xml_names(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    try:
+        cache_dir = request.app.gh_xml_cache_dir
+        names: List[str] = []
+        if os.path.isdir(cache_dir):
+            for fname in os.listdir(cache_dir):
+                if fname.lower().endswith('.xml'):
+                    names.append(fname[:-4])
+        names_sorted = sorted(list(dict.fromkeys(names)))
+
+        etag = _compute_dir_etag(cache_dir)
+        payload = json.dumps(names_sorted)
+        headers = {
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=300',  # 5 minutes
+        }
+        return Response(
+            payload,
+            media_type='application/json',
+            headers=headers,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.get('/ghupdates/xml/{name}', response_class=Response)
+async def get_xml(
+    request: Request,
+    name: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    try:
+        # Basic validation and prevent path traversal
+        if '/' in name or '\\' in name or '..' in name:
+            raise HTTPException(status_code=400, detail='Invalid name')
+        if not name.startswith('DDU_CSC_'):
+            raise HTTPException(
+                status_code=400,
+                detail='Invalid component prefix',
+            )
+
+        cache_dir = request.app.gh_xml_cache_dir
+        path = os.path.join(cache_dir, f'{name}.xml')
+        if not os.path.isfile(path):
+            raise HTTPException(status_code=404, detail='XML not found')
+
+        with open(path, 'rb') as f:
+            content = f.read()
+
+        etag = 'W/"' + hashlib.sha256(content).hexdigest()[:16] + '"'
+        headers = {
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=300',
+        }
+        return Response(
+            content,
+            media_type='text/xml; charset=utf-8',
+            headers=headers,
         )
     except HTTPException:
         raise
