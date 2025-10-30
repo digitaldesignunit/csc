@@ -19,6 +19,7 @@ from functools import cmp_to_key
 import System  # type: ignore[reportMissingImport] # NOQA
 import Rhino  # type: ignore[reportMissingImport] # NOQA
 import Grasshopper  # type: ignore[reportMissingImport] # NOQA
+import GH_IO  # type: ignore[reportMissingImport] # NOQA
 import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
 import GhPython as ghpy  # type: ignore[reportMissingImport] # NOQA
 import ScriptComponents as scomp  # type: ignore[reportMissingImport] # NOQA
@@ -40,7 +41,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 251023.1
+    Version: 251030.1
     """
 
     def __init__(self):
@@ -89,11 +90,17 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             'paths based on the GH document.'
         )
         self.InputParams[4].Description = (
-            'Folder to save script source files in.\n'
+            'Folders to save \'pasteable\' XML representations '
+            'of UserObjects in.\n'
             'NOTE: Resolves environment variables and relative'
             'paths based on the GH document.'
         )
         self.InputParams[5].Description = (
+            'Folder to save script source files in.\n'
+            'NOTE: Resolves environment variables and relative'
+            'paths based on the GH document.'
+        )
+        self.InputParams[6].Description = (
             '24x24 png icon to set to the script components '
             'and UserObjects.'
         )
@@ -476,6 +483,28 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         return (unique_script_components, OldScriptsDebug, CategoryDebug,
                 VersionDebug, InfoMessages, UpdateMessages)
 
+    def make_userobject(self, obj, iconpath=''):
+        """
+        Creates a UserObject from a GH document object
+        """
+        # Make a user object
+        uo = Grasshopper.Kernel.GH_UserObject()
+        # Process icon
+        if iconpath:
+            obj.SetIconOverride(System.Drawing.Bitmap.FromFile(iconpath))
+        uo.Icon = obj.Icon_24x24
+        # Set its properties based on the GHPython component properties
+        uo.BaseGuid = obj.ComponentGuid
+        uo.Exposure = obj.Exposure.primary
+        uo.Description.Name = obj.Name
+        uo.Description.NickName = obj.NickName
+        uo.Description.Description = obj.Description
+        uo.Description.Category = obj.Category
+        uo.Description.SubCategory = obj.SubCategory
+        # Set the user object data and save to file
+        uo.SetDataFromObject(obj)
+        return uo
+
     def export_scriptcomp_usrobj(self, scriptcomp, usrobjpath, iconpath=''):
         """
         Automates the creation of a GHPython user object. Based on this thread:
@@ -484,22 +513,8 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         """
         try:
             # Make a user object
-            uo = Grasshopper.Kernel.GH_UserObject()
-            # Get component object
             obj = scriptcomp[3]
-            # Process icon
-            if iconpath:
-                obj.SetIconOverride(System.Drawing.Bitmap.FromFile(iconpath))
-            uo.Icon = obj.Icon_24x24
-            # Set its properties based on the GHPython component properties
-            uo.BaseGuid = obj.ComponentGuid
-            uo.Exposure = ghenv.Component.Exposure.primary  # type: ignore[reportUnedfinedVariable] # NOQA
-            uo.Description.Name = obj.Name
-            uo.Description.Description = obj.Description
-            uo.Description.Category = obj.Category
-            uo.Description.SubCategory = obj.SubCategory
-            # Set the user object data and save to file
-            uo.SetDataFromObject(obj)
+            uo = self.make_userobject(obj, iconpath)
             uo.Path = os.path.join(
                 usrobjpath, obj.Category + '_' + obj.Name + '.ghuser')
             # Ensure the directory exists before saving
@@ -510,43 +525,83 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             return False
         return True
 
+    def export_scriptcomp_xml(self, scriptcomp, xmlpath, iconpath=''):
+        """
+        Export scriptable component as 'pasteable' XML
+        """
+        try:
+            obj = scriptcomp[3]
+            uo = self.make_userobject(obj, iconpath)
+            # instantiate userobject to finally get a copy of the
+            # DocumentObject and set new instanceguid (precaution)
+            uo_comp = uo.InstantiateObject()
+            uo_comp.NewInstanceGuid()
+            # overwrite object location on canvas
+            uo_comp.Attributes.Pivot = System.Drawing.PointF(20, 20)
+            # create new doc and add object
+            new_doc = Grasshopper.Kernel.GH_Document()
+            new_doc.AddObject(uo_comp, False, 0)
+            # create archive that can be serialized
+            archive = GH_IO.Serialization.GH_Archive()
+            archive.AppendObject(new_doc, 'Clipboard')
+            # last but not least: serialize to XML - hooray!
+            xml = archive.Serialize_Xml()
+            xml = xml.replace('\r', '')
+            if not os.path.isdir(xmlpath):
+                os.makedirs(xmlpath)
+            xmlfile = os.path.join(
+                xmlpath, obj.Category + '_' + obj.Name + '.xml'
+            )
+            with open(xmlfile, 'w') as f:
+                f.write(xml)
+        except Exception as e:
+            print(e)
+            return False
+        return True
+
+
     def export_scriptcomp_source(self, scriptcomp, srcpath):
         """
         Export the source code of a script component
         scriptcomp = [script_type, nickname, name, obj, source]
         """
         # Get code and lines of code
-        script_type = scriptcomp[0]
-        name = scriptcomp[2]
-        obj = scriptcomp[3]
-        source = scriptcomp[4]
-        code = source.replace('\r', '')
-        lines = code.splitlines()
-        loc = len(lines)
-        # Check/make source file folder
-        srcpath = os.path.join(srcpath)
-        if not os.path.isdir(srcpath):
-            os.makedirs(srcpath)
-        # Write code to file
-        if script_type == 'PY3' or script_type == 'IPY2':
-            ext = '.py'
-        elif script_type == 'CS9':
-            ext = '.cs'
-        else:
-            # DO NOT EXPORT OLD SCRIPTS!
-            ext = None
-        if ext:
-            src_file = os.path.join(srcpath, obj.Category + '_' + name + ext)
-            with open(src_file, 'w') as f:
-                f.write(code)
-        return loc
+        try:
+            script_type = scriptcomp[0]
+            name = scriptcomp[2]
+            obj = scriptcomp[3]
+            source = scriptcomp[4]
+            code = source.replace('\r', '')
+            lines = code.splitlines()
+            loc = len(lines)
+            # Check/make source file folder
+            srcpath = os.path.join(srcpath)
+            if not os.path.isdir(srcpath):
+                os.makedirs(srcpath)
+            # Write code to file
+            if script_type == 'PY3' or script_type == 'IPY2':
+                ext = '.py'
+            elif script_type == 'CS9':
+                ext = '.cs'
+            else:
+                # DO NOT EXPORT OLD SCRIPTS!
+                ext = None
+            if ext:
+                src_file = os.path.join(srcpath, obj.Category + '_' + name + ext)
+                with open(src_file, 'w') as f:
+                    f.write(code)
+        except Exception as e:
+            print(e)
+            return False, None
+        return True, loc
 
     def RunScript(self,
             RunComponentAnalysis: bool,
             ExportUserObjectsAndSource: bool,
             Category: str,
-            UserObjFolders: System.Collections.Generic.List[object],
-            SourceFolder,
+            UserObjFolders: System.Collections.Generic.List[str],
+            XMLFolders: System.Collections.Generic.List[str],
+            SourceFolders: System.Collections.Generic.List[str],
             IconPath: str):
         # Init outputs
         OldScriptsDebug = Grasshopper.DataTree[str]()
@@ -563,9 +618,14 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             os.path.normpath(os.path.abspath(
                 os.path.join(gh_dir, self._expand_path(uof))))
             for uof in UserObjFolders]
-        srcpath = os.path.normpath(
+        xmlpaths = [os.path.normpath(
             os.path.abspath(os.path.join(
-                gh_dir, self._expand_path(SourceFolder))))
+                gh_dir, self._expand_path(xmlf))))
+            for xmlf in XMLFolders]
+        srcpaths = [os.path.normpath(
+            os.path.abspath(os.path.join(
+                gh_dir, self._expand_path(srcf))))
+            for srcf in SourceFolders]
         iconpath = os.path.normpath(
             os.path.abspath(os.path.join(
                 gh_dir, self._expand_path(IconPath))))
@@ -590,14 +650,28 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         # HERE LOOP OVER UNIQUE COMPONENTS
         if ExportUserObjectsAndSource and RunComponentAnalysis:
             for script_id, scriptcomp in unique_script_components.items():
-                # SAVE SOURCE
-                loc = self.export_scriptcomp_source(scriptcomp, srcpath)
-                # SAVE USEROBJECT IN ALL PATHS
                 unionres = True
+                # SAVE SOURCE IN ALL PATHS
+                for src_path in srcpaths:
+                    res, loc = self.export_scriptcomp_source(
+                        scriptcomp, src_path
+                    )
+                    if not res:
+                        unionres = False
+                        break
+                # SAVE XML FILES
+                for xml_path in xmlpaths:
+                    res = self.export_scriptcomp_xml(
+                        scriptcomp, xml_path, iconpath
+                    )
+                    if not res:
+                        unionres = False
+                        break
+                # SAVE USEROBJECT IN ALL PATHS
                 for uo_path in usrobjpaths:
-                    print(uo_path)
                     res = self.export_scriptcomp_usrobj(
-                        scriptcomp, uo_path, iconpath)
+                        scriptcomp, uo_path, iconpath
+                    )
                     if not res:
                         unionres = False
                         break
