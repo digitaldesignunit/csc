@@ -5,6 +5,7 @@ import base64
 import os
 import re
 from typing import Annotated, List, Optional
+import json
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -105,6 +106,84 @@ async def _get_repo_file(
         )
 
 
+def get_source_version(source):
+    """
+    Attempts to get the first instance of the word "version"
+    (or, "Version") in a multi line string. Then attempts to extract a
+    version string from this line where the word "version" exists.
+    Supports formats like:
+        Version: 160121
+        Version: 251009.1
+        Version: 251009a
+    """
+    # Get first line with version in it
+    src_lower = source.lower()
+    version_str = [ln for ln in src_lower.split('\n') if "version" in ln]
+    if version_str:
+        # Extract version string using regex to handle complex formats
+        # Look for patterns like: 251009, 251009.1, 251009a, etc.
+        version_match = re.search(
+            r'(\d+(?:\.\d+)?[a-zA-Z]?)', version_str[0])
+        if version_match:
+            version_text = version_match.group(1)
+            return _parse_version_string(version_text)
+    return None
+
+
+def _parse_version_string(version_str):
+    """
+    Parse a version string into a comparable format.
+    Handles formats like: 251009, 251009.1, 251009a
+
+    Returns a tuple that can be used for comparison:
+    - (251009,) for "251009"
+    - (251009, 1) for "251009.1"
+    - (251009, 0, 'a') for "251009a"
+    """
+    # Split into base number and suffix
+    match = re.match(r'(\d+)(?:\.(\d+))?([a-zA-Z]*)', version_str)
+    if not match:
+        return None
+
+    base_num = int(match.group(1))
+    dot_num = int(match.group(2)) if match.group(2) else 0
+    letter_suffix = match.group(3).lower() if match.group(3) else ''
+
+    # Convert letter to number for comparison (a=1, b=2, etc.)
+    letter_num = ord(letter_suffix) - ord('a') + 1 if letter_suffix else 0
+
+    return (base_num, dot_num, letter_num)
+
+
+def compare_versions(version1, version2):
+    """
+    Compare two version tuples.
+
+    Returns:
+        -1 if version1 < version2
+            0 if version1 == version2
+            1 if version1 > version2
+    """
+    if version1 is None and version2 is None:
+        return 0
+    if version1 is None:
+        return -1
+    if version2 is None:
+        return 1
+
+    # Compare tuple elements in order
+    for i in range(max(len(version1), len(version2))):
+        v1_elem = version1[i] if i < len(version1) else 0
+        v2_elem = version2[i] if i < len(version2) else 0
+
+        if v1_elem < v2_elem:
+            return -1
+        elif v1_elem > v2_elem:
+            return 1
+
+    return 0
+
+
 # ROUTES ----------------------------------------------------------------------
 
 @router.get('/ghupdates/src_names', response_model=List[str])
@@ -120,13 +199,30 @@ async def list_src_names(
             entries = await _list_repo_dir(
                 client, api_base, token, 'grasshopper_userobjects_src'
             )
-        names: List[str] = []
-        for item in entries:
-            if item.get('type') == 'file':
-                name = item.get('name', '')
-                if '.' in name:
-                    names.append(name.rsplit('.', 1)[0])
-        return sorted(list(dict.fromkeys(names)))
+            result: List[List[object]] = []
+            for item in entries:
+                if item.get('type') == 'file':
+                    name = item.get('name', '')
+                    if '.' in name:
+                        name_no_ext = name.rsplit('.', 1)[0]
+                        path = item.get('path', '')
+                        if path:
+                            content_bytes = await _get_repo_file(
+                                client, api_base, token, path
+                            )
+                            try:
+                                text = content_bytes.decode('utf-8', 'replace')
+                            except Exception:
+                                text = ''
+                            version_tuple = get_source_version(text)
+                        else:
+                            version_tuple = None
+                        result.append([name_no_ext, version_tuple])
+        # Explicit JSON response
+        return Response(
+            json.dumps(result),
+            media_type='application/json'
+        )
     except httpx.HTTPError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

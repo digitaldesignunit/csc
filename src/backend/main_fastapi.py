@@ -82,7 +82,7 @@ app = FastAPI(
         'Backend API for Catalogue of Second Chances. '
         'FastAPI + MongoDB (async).'
     ),
-    version='0.4.0.1',
+    version='0.4.0.2',
     lifespan=lifespan,
 )
 
