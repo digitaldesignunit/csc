@@ -46,8 +46,8 @@ Version: 250820
 ### Component Params (Python)
 ```
 # GHENV COMPONENT SETTINGS
-ghenv.Component.Name = 'CSC_SignIn'
-ghenv.Component.NickName = 'CSC_SignIn'
+ghenv.Component.Name = 'Session'
+ghenv.Component.NickName = 'CSC_Session'
 ghenv.Component.Category = 'DDU_CSC'
 ghenv.Component.SubCategory = '1 User'
 ghenv.Component.Description = (
