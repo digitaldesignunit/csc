@@ -11,7 +11,6 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import json
 import os
 import re
 import glob
@@ -35,7 +34,9 @@ ghenv.Component.NickName = 'CSC_Update'  # type: ignore[reportUnedfinedVariable]
 ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.SubCategory = '0 Development'  # type: ignore[reportUnedfinedVariable] # NOQA
 ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
-    'Updates component sources in doc an userobjects on disk'
+    'Updates component sources and userobjects in document from server.\n'
+    'NOTE: CheckForUpdates must be True to check for updates AND to '
+    'install updates! Switch on both to update everything.'
 )
 
 
@@ -43,7 +44,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251030.1
+    Version: 251030.3
     """
 
     def __init__(self):
@@ -68,17 +69,22 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-    
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
+        # Initialize input param descriptions
+        self.InputParams[0].Description = (
+            'Toggle to check for updates on the server.'
+        )
+        self.InputParams[1].Description = (
+            'Toggle to install updates from server.'
+        )
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'The ComponentData that was fetched from the server as JSON. '
-            'Use \'DisassembleComponent\' to access the individual fields '
-            'ready for Grasshopper'
+            'Status messages about the update process.'
         )
 
     def get_auth_core_from_sticky(self):
@@ -112,10 +118,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 r'(\d+(?:\.\d+)?[a-zA-Z]?)', version_str[0])
             if version_match:
                 version_text = version_match.group(1)
-                return self._parse_version_string(version_text)
+                return self.parse_version_string(version_text)
         return None
 
-    def _parse_version_string(self, version_str):
+    def parse_version_string(self, version_str):
         """
         Parse a version string into a comparable format.
         Handles formats like: 251009, 251009.1, 251009a
@@ -139,7 +145,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
 
         return (base_num, dot_num, letter_num)
 
-    def _compare_versions(self, version1, version2):
+    def compare_versions(self, version1, version2):
         """
         Compare two version tuples.
 
@@ -167,7 +173,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
 
         return 0
 
-    def _expand_path(self, path):
+    def expand_path(self, path):
         """
         Expand environment variables in a path string.
         Handles %APPDATA%, %USERPROFILE%, %TEMP%, etc.
@@ -176,7 +182,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
             return path
         return os.path.expandvars(path)
 
-    def _replace_scriptcomp_source(
+    def replace_scriptcomp_source(
             self, old_script_comp_values, new_source):
         """
         Replaces source code of gh scriptable components.
@@ -327,26 +333,150 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
             version = self.get_source_version(source)
             category_match = category == set_category
             version_present = version is not None
-            # script id will be used as key for the unique dict
-            script_id = nickname + '_' + name + '_' + script_type
             if category_match and version_present:
                 versioned_script_components.append((iguid, values))
         return versioned_script_components
 
-    def _get_userobjects_dir(self):
+    def get_userobjects_dir(self):
         """Get platform-specific UserObjects directory."""
         dir = Grasshopper.Folders.DefaultUserObjectFolder
         return dir
 
+    def get_api_source_versions(self, auth_core):
+        """Get source versions from API."""
+        api_src_versions = {}
+        response = auth_core.authorized_get('/ghupdates/src_names')
+        if response.status_code == 200:
+            api_src_files_json = response.json()
+            for file_tuple in api_src_files_json:
+                name = file_tuple[0]
+                version = tuple(file_tuple[1])
+                api_src_versions[name] = version
+        elif response.status_code == 401:
+            msg = 'Authentication failed. Please sign in again.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        elif response.status_code == 403:
+            msg = 'Access denied. Insufficient permissions.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        elif response.status_code == 500:
+            msg = 'Server error. Please try again later.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        else:
+            msg = (f'Request failed with status code: '
+                   f'{response.status_code}')
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        return api_src_versions
+
+    def get_api_userobject_names(self, auth_core):
+        """Get userobject names from API."""
+        api_uo_names = []
+        response = auth_core.authorized_get('/ghupdates/userobject_names')
+        if response.status_code == 200:
+            api_uo_names = list(response.json())
+        elif response.status_code == 401:
+            msg = 'Authentication failed. Please sign in again.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        elif response.status_code == 403:
+            msg = 'Access denied. Insufficient permissions.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        elif response.status_code == 500:
+            msg = 'Server error. Please try again later.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        else:
+            msg = (f'Request failed with status code: '
+                   f'{response.status_code}')
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        return api_uo_names
+
+    def get_api_source_file_text(self, auth_core, full_name):
+        """Get source file from API."""
+        response = auth_core.authorized_get(f'/ghupdates/src/{full_name}')
+        if response.status_code == 200:
+            return response.text
+        elif response.status_code == 404:
+            msg = 'Source file not found.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        elif response.status_code == 401:
+            msg = 'Authentication failed. Please sign in again.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        elif response.status_code == 403:
+            msg = 'Access denied. Insufficient permissions.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        elif response.status_code == 500:
+            msg = 'Server error. Please try again later.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        else:
+            msg = (f'Request failed with status code: '
+                   f'{response.status_code}')
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+
+    def get_api_userobject_bytes(self, auth_core, uo_name):
+        """Get userobject bytes from API."""
+        response = auth_core.authorized_get(f'/ghupdates/userobject/{uo_name}')
+        if response.status_code == 200:
+            return response.content
+        elif response.status_code == 404:
+            msg = 'Userobject not found.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        elif response.status_code == 401:
+            msg = 'Authentication failed. Please sign in again.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        elif response.status_code == 403:
+            msg = 'Access denied. Insufficient permissions.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        elif response.status_code == 500:
+            msg = 'Server error. Please try again later.'
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+        else:
+            msg = (f'Request failed with status code: '
+                   f'{response.status_code}')
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
+
     def RunScript(self, CheckForUpdates, InstallUpdates):
+        # hardcoded category of the components to update
         CATEGORY = 'DDU_CSC'
+        # init output tree for status messages
         Status = Grasshopper.DataTree[System.Object]()
-        self.Component.Message = None
         # Get AuthCore instance from sticky storage
         auth_core = self.get_auth_core_from_sticky()
         if auth_core is None:
             return Status
-
         # Check if authentication is valid
         if not auth_core.is_valid():
             msg = ('Authentication expired. Please use CSC_Session '
@@ -355,10 +485,17 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = msg
             Status.Add(msg)
             return Status
-
+        msg = (
+            'Toggle CheckForUpdates to True to check for updates on the '
+            'server.'
+        )
+        self.Component.Message = msg
         try:
             if CheckForUpdates:
-                msg = (f'Searching current document for {CATEGORY} script components...')
+                msg = (
+                    f'Searching current document for {CATEGORY} script '
+                    'components...'
+                )
                 self.Component.Message = msg
                 # loop through the document to find all script components
                 doc = self.Component.OnPingDocument()
@@ -366,21 +503,24 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     self.process_document_objects(doc),
                     CATEGORY
                 )
-                msg = f'Found {len(script_components)} {CATEGORY} script components in current document (including duplicates).'
+                msg = (
+                    f'Found {len(script_components)} {CATEGORY} script '
+                    'components in current document (including duplicates).'
+                )
                 self._addRemark(msg)
                 Status.Add(msg)
                 # make request to fetch all source file names and versions
-                msg = (f'Checking Server for updates...')
+                msg = ('Checking Server for updates...')
                 self.Component.Message = msg
-                api_src_versions = {}
-                response = auth_core.authorized_get('/ghupdates/src_names')
-                if response.status_code == 200:
-                    api_src_files_json = response.json()
-                    for file_tuple in api_src_files_json:
-                        name = file_tuple[0]
-                        version = tuple(file_tuple[1])
-                        api_src_versions[name] = version
-                msg = f'Found {len(api_src_files_json)} unique script component source files on server.'
+                api_src_versions = self.get_api_source_versions(auth_core)
+                if api_src_versions is None:
+                    msg = 'Failed to get source versions from server.'
+                    self._addError(msg)
+                    self.Component.Message = msg
+                    Status.Add(msg)
+                    return Status
+                msg = (f'Found {len(api_src_versions)} unique script '
+                       'component source files on server.')
                 self._addRemark(msg)
                 Status.Add(msg)
 
@@ -392,8 +532,21 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     try:
                         full_name = CATEGORY + '_' + name
                         api_version = api_src_versions[full_name]
-                        vc = self._compare_versions(api_version, current_version)
-                        if vc == 0:
+                        vc = self.compare_versions(
+                            api_version,
+                            current_version
+                        )
+                        if vc == -1:
+                            print(f'!! --> {name} {api_version} < {current_version}')
+                            msg = (
+                                f'{name} {api_version} < {current_version}! '
+                                'Is this a dev file? That should '
+                                'not happen otherwise! Proceed with caution!'
+                            )
+                            self._addWarning(msg)
+                            Status.Add(msg)
+                            continue
+                        elif vc == 0:
                             print(f'{name} {api_version} == {current_version}')
                         elif vc == 1:
                             print(f'{name} {api_version} > {current_version}')
@@ -402,13 +555,20 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                         print(f'{full_name} not found on server!')
                         continue
                 if not scripts_to_update:
-                    msg = f'No scripts in document need updating!'
+                    msg = 'No scripts in document need updating!'
                     self._addRemark(msg)
                     self.Component.Message = msg
                     Status.Add(msg)
+                else:
+                    msg = (
+                        f'Found {len(scripts_to_update)} script '
+                        'components that need updating.'
+                    )
+                    self._addRemark(msg)
+                    Status.Add(msg)
 
                 # check for installed userobjects
-                uo_dir = self._get_userobjects_dir()
+                uo_dir = self.get_userobjects_dir()
                 uo_mask = os.path.join(uo_dir, '**', 'DDU_CSC_*.ghuser')
                 installed_uos = [os.path.normpath(p) for p in glob.glob(
                     os.path.normpath(uo_mask),
@@ -418,84 +578,124 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     uo_install_dir = os.path.dirname(installed_uos[0])
                 else:
                     uo_install_dir = os.path.join(uo_dir, CATEGORY)
-                installed_uo_names = [os.path.splitext(os.path.basename(p))[0] for p in installed_uos]
+                installed_uo_names = [
+                    os.path.splitext(os.path.basename(p))[0]
+                    for p in installed_uos
+                ]
                 msg = f'Found {len(installed_uos)} installed UserObjects.'
                 self._addRemark(msg)
                 Status.Add(msg)
 
                 # check for userobjects on server
-                api_uo_names = []
-                response = auth_core.authorized_get('/ghupdates/userobject_names')
-                if response.status_code == 200:
-                    api_uo_names = list(response.json())
+                api_uo_names = self.get_api_userobject_names(auth_core)
+                if api_uo_names is None:
+                    msg = 'Failed to get userobject names from server.'
+                    self._addError(msg)
+                    self.Component.Message = msg
+                    Status.Add(msg)
+                    return Status
                 msg = f'Found {len(api_uo_names)} UserObjects on server.'
                 self._addRemark(msg)
                 Status.Add(msg)
 
                 # identify missing userobjects on disk
                 set_installed_uo_names = set(installed_uo_names)
-                missing_uo_names = [uo for uo in api_uo_names if uo not in set_installed_uo_names]
+                missing_uo_names = [
+                    uo for uo in api_uo_names
+                    if uo not in set_installed_uo_names
+                ]
                 if missing_uo_names:
-                    msg = f'Found {len(missing_uo_names)} UserObjects that are not installed! Run InstallUpdates to install them.'
+                    msg = (
+                        f'Found {len(missing_uo_names)} UserObjects that '
+                        'are not installed! Run InstallUpdates to install'
+                        'them.'
+                    )
                     self._addRemark(msg)
                     Status.Add(msg)
-
+                msg = ('Toggle InstallUpdates to True to install updates from '
+                    'server.')
+                self.Component.Message = msg
             if InstallUpdates:
                 if not CheckForUpdates:
-                    msg = f'CheckForUpdates must be True to install updates!'
+                    msg = 'CheckForUpdates must be True to install updates!'
                     self._addWarning(msg)
                     Status.Add(msg)
                     return Status
-                
+
                 # loop over scripts that need updates
                 if len(scripts_to_update) > 0:
                     for iguid, values in scripts_to_update:
-                        script_type, nickname, name, obj, current_source = values
+                        (script_type,
+                         nickname,
+                         name,
+                         obj,
+                         current_source) = values
                         full_name = CATEGORY + '_' + name
-                        response = auth_core.authorized_get(f'/ghupdates/src/{full_name}')
-                        if response.status_code == 200:
-                            new_source = response.text
-                            # HERE WE NEED TO REPLACE THE SOURCE!
-                        else:
-                            pass
-                
+                        new_source = self.get_api_source_file_text(
+                            auth_core,
+                            full_name
+                        )
+                        if new_source is None:
+                            msg = (
+                                f'Failed to get source file {full_name} '
+                                'from server.'
+                            )
+                            self._addError(msg)
+                            self.Component.Message = msg
+                            Status.Add(msg)
+                            return Status
+                        res = self.replace_scriptcomp_source(values, new_source)
+                        if not res:
+                            msg = (
+                                f'Failed to replace source for {nickname} '
+                                'with new version! Please contact support '
+                                '(lol)'
+                            )
+                            self._addError(msg)
+                            self.Component.Message = msg
+                            Status.Add(msg)
+                            return Status
+                        msg = (
+                            f'Replaced source for {nickname} with new version!'
+                        )
+                        self._addRemark(msg)
+                        Status.Add(msg)
+                        self.Component.Message = msg
+
+                # currently, we need to install/replace all userobjects
+                # since we can't check userobjects file versions
+                # (TODO: add userobject file version checking)
+                missing_uo_names = api_uo_names
                 # loop over missing userobjects and save them
                 written_uo_files = []
                 for uo_name in missing_uo_names:
                     # get new userobject bytes from api server
-                    response = auth_core.authorized_get(f'/ghupdates/userobject/{uo_name}')
-                    response.raise_for_status()
+                    new_uo_bytes = self.get_api_userobject_bytes(
+                        auth_core,
+                        uo_name
+                    )
+                    if new_uo_bytes is None:
+                        msg = (
+                            f'Failed to get userobject {uo_name} from server.'
+                        )
+                        self._addError(msg)
+                        self.Component.Message = msg
+                        Status.Add(msg)
+                        return Status
                     os.makedirs(uo_install_dir, exist_ok=True)
-                    out_file = Path(os.path.join(uo_install_dir, uo_name + '.ghuser'))
+                    out_file = Path(
+                        os.path.join(uo_install_dir, uo_name + '.ghuser')
+                    )
                     with open(out_file, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
+                        f.write(new_uo_bytes)
                     written_uo_files.append(str(out_file.resolve()))
                 msg = f'Installed {len(written_uo_files)} UserObject files!'
                 self._addRemark(msg)
                 Status.Add(msg)
-
-            # elif response.status_code == 401:
-            #     msg = 'Authentication failed. Please sign in again.'
-            #     self._addError(msg)
-            #     self.Component.Message = msg
-
-            # elif response.status_code == 403:
-            #     msg = 'Access denied. Insufficient permissions.'
-            #     self._addError(msg)
-            #     self.Component.Message = msg
-
-            # elif response.status_code == 500:
-            #     msg = 'Server error. Please try again later.'
-            #     self._addWarning(msg)
-            #     self.Component.Message = msg
-
-            # else:
-            #     msg = (f'Request failed with status code: '
-            #            f'{response.status_code}')
-            #     self._addError(msg)
-            #     self.Component.Message = msg
+                msg = 'All updates installed successfully!'
+                self._addRemark(msg)
+                self.Component.Message = msg
+                Status.Add(msg)
 
         except requests.exceptions.ConnectionError as e:
             msg = 'Cannot connect to server. Please check your connection.'
@@ -516,6 +716,6 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
             msg = f'Unexpected error: {str(e)}'
             self._addError(msg)
             self.Component.Message = msg
-        
+
         # return status message
         return Status
