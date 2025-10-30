@@ -47,7 +47,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.1
+    Version: 251030
     """
 
     def __init__(self):
@@ -104,7 +104,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         """Get AuthCore instance from sticky storage."""
         auth_core = sc.sticky.get('CSC_AuthCore')
         if auth_core is None:
-            msg = ('No authentication found. Please use CSC_SignIn component '
+            msg = ('No authentication found. Please use CSC_Session component '
                    'first.')
             self._addError(msg)
             self.Component.Message = msg
@@ -813,7 +813,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
 
         # Check if authentication is valid
         if not auth_core.is_valid():
-            msg = ('Authentication expired. Please use CSC_SignIn '
+            msg = ('Authentication expired. Please use CSC_Session '
                    'component to refresh.')
             self._addError(msg)
             self.Component.Message = msg
