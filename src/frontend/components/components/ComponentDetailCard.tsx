@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { componentBounds, componentColorString, hexComponentColor, generateGrasshopperPanelXML } from '@/lib/utils'
+import { componentBounds, componentColorString, hexComponentColor, generateGrasshopperPanelXML, formatTimestamp } from '@/lib/utils'
 import { ExtendedComponentModel, ComponentLocation } from '@/generated/ComponentModel'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -12,6 +12,7 @@ import ComponentDetailMap from './ComponentDetailMap'
 import { Copy, Check, FileText, CheckCircle, Trash2 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import ComponentOverviewDataTableLocationCell from './overview/ComponentOverviewDataTableLocationCell'
 
 // Type for session user with extended properties
 interface ExtendedUser {
@@ -170,7 +171,7 @@ export default function ComponentDetailCard({
         <div className="flex items-start gap-3 flex-1 min-w-0 xl:max-w-md">
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-muted-foreground mb-1">Component ID</div>
-            <div className="font-mono text-sm font-medium bg-muted/50 border border-border rounded-md px-3 py-2 text-foreground break-all">
+            <div className="font-mono text-xs sm:text-sm font-medium bg-accent/20 border border-border rounded-md px-3 py-2 text-foreground break-all">
               {component_data._id}
             </div>
           </div>
@@ -371,14 +372,14 @@ export default function ComponentDetailCard({
               <div className="space-y-2">
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Type</span>
-                  <span className="text-xs font-semibold text-foreground bg-primary/10 px-2 py-1 rounded-md">
+                  <span className="text-xs font-semibold text-foreground bg-primary/25 px-2 py-1 rounded-md">
                     {component_data.type}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Material</span>
-                  <span className="text-xs font-semibold text-foreground bg-secondary/10 px-2 py-1 rounded-md">
+                  <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
                     {component_data.material}
                   </span>
                 </div>
@@ -392,7 +393,7 @@ export default function ComponentDetailCard({
                       aria-label={`Color ${component_color_str}`}
                       title={component_color_str}
                     />
-                    <span className="text-xs font-semibold text-foreground bg-accent/10 px-2 py-1 rounded-md">
+                    <span className="text-xs font-semibold text-foreground bg-primary/25 px-2 py-1 rounded-md">
                       {component_color_str}
                     </span>
                   </div>
@@ -422,6 +423,53 @@ export default function ComponentDetailCard({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Additional Info Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Dataset</span>
+                  <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
+                    {component_data.dataset}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Fragment</span>
+                  <span className="text-xs font-semibold text-foreground bg-primary/25 px-2 py-1 rounded-md">
+                    {String(component_data.fragment)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Complexity</span>
+                  <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
+                    {component_data.complexity}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Location</span>
+                  <span className="text-xs font-semibold text-foreground bg-primary/25 px-2 py-1 rounded-md max-w-[60%] truncate">
+                    <ComponentOverviewDataTableLocationCell coords={component_data.location as ComponentLocation} showTooltip={false} />
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Created</span>
+                  <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
+                    {formatTimestamp(component_data.created)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Last Modified</span>
+                  <span className="text-xs font-semibold text-foreground bg-primary/25 px-2 py-1 rounded-md">
+                    {formatTimestamp(component_data.lastmodified)}
+                  </span>
+                </div>
+
+                {/* Reserved state is already shown via action buttons; omit duplicate here */}
               </div>
             </div>
 
