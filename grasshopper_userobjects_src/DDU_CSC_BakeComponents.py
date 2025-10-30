@@ -36,7 +36,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.1
+    Version: 251030
     """
 
     def __init__(self):
@@ -61,7 +61,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-    
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -204,14 +204,22 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                     # extract ID
                     comp_id = json_comp['_id']
 
-                    # check document for existing groups with this comp id
-                    ex_grps = sc.doc.Groups
-                    for grp in ex_grps:
-                        if grp.Name == comp_id:
-                            raise RuntimeError(
-                                f'Component {comp_id} already exists in '
-                                'the document!'
-                            )
+                    # determine unique group name (groups must be unique)
+                    # use suffix indexing: <uuid>_1, <uuid>_2, ...
+                    base_group_name = comp_id
+                    idx = 1
+                    existing_names = set()
+                    for grp in sc.doc.Groups:
+                        try:
+                            existing_names.add(grp.Name)
+                        except Exception:
+                            continue
+                    while True:
+                        candidate = f'{base_group_name}_{idx}'
+                        if candidate not in existing_names:
+                            group_name = candidate
+                            break
+                        idx += 1
 
                     # get insertion plane
                     try:
@@ -341,10 +349,10 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                     # set layer to tag
                     rs.ObjectLayer(id_tag, layer)
 
-                    # create group
+                    # create group with unique name
                     if len(geo_ids) > 1:
                         _ = sc.doc.Groups.Add(
-                            comp_id,
+                            group_name,
                             geo_ids)
 
                     baked_count += 1
@@ -358,7 +366,10 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                             f'({mesh_count} meshes)')
 
                 except json.JSONDecodeError as e:
-                    msg = f'Failed to parse component data for {comp_id}: {str(e)}'
+                    msg = (
+                        f'Failed to parse component data for {comp_id}: '
+                        f'{str(e)}'
+                    )
                     self._addError(msg)
                     self.Component.Message = msg
                 except Exception as e:
