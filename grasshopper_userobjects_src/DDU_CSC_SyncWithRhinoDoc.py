@@ -36,7 +36,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.1
+    Version: 251030
     """
 
     def __init__(self):
@@ -136,14 +136,14 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                             continue
 
             for component_id, data in components_dict.items():
-                # Get all groups in the document
+                # Find all groups whose name starts with the component_id
                 groups = doc.Groups
                 for i in range(groups.Count):
                     group = groups[i]
-                    if group and group.Name == component_id:
-                        # This group belongs to our component
-                        # Get all objects in this group
-                        group_objects = rs.ObjectsByGroup(component_id)
+                    if (group and isinstance(group.Name, str) and
+                            group.Name.startswith(component_id)):
+                        # Get all objects in this specific group instance
+                        group_objects = rs.ObjectsByGroup(group.Name)
                         for obj_id in group_objects:
                             obj = rs.coercegeometry(obj_id)
                             if obj and rs.IsText(obj):
@@ -358,4 +358,4 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
 
         finally:
             # Restore scriptcontext to Grasshopper document
-            sc.doc = self.Component.OnPingDocument()  # type: ignore[reportUnedfinedVariable] # NOQA
+            sc.doc = self.Component.OnPingDocument()
