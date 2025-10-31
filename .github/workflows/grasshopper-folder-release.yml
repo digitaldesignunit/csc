@@ -22,8 +22,41 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all tags
 
-      - name: Get latest version tag
+      - name: Try to infer version from .gh filename
+        id: infer_version
+        run: |
+          # Look for .gh files in grasshopper_release folder
+          gh_file=$(find grasshopper_release -maxdepth 1 -name "*.gh" -type f | head -n 1)
+          
+          if [ -n "$gh_file" ]; then
+            # Extract filename without path
+            filename=$(basename "$gh_file" .gh)
+            
+            # Try to extract version pattern: X.Y.Z.B or X.Y.Z
+            # Pattern matches versions like 0.4.0.0 or 0.4.0 in filenames
+            version_match=$(echo "$filename" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1)
+            
+            if [ -n "$version_match" ]; then
+              # Convert to tag format (gh prefix)
+              inferred_version="gh$version_match"
+              
+              # Ensure 4-part version (if only 3 parts, add .0)
+              if [ "$(echo "$version_match" | tr -cd '.' | wc -c)" -eq 2 ]; then
+                inferred_version="${inferred_version}.0"
+              fi
+              
+              echo "inferred_version=$inferred_version" >> $GITHUB_OUTPUT
+              echo "version_found=true" >> $GITHUB_OUTPUT
+            else
+              echo "version_found=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "version_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get latest version tag (fallback)
         id: get_tag
+        if: steps.infer_version.outputs.version_found != 'true'
         run: |
           latest_tag=$(git tag --list 'gh*' --sort=-v:refname | grep -E '^gh[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
           if [ -z "$latest_tag" ]; then
@@ -31,14 +64,21 @@ jobs:
           fi
           echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
 
-      - name: Calculate next version and filenames
+      - name: Calculate version and filenames
         id: version
         run: |
-          latest="${{ steps.get_tag.outputs.latest_tag }}"
-          version=${latest#gh}
-          IFS='.' read -r major minor patch build <<< "$version"
-          build=$((build + 1))
-          new_version="gh$major.$minor.$patch.$build"
+          # Use inferred version if available, otherwise bump patch version
+          if [ "${{ steps.infer_version.outputs.version_found }}" == "true" ]; then
+            new_version="${{ steps.infer_version.outputs.inferred_version }}"
+          else
+            # Fallback: bump patch version
+            latest="${{ steps.get_tag.outputs.latest_tag }}"
+            version=${latest#gh}
+            IFS='.' read -r major minor patch build <<< "$version"
+            build=$((build + 1))
+            new_version="gh$major.$minor.$patch.$build"
+          fi
+          
           release_name="DDU CSC GrasshopperInterface $new_version"
           zip_name="ddu-csc-grasshopper-interface-${new_version}.zip"
 
