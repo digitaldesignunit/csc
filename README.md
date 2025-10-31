@@ -310,6 +310,56 @@ To add the cronjob to your crontab run:
 This will run the preview generation script every 30 minutes and write the
 results to a logging file.
 
+## Grasshopper XML Sync CronJob
+
+The GH XML sync automatically mirrors pasteable XML files from the private GitHub
+repository to make them available for copy-to-clipboard functionality on the
+frontend.
+
+### Configuration
+
+Add the following to your `dbconfig.json`:
+
+```json
+{
+  "gh_xml_cache_dir": "/home/ddu/csc/backend/static/ghxml",
+  "github_repo_url": "https://github.com/your-org/your-repo",
+  "github_repo_token": "your_github_token"
+}
+```
+
+### Testing
+
+To test the sync script manually, SSH into the server and run:
+
+```bash
+[user@servername csc]$ /bin/bash /home/ddu/csc/src/backend/ghxml_sync.sh
+```
+
+This will clone (if needed) and sync only the `grasshopper_userobjects_xml/`
+folder from your private GitHub repository. Check the log file for results:
+
+```bash
+[user@servername csc]$ tail -f /home/ddu/csc/backend/logs/ghxml_sync.log
+```
+
+### Setting up the CronJob
+
+To add the sync cronjob, copy the configuration from
+`uberspaceconfig/crontab/ghxml_sync_cronjob.ini` or add it manually:
+
+```bash
+[user@servername csc]$ crontab -e
+```
+
+Add this line:
+
+```
+*/30 * * * * /bin/bash /home/ddu/csc/src/backend/ghxml_sync.sh >> /home/ddu/csc/backend/logs/ghxml_sync.log 2>&1
+```
+
+This will run the sync every 30 minutes and log results to the log file.
+
 ## OpenAPI Model Generation
 
 This project uses OpenAPI schema generation to keep frontend TypeScript models in sync with backend Pydantic models.
