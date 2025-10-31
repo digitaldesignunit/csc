@@ -27,7 +27,7 @@ framework
 
 - **CSC FastAPI Backend**: 0.4.0.3
 - **CSC React Frontend**: 0.4.0.3
-- **CSC Grasshopper Interface**: 0.4.0.1
+- **CSC Grasshopper Interface**: 0.4.1.0
 
 ---
 
