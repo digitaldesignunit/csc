@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0.3] - 2025-10-30
+
+### Versions
+
+- CSC FastAPI Backend:  0.4.0.3
+- CSC React Frontend:   0.4.0.3
+- CSC Grasshopper Interface: 0.4.0.1
+
+### Added
+
+#### CSC FastAPI Backend
+
+- **GH XML Sync**: Automated sync script (`ghxml_sync.sh`) to mirror pasteable XML files from private GitHub repository using sparse checkout
+- **GH XML API Routes**: New authenticated endpoints `/ghupdates/xml_names` and `/ghupdates/xml/{name}` to serve cached XML files
+- **Config Integration**: Added `gh_xml_cache_dir` configuration support, loaded from `dbconfig.json` and available via `app.gh_xml_cache_dir`
+- **Cron Job Configuration**: Added cron job configuration file for automatic XML sync every 30 minutes
+
+#### CSC React Frontend
+
+- **Copy-to-Clipboard for GH Components**: Added copy buttons on all Grasshopper component cards to copy XML directly to clipboard
+- **CSC_Update Component Documentation**: Added component card for CSC_Update in Session Components section
+- **Getting Started Enhancements**: Added "NEW! Automatic Updater" card with copy functionality and "Find out more" link
+
+### Changed
+
+#### CSC FastAPI Backend
+
+- **GH Updates Router**: Enhanced to read XML cache directory from app state instead of hardcoded paths
+- **Config Template**: Updated `dbconfig.template.json` to include `gh_xml_cache_dir` field
+
+#### CSC React Frontend
+
+- **GH Interface Page**: Enhanced component cards with copy-to-clipboard functionality and improved visual feedback
+- **Copy Button UX**: Replaced alert-based feedback with visual state indicators (Check icon and "Copied!" text)
+
+#### Documentation
+
+- **README**: Added Grasshopper XML Sync CronJob setup instructions including configuration, testing, and cron job setup steps
+
 ## [0.4.0.2] - 2025-10-29
 
 ### Versions
