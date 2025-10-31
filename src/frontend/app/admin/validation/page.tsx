@@ -46,7 +46,13 @@ export default function ValidationPage() {
       const response = await fetch('/api/backend/shallowcomponents?validated=-1&size=100')
       if (response.ok) {
         const data = await response.json()
-        setComponents(data)
+        // Sort by created date (newest first)
+        const sortedByCreated = [...data].sort((a: ComponentModel, b: ComponentModel) => {
+          const aTime = a?.created ? new Date(a.created as unknown as string).getTime() : 0
+          const bTime = b?.created ? new Date(b.created as unknown as string).getTime() : 0
+          return bTime - aTime
+        })
+        setComponents(sortedByCreated)
       }
     } catch (error) {
       console.error('Failed to fetch components:', error)

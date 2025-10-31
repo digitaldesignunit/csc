@@ -3,12 +3,15 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { resolveStatic } from '@/lib/utils'
-import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, FileImage, Download } from 'lucide-react'
+import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, FileImage, Download, Copy, Check, FileText, ArrowRight, WandSparkles, Sparkle, Sparkles } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export default function GHInterfacePage() {
   const [expandedSection, setExpandedSection] = useState<string | null>('getting-started')
   const [releaseVersion, setReleaseVersion] = useState<string>('')
   const [isDownloading, setIsDownloading] = useState<boolean>(false)
+  const [updateCopied, setUpdateCopied] = useState<boolean>(false)
 
   const toggleSection = (sectionId: string) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId)
@@ -78,8 +81,34 @@ export default function GHInterfacePage() {
     outputs: Array<{label: string, description: string}>
     tip?: string
     imagePath?: string
-  }) => (
-    <div className="border rounded-lg p-4 bg-white/60 dark:bg-gray-900">
+  }) => {
+    const [isCopying, setIsCopying] = useState<boolean>(false)
+    const [copied, setCopied] = useState<boolean>(false)
+
+    const handleCopyXml = async () => {
+      setIsCopying(true)
+      try {
+        const xmlName = `DDU_${name}`
+        const res = await fetch(`/api/backend/ghupdates/xml/${encodeURIComponent(xmlName)}`)
+        if (!res.ok) {
+          console.error('Failed to fetch XML:', res.status)
+          alert('XML not available for this component.')
+          return
+        }
+        const xmlText = await res.text()
+        await navigator.clipboard.writeText(xmlText)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch (err) {
+        console.error('Copy XML error:', err)
+        alert('Copy to clipboard failed.')
+      } finally {
+        setIsCopying(false)
+      }
+    }
+
+    return (
+    <div className="border rounded-lg p-4 bg-white/60 dark:bg-gray-900" data-component-card={name}>
       <div className="w-full h-110 bg-white rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/25 mb-4 overflow-hidden">
         {imagePath ? (
           <Image
@@ -103,6 +132,37 @@ export default function GHInterfacePage() {
         <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
           <Icon className="h-5 w-5" />
           {name}
+          <span className="ml-auto" />
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyXml}
+                  disabled={isCopying}
+                  className="h-8 px-3 flex-shrink-0"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-4 w-4 mr-2 text-green-600" />
+                      <span>Copied! Paste into GH!</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4 mr-2" />
+                      <span>Copy GH XML</span>
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="text-center text-sm">
+                  {copied ? 'Copied! Paste into GH!' : 'Copy Grasshopper Component to Clipboard'}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </h4>
         <p className="text-muted-foreground mb-3">
           {description}
@@ -153,7 +213,7 @@ export default function GHInterfacePage() {
         </div>
       </div>
     </div>
-  )
+  )}
 
   const sections = [
     {
@@ -189,7 +249,104 @@ export default function GHInterfacePage() {
           <p className="text-muted-foreground">
             The DDU CSC Grasshopper Interface provides components for working with the Catalogue of Second Chances. This tutorial covers each component and their usage.
           </p>
-          
+
+          <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+            <h4 className="font-semibold text-purple-900 dark:text-purple-100 mb-2 flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              NEW! Automatic Updater
+            </h4>
+            <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">
+              Make your life easier and keep your CSC Grasshopper components up-to-date without headache! Use the new <strong>CSC_Update</strong> component to check for and install updates from the server.
+            </p>
+            <div className="flex items-center gap-3">
+              {/* Find out more Interface */}
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => {
+                  // Expand the authentication section if not already expanded
+                  if (expandedSection !== 'authentication') {
+                    toggleSection('authentication')
+                  }
+                  // Wait for section to expand, then scroll to the CSC_Update card
+                  setTimeout(() => {
+                    const updateCard = document.querySelector('[data-component-card="CSC_Update"]')
+                    if (updateCard) {
+                      updateCard.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    } else {
+                      // Fallback to section if card not found
+                      const sectionElement = document.querySelector('[data-section-id="authentication"]')
+                      if (sectionElement) {
+                        sectionElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }
+                    }
+                  }, 200)
+                }}
+                className="h-7 px-3 bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                <span className="text-xs">Find out more</span>
+                <ArrowRight className="h-3 w-3 ml-1" />
+              </Button>
+            </div>
+
+            <div className="mt-3">
+              <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">
+                <strong>Also NEW:</strong> Copy CSC Grasshopper Components to your clipboard and paste into Grasshopper.<br />
+                It's like <span className="inline-flex items-center"><Sparkles className="h-3 w-3" /></span> magic <span className="inline-flex items-center"><WandSparkles className="h-3 w-3" /></span>!
+                Give it a try with the <strong>CSC_Update</strong> component below.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Copy GH Component XML Interface */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const xmlName = 'DDU_CSC_Update'
+                          const res = await fetch(`/api/backend/ghupdates/xml/${encodeURIComponent(xmlName)}`)
+                          if (!res.ok) {
+                            console.error('Failed to fetch XML:', res.status)
+                            return
+                          }
+                          const xmlText = await res.text()
+                          await navigator.clipboard.writeText(xmlText)
+                          setUpdateCopied(true)
+                          setTimeout(() => setUpdateCopied(false), 2000)
+                        } catch (err) {
+                          console.error('Copy error:', err)
+                        }
+                      }}
+                      className="h-7 px-2"
+                    >
+                      {updateCopied ? (
+                        <>
+                          <Check className="h-3 w-3 mr-1 text-green-600" />
+                          <span className="text-xs">Copied! Paste into GH!</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-3 w-3 mr-1" />
+                          <span className="text-xs">Copy GH Component XML</span>
+                        </>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="text-center text-xs">
+                      {updateCopied ? 'Copied! Paste into GH!' : 'Copy Grasshopper Component to Clipboard'}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+            </div>
+          </div>
+
           <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Prerequisites</h4>
             <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
@@ -224,6 +381,21 @@ export default function GHInterfacePage() {
             ]}
             tip="Automatically caches authentication and component data locally for faster access."
             imagePath={resolveStatic('/gh-interface/csc_session.jpg')}
+          />
+
+          <ComponentCard
+            icon={Settings}
+            name="CSC_Update"
+            description="Updates component sources and userobjects in document from server. Checks for available updates and installs them automatically. NOTE: CheckForUpdates must be True to check for updates AND to install updates! Switch on both to update everything."
+            inputs={[
+              { label: 'CheckForUpdates', description: 'Toggle to check for updates on the server' },
+              { label: 'InstallUpdates', description: 'Toggle to install updates from server' }
+            ]}
+            outputs={[
+              { label: 'Status', description: 'Update status and information about installed updates' }
+            ]}
+            tip="Keep your CSC Grasshopper components up-to-date without headache! Run this component periodically to get the latest versions of all Grasshopper components from the server."
+            imagePath={resolveStatic('/gh-interface/csc_update.jpg')}
           />
         </div>
       )
@@ -763,7 +935,7 @@ export default function GHInterfacePage() {
           const isExpanded = expandedSection === section.id
           
           return (
-            <div key={section.id} className="border rounded-lg bg-muted">
+            <div key={section.id} data-section-id={section.id} className="border rounded-lg bg-muted">
               <button
                 onClick={() => toggleSection(section.id)}
                 className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-muted/50 transition-colors"
