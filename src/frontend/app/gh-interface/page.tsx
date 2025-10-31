@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { resolveStatic } from '@/lib/utils'
-import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, FileImage, Download, Copy, Check, FileText, ArrowRight, WandSparkles, Sparkle, Sparkles } from 'lucide-react'
+import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, FileImage, Download, Check, FileText, ArrowRight, WandSparkles, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -292,7 +292,7 @@ export default function GHInterfacePage() {
             <div className="mt-3">
               <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">
                 <strong>Also NEW:</strong> Copy CSC Grasshopper Components to your clipboard and paste into Grasshopper.<br />
-                It's like <span className="inline-flex items-center"><Sparkles className="h-3 w-3" /></span> magic <span className="inline-flex items-center"><WandSparkles className="h-3 w-3" /></span>!
+                It&apos;s like <span className="inline-flex items-center"><Sparkles className="h-3 w-3" /></span> magic <span className="inline-flex items-center"><WandSparkles className="h-3 w-3" /></span>!
                 Give it a try with the <strong>CSC_Update</strong> component below.
               </p>
             </div>
