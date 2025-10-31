@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Home, Package, Search, Award, FileText, User, Shield, QrCode, Terminal, Layers2 } from 'lucide-react'
+import { Home, Package, Search, Award, FileText, User, Shield, QrCode, Terminal, Layers2, BarChart2 } from 'lucide-react'
 
 export default function AppMenu() {
   const router = useRouter()
@@ -58,7 +58,6 @@ export default function AppMenu() {
                 <User className="h-4 w-4" />
                 Dashboard
               </div>
-              
               <div
                 onClick={() => handleNavigation('/gh-interface')}
                 className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
@@ -98,6 +97,13 @@ export default function AppMenu() {
             >
               <QrCode className="h-4 w-4" />
               Identify Component
+            </div>
+            <div
+              onClick={() => handleNavigation('/analytics')}
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            >
+              <BarChart2 className="h-4 w-4" />
+              Analytics
             </div>
           </div>
         </div>
