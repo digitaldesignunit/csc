@@ -29,19 +29,26 @@ jobs:
           gh_file=$(find grasshopper_release -maxdepth 1 -name "*.gh" -type f | head -n 1)
           
           if [ -n "$gh_file" ]; then
-            # Extract filename without path
+            # Extract filename without path and extension
             filename=$(basename "$gh_file" .gh)
             
-            # Try to extract version pattern: X.Y.Z.B or X.Y.Z
-            # Pattern matches versions like 0.4.0.0 or 0.4.0 in filenames
-            version_match=$(echo "$filename" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1)
+            # Extract version pattern from the end of filename
+            # Pattern matches versions like 0.4.1.0 or 0.4.1 at the end: something_0.4.1.0
+            # Use tail -n 1 to get the last match (in case there are multiple version patterns)
+            version_match=$(echo "$filename" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$' | tail -n 1)
+            
+            # If no match at end, try matching any version pattern as fallback
+            if [ -z "$version_match" ]; then
+              version_match=$(echo "$filename" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?' | tail -n 1)
+            fi
             
             if [ -n "$version_match" ]; then
               # Convert to tag format (gh prefix)
               inferred_version="gh$version_match"
               
               # Ensure 4-part version (if only 3 parts, add .0)
-              if [ "$(echo "$version_match" | tr -cd '.' | wc -c)" -eq 2 ]; then
+              dot_count=$(echo "$version_match" | tr -cd '.' | wc -c)
+              if [ "$dot_count" -eq 2 ]; then
                 inferred_version="${inferred_version}.0"
               fi
               
