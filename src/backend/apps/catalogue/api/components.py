@@ -318,6 +318,163 @@ async def count_components(
     return {'count': count}
 
 
+@router.get('/components/stats', summary='Get aggregated component statistics')
+async def get_components_stats(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    comptype: Optional[str] = Query(None, description='Component type filter'),
+    material: Optional[str] = Query(None, description='Material type filter'),
+    dataset: Optional[str] = Query(None, description='Dataset name filter'),
+    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
+    complexity: Optional[int] = Query(None, description='Complexity (0-3)'),
+    fragment: Optional[bool] = Query(None, description='Is fragment'),
+    bbx_min_x: Optional[float] = Query(None, description='Min X'),
+    bbx_min_y: Optional[float] = Query(None, description='Min Y'),
+    bbx_min_z: Optional[float] = Query(None, description='Min Z'),
+    bbx_max_x: Optional[float] = Query(None, description='Max X'),
+    bbx_max_y: Optional[float] = Query(None, description='Max Y'),
+    bbx_max_z: Optional[float] = Query(None, description='Max Z'),
+    limit_dim: int = Query(10, description='Top-N limit for long tail dims'),
+):
+    coll = await get_components_col(request)
+
+    match_stage = build_component_match_stage(
+        comptype=comptype,
+        material=material,
+        dataset=dataset,
+        validated=validated,
+        complexity=complexity,
+        fragment=fragment,
+        bbx_min_x=bbx_min_x,
+        bbx_min_y=bbx_min_y,
+        bbx_min_z=bbx_min_z,
+        bbx_max_x=bbx_max_x,
+        bbx_max_y=bbx_max_y,
+        bbx_max_z=bbx_max_z,
+    )
+
+    # One-pass aggregation using $facet
+    pipeline = [
+        {"$match": match_stage},
+        {
+            "$facet": {
+                "total": [{"$count": "count"}],
+                "byType": [
+                    {"$group": {"_id": "$type", "count": {"$sum": 1}}},
+                    {"$sort": {"count": -1}},
+                ],
+                "byMaterial": [
+                    {"$group": {"_id": "$material", "count": {"$sum": 1}}},
+                    {"$sort": {"count": -1}},
+                ],
+                "byDataset": [
+                    {"$group": {"_id": "$dataset", "count": {"$sum": 1}}},
+                    {"$sort": {"count": -1}},
+                ],
+                "byComplexity": [
+                    {"$group": {"_id": "$complexity", "count": {"$sum": 1}}},
+                    {"$sort": {"_id": 1}},
+                ],
+                "byValidated": [
+                    {"$group": {"_id": "$validated", "count": {"$sum": 1}}},
+                    {"$sort": {"count": -1}},
+                ],
+                "byFragment": [
+                    {"$group": {"_id": "$fragment", "count": {"$sum": 1}}},
+                    {"$sort": {"count": -1}},
+                ],
+                "byAssembly": [
+                    {"$group": {"_id": "$assembly", "count": {"$sum": 1}}},
+                    {"$sort": {"count": -1}},
+                ],
+                "reserved": [
+                    {
+                        "$group": {
+                            "_id": {
+                                "$cond": [
+                                    {"$ne": ["$reserved", ""]}, True, False
+                                ]
+                            },
+                            "count": {"$sum": 1},
+                        }
+                    },
+                    {"$sort": {"count": -1}},
+                ],
+                "descriptorsKeys": [
+                    {"$project": {"pairs": {"$objectToArray": {"$ifNull": ["$descriptors", {}]}}}},
+                    {"$unwind": "$pairs"},
+                    {"$group": {"_id": "$pairs.k", "count": {"$sum": 1}}},
+                    {"$sort": {"count": -1}},
+                ],
+                "createdMonthly": [
+                    {
+                        "$group": {
+                            "_id": {
+                                "$dateToString": {
+                                    "format": "%Y-%m",
+                                    "date": {"$toDate": "$created"},
+                                }
+                            },
+                            "count": {"$sum": 1},
+                        }
+                    },
+                    {"$sort": {"_id": 1}},
+                ],
+                "bbx": [
+                    {"$project": {"x": {"$arrayElemAt": ["$bbx", 0]}, "y": {"$arrayElemAt": ["$bbx", 1]}, "z": {"$arrayElemAt": ["$bbx", 2]}}},
+                    {"$bucket": {"groupBy": "$x", "boundaries": [0, 0.5, 1, 2, 5, 10, 20, 50, 100, 1000], "default": ">=1000", "output": {"count": {"$sum": 1}}}},
+                ],
+            }
+        },
+    ]
+
+    try:
+        cursor = await coll.aggregate(pipeline)
+        docs = [doc async for doc in cursor]
+        raw = docs[0] if docs else {}
+
+        def norm_list(items):
+            out = []
+            for it in items or []:
+                label = it.get('_id')
+                if isinstance(label, bool):
+                    label = 'true' if label else 'false'
+                elif label is None:
+                    label = 'unknown'
+                out.append({"label": str(label), "count": int(it.get('count', 0))})
+            return out
+
+        total = int((raw.get('total') or [{}])[0].get('count', 0)) if raw.get('total') else 0
+
+        # Apply Top-N + others for long tail dimensions
+        def topn(items):
+            rows = norm_list(items)
+            if limit_dim and len(rows) > limit_dim:
+                head = rows[:limit_dim]
+                others_count = sum(r["count"] for r in rows[limit_dim:])
+                head.append({"label": "others", "count": others_count})
+                return head
+            return rows
+
+        content = {
+            "total": total,
+            "byType": norm_list(raw.get('byType')),
+            "byMaterial": topn(raw.get('byMaterial')),
+            "byDataset": topn(raw.get('byDataset')),
+            "byComplexity": norm_list(raw.get('byComplexity')),
+            "byValidated": norm_list(raw.get('byValidated')),
+            "byFragment": norm_list(raw.get('byFragment')),
+            "byAssembly": norm_list(raw.get('byAssembly')),
+            "reserved": norm_list(raw.get('reserved')),
+            "descriptorsKeys": topn(raw.get('descriptorsKeys')),
+            "createdMonthly": norm_list(raw.get('createdMonthly')),
+            "bbxX": norm_list(raw.get('bbx')),
+        }
+
+        return JSONResponse(status_code=200, content=content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
+
 # UNIQUE VALUE ROUTES --------------------------------------------------------
 
 @router.get('/datasets', summary='Get unique dataset names')
