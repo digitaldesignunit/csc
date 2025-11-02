@@ -69,3 +69,16 @@ ghenv.Component.SubCategory = '7 Geometry Tools'
 ghenv.Component.SubCategory = '8 Visualisation'
 ghenv.Component.SubCategory = '9 Admin Actions'
 ```
+
+
+### Component Params (C#)
+```
+// GHENV COMPONENT SETTINGS
+this.Component.Name = "FindLargestFlatSide";
+this.Component.NickName = "FindLargestFlatSide";
+this.Component.Category = "DDU_CSC";
+this.Component.SubCategory = "7 Geometry Tools";
+this.Component.Description = (
+    "Finds the largest flat side of a mesh using optimized algorithm. " +
+    "Uses normal clustering and early termination heuristics for performance.");
+```
