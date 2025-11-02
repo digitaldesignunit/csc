@@ -50,5 +50,7 @@ export const config = {
     '/findcomponent',       // protect find component root
     '/identify/:path*',     // protect identify subpages
     '/identify',            // protect identify root
+    '/analytics/:path*',    // protect analytics subpages
+    '/analytics',           // protect analytics root
   ],
 }
