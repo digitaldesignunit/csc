@@ -3,18 +3,26 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { resolveStatic } from '@/lib/utils'
-import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, FileImage, Download, Check, FileText, ArrowRight, WandSparkles, Sparkles } from 'lucide-react'
+import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, FileImage, Download, Check, FileText, ArrowRight, WandSparkles, Sparkles, Box } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export default function GHInterfacePage() {
-  const [expandedSection, setExpandedSection] = useState<string | null>('getting-started')
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['getting-started']))
   const [releaseVersion, setReleaseVersion] = useState<string>('')
   const [isDownloading, setIsDownloading] = useState<boolean>(false)
   const [updateCopied, setUpdateCopied] = useState<boolean>(false)
 
   const toggleSection = (sectionId: string) => {
-    setExpandedSection(expandedSection === sectionId ? null : sectionId)
+    setExpandedSections(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(sectionId)) {
+        newSet.delete(sectionId)
+      } else {
+        newSet.add(sectionId)
+      }
+      return newSet
+    })
   }
 
   // Fetch release version on component mount
@@ -265,7 +273,7 @@ export default function GHInterfacePage() {
                 size="sm"
                 onClick={() => {
                   // Expand the authentication section if not already expanded
-                  if (expandedSection !== 'authentication') {
+                  if (!expandedSections.has('authentication')) {
                     toggleSection('authentication')
                   }
                   // Wait for section to expand, then scroll to the CSC_Update card
@@ -739,6 +747,70 @@ export default function GHInterfacePage() {
       )
     },
     {
+      id: 'geometry-tools',
+      title: 'Geometry Tools',
+      icon: Box,
+      content: (
+        <div className="space-y-6 pt-2">
+          <ComponentCard
+            icon={Box}
+            name="CSC_ComputePCAOrientation"
+            description="Computes Principal Component Analysis orientation for geometry alignment."
+            inputs={[
+              { label: 'Geometry', description: 'Input Rhino Geometry' }
+            ]}
+            outputs={[
+              { label: 'ObjectOrientedBBX', description: 'Object oriented bounding box, obtained using PCA, at the location of the input geometry' },
+              { label: 'AlignedGeometry', description: 'Input geometry transformed using PCA method and centered at world origin' },
+              { label: 'AlignedBBX', description: 'Object oriented bounding box transformed using the computed PCA frame, centered at the world origin' },
+              { label: 'TranslationVector', description: 'Translation vector that was used to move the geometry to the world origin' },
+              { label: 'PCAXForm', description: 'PCA frame that was used to transform the geometry converted to a Rhino XForm.' }
+            ]}
+            tip="Computes PCA-based orientation for geometry alignment and provides transformation data for positioning."
+            imagePath={resolveStatic('/gh-interface/csc_computepcaorientation.jpg')}
+          />
+
+          <ComponentCard
+            icon={Box}
+            name="CSC_FindLargestFlatSide"
+            description="Finds the largest flat side of a mesh using optimized algorithm. Uses normal clustering and early termination heuristics for performance."
+            inputs={[
+              { label: 'InputMesh', description: 'Input Mesh for finding the largest flat side.' },
+              { label: 'AngleTolerance', description: 'Angle tolerance for clustering normals.' },
+              { label: 'DistanceTolerance', description: 'Distance tolerance' },
+              { label: 'FaceCountThreshold', description: 'Face count threshold for large meshes. Meshes with face count above this value will be processed by sampling a subset of vertices. Defaults to 15.000' },
+              { label: 'MaxSamples', description: 'Maximum points to sample for the fallback algorithm. Defaults to 5.000' }
+            ]}
+            outputs={[
+              { label: 'FlatPlane', description: 'Flattest Plane found. Normal always points AWAY from the Mesh.' },
+              { label: 'Points', description: 'Final Points that were used to fit the flat plane.' }
+            ]}
+            tip="Optimized algorithm for finding flat surfaces on meshes, with performance optimizations for large meshes."
+            imagePath={resolveStatic('/gh-interface/csc_findlargestflatside.jpg')}
+          />
+
+          <ComponentCard
+            icon={Box}
+            name="CSC_MaxInscribedQuad"
+            description="Finds a maximum-area inscribed 4-point polygon (quadrilateral) inside each input closed polyline. Method 0: pure Rhino (default)."
+            inputs={[
+              { label: 'Curves', description: 'Closed boundary polylines (PolylineCurve). Each is processed independently.' },
+              { label: 'MaxIter', description: 'Maximum iterations for the optimizer.' },
+              { label: 'Tolerance', description: 'Containment tolerance for inside checks (default 0.01).' },
+              { label: 'Starts', description: 'Multi-start count; more starts improves quality (default 64).' },
+              { label: 'Seed', description: 'Random seed for reproducibility (default 42).' }
+            ]}
+            outputs={[
+              { label: 'Quads', description: 'List of best inscribed quadrilaterals (Polyline).' },
+              { label: 'Areas', description: 'Area of each quadrilateral.' }
+            ]}
+            tip="Finds the largest quadrilateral that fits inside closed polylines using optimization methods."
+            imagePath={resolveStatic('/gh-interface/csc_maxinscribedquad.jpg')}
+          />
+        </div>
+      )
+    },
+    {
       id: 'utility-components',
       title: 'Utility Components',
       icon: HelpCircle,
@@ -776,23 +848,6 @@ export default function GHInterfacePage() {
               { label: 'Error', description: 'Error message if extraction failed, empty string if successful' }
             ]}
             tip="Useful for extracting specific data from component JSON using dot notation paths."
-          />
-
-          <ComponentCard
-            icon={HelpCircle}
-            name="CSC_ComputePCAOrientation"
-            description="Computes Principal Component Analysis orientation for geometry alignment."
-            inputs={[
-              { label: 'Geometry', description: 'Input Rhino Geometry' }
-            ]}
-            outputs={[
-              { label: 'ObjectOrientedBBX', description: 'Object oriented bounding box, obtained using PCA, at the location of the input geometry' },
-              { label: 'AlignedGeometry', description: 'Input geometry transformed using PCA method and centered at world origin' },
-              { label: 'AlignedBBX', description: 'Object oriented bounding box transformed using the computed PCA frame, centered at the world origin' },
-              { label: 'TranslationVector', description: 'Translation vector that was used to move the geometry to the world origin' },
-              { label: 'PCAXForm', description: 'PCA frame that was used to transform the geometry converted to a Rhino XForm.' }
-            ]}
-            tip="Computes PCA-based orientation for geometry alignment and provides transformation data for positioning."
           />
 
           <ComponentCard
@@ -932,7 +987,7 @@ export default function GHInterfacePage() {
       <div className="space-y-4">
         {sections.map((section) => {
           const Icon = section.icon
-          const isExpanded = expandedSection === section.id
+          const isExpanded = expandedSections.has(section.id)
           
           return (
             <div key={section.id} data-section-id={section.id} className="border rounded-lg bg-muted">
