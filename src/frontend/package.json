@@ -1,6 +1,6 @@
 {
   "name": "csc-frontend",
-  "version": "0.4.0.4",
+  "version": "0.4.0.5",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -35,6 +35,7 @@
     "next": "15.5.6",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
+    "npm": "^11.6.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "recharts": "^3.3.0",

@@ -4,6 +4,7 @@ import { ComponentModel } from '@/generated/ComponentModel'
 import { ComponentOverviewColumns } from '@/components/components/overview/ComponentOverviewColumns'
 import { Card } from '@/components/ui/card'
 import ComponentOverviewFilterMenu from '@/components/components/overview/ComponentOverviewFilterMenu'
+import ComponentUuidNavigator from '@/components/components/overview/ComponentUuidNavigator'
 import { Package } from 'lucide-react'
 
 import { headers } from 'next/headers'
@@ -155,9 +156,12 @@ export default async function ComponentsPage({
       </div>
 
       {/* Main Content */}
-      <div className="space-y-6">
+      <div className="space-y-2">
         {/* Filter Section */}
         <ComponentOverviewFilterMenu defaultMaterial={material} defaultCompType={comptype} defaultDataset={dataset} />
+
+        {/* UUID Navigator */}
+        <ComponentUuidNavigator />
 
         {/* Components Table */}
         <Card className="w-full overflow-x-auto p-0">
