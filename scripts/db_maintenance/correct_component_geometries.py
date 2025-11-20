@@ -311,8 +311,10 @@ def process_component(component_id: str) -> bool:
         logger.error('[%s] No valid meshes after rotation', component_id)
         return False
     pca_source_vertices = ordered_mesh_items[0][1]['vertices']
+    pca_source_array = np.array(pca_source_vertices)
+    viewer_adjusted_vertices = rotate_for_viewer(pca_source_array)
     bbox_dims, principal_components, bbx_origin, translation = compute_pca_for_mesh(
-        pca_source_vertices,
+        viewer_adjusted_vertices.tolist(),
     )
     output_folder = ensure_output_folder(component_id)
     detailed_obj_path = output_folder / 'mesh.obj'
