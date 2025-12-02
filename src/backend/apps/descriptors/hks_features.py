@@ -570,9 +570,10 @@ def compute_simple_pooled_hks_on_convex_hull_trimesh(
     Compute simple HKS for a trimesh mesh on its convex hull with
     64 eigenvalues and 16 time steps.
     """
+    cvh = mesh.convex_hull
     return compute_simple_pooled_hks_for_mesh(
-        np.array(mesh.convex_hull.vertices),
-        np.array(mesh.convex_hull.faces)
+        np.array(cvh.vertices),
+        np.array(cvh.faces)
     )
 
 
@@ -593,6 +594,32 @@ def compute_moderate_pooled_hks_for_mesh(
     return compute_pooled_hks_for_mesh(V, F, n_eigs=64, n_times=32)
 
 
+def compute_moderate_pooled_hks_for_trimesh(
+    mesh: trimesh.Trimesh
+) -> np.ndarray:
+    """
+    Compute moderate HKS for a trimesh mesh with 64 eigenvalues and 32 time
+    steps.
+    """
+    return compute_moderate_pooled_hks_for_mesh(
+        np.array(mesh.vertices),
+        np.array(mesh.faces)
+    )
+
+
+def compute_moderate_pooled_hks_for_convex_hull_trimesh(
+    mesh: trimesh.Trimesh
+) -> np.ndarray:
+    """
+    Compute moderate HKS for a trimesh mesh on its convex hull with 64 eigenvalues and 32 time steps.
+    """
+    cvh = mesh.convex_hull
+    return compute_moderate_pooled_hks_for_mesh(
+        np.array(cvh.vertices),
+        np.array(cvh.faces)
+    )
+
+
 def compute_detailed_pooled_hks_for_mesh(
     V: np.ndarray,
     F: np.ndarray
@@ -608,3 +635,29 @@ def compute_detailed_pooled_hks_for_mesh(
         pooled_H: (2*64,) float array of pooled HKS values
     """
     return compute_pooled_hks_for_mesh(V, F, n_eigs=128, n_times=64)
+
+
+def compute_detailed_pooled_hks_for_trimesh(
+    mesh: trimesh.Trimesh
+) -> np.ndarray:
+    """
+    Compute detailed HKS for a trimesh mesh with 128 eigenvalues and 64 time
+    steps.
+    """
+    return compute_detailed_pooled_hks_for_mesh(
+        np.array(mesh.vertices),
+        np.array(mesh.faces)
+    )
+
+
+def compute_detailed_pooled_hks_for_convex_hull_trimesh(
+    mesh: trimesh.Trimesh
+) -> np.ndarray:
+    """
+    Compute detailed HKS for a trimesh mesh on its convex hull with 128 eigenvalues and 64 time steps.
+    """
+    cvh = mesh.convex_hull
+    return compute_detailed_pooled_hks_for_mesh(
+        np.array(cvh.vertices),
+        np.array(cvh.faces)
+    )
