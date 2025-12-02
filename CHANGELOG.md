@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3.0] - 2025-11-05
+
+### Versions
+
+- CSC FastAPI Backend:  0.4.0.4
+- CSC React Frontend:   0.4.3.0
+- CSC Grasshopper Interface: 0.4.2.0
+
+### Changed
+
+#### CSC React Frontend
+
+- **Update to NextJS 16**: Upgrade to NextJS 16.0.5 using codemod.
+
+
 ## [0.4.2.1] - 2025-11-05
 
 ### Versions
@@ -17,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - **Added direct UUID lookup**: On the browse page you can now enter a UUID directly and go to its detail page
+
 
 ## [0.4.2.0] - 2025-11-02
 
@@ -84,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **README**: Added Grasshopper XML Sync CronJob setup instructions including configuration, testing, and cron job setup steps
 
+
 ## [0.4.0.2] - 2025-10-29
 
 ### Versions
@@ -97,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - **QR Code Scanning**: Modularized QR Code Scanner
+
 
 ## [0.4.0.1] - 2025-10-27
 
@@ -115,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CSC React Frontend
 
 - **BackgroundMesh**: Fixed cutoff at bottom on Sign-In, Register and Home pages
+
 
 ## [0.4.0.0] - 2025-10-27
 
@@ -167,6 +186,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Component Updates**: Small fixes across components
 - **Dev Files**: Updated development files
 - **User Object Re-export**: Re-exported user objects with updates
+
 
 ## [0.3.1.2] - 2025-10-07
 
@@ -238,6 +258,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved mesh processing with bulk operations
 - Enhanced error handling prevents cascade failures
 
+
 ## [0.3.1.0] - 2025-09-09
 
 ### Versions
@@ -270,6 +291,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Component Validation UI**: Updated Validate button to only be active for unvalidated components
 - **Enhanced User Feedback**: Dynamic button text and tooltips based on component validation status
 - **Geometry Cache Structure**: Enhanced cache to store ETag metadata alongside geometry data
+
 
 ## [0.3.0.0] - 2025-09-05
 
@@ -378,6 +400,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Frontend Update**: No manual migration required - automatically handles both old and new formats
 - **Grasshopper Update**: Update all components to new versions for multi-mesh support
 
+
 ## [0.2.9.0] - 2025-09-04
 
 ### Versions
@@ -423,6 +446,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Thread Safety**: Implemented proper locking mechanisms for concurrent cache access
 - **Schema Validation**: Dynamic component data creation ensures strict adherence to data model
 - **Performance Optimization**: Reduced bandwidth usage through intelligent caching and conditional requests
+
 
 ## [0.2.8.0] - 2025-09-03
 
