@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,26 +11,26 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import os
-import re
-from functools import cmp_to_key
+import os  # NOQA
+import re  # NOQA
+from functools import cmp_to_key  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import GH_IO  # type: ignore[reportMissingImport] # NOQA
-import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
-import GhPython as ghpy  # type: ignore[reportMissingImport] # NOQA
-import ScriptComponents as scomp  # type: ignore[reportMissingImport] # NOQA
-import RhinoCodePluginGH as rcpgh  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Rhino  # NOQA
+import Grasshopper  # NOQA
+import GH_IO  # NOQA
+import scriptcontext as sc  # NOQA
+import GhPython as ghpy  # NOQA
+import ScriptComponents as scomp  # NOQA
+import RhinoCodePluginGH as rcpgh  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = "ExportScriptsAndSource"  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = "ExportScriptsAndSource"  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = "DDU_CSC"  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = "0 Development"  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = "ExportScriptsAndSource"  # NOQA
+ghenv.Component.NickName = "ExportScriptsAndSource"  # NOQA
+ghenv.Component.Category = "DDU_CSC"  # NOQA
+ghenv.Component.SubCategory = "0 Development"  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Analyzes the current Grasshopper document to identify script components, '
     'extracts their source code, and can export them as Grasshopper User '
     'Objects (.ghuser) and raw source files (.py, .c'
@@ -41,14 +41,14 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 251030.1
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -66,7 +66,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-    
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -559,7 +559,6 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             return False
         return True
 
-
     def export_scriptcomp_source(self, scriptcomp, srcpath):
         """
         Export the source code of a script component
@@ -587,7 +586,9 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                 # DO NOT EXPORT OLD SCRIPTS!
                 ext = None
             if ext:
-                src_file = os.path.join(srcpath, obj.Category + '_' + name + ext)
+                src_file = os.path.join(
+                    srcpath, obj.Category + '_' + name + ext
+                )
                 with open(src_file, 'w') as f:
                     f.write(code)
         except Exception as e:
@@ -688,4 +689,3 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
 
         return (OldScriptsDebug, CategoryDebug,
                 VersionDebug, InfoMessages, UpdateMessages)
-

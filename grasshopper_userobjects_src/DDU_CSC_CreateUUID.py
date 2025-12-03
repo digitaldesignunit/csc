@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,20 +11,20 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import uuid
+import uuid  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System
-import Rhino
-import Grasshopper
-from scriptcontext import sticky as st
+import System  # NOQA
+import Rhino  # NOQA
+import Grasshopper  # NOQA
+from scriptcontext import sticky as st  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'CreateUUID'
-ghenv.Component.NickName = 'CreateUUID'
-ghenv.Component.Category = 'DDU_CSC'
-ghenv.Component.SubCategory = '3 Component Operations'
-ghenv.Component.Description = (
+ghenv.Component.Name = 'CreateUUID'  # NOQA
+ghenv.Component.NickName = 'CreateUUID'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Creates new UUIDs on request.'
 )
 
@@ -33,14 +33,14 @@ class CSC_CreateUUID(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.1
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -58,7 +58,7 @@ class CSC_CreateUUID(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-    
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -72,7 +72,7 @@ class CSC_CreateUUID(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams[0+i].Description = (
             'The current UUID'
         )
-    
+
     def _updateComponent(self):
         """Updates this component using callback mechanism"""
         # Define callback action
@@ -80,17 +80,23 @@ class CSC_CreateUUID(Grasshopper.Kernel.GH_ScriptInstance):
             st_key = f'{self.Component.InstanceGuid}__CreateUUIDComponent'
             new_uuid = uuid.uuid4()
             st[st_key] = new_uuid
-            ghenv.Component.ExpireSolution(False)
+            self.Component.ExpireSolution(False)  # NOQA
+            return
         # Get grasshopper document
-        ghDoc = ghenv.Component.OnPingDocument()
+        ghDoc = ghenv.Component.OnPingDocument()  # NOQA
         # Schedule this component to expire
         ghDoc.ScheduleSolution(
             1,
             Grasshopper.Kernel.GH_Document.GH_ScheduleDelegate(callBack)
         )
+        return False
 
     def RunScript(self, Refresh: bool):
         st_key = f'{self.Component.InstanceGuid}__CreateUUIDComponent'
         if Refresh or st_key not in st.keys():
-            self._updateComponent()
+            create_new_uuid = True
+        else:
+            create_new_uuid = False
+        if create_new_uuid:
+            create_new_uuid = self._updateComponent()
         return st[st_key]

@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,21 +11,21 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import json
+import json  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import rhinoscriptsyntax as rs  # type: ignore[reportMissingImport] # NOQA
-import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Rhino  # NOQA
+import Grasshopper  # NOQA
+import rhinoscriptsyntax as rs  # NOQA
+import scriptcontext as sc  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'BakeComponents'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'BakeComponents'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'BakeComponents'  # NOQA
+ghenv.Component.NickName = 'BakeComponents'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Bakes fetched components into the Rhino document as actual geometry. '
     'Creates layers, groups, and attaches component data as user text. '
     'Prioritizes cached geometry over primitive representations.'
@@ -36,14 +36,14 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251030
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 

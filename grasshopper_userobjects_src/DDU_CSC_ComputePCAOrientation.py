@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -13,20 +13,20 @@ print('ENV OK!')
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-import numpy as np
-from sklearn.decomposition import PCA
+import numpy as np  # NOQA
+from sklearn.decomposition import PCA  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Grasshopper  # NOQA
+import Rhino  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'ComputePCAOrientation'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'ComputePCAOrientation'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '7 Geometry Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'ComputePCAOrientation'  # NOQA
+ghenv.Component.NickName = 'ComputePCAOrientation'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '7 Geometry Tools'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Computes Principal Component Analysis (PCA) orientation for input '
     'geometry. Returns the object oriented bounding box obtained using PCA, '
     'aligned geometry, translation vector, and PCA transformation matrix.'
@@ -37,14 +37,14 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.1
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -62,7 +62,7 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-    
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions

@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,32 +11,32 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import time
-import json
-import base64
-import os
-import hashlib
-import pickle
-import math
-from threading import RLock
-import uuid
-from datetime import datetime, timedelta
+import time  # NOQA
+import json  # NOQA
+import base64  # NOQA
+import os  # NOQA
+import hashlib  # NOQA
+import pickle  # NOQA
+import math  # NOQA
+from threading import RLock  # NOQA
+import uuid  # NOQA
+from datetime import datetime, timedelta  # NOQA
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-import requests
+import requests  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Rhino  # NOQA
+import Grasshopper  # NOQA
+import scriptcontext as sc  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'Session'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'CSC_Session'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '1 User'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'Session'  # NOQA
+ghenv.Component.NickName = 'CSC_Session'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '1 User'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Handles user authentication with the remote API, manages access '
     'tokens, and provides caching functionality for API responses and '
     'geometry. Stores authentication state in scriptcontext.sticky.'
@@ -45,7 +45,7 @@ ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 251023.1
+Version: 251203
 """
 
 
@@ -1479,7 +1479,7 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-    
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -1520,8 +1520,8 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
             Username: str,
             Password: str,
             Refresh: bool,
-            DisableCache,
-            ClearCache):
+            DisableCache: bool,
+            ClearCache: bool):
         # Initialize status messages list
         status_messages = []
 

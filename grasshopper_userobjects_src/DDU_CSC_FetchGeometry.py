@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,25 +11,25 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import json
-import math
+import json  # NOQA
+import math  # NOQA
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-import requests
+import requests  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
-import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
-import Rhino.Geometry as rg  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Grasshopper  # NOQA
+import Rhino  # NOQA
+import scriptcontext as sc  # NOQA
+import Rhino.Geometry as rg  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'FetchGeometry'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'FetchGeometry'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '2 Catalogue Interface'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQ
+ghenv.Component.Name = 'FetchGeometry'  # NOQA
+ghenv.Component.NickName = 'FetchGeometry'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '2 Catalogue Interface'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Fetches reduced or detailed geometry from the CSC API.\n'
     'Input can be:\n'
     '- A geometry object with \'csc_component\' userstring containing'
@@ -47,14 +47,14 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251030
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -72,7 +72,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-    
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -827,18 +827,19 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             return
 
         # Set up output trees and results tuple
-        GeometryData = Grasshopper.DataTree[System.Object]()
-        GeometryType = Grasshopper.DataTree[str]()
-        ComponentID = Grasshopper.DataTree[str]()
+        GeometryData = System.Collections.Generic.List[System.Object]()
+        GeometryType = System.Collections.Generic.List[str]()
+        ComponentID = System.Collections.Generic.List[str]()
         __Results = (GeometryData, GeometryType, ComponentID)
 
         try:
             self.Component.Message = 'Processing input...'
-
             # Extract component ID from input
             # (could be from userstring, JSON, or direct ID)
             component_id = None
             component_data = None
+            input_is_geometry = isinstance(Input, rg.GeometryBase)
+
             # First try to extract component data from input
             component_data = self.extract_component_data(Input)
             if component_data:
@@ -903,9 +904,6 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     self.Component.Message = msg
                     return __Results
 
-            # Create datatree paths
-            ghp = Grasshopper.Kernel.Data.GH_Path(0)
-
             # Process geometry based on format
             geometry_objects = []
             if geometry_data['format'] == 'rhino_meshes':
@@ -953,11 +951,26 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                 if hasattr(geometry_object, 'SetUserString'):
                     geometry_object.SetUserString('csc_mesh_index', str(i))
 
-            # Add all geometry objects to outputs
-            for geometry_object in geometry_objects:
-                GeometryData.Add(geometry_object, ghp)
-                GeometryType.Add(geometry_data['type'], ghp)
-                ComponentID.Add(component_id, ghp)
+            # If input was geometry, use the input mesh index
+            # to correctly populate outputs
+
+            if input_is_geometry:
+                # Extract csc_mesh_index if input is geometry
+                if (hasattr(Input, 'UserStringCount')
+                        and Input.UserStringCount > 0):
+                    csc_mesh_index_key = 'csc_mesh_index'
+                    csc_mesh_index = int(
+                        Input.GetUserString(csc_mesh_index_key)
+                    )
+                    GeometryData.Add(geometry_objects[csc_mesh_index])
+                else:
+                    GeometryData.AddRange(geometry_objects)
+            else:
+                # Add all geometry objects to outputs
+                GeometryData.AddRange(geometry_objects)
+            # add type and ids to output
+            GeometryType.Add(geometry_data['type'])
+            ComponentID.Add(component_id)
 
             # Update success message
             mesh_count = len(geometry_objects)

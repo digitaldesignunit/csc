@@ -1,5 +1,5 @@
+#! python3
 # -*- coding: utf-8 -*-
-# ! python3
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,20 +11,20 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import json
-import math
+import json  # NOQA
+import math  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Rhino  # NOQA
+import Grasshopper  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'ArrangeComponents'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'ArrangeComponents'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '3 Component Operations'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'ArrangeComponents'  # NOQA
+ghenv.Component.NickName = 'ArrangeComponents'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Arranges components in an even square grid based on their bounding '
     'boxes. Calculates grid cell size from the largest component dimension.'
 )
@@ -34,14 +34,14 @@ class CSC_ArrangeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251027
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -151,8 +151,8 @@ class CSC_ArrangeComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
     def RunScript(self,
             ComponentData: Grasshopper.DataTree[object],
-            Spacing,
-            InsertionPoint):
+            Spacing: float,
+            InsertionPoint: Rhino.Geometry.Point3d):
 
         # Default values for optional parameters
         if Spacing is None:

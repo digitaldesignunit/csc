@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,23 +11,23 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import json
-import uuid
-from datetime import datetime
-from typing import List, Dict, Any, Optional
+import json  # NOQA
+import uuid  # NOQA
+from datetime import datetime  # NOQA
+from typing import List, Dict, Any, Optional  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportUnedfinedVariable] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
-import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Grasshopper  # NOQA
+import Rhino  # NOQA
+import scriptcontext as sc  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'CreateDesign'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'CreateDesign'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '3 Component Operations'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'CreateDesign'  # NOQA
+ghenv.Component.NickName = 'CreateDesign'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Creates a design JSON string from component data, ready for posting to '
     'the catalogue. Validates input against design schema and generates '
     'complete design payload with UUID, timestamps, and component references. '
@@ -39,14 +39,14 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.1
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -64,7 +64,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-    
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions

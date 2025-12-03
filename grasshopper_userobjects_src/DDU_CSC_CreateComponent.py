@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,29 +11,29 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import json
-import uuid
-import os
-import platform
-from datetime import datetime
+import json  # NOQA
+import uuid  # NOQA
+import os  # NOQA
+import platform  # NOQA
+from datetime import datetime  # NOQA
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-import numpy as np
-from scipy.spatial import ConvexHull
-from sklearn.decomposition import PCA
+import numpy as np  # NOQA
+from scipy.spatial import ConvexHull  # NOQA
+from sklearn.decomposition import PCA  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
-import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Grasshopper  # NOQA
+import Rhino  # NOQA
+import scriptcontext as sc  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'CreateComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'CreateComponent'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '3 Component Operations'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'CreateComponent'  # NOQA
+ghenv.Component.NickName = 'CreateComponent'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Creates a complete component JSON string from input geometry. '
     'Computes PCA orientation, handles mesh reduction, saves geometry '
     'files locally, and builds component data according to the schema.'
@@ -44,14 +44,14 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251023.1
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -69,7 +69,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-    
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions

@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,21 +11,21 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import os
-from datetime import datetime
+import os  # NOQA
+from datetime import datetime  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
-import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Grasshopper  # NOQA
+import Rhino  # NOQA
+import scriptcontext as sc  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'CreateReleaseFiles'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'CreateReleaseFiles'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '0 Development'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'CreateReleaseFiles'  # NOQA
+ghenv.Component.NickName = 'CreateReleaseFiles'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '0 Development'  # NOQA
+ghenv.Component.Description = (  # NOQA
     """
     This component can be used to create a Grasshopper release file in a
     separate folder.
@@ -47,14 +47,14 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251027.1
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -195,7 +195,11 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
         # return target groups and objects
         return target_groups, target_objects, target_panels
 
-    def remove_all_groups_and_objects_except(self, doc, group_name, keep_sketches=True):
+    def remove_all_groups_and_objects_except(
+            self,
+            doc,
+            group_name,
+            keep_sketches=True):
         """
         Find all groups and objects in the document except
         the ones with the specified name.
@@ -211,7 +215,6 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
         paneltype_str = str(paneltype).split("'")[1]
         # loop over all document objects
         doc_objects = list(doc.Objects)
-        target_groups = []
         target_objects = []
         try:
             for doc_obj in doc_objects:
@@ -219,7 +222,8 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
                 if keep_sketches and str(doc_obj.GetType()) == sketchtype_str:
                     target_objects.append(doc_obj)
                     continue
-                if str(doc_obj.GetType()) == paneltype_str and doc_obj.NickName == '__DEVELOPMENT_CREDITS__':
+                if (str(doc_obj.GetType()) == paneltype_str and
+                        doc_obj.NickName == '__DEVELOPMENT_CREDITS__'):
                     target_objects.append(doc_obj)
                     continue
                 # ensure matching group name
@@ -234,10 +238,17 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
                             pos = grp_obj.Attributes.Pivot
                             pos_x = float(pos.X) + tx
                             pos_y = float(pos.Y) + ty
-                            grp_obj.Attributes.Pivot = System.Drawing.PointF(pos_x, pos_y)
+                            grp_obj.Attributes.Pivot = System.Drawing.PointF(
+                                pos_x,
+                                pos_y
+                            )
                             target_objects.append(grp_obj)
-            objects_to_remove = [o for o in doc_objects if o not in target_objects]
-            comps_removed = self.remove_objects_from_doc(doc, objects_to_remove)
+            objects_to_remove = [o for o in doc_objects
+                                 if o not in target_objects]
+            comps_removed = self.remove_objects_from_doc(
+                doc,
+                objects_to_remove
+            )
         except Exception as e:
             self._addError(f'Error removing groups and objects: {str(e)}')
             return None
@@ -469,7 +480,7 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             Filename: str,
             ExampleGroupNames: System.Collections.Generic.List[str],
             ExampleFileNames: System.Collections.Generic.List[str]):
-            
+
         # Initialize output variables
         success = False
         components_removed = 0
@@ -574,7 +585,10 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = 'Processing Example Exports...'
             for i, example_name in enumerate(ExampleGroupNames):
                 example_doc = self.copy_document(current_doc)
-                self.remove_all_groups_and_objects_except(example_doc, example_name)
+                self.remove_all_groups_and_objects_except(
+                    example_doc,
+                    example_name
+                )
                 save_success, saved_file_path = self.save_document(
                     example_doc,
                     ReleasePath,
@@ -585,7 +599,9 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
                         os.path.abspath(saved_file_path)
                     )
                     success = True
-                    status_message += f'Saved example file to: {saved_file_path}'
+                    status_message += (
+                        f'Saved example file to: {saved_file_path}'
+                    )
                 else:
                     status_message += ' Failed to save example document!'
         # set message

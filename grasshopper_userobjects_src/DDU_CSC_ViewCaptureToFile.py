@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,21 +11,21 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import os
-import datetime
+import os  # NOQA
+import datetime  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Rhino  # NOQA
+import Grasshopper  # NOQA
+import scriptcontext as sc  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'ViewCaptureToFile'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'ViewCaptureToFile'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '8 Visualisation'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'ViewCaptureToFile'  # NOQA
+ghenv.Component.NickName = 'ViewCaptureToFile'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '8 Visualisation'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Captures the active Rhino viewport to an image file (PNG). Supports '
     'custom dimensions, background colors, and visibility options for '
     'grid/axes. Creates organized capture folders with timestamps.'
@@ -36,13 +36,13 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Anders Holden Deleuran (updated 2025 by Max Benjamin Eschenbach)
     License: MIT License
-    Version: 251023
+    Version: 251203
     """
 
     def __init__(self):
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -74,7 +74,7 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
         mm = str(date.month).zfill(2)
         dd = str(date.day).zfill(2)
         timestamp = yy + mm + dd
-        docpath = ghdoc.Path  # type: ignore[reportUnedfinedVariable] # NOQA
+        docpath = ghdoc.Path  # NOQA
         if docpath:
             folder = os.path.dirname(docpath)
             captureFolder = folder + "\\Captures\\" + timestamp
@@ -95,7 +95,7 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
             sc = "0" + sc
         hms = ho + mt + sc
         # Get name of GH def
-        ghDef = ghdoc.Name.strip("*")  # type: ignore[reportUnedfinedVariable] # NOQA
+        ghDef = ghdoc.Name.strip("*")  # NOQA
         # Concatenate and return
         fileName = ghDef + "_" + hms
         return fileName
@@ -130,10 +130,10 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
             imageCap = viewcap.CaptureToBitmap(activeView)
             System.Drawing.Bitmap.Save(imageCap, path)
             Rhino.RhinoApp.WriteLine(path)
-            sc.doc = ghdoc  # type: ignore[reportUnedfinedVariable] # NOQA
+            sc.doc = ghdoc  # NOQA
             return path
         except Exception as e:
-            sc.doc = ghdoc  # type: ignore[reportUnedfinedVariable] # NOQA
+            sc.doc = ghdoc  # NOQA
             raise Exception(f'Capture failed, check the path: {str(e)}')
 
     def RunScript(self,

@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -13,20 +13,20 @@ print('ENV OK!')
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-import numpy as np
-from sklearn.decomposition import PCA
+import numpy as np  # NOQA
+from sklearn.decomposition import PCA  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Grasshopper  # NOQA
+import Rhino  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'ComputePCA'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'ComputePCA'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '6 Data Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'ComputePCA'  # NOQA
+ghenv.Component.NickName = 'ComputePCA'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '6 Data Tools'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Computes principal component analysis (PCA) for dimensionality reduction'
 )
 
@@ -35,14 +35,14 @@ class CSC_ComputePCA(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251027
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 

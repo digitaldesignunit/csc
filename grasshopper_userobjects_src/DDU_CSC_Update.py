@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,29 +11,29 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import os
-import re
-import glob
-from pathlib import Path
+import os  # NOQA
+import re  # NOQA
+import glob  # NOQA
+from pathlib import Path  # NOQA
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-import requests
+import requests  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
-import scriptcontext as sc  # type: ignore[reportMissingImport] # NOQA
-import GhPython as ghpy  # type: ignore[reportMissingImport] # NOQA
-import ScriptComponents as scomp  # type: ignore[reportMissingImport] # NOQA
-import RhinoCodePluginGH as rcpgh  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Grasshopper  # NOQA
+import Rhino  # NOQA
+import scriptcontext as sc  # NOQA
+import GhPython as ghpy  # NOQA
+import ScriptComponents as scomp  # NOQA
+import RhinoCodePluginGH as rcpgh  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'Update'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'CSC_Update'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '0 Development'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'Update'  # NOQA
+ghenv.Component.NickName = 'CSC_Update'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '0 Development'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Updates component sources and userobjects in document from server.\n'
     'NOTE: CheckForUpdates must be True to check for updates AND to '
     'install updates! Switch on both to update everything.'
@@ -44,14 +44,14 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251030.3
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -537,7 +537,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                             current_version
                         )
                         if vc == -1:
-                            print(f'!! --> {name} {api_version} < {current_version}')
+                            print(
+                                f'!! --> {name} {api_version} '
+                                f'< {current_version}!'
+                            )
                             msg = (
                                 f'{name} {api_version} < {current_version}! '
                                 'Is this a dev file? That should '
@@ -612,8 +615,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     )
                     self._addRemark(msg)
                     Status.Add(msg)
-                msg = ('Toggle InstallUpdates to True to install updates from '
-                    'server.')
+                msg = (
+                    'Toggle InstallUpdates to True to install updates from '
+                    'server.'
+                )
                 self.Component.Message = msg
             if InstallUpdates:
                 if not CheckForUpdates:
@@ -644,7 +649,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                             self.Component.Message = msg
                             Status.Add(msg)
                             return Status
-                        res = self.replace_scriptcomp_source(values, new_source)
+                        res = self.replace_scriptcomp_source(
+                            values,
+                            new_source
+                        )
                         if not res:
                             msg = (
                                 f'Failed to replace source for {nickname} '

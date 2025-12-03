@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 #! python3
+# -*- coding: utf-8 -*-
 # venv: DDU_CSC
 print('ENV OK!')
 # r: charset_normalizer
@@ -11,19 +11,19 @@ print('ENV OK!')
 # r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import json
+import json  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
-import System  # type: ignore[reportMissingImport] # NOQA
-import Grasshopper  # type: ignore[reportMissingImport] # NOQA
-import Rhino  # type: ignore[reportMissingImport] # NOQA
+import System  # NOQA
+import Grasshopper  # NOQA
+import Rhino  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'GetDescriptor'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.NickName = 'GetDescriptor'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Category = 'DDU_CSC'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.SubCategory = '6 Data Tools'  # type: ignore[reportUnedfinedVariable] # NOQA
-ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
+ghenv.Component.Name = 'GetDescriptor'  # NOQA
+ghenv.Component.NickName = 'GetDescriptor'  # NOQA
+ghenv.Component.Category = 'DDU_CSC'  # NOQA
+ghenv.Component.SubCategory = '6 Data Tools'  # NOQA
+ghenv.Component.Description = (  # NOQA
     'Retrieves a specific descriptor from multiple component_data inputs. '
     'Accepts a list of component_data JSON strings or geometries with '
     'attached component_data. Returns the descriptor values for the specified '
@@ -37,14 +37,14 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251027
+    Version: 251203
     """
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
         # initialize props
-        self.Component = ghenv.Component  # type: ignore[reportUnedfinedVariable] # NOQA
+        self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
@@ -184,7 +184,7 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
                 # Single branch: (0)
                 path = Grasshopper.Kernel.Data.GH_Path(0)
                 for value in descriptor_value:
-                    result_tree.Add(float(value), ghp)
+                    result_tree.Add(float(value), path)
         else:
             # Fallback for other types
             ghp = Grasshopper.Kernel.Data.GH_Path(0)
