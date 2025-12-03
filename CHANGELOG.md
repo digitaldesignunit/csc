@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [0.4.3.1] - 2025-11-05
+
+### Versions
+
+- CSC FastAPI Backend:  0.4.0.4
+- CSC React Frontend:   0.4.3.1
+- CSC Grasshopper Interface: 0.4.3.0
+
+### Changed
+
+#### CSC React Frontend
+
+- **GH Interface Page**: Fixed mobile layout of "Copy GH XML" Buttons
+
+
 ## [0.4.3.0] - 2025-11-05
 
 ### Versions
