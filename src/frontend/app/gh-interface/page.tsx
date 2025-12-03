@@ -137,10 +137,12 @@ export default function GHInterfacePage() {
         )}
       </div>
       <div>
-        <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
-          <Icon className="h-5 w-5" />
-          {name}
-          <span className="ml-auto" />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
+          <h4 className="font-semibold text-lg flex items-center gap-2">
+            <Icon className="h-5 w-5" />
+            {name}
+          </h4>
+          <span className="hidden sm:block sm:flex-1" />
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -149,7 +151,7 @@ export default function GHInterfacePage() {
                   size="sm"
                   onClick={handleCopyXml}
                   disabled={isCopying}
-                  className="h-8 px-3 flex-shrink-0"
+                  className="h-8 px-3 flex-shrink-0 w-fit"
                 >
                   {copied ? (
                     <>
@@ -171,7 +173,7 @@ export default function GHInterfacePage() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        </h4>
+        </div>
         <p className="text-muted-foreground mb-3">
           {description}
         </p>
