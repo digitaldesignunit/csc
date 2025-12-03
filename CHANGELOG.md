@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - CSC FastAPI Backend:  0.4.0.4
 - CSC React Frontend:   0.4.3.0
+- CSC Grasshopper Interface: 0.4.3.0
+
+### Changed
+
+#### CSC Grasshopper Interface
+
+- **FetchGeometry**: Update populating of outputs to avoid double geometries as well as putting everything in one tree branch
+- **All Components**: Got rid of everything basedpyright-related
+
+
+## [0.4.3.0] - 2025-11-05
+
+### Versions
+
+- CSC FastAPI Backend:  0.4.0.4
+- CSC React Frontend:   0.4.3.0
 - CSC Grasshopper Interface: 0.4.2.0
 
 ### Changed
