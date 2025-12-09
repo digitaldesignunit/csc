@@ -207,13 +207,7 @@ const ComponentIdentifier: React.FC = () => {
           ref={qrScannerRef}
           elementId={elementId}
           onScanSuccess={handleScannedCode}
-          onScanError={(error) => {
-            console.error('QR scan error:', error)
-            setStatus('error')
-            setIsScanning(false)
-          }}
-          config={config
-          }
+          config={config}
         />
         {!isScanning && (
           <div className="absolute inset-0 bg-muted/60 flex items-center justify-center text-center rounded">
