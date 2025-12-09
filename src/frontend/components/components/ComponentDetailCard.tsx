@@ -146,7 +146,7 @@ export default function ComponentDetailCard({
 
       if (response.ok) {
         // Redirect to archive page after successful archiving
-        router.push('/admin/archive')
+        router.push('/archive/components')
       } else {
         console.error('Failed to archive component')
         alert('Failed to archive component. Please try again.')

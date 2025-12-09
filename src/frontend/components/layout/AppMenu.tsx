@@ -142,7 +142,7 @@ export default function AppMenu() {
               Component Validation
             </div>
             <div
-              onClick={() => handleNavigation('/admin/archive')}
+              onClick={() => handleNavigation('/archive/components')}
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Archive className="h-4 w-4" />

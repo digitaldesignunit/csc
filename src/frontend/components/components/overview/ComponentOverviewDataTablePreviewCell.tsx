@@ -53,7 +53,7 @@ export default function ComponentOverviewDataTablePreviewCell({
   const { isArchived = false } = config
 
   // Derive paths based on whether this is archived or not
-  const detailBasePath = isArchived ? '/admin/archive' : '/components'
+  const detailBasePath = isArchived ? '/archive/components' : '/components'
   const apiBasePath = isArchived ? '/api/backend/archived' : '/api/backend'
   const showFindComponent = !isArchived
   const router = useRouter()

@@ -96,7 +96,7 @@ async function fetchArchivedComponentsAndTotal({
   ])
 
   if (itemsRes.status === 401 || countRes.status === 401) {
-    redirect('/auth/signin?callbackUrl=/admin/archive')
+    redirect('/auth/signin?callbackUrl=/archive/components')
   }
   if (itemsRes.status === 403 || countRes.status === 403) {
     redirect('/')
@@ -173,3 +173,4 @@ export default async function ArchivePage({
     </div>
   )
 }
+
