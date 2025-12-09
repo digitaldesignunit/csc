@@ -81,7 +81,7 @@ def get_geometry_archive_directory(config_file: str) -> str:
         # Reading from json file
         dbconfig = json.load(configfile)
         geometry_archive_dir = sanitize_path(
-            dbconfig['component_geometry_archive']
+            dbconfig['geometry_archive_dir']
         )
     return geometry_archive_dir
 
