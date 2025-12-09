@@ -73,6 +73,19 @@ def get_geometry_directory(config_file: str) -> str:
     return geometry_dir
 
 
+def get_geometry_archive_directory(config_file: str) -> str:
+    """
+    Read geometry archive directory from config file.
+    """
+    with open(config_file, 'r') as configfile:
+        # Reading from json file
+        dbconfig = json.load(configfile)
+        geometry_archive_dir = sanitize_path(
+            dbconfig['component_geometry_archive']
+        )
+    return geometry_archive_dir
+
+
 def get_gh_xml_cache_directory(config_file: str) -> str:
     """
     Read GH XML cache directory from config file.

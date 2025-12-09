@@ -19,6 +19,7 @@ from utility import (
     get_db_connectionstring,
     get_preview_directory,
     get_geometry_directory,
+    get_geometry_archive_directory,
     get_gh_xml_cache_directory,
 )
 
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
     app.mongodb = app.mongodb_client['csc']
     app.mongodb_users = app.mongodb['users']
     app.mongodb_components = app.mongodb['components']
+    app.mongodb_components_archived = app.mongodb['components_archived']
     app.mongodb_designs = app.mongodb['designs']
 
     # Create helpful indexes (idempotent)
@@ -69,6 +71,9 @@ async def lifespan(app: FastAPI):
     app.config_dir = _CONFIG_DIR
     app.component_preview_dir = get_preview_directory(_CONFIGFILE)
     app.component_geometry_dir = get_geometry_directory(_CONFIGFILE)
+    app.component_geometry_archive_dir = get_geometry_archive_directory(
+        _CONFIGFILE
+    )
     app.gh_xml_cache_dir = get_gh_xml_cache_directory(_CONFIGFILE)
 
     yield
@@ -84,7 +89,7 @@ app = FastAPI(
         'Backend API for Catalogue of Second Chances. '
         'FastAPI + MongoDB (async).'
     ),
-    version='0.4.0.4',
+    version='0.4.1.0',
     lifespan=lifespan,
 )
 

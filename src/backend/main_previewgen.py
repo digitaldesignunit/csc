@@ -58,14 +58,23 @@ async def initialize_preview_generation() -> Tuple[List[dict], List[str]]:
     )
     mongodb = mongodb_client['csc']
     mongodb_components = mongodb['components']
-    # mongodb_models = mongodb['models']
-    # retrieve all component ids from database and create set
+    mongodb_components_archived = mongodb['components_archived']
+    # retrieve all component ids from database (both main and archived)
     component_ids = {
         str(c['_id']) async for c in mongodb_components.find({}, {'_id': 1})
     }
+    archived_component_ids = {
+        str(c['_id']) async for c in mongodb_components_archived.find(
+            {}, {'_id': 1}
+        )
+    }
+    # Union of both sets - previews for archived components should be kept
+    all_component_ids = component_ids | archived_component_ids
     # compare both sets and find component ids with missing previews
+    # Only generate previews for main (non-archived) components
     missing_preview_ids = list(component_ids - preview_images)
-    stale_preview_ids = list(preview_images - component_ids)
+    # Only consider stale if not in main OR archive collection
+    stale_preview_ids = list(preview_images - all_component_ids)
     # for all missing preview ids, retrieve type, materialthickness and
     # geometry from database
     missing_preview_components = []
