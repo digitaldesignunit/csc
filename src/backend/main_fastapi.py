@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     app.mongodb = app.mongodb_client['csc']
     app.mongodb_users = app.mongodb['users']
     app.mongodb_components = app.mongodb['components']
-    app.mongodb_components_archived = app.mongodb['components_archived']
+    app.mongodb_components_archived = app.mongodb['components_archive']
     app.mongodb_designs = app.mongodb['designs']
 
     # Create helpful indexes (idempotent)

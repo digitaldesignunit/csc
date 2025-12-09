@@ -58,7 +58,7 @@ async def initialize_preview_generation() -> Tuple[List[dict], List[str]]:
     )
     mongodb = mongodb_client['csc']
     mongodb_components = mongodb['components']
-    mongodb_components_archived = mongodb['components_archived']
+    mongodb_components_archived = mongodb['components_archive']
     # retrieve all component ids from database (both main and archived)
     component_ids = {
         str(c['_id']) async for c in mongodb_components.find({}, {'_id': 1})
