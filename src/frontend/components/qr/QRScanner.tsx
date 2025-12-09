@@ -63,6 +63,8 @@ const QRScanner = forwardRef<QRScannerRef, QRScannerProps>(({
       }
 
       // Start the html5-qrcode scanner with enhanced configuration
+      // Note: The error callback is called on EVERY frame where no QR code is found.
+      // This is normal behavior, not an error. We only log for debugging, never treat as error.
       await instance.start(
         { facingMode: 'environment' },
         mergedConfig,
@@ -70,12 +72,9 @@ const QRScanner = forwardRef<QRScannerRef, QRScannerProps>(({
           // QR code detected
           onScanSuccess(decodedText)
         },
-        (error) => {
-          // Only call onScanError for actual errors, not "no QR code found"
-          if (!error.includes('No QR code found') && !error.includes('NotFoundException')) {
-            console.warn('QR scan error:', error)
-            onScanError?.(error)
-          }
+        () => {
+          // Per-frame scan callback - called when no QR code found in current frame
+          // This is expected behavior during normal scanning, not an error
         }
       )
 
