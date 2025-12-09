@@ -22,9 +22,12 @@ import { useRouter } from 'next/navigation'
 
 type Geometry = ComponentModel['geometry']
 
-async function fetch_component_geometry(component_id: string): Promise<{ geometry: Geometry }> {
+async function fetch_component_geometry(
+  component_id: string,
+  apiBasePath: string = '/api/backend'
+): Promise<{ geometry: Geometry }> {
   const res = await fetch(
-    `/api/backend/components/${encodeURIComponent(component_id)}/geometry`,
+    `${apiBasePath}/components/${encodeURIComponent(component_id)}/geometry`,
     { method: 'GET', credentials: 'include', cache: 'no-store' }
   )
   if (res.status === 401) throw new Error('unauthorized')
@@ -35,9 +38,24 @@ async function fetch_component_geometry(component_id: string): Promise<{ geometr
   return res.json() as Promise<{ geometry: Geometry }>
 }
 
+export interface PreviewCellConfig {
+  /** Whether this is for archived components */
+  isArchived?: boolean
+}
+
 export default function ComponentOverviewDataTablePreviewCell({
   component_data,
-}: { component_data: ComponentModel }) {
+  config = {},
+}: {
+  component_data: ComponentModel
+  config?: PreviewCellConfig
+}) {
+  const { isArchived = false } = config
+
+  // Derive paths based on whether this is archived or not
+  const detailBasePath = isArchived ? '/admin/archive' : '/components'
+  const apiBasePath = isArchived ? '/api/backend/archived' : '/api/backend'
+  const showFindComponent = !isArchived
   const router = useRouter()
   const compId = component_data._id
 
@@ -57,12 +75,12 @@ export default function ComponentOverviewDataTablePreviewCell({
     if (geometry) return
     setIsLoading(true)
     try {
-      const data = await fetch_component_geometry(compId as string)
+      const data = await fetch_component_geometry(compId as string, apiBasePath)
       setGeometry(data.geometry)
     } catch (e: unknown) {
       console.error('Error fetching Component Geometry:', e)
       if (e instanceof Error && e.message.toLowerCase().includes('unauthorized')) {
-        router.push(`/auth/signin?callbackUrl=/components`)
+        router.push(`/auth/signin?callbackUrl=${detailBasePath}`)
       }
       setOpen(false)
     } finally {
@@ -108,7 +126,7 @@ export default function ComponentOverviewDataTablePreviewCell({
         <TooltipProvider>
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
-              <Link href={`/components/${compId}`} className="min-w-0">
+              <Link href={`${detailBasePath}/${compId}`} className="min-w-0">
                 <Button
                   variant="ghost"
                   className="h-6 px-2 text-xs max-w-[16rem] truncate"
@@ -137,30 +155,35 @@ export default function ComponentOverviewDataTablePreviewCell({
 
         {isLoading && <ComponentViewerSkeleton message="Loading Geometry..." />}
         {!isLoading && geometry && (
-          <ComponentViewer component_data={{ ...component_data, geometry }} />
+          <ComponentViewer
+            component_data={{ ...component_data, geometry }}
+            geometryEndpoint={isArchived ? `${apiBasePath}/components/${compId}/geometry_reduced` : undefined}
+          />
         )}
 
         <SheetFooter className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
-          <Link href={`/components/${compId}`} className="w-full sm:w-[200px]">
+          <Link href={`${detailBasePath}/${compId}`} className="w-full sm:w-[200px]">
             <Button variant="outline" className="h-8 w-full">
               Open Detail Page
             </Button>
           </Link>
 
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link href={`/findcomponent?reference_id=${compId}`} className="w-full sm:w-[200px]">
-                  <Button variant="outline" className="h-8 w-full">
-                    Find Component
-                  </Button>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent>
-                <div className="text-center">Find via QR code</div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          {showFindComponent && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href={`/findcomponent?reference_id=${compId}`} className="w-full sm:w-[200px]">
+                    <Button variant="outline" className="h-8 w-full">
+                      Find Component
+                    </Button>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-center">Find via QR code</div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
 
           <SheetClose asChild className="w-full sm:w-[200px]">
             <Button variant="outline" className="h-8 w-full">

@@ -13,6 +13,8 @@ interface ComponentOverviewFilterMenuProps {
   defaultMaterial: string
   defaultCompType: string
   defaultDataset: string
+  /** Optional custom endpoint for fetching datasets (default: '/api/backend/datasets') */
+  datasetsEndpoint?: string
 }
 
 /**
@@ -29,6 +31,7 @@ export default function ComponentOverviewFilterMenu({
   defaultMaterial,
   defaultCompType,
   defaultDataset,
+  datasetsEndpoint = '/api/backend/datasets',
 }: ComponentOverviewFilterMenuProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -59,7 +62,7 @@ export default function ComponentOverviewFilterMenu({
   useEffect(() => {
     const fetchDatasets = async () => {
       try {
-        const response = await fetch('/api/backend/datasets')
+        const response = await fetch(datasetsEndpoint)
         if (response.ok) {
           const datasets = await response.json()
           setAvailableDatasets(datasets)
@@ -69,7 +72,7 @@ export default function ComponentOverviewFilterMenu({
       }
     }
     fetchDatasets()
-  }, [])
+  }, [datasetsEndpoint])
 
   // Whenever the searchParams themselves change (due to another component),
   // we sync our local state so our inputs reflect the updated query string.

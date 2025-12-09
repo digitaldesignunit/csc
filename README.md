@@ -25,8 +25,8 @@ framework
 
 ## Current Versions
 
-- **CSC FastAPI Backend**: 0.4.0.4
-- **CSC React Frontend**: 0.4.3.2
+- **CSC FastAPI Backend**: 0.4.1.0
+- **CSC React Frontend**: 0.4.3.3
 - **CSC Grasshopper Interface**: 0.4.3.0
 
 ---

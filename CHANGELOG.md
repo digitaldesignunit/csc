@@ -4,7 +4,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.3.2] - 2025-11-05
+## [0.4.3.3] - 2025-12-09
+
+### Versions
+
+- CSC FastAPI Backend:  0.4.1.0
+- CSC React Frontend:   0.4.3.3
+- CSC Grasshopper Interface: 0.4.3.0
+
+### Added
+
+#### CSC FastAPI Backend
+
+- **Add Archive Router**: Add router and routes to handle component archiving instead of hard deletion
+
+#### CSC React Frontend
+
+- **Add Archive Feature and Page**: Add UI features and pages to support archiving of components.
+
+
+## [0.4.3.2] - 2025-12-09
 
 ### Versions
 

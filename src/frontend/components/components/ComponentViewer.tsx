@@ -220,30 +220,44 @@ function parseOBJ(objContent: string): { meshes: { vertices: number[], faces: nu
 
 async function loadExternalGeometry(
   componentId: string,
-  mode: Exclude<GeometryMode, 'primitive'>
+  mode: Exclude<GeometryMode, 'primitive'>,
+  customEndpoint?: string
 ): Promise<GeometryLoadResult> {
   debugLog(`Loading ${mode} geometry for component ${componentId}`)
-  
-  const cacheKey = `${componentId}:${mode}`
+
+  const cacheKey = customEndpoint ? `${customEndpoint}:${mode}` : `${componentId}:${mode}`
   const cached = externalGeometryCache.get(cacheKey)
-  
+
   // Check if we have valid cached data
   if (cached && cached.meshes) {
     debugLog(`Using cached geometry for ${componentId}: ${cached.meshes.length} meshes`)
     return { success: true, meshes: cached.meshes }
   }
-  
+
   // Check if we have cached "not found" state
   if (cached && cached.meshes === null) {
-    return { 
-      success: false, 
-      error: 'not_found', 
-      message: `No ${mode} geometry available for this component` 
+    return {
+      success: false,
+      error: 'not_found',
+      message: `No ${mode} geometry available for this component`
     }
   }
 
-  const geometryRoute = mode === 'reduced' ? 'geometry_reduced' : 'geometry_detailed'
-  const objUrl = `/api/backend/components/${componentId}/${geometryRoute}`
+  // Use custom endpoint if provided, otherwise construct default
+  let objUrl: string
+  if (customEndpoint) {
+    // Replace geometry_reduced with geometry_detailed if mode is detailed
+    if (mode === 'detailed' && customEndpoint.includes('geometry_reduced')) {
+      objUrl = customEndpoint.replace('geometry_reduced', 'geometry_detailed')
+    } else if (mode === 'reduced' && customEndpoint.includes('geometry_detailed')) {
+      objUrl = customEndpoint.replace('geometry_detailed', 'geometry_reduced')
+    } else {
+      objUrl = customEndpoint
+    }
+  } else {
+    const geometryRoute = mode === 'reduced' ? 'geometry_reduced' : 'geometry_detailed'
+    objUrl = `/api/backend/components/${componentId}/${geometryRoute}`
+  }
 
   try {
     // Prepare headers for conditional request
@@ -790,7 +804,13 @@ function VisualizeComponent({
 /**
  * ComponentViewer
  */
-export default function ComponentViewer({ component_data }: { component_data: ComponentModel }) {
+export default function ComponentViewer({
+  component_data,
+  geometryEndpoint
+}: {
+  component_data: ComponentModel
+  geometryEndpoint?: string
+}) {
   // Call ALL hooks FIRST, unconditionally
   const [geometryMode, setGeometryMode] = useState<GeometryMode>('primitive')
   const [visibleMeshes, setVisibleMeshes] = useState<boolean[]>([])
@@ -824,7 +844,7 @@ export default function ComponentViewer({ component_data }: { component_data: Co
       setGeometryError(null)
       // For external geometry default: hide edges
       setShowEdges(false)
-      loadExternalGeometry(component_data._id.toString(), geometryMode)
+      loadExternalGeometry(component_data._id.toString(), geometryMode, geometryEndpoint)
         .then((result) => {
           if (isMounted) {
             if (result.success) {
@@ -866,7 +886,7 @@ export default function ComponentViewer({ component_data }: { component_data: Co
     return () => {
       isMounted = false
     }
-  }, [geometryMode, component_data, isExternalMode, hasMultipleMeshes, meshes, geometry?.mesh])
+  }, [geometryMode, component_data, isExternalMode, hasMultipleMeshes, meshes, geometry?.mesh, geometryEndpoint])
 
   const onModeChange: React.ChangeEventHandler<HTMLSelectElement> = (e) => {
     const v = e.target.value as GeometryMode

@@ -1,6 +1,6 @@
 {
   "name": "csc-frontend",
-  "version": "0.4.3.2",
+  "version": "0.4.3.3",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -32,7 +32,7 @@
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.539.0",
     "mongodb": "^5.9.2",
-    "next": "16.0.7",
+    "next": "16.0.8",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
     "npm": "^11.6.0",
@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@next/eslint-plugin-next": "^16.0.8",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
@@ -51,13 +52,16 @@
     "@types/react-dom": "19.2.3",
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
-    "eslint-config-next": "16.0.7",
+    "eslint-config-next": "16.0.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "openapi-typescript-codegen": "^0.29.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.12",
     "tsx": "^4.20.4",
     "tw-animate-css": "^1.3.6",
-    "typescript": "^5"
+    "typescript": "^5",
+    "typescript-eslint": "^8.49.0"
   },
   "overrides": {
     "@types/react": "19.2.7",

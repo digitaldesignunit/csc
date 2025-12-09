@@ -4,25 +4,35 @@
 import { ColumnDef } from '@tanstack/react-table'
 import { ComponentModel, ExtendedComponentModel, ComponentBoundingBox } from '@/generated/ComponentModel'
 import { formatTimestamp, rgbToHex } from '@/lib/utils'
-import ComponentOverviewDataTablePreviewCell from './ComponentOverviewDataTablePreviewCell'
+import ComponentOverviewDataTablePreviewCell, { PreviewCellConfig } from './ComponentOverviewDataTablePreviewCell'
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
 import ComponentOverviewDataTableFilterCell from './ComponentOverviewDataTableFilterCell'
 import ComponentOverviewDataTableLocationCell from './ComponentOverviewDataTableLocationCell'
 
-export const ComponentOverviewColumns: ColumnDef<ComponentModel>[] = [
-  {
-    accessorKey: '_id',
-    header: () => <ComponentOverviewDataTableHeader header='ID' />,
-    meta: {
-      // preview column: can compress a bit, then scroll
-      colClassName: 'w-[200px] sm:w-[260px] md:w-[300px]',
-      headerClassName: '',
-      cellClassName: '',
+/**
+ * Creates component overview columns with customizable preview cell config.
+ * This allows reuse for both regular components and archived components.
+ */
+export function createComponentOverviewColumns(
+  previewConfig?: PreviewCellConfig
+): ColumnDef<ComponentModel>[] {
+  return [
+    {
+      accessorKey: '_id',
+      header: () => <ComponentOverviewDataTableHeader header='ID' />,
+      meta: {
+        // preview column: can compress a bit, then scroll
+        colClassName: 'w-[200px] sm:w-[260px] md:w-[300px]',
+        headerClassName: '',
+        cellClassName: '',
+      },
+      cell: ({ row }) => (
+        <ComponentOverviewDataTablePreviewCell
+          component_data={row.original}
+          config={previewConfig}
+        />
+      ),
     },
-    cell: ({ row }) => (
-      <ComponentOverviewDataTablePreviewCell component_data={row.original} />
-    ),
-  },
   {
     accessorKey: 'type',
     header: () => <ComponentOverviewDataTableHeader header='Type' />,
@@ -202,4 +212,8 @@ export const ComponentOverviewColumns: ColumnDef<ComponentModel>[] = [
       )
     },
   },
-]
+  ]
+}
+
+// Default columns for regular components (backwards compatible)
+export const ComponentOverviewColumns = createComponentOverviewColumns()

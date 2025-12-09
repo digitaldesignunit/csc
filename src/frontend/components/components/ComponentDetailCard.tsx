@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import ComponentDetailMap from './ComponentDetailMap'
-import { Copy, Check, FileText, CheckCircle, Trash2 } from 'lucide-react'
+import { Copy, Check, FileText, CheckCircle, Trash2, Archive, RotateCcw, ChevronDown } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import ComponentOverviewDataTableLocationCell from './overview/ComponentOverviewDataTableLocationCell'
@@ -25,13 +25,17 @@ interface ExtendedUser {
 
 export default function ComponentDetailCard({
   component_data,
+  isArchived = false,
 }: {
   component_data: ExtendedComponentModel
+  isArchived?: boolean
 }) {
   const [copied, setCopied] = useState(false)
   const [grasshopperCopied, setGrasshopperCopied] = useState(false)
   const [validating, setValidating] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showDestructiveActions, setShowDestructiveActions] = useState(false)
   const { data: session } = useSession()
   const router = useRouter()
 
@@ -129,8 +133,60 @@ export default function ComponentDetailCard({
     }
   }
 
+  const handleArchiveComponent = async () => {
+    if (!confirm('Are you sure you want to archive this component? It will be removed from the main catalogue but can be restored later.')) {
+      return
+    }
+
+    try {
+      setArchiving(true)
+      const response = await fetch(`/api/backend/archive/${component_data._id}`, {
+        method: 'POST',
+      })
+
+      if (response.ok) {
+        // Redirect to archive page after successful archiving
+        router.push('/admin/archive')
+      } else {
+        console.error('Failed to archive component')
+        alert('Failed to archive component. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error archiving component:', error)
+      alert('Failed to archive component. Please try again.')
+    } finally {
+      setArchiving(false)
+    }
+  }
+
+  const handleUnarchiveComponent = async () => {
+    if (!confirm('Are you sure you want to restore this component from the archive?')) {
+      return
+    }
+
+    try {
+      setArchiving(true)
+      const response = await fetch(`/api/backend/unarchive/${component_data._id}`, {
+        method: 'POST',
+      })
+
+      if (response.ok) {
+        // Redirect to the main component page after successful restoration
+        router.push(`/components/${component_data._id}`)
+      } else {
+        console.error('Failed to restore component')
+        alert('Failed to restore component. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error restoring component:', error)
+      alert('Failed to restore component. Please try again.')
+    } finally {
+      setArchiving(false)
+    }
+  }
+
   const handleDeleteComponent = async () => {
-    if (!confirm('Are you sure you want to delete this component? This action cannot be undone.')) {
+    if (!confirm('Are you sure you want to PERMANENTLY delete this component? This action cannot be undone!')) {
       return
     }
 
@@ -139,10 +195,10 @@ export default function ComponentDetailCard({
       const response = await fetch(`/api/backend/components/${component_data._id}`, {
         method: 'DELETE',
       })
-      
+
       if (response.ok) {
-        // Redirect to validation page after successful deletion
-        router.push('/admin/validation')
+        // Redirect to components page after successful deletion
+        router.push('/components')
       } else {
         console.error('Failed to delete component')
         alert('Failed to delete component. Please try again.')
@@ -302,63 +358,119 @@ export default function ComponentDetailCard({
 
         {/* Admin Action Buttons - Only show for admin users */}
         {session?.user?.role === 'admin' && (
-          <div className="mb-4 flex gap-2 xl:max-w-md">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={handleValidateComponent}
-                    disabled={validating || deleting || component_data.validated}
-                    variant="default"
-                    className="bg-green-600 hover:bg-green-700 flex-1"
-                  >
-                    {validating ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    ) : (
-                      <>
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        <span>{component_data.validated ? 'Validated' : 'Validate'}</span>
-                      </>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="text-center text-sm">
-                    {component_data.validated 
-                      ? 'This component is already validated' 
-                      : 'Validate this component for public use'
-                    }
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+          <div className="mb-4 space-y-3 xl:max-w-md">
+            {/* Main Admin Actions */}
+            <div className="flex gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleValidateComponent}
+                      disabled={validating || archiving || deleting || component_data.validated}
+                      variant="default"
+                      className="bg-green-600 hover:bg-green-700 flex-1"
+                    >
+                      {validating ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          <span>{component_data.validated ? 'Validated' : 'Validate'}</span>
+                        </>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="text-center text-sm">
+                      {component_data.validated
+                        ? 'This component is already validated'
+                        : 'Validate this component for public use'
+                      }
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
 
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={handleDeleteComponent}
-                    disabled={validating || deleting}
-                    variant="destructive"
-                    className="flex-1"
-                  >
-                    {deleting ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    ) : (
-                      <>
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        <span>Delete</span>
-                      </>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="text-center text-sm">
-                    Permanently delete this component
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={isArchived ? handleUnarchiveComponent : handleArchiveComponent}
+                      disabled={validating || archiving || deleting}
+                      variant={isArchived ? 'default' : 'outline'}
+                      className="flex-1"
+                    >
+                      {archiving ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      ) : isArchived ? (
+                        <>
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          <span>Restore</span>
+                        </>
+                      ) : (
+                        <>
+                          <Archive className="h-4 w-4 mr-2" />
+                          <span>Archive</span>
+                        </>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="text-center text-sm">
+                      {isArchived
+                        ? 'Restore this component to the main catalogue'
+                        : 'Archive this component (can be restored later)'
+                      }
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            {/* Destructive Actions - Collapsible */}
+            <div className="border border-destructive/30 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setShowDestructiveActions(!showDestructiveActions)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <span>Destructive Actions</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${showDestructiveActions ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showDestructiveActions && (
+                <div className="p-3 pt-0 border-t border-destructive/30">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Warning: Deleting a component is permanent and cannot be undone. Consider archiving instead.
+                  </p>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleDeleteComponent}
+                          disabled={validating || archiving || deleting}
+                          variant="destructive"
+                          className="w-full"
+                        >
+                          {deleting ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          ) : (
+                            <>
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              <span>Permanently Delete</span>
+                            </>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="text-center text-sm">
+                          Permanently delete this component (cannot be undone)
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
