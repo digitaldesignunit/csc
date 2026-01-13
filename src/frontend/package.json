@@ -32,7 +32,7 @@
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.539.0",
     "mongodb": "^5.9.2",
-    "next": "16.0.10",
+    "next": "16.1.1",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
     "npm": "^11.6.0",
@@ -44,15 +44,15 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@next/eslint-plugin-next": "16.0.10",
+    "@next/eslint-plugin-next": "16.1.1",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
-    "@types/react": "19.2.7",
+    "@types/react": "19.2.8",
     "@types/react-dom": "19.2.3",
     "autoprefixer": "^10.4.21",
     "eslint": "^9",
-    "eslint-config-next": "16.0.10",
+    "eslint-config-next": "16.1.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "openapi-typescript-codegen": "^0.29.0",
@@ -64,7 +64,7 @@
     "typescript-eslint": "^8.49.0"
   },
   "overrides": {
-    "@types/react": "19.2.7",
+    "@types/react": "19.2.8",
     "@types/react-dom": "19.2.3"
   }
 }
