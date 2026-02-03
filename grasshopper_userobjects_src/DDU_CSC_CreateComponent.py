@@ -44,7 +44,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260203
     """
 
     def __init__(self):
@@ -82,37 +82,40 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'Component ID (must be a valid UUID)'
         )
         self.InputParams[2].Description = (
-            'Component type (e.g., "sheet", "rubble")'
+            'Component Name (e.g. My Beam 01)'
         )
         self.InputParams[3].Description = (
-            'Material type (e.g., "steel", "concrete", "wood")'
+            'Component type (e.g., "sheet", "rubble")'
         )
         self.InputParams[4].Description = (
+            'Material type (e.g., "steel", "concrete", "wood")'
+        )
+        self.InputParams[5].Description = (
             'Dataset that this component belongs to '
             '(i.e. my_rubble_dataset)'
         )
-        self.InputParams[5].Description = (
+        self.InputParams[6].Description = (
             'Complexity level '
             '(0=simple, 1=normal, 2=complex, 3=very complex)'
         )
-        self.InputParams[6].Description = (
+        self.InputParams[7].Description = (
             'Fragment status (True for fragments, False for complete)'
         )
-        self.InputParams[7].Description = (
-            'Assembly status (True for assemblies, False for individual)'
-        )
         self.InputParams[8].Description = (
-            'Location as Vector3d (X=latitude, Y=longitude, Z ignored)'
+            'Assembly status (True for assemblies, False for individual)'
         )
         self.InputParams[9].Description = (
             'Component color (System.Drawing.Color)'
         )
         self.InputParams[10].Description = (
+            'Location as Vector3d (X=latitude, Y=longitude, Z ignored)'
+        )
+        self.InputParams[11].Description = (
             'Rhino geometry object(s) - single object or list of objects. '
             'For single: Mesh or Extrusion for sheets, Mesh for rubble. '
             'For multiple: all must be Meshes.'
         )
-        self.InputParams[11].Description = (
+        self.InputParams[12].Description = (
             'Marker points as list of Point3d objects for component '
             'identification and positioning'
         )
@@ -307,6 +310,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             self,
             schema,
             ComponentID: str,
+            Name: str,
             Type: str,
             Material: str,
             Dataset: str,
@@ -329,7 +333,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             if field_name == '_id':
                 component_data[field_name] = ComponentID
             elif field_name == 'name':
-                component_data[field_name] = (
+                component_data[field_name] = Name if Name else (
                     f'{str(Type).capitalize()} Component made '
                     f'from {str(Material).capitalize()}'
                 )
@@ -1082,6 +1086,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     def RunScript(self,
             ClearLocalStorage: bool,
             ComponentID: str,
+            Name: str,
             Type: str,
             Material: str,
             Dataset: str,
@@ -1134,6 +1139,10 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = 'Input ComponentID is not a valid UUID! Aborting...'
                 self._addError(msg)
                 return ComponentData
+            if not Name:
+                msg = "Input Name failed to collect data. Using auto-generated name!"
+                self._addRemark(msg)
+                Name = ''
             if not Type:
                 msg = 'Input Type failed to collect data!'
                 self._addWarning(msg)
@@ -1280,7 +1289,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
             # Create component data dictionary based on schema
             COMPDATA = self.build_component_data_from_schema(
-                schema, ComponentID, Type, Material, Dataset, Complexity,
+                schema, ComponentID, Name, Type, Material, Dataset, Complexity,
                 Fragment, Assembly, Color, dimensions, location_data,
                 principal_components
             )
