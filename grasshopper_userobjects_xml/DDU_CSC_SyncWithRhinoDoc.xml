@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">d0705212-711f-4e1f-b3ac-1dd3be6038f2</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">852bd88c-de64-4d5e-b57c-4bad90281c69</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639003670246124821</item>
+            <item name="Date" type_name="gh_date" type_code="8">639057125949160941</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -84,7 +84,7 @@
                 <item name="Author" type_name="gh_string" type_code="10">Robert McNeel &amp; Associates</item>
                 <item name="Id" type_name="gh_guid" type_code="9">00000000-0000-0000-0000-000000000000</item>
                 <item name="Name" type_name="gh_string" type_code="10">Grasshopper</item>
-                <item name="Version" type_name="gh_string" type_code="10">8.25.25314.11001</item>
+                <item name="Version" type_name="gh_string" type_code="10">8.27.26019.16021</item>
               </items>
             </chunk>
           </chunks>
@@ -107,7 +107,7 @@
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="834">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAALXSURBVEhLtZVNSFRRGIZd5Kog2oVgJbZv0yaiQOncc+d/7r2zCcM0qDaCQWSZ7SJQwSjKRUHhIoK0qDTyzk86GhbuaumqcqdoqxY5zswT58xoM3dG06wLLxzOz/ucc77vfLemxvMRF+xUXs/1zztxJ/J6/1PzNW3LPB8X5NyCVNs7vpH+aJ53BdlxAQkBqaIShT415p3v1aaAnGtAUsCUYNU1+DZiMv/cJKv6p4QeUyfyrtsSQJtPCBZHJR1dYeoth32Bgg5YDh1XwyyMmjBhbAqpClgz//TUR13YodGxudcX5OOQnw9DPu70BmmwHT2m5hQgRoVPVYC613xSsDwmqYs4RC9GWU1KmFbQoqYFK0lJ4LzF/rDD8phJJl79JBWA1XGD/JRBd09YL/4ZNyElybyV5NyCVJukAZOSBsfh2vUwzBYTwQMpA+j0SxQWHo7ZDNwKw4wyNEGB4lIr70qyCcmrBwGaz1kcOW1zty/El2G1mfLsKgOoe8y9k/TfDFF7Kob/gsXCqJ9cwiTvrkFMsuOm3kTPjQg1zTEd+L1+h7lnJvlUeWatA3TnhGB2KMAeM0Z91GaXiHGlOwJpyaoyLQI0RAHTJh1dUXZLh89PfJCuTNvyGCQEP95Ivr40Odpi0XYpynfXR8Y1yZeYK62oa3svudwd4VirpZNAP8hSvwpAMYuYEQz2hvRJFl/79U5VHNQplHRM0pL5Fz5qRYyH/SFyaZUgWwHEBdm4IJM0ON5q02g7zI34YVrCVFHTkrlhH422zYmzFpmEJBc3qtaoCoCGqFOkBEtjJk3tlo5FS2eU+30hBvuCnOmM6L6mdpulMR+kjA3rUlXAb4ih9WggyMk2i0O2zUHL1u3Ht4P6faj3sJH5poB1iGqrwjZZSGNd6CaLfaVzNtCmAG2gYjJeTD/1UhOFti7XVeZ79UdAqZThVkxLteU/2t9qW7/N7Wrd/H9A1jx/Aa9cJ2v5UTM8AAAAAElFTkSuQmCC</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">c1d48644-570a-403c-a17a-eeb338a0dab4</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">ed97e902-09de-49e6-a378-aaa3ab971ff3</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -150,7 +150,7 @@
                             <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                               <bitmap length="1053">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOvAAADrwBlbxySQAAA79JREFUSEvVVUtLI1kUvrcKiyAxZR6W0RhRE98a329U8AFKwIiKg70TBAXxFwRaXTjoQIPo0oXuXEkvXbkRXLYiPtCFDxR0ZjGDC+1oPzjNd8YqhrJ7umc19AeHJFU33znnO9+9V4j/CWEp5XshBP2H+MVO8k04HI53KysrtLOzQ9vb27S1tUWbm5u0sbFBa2trtLCwQGNjYxSNRqmlpYXy8/NJSnkrhNDsXC+gqmosGo1+XF1dpYaGBo76+nqqra2l6upqqqiooLKyMioqKmLi3NxcKikpIafTea8oStzOZ4em6/qf6+vrNDg4yNUhmpubORGSVFVVUXl5OZMWFBRQKBTiyMvLI0VRHoQQATuphaSkpF9HR0c/zczMUGtrK7W3t3PgO5Kgk5qaGu6itLSUCgsLmTwnJ4c70XX9SUr51s5rIuz3+x+Xlpaos7OTiTs6Oqi3t5eWl5fp6OiITBwcHND8/DxVVlZSOBzmBMFgkLKysjALdFFjJ4f22wMDAzQyMsKyIMHw8DCdn59bxHacnp7yWiQAeUZGBrnd7s9Syl07f9Tn8yVACK0hB6o/Ozuzc1pIJBL8eXJywsNGAr/fT9nZ2eRwOO6FEK9Mck1V1d8bGxsJgUEiyeLiop3Tws3NDfX399P19TX/np2dpUAgQOnp6ZwEHUkp/xJCOIWiKK+9Xm8C5BgerIgkaP9ruL29pe7ubrbp1NQUPzs8PKTMzEwyDIM8Hg8P3jAMbNQ3Qkp5V1xczN5GIAms+Pj4aOe2yLEeFsWQAcgF/dPS0jADThSJRLC775Dgja7rD/C2mQjf7Qkgi0kOe8I9IDETQB6v10upqam8JhgMooPfMAMn9IKP0TYCm+iftgQ5rIt3qBzkWD8xMcHv9/f3uXrIg06wX1RV/XsGz3ilado9/gxH4HNubo7/jE76+vr4Gd5BX5Cj+qurK14Tj8et6mEQwzCwFywXMeBdaIctDxJUCwsCl5eXNDk5ya3j+fj4OF1cXPC74+Njrhrk6Kyuru6zEOLFPgDqcZbAYmbAWWaSrwHkmBkGC3kwI5fLBe1f7mQA54jH43lCB9g4CMgxPT1Ne3t7FvHu7i7LAu+jcpfLxfaORCIfhBDfPIuAALqA3jhbsGnMgEsgIYYJvVGxruuUkpLC73E3aJr276fpM+Jut/sBp6XP57PCJIUcZtVOp5OSk5P5WAmFQiD/7n0AaFLKP2DVpqYmamtrYwLo29PTw5XGYjHCwTg0NMQHYldX14/faM/A/Wq/c78XP34n/1T4Ain3+7F9TBcNAAAAAElFTkSuQmCC</bitmap>
                             </item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">47f55093-0e56-4212-871e-0530e8f73918</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">8010427b-cc54-4c1d-8742-85583e23b9a1</item>
                             <item name="Name" type_name="gh_string" type_code="10">Sync</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Sync</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -187,7 +187,7 @@
                             <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                               <bitmap length="1155">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOvAAADrwBlbxySQAABCVJREFUSEvVVVso7HsU/v1nMk0a8zcXYxjjNu6Xcb/nTmSUQk48UR68uCRPtiR05GhLkgce3AovOp4opSREshPFg6SUc0mHXQybTWv3/Y7/ZI/22fs8nc6qlWlG31rr+761foz9RxEgCMInxhj9i/zJGeSboVQqP4yPj9Pm5iatr6/T6uoqLS8v08LCAk1OTlJ/fz/V19eTzWajjIwMCg4OJkEQfmeMKZyx3oRcLi+z2WyfJyYmKCUlhWdycjIlJiZSfHw8xcTEUFRUFIWFhXHggIAAioiIIJVKdSuTyd454zmHQhTFv+bm5qiiooJ3h0xPT+eFUCQuLo6io6M5aEhICFksFp6BgYEkk8nsjDGTM6gjXFxcfq6rq3vq6uqizMxMamhooL6+PpqdnaWNjQ2ampqihIQEPkVkZCTl5OTw31ZWVqimpoZEUXwQBOFXZ1wpAoxG46fh4WHKz8+n3Nxcqq2tpZGREbq8vKSrqyv+t7S0lGJjY6mwsJAODw/p7OyMDg4OaGxsjHx8fKAFpkhwBgf36+Xl5VRdXc1pyc7Opry8PJ57e3t0c3NDd3d3HCgpKYm2trZofn6eYIalpSVOqZeXF2k0mmdBED4449v0ev19VVUV5xqcgyIUQfb29tL9/T09PDzQ8fExL9La2kqhoaGcf39/f9690WgkX19fUiqVt4yxGglcIZfL/0hNTSUkhJSKSCIXFRXxAk9PT/T8/EyLi4tfiezn50cmk4k8PT15ERQUBOGKMaZiMpmsU6fT3QMc4sGKKAJrvrbp7u4uB0d0d3d/ZVOz2Uze3t5kMBhIq9XyogaD4Y4x9p4JgvAxPDycexuJIrAi3PI6h4aGHBOsra05upfoAf8eHh7QgBeyWq3Y7o8o8F4URTu8LRXCZxSCW5D4jC2GBo+Pj1xsFH3dPejR6XTk7u7OccxmMyb4BRqowBf+GWMjwS98Lk3V2dlJPT09dHJywsHtdjt1dHRwQcE9Jkb3oAeTgFK5XP63Bi9Ro1AobjE2srm5mUZHR6mtrY0GBwdpenqafz8wMEDX19d8J46OjngzJSUl1NLS4ugemhkMBuyCw0U84F1wB+s1NTXxDcWxm5mZcdgRtJyentLFxQWdn5/T/v4+4Wahe4AHBQVhR54ZY2/2AJGMWwLRsrKyuM8bGxsdQsKK4BuLuLOzQ9vb29Te3i4tF6cH261Wq8H9201G4I5otdoHgMIZrxNcQ0wAQlB0LdGiVqu5va1W6yNj7Ju3CGHCFOAb3WJppAQoKJSA0bEoiuTm5sZ/x9ugUCj++Zq+xDuNRmOHi/R6vSMlUNAhda1SqcjV1ZXfK4vFAvDvvgcIhSAIf8KqaWlpXA8AgN/i4mLeaVlZGeEwVlZWEu5XQUEBTsNvP/SivQTeV+c393v542/y/yq+AEB0rPnjs0SQAAAAAElFTkSuQmCC</bitmap>
                             </item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">9c8272e4-7442-4daf-afcd-b2c99ed51ad4</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">ea8bc2e8-3eee-47b9-87f4-a3def6cd978e</item>
                             <item name="Name" type_name="gh_string" type_code="10">DocumentComponents</item>
                             <item name="NickName" type_name="gh_string" type_code="10">DocumentComponents</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
