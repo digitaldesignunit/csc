@@ -34,7 +34,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260203
     """
 
     def __init__(self):
@@ -74,34 +74,37 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'Component ID (GUID)'
         )
         self.OutputParams[1+i].Description = (
-            'Component type (sheet, beam, slab, etc.)'
+            'Component name (e.g. My Component 01)'
         )
         self.OutputParams[2+i].Description = (
-            'Component material'
+            'Component type (sheet, beam, slab, etc.)'
         )
         self.OutputParams[3+i].Description = (
-            'Component color as System.Drawing.Color'
+            'Component material'
         )
         self.OutputParams[4+i].Description = (
-            'Component location as Point3d (X=latitude, Y=longitude, Z=0)'
+            'Component color as System.Drawing.Color'
         )
         self.OutputParams[5+i].Description = (
-            'Component bounding box as Rhino.Geometry.BoundingBox'
+            'Component location as Point3d (X=latitude, Y=longitude, Z=0)'
         )
         self.OutputParams[6+i].Description = (
-            'PCA frame at world origin as Rhino.Geometry.Plane'
+            'Component bounding box as Rhino.Geometry.BoundingBox'
         )
         self.OutputParams[7+i].Description = (
-            'Component descriptors/metadata as JSON string'
+            'PCA frame at world origin as Rhino.Geometry.Plane'
         )
         self.OutputParams[8+i].Description = (
+            'Component descriptors/metadata as JSON string'
+        )
+        self.OutputParams[9+i].Description = (
             'Rhino geometry objects (extrusion, mesh, multiple meshes, '
             'polyline)'
         )
-        self.OutputParams[9+i].Description = (
+        self.OutputParams[10+i].Description = (
             'Marker points as list of Point3d objects'
         )
-        self.OutputParams[10+i].Description = (
+        self.OutputParams[11+i].Description = (
             'Component attributes as JSON string'
         )
 
@@ -239,6 +242,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     def RunScript(self, ComponentData: Grasshopper.DataTree[str]):
         # set up output trees and results tuple
         ID = Grasshopper.DataTree[System.Object]()
+        Name = Grasshopper.DataTree[System.Object]()
         Type = Grasshopper.DataTree[System.Object]()
         Material = Grasshopper.DataTree[System.Object]()
         Color = Grasshopper.DataTree[System.Object]()
@@ -251,6 +255,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         Attributes = Grasshopper.DataTree[System.Object]()
         __Results = (
             ID,
+            Name,
             Type,
             Material,
             Color,
@@ -281,6 +286,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         # add directly available metadata to the
                         # respective datatrees
                         ID.Add(json_comp['_id'], ghp)
+                        Name.Add(json_comp['name'], ghp)
                         Type.Add(json_comp['type'], ghp)
                         Material.Add(json_comp['material'], ghp)
 
