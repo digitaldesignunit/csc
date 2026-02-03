@@ -43,5 +43,6 @@ src/backend/apps/catalogue/test.json
 csc_deploy*.sh
 src/backend/logs/fastapi.log
 *.3dm.rhl
+/grasshopper_development/DDU_CSC_GrasshopperInterface_DMS_PAPER.gh
 
 scripts/*.log
