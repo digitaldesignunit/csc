@@ -1,6 +1,6 @@
-# CSC - Catalogue of Second Chances
+# CSC - Catalog of Second Chances
 
-_Catalogue of Second Chances (CSC)_ tries to provide a platform and the
+_Catalog of Second Chances (CSC)_ tries to provide a platform and the
 corresponding tools to leverage a database of uniquely identified, digitized
 building components and materials to create designs that reuse these
 components.
@@ -12,7 +12,7 @@ not working, etc. pp.
 
 ## Software Structure
 
-- The catalogue consists of a _database_, _backend_, _frontend_, and _Grasshopper interface_
+- The Catalog consists of a _database_, _backend_, _frontend_, and _Grasshopper interface_
 - We use [_MongoDB Atlas_](https://www.mongodb.com/) as database
 - The backend is implemented using [_FastAPI_](https://fastapi.tiangolo.com/)
 - We use Python 3.9.18
@@ -202,6 +202,27 @@ Route (app)                              Size     First Load JS
 Now you should be almost set up! The last things to do are configuring services
 and corresponding web backends...
 
+### Upgrading Next.js
+
+Use the official Next.js codemod to upgrade the frontend to a newer version:
+
+```bash
+# Upgrade to the latest patch (e.g. 16.0.7 -> 16.0.8)
+npx @next/codemod upgrade patch
+
+# Upgrade to the latest minor (e.g. 15.3.7 -> 15.4.8). This is the default.
+npx @next/codemod upgrade minor
+
+# Upgrade to the latest major (e.g. 15.5.7 -> 16.0.7)
+npx @next/codemod upgrade major
+
+# Upgrade to a specific version
+npx @next/codemod upgrade 16
+
+# Upgrade to the canary release
+npx @next/codemod upgrade canary
+```
+
 ### Services Config using Supervisor
 
 Again, we will consider our setup case using Uberspace, which uses Supervisor
@@ -382,7 +403,7 @@ npm run generate:models
 
 #### Development Workflow
 
-1. **Update Backend Model**: Modify Pydantic model in `src/backend/apps/catalogue/models.py`
+1. **Update Backend Model**: Modify Pydantic model in `src/backend/apps/Catalog/models.py`
 2. **Restart Backend**: Restart FastAPI to regenerate OpenAPI schema
 3. **Generate Frontend Models**: Run `npm run generate:models`
 4. **Use Generated Models**: Import from `src/generated/ComponentModel`
@@ -462,12 +483,12 @@ via conda-forge.
 
 ## References
 
-- The technical main inspiration for the _Catalogue of Second Chances_
-interface is the [Catalogue Explorer](https://github.com/ibois-epfl/catalogue-explorer)
+- The technical main inspiration for the _Catalog of Second Chances_
+interface is the [Catalog Explorer](https://github.com/ibois-epfl/Catalog-explorer)
 by [@AymbericBr](https://github.com/AymericBr).
 - Another huge inspiration and reference is the
 [Timberstone Project](https://epfl-enac.github.io/MANSLAB-IBOIS-EESD-timberstone/),
-which is the origin of abovementioned Catalogue Explorer.
+which is the origin of abovementioned Catalog Explorer.
 
 # To-Do & Extension Ideas
 

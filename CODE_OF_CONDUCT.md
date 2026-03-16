@@ -1,6 +1,6 @@
 # Code of Conduct
 
-Welcome to our Catalogue of Second Chances (CSC) development repository!
+Welcome to our Catalog of Second Chances (CSC) development repository!
 
 To ensure smooth collaboration and a helpful environment for everyone, please follow these guidelines:
 
