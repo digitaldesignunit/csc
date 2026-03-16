@@ -193,7 +193,7 @@ export default function ReservedComponentsPage() {
               <strong>How reservations work:</strong> When you reserve a component, it&apos;s marked as reserved. You can release components at any time to make them available again.
             </p>
             <p>
-              <strong>Note:</strong> Reserved components are still available and visible in the catalogue but show as 
+              <strong>Note:</strong> Reserved components are still available and visible in the Catalog but show as 
               reserved to you!
             </p>
           </div>

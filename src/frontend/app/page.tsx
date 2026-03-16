@@ -26,7 +26,7 @@ export default function Home() {
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center gap-2 sm:gap-3 mb-2">
             <BookOpen className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl sm:text-3xl font-bold">Catalogue of Second Chances</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold">Catalog of Second Chances</h1>
           </div>
           <p className="text-muted-foreground text-sm sm:text-base">
             A repository for architectural component reuse
@@ -46,16 +46,16 @@ export default function Home() {
           </CardHeader>
           <CardContent className="space-y-4 text-base leading-relaxed">
             <p>
-              The <i>Catalogue of Second Chances</i> is a digital repository designed to store, browse and access digitized representations of building components. 
+              The <i>Catalog of Second Chances</i> is a digital repository designed to store, browse and access digitized representations of building components. 
               It aims to promote reuse and circularity in architecture by providing structured access to component data.
             </p>
             <p>
-              The catalogue can be accessed in two ways: through this web interface, and from within the parametric design environment 
+              The Catalog can be accessed in two ways: through this web interface, and from within the parametric design environment 
               <i> Rhino/Grasshopper</i> using custom Python components. It is primarily developed for use in architectural research and teaching, 
               where it serves as a testbed for workflows involving reuse, digital documentation, and component-based design.
             </p>
             <p>
-              The catalogue is created and maintained as a case-study for the PhD thesis of Max Benjamin Eschenbach. For more information, please visit the <Link href="/credits" className='text-blue-500 underline'>Credits</Link> page.
+              The Catalog is created and maintained as a case-study for the PhD thesis of Max Benjamin Eschenbach. For more information, please visit the <Link href="/credits" className='text-blue-500 underline'>Credits</Link> page.
             </p>
           </CardContent>
         </Card>
@@ -72,7 +72,7 @@ export default function Home() {
             <CardContent className="space-y-4 text-base leading-relaxed">
               <p>
                 To browse components and interact with the repository, you need to create an account and log in. 
-                Registered users can explore the catalogue, access component data, and begin working with it either 
+                Registered users can explore the Catalog, access component data, and begin working with it either 
                 through the web interface or within Rhino/Grasshopper.
               </p>
               <div className="flex gap-4">
@@ -96,7 +96,7 @@ export default function Home() {
                 Quick Actions
               </CardTitle>
               <CardDescription>
-                Get started with the catalogue
+                Get started with the Catalog
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -105,7 +105,7 @@ export default function Home() {
                   <Button variant="outline" className="w-full h-auto p-4 flex flex-col items-center gap-2">
                     <Package className="h-6 w-6" />
                     <span className="font-medium">Browse Components</span>
-                    <span className="text-xs">Explore the component catalogue</span>
+                    <span className="text-xs">Explore the component Catalog</span>
                   </Button>
                 </Link>
                 <Link href="/designs">

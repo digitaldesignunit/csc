@@ -66,7 +66,7 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">-</div>
             <p className="text-xs text-muted-foreground">
-              Available in catalogue
+              Available in Catalog
             </p>
           </CardContent>
         </Card>
@@ -148,12 +148,12 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="flex flex-col flex-1">
             <p className="text-sm text-muted-foreground">
-              Search and browse the component catalogue to find what you need.
+              Search and browse the component Catalog to find what you need.
             </p>
             <div className="mt-auto pt-4">
               <Link href="/components">
                 <Button className="w-full" variant="outline">
-                  Browse Catalogue
+                  Browse Catalog
                 </Button>
               </Link>
             </div>

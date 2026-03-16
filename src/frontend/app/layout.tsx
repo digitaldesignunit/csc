@@ -12,7 +12,7 @@ import { ThemeProvider } from 'next-themes'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'CSC - Catalogue of Second Chances',
+  title: 'CSC - Catalog of Second Chances',
   description: 'A components and materials database.',
 }
 

@@ -106,7 +106,7 @@ export default function ArchivedComponentDetailPage() {
           <h1 className="text-2xl sm:text-3xl font-bold">Archived Component</h1>
         </div>
         <p className="text-muted-foreground">
-          This component is archived and not visible in the main catalogue.
+          This component is archived and not visible in the main Catalog.
         </p>
       </div>
 

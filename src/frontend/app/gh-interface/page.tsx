@@ -257,7 +257,7 @@ export default function GHInterfacePage() {
           </div>
 
           <p className="text-muted-foreground">
-            The DDU CSC Grasshopper Interface provides components for working with the Catalogue of Second Chances. This tutorial covers each component and their usage.
+            The DDU CSC Grasshopper Interface provides components for working with the Catalog of Second Chances. This tutorial covers each component and their usage.
           </p>
 
           <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
@@ -411,15 +411,15 @@ export default function GHInterfacePage() {
       )
     },
     {
-      id: 'catalogue-interface',
-      title: 'Catalogue Interface Components',
+      id: 'Catalog-interface',
+      title: 'Catalog Interface Components',
       icon: Database,
       content: (
         <div className="space-y-6 pt-2">
           <ComponentCard
             icon={Database}
             name="CSC_FetchComponents"
-            description="Fetches specific components from the remote catalogue by their IDs. Supports caching and handles individual component retrieval with error handling for missing components."
+            description="Fetches specific components from the remote Catalog by their IDs. Supports caching and handles individual component retrieval with error handling for missing components."
             inputs={[
               { label: 'ComponentID', description: 'One or many ComponentIDs to fetch' }
             ]}
@@ -433,7 +433,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Database}
             name="CSC_FetchAllComponents"
-            description="Fetches all available components from the remote catalogue API with caching support. Returns all components as a list of JSON strings."
+            description="Fetches all available components from the remote Catalog API with caching support. Returns all components as a list of JSON strings."
             inputs={[
               { label: 'None', description: 'This component has no inputs' }
             ]}
@@ -473,7 +473,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Database}
             name="CSC_FetchFilteredComponents"
-            description="Fetches components from the remote catalogue based on filter criteria (type, material, dataset, complexity, dimensions, reservation status). Builds query parameters and returns filtered results."
+            description="Fetches components from the remote Catalog based on filter criteria (type, material, dataset, complexity, dimensions, reservation status). Builds query parameters and returns filtered results."
             inputs={[
               { label: 'Type', description: 'Component type filter (e.g., "beam", "slab", "column")' },
               { label: 'Material', description: 'Material type filter (e.g., "concrete", "steel", "wood")' },
@@ -516,7 +516,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Database}
             name="CSC_FetchDesign"
-            description="Fetches a design from the remote catalogue along with all its contained components. Updates each component's iframe with the design's iframe and returns both design JSON and components with updated iframes. Uses caching for optimal performance."
+            description="Fetches a design from the remote Catalog along with all its contained components. Updates each component's iframe with the design's iframe and returns both design JSON and components with updated iframes. Uses caching for optimal performance."
             inputs={[
               { label: 'DesignID', description: 'Design ID to fetch' }
             ]}
@@ -566,7 +566,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Code}
             name="CSC_AddComponent"
-            description="Adds a created component to the Catalogue of Second Chances database."
+            description="Adds a created component to the Catalog of Second Chances database."
             inputs={[
               { label: 'ComponentData', description: 'Component data as JSON string to add to the database' },
               { label: 'Run', description: 'Toggle to execute the add operation' }
@@ -666,7 +666,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Code}
             name="CSC_CreateDesign"
-            description="Creates a design JSON string from component data, ready for posting to the catalogue. Validates input against design schema and generates complete design payload with UUID, timestamps, and component references. Does NOT post the design - only generates the JSON string."
+            description="Creates a design JSON string from component data, ready for posting to the Catalog. Validates input against design schema and generates complete design payload with UUID, timestamps, and component references. Does NOT post the design - only generates the JSON string."
             inputs={[
               { label: 'DesignName', description: 'Design name (mandatory)' },
               { label: 'DesignDescription', description: 'Design description (optional)' },
@@ -683,7 +683,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Code}
             name="CSC_AddDesign"
-            description="Adds a new design to the remote database. Takes design data (JSON), validates it, and makes an authenticated POST request to add the design to the catalogue. Designs contain component references and additional geometry embedded directly in the JSON."
+            description="Adds a new design to the remote database. Takes design data (JSON), validates it, and makes an authenticated POST request to add the design to the Catalog. Designs contain component references and additional geometry embedded directly in the JSON."
             inputs={[
               { label: 'DesignData', description: 'Design data as JSON string to add to the database' },
               { label: 'Run', description: 'Toggle to execute the add operation' }
@@ -982,7 +982,7 @@ export default function GHInterfacePage() {
           Grasshopper Interface
         </h1>
         <p className="text-lg text-muted-foreground">
-          Learn how to use the DDU CSC Grasshopper components to work with the Catalogue of Second Chances.
+          Learn how to use the DDU CSC Grasshopper components to work with the Catalog of Second Chances.
         </p>
       </div>
 

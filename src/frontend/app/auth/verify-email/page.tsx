@@ -104,7 +104,7 @@ function VerifyEmailContent() {
               </div>
 
               <div className='text-center text-sm text-muted-foreground'>
-                <p>Your account is now active. You can sign in and start using the Catalogue of Second Chances.</p>
+                <p>Your account is now active. You can sign in and start using the Catalog of Second Chances.</p>
                 <p className='mt-2 text-xs'>Redirecting to sign in page in 3 seconds...</p>
               </div>
 

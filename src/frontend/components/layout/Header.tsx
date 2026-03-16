@@ -72,7 +72,7 @@ export default function Header() {
               }}
             />
           )}
-          <h1 className='text-xl font-bold text-foreground'>Catalogue of Second Chances</h1>
+          <h1 className='text-xl font-bold text-foreground'>Catalog of Second Chances</h1>
         </div>
 
         {/* Right side - Theme toggle and mobile menu button */}

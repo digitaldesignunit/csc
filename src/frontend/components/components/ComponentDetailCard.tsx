@@ -134,7 +134,7 @@ export default function ComponentDetailCard({
   }
 
   const handleArchiveComponent = async () => {
-    if (!confirm('Are you sure you want to archive this component? It will be removed from the main catalogue but can be restored later.')) {
+    if (!confirm('Are you sure you want to archive this component? It will be removed from the main catalog but can be restored later.')) {
       return
     }
 
@@ -418,7 +418,7 @@ export default function ComponentDetailCard({
                   <TooltipContent>
                     <div className="text-center text-sm">
                       {isArchived
-                        ? 'Restore this component to the main catalogue'
+                        ? 'Restore this component to the main Catalog'
                         : 'Archive this component (can be restored later)'
                       }
                     </div>

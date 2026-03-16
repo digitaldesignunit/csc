@@ -148,7 +148,7 @@ export default async function ArchivePage({
           <h1 className="text-2xl sm:text-3xl font-bold">Component Archive</h1>
         </div>
         <p className="text-muted-foreground">
-          Browse and restore archived components. These components are not visible in the main catalogue.
+          Browse and restore archived components. These components are not visible in the main Catalog.
         </p>
       </div>
 

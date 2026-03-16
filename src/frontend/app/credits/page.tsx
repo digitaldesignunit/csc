@@ -22,7 +22,7 @@ export default function CreditsPage() {
             <h1 className="text-2xl sm:text-3xl font-bold">Credits</h1>
           </div>
           <p className="text-muted-foreground text-sm sm:text-base">
-            Credits, Sources & References for the <em>Catalogue of Second Chances</em>
+            Credits, Sources & References for the <em>Catalog of Second Chances</em>
           </p>
         </div>
 
@@ -113,10 +113,10 @@ export default function CreditsPage() {
           <CardContent className="space-y-4 text-base leading-relaxed">
             <ul className='list-disc list-inside space-y-2'>
               <li>
-                The technical main inspiration for the <em>Catalogue of Second Chances</em> interface is the <a href='https://github.com/ibois-epfl/catalogue-explorer' target='_blank' className='text-blue-500 underline'>Catalogue Explorer</a> by <a href='https://github.com/AymericBr' target='_blank' className='text-blue-500 underline'>@AymbericBr</a>.
+                The technical main inspiration for the <em>Catalog of Second Chances</em> interface is the <a href='https://github.com/ibois-epfl/Catalog-explorer' target='_blank' className='text-blue-500 underline'>Catalog Explorer</a> by <a href='https://github.com/AymericBr' target='_blank' className='text-blue-500 underline'>@AymbericBr</a>.
               </li>
               <li>
-                Another huge inspiration and reference is the <a href='https://epfl-enac.github.io/MANSLAB-IBOIS-EESD-timberstone/' target='_blank' className='text-blue-500 underline'>Timberstone Project</a>, which is the origin of abovementioned Catalogue Explorer.
+                Another huge inspiration and reference is the <a href='https://epfl-enac.github.io/MANSLAB-IBOIS-EESD-timberstone/' target='_blank' className='text-blue-500 underline'>Timberstone Project</a>, which is the origin of abovementioned Catalog Explorer.
               </li>
               <li>
                 The simple shape descriptors (BoxScore, SphereScore, PlaneScore, LineScore) are computed based on the reference implementation of <a href='https://github.com/keithjlee/DigitalCircularityToolkit' target='_blank' className='text-blue-500 underline'>DigitalCircularityToolkit</a> by <a href='https://github.com/keithjlee' target='_blank' className='text-blue-500 underline'>Keith J. Lee</a>.
