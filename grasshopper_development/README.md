@@ -60,7 +60,7 @@ ghenv.Component.Description = (
 ```
 ghenv.Component.SubCategory = '0 Development'
 ghenv.Component.SubCategory = '1 User'
-ghenv.Component.SubCategory = '2 Catalogue Interface'
+ghenv.Component.SubCategory = '2 Catalog Interface'
 ghenv.Component.SubCategory = '3 Component Operations'
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'
 
