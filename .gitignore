@@ -26,7 +26,7 @@ __pycache__/
 # DATABASE CONFIG FILE FOR DEVELOPMENT
 /src/backend/config/dbconfig.json
 /src/backend/config/email_config.json
-/src/backend/apps/catalogue/hash_pwd.py
+/src/backend/apps/catalog/hash_pwd.py
 
 
 # OLD FILES FROM NEXTJS14 APP
@@ -39,7 +39,7 @@ __pycache__/
 _archive
 csc.code-workspace
 *.egg-info
-src/backend/apps/catalogue/test.json
+src/backend/apps/catalog/test.json
 csc_deploy*.sh
 src/backend/logs/fastapi.log
 *.3dm.rhl
