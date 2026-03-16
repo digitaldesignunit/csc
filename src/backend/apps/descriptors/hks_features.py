@@ -611,7 +611,8 @@ def compute_moderate_pooled_hks_for_convex_hull_trimesh(
     mesh: trimesh.Trimesh
 ) -> np.ndarray:
     """
-    Compute moderate HKS for a trimesh mesh on its convex hull with 64 eigenvalues and 32 time steps.
+    Compute moderate HKS for a trimesh mesh on its convex hull
+    with 64 eigenvalues and 32 time steps.
     """
     cvh = mesh.convex_hull
     return compute_moderate_pooled_hks_for_mesh(
@@ -654,7 +655,8 @@ def compute_detailed_pooled_hks_for_convex_hull_trimesh(
     mesh: trimesh.Trimesh
 ) -> np.ndarray:
     """
-    Compute detailed HKS for a trimesh mesh on its convex hull with 128 eigenvalues and 64 time steps.
+    Compute detailed HKS for a trimesh mesh on its convex hull
+    with 128 eigenvalues and 64 time steps.
     """
     cvh = mesh.convex_hull
     return compute_detailed_pooled_hks_for_mesh(
