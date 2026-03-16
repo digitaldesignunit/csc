@@ -13,7 +13,7 @@
 - I will introduce you to a component database
 - This database stores geometry and metadata on architectural components and objects
 - It is web based, so can be accessed and interacted with via the internet in multiple ways
-- I call it the "Catalogue of Second Chances" because it was created primarily to give leftover materials, objects and harvested components a second chance, as in reusing them
+- I call it the "Catalog of Second Chances" because it was created primarily to give leftover materials, objects and harvested components a second chance, as in reusing them
 - During this small workshop, I will explain using some slides, and then we will also have short interactive sessions where you will directly apply the things that I explain in short exercises
 - So let's get started!
 
