@@ -27,9 +27,9 @@ import scriptcontext as sc  # NOQA
 ghenv.Component.Name = 'FetchDesign'  # NOQA
 ghenv.Component.NickName = 'FetchDesign'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '2 Catalogue Interface'  # NOQA
+ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Fetches a design from the remote catalogue along with all its contained '
+    'Fetches a design from the remote Catalog along with all its contained '
     'components. Updates each component\'s iframe with the design\'s iframe '
     'and returns both design JSON and components with updated iframes. Uses '
     'caching for optimal performance.'
@@ -40,7 +40,7 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260316
     """
 
     def __init__(self):

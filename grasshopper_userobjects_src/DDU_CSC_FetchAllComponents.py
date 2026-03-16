@@ -26,9 +26,9 @@ import scriptcontext as sc  # NOQA
 ghenv.Component.Name = 'FetchAllComponents'  # NOQA
 ghenv.Component.NickName = 'FetchAllComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '2 Catalogue Interface'  # NOQA
+ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Fetches all available components from the remote catalogue API with '
+    'Fetches all available components from the remote Catalog API with '
     'caching support. Returns all components as a list of JSON strings.'
 )
 
@@ -37,7 +37,7 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260316
     """
 
     def __init__(self):

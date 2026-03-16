@@ -26,11 +26,11 @@ import scriptcontext as sc  # NOQA
 ghenv.Component.Name = 'AddDesign'  # NOQA
 ghenv.Component.NickName = 'AddDesign'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '2 Catalogue Interface'  # NOQA
+ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Adds a new design to the remote database. Takes design data (JSON), '
     'validates it, and makes an authenticated POST request to add the design '
-    'to the catalogue. Designs contain component references and additional '
+    'to the Catalog. Designs contain component references and additional '
     'geometry embedded directly in the JSON.'
 )
 
@@ -39,7 +39,7 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260316
     """
 
     def __init__(self):

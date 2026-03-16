@@ -28,7 +28,7 @@ import Rhino.Geometry as rg  # NOQA
 ghenv.Component.Name = 'FetchGeometry'  # NOQA
 ghenv.Component.NickName = 'FetchGeometry'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '2 Catalogue Interface'  # NOQA
+ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Fetches reduced or detailed geometry from the CSC API.\n'
     'Input can be:\n'
@@ -47,7 +47,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260316
     """
 
     def __init__(self):

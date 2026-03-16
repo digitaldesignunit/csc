@@ -26,9 +26,9 @@ import scriptcontext as sc  # NOQA
 ghenv.Component.Name = 'FetchFilteredComponents'  # NOQA
 ghenv.Component.NickName = 'FetchFilteredComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '2 Catalogue Interface'  # NOQA
+ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Fetches components from the remote catalogue based on filter criteria '
+    'Fetches components from the remote Catalog based on filter criteria '
     '(type, material, dataset, complexity, dimensions, reservation status). '
     'Builds query parameters and returns filtered results.'
 )
@@ -38,7 +38,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260316
     """
 
     def __init__(self):

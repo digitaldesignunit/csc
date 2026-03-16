@@ -29,7 +29,7 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Creates a design JSON string from component data, ready for posting to '
-    'the catalogue. Validates input against design schema and generates '
+    'the Catalog. Validates input against design schema and generates '
     'complete design payload with UUID, timestamps, and component references. '
     'Does NOT post the design - only generates the JSON string.'
 )
@@ -39,7 +39,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260316
     """
 
     def __init__(self):

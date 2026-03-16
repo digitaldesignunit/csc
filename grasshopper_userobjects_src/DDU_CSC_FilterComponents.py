@@ -22,7 +22,7 @@ import Rhino  # NOQA
 ghenv.Component.Name = 'FilterComponents'  # NOQA
 ghenv.Component.NickName = 'FilterComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '2 Catalogue Interface'  # NOQA
+ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Filters a list of component data based on various criteria (type, '
     'material, dataset, complexity, fragment, bounding box dimensions). '
@@ -34,7 +34,7 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260316
     """
 
     def __init__(self):

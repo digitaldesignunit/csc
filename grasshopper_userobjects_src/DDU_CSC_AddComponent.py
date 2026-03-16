@@ -28,12 +28,12 @@ import scriptcontext as sc  # NOQA
 ghenv.Component.Name = 'AddComponent'  # NOQA
 ghenv.Component.NickName = 'AddComponent'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '2 Catalogue Interface'  # NOQA
+ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Adds a new component to the remote database. Takes component data '
     '(JSON), validates it, uploads associated geometry files (detailed '
     'and reduced OBJ meshes), and makes an authenticated POST request '
-    'to add the component to the catalogue.'
+    'to add the component to the Catalog.'
 )
 
 
@@ -41,7 +41,7 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260316
     """
 
     def __init__(self):
