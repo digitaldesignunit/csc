@@ -46,7 +46,8 @@ def generate_labels(N: int,
                     outdir: str = _OUTPUTDIR,
                     qr_size: float = 0.5,
                     error_correction: str = 'L',
-                    qr_version: int = 1):
+                    qr_version: int = 1,
+                    adaptive_layout: bool = False):
     """
     Create N amount of unique QR-Codes with UUID encoded for A4 label sheets.
 
@@ -73,6 +74,9 @@ def generate_labels(N: int,
     qr_version: int
         QR code version (1-40). Version 1 = simplest (21x21 modules), higher
         versions = more complex but can store more data. Default: 1
+    adaptive_layout: bool
+        If True, ignores fixed label sizes and spreads QR codes evenly across
+        the page, only respecting top and bottom borders. Default: False
 
     Notes
     -------
@@ -88,6 +92,7 @@ def generate_labels(N: int,
     print(f"  - QR size: {qr_size}")
     print(f"  - Error correction: {error_correction}")
     print(f"  - QR version: {qr_version}")
+    print(f"  - Adaptive layout: {adaptive_layout}")
 
     # Map error correction string to qrcode constant
     error_correction_map = {
@@ -114,11 +119,13 @@ def generate_labels(N: int,
 
     print(f"Generating {N} individual QR codes...")
     qrCodeList = []
+    uuidList = []
     for i in range(0, N):
         if i % 10 == 0:  # Progress update every 10 QR codes
             print(f"  Generated {i}/{N} QR codes...")
 
         uuidTemp = uuid.uuid4()
+        uuidList.append(str(uuidTemp))
 
         # QRCode class with calculated dimensions and complexity settings
         qr = qrcode.QRCode(
@@ -132,7 +139,8 @@ def generate_labels(N: int,
         qr.add_data(uuidTemp)
         qr.make(fit=True)
 
-        img = qr.make_image(fill_color='black', back_color='white')
+        img = qr.make_image(
+            fill_color='black', back_color='white').convert('RGB')
         qrCodeList.append(img)
 
         # get dimensions of QR-Code image
@@ -173,37 +181,53 @@ def generate_labels(N: int,
 
         pageTemp = Image.new('RGB', (page_width, page_height), (255, 255, 255))
 
-        # Calculate label dimensions in pixels (70mm x 42mm at 300 DPI)
-        label_width = int(70 * 300 / 25.4)   # ~827 pixels
-        label_height = int(42 * 300 / 25.4)  # ~496 pixels
-
         # Calculate borders (4mm top and bottom at 300 DPI)
         border_top_bottom = int(4 * 300 / 25.4)  # ~47 pixels
 
-        # Calculate margins to center the label grid horizontally
-        # and position with 4mm borders on top and bottom
-        margin_x = (page_width - (label_width * cols)) // 2
-        margin_y = border_top_bottom  # 4mm border from top
+        if adaptive_layout:
+            # Adaptive layout: spread QR codes evenly across the page
+            # Available height = page height minus top and bottom borders
+            available_height = page_height - (2 * border_top_bottom)
+            available_width = page_width
+
+            # Calculate cell dimensions based on rows and cols
+            cell_width = available_width // cols
+            cell_height = available_height // rows
+
+            margin_x = 0
+            margin_y = border_top_bottom
+        else:
+            # Fixed layout: use standard label dimensions (70mm x 42mm)
+            label_width = int(70 * 300 / 25.4)   # ~827 pixels
+            label_height = int(42 * 300 / 25.4)  # ~496 pixels
+
+            cell_width = label_width
+            cell_height = label_height
+
+            # Calculate margins to center the label grid horizontally
+            margin_x = (page_width - (cell_width * cols)) // 2
+            margin_y = border_top_bottom  # 4mm border from top
 
         # Get the QR codes for this page
-        page_start_index = page_index * rows
+        codes_per_page = rows * cols
+        page_start_index = page_index * codes_per_page
         page_qr_codes = qrCodeList[page_start_index:page_start_index +
-                                   (rows * cols)]
+                                   codes_per_page]
 
         # Paste QR codes in grid layout
         for row_index in range(rows):
-            y_pos = margin_y + (label_height * row_index)
+            y_pos = margin_y + (cell_height * row_index)
             for col_index in range(cols):
                 qr_index = row_index * cols + col_index
                 if qr_index < len(page_qr_codes):
                     qr_code = page_qr_codes[qr_index]
-                    x_pos = margin_x + (label_width * col_index)
-                    # Center QR code within each label
-                    qr_x = x_pos + (label_width - widthB) // 2
-                    qr_y = y_pos + (label_height - heightB) // 2
+                    x_pos = margin_x + (cell_width * col_index)
+                    # Center QR code within each cell
+                    qr_x = x_pos + (cell_width - widthB) // 2
+                    qr_y = y_pos + (cell_height - heightB) // 2
                     pageTemp.paste(qr_code, box=(qr_x, qr_y), mask=None)
 
-        # Save the page
+        # Save the page image
         imgName = sanitize_path(os.path.join(outdir, f'{page_nr}.jpg'))
         try:
             pageTemp.save(imgName, 'JPEG', quality=95, DPI=(300, 300))
@@ -211,12 +235,27 @@ def generate_labels(N: int,
         except Exception as e:
             print(f"    ERROR: Failed to save {imgName} - {e}")
             raise
+
+        # Save the UUID list for this page
+        txtName = sanitize_path(os.path.join(outdir, f'{page_nr}.txt'))
+        page_end_index = page_start_index + codes_per_page
+        page_uuids = uuidList[page_start_index:page_end_index]
+        try:
+            with open(txtName, 'w') as f:
+                for uid in page_uuids:
+                    f.write(f'{uid}\n')
+            print(f"    Saved: {txtName}")
+        except Exception as e:
+            print(f"    ERROR: Failed to save {txtName} - {e}")
+            raise
+
         page_nr += 1
 
     print(f"Successfully generated {N} QR codes in "
           f"{len(lineImgChunks)} sheets!")
     print(f"Output directory: {outdir}")
-    print(f"Files created: {page_nr - len(existing_pages) - 1} new JPG files")
+    print(f"Files created: {page_nr - len(existing_pages) - 1} new sheets "
+          f"(JPG + TXT each)")
 
 
 # COMMAND LINE INTERFACE ------------------------------------------------------
@@ -284,6 +323,27 @@ Examples:
              f'Default: {_OUTPUTDIR}'
     )
 
+    parser.add_argument(
+        '--cols',
+        type=int,
+        default=3,
+        help='Number of columns per sheet. Default: 3'
+    )
+
+    parser.add_argument(
+        '--rows',
+        type=int,
+        default=7,
+        help='Number of rows per sheet. Default: 7'
+    )
+
+    parser.add_argument(
+        '--adaptive-layout',
+        action='store_true',
+        help='Spread QR codes evenly across the page, ignoring fixed label '
+             'sizes. Only respects top and bottom page borders.'
+    )
+
     return parser
 
 
@@ -303,9 +363,11 @@ def main():
             sys.exit(1)
 
         # Validate qr_size is in valid range
-        if not 0.0 <= args.qr_size <= 1.0:
-            print('ERROR: QR size must be between 0.0 and 1.0.',
-                  file=sys.stderr)
+        if not args.adaptive_layout and (not 0.0 <= args.qr_size <= 1.0):
+            print(
+                'ERROR: Without adaptive layout QR size must be '
+                'between 0.0 and 1.0.',
+                file=sys.stderr)
             sys.exit(1)
 
         # Create output directory if it doesn't exist
@@ -317,10 +379,13 @@ def main():
         print("Starting QR code generation...")
         generate_labels(
             N=args.count,
+            cols=args.cols,
+            rows=args.rows,
             outdir=output_dir,
             qr_size=args.qr_size,
             error_correction=args.error_correction,
-            qr_version=args.qr_version
+            qr_version=args.qr_version,
+            adaptive_layout=args.adaptive_layout
         )
         print(f'CLI: Successfully generated {args.count} QR codes in '
               f'{output_dir}')

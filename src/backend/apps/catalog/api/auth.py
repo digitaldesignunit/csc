@@ -13,7 +13,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from apps.Catalog.models import Token, User, UserInDB # NOQA
+from apps.catalog.models import Token, User, UserInDB # NOQA
 from services.email_service import (
     generate_verification_token,
     get_token_expiry,

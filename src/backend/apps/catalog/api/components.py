@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from pymongo.errors import PyMongoError
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from apps.Catalog.models import (  # NOQA
+from apps.catalog.models import (  # NOQA
     ALLOWED_COMPONENT_SORTKEYS,
     ComponentCount,
     ComponentDescriptors,
