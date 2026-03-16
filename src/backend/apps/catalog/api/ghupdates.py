@@ -14,8 +14,8 @@ from fastapi.responses import Response, StreamingResponse
 import httpx
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from apps.catalogue.api.auth import get_current_user
-from apps.catalogue.models import User
+from apps.Catalog.api.auth import get_current_user
+from apps.Catalog.models import User
 from utility.utility import get_github_repo_url, get_github_repo_token
 
 # INIT ROUTER -----------------------------------------------------------------

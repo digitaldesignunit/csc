@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from apps.catalogue.models import (  # NOQA
+from apps.Catalog.models import (  # NOQA
     DesignModel,
     CreateDesignRequest,
     UpdateDesignModel,

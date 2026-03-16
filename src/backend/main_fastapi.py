@@ -84,9 +84,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title='CSC - Catalogue of Second Chances - Backend API',
+    title='CSC - Catalog of Second Chances - Backend API',
     description=(
-        'Backend API for Catalogue of Second Chances. '
+        'Backend API for Catalog of Second Chances. '
         'FastAPI + MongoDB (async).'
     ),
     version='0.4.1.0',
@@ -103,6 +103,6 @@ app.add_middleware(
 )
 
 # ROUTERS ---------------------------------------------------------------------
-# New, modern router structure under apps/catalogue/api/*
-from apps.catalogue.api import api_router  # NOQA - aggregator for sub-routers
+# New, modern router structure under apps/catalog/api/*
+from apps.catalog.api import api_router  # NOQA - aggregator for sub-routers
 app.include_router(api_router, prefix='')

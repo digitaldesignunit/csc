@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from apps.catalogue.models import (  # NOQA
+from apps.Catalog.models import (  # NOQA
     User,
 )
 from .auth import get_current_active_user

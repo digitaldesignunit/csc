@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
 from fastapi.responses import JSONResponse, FileResponse
 from pymongo.errors import PyMongoError
 
-from apps.catalogue.models import ComponentCount, ComponentModel, User
+from apps.Catalog.models import ComponentCount, ComponentModel, User
 from .auth import require_admin
 from .components import build_component_match_stage
 from utility.utility import (
