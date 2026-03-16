@@ -4,7 +4,7 @@
   "smtp_user": "noreply@ddu.uber.space",
   "smtp_password": "not-used-in-dev-mode",
   "from_email": "noreply@ddu.uber.space",
-  "from_name": "Catalogue of Second Chances",
+  "from_name": "Catalog of Second Chances",
   "frontend_url": "http://localhost:3000",
   "dev_mode": true
 }

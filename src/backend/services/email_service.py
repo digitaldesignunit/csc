@@ -23,7 +23,7 @@ def load_email_config(config_path: str) -> Dict[str, str]:
         'smtp_user': 'noreply@ddu.uber.space',
         'smtp_password': 'your-password',
         'from_email': 'noreply@ddu.uber.space',
-        'from_name': 'Catalogue of Second Chances',
+        'from_name': 'Catalog of Second Chances',
         'frontend_url': 'https://ddu.uber.space'
     }
     """
@@ -69,11 +69,11 @@ def create_verification_email_html(
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
     <div style="background-color: #f8f9fa; padding: 30px; border-radius: 10px; border: 1px solid #e0e0e0;">
-        <h1 style="color: #2563eb; margin-bottom: 20px;">Welcome to Catalogue of Second Chances!</h1>
+        <h1 style="color: #2563eb; margin-bottom: 20px;">Welcome to Catalog of Second Chances!</h1>
 
         <p>Hello {full_name},</p>
 
-        <p>Thank you for registering with the Catalogue of Second Chances. To complete your registration and activate your account, please verify your email address by clicking the button below:</p>
+        <p>Thank you for registering with the Catalog of Second Chances. To complete your registration and activate your account, please verify your email address by clicking the button below:</p>
 
         <div style="text-align: center; margin: 30px 0;">
             <a href="{verification_url}"
@@ -94,7 +94,7 @@ def create_verification_email_html(
         <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
 
         <p style="font-size: 12px; color: #666;">
-            This is an automated message from the Catalogue of Second Chances.<br>
+            This is an automated message from the Catalog of Second Chances.<br>
             Please do not reply to this email.
         </p>
     </div>
@@ -113,7 +113,7 @@ def create_verification_email_text(
     return f'''
 Hello {full_name},
 
-Thank you for registering with the Catalogue of Second Chances. To complete your registration and activate your account, please verify your email address by clicking the link below:
+Thank you for registering with the Catalog of Second Chances. To complete your registration and activate your account, please verify your email address by clicking the link below:
 
 {verification_url}
 
@@ -122,7 +122,7 @@ This verification link will expire in 24 hours.
 If you did not create an account with us, please ignore this email.
 
 ---
-This is an automated message from the Catalogue of Second Chances.
+This is an automated message from the Catalog of Second Chances.
 Please do not reply to this email.
 '''
 
@@ -167,7 +167,7 @@ def send_verification_email(
     try:
         # Create message
         msg = MIMEMultipart('alternative')
-        msg['Subject'] = 'Verify Your Email - Catalogue of Second Chances'
+        msg['Subject'] = 'Verify Your Email - Catalog of Second Chances'
         msg['From'] = (
             f"{config.get('from_name', 'CSC')} <{config['from_email']}>"
         )
