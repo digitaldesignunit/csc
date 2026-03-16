@@ -35,7 +35,7 @@ MESH_REDUCED_TARGET = 10000
 MESH_PRIMITIVE_TARGET = 500
 
 # DATASET NAME
-DATASET_NAME = "ddu_build_width_debris"
+DATASET_NAME = "ddu_build_with_debris"
 
 # Configure logging
 logging.basicConfig(
