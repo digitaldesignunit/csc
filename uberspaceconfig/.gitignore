@@ -1,0 +1,2 @@
+# Do not add env variables to git - lol
+*.bash_profile

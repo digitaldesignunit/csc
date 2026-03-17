@@ -40,7 +40,7 @@ _archive
 csc.code-workspace
 *.egg-info
 src/backend/apps/catalog/test.json
-csc_deploy*.sh
+*.bash_profile
 src/backend/logs/fastapi.log
 *.3dm.rhl
 /grasshopper_development/DDU_CSC_GrasshopperInterface_DMS_PAPER.gh

@@ -6,10 +6,8 @@
 
 # ENVIRONMENT FILES
 *.env
+*.bash_profile
 
 # OLD FILES FROM NEXTJS14 APP
 /src/backend_OLD/
 /src/frontend_OLD/
-
-# MISC
-csc_deploy*.sh
