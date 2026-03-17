@@ -1,8 +1,7 @@
-# Uberspace Deployment Sript
+# Uberspace Deployment Sripts
 
 This shell script is for automatically deploying the backend and frontend on uberspace from github.
-- Fill the script with your login / token data
-- Upload toyour server into the `~/home/csc` directory
-- Rename to `csc_deploy.sh`
+- Ensure that environment variables in `~/.bash_profile` are set!
+- Upload to your server into the `~/home/csc` directory
 - Hit `bash csc_deploy.sh`
 - Everything should now automatically deploy and start

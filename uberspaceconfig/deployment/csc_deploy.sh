@@ -1,9 +1,7 @@
 #!/bin/bash
 
 # Variables
-USERNAME="YOUR_GITHUB_USERNAME_HERE"
-ACCESS_TOKEN="YOUR_GITHUB_ACCESS_TOKEN_HERE"
-REPO_URL="https://$USERNAME:$ACCESS_TOKEN@github.com/orgname/reponame.git"
+REPO_URL=$GITHUB_DEPLOY_URL
 FOLDER1="src/frontend"
 FOLDER2="src/backend"
 DEPLOY_DIR="csc_deploy"
@@ -17,6 +15,9 @@ echo ""
 echo "-----------------------------------------------------------------"
 echo "------------------------ INITIALIZATION -------------------------"
 echo "-----------------------------------------------------------------"
+
+echo $GITHUB_DEPLOY_URL
+
 # Check if the directory does not exist
 if [ ! -d "$DEPLOY_DIR" ]; then
   # Create the directory
@@ -74,9 +75,7 @@ echo "------------------------ BUILD FRONTEND -------------------------"
 echo "-----------------------------------------------------------------"
 echo "NPM: Building frontend..."
 cd ../$TARGET1
-if ! rm -r .next; then
-  echo "Warning: failed to remove .next dir, continuing..."
-fi
+rm -r .next
 npm i
 npm run build
 
