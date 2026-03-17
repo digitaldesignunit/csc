@@ -1,0 +1,49 @@
+# .bash_profile
+
+# Get the aliases and functions
+if [ -f ~/.bashrc ]; then
+        . ~/.bashrc
+fi
+
+# User specific environment and startup programs
+
+PATH=$HOME/.local/bin:$HOME/bin:$PATH
+
+export PATH
+
+# ---- CATALOG OF SECOND CHANCES ENVIRONMENT VARS ----------------------------
+
+# MongoDB
+export MONGODB_URI="mongodb+srv://USERNAME:PASSWORD@your.cluster.mongodb.net/csc"
+
+# JWT (must match the value previously in dbconfig.json → "secret")
+export JWT_SECRET="your-openssl-rand-hex-32-value"
+export JWT_ALGORITHM="HS256"
+export JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60"
+
+# GitHub
+#     GH_TOKEN is used to download the gh files
+#     DEPLOY_TOKEN is used by deploy shell script
+export GITHUB_REPO_URL="https://github.com/your-org/your-repo"
+export GITHUB_USERNAME="your-github-username"
+export GITHUB_CSC_GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
+export GITHUB_CSC_DEPLOY_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
+export GITHUB_DEPLOY_URL="https://{$GITHUB_USERNAME}:{$GITHUB_CSC_DEPLOY_TOKEN}@github.com/your-org/your-repo.git"
+
+# SMTP / Email
+export SMTP_HOST="yourhost.uberspace.de"
+export SMTP_PORT="587"
+export SMTP_USER="noreply@ddu.uber.space"
+export SMTP_PASSWORD="your-mailbox-password"
+export SMTP_FROM_EMAIL="noreply@ddu.uber.space"
+export SMTP_FROM_NAME="Catalog of Second Chances"
+export FRONTEND_URL="https://ddu.uber.space"
+
+# Filesystem paths (not secrets, but avoids a config file)
+export PREVIEW_DIR="/home/ddu/csc/backend/static/previews"
+export GEOMETRY_DIR="/home/ddu/csc/backend/static/geometry"
+export GEOMETRY_ARCHIVE_DIR="/home/ddu/csc/backend/static/geometry_archive"
+export GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml"
+
+# FASTAPI CORS origins
+export FASTAPI_CORS_ORIGINS="https://ddu.uber.space,http://localhost:3000"
