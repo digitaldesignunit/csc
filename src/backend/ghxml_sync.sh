@@ -2,9 +2,8 @@
 
 set -euo pipefail
 
-# Script directory and config path
+# Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="${SCRIPT_DIR}/config/dbconfig.json"
 
 # Configuration (overridable via environment variables)
 GH_REPO_PATH="${GH_REPO_PATH:-/home/ddu/csc/_gh_repo}"
@@ -32,44 +31,12 @@ fail() {
   exit 1
 }
 
-# Read GitHub repo URL and token from config file
-if [ ! -f "${CONFIG_FILE}" ]; then
-  fail "Config file not found: ${CONFIG_FILE}"
-fi
-
-# Use Python to parse JSON (always available in this Python project)
-read_github_config() {
-  python3 <<EOF
-import json
-import sys
-try:
-    with open('${CONFIG_FILE}', 'r') as f:
-        config = json.load(f)
-    repo_url = config.get('github_repo_url', '')
-    token = config.get('github_repo_token', '')
-    if not repo_url:
-        print("ERROR: github_repo_url not found in config", file=sys.stderr)
-        sys.exit(1)
-    if not token:
-        print("ERROR: github_repo_token not found in config", file=sys.stderr)
-        sys.exit(1)
-    print(f"{repo_url}|{token}")
-except Exception as e:
-    print(f"ERROR: Failed to read config: {e}", file=sys.stderr)
-    sys.exit(1)
-EOF
-}
-
-GITHUB_CONFIG=$(read_github_config)
-if [ $? -ne 0 ]; then
-  fail "Failed to read GitHub config from ${CONFIG_FILE}"
-fi
-
-GH_REPO_URL=$(echo "${GITHUB_CONFIG}" | cut -d'|' -f1)
-GH_REPO_TOKEN=$(echo "${GITHUB_CONFIG}" | cut -d'|' -f2)
+# Read GitHub repo URL and token from environment variables
+GH_REPO_URL="${GITHUB_REPO_URL:-}"
+GH_REPO_TOKEN="${GITHUB_CSC_GH_TOKEN:-}"
 
 if [ -z "${GH_REPO_URL}" ] || [ -z "${GH_REPO_TOKEN}" ]; then
-  fail "GitHub repo URL or token is empty in config file"
+  fail "GITHUB_REPO_URL or GITHUB_CSC_GH_TOKEN environment variable is not set"
 fi
 
 log "Starting GH XML sync"
