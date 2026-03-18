@@ -1,0 +1,27 @@
+[program:fastapi]
+directory=%(ENV_HOME)s/csc/backend
+command=%(ENV_HOME)s/csc/venv/bin/gunicorn --config %(ENV_HOME)s/csc/backend/conf.py --reload
+autostart=true
+autorestart=true
+# `startsecs` is set by Uberspace monitoring team, to prevent a broken service from looping
+startsecs=30
+environment=
+    PYTHONUNBUFFERED="1",
+    MONGODB_URI="mongodb+srv://USERNAME:PASSWORD@your.cluster.mongodb.net/csc",
+    JWT_SECRET="your-secret",
+    JWT_ALGORITHM="HS256",
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60",
+    GITHUB_REPO_URL="https://github.com/your-org/your-repo",
+    GITHUB_CSC_GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx",
+    SMTP_HOST="yourhost.uberspace.de",
+    SMTP_PORT="587",
+    SMTP_USER="noreply@ddu.uber.space",
+    SMTP_PASSWORD="your-password",
+    SMTP_FROM_EMAIL="noreply@ddu.uber.space",
+    SMTP_FROM_NAME="Catalog of Second Chances",
+    FRONTEND_URL="https://ddu.uber.space",
+    PREVIEW_DIR="/home/ddu/csc/backend/static/previews",
+    GEOMETRY_DIR="/home/ddu/csc/backend/static/geometry",
+    GEOMETRY_ARCHIVE_DIR="/home/ddu/csc/backend/static/geometry_archive",
+    GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml",
+    FASTAPI_CORS_ORIGINS="https://ddu.uber.space,http://localhost:3000"
