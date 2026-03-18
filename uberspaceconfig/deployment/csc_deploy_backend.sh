@@ -54,6 +54,7 @@ echo "------------------------ UPDATE FILES ---------------------------"
 echo "-----------------------------------------------------------------"
 echo "I/O: Moving $FOLDER2 to ../$TARGET2..."
 rsync -a --force "$FOLDER2/" "../$TARGET2/"
+mkdir -p "../$TARGET2/logs"
 echo "-----------------------------------------------------------------"
 
 # Restarting backend

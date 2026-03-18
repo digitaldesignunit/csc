@@ -59,6 +59,7 @@ echo "I/O: Moving $FOLDER1 to ../$TARGET1..."
 rsync -a --force "$FOLDER1/" "../$TARGET1/"
 echo "I/O: Moving $FOLDER2 to ../$TARGET2..."
 rsync -a --force "$FOLDER2/" "../$TARGET2/"
+mkdir -p "../$TARGET2/logs"
 echo "-----------------------------------------------------------------"
 
 # Restarting backend and stopping frontend for build
