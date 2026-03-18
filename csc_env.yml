@@ -35,3 +35,4 @@ dependencies:
     - httpx
     - trimesh>=3.15.0
     - fast-simplification
+    - slowapi
