@@ -15,7 +15,6 @@ from pymongo import AsyncMongoClient
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 
 from utility import (
-    sanitize_path,
     get_db_connectionstring,
     get_preview_directory,
     create_logging_timestamp as logts
@@ -27,24 +26,13 @@ from apps.previewgen import (
 )
 
 
-# ENVIRONMENT SETTINGS --------------------------------------------------------
-
-_HERE = os.path.dirname(sanitize_path(__file__))
-"""str: Path to directory of this particular file."""
-
-_CONFIG_DIR = sanitize_path(os.path.join(_HERE, "config"))
-
-_CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
-"""str: Default configuration file."""
-
-
 async def initialize_preview_generation() -> Tuple[List[dict], List[str]]:
     """
     Initialize preview generation by comparing component ids in database with
     preview images in preview directory. Return list of missing previews.
     """
     # initialize preview generation directory
-    preview_dir = get_preview_directory(_CONFIGFILE)
+    preview_dir = get_preview_directory()
     # try to create directory if it does not exist
     os.makedirs(preview_dir, exist_ok=True)
     # read all file names in directory and create set from it
@@ -54,7 +42,7 @@ async def initialize_preview_generation() -> Tuple[List[dict], List[str]]:
             preview_images.add(os.path.splitext(file_name)[0])
     # set up database client and select collections
     mongodb_client = AsyncMongoClient(
-        get_db_connectionstring(_CONFIGFILE)
+        get_db_connectionstring()
     )
     mongodb = mongodb_client['csc']
     mongodb_components = mongodb['components']
@@ -96,7 +84,7 @@ async def initialize_preview_generation() -> Tuple[List[dict], List[str]]:
 
 
 if __name__ == '__main__':
-    preview_dir = get_preview_directory(_CONFIGFILE)
+    preview_dir = get_preview_directory()
     missing_preview_components, stale_preview_ids = asyncio.run(
         initialize_preview_generation()
     )

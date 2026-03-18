@@ -16,18 +16,8 @@ import httpx
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalog.api.auth import get_current_user
 from apps.catalog.models import User
-from utility.utility import get_github_repo_url, get_github_repo_token
-
 # INIT ROUTER -----------------------------------------------------------------
 router = APIRouter()
-
-
-# CONFIG LOADING --------------------------------------------------------------
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_CONFIG_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(_HERE))), 'config'
-)
-_CONFIGFILE = os.path.join(_CONFIG_DIR, 'dbconfig.json')
 
 
 # INTERNAL HELPERS ------------------------------------------------------------
@@ -192,8 +182,8 @@ async def list_src_names(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     try:
-        repo_url = get_github_repo_url(_CONFIGFILE)
-        token = get_github_repo_token(_CONFIGFILE)
+        repo_url = os.environ['GITHUB_REPO_URL']
+        token = os.environ['GITHUB_CSC_GH_TOKEN']
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
@@ -242,8 +232,8 @@ async def get_src_code(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     try:
-        repo_url = get_github_repo_url(_CONFIGFILE)
-        token = get_github_repo_token(_CONFIGFILE)
+        repo_url = os.environ['GITHUB_REPO_URL']
+        token = os.environ['GITHUB_CSC_GH_TOKEN']
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
@@ -385,8 +375,8 @@ async def list_userobject_names(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     try:
-        repo_url = get_github_repo_url(_CONFIGFILE)
-        token = get_github_repo_token(_CONFIGFILE)
+        repo_url = os.environ['GITHUB_REPO_URL']
+        token = os.environ['GITHUB_CSC_GH_TOKEN']
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
@@ -418,8 +408,8 @@ async def get_userobject(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     try:
-        repo_url = get_github_repo_url(_CONFIGFILE)
-        token = get_github_repo_token(_CONFIGFILE)
+        repo_url = os.environ['GITHUB_REPO_URL']
+        token = os.environ['GITHUB_CSC_GH_TOKEN']
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:

@@ -29,7 +29,6 @@ import trimesh
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from utility import (
-    sanitize_path,
     get_db_connectionstring,
     get_geometry_directory,
     create_logging_timestamp as logts,
@@ -54,18 +53,6 @@ from apps.descriptors.linescore import (
 from apps.descriptors.planescore import (
     compute_planescore_with_metadata
 )
-
-
-# ENVIRONMENT SETTINGS --------------------------------------------------------
-
-_HERE = os.path.dirname(sanitize_path(__file__))
-"""str: Path to directory of this particular file."""
-
-_CONFIG_DIR = sanitize_path(os.path.join(_HERE, 'config'))
-
-_CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, 'dbconfig.json'))
-"""str: Default configuration file."""
-
 
 # DESCRIPTOR CONFIGURATION ----------------------------------------------------
 
@@ -427,7 +414,7 @@ async def compute_descriptors(dry_run: bool = False) -> bool:
     log('-' * 80)
 
     # Connect to MongoDB
-    connection_string = get_db_connectionstring(_CONFIGFILE)
+    connection_string = get_db_connectionstring()
     client = AsyncMongoClient(
         connection_string,
         serverSelectionTimeoutMS=5000
@@ -438,7 +425,7 @@ async def compute_descriptors(dry_run: bool = False) -> bool:
         log('Connected to MongoDB')
         db = client['csc']
         mongodb_components = db['components']
-        geometry_dir = get_geometry_directory(_CONFIGFILE)
+        geometry_dir = get_geometry_directory()
         log(f'Looking for components missing descriptors: '
             f'{", ".join(DESCRIPTORS_TO_COMPUTE)}')
         component = await find_component_with_missing_descriptors(

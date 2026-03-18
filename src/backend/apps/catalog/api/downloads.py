@@ -13,17 +13,8 @@ import httpx
 from apps.catalog.api.auth import get_current_user
 from apps.catalog.models import User
 from services.github_service import GitHubService
-from utility.utility import get_github_repo_url, get_github_repo_token
-
 # INIT ROUTER -----------------------------------------------------------------
 router = APIRouter()
-
-# CONFIG LOADING --------------------------------------------------------------
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_CONFIG_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(_HERE))), 'config'
-)
-_CONFIGFILE = os.path.join(_CONFIG_DIR, 'dbconfig.json')
 
 
 # ROUTES ----------------------------------------------------------------------
@@ -38,8 +29,8 @@ async def get_gh_interface_version(
     """
     try:
         # Load GitHub configuration
-        repo_url = get_github_repo_url(_CONFIGFILE)
-        token = get_github_repo_token(_CONFIGFILE)
+        repo_url = os.environ['GITHUB_REPO_URL']
+        token = os.environ['GITHUB_CSC_GH_TOKEN']
 
         # Initialize GitHub service
         github_service = GitHubService(repo_url, token)
@@ -92,8 +83,8 @@ async def download_gh_interface(
     """
     try:
         # Load GitHub configuration
-        repo_url = get_github_repo_url(_CONFIGFILE)
-        token = get_github_repo_token(_CONFIGFILE)
+        repo_url = os.environ['GITHUB_REPO_URL']
+        token = os.environ['GITHUB_CSC_GH_TOKEN']
 
         # Initialize GitHub service
         github_service = GitHubService(repo_url, token)

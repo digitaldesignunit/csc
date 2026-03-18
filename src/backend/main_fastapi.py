@@ -2,7 +2,7 @@
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os
-import json
+import sys
 from contextlib import asynccontextmanager
 
 
@@ -14,7 +14,6 @@ from pymongo import AsyncMongoClient
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from utility import (
-    sanitize_path,
     get_cors_origins,
     get_db_connectionstring,
     get_preview_directory,
@@ -24,34 +23,46 @@ from utility import (
 )
 
 
-# ENVIRONMENT SETTINGS --------------------------------------------------------
-_HERE = os.path.dirname(sanitize_path(__file__))
-_CONFIG_DIR = sanitize_path(os.path.join(_HERE, 'config'))
-_CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, 'dbconfig.json'))
+# STARTUP VALIDATION ----------------------------------------------------------
+_REQUIRED_ENV = [
+    'MONGODB_URI',
+    'JWT_SECRET',
+    'GITHUB_REPO_URL',
+    'GITHUB_CSC_GH_TOKEN',
+    'SMTP_HOST',
+    'SMTP_USER',
+    'SMTP_PASSWORD',
+    'SMTP_FROM_EMAIL',
+    'FRONTEND_URL',
+    'PREVIEW_DIR',
+    'GEOMETRY_DIR',
+    'GEOMETRY_ARCHIVE_DIR',
+    'GH_XML_CACHE_DIR',
+    'FASTAPI_CORS_ORIGINS',
+]
 
-
-def load_jwt_secret(config_path: str) -> str:
-    with open(config_path, 'r', encoding='utf-8-sig') as f:
-        cfg = json.load(f)
-    secret = str(cfg['secret'])
-    return secret.replace('\r', '').replace('\n', '').strip()
+_missing = [v for v in _REQUIRED_ENV if not os.getenv(v)]
+if _missing:
+    print(
+        f'[FATAL] Missing required environment variables: {_missing}',
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 # FASTAPI SETUP ---------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- Load config (secret, algorithm, expiry) once ------------------------
-    with open(_CONFIGFILE, 'r') as f:
-        cfg = json.load(f)
-    app.state.jwt_secret = cfg['secret'].strip()
-    app.state.jwt_algorithm = cfg.get('algorithm', 'HS256').strip()
+    # --- JWT config ----------------------------------------------------------
+    app.state.jwt_secret = os.environ['JWT_SECRET']
+    app.state.jwt_algorithm = os.getenv('JWT_ALGORITHM', 'HS256')
     app.state.jwt_access_minutes = int(
-        cfg.get('access_token_expire_minutes', 30)
+        os.getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '30')
     )
 
     # --- MongoDB -------------------------------------------------------------
     app.mongodb_client = AsyncMongoClient(
-        get_db_connectionstring(_CONFIGFILE),
+        get_db_connectionstring(),
         serverSelectionTimeoutMS=5000,
     )
     await app.mongodb_client.aconnect()
@@ -68,13 +79,10 @@ async def lifespan(app: FastAPI):
     await app.mongodb_users.create_index('username', unique=True)
 
     # --- Directories ---------------------------------------------------------
-    app.config_dir = _CONFIG_DIR
-    app.component_preview_dir = get_preview_directory(_CONFIGFILE)
-    app.component_geometry_dir = get_geometry_directory(_CONFIGFILE)
-    app.component_geometry_archive_dir = get_geometry_archive_directory(
-        _CONFIGFILE
-    )
-    app.gh_xml_cache_dir = get_gh_xml_cache_directory(_CONFIGFILE)
+    app.component_preview_dir = get_preview_directory()
+    app.component_geometry_dir = get_geometry_directory()
+    app.component_geometry_archive_dir = get_geometry_archive_directory()
+    app.gh_xml_cache_dir = get_gh_xml_cache_directory()
 
     yield
 
@@ -96,7 +104,7 @@ app = FastAPI(
 # CORS ------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get_cors_origins(_CONFIGFILE),
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],

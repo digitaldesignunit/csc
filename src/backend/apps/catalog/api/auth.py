@@ -3,7 +3,6 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from datetime import datetime, timedelta, timezone
 import re
-import os
 from typing import Annotated
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
@@ -275,10 +274,7 @@ async def register_user(
 
     # Send verification email
     try:
-        email_config_path = os.path.normpath(os.path.abspath(os.path.join(
-            request.app.config_dir, 'email_config.json'
-            )))
-        email_config = load_email_config(email_config_path)
+        email_config = load_email_config()
         dev_mode = email_config.get('dev_mode', False)
 
         send_verification_email(
@@ -403,10 +399,7 @@ async def resend_verification(
 
     # Send verification email
     try:
-        email_config_path = os.path.normpath(os.path.abspath(os.path.join(
-            request.app.config_dir, 'email_config.json'
-            )))
-        email_config = load_email_config(email_config_path)
+        email_config = load_email_config()
         dev_mode = email_config.get('dev_mode', False)
 
         send_verification_resent_email(

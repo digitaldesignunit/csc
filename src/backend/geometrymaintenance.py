@@ -16,22 +16,10 @@ from pymongo import AsyncMongoClient
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 
 from utility import (
-    sanitize_path,
     get_db_connectionstring,
     get_geometry_directory,
     create_logging_timestamp as logts
 )
-
-
-# ENVIRONMENT SETTINGS --------------------------------------------------------
-
-_HERE = os.path.dirname(sanitize_path(__file__))
-"""str: Path to directory of this particular file."""
-
-_CONFIG_DIR = sanitize_path(os.path.join(_HERE, "config"))
-
-_CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
-"""str: Default configuration file."""
 
 
 async def initialize_geometry_maintenance() -> Tuple[List[str], List[str]]:
@@ -41,7 +29,7 @@ async def initialize_geometry_maintenance() -> Tuple[List[str], List[str]]:
     Return list of geometry subdirs that have no id equivalent in the db.
     """
     # initialize geometry directory
-    geometry_dir = get_geometry_directory(_CONFIGFILE)
+    geometry_dir = get_geometry_directory()
     # try to create directory if it does not exist
     os.makedirs(geometry_dir, exist_ok=True)
     # read all subdirectory names in directory and create set from it
@@ -52,7 +40,7 @@ async def initialize_geometry_maintenance() -> Tuple[List[str], List[str]]:
             geometry_subdirs.add(dir_name)
     # set up database client and select collections
     mongodb_client = AsyncMongoClient(
-        get_db_connectionstring(_CONFIGFILE)
+        get_db_connectionstring()
     )
     mongodb = mongodb_client['csc']
     mongodb_components = mongodb['components']
@@ -69,7 +57,7 @@ async def initialize_geometry_maintenance() -> Tuple[List[str], List[str]]:
 
 
 if __name__ == '__main__':
-    geometry_dir = get_geometry_directory(_CONFIGFILE)
+    geometry_dir = get_geometry_directory()
     stale_geometry_ids = asyncio.run(
         initialize_geometry_maintenance()
     )

@@ -25,98 +25,64 @@ def mm_to_inches(mm):
 
 # CONFIG LOADING --------------------------------------------------------------
 
-def get_db_connectionstring(config_file: str) -> str:
+def get_db_connectionstring() -> str:
     """
-    Read MongoDB connection string from config file.
+    Read MongoDB connection string from environment variable MONGODB_URI.
     """
-    with open(config_file, 'r') as configfile:
-        # Reading from json file
-        dbconfig = json.load(configfile)
-        server = dbconfig['server']
-        user = dbconfig['user']
-        pwd = dbconfig['pwd']
-    # compose mongodb connection string
-    cstr = f'mongodb+srv://{user}:{pwd}@{server}'
-    return cstr
+    return os.environ['MONGODB_URI']
 
 
-def get_cors_origins(config_file: str):
+def get_cors_origins() -> list:
     """
-    Read CORS origins from config file.
+    Read CORS origins from environment variable FASTAPI_CORS_ORIGINS
+    (comma-separated list).
     """
-    with open(config_file, 'r') as configfile:
-        # Reading from json file
-        dbconfig = json.load(configfile)
-        origins = dbconfig['origins']
-    return origins
+    origins_str = os.environ['FASTAPI_CORS_ORIGINS']
+    return [o.strip() for o in origins_str.split(',') if o.strip()]
 
 
-def get_preview_directory(config_file: str) -> str:
+def get_preview_directory() -> str:
     """
-    Read preview directory from config file.
+    Read preview directory from environment variable PREVIEW_DIR.
     """
-    with open(config_file, 'r') as configfile:
-        # Reading from json file
-        dbconfig = json.load(configfile)
-        preview_dir = sanitize_path(dbconfig['preview_dir'])
-    return preview_dir
+    return sanitize_path(os.environ['PREVIEW_DIR'])
 
 
-def get_geometry_directory(config_file: str) -> str:
+def get_geometry_directory() -> str:
     """
-    Read geometry directory from config file.
+    Read geometry directory from environment variable GEOMETRY_DIR.
     """
-    with open(config_file, 'r') as configfile:
-        # Reading from json file
-        dbconfig = json.load(configfile)
-        geometry_dir = sanitize_path(dbconfig['geometry_dir'])
-    return geometry_dir
+    return sanitize_path(os.environ['GEOMETRY_DIR'])
 
 
-def get_geometry_archive_directory(config_file: str) -> str:
+def get_geometry_archive_directory() -> str:
     """
-    Read geometry archive directory from config file.
+    Read geometry archive directory from environment variable
+    GEOMETRY_ARCHIVE_DIR.
     """
-    with open(config_file, 'r') as configfile:
-        # Reading from json file
-        dbconfig = json.load(configfile)
-        geometry_archive_dir = sanitize_path(
-            dbconfig['geometry_archive_dir']
-        )
-    return geometry_archive_dir
+    return sanitize_path(os.environ['GEOMETRY_ARCHIVE_DIR'])
 
 
-def get_gh_xml_cache_directory(config_file: str) -> str:
+def get_gh_xml_cache_directory() -> str:
     """
-    Read GH XML cache directory from config file.
+    Read GH XML cache directory from environment variable GH_XML_CACHE_DIR.
     """
-    with open(config_file, 'r') as configfile:
-        # Reading from json file
-        dbconfig = json.load(configfile)
-        gh_xml_cache_dir = sanitize_path(dbconfig['gh_xml_cache_dir'])
-    return gh_xml_cache_dir
+    return sanitize_path(os.environ['GH_XML_CACHE_DIR'])
 
 
-def get_github_repo_url(config_file: str) -> str:
+def get_github_repo_url() -> str:
     """
-    Read GitHub repository URL from config file.
+    Read GitHub repository URL from environment variable GITHUB_REPO_URL.
     """
-    with open(config_file, 'r') as configfile:
-        # Reading from json file
-        dbconfig = json.load(configfile)
-        repo_url = dbconfig['github_repo_url']
-    return repo_url
+    return os.environ['GITHUB_REPO_URL']
 
 
-def get_github_repo_token(config_file: str) -> str:
+def get_github_repo_token() -> str:
     """
-    Read GitHub repository token from config file.
+    Read GitHub repository token from environment variable
+    GITHUB_CSC_GH_TOKEN.
     """
-    with open(config_file, 'r') as configfile:
-        # Reading from json file
-        dbconfig = json.load(configfile)
-        token = dbconfig['github_repo_token']
-    return token
+    return os.environ['GITHUB_CSC_GH_TOKEN']
 
 
 def create_logging_timestamp():

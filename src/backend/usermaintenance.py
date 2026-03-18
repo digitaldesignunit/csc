@@ -13,7 +13,6 @@ Run this script as a cron job (e.g., daily at 2 AM):
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import os
 import sys
 from datetime import datetime, timedelta, timezone
 import asyncio
@@ -23,20 +22,9 @@ from pymongo import AsyncMongoClient
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from utility import (
-    sanitize_path,
     get_db_connectionstring,
     create_logging_timestamp as logts
 )
-
-# ENVIRONMENT SETTINGS --------------------------------------------------------
-
-_HERE = os.path.dirname(sanitize_path(__file__))
-"""str: Path to directory of this particular file."""
-
-_CONFIG_DIR = sanitize_path(os.path.join(_HERE, "config"))
-
-_CONFIGFILE = sanitize_path(os.path.join(_CONFIG_DIR, "dbconfig.json"))
-"""str: Default configuration file."""
 
 
 # MAIN CLEANUP LOGIC ----------------------------------------------------------
@@ -58,7 +46,7 @@ async def cleanup_unverified_users(dry_run=False):
     print('-' * 80)
 
     # Load config and connect to MongoDB
-    connection_string = get_db_connectionstring(_CONFIGFILE)
+    connection_string = get_db_connectionstring()
 
     client = AsyncMongoClient(
         connection_string,

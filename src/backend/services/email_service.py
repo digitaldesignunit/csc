@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.9
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import json
+import os
 import secrets
 import smtplib
 from email.mime.text import MIMEText
@@ -12,24 +12,25 @@ from typing import Dict
 
 # CONFIGURATION ---------------------------------------------------------------
 
-def load_email_config(config_path: str) -> Dict[str, str]:
+def load_email_config() -> Dict[str, str]:
     """
-    Load email configuration from JSON file.
+    Load email configuration from environment variables.
 
-    Expected structure:
-    {
-        'smtp_host': 'your-uberspace-host.uberspace.de',
-        'smtp_port': 587,
-        'smtp_user': 'noreply@ddu.uber.space',
-        'smtp_password': 'your-password',
-        'from_email': 'noreply@ddu.uber.space',
-        'from_name': 'Catalog of Second Chances',
-        'frontend_url': 'https://ddu.uber.space'
-    }
+    Required env vars: SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_FROM_EMAIL,
+    FRONTEND_URL.
+    Optional env vars: SMTP_PORT (default 587), SMTP_FROM_NAME,
+    SMTP_DEV_MODE (default false).
     """
-    with open(config_path, 'r', encoding='utf-8-sig') as f:
-        config = json.load(f)
-    return config
+    return {
+        'smtp_host': os.environ['SMTP_HOST'],
+        'smtp_port': os.getenv('SMTP_PORT', '587'),
+        'smtp_user': os.environ['SMTP_USER'],
+        'smtp_password': os.environ['SMTP_PASSWORD'],
+        'from_email': os.environ['SMTP_FROM_EMAIL'],
+        'from_name': os.getenv('SMTP_FROM_NAME', 'Catalog of Second Chances'),
+        'frontend_url': os.environ['FRONTEND_URL'],
+        'dev_mode': os.getenv('SMTP_DEV_MODE', 'false').lower() == 'true',
+    }
 
 
 # TOKEN GENERATION ------------------------------------------------------------
