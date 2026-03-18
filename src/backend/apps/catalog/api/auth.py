@@ -378,12 +378,15 @@ async def resend_verification(
             ),
         }
 
-    # Check if already verified
+    # Check if already verified - return the same neutral response as "user not
+    # found" to avoid leaking whether a verified account exists for this email.
     if user.get('email_verified', False):
-        raise HTTPException(
-            400,
-            'Email is already verified. You can sign in.'
-        )
+        return {
+            'message': (
+                'If an unverified account exists with this email, '
+                'a verification email has been sent.'
+            ),
+        }
 
     # Generate new verification token
     verification_token = generate_verification_token()
