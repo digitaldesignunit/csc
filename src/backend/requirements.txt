@@ -1,0 +1,29 @@
+# CSC Backend Requirements
+# Requirements for all Backend processes, i.e. FastAPI and Services
+# Install with: pip install -r requirements.txt
+
+# --- Server ---
+fastapi
+gunicorn
+uvicorn[standard]
+python-multipart
+
+# --- Database ---
+pymongo[srv]
+
+# --- Auth ---
+python-jose[cryptography]
+passlib[bcrypt]
+
+# --- HTTP client (GitHub service) ---
+httpx
+
+# --- Preview generation ---
+matplotlib
+numpy>=1.15.4
+Pillow
+
+# --- Descriptor computation ---
+trimesh>=3.15.0
+scipy
+robust-laplacian>=1.0.0

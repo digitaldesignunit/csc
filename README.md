@@ -112,6 +112,7 @@ gitignored; only the `.example` file is tracked).
 - Proceed in the same way with copying `.env.local.example` and renaming it to `.env.local`
 - Paste your JWT secret key into both the `NEXTAUTH_SECRET` and `API_SECRET` fields. This is odd but unfortunately necessary.
 - Add your MongoDB credentials so that the frontend can directly authenticate with MongoDB
+- Set `NEXT_PUBLIC_STATIC_BASE_URL` to a URL served directly by Apache (e.g. `https://username.uberspace.de`). On Uberspace, Next.js runs behind a reverse proxy and serving large static files (previews, downloads) through it causes 502 timeouts. This variable redirects those requests to Apache directly. It is ignored on localhost.
 
 ## Grasshopper Interface Setup
 
@@ -142,7 +143,7 @@ server.
 - Install necessary packages and then deactivate the venv
 
 ```
-(venv) [user@servername csc]$ pip install gunicorn uvloop httptools
+(venv) [user@servername csc]$ pip install -r ~/csc/backend/requirements.txt
 (venv) [user@servername csc]$ deactivate
 [user@servername ~]$
 ```
@@ -159,6 +160,27 @@ your web server. In our case the folder structure looks like this:
 │  ├─ backend/
 │  ├─ frontend/
 ```
+
+After the initial upload, make sure the `logs`directory in `backend` exists...
+
+```
+/home/user/
+├─ csc/
+│  ├─ venv/
+│  ├─ backend/
+│  │  ├─ ...
+│  │  ├─ logs/
+│  │  ├─ ...
+│  ├─ frontend/
+```
+
+...or create it manually:
+
+```
+mkdir -p ~/csc/backend/logs
+```
+
+The deployment scripts (`csc_deploy.sh`, `csc_deploy_backend.sh`) handle this automatically on subsequent deploys.
 
 ## Setting up FastAPI
 
@@ -271,6 +293,9 @@ for services:
 - For `fastapi.ini`: use `fastapi.ini.example` as a template, fill in the real
   values in the `environment=` block, and transfer your filled-in copy to the
   server — never commit the file with real secrets (it is gitignored)
+- For `react-frontend.ini`: transfer as-is, no user-specific values needed. It
+  only sets `NODE_ENV=production`; all frontend configuration is baked in at
+  build time via `.env`.
 - Transfer the files to Uberspace into `/home/yourusername/etc/services.d`
 - Run the following commands:
 
@@ -339,6 +364,20 @@ Uberlab guides:
 - [Uberspace Web Backends](https://manual.uberspace.de/web-backends/)
 - [Uberspace Web Domains](https://manual.uberspace.de/web-domains/)
 
+### Deploying .htaccess
+
+The repo contains `uberspaceconfig/html/.htaccess` which must be placed at
+`~/html/.htaccess` on the server. It sets CORS headers for the Apache layer and
+forces `.wsc` files to download as `application/octet-stream` rather than being
+served inline. Without it, Grasshopper component downloads will not work
+correctly.
+
+```
+[user@servername ~]$ cp ~/csc/uberspaceconfig/html/.htaccess ~/html/.htaccess
+```
+
+Before deploying, update the `Access-Control-Allow-Origin` header in the file
+to match your actual frontend domain.
 
 ## Preview Generation CronJob
 
