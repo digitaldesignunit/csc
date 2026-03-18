@@ -8,6 +8,7 @@
 *.env
 *.bash_profile
 *fastapi.ini
+*dbconfig.json
 
 # OLD FILES FROM NEXTJS14 APP
 /src/backend_OLD/
