@@ -12,7 +12,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from apps.catalog.models import Token, User, UserInDB # NOQA
+from apps.catalog.models import Token, User, UserInDB, UserPublic # NOQA
 from services.email_service import (
     generate_verification_token,
     get_token_expiry,
@@ -230,7 +230,7 @@ async def login_for_access_token(
 
 # Optional: registration endpoint (enforce TU domain)
 @router.post('/register',
-             response_model=User,
+             response_model=UserPublic,
              status_code=201,
              summary='Register new user (@*.tu-darmstadt.de)')
 @limiter.limit('5/minute')

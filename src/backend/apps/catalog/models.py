@@ -23,6 +23,9 @@ class TokenData(BaseModel):
 
 
 class User(BaseModel):
+    """
+    Full user representation used internally, including sensitive data.
+    """
     id: str = Field(alias="_id")
     username: str
     email: Optional[EmailStr] = None
@@ -32,6 +35,22 @@ class User(BaseModel):
     email_verified: bool = False
     verification_token: Optional[str] = None
     verification_token_expires: Optional[datetime] = None
+
+    class Config:
+        populate_by_name = True
+
+
+class UserPublic(BaseModel):
+    """
+    Safe user representation returned to clients - no tokens or credentials.
+    """
+    id: str = Field(alias="_id")
+    username: str
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    disabled: Optional[bool] = None
+    role: Role = "user"
+    email_verified: bool = False
 
     class Config:
         populate_by_name = True
