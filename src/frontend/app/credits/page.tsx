@@ -62,6 +62,11 @@ export default function CreditsPage() {
               measure <a href='https://www.remin-kreislaufwirtschaft.de/en/projects/fertigteil-20' target='_blank' className='text-blue-500 underline'>Resource-efficient circular economy - Building and mineral cycles
               (ReMin)</a>.
             </p>
+            <p>
+            Part of this research was conducted within the Project <em><a href="https://www.dg.architektur.tu-darmstadt.de/fachgebiet_ddu/news_uebersicht/dg_news_details_188416.en.jsp" target='_blank' className='text-blue-500 underline'>ZirKuS - Circular Construction and Structural Design of Reused Concrete Components</a></em>.
+            The project <em>ZirKuS</em> is funded by the <a href='https://www.dbu.de/' target='_blank' className='text-blue-500 underline'>Deutsche Bundesstiftung Umwelt - DBU</a>
+            (German Federal Environmental Foundation) within the funding line <a href="https://www.dbu.de/foerderung/projektfoerderung/foerderthemen/klima-und-ressourcenschonendes-bauen/" target='_blank' className='text-blue-500 underline'>Climate- and Resource-Efficient Construction</a>.
+            </p>
           </CardContent>
         </Card>
 

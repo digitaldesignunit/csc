@@ -9,6 +9,7 @@ components.
 
 - This is research level code! As always: expect bugs, weird behaviour, things
 not working, etc. pp.
+- This is a proof-of-concept / prototype. Things will change (and break) all the time.
 
 ## Software Structure
 
@@ -35,11 +36,11 @@ framework
 
 Start by cloning this repo onto your desktop computer.
 
-## MongoDB and dbconfig.json
+## MongoDB
 
 Either create a MongoDB atlas account and set up a new database or run a
-MongoDB database by other means. Save your connection string / login
-credentials once you have them.
+MongoDB database by other means. You will need the full connection string in
+the form `mongodb+srv://user:password@host/dbname`.
 
 ## Creating a Secret Key for JWT Auth
 
@@ -53,27 +54,64 @@ $ openssl rand -hex 32
 >> 09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7
 ```
 
-- You will end up with a key like the above (__DON'T__ use the one in this
+- You will end up with a key like the above (__DO NOT__ use the one in this
 example!).
 - If in doubt, have a look here for a detailed explanation of the auth setup:
 [FastAPI OAuth2 with Password (and hashing), Bearer with JWT tokens]
 (https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/#handle-jwt-tokens)
 
-## Editing dbconfig.json
+## Setting up Environment Variables
 
-- Navigate to `... \csc\src\backend`
-- Copy `dbconfig.template.json` and rename it to `dbconfig.json`
-- Edit `dbconfig.json` and add your MongoDB credentials
-- Paste your secret key from the previous step into the `'secret'` field of
-your `dbconfig.json`
+All secrets and configuration are passed via environment variables — no config
+files with credentials are used in the backend.
 
-## Editing .env.local
+### Backend environment variables
+
+The backend reads all configuration from the environment at startup and will
+exit immediately with a clear error listing any missing variables. There are
+two places you need to set them:
+
+**1. `~/.bash_profile`** — for shell scripts and cron jobs (see
+`uberspaceconfig/.bash_profile.example` for the full template):
+
+```bash
+export MONGODB_URI="mongodb+srv://user:password@host/csc"
+export JWT_SECRET="your-openssl-rand-hex-32-value"
+export JWT_ALGORITHM="HS256"
+export JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60"
+export GITHUB_REPO_URL="https://github.com/your-org/your-repo"
+export GITHUB_CSC_GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
+export SMTP_HOST="yourhost.uberspace.de"
+export SMTP_PORT="587"
+export SMTP_USER="noreply@ddu.uber.space"
+export SMTP_PASSWORD="your-mailbox-password"
+export SMTP_FROM_EMAIL="noreply@ddu.uber.space"
+export SMTP_FROM_NAME="Catalog of Second Chances"
+export SMTP_DEV_MODE="false"
+export FRONTEND_URL="https://ddu.uber.space"
+export PREVIEW_DIR="/home/ddu/csc/backend/static/previews"
+export GEOMETRY_DIR="/home/ddu/csc/backend/static/geometry"
+export GEOMETRY_ARCHIVE_DIR="/home/ddu/csc/backend/static/geometry_archive"
+export GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml"
+export FASTAPI_CORS_ORIGINS="https://ddu.uber.space,http://localhost:3000"
+```
+
+Apply immediately by running: `source ~/.bash_profile`
+
+**2. `~/etc/services.d/fastapi.ini`** — for the supervisord-managed FastAPI
+service (supervisord does _not_ read `~/.bash_profile`). Copy
+`uberspaceconfig/etc/services.d/fastapi.ini.example` to the server, fill in
+the real values in the `environment=` block, and keep it off git (it is
+gitignored; only the `.example` file is tracked).
+
+### Frontend environment variables
 
 - Navigate to `...\csc\src\frontend`
 - Copy `.env.example` and rename it to `.env`
-- Edit `.env` and paste your secret key into the `API_SECRET` field
-- Also add your MongoDB credentials so that the frontend can directly authenticate with MongoDB
-- Do the same with `.env.local.example`, following the comments given in the file
+- Edit `.env` and fill in the values following the comments in the file
+- Proceed in the same way with copying `.env.local.example` and renaming it to `.env.local`
+- Paste your JWT secret key into both the `NEXTAUTH_SECRET` and `API_SECRET` fields. This is odd but unfortunately necessary.
+- Add your MongoDB credentials so that the frontend can directly authenticate with MongoDB
 
 ## Grasshopper Interface Setup
 
@@ -230,7 +268,10 @@ for services:
 
 - On your computer, navigate to `...\csc\uberspaceconfig\etc\services.d`
 - This folder contains two configuration files for _Supervisor_
-- Transfer these files to Uberspace into `/home/yourusername/etc/services.d`
+- For `fastapi.ini`: use `fastapi.ini.example` as a template, fill in the real
+  values in the `environment=` block, and transfer your filled-in copy to the
+  server — never commit the file with real secrets (it is gitignored)
+- Transfer the files to Uberspace into `/home/yourusername/etc/services.d`
 - Run the following commands:
 
 ```
@@ -325,11 +366,12 @@ To add the cronjob to your crontab run:
 ...to open the crontab in an editor and then add:
 
 ```
-*/30 * * * * /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/main_previewgen.py >> /home/ddu/csc/backend/logs/previewgen_cronjob.log 2>&1
+*/30 * * * * source /home/ddu/.bash_profile && /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/main_previewgen.py >> /home/ddu/csc/backend/logs/previewgen_cronjob.log 2>&1
 ```
 
 This will run the preview generation script every 30 minutes and write the
-results to a logging file.
+results to a logging file. The `source ~/.bash_profile` prefix is required so
+that the cron job picks up the environment variables.
 
 ## Grasshopper XML Sync CronJob
 
@@ -339,15 +381,9 @@ frontend.
 
 ### Configuration
 
-Add the following to your `dbconfig.json`:
-
-```json
-{
-  "gh_xml_cache_dir": "/home/ddu/csc/backend/static/ghxml",
-  "github_repo_url": "https://github.com/your-org/your-repo",
-  "github_repo_token": "your_github_token"
-}
-```
+The script reads `GITHUB_REPO_URL`, `GITHUB_CSC_GH_TOKEN`, and
+`GH_XML_CACHE_DIR` from the environment. Make sure these are set in
+`~/.bash_profile` (see the environment variables section above).
 
 ### Testing
 
@@ -376,10 +412,46 @@ To add the sync cronjob, copy the configuration from
 Add this line:
 
 ```
-*/30 * * * * /bin/bash /home/ddu/csc/src/backend/ghxml_sync.sh >> /home/ddu/csc/backend/logs/ghxml_sync.log 2>&1
+*/30 * * * * source /home/ddu/.bash_profile && /bin/bash /home/ddu/csc/backend/ghxml_sync.sh >> /home/ddu/csc/backend/logs/ghxml_sync.log 2>&1
 ```
 
 This will run the sync every 30 minutes and log results to the log file.
+
+## User Maintenance CronJob
+
+Removes unverified user accounts older than 7 days. Runs daily at 2:00 AM.
+
+```
+0 2 * * * source /home/ddu/.bash_profile && /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/usermaintenance.py >> /home/ddu/csc/backend/logs/usermaintenance_cronjob.log 2>&1
+```
+
+## Geometry Maintenance CronJob
+
+Removes geometry subdirectories that have no corresponding component in the
+database. Runs daily at 3:00 AM.
+
+```
+0 3 * * * source /home/ddu/.bash_profile && /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/geometrymaintenance.py >> /home/ddu/csc/backend/logs/geometrymaintenance_cronjob.log 2>&1
+```
+
+## Descriptor Computation CronJob
+
+Computes missing descriptors for components. Runs every 2 minutes; uses
+`flock` to prevent overlapping runs.
+
+```
+*/2 * * * * source /home/ddu/.bash_profile && flock /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/main_descriptors_simple.py >> /home/ddu/csc/backend/logs/descriptors_simple_cronjob.log 2>&1
+```
+
+Ready-made crontab entries for all jobs are in `uberspaceconfig/crontab/`.
+
+## Deployment
+
+Two deployment scripts are provided in `uberspaceconfig/deployment/`. Both
+require `GITHUB_DEPLOY_URL` to be set in `~/.bash_profile`.
+
+- `csc_deploy.sh` — full deploy: pulls backend + frontend, restarts backend, rebuilds and restarts frontend
+- `csc_deploy_backend.sh` — backend only: pulls backend, restarts FastAPI
 
 ## OpenAPI Model Generation
 
@@ -460,8 +532,14 @@ Part of this research was conducted within the Project _Fertigteil 2.0 -
 Real-digital process chains for the production of built-in concrete
 components_. The project _Fertigteil 2.0 (Precast Concrete Components 2.0)_
 was funded by the Federal Ministry of Education and Research Germany (BMBF)
-through the funding measure Resource-efficient circular economy - Building and
-mineral cycles (ReMin).
+through the funding measure "Resource-efficient circular economy - Building and
+mineral cycles (ReMin)".
+
+Part of this research was conducted within the Project _ZirKuS -
+Circular Construction and Structural Design of Reused Concrete Components_.
+The project _ZirKuS_ is funded by the Deutsche Bundesstiftung Umwelt DBU
+(German Federal Environmental Foundation) within the funding line
+"Climate- and Resource-Efficient Construction."
 
 ## Student Work
 
