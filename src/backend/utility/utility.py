@@ -8,7 +8,7 @@ import os
 import uuid
 from typing import TYPE_CHECKING
 
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -269,6 +269,36 @@ def generate_etag_for_designs(designs: list) -> str:
     etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
 
     return etag_hash
+
+
+def get_geometry_upload_limit_bytes() -> int:
+    """
+    Read max geometry upload size from environment variable
+    GEOMETRY_UPLOAD_LIMIT_MB (default: 250 MB).
+    """
+    mb = int(os.getenv('GEOMETRY_UPLOAD_LIMIT_MB', '250'))
+    return mb * 1024 * 1024
+
+
+async def read_upload_limited(upload: UploadFile, limit_bytes: int) -> bytes:
+    """
+    Read an uploaded file into memory, raising 413 if it exceeds limit_bytes.
+    Reads in 64 KB chunks to avoid buffering the entire file before checking size.
+    """
+    chunks = []
+    total = 0
+    while True:
+        chunk = await upload.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f'File too large (limit: {limit_bytes // (1024 * 1024)} MB)',
+            )
+        chunks.append(chunk)
+    return b''.join(chunks)
 
 
 def validate_component_id(component_id: str) -> str:

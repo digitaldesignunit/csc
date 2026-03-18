@@ -25,6 +25,7 @@ from utility import (
     get_geometry_directory,
     get_geometry_archive_directory,
     get_gh_xml_cache_directory,
+    get_geometry_upload_limit_bytes,
 )
 
 
@@ -88,6 +89,11 @@ async def lifespan(app: FastAPI):
     app.component_geometry_dir = get_geometry_directory()
     app.component_geometry_archive_dir = get_geometry_archive_directory()
     app.gh_xml_cache_dir = get_gh_xml_cache_directory()
+    app.geometry_upload_limit_bytes = get_geometry_upload_limit_bytes()
+    print(
+        f'[INFO] Geometry upload limit: '
+        f'{app.geometry_upload_limit_bytes // (1024 * 1024)} MB'
+    )
 
     yield
 

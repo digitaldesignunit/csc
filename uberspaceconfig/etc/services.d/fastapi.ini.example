@@ -25,3 +25,4 @@ environment=
     GEOMETRY_ARCHIVE_DIR="/home/ddu/csc/backend/static/geometry_archive",
     GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml",
     FASTAPI_CORS_ORIGINS="https://ddu.uber.space,http://localhost:3000"
+    GEOMETRY_UPLOAD_LIMIT_MB="250"

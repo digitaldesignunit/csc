@@ -29,6 +29,7 @@ from utility import (
     check_geometry_conditional_request,
     validate_component_id,
     ensure_file,
+    read_upload_limited,
 )
 
 # INIT ROUTER -----------------------------------------------------------------
@@ -1040,7 +1041,9 @@ async def add_reduced_geometry(
         # Save reduced mesh file
         mesh_path = os.path.join(component_dir, 'mesh_reduced.obj')
         with open(mesh_path, 'wb') as f:
-            content = await mesh_file.read()
+            content = await read_upload_limited(
+                mesh_file, request.app.geometry_upload_limit_bytes
+            )
             f.write(content)
 
         return JSONResponse(
@@ -1086,7 +1089,9 @@ async def add_detailed_geometry(
         # Save detailed mesh file
         mesh_path = os.path.join(component_dir, 'mesh.obj')
         with open(mesh_path, 'wb') as f:
-            content = await mesh_file.read()
+            content = await read_upload_limited(
+                mesh_file, request.app.geometry_upload_limit_bytes
+            )
             f.write(content)
 
         return JSONResponse(
