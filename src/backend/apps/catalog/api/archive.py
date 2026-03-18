@@ -20,7 +20,9 @@ from .auth import require_admin
 from .components import build_component_match_stage
 from utility.utility import (
     generate_geometry_etag,
-    check_geometry_conditional_request
+    check_geometry_conditional_request,
+    validate_component_id,
+    ensure_file,
 )
 
 
@@ -87,12 +89,6 @@ async def get_archived_components_with_aggregation(
     return components
 
 
-def _ensure_file(path: str):
-    if not os.path.exists(path):
-        raise HTTPException(404, 'Geometry file not found')
-    return path
-
-
 # ARCHIVE/UNARCHIVE ROUTES ----------------------------------------------------
 
 @router.post(
@@ -115,6 +111,7 @@ async def archive_component(
 
     Note: Preview images are kept in place for display in archive.
     """
+    validate_component_id(component_id)
     components_coll = await get_components_col(request)
     archived_coll = await get_archived_components_col(request)
 
@@ -208,6 +205,7 @@ async def unarchive_component(
 
     The component retains its original validation status.
     """
+    validate_component_id(component_id)
     components_coll = await get_components_col(request)
     archived_coll = await get_archived_components_col(request)
 
@@ -471,6 +469,7 @@ async def get_archived_component_geometry_detailed(
     admin_user: Annotated[User, Depends(require_admin)],
 ):
     """Retrieve the detailed OBJ mesh for an archived component."""
+    validate_component_id(component_id)
     base = request.app.component_geometry_archive_dir
     mesh_path = os.path.join(base, component_id, 'mesh.obj')
 
@@ -486,10 +485,10 @@ async def get_archived_component_geometry_detailed(
         )
 
     return FileResponse(
-        _ensure_file(mesh_path),
+        ensure_file(mesh_path),
         media_type='text/x-obj',
         filename='mesh.obj',
-        headers={'ETag': etag, 'Cache-Control': 'public, max-age=3600'}
+        headers={'ETag': etag, 'Cache-Control': 'private, max-age=3600'}
     )
 
 
@@ -503,6 +502,7 @@ async def get_archived_component_geometry_reduced(
     admin_user: Annotated[User, Depends(require_admin)],
 ):
     """Retrieve the reduced OBJ mesh for an archived component."""
+    validate_component_id(component_id)
     base = request.app.component_geometry_archive_dir
     mesh_path = os.path.join(base, component_id, 'mesh_reduced.obj')
 
@@ -518,10 +518,10 @@ async def get_archived_component_geometry_reduced(
         )
 
     return FileResponse(
-        _ensure_file(mesh_path),
+        ensure_file(mesh_path),
         media_type='text/x-obj',
         filename='mesh_reduced.obj',
-        headers={'ETag': etag, 'Cache-Control': 'public, max-age=3600'}
+        headers={'ETag': etag, 'Cache-Control': 'private, max-age=3600'}
     )
 
 

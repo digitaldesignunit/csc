@@ -26,7 +26,9 @@ from utility import (
     generate_component_etag,
     generate_etag_for_components,
     generate_geometry_etag,
-    check_geometry_conditional_request
+    check_geometry_conditional_request,
+    validate_component_id,
+    ensure_file,
 )
 
 # INIT ROUTER -----------------------------------------------------------------
@@ -477,6 +479,7 @@ async def get_components_stats(
         print(f'[ERROR] components stats aggregation: {e}')
         raise HTTPException(status_code=500, detail='Internal server error')
 
+
 # UNIQUE VALUE ROUTES --------------------------------------------------------
 
 @router.get('/datasets', summary='Get unique dataset names')
@@ -766,7 +769,7 @@ async def get_components(
         content=components_clean,
         headers={
             'ETag': etag,
-            'Cache-Control': 'public, max-age=3600'  # 1 hour cache
+            'Cache-Control': 'private, max-age=3600'
         }
     )
 
@@ -816,7 +819,7 @@ async def get_component(
         content=component_clean,
         headers={
             'ETag': etag,
-            'Cache-Control': 'public, max-age=3600'  # 1 hour cache
+            'Cache-Control': 'private, max-age=3600'
         }
     )
 
@@ -868,18 +871,13 @@ async def get_component_geometry(
     return JSONResponse(status_code=200, content=doc)
 
 
-def _ensure_file(path: str):
-    if not os.path.exists(path):
-        raise HTTPException(404, 'File not found')
-    return path
-
-
 @router.get('/components/{component_id}/geometry_detailed')
 async def get_component_geometry_detailed(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str,
 ):
+    validate_component_id(component_id)
     base = request.app.component_geometry_dir
     mesh_path = os.path.join(base, component_id, 'mesh.obj')
 
@@ -894,10 +892,10 @@ async def get_component_geometry_detailed(
         )
 
     return FileResponse(
-        _ensure_file(mesh_path),
+        ensure_file(mesh_path),
         media_type='text/x-obj',
         filename='mesh.obj',
-        headers={'ETag': etag, 'Cache-Control': 'public, max-age=3600'}
+        headers={'ETag': etag, 'Cache-Control': 'private, max-age=3600'}
     )
 
 
@@ -921,6 +919,7 @@ async def get_component_geometry_reduced(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str,
 ):
+    validate_component_id(component_id)
     base = request.app.component_geometry_dir
     mesh_path = os.path.join(base, component_id, 'mesh_reduced.obj')
 
@@ -935,10 +934,10 @@ async def get_component_geometry_reduced(
         )
 
     return FileResponse(
-        _ensure_file(mesh_path),
+        ensure_file(mesh_path),
         media_type='text/x-obj',
         filename='mesh_reduced.obj',
-        headers={'ETag': etag, 'Cache-Control': 'public, max-age=3600'}
+        headers={'ETag': etag, 'Cache-Control': 'private, max-age=3600'}
     )
 
 
@@ -976,10 +975,11 @@ async def get_component_preview_image(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component_id: str,
 ):
+    validate_component_id(component_id)
     base = request.app.component_preview_dir
     preview_image_path = os.path.join(base, f'{component_id}.webp')
     return FileResponse(
-        _ensure_file(preview_image_path),
+        ensure_file(preview_image_path),
         media_type='image/webp',
         filename=f'{component_id}.webp'
     )
@@ -1020,6 +1020,7 @@ async def add_reduced_geometry(
     Add reduced geometry files to an existing component.
     Accepts mesh_reduced.obj with embedded vertex colors.
     """
+    validate_component_id(component_id)
     # Check if component exists
     coll = await get_components_col(request)
     component = await coll.find_one({'_id': component_id})
@@ -1065,6 +1066,7 @@ async def add_detailed_geometry(
     Add detailed geometry files to an existing component.
     Accepts mesh.obj with embedded vertex colors.
     """
+    validate_component_id(component_id)
     # Check if component exists
     coll = await get_components_col(request)
     component = await coll.find_one({'_id': component_id})
@@ -1120,6 +1122,7 @@ async def delete_component(
     If file deletion fails, the operation continues and deletes the
     database record anyway.
     """
+    validate_component_id(component_id)
     # Get component geometry directory path
     geometry_base_dir = request.app.component_geometry_dir
     component_dir = os.path.join(geometry_base_dir, component_id)

@@ -5,7 +5,10 @@ import datetime
 import hashlib
 import json
 import os
+import uuid
 from typing import TYPE_CHECKING
+
+from fastapi import HTTPException
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -266,3 +269,19 @@ def generate_etag_for_designs(designs: list) -> str:
     etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
 
     return etag_hash
+
+
+def validate_component_id(component_id: str) -> str:
+    """Reject non-UUID component IDs before they can be used in file paths."""
+    try:
+        uuid.UUID(component_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail='Invalid component ID')
+    return component_id
+
+
+def ensure_file(path: str) -> str:
+    """Return path if it exists, otherwise raise 404."""
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail='File not found')
+    return path

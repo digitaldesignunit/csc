@@ -145,7 +145,7 @@ async def get_designs(
             content=designs_clean,
             headers={
                 'ETag': etag,
-                'Cache-Control': 'public, max-age=3600'  # 1 hour cache
+                'Cache-Control': 'private, max-age=3600'
             }
         )
 
@@ -208,7 +208,7 @@ async def get_user_designs(
             content=designs_clean,
             headers={
                 'ETag': etag,
-                'Cache-Control': 'public, max-age=3600'  # 1 hour cache
+                'Cache-Control': 'private, max-age=3600'
             }
         )
 
@@ -264,7 +264,7 @@ async def get_design(
             content=enriched_design,
             headers={
                 'ETag': etag,
-                'Cache-Control': 'public, max-age=3600'  # 1 hour cache
+                'Cache-Control': 'private, max-age=3600'
             }
         )
 
@@ -371,7 +371,7 @@ async def create_design(
             content=enriched_design,
             headers={
                 'ETag': etag,
-                'Cache-Control': 'public, max-age=3600'
+                'Cache-Control': 'private, max-age=3600'
             }
         )
 
@@ -495,7 +495,7 @@ async def update_design(
             content=enriched_design,
             headers={
                 'ETag': etag,
-                'Cache-Control': 'public, max-age=3600'
+                'Cache-Control': 'private, max-age=3600'
             }
         )
 
