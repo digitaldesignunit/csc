@@ -58,7 +58,7 @@ class UserPublic(BaseModel):
 
 class RegisterPayload(BaseModel):
     username: str = Field(min_length=3, max_length=50)
-    full_name: str = Field(default='', max_length=100)
+    full_name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     # max_length=72 matches bcrypt's hard truncation limit, also prevents DoS
     password: str = Field(min_length=8, max_length=72)

@@ -508,7 +508,7 @@ This project uses OpenAPI schema generation to keep frontend TypeScript models i
 #### Generate Models
 
 ```bash
-# Generate ComponentModel from backend
+# Generate data models from backend
 npm run generate:models
 ```
 
