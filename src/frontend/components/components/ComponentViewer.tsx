@@ -23,11 +23,11 @@ interface CachedGeometry {
 
 const externalGeometryCache = new Map<string, CachedGeometry>()
 
-/* ───────── Helpers ───────── */
+// Helpers
 
 type GeometryMode = 'primitive' | 'reduced' | 'detailed'
 
-/* ───────── External geometry/mtl loading ───────── */
+// External geometry/mtl loading
 
 // Simple debug logging for dev mode only
 const isDev = process.env.NODE_ENV === 'development'

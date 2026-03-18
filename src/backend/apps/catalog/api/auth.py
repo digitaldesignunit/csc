@@ -26,7 +26,7 @@ from services.email_service import (
 # create router instance
 router = APIRouter()
 
-# OAuth2 uses this tokenUrl — keep in sync with the route below
+# OAuth2 uses this tokenUrl - keep in sync with the route below
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/auth/token')
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
@@ -184,7 +184,7 @@ async def require_admin(
 @router.post(
     '/token',
     response_model=Token,
-    summary='Login (email or username) → JWT'
+    summary='Login (email or username) -> JWT'
 )
 async def login_for_access_token(
     request: Request,

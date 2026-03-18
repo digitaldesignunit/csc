@@ -8,21 +8,14 @@ import bcrypt from 'bcryptjs'
 import type { JWT } from 'next-auth/jwt'
 import type { Session } from 'next-auth'
 
-// ───────────────────────────────────────────────────────────────────────────────
 // Env
-// ───────────────────────────────────────────────────────────────────────────────
 const MONGODB_URI = process.env.MONGODB_URI!
 const DB_NAME = process.env.MONGODB_DB!
 const DB_USERCOLLECTION = process.env.MONGODB_USERCOLLECTION!
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET!
 const FASTAPI_URL = process.env.FASTAPI_URL!
 
-// Optional fallback if FastAPI doesn’t return expires_in and token has no exp
-const FALLBACK_ACCESS_TTL_SECS = Number(process.env.FASTAPI_ACCESS_TOKEN_TTL_SECS ?? 3600)
-
-// ───────────────────────────────────────────────────────────────────────────────
 // Types
-// ───────────────────────────────────────────────────────────────────────────────
 type DBUser = {
   _id: unknown
   username: string
@@ -65,9 +58,7 @@ type SessionUserPatch = {
   error?: 'ApiTokenExpired'
 }
 
-// ───────────────────────────────────────────────────────────────────────────────
 // Mongo singleton (safe for RSC/route handlers)
-// ───────────────────────────────────────────────────────────────────────────────
 declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined
 }
@@ -96,9 +87,7 @@ async function getClient(): Promise<MongoClient> {
   }
 }
 
-// ───────────────────────────────────────────────────────────────────────────────
-/** Best-effort decode of JWT `exp` (seconds) → ms timestamp. No verification. */
-// ───────────────────────────────────────────────────────────────────────────────
+/** Best-effort decode of JWT `exp` (seconds) -> ms timestamp. No verification. */
 function decodeJwtExpMs(token: string): number | undefined {
   try {
     const parts = token.split('.')
@@ -114,9 +103,7 @@ function decodeJwtExpMs(token: string): number | undefined {
   }
 }
 
-// ───────────────────────────────────────────────────────────────────────────────
 // Credentials authorize (Mongo + bcrypt), then exchange for FastAPI token
-// ───────────────────────────────────────────────────────────────────────────────
 async function authorizeUser(credentials?: { identifier: string; password: string }): Promise<AuthorizedUserPayload | null> {
   if (!credentials) {
     console.error('[NextAuth][Auth] No credentials payload received')
@@ -246,11 +233,10 @@ async function authorizeUser(credentials?: { identifier: string; password: strin
     return null
   }
 
-  // Compute absolute expiry in ms
-  const fromExpClaim = decodeJwtExpMs(apiToken)
+  // exp claim in the JWT takes priority, then expires_in from response, then 1h default
   const apiTokenExpiresAt =
-    fromExpClaim ??
-    (expiresIn ? Date.now() + expiresIn * 1000 : Date.now() + FALLBACK_ACCESS_TTL_SECS * 1000)
+    decodeJwtExpMs(apiToken) ??
+    (expiresIn ? Date.now() + expiresIn * 1000 : Date.now() + 3600 * 1000)
 
   // 6) Return user info for NextAuth to embed into its JWT
   return {
@@ -264,9 +250,7 @@ async function authorizeUser(credentials?: { identifier: string; password: strin
   }
 }
 
-// ───────────────────────────────────────────────────────────────────────────────
-// NextAuth Options
-// ───────────────────────────────────────────────────────────────────────────────
+// NextAuth options
 const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
@@ -282,7 +266,7 @@ const authOptions: AuthOptions = {
     signIn: '/auth/signin',
     error: '/auth/signin',
   },
-  session: { 
+  session: {
     strategy: 'jwt',
     maxAge: 24 * 60 * 60, // 24 hours session max age
     updateAge: 2 * 60 * 60, // Update session every 2 hours
@@ -305,7 +289,7 @@ const authOptions: AuthOptions = {
         return t
       }
 
-      // If we have an access token with an expiry, invalidate it when expired (no refresh flow)
+      // Invalidate expired API token on subsequent requests (no refresh flow)
       if (t.apiToken && t.apiTokenExpiresAt) {
         const bufferMs = 60_000 // 60s safety buffer
         if (Date.now() >= Number(t.apiTokenExpiresAt) - bufferMs) {

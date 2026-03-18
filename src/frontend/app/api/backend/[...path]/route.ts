@@ -77,7 +77,7 @@ async function handle(
   }
 
   // Note: do NOT read .text()/json(); just forward the stream/body directly.
-  // For 204/304 upstream.body may be null — NextResponse handles that.
+  // For 204/304 upstream.body may be null - NextResponse handles that.
   return new NextResponse(upstream.body, {
     status: upstream.status,
     headers: outHeaders,

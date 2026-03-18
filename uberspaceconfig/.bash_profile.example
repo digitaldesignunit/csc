@@ -16,7 +16,7 @@ export PATH
 # MongoDB
 export MONGODB_URI="mongodb+srv://USERNAME:PASSWORD@your.cluster.mongodb.net/csc"
 
-# JWT (must match the value previously in dbconfig.json → "secret")
+# JWT (must match the value previously in dbconfig.json -> "secret")
 export JWT_SECRET="your-openssl-rand-hex-32-value"
 export JWT_ALGORITHM="HS256"
 export JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60"

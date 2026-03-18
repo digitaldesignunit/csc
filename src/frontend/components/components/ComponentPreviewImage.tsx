@@ -34,7 +34,7 @@ export default function ComponentPreviewImage({
         width={width}
         height={height}
         className={`object-cover ${className ?? ''}`}
-        // IMPORTANT: let the BROWSER request it (with cookies) – skip server optimizer
+        // IMPORTANT: let the BROWSER request it (with cookies) - skip server optimizer
         unoptimized
         // optional: better lazy behavior in tables
         loading="lazy"

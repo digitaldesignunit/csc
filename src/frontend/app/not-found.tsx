@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import BackgroundMesh from '@/components/components/BackgroundMesh'
 
 export const metadata = {
-  title: '404 – Page not found',
+  title: '404 - Page not found',
 }
 
 export default function NotFound() {
