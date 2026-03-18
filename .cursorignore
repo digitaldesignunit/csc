@@ -7,6 +7,7 @@
 # ENVIRONMENT FILES
 *.env
 *.bash_profile
+*fastapi.ini
 
 # OLD FILES FROM NEXTJS14 APP
 /src/backend_OLD/
