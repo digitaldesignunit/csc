@@ -12,7 +12,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from apps.catalog.models import Token, User, UserInDB, UserPublic # NOQA
+from apps.catalog.models import Token, User, UserInDB, UserPublic, RegisterPayload # NOQA
 from services.email_service import (
     generate_verification_token,
     get_token_expiry,
@@ -236,16 +236,14 @@ async def login_for_access_token(
 @limiter.limit('5/minute')
 async def register_user(
     request: Request,
-    payload: dict,             # { username, full_name, email, password }
+    payload: RegisterPayload,
     users=Depends(users_coll),
 ):
-    username = (payload.get('username') or '').strip()
-    full_name = (payload.get('full_name') or '').strip()
-    email = (payload.get('email') or '').strip().lower()
-    password = payload.get('password') or ''
+    username = payload.username.strip()
+    full_name = payload.full_name.strip()
+    email = payload.email.strip().lower()
+    password = payload.password
 
-    if not username or not email or not password:
-        raise HTTPException(400, 'username, email, password are required')
     if not TU_REGEX.match(email):
         raise HTTPException(400, 'Email must be @*.tu-darmstadt.de')
 
