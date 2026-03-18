@@ -10,6 +10,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import AsyncMongoClient
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+# LOCAL IMPORTS (pre-app) -----------------------------------------------------
+from limiter import limiter
 
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -97,9 +102,11 @@ app = FastAPI(
         'Backend API for Catalog of Second Chances. '
         'FastAPI + MongoDB (async).'
     ),
-    version='0.4.2.0',
+    version='0.4.3.0',
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS ------------------------------------------------------------------------
 app.add_middleware(

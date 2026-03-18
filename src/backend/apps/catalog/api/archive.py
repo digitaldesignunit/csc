@@ -156,9 +156,10 @@ async def archive_component(
             except Exception as e:
                 # If geometry move fails, rollback the database changes
                 await archived_coll.delete_one({'_id': component_id})
+                print(f'[ERROR] archive_component geometry move: {e}')
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f'Failed to move geometry folder: {str(e)}'
+                    detail='Failed to move geometry folder'
                 )
 
         # Delete from main collection
@@ -175,14 +176,16 @@ async def archive_component(
     except HTTPException:
         raise
     except PyMongoError as e:
+        print(f'[ERROR] archive_component DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Database error: {str(e)}'
+            detail='Internal server error'
         )
     except Exception as e:
+        print(f'[ERROR] archive_component: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Error archiving component: {str(e)}'
+            detail='Internal server error'
         )
 
 
@@ -242,9 +245,10 @@ async def unarchive_component(
             except Exception as e:
                 # If geometry move fails, rollback the database changes
                 await components_coll.delete_one({'_id': component_id})
+                print(f'[ERROR] unarchive_component geometry move: {e}')
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f'Failed to move geometry folder: {str(e)}'
+                    detail='Failed to move geometry folder'
                 )
 
         # Delete from archived collection
@@ -261,14 +265,16 @@ async def unarchive_component(
     except HTTPException:
         raise
     except PyMongoError as e:
+        print(f'[ERROR] unarchive_component DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Database error: {str(e)}'
+            detail='Internal server error'
         )
     except Exception as e:
+        print(f'[ERROR] unarchive_component: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Error restoring component: {str(e)}'
+            detail='Internal server error'
         )
 
 
@@ -535,7 +541,8 @@ async def get_archived_unique_types(
         types = await coll.distinct('type')
         return JSONResponse(status_code=200, content=types)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
+        print(f'[ERROR] get_archived_unique_types: {e}')
+        raise HTTPException(status_code=500, detail='Internal server error')
 
 
 @router.get(
@@ -552,7 +559,8 @@ async def get_archived_unique_materials(
         materials = await coll.distinct('material')
         return JSONResponse(status_code=200, content=materials)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
+        print(f'[ERROR] get_archived_unique_materials: {e}')
+        raise HTTPException(status_code=500, detail='Internal server error')
 
 
 @router.get(
@@ -569,4 +577,5 @@ async def get_archived_unique_datasets(
         datasets = await coll.distinct('dataset')
         return JSONResponse(status_code=200, content=datasets)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
+        print(f'[ERROR] get_archived_unique_datasets: {e}')
+        raise HTTPException(status_code=500, detail='Internal server error')

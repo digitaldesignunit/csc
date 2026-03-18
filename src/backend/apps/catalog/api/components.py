@@ -313,7 +313,8 @@ async def count_components(
     try:
         count = await coll.count_documents(query)
     except PyMongoError as e:
-        raise HTTPException(status_code=500, detail=f'DB error: {e}')
+        print(f'[ERROR] componentcount DB error: {e}')
+        raise HTTPException(status_code=500, detail='Internal server error')
 
     return {'count': count}
 
@@ -473,7 +474,8 @@ async def get_components_stats(
 
         return JSONResponse(status_code=200, content=content)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
+        print(f'[ERROR] components stats aggregation: {e}')
+        raise HTTPException(status_code=500, detail='Internal server error')
 
 # UNIQUE VALUE ROUTES --------------------------------------------------------
 
@@ -494,7 +496,8 @@ async def get_unique_datasets(
         datasets = [doc["_id"] async for doc in cursor if doc.get("_id")]
         return JSONResponse(status_code=200, content=datasets)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
+        print(f'[ERROR] get_unique_datasets: {e}')
+        raise HTTPException(status_code=500, detail='Internal server error')
 
 
 @router.get('/componenttypes', summary='Get unique component types')
@@ -514,7 +517,8 @@ async def get_unique_component_types(
         types = [doc["_id"] async for doc in cursor if doc.get("_id")]
         return JSONResponse(status_code=200, content=types)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
+        print(f'[ERROR] get_unique_component_types: {e}')
+        raise HTTPException(status_code=500, detail='Internal server error')
 
 
 @router.get('/materials', summary='Get unique material names')
@@ -534,7 +538,8 @@ async def get_unique_materials(
         materials = [doc["_id"] async for doc in cursor if doc.get("_id")]
         return JSONResponse(status_code=200, content=materials)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Error: {str(e)}')
+        print(f'[ERROR] get_unique_materials: {e}')
+        raise HTTPException(status_code=500, detail='Internal server error')
 
 
 # ADD COMPONENT ROUTES --------------------------------------------------------
@@ -577,9 +582,10 @@ async def create_component(
                         'already exists')
             )
         else:
+            print(f'[ERROR] create_component DB error: {e}')
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f'Database error: {str(e)}'
+                detail='Internal server error'
             )
 
 
@@ -1041,7 +1047,8 @@ async def add_reduced_geometry(
             content={'message': 'Reduced geometry file uploaded successfully'}
         )
     except Exception as e:
-        raise HTTPException(500, f'Error saving file: {str(e)}')
+        print(f'[ERROR] add_reduced_geometry: {e}')
+        raise HTTPException(500, 'Failed to save geometry file')
 
 
 @router.post(
@@ -1087,7 +1094,8 @@ async def add_detailed_geometry(
             }
         )
     except Exception as e:
-        raise HTTPException(500, f'Error saving file: {str(e)}')
+        print(f'[ERROR] add_detailed_geometry: {e}')
+        raise HTTPException(500, 'Failed to save geometry file')
 
 
 # DELETE: ADMIN ONLY ----------------------------------------------------------

@@ -20,6 +20,7 @@ from services.email_service import (
     send_verification_resent_email,
     load_email_config
 )
+from limiter import limiter
 
 # INIT ROUTER -----------------------------------------------------------------
 
@@ -94,15 +95,14 @@ async def get_current_user(
         headers={'WWW-Authenticate': 'Bearer'},
     )
 
-    # 1) Decode the JWT (signed JWS). Auto-detect alg from header.
+    # 1) Decode the JWT.
+    # Algorithm is always taken from server config,
+    # never from the token header.
     try:
-        header = jwt.get_unverified_header(token)
-        alg = (header.get('alg') or
-               getattr(request.app.state, 'jwt_algorithm', 'HS256'))
         payload = jwt.decode(
             token,
-            request.app.state.jwt_secret,  # must equal NEXTAUTH_SECRET
-            algorithms=[alg],
+            request.app.state.jwt_secret,
+            algorithms=[request.app.state.jwt_algorithm],
             options={'verify_aud': False},
         )
     except JWTError as e:
@@ -186,6 +186,7 @@ async def require_admin(
     response_model=Token,
     summary='Login (email or username) -> JWT'
 )
+@limiter.limit('10/minute')
 async def login_for_access_token(
     request: Request,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -232,6 +233,7 @@ async def login_for_access_token(
              response_model=User,
              status_code=201,
              summary='Register new user (@*.tu-darmstadt.de)')
+@limiter.limit('5/minute')
 async def register_user(
     request: Request,
     payload: dict,             # { username, full_name, email, password }
@@ -350,6 +352,7 @@ async def verify_email(
 
 @router.post('/resend-verification',
              summary='Resend verification email')
+@limiter.limit('3/minute')
 async def resend_verification(
     request: Request,
     payload: dict,  # { email }

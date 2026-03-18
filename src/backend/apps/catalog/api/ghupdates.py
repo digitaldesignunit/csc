@@ -91,9 +91,10 @@ async def _get_repo_file(
     try:
         return base64.b64decode(content_b64)
     except Exception as e:
+        print(f'[ERROR] _get_repo_file base64 decode: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Failed to decode file content: {e}',
+            detail='Failed to decode file content',
         )
 
 
@@ -215,14 +216,16 @@ async def list_src_names(
             media_type='application/json'
         )
     except httpx.HTTPError as e:
+        print(f'[ERROR] list_src_names GitHub: {e}')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f'Failed to query GitHub: {e}',
+            detail='GitHub service unavailable',
         )
     except Exception as e:
+        print(f'[ERROR] list_src_names: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail='Internal server error',
         )
 
 
@@ -261,16 +264,18 @@ async def get_src_code(
         # Guess text encoding as UTF-8, return as text/plain
         return Response(content, media_type='text/plain; charset=utf-8')
     except httpx.HTTPError as e:
+        print(f'[ERROR] get_src_code GitHub: {e}')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f'Failed to fetch source from GitHub: {e}',
+            detail='GitHub service unavailable',
         )
     except HTTPException:
         raise
     except Exception as e:
+        print(f'[ERROR] get_src_code: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail='Internal server error',
         )
 
 
@@ -391,14 +396,16 @@ async def list_userobject_names(
                     names.append(name[:-7])
         return sorted(list(dict.fromkeys(names)))
     except httpx.HTTPError as e:
+        print(f'[ERROR] list_userobject_names GitHub: {e}')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f'Failed to query GitHub: {e}',
+            detail='GitHub service unavailable',
         )
     except Exception as e:
+        print(f'[ERROR] list_userobject_names: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail='Internal server error',
         )
 
 
@@ -438,14 +445,16 @@ async def get_userobject(
             headers=headers,
         )
     except httpx.HTTPError as e:
+        print(f'[ERROR] get_userobject GitHub: {e}')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f'Failed to fetch file from GitHub: {e}',
+            detail='GitHub service unavailable',
         )
     except HTTPException:
         raise
     except Exception as e:
+        print(f'[ERROR] get_userobject: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
+            detail='Internal server error',
         )

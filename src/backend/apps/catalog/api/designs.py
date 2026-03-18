@@ -150,14 +150,16 @@ async def get_designs(
         )
 
     except PyMongoError as e:
+        print(f'[ERROR] get_designs DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
+            detail='Internal server error'
         )
     except Exception as e:
+        print(f'[ERROR] get_designs: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching designs: {str(e)}"
+            detail='Internal server error'
         )
 
 
@@ -211,14 +213,16 @@ async def get_user_designs(
         )
 
     except PyMongoError as e:
+        print(f'[ERROR] get_user_designs DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
+            detail='Internal server error'
         )
     except Exception as e:
+        print(f'[ERROR] get_user_designs: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching user designs: {str(e)}"
+            detail='Internal server error'
         )
 
 
@@ -265,16 +269,18 @@ async def get_design(
         )
 
     except PyMongoError as e:
+        print(f'[ERROR] get_design DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
+            detail='Internal server error'
         )
     except HTTPException:
         raise
     except Exception as e:
+        print(f'[ERROR] get_design: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching design: {str(e)}"
+            detail='Internal server error'
         )
 
 
@@ -370,16 +376,18 @@ async def create_design(
         )
 
     except PyMongoError as e:
+        print(f'[ERROR] create_design DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
+            detail='Internal server error'
         )
     except HTTPException:
         raise
     except Exception as e:
+        print(f'[ERROR] create_design: {e}')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error creating design: {str(e)}"
+            detail='Failed to create design'
         )
 
 
@@ -492,16 +500,18 @@ async def update_design(
         )
 
     except PyMongoError as e:
+        print(f'[ERROR] update_design DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
+            detail='Internal server error'
         )
     except HTTPException:
         raise
     except Exception as e:
+        print(f'[ERROR] update_design: {e}')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error updating design: {str(e)}"
+            detail='Failed to update design'
         )
 
 
@@ -537,16 +547,18 @@ async def delete_design(
         )
 
     except PyMongoError as e:
+        print(f'[ERROR] delete_design DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
+            detail='Internal server error'
         )
     except HTTPException:
         raise
     except Exception as e:
+        print(f'[ERROR] delete_design: {e}')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error deleting design: {str(e)}"
+            detail='Failed to delete design'
         )
 
 

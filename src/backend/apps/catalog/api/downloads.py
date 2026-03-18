@@ -62,14 +62,16 @@ async def get_gh_interface_version(
         }
 
     except httpx.HTTPError as e:
+        print(f'[ERROR] get_gh_interface_version GitHub: {e}')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to fetch release information from GitHub: {str(e)}"
+            detail='GitHub service unavailable'
         )
     except Exception as e:
+        print(f'[ERROR] get_gh_interface_version: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting release version: {str(e)}"
+            detail='Internal server error'
         )
 
 
@@ -164,17 +166,20 @@ async def download_gh_interface(
         )
 
     except httpx.HTTPError as e:
+        print(f'[ERROR] download_gh_interface GitHub: {e}')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to download from GitHub: {str(e)}"
+            detail='GitHub service unavailable'
         )
     except ValueError as e:
+        print(f'[ERROR] download_gh_interface asset lookup: {e}')
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Release asset not found: {str(e)}"
+            detail='Release asset not found'
         )
     except Exception as e:
+        print(f'[ERROR] download_gh_interface: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error downloading release: {str(e)}"
+            detail='Internal server error'
         )

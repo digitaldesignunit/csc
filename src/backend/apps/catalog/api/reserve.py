@@ -96,9 +96,10 @@ async def reserve_component(
         )
 
     except PyMongoError as e:
+        print(f'[ERROR] reserve_component DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Database error: {str(e)}'
+            detail='Internal server error'
         )
 
 
@@ -172,9 +173,10 @@ async def get_user_reserved_components(
         )
 
     except PyMongoError as e:
+        print(f'[ERROR] get_user_reserved_components DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Database error: {str(e)}'
+            detail='Internal server error'
         )
 
 
@@ -245,7 +247,8 @@ async def release_component(
         )
 
     except PyMongoError as e:
+        print(f'[ERROR] release_component DB error: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Database error: {str(e)}'
+            detail='Internal server error'
         )
