@@ -6,6 +6,13 @@ import { getToken } from 'next-auth/jwt'
 
 const FASTAPI_URL = process.env.FASTAPI_URL!
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET
+const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 MB
+
+// Geometry uploads must go directly to the FastAPI backend - not via this proxy.
+const BLOCKED_PATTERNS = [
+  /^\/components\/[^/]+\/geometry\/add_reduced$/,
+  /^\/components\/[^/]+\/geometry\/add_detailed$/,
+]
 
 function buildTargetUrl(pathParts: string[] | undefined, srcUrl: URL) {
   const path = Array.isArray(pathParts) && pathParts.length
@@ -42,7 +49,22 @@ async function handle(
   const { path } = await params
   const target = buildTargetUrl(path, url)
 
-  // 3) Prepare method/body/headers
+  // 3) Block geometry upload routes - these must go directly to FastAPI
+  const pathname = Array.isArray(path) ? `/${path.join('/')}` : ''
+  if (BLOCKED_PATTERNS.some(p => p.test(pathname))) {
+    return NextResponse.json(
+      { error: 'Geometry uploads must be sent directly to the backend API!' },
+      { status: 403 }
+    )
+  }
+
+  // 4) Reject oversized request bodies before reading
+  const contentLength = req.headers.get('content-length')
+  if (contentLength && parseInt(contentLength) > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'Request too large' }, { status: 413 })
+  }
+
+  // 5) Prepare method/body/headers
   const method = req.method.toUpperCase()
   const hasBody = !['GET', 'HEAD'].includes(method)
   const body = hasBody ? await req.arrayBuffer() : undefined
@@ -51,7 +73,7 @@ async function handle(
     Authorization: `Bearer ${apiToken}`,
   })
 
-  // 4) Call FastAPI
+  // 6) Call FastAPI
   const upstream = await fetch(target, {
     method,
     headers,
@@ -60,7 +82,7 @@ async function handle(
     cache: 'no-store',
   })
 
-  // 5) Stream/return response as-is (works for JSON, text, images, files)
+  // 7) Stream/return response as-is (works for JSON, text, images, files)
   const outHeaders = new Headers()
 
   // Pass through common useful headers; especially content-type for images.
