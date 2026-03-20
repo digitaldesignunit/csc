@@ -402,7 +402,7 @@ class ComponentModel(BaseModel):
     )
 
     class Config:
-        extra = "allow"
+        extra = "ignore"
         populate_by_name = True
         exclude_none = True
         schema_extra = {
@@ -481,7 +481,7 @@ class UpdateComponentModel(BaseModel):
     reserved: Optional[str]
 
     class Config:
-        extra = "allow"
+        extra = "ignore"
         populate_by_name = True
 
 
@@ -577,7 +577,7 @@ class DesignModel(BaseModel):
     )
 
     class Config:
-        extra = "allow"
+        extra = "ignore"
         populate_by_name = True
         schema_extra = {
             "example": {
@@ -679,5 +679,5 @@ class UpdateDesignModel(BaseModel):
     )
 
     class Config:
-        extra = "allow"
+        extra = "ignore"
         populate_by_name = True
