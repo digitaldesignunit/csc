@@ -47,7 +47,7 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260316
+    Version: 260421
     """
 
     def __init__(self):
@@ -694,15 +694,8 @@ class CSC_FetchGeometry(Grasshopper.Kernel.GH_ScriptInstance):
 
             geometries = []
 
-            # Check for single mesh data (backward compatibility)
-            if 'mesh' in geometry_data:
-                mesh_data = geometry_data['mesh']
-                mesh_geometry = self.primitive_mesh(mesh_data)
-                if mesh_geometry is not None:
-                    geometries.append(mesh_geometry)
-
             # Check for multiple meshes data
-            elif 'meshes' in geometry_data:
+            if 'meshes' in geometry_data:
                 meshes_data = geometry_data['meshes']
                 if isinstance(meshes_data, list):
                     mesh_geometries = self.primitive_meshes(meshes_data)
