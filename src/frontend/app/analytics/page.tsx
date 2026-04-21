@@ -226,15 +226,15 @@ export default function AnalyticsPage() {
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
         </TabsList>
 
-        {!chartsReady && (
+        {!chartsReady ? (
           <Card className="mt-4">
             <CardContent className="pt-6 text-sm text-muted-foreground">
               Loading charts...
             </CardContent>
           </Card>
-        )}
-
-        <TabsContent value="overview" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
+        ) : (
+          <>
+        <TabsContent value="overview" className="mt-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card>
               <CardHeader>
@@ -301,7 +301,7 @@ export default function AnalyticsPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="types" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
+        <TabsContent value="types" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle>By Type</CardTitle>
@@ -321,7 +321,7 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="materials" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
+        <TabsContent value="materials" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle>Top Materials</CardTitle>
@@ -341,7 +341,7 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="datasets" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
+        <TabsContent value="datasets" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle>Top Datasets</CardTitle>
@@ -361,7 +361,7 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="descriptors" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
+        <TabsContent value="descriptors" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle>Descriptor Keys</CardTitle>
@@ -381,7 +381,7 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="timeline" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
+        <TabsContent value="timeline" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><LineIcon className="h-4 w-4" /> New per month</CardTitle>
@@ -400,6 +400,8 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+          </>
+        )}
       </Tabs>
     </div>
   )
