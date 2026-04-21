@@ -44,7 +44,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260203
+    Version: 260421
     """
 
     def __init__(self):
@@ -177,26 +177,9 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 'geometry': {
                     'type': 'object',
                     'properties': {
-                        'mesh': {
-                            'type': 'object',
-                            'description': ('Mesh geometry (single mesh '
-                                            '- backward compatibility)'),
-                            'properties': {
-                                'v': {'type': 'array',
-                                      'items': {'type': 'array',
-                                                'items': {'type': 'number'}}},
-                                'f': {'type': 'array',
-                                      'items': {'type': 'array',
-                                                'items': {'type': 'integer'}}},
-                                'c': {'type': 'array',
-                                      'items': {'type': 'array',
-                                                'items': {'type': 'integer'}}}
-                            }
-                        },
                         'meshes': {
                             'type': 'array',
-                            'description': ('Array of mesh geometries '
-                                            '(multiple meshes)'),
+                            'description': 'Array of mesh geometries',
                             'items': {
                                 'type': 'object',
                                 'properties': {
