@@ -39,6 +39,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<StatsResponse | null>(null)
+  const [chartsReady, setChartsReady] = useState(false)
 
   // Filters
   const [typeFilter, setTypeFilter] = useState<string>('all')
@@ -90,6 +91,10 @@ export default function AnalyticsPage() {
   useEffect(() => {
     void load()
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    setChartsReady(true)
   }, [])
 
   const validatedPct = useMemo(() => {
@@ -221,7 +226,15 @@ export default function AnalyticsPage() {
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="mt-4">
+        {!chartsReady && (
+          <Card className="mt-4">
+            <CardContent className="pt-6 text-sm text-muted-foreground">
+              Loading charts...
+            </CardContent>
+          </Card>
+        )}
+
+        <TabsContent value="overview" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card>
               <CardHeader>
@@ -288,7 +301,7 @@ export default function AnalyticsPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="types" className="mt-4">
+        <TabsContent value="types" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
           <Card>
             <CardHeader>
               <CardTitle>By Type</CardTitle>
@@ -308,7 +321,7 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="materials" className="mt-4">
+        <TabsContent value="materials" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
           <Card>
             <CardHeader>
               <CardTitle>Top Materials</CardTitle>
@@ -328,7 +341,7 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="datasets" className="mt-4">
+        <TabsContent value="datasets" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
           <Card>
             <CardHeader>
               <CardTitle>Top Datasets</CardTitle>
@@ -348,7 +361,7 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="descriptors" className="mt-4">
+        <TabsContent value="descriptors" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
           <Card>
             <CardHeader>
               <CardTitle>Descriptor Keys</CardTitle>
@@ -368,7 +381,7 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="timeline" className="mt-4">
+        <TabsContent value="timeline" className={`mt-4 ${!chartsReady ? 'hidden' : ''}`}>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><LineIcon className="h-4 w-4" /> New per month</CardTitle>
