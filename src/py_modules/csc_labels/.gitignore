@@ -21,6 +21,7 @@ __pycache__/
 
 # OUTPUT
 output/
+input/
 
 # MISC
 _archive
