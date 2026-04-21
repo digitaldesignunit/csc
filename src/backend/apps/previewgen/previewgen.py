@@ -57,20 +57,6 @@ def create_extrusion_component_mesh(
     return (all_points, faces)
 
 
-def convert_mesh_component_mesh(component_data: dict):
-    # Build np arrays from mesh data
-    vertices = np.array(component_data['geometry']['mesh']['v'])
-    # Check for vertex colors
-    vertex_colors = None
-    if 'c' in component_data['geometry']['mesh']:
-        vertex_colors = np.array(component_data['geometry']['mesh']['c'])
-
-    faces_idx = component_data['geometry']['mesh']['f']
-    faces = [[vertices[idx] for idx in face] for face in faces_idx]
-
-    return vertices, faces, vertex_colors, faces_idx
-
-
 def convert_multiple_meshes_component_mesh(component_data: dict):
     # Build np arrays from multiple mesh data
     all_vertices = []
@@ -127,30 +113,19 @@ def create_component_preview_image(
     geometry = component_data.get('geometry', {})
 
     if 'extrusion' in geometry and geometry['extrusion']:
-        # Create extrusion preview
         vertices, faces = create_extrusion_component_mesh(component_data)
         vertex_colors = None
         faces_idx = None
     elif 'meshes' in geometry and geometry['meshes']:
-        # Create multiple meshes preview
         (vertices, faces,
          vertex_colors,
          faces_idx) = convert_multiple_meshes_component_mesh(component_data)
-    elif 'mesh' in geometry and geometry['mesh']:
-        # Create single mesh preview (backward compatibility)
-        (vertices, faces,
-         vertex_colors,
-         faces_idx) = convert_mesh_component_mesh(component_data)
     else:
-        # Fallback to component type for backward compatibility
-        if component_data.get('type') == 'sheet':
-            vertices, faces = create_extrusion_component_mesh(component_data)
-            vertex_colors = None
-            faces_idx = None
-        else:
-            (vertices, faces,
-             vertex_colors,
-             faces_idx) = convert_mesh_component_mesh(component_data)
+        raise ValueError(
+            f'Component {component_data.get("_id")!r} has no supported '
+            f'geometry (expected "extrusion" or "meshes", got keys: '
+            f'{list(geometry.keys())})'
+        )
 
     # If vertex colors are present, compute face colors by
     # averaging vertex colors per face
@@ -335,7 +310,7 @@ __example_component_data_b = {
         'type': 'beam',
         'material': 'timber',
         'geometry': {
-            'mesh': {
+            'meshes': [{
                 'v': [
                     [510, 33.5, 26.5],
                     [510, -33.5, 26.5],
@@ -466,7 +441,7 @@ __example_component_data_b = {
                     [27, 25, 26],
                     [29, 28, 30]
                 ]
-            }
+            }]
         },
         'complexity': 1,
         'fragment': True,
