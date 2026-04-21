@@ -41,7 +41,7 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260316
+    Version: 260421
     """
 
     def __init__(self):
@@ -294,23 +294,22 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
             self._addError(msg)
             return AddedComponentData
 
-        # Check if geometry has mesh, meshes, or extrusion
-        has_mesh = 'mesh' in geometry
+        # Check if geometry has meshes or extrusion
         has_meshes = 'meshes' in geometry
         has_extrusion = 'extrusion' in geometry
 
         # Count how many geometry types are present
-        geometry_types_count = sum([has_mesh, has_meshes, has_extrusion])
+        geometry_types_count = sum([has_meshes, has_extrusion])
 
         if geometry_types_count == 0:
-            msg = ('Component geometry must contain either mesh, meshes, or '
+            msg = ('Component geometry must contain either meshes or '
                    'extrusion field.')
             self._addError(msg)
             return AddedComponentData
 
         if geometry_types_count > 1:
-            msg = ('Component geometry must contain only one of: mesh, '
-                   'meshes, or extrusion.')
+            msg = ('Component geometry must contain only one of: meshes '
+                   'or extrusion.')
             self._addError(msg)
             return AddedComponentData
 
