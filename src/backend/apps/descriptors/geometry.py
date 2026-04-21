@@ -16,7 +16,8 @@ Coordinate Systems:
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-from typing import Tuple, Dict, List, Optional
+import os
+from typing import Callable, Dict, List, Optional, Tuple
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import numpy as np
@@ -487,3 +488,135 @@ def load_extrusion_mesh_for_descriptor(
     if pca_frame is not None:
         mesh = apply_pca_frame_transform(mesh, pca_frame)
     return mesh
+
+
+# COMPONENT-LEVEL LOADING ----------------------------------------------------
+
+LoggerFn = Callable[[str], None]
+
+
+def _noop_logger(_message: str) -> None:
+    return None
+
+
+def get_component_geometry_paths(
+    geometry_dir: str,
+    component_id: str,
+) -> Dict[str, Optional[str]]:
+    """Identify on-disk geometry files for a component.
+
+    Returns a dict with ``mesh`` and ``mesh_reduced`` keys whose values are
+    absolute paths (if the file exists) or None (if it does not). Files
+    are looked up under ``{geometry_dir}/{component_id}/``.
+    """
+    paths: Dict[str, Optional[str]] = {'mesh': None, 'mesh_reduced': None}
+    comp_dir = os.path.join(geometry_dir, component_id)
+    if not os.path.isdir(comp_dir):
+        return paths
+
+    mesh_path = os.path.join(comp_dir, 'mesh.obj')
+    if os.path.isfile(mesh_path):
+        paths['mesh'] = mesh_path
+
+    mesh_reduced_path = os.path.join(comp_dir, 'mesh_reduced.obj')
+    if os.path.isfile(mesh_reduced_path):
+        paths['mesh_reduced'] = mesh_reduced_path
+
+    return paths
+
+
+def load_component_mesh(
+    component: Dict,
+    geometry_dir: Optional[str] = None,
+    *,
+    logger: LoggerFn = _noop_logger,
+) -> Optional[trimesh.Trimesh]:
+    """Load the best available mesh for a component.
+
+    Priority:
+        1. ``mesh.obj`` on disk (highest quality)
+        2. ``mesh_reduced.obj`` on disk (reduced quality)
+        3. primitive ``geometry.meshes[0]``
+        4. ``geometry.extrusion`` (profile + height, for sheets/panels)
+
+    The PCA frame from the component document is applied when present,
+    so the returned mesh is aligned in the canonical PCA space used by
+    mesh-based descriptors.
+
+    Args:
+        component: Component document from the database.
+        geometry_dir: Base directory for on-disk geometry; if None, only
+            the primitive fallbacks (3-5) are tried.
+        logger: Optional logger callback. Defaults to no-op.
+
+    Returns:
+        A trimesh.Trimesh ready for descriptor computation, or None if
+        no geometry source could be loaded.
+    """
+    component_id = str(component.get('_id', '<unknown>'))
+    pca_frame = component.get('pca_frame')
+
+    # 1. + 2. On-disk OBJ files.
+    if geometry_dir is not None:
+        paths = get_component_geometry_paths(geometry_dir, component_id)
+        for label, path in (
+            ('mesh.obj', paths['mesh']),
+            ('mesh_reduced.obj', paths['mesh_reduced']),
+        ):
+            if not path:
+                continue
+            try:
+                logger(f'Loading {label} for component {component_id}')
+                mesh = load_obj_mesh_for_descriptor(path, pca_frame=pca_frame)
+                logger(
+                    f'Loaded {label} ({len(mesh.vertices)} vertices, '
+                    f'{len(mesh.faces)} faces)'
+                )
+                return mesh
+            except Exception as exc:
+                logger(f'Failed to load {label}: {exc}')
+
+    # 3. - 4. Primitive fallbacks from the component document.
+    geometry = component.get('geometry') or {}
+    primitive_source: Optional[str] = None
+    primitive_loader: Optional[Callable[[], trimesh.Trimesh]] = None
+
+    meshes = geometry.get('meshes')
+    if meshes:
+        mesh_data = meshes[0]
+        primitive_source = 'primitive.meshes[0]'
+
+        def _load_from_meshes() -> trimesh.Trimesh:
+            return load_primitive_mesh_for_descriptor(
+                vertices=mesh_data['v'],
+                faces=mesh_data['f'],
+                pca_frame=pca_frame,
+            )
+        primitive_loader = _load_from_meshes
+    elif geometry.get('extrusion'):
+        extrusion = geometry['extrusion']
+        primitive_source = 'extrusion'
+
+        def _load_from_extrusion() -> trimesh.Trimesh:
+            return load_extrusion_mesh_for_descriptor(
+                profile=extrusion['profile'],
+                height=extrusion['height'],
+                pca_frame=pca_frame,
+            )
+        primitive_loader = _load_from_extrusion
+
+    if primitive_loader is None:
+        logger(f'No geometry source available for component {component_id}')
+        return None
+
+    try:
+        logger(f'Loading {primitive_source} for component {component_id}')
+        mesh = primitive_loader()
+        logger(
+            f'Loaded {primitive_source} ({len(mesh.vertices)} vertices, '
+            f'{len(mesh.faces)} faces)'
+        )
+        return mesh
+    except Exception as exc:
+        logger(f'Failed to load {primitive_source}: {exc}')
+        return None

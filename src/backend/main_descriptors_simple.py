@@ -2,494 +2,224 @@
 """
 Descriptor computation maintenance script.
 
-This script runs as a cronjob to compute missing descriptors for components.
-It processes one component at a time to manage computational resources.
+Thin orchestrator over the descriptor registry. Runs as a cronjob and
+processes one component per invocation.
+
+Responsibilities of this module, and nothing else:
+    1. Connect to MongoDB.
+    2. Ask the registry for a component that is missing at least one
+       applicable descriptor.
+    3. Load geometry via `apps.descriptors.geometry.load_component_mesh`.
+    4. Iterate the specs that apply to this component and are missing,
+       running each spec's compute function via the registry.
+    5. Merge the results back into the component's ``descriptors`` field.
+
+All per-descriptor knowledge (parameters, applicability, output keys,
+compute function) lives in `apps/descriptors/specs.py`. To add a new
+descriptor, add one `DescriptorSpec` there; no changes are needed here.
 
 Usage:
-    python main_computedescriptors.py [--dry-run]
-
-The script will:
-1. Find one component with missing descriptors
-2. Load geometry (OBJ files preferred, fallback to primitive)
-3. Compute missing descriptors (boxscore, etc.)
-4. Update the component in the database
-5. Exit (to be run again by cron)
+    python main_descriptors_simple.py [--dry-run]
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import asyncio
-import os
-import sys
-from typing import Optional, Dict, List
 import random
+import sys
+from typing import Any, Dict, List, Optional
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from pymongo import AsyncMongoClient
-import trimesh
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from utility import (
+    create_logging_timestamp as logts,
+    get_current_timestamp_z,
     get_db_connectionstring,
     get_geometry_directory,
-    create_logging_timestamp as logts,
-    get_current_timestamp_z
 )
-
-# Import descriptor computation modules
-from apps.descriptors.geometry import (
-    load_primitive_mesh_for_descriptor,
-    load_obj_mesh_for_descriptor,
-    load_extrusion_mesh_for_descriptor
+from apps.descriptors.geometry import load_component_mesh
+from apps.descriptors.registry import (
+    DescriptorSpec,
+    build_missing_query,
+    collect_output_keys,
+    compute_descriptor,
+    missing_specs_for,
 )
-from apps.descriptors.boxscore import (
-    compute_boxscore_with_metadata
-)
-from apps.descriptors.spherescore import (
-    compute_spherescore_with_metadata
-)
-from apps.descriptors.linescore import (
-    compute_linescore_with_metadata
-)
-from apps.descriptors.planescore import (
-    compute_planescore_with_metadata
-)
-
-# DESCRIPTOR CONFIGURATION ----------------------------------------------------
-
-DESCRIPTORS_TO_COMPUTE = [
-    'boxscore',
-    'spherescore',
-    'linescore',
-    'planescore'
-]
-"""List of descriptor names to compute if missing."""
-
-DESCRIPTOR_PARAMS = {
-    'boxscore': {
-        'factor': 100.0
-    },
-    'spherescore': {
-        'factor': 100.0
-    },
-    'linescore': {
-        'factor': 100.0
-    },
-    'planescore': {
-        'factor': 100.0
-    }
-}
-"""Parameters for each descriptor computation."""
+from apps.descriptors.specs import ALL_SPECS
 
 
-# HELPER FUNCTIONS ------------------------------------------------------------
+# LOGGING --------------------------------------------------------------------
 
-def log(message: str, prefix: str = 'DESCRIPTORS'):
-    """Print timestamped log message."""
-    ts = logts()
-    print(f'[{prefix}] {ts} {message}')
+def log(message: str, prefix: str = 'DESCRIPTORS') -> None:
+    """Print a timestamped log message."""
+    print(f'[{prefix}] {logts()} {message}')
 
+
+def _spec_logger(spec: DescriptorSpec):
+    """Return a compute-scoped logger that indents and tags lines."""
+    return lambda msg: log(f'    [{spec.name}] {msg}')
+
+
+# DATABASE HELPERS -----------------------------------------------------------
 
 async def find_component_with_missing_descriptors(
     mongodb_components,
-    descriptor_names: List[str],
-    dry_run: bool = False
-) -> Optional[Dict]:
-    """
-    Find one component that is missing any of the specified descriptors.
-
-    Args:
-        mongodb_components: MongoDB collection
-        descriptor_names: List of descriptor field names to check
-
-    Returns:
-        Component document or None if all components have descriptors
-    """
-    # Build query to find components missing any descriptor
-    # A component is missing a descriptor if:
-    # - The descriptors field doesn't exist
-    # - The descriptors field exists but the specific descriptor is missing
-    # - The descriptors field exists but the specific descriptor is null
-    or_conditions = []
-    # Check if descriptors field doesn't exist
-    or_conditions.append({'descriptors': {'$exists': False}})
-    # Check for each specific descriptor
-    for desc_name in descriptor_names:
-        field_path = f'descriptors.{desc_name}'
-        or_conditions.append({field_path: {'$exists': False}})
-        or_conditions.append({field_path: None})
-    query = {'$or': or_conditions}
-    # Find all components matching the query and select a random oneon dry-run
+    specs: List[DescriptorSpec],
+    dry_run: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Find one component missing at least one applicable descriptor."""
+    query = build_missing_query(specs)
     if dry_run:
         components = await mongodb_components.find(query).to_list(None)
-        return random.choice(components)
-    # Find one component matching the query
-    component = await mongodb_components.find_one(query)
-    return component
-
-
-def get_geometry_paths(geometry_dir: str, component_id: str) -> Dict[str, str]:
-    """
-    Get paths to geometry files for a component.
-
-    Args:
-        geometry_dir: Base geometry directory
-        component_id: Component UUID
-
-    Returns:
-        Dictionary with 'mesh' and 'mesh_reduced' keys (values may be None)
-    """
-    comp_dir = os.path.join(geometry_dir, component_id)
-
-    paths = {
-        'mesh': None,
-        'mesh_reduced': None
-    }
-
-    if not os.path.exists(comp_dir) or not os.path.isdir(comp_dir):
-        return paths
-
-    # Check for mesh.obj (highest priority)
-    mesh_path = os.path.join(comp_dir, 'mesh.obj')
-    if os.path.exists(mesh_path) and os.path.isfile(mesh_path):
-        paths['mesh'] = mesh_path
-
-    # Check for mesh_reduced.obj (fallback)
-    mesh_reduced_path = os.path.join(comp_dir, 'mesh_reduced.obj')
-    if os.path.exists(mesh_reduced_path) and os.path.isfile(mesh_reduced_path):
-        paths['mesh_reduced'] = mesh_reduced_path
-
-    return paths
-
-
-def load_geometry_for_descriptor(
-    component: Dict,
-    geometry_paths: Dict[str, str],
-    geometry_dir: str
-) -> Optional[trimesh.Trimesh]:
-    """
-    Load geometry for descriptor computation.
-
-    Priority:
-    1. mesh.obj (if available)
-    2. mesh_reduced.obj (if available)
-    3. Primitive geometry from component JSON
-
-    Args:
-        component: Component document from database
-        geometry_paths: Dictionary with geometry file paths
-        geometry_dir: Base geometry directory
-
-    Returns:
-        trimesh.Trimesh object ready for descriptor computation, or None
-    """
-    component_id = str(component['_id'])
-    pca_frame = component.get('pca_frame')
-    # Try mesh.obj first (highest quality)
-    if geometry_paths['mesh']:
-        try:
-            log(f'Loading mesh.obj for component {component_id}')
-            mesh = load_obj_mesh_for_descriptor(
-                geometry_paths['mesh'],
-                pca_frame=pca_frame
-            )
-            log(f'Successfully loaded mesh.obj '
-                f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
-            return mesh
-        except Exception as e:
-            log(f'Failed to load mesh.obj: {e}', prefix='WARNING')
-    # Try mesh_reduced.obj (medium quality)
-    if geometry_paths['mesh_reduced']:
-        try:
-            log(f'Loading mesh_reduced.obj for component {component_id}')
-            mesh = load_obj_mesh_for_descriptor(
-                geometry_paths['mesh_reduced'],
-                pca_frame=pca_frame
-            )
-            log(f'Successfully loaded mesh_reduced.obj '
-                f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
-            return mesh
-        except Exception as e:
-            log(f'Failed to load mesh_reduced.obj: {e}', prefix='WARNING')
-    # Fallback to primitive geometry from JSON
-    try:
-        log(f'Using primitive geometry for component {component_id}')
-        # Get geometry from component
-        geometry = component.get('geometry', {})
-        # Handle both 'meshes' (new format) and 'mesh' (old format)
-        if 'meshes' in geometry and geometry['meshes']:
-            # Use first mesh from meshes array
-            mesh_data = geometry['meshes'][0]
-            vertices = mesh_data['v']
-            faces = mesh_data['f']
-            mesh = load_primitive_mesh_for_descriptor(
-                vertices=vertices,
-                faces=faces,
-                pca_frame=pca_frame
-            )
-            log(f'Successfully loaded primitive mesh geometry '
-                f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
-            return mesh
-        elif 'mesh' in geometry and geometry['mesh']:
-            # Old single mesh format
-            mesh_data = geometry['mesh']
-            vertices = mesh_data['v']
-            faces = mesh_data['f']
-            mesh = load_primitive_mesh_for_descriptor(
-                vertices=vertices,
-                faces=faces,
-                pca_frame=pca_frame
-            )
-            log(f'Successfully loaded primitive mesh geometry '
-                f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
-            return mesh
-        elif 'extrusion' in geometry and geometry['extrusion']:
-            # Extrusion geometry (for sheet components)
-            extrusion_data = geometry['extrusion']
-            profile = extrusion_data['profile']
-            height = extrusion_data['height']
-            mesh = load_extrusion_mesh_for_descriptor(
-                profile=profile,
-                height=height,
-                pca_frame=pca_frame
-            )
-            log(f'Successfully loaded extrusion geometry '
-                f'({len(mesh.vertices)} vertices, {len(mesh.faces)} faces)')
-            return mesh
-        else:
-            log(f'No geometry found in component {component_id}',
-                prefix='ERROR')
+        if not components:
             return None
-
-    except Exception as e:
-        log(f'Failed to load primitive geometry: {e}', prefix='ERROR')
-        return None
-
-
-def compute_descriptors_for_mesh(
-    mesh: trimesh.Trimesh,
-    descriptor_names: List[str]
-) -> Dict[str, float]:
-    """
-    Compute all specified descriptors for a mesh.
-
-    Args:
-        mesh: trimesh.Trimesh object
-        descriptor_names: List of descriptor names to compute
-
-    Returns:
-        Dictionary of descriptor_name: value pairs
-    """
-    results = {}
-
-    for desc_name in descriptor_names:
-        try:
-            # ///// BOXSCORE /////
-            if desc_name == 'boxscore':
-                params = DESCRIPTOR_PARAMS.get('boxscore', {})
-                boxscore_data = compute_boxscore_with_metadata(mesh, **params)
-                score = boxscore_data['score']
-                results['boxscore'] = float(score)
-                log(
-                    f'    Computed boxscore: {score:.6f} with '
-                    f'parameters: {params}'
-                )
-            # ///// SPHERESCORE /////
-            elif desc_name == 'spherescore':
-                params = DESCRIPTOR_PARAMS.get('spherescore', {})
-                spherescore_data = compute_spherescore_with_metadata(
-                    mesh,
-                    **params
-                )
-                score = spherescore_data['score']
-                results['spherescore'] = float(score)
-                log(
-                    f'    Computed spherescore: {score:.6f} with '
-                    f'parameters: {params}'
-                )
-            # ///// LINESCORE /////
-            elif desc_name == 'linescore':
-                params = DESCRIPTOR_PARAMS.get('linescore', {})
-                linescore_data = compute_linescore_with_metadata(
-                    mesh,
-                    **params
-                )
-                score = linescore_data['score']
-                results['linescore'] = float(score)
-                log(
-                    f'    Computed linescore: {score:.6f} with '
-                    f'parameters: {params}'
-                )
-            # ///// PLANESCORE /////
-            elif desc_name == 'planescore':
-                params = DESCRIPTOR_PARAMS.get('planescore', {})
-                planescore_data = compute_planescore_with_metadata(
-                    mesh,
-                    **params
-                )
-                score = planescore_data['score']
-                results['planescore'] = float(score)
-                log(
-                    f'    Computed planescore: {score:.6f} with '
-                    f'parameters: {params}'
-                )
-        except Exception as e:
-            log(f'Failed to compute {desc_name}: {e}', prefix='ERROR')
-            results[desc_name] = None
-    return results
+        return random.choice(components)
+    return await mongodb_components.find_one(query)
 
 
 async def update_component_descriptors(
     mongodb_components,
     component_id: str,
-    descriptors: Dict[str, float]
+    descriptors: Dict[str, Any],
 ) -> bool:
     """
-    Update component descriptors in database.
-
-    Args:
-        mongodb_components: MongoDB collection
-        component_id: Component UUID
-        descriptors: Dictionary of descriptor values to update
-
-    Returns:
-        True if successful, False otherwise
+    Merge new descriptor values into the component's ``descriptors`` field.
     """
     try:
-        # Get current component to preserve existing descriptors
         component = await mongodb_components.find_one({'_id': component_id})
-
         if not component:
             log(f'Component {component_id} not found', prefix='ERROR')
             return False
 
-        # Merge new descriptors with existing ones
-        current_descriptors = component.get('descriptors', {})
-        updated_descriptors = {**current_descriptors, **descriptors}
+        current = component.get('descriptors') or {}
+        merged = {**current, **descriptors}
 
-        # Update lastmodified timestamp
-        now = get_current_timestamp_z()
-
-        # Update in database
         result = await mongodb_components.update_one(
             {'_id': component_id},
             {
                 '$set': {
-                    'descriptors': updated_descriptors,
-                    'lastmodified': now
+                    'descriptors': merged,
+                    'lastmodified': get_current_timestamp_z(),
                 }
-            }
+            },
         )
-
         if result.modified_count > 0:
             log(f'Updated descriptors for component {component_id}')
             return True
-        else:
-            log(f'No changes made to component {component_id}',
-                prefix='WARNING')
-            return False
-
-    except Exception as e:
-        log(f'Failed to update component {component_id}: {e}', prefix='ERROR')
+        log(f'No changes made to component {component_id}', prefix='WARNING')
+        return False
+    except Exception as exc:
+        log(f'Failed to update component {component_id}: {exc}',
+            prefix='ERROR')
         return False
 
 
-# MAIN COMPUTATION LOGIC ------------------------------------------------------
+# CORE EXECUTION -------------------------------------------------------------
+
+def run_missing_specs_on_component(
+    component: Dict[str, Any],
+    geometry_dir: Optional[str],
+    specs: List[DescriptorSpec],
+) -> Dict[str, Any]:
+    """Execute every applicable+missing spec against the component.
+
+    Returns a flat mapping of ``descriptors.*`` field names to values
+    ready to merge into the component document. Keys whose spec explicitly
+    failed are included with a None value; keys whose spec simply could
+    not run (e.g. missing mesh) are omitted.
+    """
+    missing = missing_specs_for(component, specs)
+    if not missing:
+        log('No missing applicable descriptors on this component')
+        return {}
+
+    expected_keys = collect_output_keys(missing)
+    log(f'Missing applicable descriptors: {", ".join(expected_keys)}')
+
+    # Lazily load mesh - only if at least one spec needs it. Keeps pure
+    # planar components (radial-only) from paying for mesh reconstruction.
+    needs_mesh = any(spec.requires_mesh for spec in missing)
+    mesh = None
+    if needs_mesh:
+        log('Loading geometry...')
+        mesh = load_component_mesh(
+            component,
+            geometry_dir=geometry_dir,
+            logger=lambda msg: log(f'    [geometry] {msg}'),
+        )
+        if mesh is None:
+            log('Mesh load failed; mesh-dependent specs will be skipped',
+                prefix='WARNING')
+
+    log('Computing descriptors...')
+    results: Dict[str, Any] = {}
+    for spec in missing:
+        spec_results = compute_descriptor(
+            spec=spec,
+            component=component,
+            mesh=mesh,
+            log=_spec_logger(spec),
+        )
+        results.update(spec_results)
+    return results
+
 
 async def compute_descriptors(dry_run: bool = False) -> bool:
-    """
-    Main descriptor computation function.
-
-    Finds one component with missing descriptors, computes them, and updates
-    the database.
-
-    Args:
-        dry_run: If True, only log what would be done without updating database
-
-    Returns:
-        True if a component was processed, False if no work was done
-    """
+    """Find one component with missing descriptors, compute them, persist."""
     log('Starting descriptor computation...')
     if dry_run:
         log('DRY RUN MODE - No database updates will be made')
     log('-' * 80)
 
-    # Connect to MongoDB
-    connection_string = get_db_connectionstring()
     client = AsyncMongoClient(
-        connection_string,
-        serverSelectionTimeoutMS=5000
+        get_db_connectionstring(),
+        serverSelectionTimeoutMS=5000,
     )
     try:
         await client.aconnect()
         await client.admin.command('ping')
         log('Connected to MongoDB')
-        db = client['csc']
-        mongodb_components = db['components']
+
+        mongodb_components = client['csc']['components']
         geometry_dir = get_geometry_directory()
-        log(f'Looking for components missing descriptors: '
-            f'{", ".join(DESCRIPTORS_TO_COMPUTE)}')
+
+        registered_keys = collect_output_keys(ALL_SPECS)
+        log(f'Registered descriptor keys: {", ".join(registered_keys)}')
+
         component = await find_component_with_missing_descriptors(
-            mongodb_components,
-            DESCRIPTORS_TO_COMPUTE,
-            dry_run=dry_run
+            mongodb_components, ALL_SPECS, dry_run=dry_run
         )
         if not component:
             log('No components with missing descriptors found')
             return False
+
         component_id = str(component['_id'])
-        component_name = component.get('name', 'Unnamed Component')
         log(f'Found component: {component_id}')
-        log(f'  Name: {component_name}')
+        log(f'  Name: {component.get("name", "Unnamed Component")}')
         log(f'  Type: {component.get("type", "unknown")}')
-        # Check which descriptors are missing
-        current_descriptors = component.get('descriptors', {})
-        missing_descriptors = [
-            desc for desc in DESCRIPTORS_TO_COMPUTE
-            if desc not in current_descriptors or
-            current_descriptors.get(desc) is None
-        ]
-        log(f'Missing descriptors: {", ".join(missing_descriptors)}')
-        # Get geometry paths
-        geometry_paths = get_geometry_paths(geometry_dir, component_id)
-        # Load geometry
-        log('Loading geometry...')
-        mesh = load_geometry_for_descriptor(
-            component,
-            geometry_paths,
-            geometry_dir
+
+        descriptors = run_missing_specs_on_component(
+            component=component,
+            geometry_dir=geometry_dir,
+            specs=ALL_SPECS,
         )
-        if mesh is None:
-            log(f'Failed to load geometry for component {component_id}',
-                prefix='ERROR')
-            return False
-
-        # Compute descriptors
-        log('Computing descriptors...')
-        descriptors = compute_descriptors_for_mesh(mesh, missing_descriptors)
-
         if not descriptors:
             log('No descriptors were computed', prefix='WARNING')
             return False
 
-        # Update database
         if dry_run:
             log(f'DRY RUN: Would update component {component_id} '
-                f'with descriptors: {descriptors}')
+                f'with descriptors: {list(descriptors.keys())}')
             return True
-        else:
-            success = await update_component_descriptors(
-                mongodb_components,
-                component_id,
-                descriptors
-            )
-            return success
-
-    except Exception as e:
-        log(f'Error during descriptor computation: {e}', prefix='ERROR')
+        return await update_component_descriptors(
+            mongodb_components, component_id, descriptors
+        )
+    except Exception as exc:
+        log(f'Error during descriptor computation: {exc}', prefix='ERROR')
         import traceback
         traceback.print_exc()
         return False
-
     finally:
         await client.close()
         log('Closed MongoDB connection')
@@ -498,16 +228,10 @@ async def compute_descriptors(dry_run: bool = False) -> bool:
 # MAIN EXECUTION --------------------------------------------------------------
 
 if __name__ == '__main__':
-    # Check for dry-run flag
-    dry_run = '--dry-run' in sys.argv
-
-    # Run the computation
-    success = asyncio.run(compute_descriptors(dry_run=dry_run))
-
-    # Exit with appropriate code
+    dry_run_flag = '--dry-run' in sys.argv
+    success = asyncio.run(compute_descriptors(dry_run=dry_run_flag))
     if success:
         log('Descriptor computation completed successfully')
         sys.exit(0)
-    else:
-        log('No work done or computation failed')
-        sys.exit(1)
+    log('No work done or computation failed')
+    sys.exit(1)
