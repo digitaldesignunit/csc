@@ -104,19 +104,28 @@ export default function ComponentOverviewFilterMenu({
 
   function handleApplyFilters() {
     const params = new URLSearchParams(searchParams.toString())
-    
-    // Set all filter parameters
-    if (material) params.set('material', material)
-    if (compType) params.set('comptype', compType)
-    if (dataset) params.set('dataset', dataset)
-    if (complexity) params.set('complexity', complexity)
-    if (fragment) params.set('fragment', fragment)
-    if (bbxMinX) params.set('bbx_min_x', bbxMinX)
-    if (bbxMinY) params.set('bbx_min_y', bbxMinY)
-    if (bbxMinZ) params.set('bbx_min_z', bbxMinZ)
-    if (bbxMaxX) params.set('bbx_max_x', bbxMaxX)
-    if (bbxMaxY) params.set('bbx_max_y', bbxMaxY)
-    if (bbxMaxZ) params.set('bbx_max_z', bbxMaxZ)
+
+    const applyFilterParam = (key: string, value: string) => {
+      const normalizedValue = value.trim()
+      if (normalizedValue) {
+        params.set(key, normalizedValue)
+        return
+      }
+      params.delete(key)
+    }
+
+    // Keep URL filter params in sync with local state, including cleared fields.
+    applyFilterParam('material', material)
+    applyFilterParam('comptype', compType)
+    applyFilterParam('dataset', dataset)
+    applyFilterParam('complexity', complexity)
+    applyFilterParam('fragment', fragment)
+    applyFilterParam('bbx_min_x', bbxMinX)
+    applyFilterParam('bbx_min_y', bbxMinY)
+    applyFilterParam('bbx_min_z', bbxMinZ)
+    applyFilterParam('bbx_max_x', bbxMaxX)
+    applyFilterParam('bbx_max_y', bbxMaxY)
+    applyFilterParam('bbx_max_z', bbxMaxZ)
     
     // Reset page to 1 when applying filters
     params.set('page', '1')
