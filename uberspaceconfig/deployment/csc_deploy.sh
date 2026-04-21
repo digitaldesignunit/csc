@@ -78,7 +78,7 @@ echo "NPM: Building frontend..."
 cd ../$TARGET1
 rm -r .next
 npm i
-npm run build --webpack
+npm run build -- --webpack
 
 # Restarting frontend after build
 echo "------------------------- PROCESSES -----------------------------"
