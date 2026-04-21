@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4.0] - 2026-04-21
+
+### Versions
+
+- CSC FastAPI Backend:  0.4.4.0
+- CSC React Frontend:   0.4.4.0
+- CSC Grasshopper Interface: 0.4.5.3
+
+### Added
+
+#### CSC FastAPI Backend
+
+- **Component ID Transmission Router**: New router `ghtransmit.py` exposing
+  authenticated endpoints for transmitting a scanned component ID from the
+  web frontend to Grasshopper:
+  - `GET /component_id_transmission` - fetch the current pending transmission
+    for the authenticated user.
+  - `POST /component_id_transmission` - store a pending transmission with
+    `force_overwrite` flag. Returns `409 conflict` if a different pending ID
+    already exists and the user has not confirmed overwrite.
+  - `DELETE /component_id_transmission` - clear the pending transmission.
+  - `POST /component_id_transmission/consume` - remove the pending
+    transmission after the component has been successfully added to the
+    database (supports matching `component_id` to avoid consuming newer
+    scans).
+- **Mongo Collection Wiring**: Registered `component_id_transmission`
+  collection on the app during startup. One document per user (natural key
+  `_id = user_id`).
+
+#### CSC React Frontend
+
+- **Transmit ID to Grasshopper Page**: New page at `/transmit-id` with a QR
+  scanner and manual input for transmitting a scanned component ID to
+  Grasshopper. Shows the current pending ID, allows clearing it, and handles
+  overwrite confirmation via a modal dialog when a different pending ID
+  already exists.
+- **`ComponentIdTransmitter` Component**: New reusable client component
+  encapsulating the full scan/transmit/overwrite UX.
+- **App Menu Entry**: Added "Transmit ID to GH" entry under the Components
+  section of the app menu.
+
+### Changed
+
+- **Versions**: Bumped backend and frontend to `0.4.4.0` to reflect the new
+  Grasshopper ID transmission feature.
+
 ## [0.4.5.3] - 2026-03-18
 
 ### Versions

@@ -79,6 +79,9 @@ async def lifespan(app: FastAPI):
     app.mongodb_components = app.mongodb['components']
     app.mongodb_components_archived = app.mongodb['components_archive']
     app.mongodb_designs = app.mongodb['designs']
+    app.mongodb_component_id_transmission = app.mongodb[
+        'component_id_transmission'
+    ]
 
     # Create helpful indexes (idempotent)
     await app.mongodb_users.create_index('email', unique=True)
@@ -108,7 +111,7 @@ app = FastAPI(
         'Backend API for Catalog of Second Chances. '
         'FastAPI + MongoDB (async).'
     ),
-    version='0.4.3.0',
+    version='0.4.4.0',
     lifespan=lifespan,
 )
 app.state.limiter = limiter

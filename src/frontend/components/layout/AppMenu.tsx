@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Home, Package, Search, Award, FileText, User, Shield, QrCode, Terminal, Layers2, BarChart2, Archive } from 'lucide-react'
+import { Home, Package, Search, Award, FileText, User, Shield, QrCode, Terminal, Layers2, BarChart2, Archive, Send } from 'lucide-react'
 
 export default function AppMenu() {
   const router = useRouter()
@@ -97,6 +97,13 @@ export default function AppMenu() {
             >
               <QrCode className="h-4 w-4" />
               Identify Component
+            </div>
+            <div
+              onClick={() => handleNavigation('/transmit-id')}
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            >
+              <Send className="h-4 w-4" />
+              Transmit ID to GH
             </div>
             <div
               onClick={() => handleNavigation('/analytics')}
