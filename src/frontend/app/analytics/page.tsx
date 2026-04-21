@@ -227,8 +227,8 @@ export default function AnalyticsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><PieIcon className="h-4 w-4" /> Type distribution</CardTitle>
               </CardHeader>
-              <CardContent className="h-64">
-                <ResponsiveContainer>
+              <CardContent className="h-64 min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <PieChart>
                     <Pie dataKey="count" data={data?.byType || []} nameKey="label" innerRadius={40} outerRadius={80}>
                       {(data?.byType || []).map((_, i) => (
@@ -245,8 +245,8 @@ export default function AnalyticsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><BarChart2 className="h-4 w-4" /> Complexity</CardTitle>
               </CardHeader>
-              <CardContent className="h-64">
-                <ResponsiveContainer>
+              <CardContent className="h-64 min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart data={(data?.byComplexity || []).map(d => ({ ...d, label: String(d.label) }))}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="label" />
@@ -263,22 +263,26 @@ export default function AnalyticsPage() {
                 <CardTitle className="flex items-center gap-2"><BarChart2 className="h-4 w-4" /> Validated / Reserved</CardTitle>
               </CardHeader>
               <CardContent className="h-64 grid grid-cols-2 gap-2">
-                <ResponsiveContainer>
-                  <BarChart data={data?.byValidated || []}>
-                    <XAxis dataKey="label" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#22c55e" />
-                  </BarChart>
-                </ResponsiveContainer>
-                <ResponsiveContainer>
-                  <BarChart data={data?.reserved || []}>
-                    <XAxis dataKey="label" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#f97316" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div className="h-full min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <BarChart data={data?.byValidated || []}>
+                      <XAxis dataKey="label" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#22c55e" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="h-full min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <BarChart data={data?.reserved || []}>
+                      <XAxis dataKey="label" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#f97316" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -290,8 +294,8 @@ export default function AnalyticsPage() {
               <CardTitle>By Type</CardTitle>
               <CardDescription>Distribution of component types</CardDescription>
             </CardHeader>
-            <CardContent className="h-80">
-              <ResponsiveContainer>
+            <CardContent className="h-80 min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart data={data?.byType || []}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" />
@@ -310,8 +314,8 @@ export default function AnalyticsPage() {
               <CardTitle>Top Materials</CardTitle>
               <CardDescription>Top 10 plus others</CardDescription>
             </CardHeader>
-            <CardContent className="h-80">
-              <ResponsiveContainer>
+            <CardContent className="h-80 min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart data={data?.byMaterial || []}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" interval={0} angle={-25} textAnchor="end" height={60} />
@@ -330,8 +334,8 @@ export default function AnalyticsPage() {
               <CardTitle>Top Datasets</CardTitle>
               <CardDescription>Top 10 plus others</CardDescription>
             </CardHeader>
-            <CardContent className="h-80">
-              <ResponsiveContainer>
+            <CardContent className="h-80 min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart data={data?.byDataset || []}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" interval={0} angle={-25} textAnchor="end" height={60} />
@@ -350,8 +354,8 @@ export default function AnalyticsPage() {
               <CardTitle>Descriptor Keys</CardTitle>
               <CardDescription>Frequency of metadata keys</CardDescription>
             </CardHeader>
-            <CardContent className="h-80">
-              <ResponsiveContainer>
+            <CardContent className="h-80 min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart data={data?.descriptorsKeys || []}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" interval={0} angle={-25} textAnchor="end" height={60} />
@@ -370,8 +374,8 @@ export default function AnalyticsPage() {
               <CardTitle className="flex items-center gap-2"><LineIcon className="h-4 w-4" /> New per month</CardTitle>
               <CardDescription>Created date trend</CardDescription>
             </CardHeader>
-            <CardContent className="h-80">
-              <ResponsiveContainer>
+            <CardContent className="h-80 min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <LineChart data={data?.createdMonthly || []}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" />
