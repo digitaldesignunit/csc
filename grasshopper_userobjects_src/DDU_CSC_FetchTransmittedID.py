@@ -38,7 +38,7 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260422
+    Version: 260422.1
     """
 
     def __init__(self):
@@ -88,8 +88,6 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
 
     def RunScript(self):
         component_id = Grasshopper.DataTree[object]()
-        has_pending = False
-        pending_json = ''
 
         # Get AuthCore instance from sticky storage
         auth_core = self.get_auth_core_from_sticky()
@@ -115,8 +113,6 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
 
                 if pending and isinstance(pending, dict):
                     component_id = str(pending.get('component_id', '') or '')
-                    has_pending = bool(component_id)
-                    pending_json = json.dumps(pending)
                     self.Component.Message = 'Pending transmitted ID found'
                     self._addRemark(
                         f'Fetched pending transmitted ID: {component_id}'
