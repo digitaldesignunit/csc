@@ -54,5 +54,7 @@ export const config = {
     '/identify',            // protect identify root
     '/analytics/:path*',    // protect analytics subpages
     '/analytics',           // protect analytics root
+    '/transmit-id/:path*',  // protect transmit-id subpages
+    '/transmit-id',         // protect transmit-id root
   ],
 }

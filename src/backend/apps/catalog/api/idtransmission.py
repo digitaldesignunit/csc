@@ -3,16 +3,16 @@
 Component ID Transmission endpoints.
 
 Allows a user to transmit a scanned component ID from the web frontend to
-Grasshopper. One pending transmission per user is stored in the
+CAD integrations. One pending transmission per user is stored in the
 `component_id_transmission` MongoDB collection (document _id = user_id).
 
 Lifecycle:
     - User scans a QR code on the frontend and POSTs the ID here.
     - If the user already has a pending item with a different ID, the request
       is rejected with 409 unless `force_overwrite` is True.
-    - Grasshopper fetches the current pending item via GET.
+    - Client integration fetches the current pending item via GET.
     - After the component is successfully added to the database, the pending
-      item is removed via POST /ghtransmit/consume (or DELETE).
+      item is removed via POST /component_id_transmission/consume (or DELETE).
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
@@ -69,6 +69,10 @@ class ConsumePayload(BaseModel):
 # FASTAPI DEPENDENCIES --------------------------------------------------------
 async def get_transmit_col(request: Request):
     return request.app.mongodb_component_id_transmission
+
+
+async def get_components_col(request: Request):
+    return request.app.mongodb_components
 
 
 # HELPERS ---------------------------------------------------------------------
@@ -153,6 +157,24 @@ async def transmit_component_id(
     now = _now_iso()
 
     try:
+        components_coll = await get_components_col(request)
+        existing_component = await components_coll.find_one(
+            {'_id': component_id},
+            {'_id': 1}
+        )
+        if existing_component:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    'status': 'component_id_exists',
+                    'message': (
+                        'This component ID already exists in the catalog and '
+                        'cannot be transmitted as a new ID.'
+                    ),
+                    'component_id': component_id,
+                }
+            )
+
         existing = await coll.find_one({'_id': current_user.id})
 
         if existing and existing.get('component_id') == component_id:
@@ -254,8 +276,8 @@ async def consume_pending_transmission(
 ):
     """
     Consume the user's pending transmission. Intended to be called from
-    Grasshopper (or from the frontend) only after the component has been
-    successfully added to the database.
+    client integrations (or from the frontend) only after the component has
+    been successfully added to the database.
 
     If `component_id` is provided in the payload, the item is only removed
     when it matches, which prevents accidentally consuming a newer scan that

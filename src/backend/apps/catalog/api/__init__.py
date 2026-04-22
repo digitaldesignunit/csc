@@ -7,7 +7,7 @@ from .utility import router as utility_router
 from .reserve import router as reserve_router
 from .downloads import router as downloads_router
 from .ghupdates import router as ghupdates_router
-from .ghtransmit import router as ghtransmit_router
+from .idtransmission import router as idtransmission_router
 from .archive import router as archive_router
 
 api_router = APIRouter()
@@ -19,5 +19,5 @@ api_router.include_router(utility_router, tags=['utility'])
 api_router.include_router(reserve_router, tags=['reserve'])
 api_router.include_router(downloads_router, tags=['downloads'])
 api_router.include_router(ghupdates_router, tags=['ghupdates'])
-api_router.include_router(ghtransmit_router, tags=['ghtransmit'])
+api_router.include_router(idtransmission_router, tags=['idtransmission'])
 api_router.include_router(archive_router, tags=['archive'])
