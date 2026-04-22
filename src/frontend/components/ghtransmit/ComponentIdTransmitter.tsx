@@ -147,17 +147,26 @@ const ComponentIdTransmitter: React.FC = () => {
 
         if (res.status === 409) {
           const data: {
-            status: 'conflict'
-            existing: TransmitItem
-            new_component_id: string
+            status: 'conflict' | 'component_id_exists'
+            existing?: TransmitItem
+            new_component_id?: string
+            message?: string
           } = await res.json()
-          setConfirmPayload({
-            existing: data.existing,
-            newId: data.new_component_id,
-          })
-          setConfirmOverwriteOpen(true)
-          setStatus('idle')
-          setStatusMessage('')
+
+          if (data.status === 'conflict' && data.existing && data.new_component_id) {
+            setConfirmPayload({
+              existing: data.existing,
+              newId: data.new_component_id,
+            })
+            setConfirmOverwriteOpen(true)
+            setStatus('idle')
+            setStatusMessage('')
+          } else {
+            setStatus('error')
+            setStatusMessage(
+              data.message || 'This component ID already exists in the catalog.'
+            )
+          }
           return
         }
 
