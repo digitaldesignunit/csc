@@ -787,7 +787,8 @@ export default function GHInterfacePage() {
               { label: 'FlatPlane', description: 'Flattest Plane found. Normal always points AWAY from the Mesh.' },
               { label: 'Points', description: 'Final Points that were used to fit the flat plane.' }
             ]}
-            tip="Optimized algorithm for finding flat surfaces on meshes, with performance optimizations for large meshes."
+            tip="Optimized algorithm for finding flat surfaces on meshes, with performance optimizations for large meshes.
+Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max Benjamin Eschenbach."
             imagePath={resolveStatic('/gh-interface/csc_findlargestflatside.jpg')}
           />
 
@@ -806,7 +807,8 @@ export default function GHInterfacePage() {
               { label: 'Quads', description: 'List of best inscribed quadrilaterals (Polyline).' },
               { label: 'Areas', description: 'Area of each quadrilateral.' }
             ]}
-            tip="Finds the largest quadrilateral that fits inside closed polylines using optimization methods."
+            tip="Finds the largest quadrilateral that fits inside closed polylines using optimization methods.
+Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max Benjamin Eschenbach."
             imagePath={resolveStatic('/gh-interface/csc_maxinscribedquad.jpg')}
           />
         </div>

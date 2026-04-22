@@ -172,9 +172,9 @@ export default function ComponentOverviewDataTablePreviewCell({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href={`/findcomponent?reference_id=${compId}`} className="w-full sm:w-[200px]">
+                  <Link href={`/locate-by-id?reference_id=${compId}`} className="w-full sm:w-[200px]">
                     <Button variant="outline" className="h-8 w-full">
-                      Find Component
+                      Locate by ID
                     </Button>
                   </Link>
                 </TooltipTrigger>

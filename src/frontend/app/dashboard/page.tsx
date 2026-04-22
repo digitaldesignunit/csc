@@ -160,22 +160,22 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Find Component */}
+        {/* Locate by ID */}
         <Card className="hover:shadow-lg transition-shadow flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Search className="h-5 w-5 text-primary" />
-              Find Component
+              Locate by ID
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col flex-1">
             <p className="text-sm text-muted-foreground">
-              Find a physical component based on its <b>Component ID</b>.
+              Locate a physical component based on its <b>Component ID</b>.
             </p>
             <div className="mt-auto pt-4">
-              <Link href="/findcomponent">
+              <Link href="/locate-by-id">
                 <Button className="w-full" variant="outline">
-                  Find Component
+                  Locate by ID
                 </Button>
               </Link>
             </div>
@@ -264,9 +264,9 @@ export default function DashboardPage() {
                 My Reservations
               </Badge>
             </Link>
-            <Link href="/findcomponent">
+            <Link href="/locate-by-id">
               <Badge variant="outline" className="cursor-pointer hover:bg-primary hover:text-primary-foreground">
-                Find Component
+                Locate by ID
               </Badge>
             </Link>
             <Link href="/settings">

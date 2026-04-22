@@ -80,6 +80,12 @@ export default function CreditsPage() {
           <CardContent className="space-y-4 text-base leading-relaxed">
             <ul className='list-disc list-inside space-y-2'>
               <li>
+                Idea and prototype code for <code className='bg-accent/40 px-1 py-0.5 rounded'>FindLargestFlatSide</code> by Alessandro Garruto. The code has been refactored and integrated by Max Benjamin Eschenbach.
+              </li>
+              <li>
+                Idea and prototype code for <code className='bg-accent/40 px-1 py-0.5 rounded'>MaxInscribedQuad</code> by Alessandro Garruto. The code has been refactored and integrated by Max Benjamin Eschenbach.
+              </li>
+              <li>
                 The <code className='bg-accent/40 px-1 py-0.5 rounded'>csc_labels</code> python code to create the QR-Code labels was developed by <a href='https://instagram.com/mirkodutschke' target='_blank' className='text-blue-500 underline'>Mirko Dutschke</a>. The code has
                 been refactored as a python module and integrated by Max Benjamin Eschenbach.
               </li>

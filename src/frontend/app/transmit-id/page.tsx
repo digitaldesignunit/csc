@@ -1,4 +1,4 @@
-import ComponentIdTransmitter from '@/components/ghtransmit/ComponentIdTransmitter'
+import ComponentIdTransmitter from '@/components/idtransmission/ComponentIdTransmitter'
 import {
   Card,
   CardContent,
@@ -12,19 +12,27 @@ export default function TransmitIdPage() {
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-6xl">
       {/* Header */}
-      <div className="mb-6 sm:mb-8">
+      <div className="mb-3 sm:mb-4">
         <div className="flex items-center gap-2 sm:gap-3 mb-2">
           <Send className="h-8 w-8 text-primary" />
           <h1 className="text-2xl sm:text-3xl font-bold">
             Transmit ID to Grasshopper
           </h1>
         </div>
-        <p className="text-muted-foreground text-sm sm:text-base">
-          Scan the QR code of a <b>physical part</b> and transmit its
-          component ID to Grasshopper. Grasshopper can then read the pending
-          ID while you add the component to the catalog. The ID stays pending
-          until the component is successfully added.
-        </p>
+        <div className="mt-3 rounded-lg border bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800 p-3">
+          <ul className="list-disc space-y-1 pl-5 text-sm sm:text-base text-purple-800 dark:text-purple-200">
+            <li>
+              <b>Purpose:</b>{' '}Transmit a <b>scanned ID</b> into your active <b>CAD workflow</b>.
+            </li>
+            <li>
+              <b>Input:</b>{' '}Scan QR code or paste a component ID.
+            </li>
+            <li>
+              <b>Result:</b>{' '}The ID is queued and can be consumed in
+              CAD (i.e. Grasshopper) during component creation.
+            </li>
+          </ul>
+        </div>
       </div>
 
       {/* Main Content */}
@@ -37,7 +45,7 @@ export default function TransmitIdPage() {
             </CardTitle>
             <CardDescription>
               Use your device&apos;s camera to scan a component QR code, then
-              transmit the ID to Grasshopper.
+              transmit the ID to CAD.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-1">

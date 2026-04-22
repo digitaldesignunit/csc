@@ -36,6 +36,7 @@ type TransmitStatus =
   | 'error'
 
 const API_BASE = '/api/backend/component_id_transmission'
+const COMPONENTS_API_BASE = '/api/backend/components'
 
 function formatTimestamp(iso?: string): string {
   if (!iso) return ''
@@ -60,8 +61,8 @@ const ComponentIdTransmitter: React.FC = () => {
   )
 
   const qrScannerRef = useRef<QRScannerRef | null>(null)
-  const elementId = 'ghtransmit-reader'
-  const cameraContainerId = 'ghtransmit-cameracontainer'
+  const elementId = 'id-transmission-reader'
+  const cameraContainerId = 'id-transmission-cameracontainer'
 
   const [pending, setPending] = useState<TransmitItem | null>(null)
   const [isLoadingPending, setIsLoadingPending] = useState(true)
@@ -72,6 +73,9 @@ const ComponentIdTransmitter: React.FC = () => {
 
   const [status, setStatus] = useState<TransmitStatus>('idle')
   const [statusMessage, setStatusMessage] = useState<string>('')
+  const [isCheckingId, setIsCheckingId] = useState(false)
+  const [idAlreadyExists, setIdAlreadyExists] = useState(false)
+  const [idCheckMessage, setIdCheckMessage] = useState('')
 
   const [confirmOverwriteOpen, setConfirmOverwriteOpen] = useState(false)
   const [confirmPayload, setConfirmPayload] = useState<{
@@ -102,6 +106,60 @@ const ComponentIdTransmitter: React.FC = () => {
   useEffect(() => {
     fetchPending()
   }, [fetchPending])
+
+  const effectiveId = (scannedId || inputId).trim()
+
+  useEffect(() => {
+    if (!effectiveId) {
+      setIsCheckingId(false)
+      setIdAlreadyExists(false)
+      setIdCheckMessage('')
+      return
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(async () => {
+      setIsCheckingId(true)
+      try {
+        const res = await fetch(
+          `${COMPONENTS_API_BASE}/${encodeURIComponent(effectiveId)}`,
+          { cache: 'no-store', signal: controller.signal }
+        )
+
+        if (res.status === 200) {
+          setIdAlreadyExists(true)
+          setIdCheckMessage(
+            'This ID already exists in the catalog and cannot be transmitted.'
+          )
+          return
+        }
+
+        if (res.status === 404) {
+          setIdAlreadyExists(false)
+          setIdCheckMessage('ID is available for transmission.')
+          return
+        }
+
+        // For auth/network/validation edge cases we keep transmit enabled and
+        // let the backend decide on submit.
+        setIdAlreadyExists(false)
+        setIdCheckMessage('')
+      } catch (err) {
+        if ((err as { name?: string })?.name !== 'AbortError') {
+          console.error('Error checking ID availability:', err)
+          setIdAlreadyExists(false)
+          setIdCheckMessage('')
+        }
+      } finally {
+        setIsCheckingId(false)
+      }
+    }, 250)
+
+    return () => {
+      controller.abort()
+      clearTimeout(timeout)
+    }
+  }, [effectiveId])
 
   const stopScanning = useCallback(async () => {
     if (qrScannerRef.current) {
@@ -190,7 +248,7 @@ const ComponentIdTransmitter: React.FC = () => {
             ? 'This ID was already pending.'
             : data.status === 'overwritten'
             ? 'Pending ID overwritten.'
-            : 'ID transmitted to Grasshopper.'
+            : 'ID transmitted.'
         )
       } catch (err) {
         console.error('Error during transmit:', err)
@@ -204,8 +262,15 @@ const ComponentIdTransmitter: React.FC = () => {
   const handleTransmitClick = useCallback(async () => {
     const id = (scannedId || inputId).trim()
     if (!id) return
+    if (idAlreadyExists) {
+      setStatus('error')
+      setStatusMessage(
+        'This ID already exists in the catalog and cannot be transmitted.'
+      )
+      return
+    }
     await performTransmit(id, false)
-  }, [scannedId, inputId, performTransmit])
+  }, [scannedId, inputId, idAlreadyExists, performTransmit])
 
   const handleConfirmOverwrite = useCallback(async () => {
     if (!confirmPayload) return
@@ -243,9 +308,12 @@ const ComponentIdTransmitter: React.FC = () => {
   }, [isScanning, stopScanning])
 
   // --- Derived UI state ------------------------------------------------------
-  const effectiveId = (scannedId || inputId).trim()
   const canTransmit =
-    !!effectiveId && status !== 'transmitting' && !isScanning
+    !!effectiveId &&
+    !idAlreadyExists &&
+    !isCheckingId &&
+    status !== 'transmitting' &&
+    !isScanning
 
   const borderClass =
     status === 'transmitted'
@@ -266,7 +334,7 @@ const ComponentIdTransmitter: React.FC = () => {
       : 'bg-muted text-muted-foreground'
 
   const placeholderMessage =
-    'Camera Feed Placeholder.\n\nScan a QR code to transmit the component ID to Grasshopper.'
+    'Camera Feed Placeholder.\n\nScan a QR code to transmit the component ID.'
 
   return (
     <div className="flex flex-col items-center">
@@ -338,9 +406,11 @@ const ComponentIdTransmitter: React.FC = () => {
               className="flex items-center gap-2"
             >
               <Send className="h-4 w-4" />
-              {status === 'transmitting'
+              {isCheckingId
+                ? 'Checking ID...'
+                : status === 'transmitting'
                 ? 'Transmitting...'
-                : 'Transmit to Grasshopper'}
+                : 'Transmit ID'}
             </Button>
           </div>
         )}
@@ -378,6 +448,18 @@ const ComponentIdTransmitter: React.FC = () => {
               <Check className="inline h-3 w-3 mr-1" />
             )}
             {statusMessage}
+          </div>
+        )}
+
+        {idCheckMessage && status !== 'transmitting' && (
+          <div
+            className={`mt-2 text-xs ${
+              idAlreadyExists
+                ? 'text-destructive'
+                : 'text-green-600 dark:text-green-400'
+            }`}
+          >
+            {idCheckMessage}
           </div>
         )}
       </CardHeader>

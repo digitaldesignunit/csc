@@ -111,7 +111,7 @@ app = FastAPI(
         'Backend API for Catalog of Second Chances. '
         'FastAPI + MongoDB (async).'
     ),
-    version='0.4.4.0',
+    version='0.4.6.0',
     lifespan=lifespan,
 )
 app.state.limiter = limiter

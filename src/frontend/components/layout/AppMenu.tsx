@@ -77,6 +77,9 @@ export default function AppMenu() {
             Components
           </h3>
           <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
+            <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Explore
+            </div>
             <div
               onClick={() => handleNavigation('/components')}
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
@@ -85,25 +88,35 @@ export default function AppMenu() {
               Browse Components
             </div>
             <div
-              onClick={() => handleNavigation('/findcomponent')}
+              onClick={() => handleNavigation('/locate-by-id')}
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Search className="h-4 w-4" />
-              Find Component
+              Locate by ID
+            </div>
+
+            <div className="my-1 mx-2 border-t border-border/60" />
+            <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Capture
             </div>
             <div
               onClick={() => handleNavigation('/identify')}
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <QrCode className="h-4 w-4" />
-              Identify Component
+              Scan & Identify
             </div>
             <div
               onClick={() => handleNavigation('/transmit-id')}
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Send className="h-4 w-4" />
-              Transmit ID to GH
+              Transmit ID
+            </div>
+
+            <div className="my-1 mx-2 border-t border-border/60" />
+            <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Insights
             </div>
             <div
               onClick={() => handleNavigation('/analytics')}

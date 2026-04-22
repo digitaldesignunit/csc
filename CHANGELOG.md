@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6.0] - 2026-04-22
+
+### Versions
+
+- CSC FastAPI Backend:  0.4.6.0
+- CSC React Frontend:   0.4.6.0
+- CSC Grasshopper Interface: 0.4.5.3
+
+### Added
+
+#### CSC FastAPI Backend
+
+- **Component ID validation for transmission**: `POST /component_id_transmission` now rejects IDs that already exist in the catalog (`status: component_id_exists`) to prevent reusing existing component IDs.
+
+#### CSC Grasshopper Interface
+
+- **FetchTransmittedID component**: Added `DDU_CSC_FetchTransmittedID.py` to retrieve the currently pending transmitted ID using the shared `CSC_Session` auth state.
+
+### Changed
+
+#### CSC FastAPI Backend
+
+- **Transmission router naming**: Renamed API module from `ghtransmit.py` to `idtransmission.py` and updated router registration/tag to `idtransmission` (no backwards-compat alias).
+
+#### CSC Grasshopper Interface
+
+- **Automatic consume after AddComponent success**: `DDU_CSC_AddComponent.py` now consumes `/component_id_transmission/consume` immediately after successful component creation (`201`) in a non-fatal way.
+
+#### CSC React Frontend
+
+- **Transmission UX robustness**: Improved `409` handling for ID transmission to support both overwrite conflict payloads and `component_id_exists` payloads without breaking UI flow.
+- **Immediate ID availability feedback**: Added pre-transmit ID availability checks after scan/manual input in `ComponentIdTransmitter`, including disabled transmit while checking/when ID already exists.
+- **Navigation and wording clarity**:
+  - Grouped Components menu into **Explore**, **Capture**, and **Insights** sections.
+  - Renamed **Identify Component** to **Scan & Identify**.
+  - Renamed **Find Component** workflow to **Locate by ID** across route, page, component names, and links (`/findcomponent` -> `/locate-by-id`).
+- **Page guidance improvements**: Added colored info boxes with explicit `Purpose / Input / Result` bullets on `Scan & Identify`, `Locate by ID`, and `Transmit ID`, including spacing/wording refinements for consistency and clarity.
+
+#### Documentation
+
+- **GH Interface credits**: Added credits for Alessandro Garruto in `gh-interface` component tips for `CSC_FindLargestFlatSide` and `CSC_MaxInscribedQuad`.
+
 ## [0.4.4.0] - 2026-04-21
 
 ### Versions

@@ -290,15 +290,15 @@ export default function ComponentDetailCard({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href={`/findcomponent?reference_id=${component_data._id}`} className="flex-1">
+                <Link href={`/locate-by-id?reference_id=${component_data._id}`} className="flex-1">
                   <Button variant="outline" className="w-full">
-                    Find Component
+                    Locate by ID
                   </Button>
                 </Link>
               </TooltipTrigger>
               <TooltipContent>
                 <div className="text-center text-sm">
-                  Find this component using the QR code
+                  Locate this component using the ID workflow
                 </div>
               </TooltipContent>
             </Tooltip>

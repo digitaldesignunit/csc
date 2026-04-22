@@ -14,7 +14,7 @@ interface Props {
 
 type ScanStatus = 'neutral' | 'ok' | 'bad'
 
-const ComponentLookup: React.FC<Props> = ({ presetReferenceID }) => {
+const ComponentLocateById: React.FC<Props> = ({ presetReferenceID }) => {
   const config = {
     aspectRatio: 1,
     fps: 10,
@@ -219,4 +219,4 @@ const ComponentLookup: React.FC<Props> = ({ presetReferenceID }) => {
   )
 }
 
-export default ComponentLookup
+export default ComponentLocateById

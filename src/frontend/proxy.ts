@@ -48,8 +48,8 @@ export const config = {
     '/gh-interface',        // protect gh-interface root
     '/designs/:path*',      // protect designs subpages
     '/designs',             // protect designs root - THIS WAS MISSING!
-    '/findcomponent/:path*', // protect find component subpages
-    '/findcomponent',       // protect find component root
+    '/locate-by-id/:path*', // protect locate-by-id subpages
+    '/locate-by-id',       // protect locate-by-id root
     '/identify/:path*',     // protect identify subpages
     '/identify',            // protect identify root
     '/analytics/:path*',    // protect analytics subpages
