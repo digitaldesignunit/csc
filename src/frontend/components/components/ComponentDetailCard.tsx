@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import ComponentDetailMap from './ComponentDetailMap'
-import { Copy, Check, FileText, CheckCircle, Trash2, Archive, RotateCcw, ChevronDown } from 'lucide-react'
+import { Copy, Check, FileText, CheckCircle, Trash2, Archive, RotateCcw, ChevronDown, Pencil } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import ComponentOverviewDataTableLocationCell from './overview/ComponentOverviewDataTableLocationCell'
@@ -359,6 +359,34 @@ export default function ComponentDetailCard({
         {/* Admin Action Buttons - Only show for admin users */}
         {session?.user?.role === 'admin' && (
           <div className="mb-4 space-y-3 xl:max-w-md">
+            {/* Edit Metadata Action */}
+            {!isArchived && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={`/components/${component_data._id}/edit`}
+                      className="block"
+                    >
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        disabled={validating || archiving || deleting}
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        <span>Edit Metadata</span>
+                      </Button>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="text-center text-sm">
+                      Edit name, type, material, color, and location
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
             {/* Main Admin Actions */}
             <div className="flex gap-2">
               <TooltipProvider>

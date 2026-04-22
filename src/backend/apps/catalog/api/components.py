@@ -3,21 +3,26 @@ import os
 import json
 import hashlib
 import shutil
-from typing import Annotated, Optional
+from datetime import datetime, timezone
+from typing import Annotated, Any, Dict, List, Optional
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
 from fastapi import (
-    APIRouter, Depends, HTTPException, Request, Response, status, Query,
+    APIRouter, Body, Depends, HTTPException, Request, Response, status, Query,
     UploadFile, File
 )
 from fastapi.responses import JSONResponse, FileResponse
+from pydantic import BaseModel, Field, field_validator
 from pymongo.errors import PyMongoError
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalog.models import (  # NOQA
+    ALLOWED_COMPLEXITY_LEVELS,
     ALLOWED_COMPONENT_SORTKEYS,
+    ALLOWED_COMPONENT_TYPES,
     ComponentCount,
     ComponentDescriptors,
+    ComponentLocation,
     ComponentModel,
     User,
 )
@@ -823,6 +828,161 @@ async def get_component(
             'Cache-Control': 'private, max-age=3600'
         }
     )
+
+
+# EDIT METADATA: ADMIN ONLY ---------------------------------------------------
+
+class ComponentMetadataUpdate(BaseModel):
+    """
+    Admin-editable component metadata. All fields are optional; only those
+    explicitly provided are updated. Structural/derived fields (geometry,
+    bbx, iframe, pca_frame, reserved, validated, descriptors, processes,
+    attributes, marker_points, _id, created) are intentionally excluded.
+    """
+    name: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description='Human readable component name',
+    )
+    componenttype: Optional[str] = Field(
+        default=None,
+        alias='type',
+        description='Component type (one of ALLOWED_COMPONENT_TYPES)',
+    )
+    material: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description='Material type',
+    )
+    dataset: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description='Dataset name',
+    )
+    complexity: Optional[int] = Field(
+        default=None,
+        description='Complexity level (0-3)',
+    )
+    fragment: Optional[bool] = Field(
+        default=None,
+        description='Whether this component is a fragment',
+    )
+    assembly: Optional[bool] = Field(
+        default=None,
+        description='Whether this component is an assembly',
+    )
+    color: Optional[List[int]] = Field(
+        default=None,
+        description='RGB color as [R, G, B] integers (0-255)',
+    )
+    location: Optional[ComponentLocation] = Field(
+        default=None,
+        description='Geographic location (lat/lon coordinates)',
+    )
+
+    class Config:
+        populate_by_name = True
+        extra = 'forbid'
+
+    @field_validator('componenttype')
+    @classmethod
+    def _check_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in ALLOWED_COMPONENT_TYPES:
+            raise ValueError(
+                f'type must be one of {ALLOWED_COMPONENT_TYPES}'
+            )
+        return v
+
+    @field_validator('complexity')
+    @classmethod
+    def _check_complexity(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v not in ALLOWED_COMPLEXITY_LEVELS:
+            raise ValueError(
+                f'complexity must be one of {ALLOWED_COMPLEXITY_LEVELS}'
+            )
+        return v
+
+    @field_validator('color')
+    @classmethod
+    def _check_color(cls, v: Optional[List[int]]) -> Optional[List[int]]:
+        if v is None:
+            return v
+        if len(v) != 3:
+            raise ValueError('color must have exactly 3 elements [R, G, B]')
+        for c in v:
+            if not isinstance(c, int) or c < 0 or c > 255:
+                raise ValueError(
+                    'color components must be integers in 0-255'
+                )
+        return v
+
+    @field_validator('material', 'dataset', 'name')
+    @classmethod
+    def _strip_strings(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        if v == '':
+            raise ValueError('value must not be empty')
+        return v
+
+
+@router.patch(
+    '/components/{component_id}',
+    summary='Update component metadata (admin only)',
+)
+async def update_component_metadata(
+    request: Request,
+    admin_user: Annotated[User, Depends(require_admin)],
+    component_id: str,
+    payload: ComponentMetadataUpdate = Body(...),
+):
+    """
+    Partial update of admin-editable component metadata.
+
+    Only fields explicitly provided in the request body are modified.
+    `lastmodified` is refreshed automatically when at least one field
+    changes. Structural and derived fields (geometry, bounding box,
+    frames, reservation, validation, etc.) cannot be edited via this
+    endpoint and must be modified through their dedicated routes.
+    """
+    validate_component_id(component_id)
+
+    coll = await get_components_col(request)
+    existing = await coll.find_one({'_id': component_id})
+    if not existing:
+        raise HTTPException(404, 'Not found')
+
+    # Build $set using alias names (maps componenttype -> 'type')
+    update_data: Dict[str, Any] = payload.model_dump(
+        by_alias=True,
+        exclude_none=True,
+    )
+
+    if not update_data:
+        raise HTTPException(400, 'No updatable fields provided')
+
+    update_data['lastmodified'] = datetime.now(timezone.utc).isoformat(
+    ).replace('+00:00', 'Z')
+
+    try:
+        await coll.update_one(
+            {'_id': component_id},
+            {'$set': update_data},
+        )
+    except PyMongoError as e:
+        print(f'[ERROR] update_component_metadata DB error: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    updated = await coll.find_one({'_id': component_id})
+    return JSONResponse(status_code=200, content=updated)
 
 
 @router.get('/schema/component', summary='Get ComponentModel schema')
