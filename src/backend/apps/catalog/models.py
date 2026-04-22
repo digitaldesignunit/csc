@@ -69,7 +69,13 @@ class UserInDB(User):
 
 
 # COMPONENTS ------------------------------------------------------------------
-ALLOWED_COMPONENT_TYPES = ["sheet", "beam", "slab", "rubble", "column"]
+ALLOWED_COMPONENT_TYPES = [
+    "sheet",
+    "beam",
+    "slab",
+    "rubble",
+    "column"
+]
 
 
 ALLOWED_COMPONENT_SORTKEYS = [
