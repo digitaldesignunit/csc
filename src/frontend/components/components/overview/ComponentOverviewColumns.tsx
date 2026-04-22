@@ -1,6 +1,7 @@
 // ComponentOverviewColumns.tsx
 'use client'
 
+import { useState } from 'react'
 import { ColumnDef } from '@tanstack/react-table'
 import { ComponentModel, ExtendedComponentModel, ComponentBoundingBox } from '@/generated/ComponentModel'
 import { formatTimestamp, rgbToHex } from '@/lib/utils'
@@ -8,6 +9,30 @@ import ComponentOverviewDataTablePreviewCell, { PreviewCellConfig } from './Comp
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
 import ComponentOverviewDataTableFilterCell from './ComponentOverviewDataTableFilterCell'
 import ComponentOverviewDataTableLocationCell from './ComponentOverviewDataTableLocationCell'
+
+function ComponentOverviewDataTableCopyIdCell({ componentId }: { componentId: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopyId = async () => {
+    try {
+      await navigator.clipboard.writeText(componentId ?? '')
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch (error) {
+      console.error('Failed to copy component ID:', error)
+    }
+  }
+
+  return (
+    <div
+      className='inline-flex max-w-full items-center gap-1 rounded px-1.5 py-0.5 text-xs bg-muted text-foreground hover:bg-accent hover:text-accent-foreground truncate cursor-pointer font-mono'
+      onClick={handleCopyId}
+      title={copied ? 'Copied component ID to clipboard' : 'Click to copy component ID to clipboard'}
+    >
+      {copied ? 'Copied!' : componentId}
+    </div>
+  )
+}
 
 /**
  * Creates component overview columns with customizable preview cell config.
@@ -18,8 +43,8 @@ export function createComponentOverviewColumns(
 ): ColumnDef<ComponentModel>[] {
   return [
     {
-      accessorKey: '_id',
-      header: () => <ComponentOverviewDataTableHeader header='ID' />,
+      accessorKey: 'name',
+      header: () => <ComponentOverviewDataTableHeader header='Name' />,
       meta: {
         // preview column: can compress a bit, then scroll
         colClassName: 'w-[200px] sm:w-[260px] md:w-[300px]',
@@ -33,6 +58,15 @@ export function createComponentOverviewColumns(
         />
       ),
     },
+  {
+    accessorKey: '_id',
+    header: () => <ComponentOverviewDataTableHeader header='ID' />,
+    meta: { colClassName: 'w-[220px] sm:w-[260px] md:w-[320px]' },
+    cell: ({ row }) => {
+      const componentId = row.getValue('_id') as string
+      return <ComponentOverviewDataTableCopyIdCell componentId={componentId} />
+    },
+  },
   {
     accessorKey: 'type',
     header: () => <ComponentOverviewDataTableHeader header='Type' />,

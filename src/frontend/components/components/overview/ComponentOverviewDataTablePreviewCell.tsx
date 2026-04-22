@@ -58,6 +58,9 @@ export default function ComponentOverviewDataTablePreviewCell({
   const showFindComponent = !isArchived
   const router = useRouter()
   const compId = component_data._id
+  const compName = typeof component_data.name === 'string' && component_data.name.trim().length > 0
+    ? component_data.name
+    : 'Unnamed component'
 
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -90,7 +93,7 @@ export default function ComponentOverviewDataTablePreviewCell({
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      {/* Compact inline preview cell: 40px thumb + clipped id button */}
+      {/* Compact inline preview cell: 40px thumb + clipped name button */}
       <div className="inline-flex items-center gap-2 min-w-0">
         <TooltipProvider>
           <Tooltip delayDuration={200}>
@@ -129,10 +132,10 @@ export default function ComponentOverviewDataTablePreviewCell({
               <Link href={`${detailBasePath}/${compId}`} className="min-w-0">
                 <Button
                   variant="ghost"
-                  className="h-6 px-2 text-xs max-w-[16rem] truncate"
-                  title={compId}
+                  className="h-6 px-2 text-xs max-w-[16rem] truncate justify-start"
+                  title={compName}
                 >
-                  {compId}
+                  {compName}
                 </Button>
               </Link>
             </TooltipTrigger>
@@ -149,7 +152,8 @@ export default function ComponentOverviewDataTablePreviewCell({
           <SheetTitle className="text-center text-base">Component Preview</SheetTitle>
           {/* prevent <p> inside <p> nesting (SheetDescription renders <p>) */}
           <SheetDescription>
-            <span className="block text-center text-sm font-bold">{compId}</span>
+            <span className="block text-center text-sm font-semibold">{compName}</span>
+            <span className="block text-center text-xs font-bold">{compId}</span>
           </SheetDescription>
         </SheetHeader>
 

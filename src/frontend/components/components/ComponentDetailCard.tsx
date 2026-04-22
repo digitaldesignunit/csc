@@ -220,19 +220,26 @@ export default function ComponentDetailCard({
 
   // Lat/Lon
   const { lat, lon } = component_data.location as ComponentLocation || { lat: 37.81627937, lon: 144.95373531 }
+  const componentName = typeof component_data.name === 'string' && component_data.name.trim().length > 0
+    ? component_data.name
+    : 'Unnamed component'
 
   return (
     <Card className="w-full overflow-x-auto">
       <CardHeader className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-3 flex-1 min-w-0 xl:max-w-md">
           <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-muted-foreground mb-1">Component Name</div>
+            <div className="text-sm sm:text-base font-semibold bg-primary/10 border border-border rounded-md px-3 py-2 text-foreground break-words mb-2">
+              {componentName}
+            </div>
             <div className="text-sm font-medium text-muted-foreground mb-1">Component ID</div>
             <div className="font-mono text-xs sm:text-sm font-medium bg-accent/20 border border-border rounded-md px-3 py-2 text-foreground break-all">
               {component_data._id}
             </div>
           </div>
           
-          <div className="flex gap-1 mt-6">
+          <div className="flex gap-1 self-end">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
