@@ -41,7 +41,7 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260421
+    Version: 260422
     """
 
     def __init__(self):
@@ -419,6 +419,35 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
                     f'Successfully added component {component_id} to database'
                 )
                 self.Component.Message = f'Added component {component_id}'
+
+                # Consume pending transmitted ID after successful DB insert.
+                # This is intentionally non-fatal for AddComponent: if consume
+                # fails, we keep the added component result and only warn.
+                try:
+                    consume_response = auth_core.authorized_post(
+                        '/component_id_transmission/consume',
+                        json_body={'component_id': component_id}
+                    )
+                    if consume_response.status_code == 200:
+                        consume_payload = consume_response.json()
+                        if consume_payload.get('consumed', False):
+                            self._addRemark(
+                                'Consumed pending transmitted ID after add.'
+                            )
+                        else:
+                            self._addRemark(
+                                'No matching transmitted ID to consume.'
+                            )
+                    else:
+                        self._addWarning(
+                            'Component added, but transmitted ID consume '
+                            f'failed ({consume_response.status_code}).'
+                        )
+                except Exception as e:
+                    self._addWarning(
+                        'Component added, but transmitted ID consume errored: '
+                        f'{str(e)}'
+                    )
 
                 # Upload geometry files if they exist
                 if has_geometry_files:
