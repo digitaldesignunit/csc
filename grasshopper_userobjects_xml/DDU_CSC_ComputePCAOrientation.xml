@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">b77d58b7-9510-434e-891d-fb977ba5c024</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">b2c63ab7-df85-4723-b139-9e52860d15d3</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639123652775551434</item>
+            <item name="Date" type_name="gh_date" type_code="8">639124459445630649</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -101,13 +101,14 @@
               </items>
               <chunks count="1">
                 <chunk name="Container">
-                  <items count="15">
+                  <items count="16">
                     <item name="Description" type_name="gh_string" type_code="10">Computes Principal Component Analysis (PCA) orientation for input geometry. Returns the object oriented bounding box obtained using PCA, aligned geometry, translation vector, and PCA transformation matrix.</item>
                     <item name="GraftStandardOutputLines" type_name="gh_bool" type_code="1">true</item>
+                    <item name="Hidden" type_name="gh_bool" type_code="1">true</item>
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="834">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAALXSURBVEhLtZVNSFRRGIZd5Kog2oVgJbZv0yaiQOncc+d/7r2zCcM0qDaCQWSZ7SJQwSjKRUHhIoK0qDTyzk86GhbuaumqcqdoqxY5zswT58xoM3dG06wLLxzOz/ucc77vfLemxvMRF+xUXs/1zztxJ/J6/1PzNW3LPB8X5NyCVNs7vpH+aJ53BdlxAQkBqaIShT415p3v1aaAnGtAUsCUYNU1+DZiMv/cJKv6p4QeUyfyrtsSQJtPCBZHJR1dYeoth32Bgg5YDh1XwyyMmjBhbAqpClgz//TUR13YodGxudcX5OOQnw9DPu70BmmwHT2m5hQgRoVPVYC613xSsDwmqYs4RC9GWU1KmFbQoqYFK0lJ4LzF/rDD8phJJl79JBWA1XGD/JRBd09YL/4ZNyElybyV5NyCVJukAZOSBsfh2vUwzBYTwQMpA+j0SxQWHo7ZDNwKw4wyNEGB4lIr70qyCcmrBwGaz1kcOW1zty/El2G1mfLsKgOoe8y9k/TfDFF7Kob/gsXCqJ9cwiTvrkFMsuOm3kTPjQg1zTEd+L1+h7lnJvlUeWatA3TnhGB2KMAeM0Z91GaXiHGlOwJpyaoyLQI0RAHTJh1dUXZLh89PfJCuTNvyGCQEP95Ivr40Odpi0XYpynfXR8Y1yZeYK62oa3svudwd4VirpZNAP8hSvwpAMYuYEQz2hvRJFl/79U5VHNQplHRM0pL5Fz5qRYyH/SFyaZUgWwHEBdm4IJM0ON5q02g7zI34YVrCVFHTkrlhH422zYmzFpmEJBc3qtaoCoCGqFOkBEtjJk3tlo5FS2eU+30hBvuCnOmM6L6mdpulMR+kjA3rUlXAb4ih9WggyMk2i0O2zUHL1u3Ht4P6faj3sJH5poB1iGqrwjZZSGNd6CaLfaVzNtCmAG2gYjJeTD/1UhOFti7XVeZ79UdAqZThVkxLteU/2t9qW7/N7Wrd/H9A1jx/Aa9cJ2v5UTM8AAAAAElFTkSuQmCC</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">c1d18b95-a7a6-4e45-a902-95086ff4135d</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">3af28291-3946-4087-97db-a51c20a8a3b7</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -125,7 +126,7 @@
                       <items count="2">
                         <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
                           <X>316</X>
-                          <Y>13973</Y>
+                          <Y>21435</Y>
                           <W>193</W>
                           <H>174</H>
                         </item>
@@ -151,7 +152,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of generic geometry</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">9a2e0421-7bb9-46d0-916a-2ce69d28b32e</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">ff42441a-30f1-49a7-899b-54a7c5e06f78</item>
                             <item name="Name" type_name="gh_string" type_code="10">Geometry</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Geometry</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -185,7 +186,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of boxes</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">b7d07f48-423a-45cb-849d-22a1aa6954f7</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">31839526-5795-4a3d-aa94-fc40fc7c8287</item>
                             <item name="Name" type_name="gh_string" type_code="10">ObjectOrientedBBX</item>
                             <item name="NickName" type_name="gh_string" type_code="10">ObjectOrientedBBX</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -219,7 +220,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of generic geometry</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">88d379b8-9a81-4532-be9e-a7021c713b13</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">5356d0a3-138e-4125-9892-c2beef560b06</item>
                             <item name="Name" type_name="gh_string" type_code="10">AlignedGeometry</item>
                             <item name="NickName" type_name="gh_string" type_code="10">AlignedGeometry</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -253,7 +254,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of boxes</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">6e13acc1-8a10-4411-b494-9033db61242c</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">1507c254-9ce8-4329-895f-498dee65222a</item>
                             <item name="Name" type_name="gh_string" type_code="10">AlignedBBX</item>
                             <item name="NickName" type_name="gh_string" type_code="10">AlignedBBX</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -287,7 +288,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of three-dimensional vectors</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">a1a944c2-925f-4780-9e03-4875dbf19fb6</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">9959ad1e-2b6f-4e56-9cb5-3a6328a55423</item>
                             <item name="Name" type_name="gh_string" type_code="10">TranslationVector</item>
                             <item name="NickName" type_name="gh_string" type_code="10">TranslationVector</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -321,7 +322,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of three-dimensional transformations</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">1fdf8def-8614-4a66-89b2-eb478f4b01cc</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">6ef3abf0-ef07-4ec9-a24e-d34a4ab87e92</item>
                             <item name="Name" type_name="gh_string" type_code="10">PCAXForm</item>
                             <item name="NickName" type_name="gh_string" type_code="10">PCAXForm</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
