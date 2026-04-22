@@ -38,7 +38,7 @@ APPLICABLE_COMPONENT_TYPES: Tuple[str, ...] = ("sheet", "panel")
 (see IMPLEMENTATION_PLAN.md, ADR-002) so no change is required at cutover.
 """
 
-SUPPORTED_RESOLUTIONS: Tuple[int, ...] = (16, 32, 64)
+SUPPORTED_RESOLUTIONS: Tuple[int, ...] = (16, 32, 64, 128)
 """Canonical ray counts exposed by the module."""
 
 DEFAULT_REST_ANGLES: int = 180
