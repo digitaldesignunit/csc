@@ -16,7 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### CSC FastAPI Backend
 
+- **Component metadata edit endpoint**: Added `PATCH /components/{component_id}` (admin-only) to update simple component metadata. Accepts a partial `ComponentMetadataUpdate` payload covering `name`, `type`, `material`, `dataset`, `complexity`, `fragment`, `assembly`, `color` (RGB), and `location` (lat/lon). Structural and derived fields (geometry, bbx, frames, descriptors, processes, attributes, marker points, `reserved`, `validated`) are intentionally excluded; `lastmodified` is refreshed automatically on successful update.
 - **Component ID validation for transmission**: `POST /component_id_transmission` now rejects IDs that already exist in the catalog (`status: component_id_exists`) to prevent reusing existing component IDs.
+
+#### CSC React Frontend
+
+- **Admin component metadata editor**: New route `/components/[component_id]/edit` with a dedicated `ComponentEditForm` UI for admins. Provides inputs for name, type (dropdown), material (with suggestions from `/materials`), dataset (with suggestions from `/datasets`), complexity, fragment/assembly flags, RGB color (color picker + R/G/B inputs), and geographic location (lat/lon). Only changed fields are sent in the `PATCH` request; non-admin or unauthenticated users are redirected.
+- **Edit Metadata button in component detail card**: Added an "Edit Metadata" button to the admin action area on the component detail page that links to the new edit route (hidden for archived components).
 
 #### CSC Grasshopper Interface
 
