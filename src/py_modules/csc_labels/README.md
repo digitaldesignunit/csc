@@ -12,6 +12,8 @@ A Python module for generating QR code labels designed for A4 label sheets with 
   - 30mm grey outlined circle (default)
   - 5mm blank center circle (default)
 - Command line interface for easy batch processing
+- Auto-generate human-readable names from a base name with indexed suffixes
+- Continue base-name numbering from a custom first index (e.g. start at 22)
 - High-quality output at 300 DPI for professional printing
 
 ## Installation
@@ -49,11 +51,25 @@ python labels.py 21 --uuid-file ./uuids.txt
 # Human-readable names only (one name per line)
 python labels.py 21 --name-file ./names.txt
 
+# Auto-generate human-readable names from a base name
+# 23 codes -> MY_COMP_01 ... MY_COMP_23
+python labels.py 23 --base-name MY_COMP
+
+# 100 codes -> MY_COMP_001 ... MY_COMP_100
+python labels.py 100 --base-name MY_COMP
+
+# Continue numbering from a custom first index
+# 23 codes from index 22 -> MY_COMP_22 ... MY_COMP_44
+python labels.py 23 --base-name MY_COMP --start-index 22
+
 # Both together
 python labels.py 21 --uuid-file ./uuids.txt --name-file ./names.txt
 
 # Both together in NFC mode
 python labels.py 21 --nfc --uuid-file ./uuids.txt --name-file ./names.txt
+
+# Base name generation in NFC mode
+python labels.py 23 --nfc --base-name MY_COMP
 ```
 
 Python API:
@@ -102,6 +118,12 @@ python labels.py 42 --qr-size 0.8 --error-correction H --qr-version 2 --output-d
 
 # Generate NFC-style labels
 python labels.py 21 --nfc
+
+# Generate labels with auto-generated names
+python labels.py 23 --base-name MY_COMP
+
+# Continue generated names from index 22
+python labels.py 23 --base-name MY_COMP --start-index 22
 ```
 
 #### Command Line Options
@@ -116,6 +138,10 @@ python labels.py 21 --nfc
 | `--nfc` | flag | false | Generate NFC-style labels (21mm QR, 30mm circle, 5mm blank center) |
 | `--uuid-file` | str | - | Path to `.txt` file with one UUID per line |
 | `--name-file` | str | - | Path to `.txt` file with one human-readable name per line |
+| `--base-name` | str | - | Auto-generate names as `<base-name>_<index>` with 1-based zero-padded index |
+| `--start-index` | int | 1 | First index for auto-generated base names (used with `--base-name`) |
+
+`--name-file` and `--base-name` are mutually exclusive.
 
 #### Error Correction Levels
 
@@ -168,11 +194,31 @@ generate_labels(
     name_file='./names.txt'
 )
 
+# Standard labels with auto-generated names:
+# 23 codes -> MY_COMP_01 ... MY_COMP_23
+generate_labels(
+    23,
+    base_name='MY_COMP'
+)
+
+# Continue generated names from a custom first index
+generate_labels(
+    23,
+    base_name='MY_COMP',
+    start_index=22
+)
+
 # NFC labels from existing UUIDs and names
 generate_nfc_labels(
     21,
     uuid_file='./uuids.txt',
     name_file='./names.txt'
+)
+
+# NFC labels with auto-generated names
+generate_nfc_labels(
+    100,
+    base_name='MY_COMP'
 )
 ```
 
@@ -187,6 +233,10 @@ generate_nfc_labels(
 - `qr_version` (int, default=1): QR code version (1-40)
 - `uuid_file` (str, optional): `.txt` file with one UUID per line
 - `name_file` (str, optional): `.txt` file with one human-readable name per line
+- `base_name` (str, optional): Auto-generate names as
+  `<base_name>_<index>`, where index starts at `start_index` and is
+  zero-padded to `max(2, len(str(start_index + N - 1)))`
+- `start_index` (int, default=1): First index used for auto-generated names
 
 `generate_nfc_labels(...)` parameters:
 
@@ -205,7 +255,9 @@ generate_nfc_labels(
 - **Label size**: 70mm × 42mm per label
 - **Layout**: 3 columns × 7 rows = 21 labels per sheet
 - **Borders**: 4mm top and bottom margins
-- **Naming**: Sequential page numbers (1.jpg, 2.jpg, etc.)
+- **Naming without base name**: Sequential page numbers (`1.jpg`, `2.jpg`, etc.)
+- **Naming with base name**: Date + base + index range, for all output files
+  (`YYMMDD_BASE_001-021.jpg/.pdf/.txt`, e.g. `260422_AGGREGATIONS_001-021.pdf`)
 
 ## Examples
 

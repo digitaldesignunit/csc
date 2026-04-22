@@ -1,6 +1,7 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
 import argparse
+import datetime
 import glob
 import math
 import os
@@ -72,15 +73,45 @@ def _read_text_lines(filepath: str):
         return [line.strip() for line in handle if line.strip()]
 
 
+def _build_base_names(base_name: str, count: int, start_index: int = 1):
+    """Generate indexed names with zero-padding based on index range."""
+    last_index = start_index + count - 1
+    pad_width = max(2, len(str(last_index)))
+    return [
+        f"{base_name}_{idx:0{pad_width}d}"
+        for idx in range(start_index, last_index + 1)
+    ]
+
+
+def _build_output_stem(base_name: str,
+                       start_index: int,
+                       end_index: int,
+                       pad_width: int = 3):
+    """Build output stem like YYMMDD_BASE_001-021."""
+    date_prefix = datetime.datetime.now().strftime('%y%m%d')
+    safe_base = ''.join(
+        char if char.isalnum() or char in ('-', '_') else '_'
+        for char in base_name.strip().upper()
+    )
+    return (
+        f"{date_prefix}_{safe_base}_"
+        f"{start_index:0{pad_width}d}-{end_index:0{pad_width}d}"
+    )
+
+
 def _build_label_payloads(N: int,
                           uuid_file: str = None,
-                          name_file: str = None):
+                          name_file: str = None,
+                          base_name: str = None,
+                          start_index: int = 1):
     """
     Build UUID and name lists for label generation.
 
     If uuid_file is provided, UUIDs are read from file (one per line).
     Otherwise random UUIDs are generated.
     If name_file is provided, names are read from file (one per line).
+    If base_name is provided, names are auto-generated as:
+    <base_name>_<index with zero padding>.
     """
     if uuid_file:
         uuid_values = _read_text_lines(uuid_file)
@@ -101,6 +132,12 @@ def _build_label_payloads(N: int,
                 f"{N} are required."
             )
         name_values = name_values[:N]
+    elif base_name:
+        name_values = _build_base_names(
+            base_name=base_name,
+            count=N,
+            start_index=start_index
+        )
     else:
         name_values = [None] * N
 
@@ -156,9 +193,10 @@ def _draw_centered_text_in_box(image: Image.Image,
                                box_h: int,
                                start_size: int,
                                min_size: int = 8,
-                               fill=(0, 0, 0)):
+                               fill=(0, 0, 0),
+                               valign: str = 'center'):
     """
-    Draw centered text in a box.
+    Draw centered text in a box with optional vertical alignment.
 
     If truetype fonts are unavailable, uses bitmap text upscaling so output
     still becomes visibly larger instead of staying tiny.
@@ -177,18 +215,25 @@ def _draw_centered_text_in_box(image: Image.Image,
     bbox = draw.textbbox((0, 0), text, font=font)
     text_w = max(1, bbox[2] - bbox[0])
     text_h = max(1, bbox[3] - bbox[1])
+    text_x = box_x + ((box_w - text_w) // 2)
+    if valign == 'top':
+        target_y = box_y
+    elif valign == 'bottom':
+        target_y = box_y + box_h - text_h
+    else:
+        target_y = box_y + ((box_h - text_h) // 2)
 
     if _is_truetype_font(font):
-        text_x = box_x + ((box_w - text_w) // 2)
-        text_y = box_y + ((box_h - text_h) // 2)
+        # Offset by bbox origin to avoid extra apparent padding from font
+        # internal ascender/descender metrics.
+        text_y = target_y - bbox[1]
         draw.text((text_x, text_y), text, fill=fill, font=font)
         return
 
     # Bitmap fallback: scale rendered mask to requested box.
     scale = max(1, int(min(box_w / text_w, box_h / text_h)))
     if scale <= 1:
-        text_x = box_x + ((box_w - text_w) // 2)
-        text_y = box_y + ((box_h - text_h) // 2)
+        text_y = target_y - bbox[1]
         draw.text((text_x, text_y), text, fill=fill, font=font)
         return
 
@@ -198,7 +243,12 @@ def _draw_centered_text_in_box(image: Image.Image,
     scaled_mask = mask.resize((text_w * scale, text_h * scale),
                               Image.Resampling.NEAREST)
     paste_x = box_x + ((box_w - scaled_mask.width) // 2)
-    paste_y = box_y + ((box_h - scaled_mask.height) // 2)
+    if valign == 'top':
+        paste_y = box_y
+    elif valign == 'bottom':
+        paste_y = box_y + box_h - scaled_mask.height
+    else:
+        paste_y = box_y + ((box_h - scaled_mask.height) // 2)
     image.paste(fill, (paste_x, paste_y), scaled_mask)
 
 
@@ -295,7 +345,9 @@ def generate_labels(N: int,
                     qr_version: int = 1,
                     adaptive_layout: bool = False,
                     uuid_file: str = None,
-                    name_file: str = None):
+                    name_file: str = None,
+                    base_name: str = None,
+                    start_index: int = 1):
     """
     Create N amount of unique QR-Codes with UUID encoded for A4 label sheets.
 
@@ -345,6 +397,9 @@ def generate_labels(N: int,
         print(f"  - UUID file: {uuid_file}")
     if name_file:
         print(f"  - Name file: {name_file}")
+    if base_name:
+        print(f"  - Base name: {base_name}")
+        print(f"  - Start index: {start_index}")
 
     # Map error correction string to qrcode constant
     error_correction_map = {
@@ -374,7 +429,11 @@ def generate_labels(N: int,
     print(f"Generating {N} individual QR codes...")
     qrCodeList = []
     uuidList, nameList = _build_label_payloads(
-        N=N, uuid_file=uuid_file, name_file=name_file
+        N=N,
+        uuid_file=uuid_file,
+        name_file=name_file,
+        base_name=base_name,
+        start_index=start_index
     )
     for i in range(0, N):
         if i % 10 == 0:  # Progress update every 10 QR codes
@@ -496,8 +555,9 @@ def generate_labels(N: int,
 
                     # Draw UUID above QR as one row, constrained to cell.
                     uuid_text = str(uuid_value)
-                    # Tighten spacing so text sits closer to QR.
-                    text_padding = 0
+                    # Shared spacing control between QR and both text bands
+                    # in non-NFC labels.
+                    text_padding = _mm_to_px(1.5)
                     shared_text_max_height = _mm_to_px(8.0)
                     top_band_top = y_pos + text_padding
                     top_band_bottom = qr_y - text_padding
@@ -522,7 +582,8 @@ def generate_labels(N: int,
                             box_h=uuid_max_height,
                             start_size=36,
                             min_size=15,
-                            fill=(0, 0, 0)
+                            fill=(0, 0, 0),
+                            valign='bottom'
                         )
 
                     # Draw optional human-readable label
@@ -533,17 +594,21 @@ def generate_labels(N: int,
                         bottom_band_height = (bottom_band_bottom -
                                               bottom_band_top)
                         if bottom_band_height > 8:
+                            # Allow a taller text band for the human-readable
+                            # name so it renders noticeably larger than the
+                            # UUID row above the QR.
+                            name_text_max_height = _mm_to_px(11.0)
                             # Keep names readable but strictly bounded in
                             # standard (non-NFC) labels.
                             name_max_width = max(
                                 10,
-                                min(cell_width - 8, int(widthB * 1.8))
+                                min(cell_width - 8, int(widthB * 2.2))
                             )
                             # Hard clamp vertical text size to avoid oversized
                             # output when bitmap-font fallback is active.
                             name_max_height = max(
                                 10,
-                                min(bottom_band_height, shared_text_max_height)
+                                min(bottom_band_height, name_text_max_height)
                             )
                             box_x = (
                                 x_pos + ((cell_width - name_max_width) // 2)
@@ -556,13 +621,29 @@ def generate_labels(N: int,
                                 box_y=box_y,
                                 box_w=name_max_width,
                                 box_h=name_max_height,
-                                start_size=36,
-                                min_size=15,
-                                fill=(0, 0, 0)
+                                start_size=56,
+                                min_size=20,
+                                fill=(0, 0, 0),
+                                valign='top'
                             )
 
+        page_end_index = page_start_index + codes_per_page
+        page_uuids = uuidList[page_start_index:page_end_index]
+        range_start = start_index + page_start_index
+        range_end = range_start + len(page_uuids) - 1
+        range_pad_width = max(3, len(str(start_index + N - 1)))
+        if base_name:
+            file_stem = _build_output_stem(
+                base_name=base_name,
+                start_index=range_start,
+                end_index=range_end,
+                pad_width=range_pad_width
+            )
+        else:
+            file_stem = str(page_nr)
+
         # Save the page image
-        imgName = sanitize_path(os.path.join(outdir, f'{page_nr}.jpg'))
+        imgName = sanitize_path(os.path.join(outdir, f'{file_stem}.jpg'))
         try:
             pageTemp.save(imgName, 'JPEG', quality=95, DPI=(300, 300))
             print(f"    Saved: {imgName}")
@@ -570,7 +651,7 @@ def generate_labels(N: int,
             print(f"    ERROR: Failed to save {imgName} - {e}")
             raise
 
-        pdfName = sanitize_path(os.path.join(outdir, f'{page_nr}.pdf'))
+        pdfName = sanitize_path(os.path.join(outdir, f'{file_stem}.pdf'))
         try:
             pageTemp.save(
                 pdfName,
@@ -585,9 +666,7 @@ def generate_labels(N: int,
             raise
 
         # Save the UUID list for this page
-        txtName = sanitize_path(os.path.join(outdir, f'{page_nr}.txt'))
-        page_end_index = page_start_index + codes_per_page
-        page_uuids = uuidList[page_start_index:page_end_index]
+        txtName = sanitize_path(os.path.join(outdir, f'{file_stem}.txt'))
         try:
             with open(txtName, 'w') as f:
                 for uid in page_uuids:
@@ -614,7 +693,9 @@ def generate_nfc_labels(N: int,
                         outer_circle_mm: float = 30.0,
                         center_blank_mm: float = 5.0,
                         uuid_file: str = None,
-                        name_file: str = None):
+                        name_file: str = None,
+                        base_name: str = None,
+                        start_index: int = 1):
     """
     Generate NFC label sheets with fixed physical dimensions.
 
@@ -642,10 +723,17 @@ def generate_nfc_labels(N: int,
         print(f"  - UUID file: {uuid_file}")
     if name_file:
         print(f"  - Name file: {name_file}")
+    if base_name:
+        print(f"  - Base name: {base_name}")
+        print(f"  - Start index: {start_index}")
 
     qrCodeList = []
     uuidList, nameList = _build_label_payloads(
-        N=N, uuid_file=uuid_file, name_file=name_file
+        N=N,
+        uuid_file=uuid_file,
+        name_file=name_file,
+        base_name=base_name,
+        start_index=start_index
     )
 
     # Create a temporary "logo" image for StyledPilImage center embedding.
@@ -892,11 +980,27 @@ def generate_nfc_labels(N: int,
                     tile_y = y_pos + (label_height - tile.size[1]) // 2
                     pageTemp.paste(tile, (tile_x, tile_y))
 
-        imgName = sanitize_path(os.path.join(outdir, f'{page_nr}.jpg'))
+        page_start_index = page_index * codes_per_page
+        page_end_index = page_start_index + codes_per_page
+        page_uuids = uuidList[page_start_index:page_end_index]
+        range_start = start_index + page_start_index
+        range_end = range_start + len(page_uuids) - 1
+        range_pad_width = max(3, len(str(start_index + N - 1)))
+        if base_name:
+            file_stem = _build_output_stem(
+                base_name=base_name,
+                start_index=range_start,
+                end_index=range_end,
+                pad_width=range_pad_width
+            )
+        else:
+            file_stem = str(page_nr)
+
+        imgName = sanitize_path(os.path.join(outdir, f'{file_stem}.jpg'))
         pageTemp.save(imgName, 'JPEG', quality=95, DPI=(dpi, dpi))
         print(f"    Saved: {imgName}")
 
-        pdfName = sanitize_path(os.path.join(outdir, f'{page_nr}.pdf'))
+        pdfName = sanitize_path(os.path.join(outdir, f'{file_stem}.pdf'))
         pageTemp.save(
             pdfName,
             'PDF',
@@ -906,10 +1010,7 @@ def generate_nfc_labels(N: int,
         )
         print(f"    Saved: {pdfName}")
 
-        txtName = sanitize_path(os.path.join(outdir, f'{page_nr}.txt'))
-        page_start_index = page_index * codes_per_page
-        page_end_index = page_start_index + codes_per_page
-        page_uuids = uuidList[page_start_index:page_end_index]
+        txtName = sanitize_path(os.path.join(outdir, f'{file_stem}.txt'))
         with open(txtName, 'w') as f:
             for uid in page_uuids:
                 f.write(f'{uid}\n')
@@ -1031,6 +1132,24 @@ Examples:
              '(e.g. BEAM01). Names are printed below each QR code.'
     )
 
+    parser.add_argument(
+        '--base-name',
+        type=str,
+        help='Auto-generate names as <base-name>_<index>. Index is 1-based '
+             'and zero-padded using the number of requested codes '
+             '(e.g. 23 -> MY_COMP_01..MY_COMP_23, '
+             '100 -> MY_COMP_001..MY_COMP_100).'
+    )
+
+    parser.add_argument(
+        '--start-index',
+        type=int,
+        default=1,
+        help='First index to use for auto-generated base names. '
+             'Example: --base-name MY_COMP --start-index 22 with --count 23 '
+             'produces MY_COMP_22..MY_COMP_44.'
+    )
+
     return parser
 
 
@@ -1071,6 +1190,24 @@ def main():
                       file=sys.stderr)
                 sys.exit(1)
 
+        if args.name_file and args.base_name:
+            print(
+                'ERROR: Use either --name-file or --base-name, not both.',
+                file=sys.stderr
+            )
+            sys.exit(1)
+
+        if args.base_name:
+            args.base_name = args.base_name.strip()
+            if not args.base_name:
+                print('ERROR: --base-name cannot be empty.', file=sys.stderr)
+                sys.exit(1)
+
+        if args.start_index <= 0:
+            print('ERROR: --start-index must be a positive integer.',
+                  file=sys.stderr)
+            sys.exit(1)
+
         # Create output directory if it doesn't exist
         output_dir = sanitize_path(args.output_dir)
         print(f"Creating output directory: {output_dir}")
@@ -1085,7 +1222,9 @@ def main():
                 rows=args.rows,
                 outdir=output_dir,
                 uuid_file=args.uuid_file,
-                name_file=args.name_file
+                name_file=args.name_file,
+                base_name=args.base_name,
+                start_index=args.start_index
             )
             print(f'CLI: Successfully generated {args.count} NFC QR codes in '
                   f'{output_dir}')
@@ -1100,7 +1239,9 @@ def main():
                 qr_version=args.qr_version,
                 adaptive_layout=args.adaptive_layout,
                 uuid_file=args.uuid_file,
-                name_file=args.name_file
+                name_file=args.name_file,
+                base_name=args.base_name,
+                start_index=args.start_index
             )
             print(f'CLI: Successfully generated {args.count} QR codes in '
                   f'{output_dir}')
