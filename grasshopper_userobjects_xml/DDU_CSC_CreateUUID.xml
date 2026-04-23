@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">ae866334-1162-47ff-9863-abf6f36c5edb</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">dce7930c-4a4d-404f-ae36-3644754f332b</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639124748436287053</item>
+            <item name="Date" type_name="gh_date" type_code="8">639125517573328864</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -108,7 +108,7 @@
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="834">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAALXSURBVEhLtZVNSFRRGIZd5Kog2oVgJbZv0yaiQOncc+d/7r2zCcM0qDaCQWSZ7SJQwSjKRUHhIoK0qDTyzk86GhbuaumqcqdoqxY5zswT58xoM3dG06wLLxzOz/ucc77vfLemxvMRF+xUXs/1zztxJ/J6/1PzNW3LPB8X5NyCVNs7vpH+aJ53BdlxAQkBqaIShT415p3v1aaAnGtAUsCUYNU1+DZiMv/cJKv6p4QeUyfyrtsSQJtPCBZHJR1dYeoth32Bgg5YDh1XwyyMmjBhbAqpClgz//TUR13YodGxudcX5OOQnw9DPu70BmmwHT2m5hQgRoVPVYC613xSsDwmqYs4RC9GWU1KmFbQoqYFK0lJ4LzF/rDD8phJJl79JBWA1XGD/JRBd09YL/4ZNyElybyV5NyCVJukAZOSBsfh2vUwzBYTwQMpA+j0SxQWHo7ZDNwKw4wyNEGB4lIr70qyCcmrBwGaz1kcOW1zty/El2G1mfLsKgOoe8y9k/TfDFF7Kob/gsXCqJ9cwiTvrkFMsuOm3kTPjQg1zTEd+L1+h7lnJvlUeWatA3TnhGB2KMAeM0Z91GaXiHGlOwJpyaoyLQI0RAHTJh1dUXZLh89PfJCuTNvyGCQEP95Ivr40Odpi0XYpynfXR8Y1yZeYK62oa3svudwd4VirpZNAP8hSvwpAMYuYEQz2hvRJFl/79U5VHNQplHRM0pL5Fz5qRYyH/SFyaZUgWwHEBdm4IJM0ON5q02g7zI34YVrCVFHTkrlhH422zYmzFpmEJBc3qtaoCoCGqFOkBEtjJk3tlo5FS2eU+30hBvuCnOmM6L6mdpulMR+kjA3rUlXAb4ih9WggyMk2i0O2zUHL1u3Ht4P6faj3sJH5poB1iGqrwjZZSGNd6CaLfaVzNtCmAG2gYjJeTD/1UhOFti7XVeZ79UdAqZThVkxLteU/2t9qW7/N7Wrd/H9A1jx/Aa9cJ2v5UTM8AAAAAElFTkSuQmCC</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">cfbf10cd-94af-4296-9ccf-fe199508a41c</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">963d2148-f19f-48ef-bf11-cadf0a1c91bc</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -126,7 +126,7 @@
                       <items count="2">
                         <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
                           <X>275</X>
-                          <Y>19522</Y>
+                          <Y>25562</Y>
                           <W>113</W>
                           <H>90</H>
                         </item>
@@ -148,7 +148,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of boolean values</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">7c33a206-deb0-4810-90a4-8d1de5900cd3</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">054161cf-ad2c-4b64-a141-a90659f1346e</item>
                             <item name="Name" type_name="gh_string" type_code="10">Refresh</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Refresh</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -182,7 +182,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of text fragments</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">2515d82c-9ccd-4286-bf33-94f8258d8295</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">20cd284e-8f26-4399-8064-fa8f0da90399</item>
                             <item name="Name" type_name="gh_string" type_code="10">UUID</item>
                             <item name="NickName" type_name="gh_string" type_code="10">UUID</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -234,8 +234,8 @@
                     <chunk name="ScriptEditor">
                       <items count="1">
                         <item name="StartBounds" type_name="gh_drawing_rectangle" type_code="34">
-                          <X>825</X>
-                          <Y>-907</Y>
+                          <X>721</X>
+                          <Y>-788</Y>
                           <W>705</W>
                           <H>1032</H>
                         </item>
