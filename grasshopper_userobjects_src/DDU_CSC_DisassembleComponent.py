@@ -34,7 +34,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260203
+    Version: 260423
     """
 
     def __init__(self):
@@ -77,7 +77,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'Component name (e.g. My Component 01)'
         )
         self.OutputParams[2+i].Description = (
-            'Component type (sheet, beam, slab, etc.)'
+            'Component type (panel, beam, slab, etc.)'
         )
         self.OutputParams[3+i].Description = (
             'Component material'
@@ -106,6 +106,26 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         )
         self.OutputParams[11+i].Description = (
             'Component attributes as JSON string'
+        )
+        self.OutputParams[12+i].Description = (
+            'Component condition grade (0=destroyed/retired, 1=poor, '
+            '2=average, 3=good)'
+        )
+        self.OutputParams[13+i].Description = (
+            'Component manufacturing date as ISO-8601 UTC timestamp'
+        )
+        self.OutputParams[14+i].Description = (
+            'Precision qualifier for ManufacturedAt (exact, month, year, '
+            'unknown)'
+        )
+        self.OutputParams[15+i].Description = (
+            'Component salvage source (e.g. building name, site)'
+        )
+        self.OutputParams[16+i].Description = (
+            'Component salvage date as ISO-8601 UTC timestamp'
+        )
+        self.OutputParams[17+i].Description = (
+            'Parent component ID (GUID) this component was derived from'
         )
 
     def ComponentExtrusionProfile(
@@ -253,6 +273,12 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
         MarkerPoints = Grasshopper.DataTree[System.Object]()
         Attributes = Grasshopper.DataTree[System.Object]()
+        Condition = Grasshopper.DataTree[System.Object]()
+        ManufacturedAt = Grasshopper.DataTree[System.Object]()
+        ManufacturedPrecision = Grasshopper.DataTree[System.Object]()
+        SalvageSource = Grasshopper.DataTree[System.Object]()
+        SalvagedAt = Grasshopper.DataTree[System.Object]()
+        ParentComponent = Grasshopper.DataTree[System.Object]()
         __Results = (
             ID,
             Name,
@@ -265,7 +291,13 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             Descriptors,
             PrimitiveGeometry,
             MarkerPoints,
-            Attributes)
+            Attributes,
+            Condition,
+            ManufacturedAt,
+            ManufacturedPrecision,
+            SalvageSource,
+            SalvagedAt,
+            ParentComponent)
         try:
             # Validate input
             if not ComponentData or ComponentData.DataCount == 0:
@@ -406,6 +438,17 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         except KeyError:
                             # If no attributes, add empty dict as JSON string
                             Attributes.Add(json.dumps({}), ghp)
+
+                        Condition.Add(json_comp.get('condition'), ghp)
+                        ManufacturedAt.Add(
+                            json_comp.get('manufactured_at'), ghp)
+                        ManufacturedPrecision.Add(
+                            json_comp.get('manufactured_precision'), ghp)
+                        SalvageSource.Add(
+                            json_comp.get('salvage_source'), ghp)
+                        SalvagedAt.Add(json_comp.get('salvaged_at'), ghp)
+                        ParentComponent.Add(
+                            json_comp.get('parent_component'), ghp)
 
                     except json.JSONDecodeError as e:
                         msg = f'Failed to parse component data: {str(e)}'
