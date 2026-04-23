@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-03-20T09:29:05.134Z
+// Generated on: 2026-04-23T12:13:23.327Z
 // Source: https://api.ddu.uber.space/schema/component
 
 export type ComponentBoundingBox = number[];
@@ -51,7 +51,7 @@ export interface ComponentModel {
   name?: string | unknown; // Human readable component name (optional)
   created: string; // ISO timestamp when component was created
   lastmodified: string; // ISO timestamp when component was last modified
-  type: string; // Type of component (sheet, beam, slab, rubble, column)
+  type: string; // Type of component. Must be one of ALLOWED_COMPONENT_TYPES (panel, beam, column, slab, rubble, brick, pipe, profile, connector, other).
   material: string; // Material type of the component
   dataset: string; // Dataset name that this component belongs to
   complexity: number; // Complexity level (0-3, where 0 is simplest)
@@ -71,11 +71,29 @@ export interface ComponentModel {
   marker_points?: number[][] | unknown; // Marker points as array of [x, y, z] coordinate triplets
   validated: boolean; // Whether this component has been validated
   etag?: string | unknown; // ETag for cache validation (auto-generated from lastmodified and key fields)
+  condition?: number | unknown; // Condition grade. 0 = destroyed/retired, 1 = poor, 2 = average, 3 = good. `None` = unknown / unassessed.
+  manufactured_at?: string | unknown; // ISO-8601 timestamp (UTC) describing when the component was originally manufactured, to the precision indicated by `manufactured_precision`. Optional.
+  manufactured_precision?: string | unknown; // Precision qualifier for `manufactured_at`. Must be one of ALLOWED_MANUFACTURED_PRECISIONS (exact, month, year, unknown).
+  salvage_source?: string | unknown; // Short free-text description of where the component was salvaged from (e.g. building name, demolition site).
+  salvaged_at?: string | unknown; // ISO-8601 timestamp (UTC) describing when the component was salvaged. Optional. Paired with `salvage_source`.
+  parent_component?: string | unknown; // Optional UUID of the parent component this component was derived from (e.g. when a piece is split into smaller pieces and reintroduced into the catalog). Lightweight Phase 1 lineage link; will be superseded by the identity/snapshot model in Phase 2.
 }
 
 // Utility types for better type safety
-export type ComponentType = 'sheet' | 'beam' | 'slab' | 'rubble' | 'column';
+export type ComponentType =
+  | 'panel'
+  | 'beam'
+  | 'column'
+  | 'slab'
+  | 'rubble'
+  | 'brick'
+  | 'pipe'
+  | 'profile'
+  | 'connector'
+  | 'other';
 export type ComponentComplexity = 0 | 1 | 2 | 3;
+export type ComponentCondition = 0 | 1 | 2 | 3;
+export type ComponentManufacturedPrecision = 'exact' | 'month' | 'year' | 'unknown';
 
 // Type guards
 export function isComponentModel(obj: unknown): obj is ComponentModel {

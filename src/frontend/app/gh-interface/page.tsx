@@ -545,7 +545,7 @@ export default function GHInterfacePage() {
             inputs={[
               { label: 'ClearLocalStorage', description: 'If set to True, clears all stored locally saved geometry files for component creation' },
               { label: 'ComponentID', description: 'Component ID (must be a valid UUID)' },
-              { label: 'Type', description: 'Component type (e.g., "sheet", "rubble")' },
+              { label: 'Type', description: 'Component type (e.g., "panel", "rubble"). Must be one of the values exposed by the backend component type enum.' },
               { label: 'Material', description: 'Material type (e.g., "steel", "concrete", "wood")' },
               { label: 'Dataset', description: 'Dataset that this component belongs to (i.e. my_rubble_dataset)' },
               { label: 'Complexity', description: 'Complexity level (0=simple, 1=normal, 2=complex, 3=very complex)' },
@@ -553,7 +553,7 @@ export default function GHInterfacePage() {
               { label: 'Assembly', description: 'Assembly status (True for assemblies, False for individual)' },
               { label: 'Location', description: 'Location as Vector3d (X=latitude, Y=longitude, Z ignored)' },
               { label: 'Color', description: 'Component color (System.Drawing.Color)' },
-              { label: 'Geometry', description: 'Rhino geometry object(s) - single object or list of objects. For single: Mesh or Extrusion for sheets, Mesh for rubble. For multiple: list of Meshes' },
+              { label: 'Geometry', description: 'Rhino geometry object(s) - single object or list of objects. For single: Mesh or Extrusion for panels, Mesh for rubble. For multiple: list of Meshes' },
               { label: 'MarkerPoints', description: 'Marker points as list of Point3d objects for component identification and positioning' }
             ]}
             outputs={[
@@ -587,7 +587,7 @@ export default function GHInterfacePage() {
             ]}
             outputs={[
               { label: 'ID', description: 'Component ID (GUID)' },
-              { label: 'Type', description: 'Component type (sheet, beam, slab, etc.)' },
+              { label: 'Type', description: 'Component type (panel, beam, column, slab, rubble, brick, pipe, profile, connector, other)' },
               { label: 'Material', description: 'Component material' },
               { label: 'Color', description: 'Component color as System.Drawing.Color' },
               { label: 'Location', description: 'Component location as Point3d (X=latitude, Y=longitude, Z=0)' },

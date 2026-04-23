@@ -131,8 +131,20 @@ import { ComponentGeometry } from './ComponentModel';
 
   if (rootInterfaceName === 'ComponentModel') {
     interfaceCode += `// Utility types for better type safety
-export type ComponentType = 'sheet' | 'beam' | 'slab' | 'rubble' | 'column';
+export type ComponentType =
+  | 'panel'
+  | 'beam'
+  | 'column'
+  | 'slab'
+  | 'rubble'
+  | 'brick'
+  | 'pipe'
+  | 'profile'
+  | 'connector'
+  | 'other';
 export type ComponentComplexity = 0 | 1 | 2 | 3;
+export type ComponentCondition = 0 | 1 | 2 | 3;
+export type ComponentManufacturedPrecision = 'exact' | 'month' | 'year' | 'unknown';
 
 // Type guards
 export function isComponentModel(obj: unknown): obj is ComponentModel {

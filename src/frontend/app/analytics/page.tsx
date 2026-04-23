@@ -195,11 +195,16 @@ export default function AnalyticsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="sheet">sheet</SelectItem>
+                  <SelectItem value="panel">panel</SelectItem>
                   <SelectItem value="beam">beam</SelectItem>
+                  <SelectItem value="column">column</SelectItem>
                   <SelectItem value="slab">slab</SelectItem>
                   <SelectItem value="rubble">rubble</SelectItem>
-                  <SelectItem value="column">column</SelectItem>
+                  <SelectItem value="brick">brick</SelectItem>
+                  <SelectItem value="pipe">pipe</SelectItem>
+                  <SelectItem value="profile">profile</SelectItem>
+                  <SelectItem value="connector">connector</SelectItem>
+                  <SelectItem value="other">other</SelectItem>
                 </SelectContent>
               </Select>
             </div>

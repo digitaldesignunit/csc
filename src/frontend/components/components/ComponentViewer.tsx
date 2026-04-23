@@ -548,9 +548,9 @@ const VisualizeMesh = React.memo(({
 VisualizeMesh.displayName = 'VisualizeMesh'
 
 /** 
- * VisualizeSheet 
+ * VisualizePanel 
  */
-const VisualizeSheet = React.memo(({ component_data }: { component_data: ComponentModel }) => {
+const VisualizePanel = React.memo(({ component_data }: { component_data: ComponentModel }) => {
   const pline_shape = useMemo(() => {
     const shape = new THREE.Shape()
     
@@ -603,7 +603,7 @@ const VisualizeSheet = React.memo(({ component_data }: { component_data: Compone
     </>
   )
 })
-VisualizeSheet.displayName = 'VisualizeSheet'
+VisualizePanel.displayName = 'VisualizePanel'
 
 /** 
  * MarkerPoints - renders marker points as red dots
@@ -786,7 +786,7 @@ function VisualizeComponent({
   const hasMultipleMeshes = meshes && meshes.length > 0
   
   if (hasExtrusion) {
-    return <VisualizeSheet component_data={component_data} />
+    return <VisualizePanel component_data={component_data} />
   } else if (hasMultipleMeshes) {
     return <VisualizeMultipleMeshes component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
   } else if (hasMesh) {
@@ -794,8 +794,8 @@ function VisualizeComponent({
   }
   
   // Fallback to type-based logic if geometry inference fails
-  if (component_data.type === 'sheet') {
-    return <VisualizeSheet component_data={component_data} />
+  if (component_data.type === 'panel') {
+    return <VisualizePanel component_data={component_data} />
   } else {
     return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
   }
@@ -820,7 +820,7 @@ export default function ComponentViewer({
   const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
   const [showEdges, setShowEdges] = useState<boolean>(true)
 
-  const isSheet = component_data.type === 'sheet'
+  const isPanel = component_data.type === 'panel'
   const geometry = component_data.geometry as ComponentGeometry
   const meshes = useMemo(() => (geometry?.meshes || []) as ComponentMesh[], [geometry?.meshes])
   const hasMultipleMeshes = meshes && meshes.length > 0
@@ -839,7 +839,7 @@ export default function ComponentViewer({
   // Load external geometry centrally
   useEffect(() => {
     let isMounted = true
-    if (isExternalMode && component_data.type !== 'sheet' && component_data._id) {
+    if (isExternalMode && component_data.type !== 'panel' && component_data._id) {
       setIsLoadingExternal(true)
       setGeometryError(null)
       // For external geometry default: hide edges
@@ -938,7 +938,7 @@ export default function ComponentViewer({
           label="Geometry Resolution:"
           value={geometryMode}
           onChange={onModeChange}
-          disabled={isSheet}
+          disabled={isPanel}
           options={[
             { value: 'primitive', label: 'Primitive' },
             { value: 'reduced', label: 'Reduced' },

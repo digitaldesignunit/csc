@@ -14,7 +14,18 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { hexComponentColor } from '@/lib/utils'
 
-const COMPONENT_TYPES = ['sheet', 'beam', 'slab', 'rubble', 'column'] as const
+const COMPONENT_TYPES = [
+  'panel',
+  'beam',
+  'column',
+  'slab',
+  'rubble',
+  'brick',
+  'pipe',
+  'profile',
+  'connector',
+  'other',
+] as const
 const COMPLEXITY_LEVELS = [0, 1, 2, 3] as const
 
 type FormState = {
