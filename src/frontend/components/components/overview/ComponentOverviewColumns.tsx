@@ -25,11 +25,20 @@ function ComponentOverviewDataTableCopyIdCell({ componentId }: { componentId: st
 
   return (
     <div
-      className='inline-flex max-w-full items-center gap-1 rounded px-1.5 py-0.5 text-xs bg-muted text-foreground hover:bg-accent hover:text-accent-foreground truncate cursor-pointer font-mono'
+      className={`relative inline-flex max-w-full items-center rounded px-1.5 py-0.5 text-xs truncate cursor-pointer font-mono ${
+        copied
+          ? 'bg-green-100 text-green-700 hover:bg-green-200 hover:text-green-800'
+          : 'bg-muted text-foreground hover:bg-accent hover:text-accent-foreground'
+      }`}
       onClick={handleCopyId}
       title={copied ? 'Copied component ID to clipboard' : 'Click to copy component ID to clipboard'}
     >
-      {copied ? 'Copied!' : componentId}
+      <span className={`truncate ${copied ? 'opacity-0' : ''}`}>{componentId}</span>
+      {copied && (
+        <span className='absolute inset-0 flex items-center justify-center px-1.5 py-0.5'>
+          Copied!
+        </span>
+      )}
     </div>
   )
 }
