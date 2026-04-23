@@ -143,7 +143,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Search className="h-5 w-5 text-primary" />
-              Find Components
+              Explore Component Catalog
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col flex-1">
