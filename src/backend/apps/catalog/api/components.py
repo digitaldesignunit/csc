@@ -3,6 +3,7 @@ import os
 import json
 import hashlib
 import shutil
+import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Any, Dict, List, Optional
 
@@ -20,6 +21,8 @@ from apps.catalog.models import (  # NOQA
     ALLOWED_COMPLEXITY_LEVELS,
     ALLOWED_COMPONENT_SORTKEYS,
     ALLOWED_COMPONENT_TYPES,
+    ALLOWED_CONDITION_VALUES,
+    ALLOWED_MANUFACTURED_PRECISIONS,
     ComponentCount,
     ComponentDescriptors,
     ComponentLocation,
@@ -450,10 +453,14 @@ async def get_components_stats(
                     label = 'true' if label else 'false'
                 elif label is None:
                     label = 'unknown'
-                out.append({"label": str(label), "count": int(it.get('count', 0))})
+                out.append(
+                    {"label": str(label),
+                     "count": int(it.get('count', 0))}
+                )
             return out
 
-        total = int((raw.get('total') or [{}])[0].get('count', 0)) if raw.get('total') else 0
+        total = (int((raw.get('total') or [{}])[0].get('count', 0))
+                 if raw.get('total') else 0)
 
         # Apply Top-N + others for long tail dimensions
         def topn(items):
@@ -879,6 +886,50 @@ class ComponentMetadataUpdate(BaseModel):
         default=None,
         description='Geographic location (lat/lon coordinates)',
     )
+    # Phase 1 admin-editable provenance/lineage fields.
+    # See IMPLEMENTATION_PLAN.md Phase 1 scope / ADR-008.
+    condition: Optional[int] = Field(
+        default=None,
+        description=(
+            'Condition grade: 0=destroyed/retired, 1=poor, 2=average, '
+            '3=good. Must be one of ALLOWED_CONDITION_VALUES.'
+        ),
+    )
+    manufactured_at: Optional[str] = Field(
+        default=None,
+        max_length=40,
+        description=(
+            'ISO-8601 timestamp describing when the component was '
+            'originally manufactured.'
+        ),
+    )
+    manufactured_precision: Optional[str] = Field(
+        default=None,
+        description=(
+            'Precision qualifier for manufactured_at. Must be one of '
+            'ALLOWED_MANUFACTURED_PRECISIONS (exact, month, year, unknown).'
+        ),
+    )
+    salvage_source: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description='Short free-text description of salvage origin.',
+    )
+    salvaged_at: Optional[str] = Field(
+        default=None,
+        max_length=40,
+        description=(
+            'ISO-8601 timestamp describing when the component was '
+            'salvaged.'
+        ),
+    )
+    parent_component: Optional[str] = Field(
+        default=None,
+        description=(
+            'Optional UUID of parent component (lightweight Phase 1 '
+            'lineage link). Use empty string or null to clear.'
+        ),
+    )
 
     class Config:
         populate_by_name = True
@@ -929,6 +980,52 @@ class ComponentMetadataUpdate(BaseModel):
         if v == '':
             raise ValueError('value must not be empty')
         return v
+
+    @field_validator('condition')
+    @classmethod
+    def _check_condition(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v not in ALLOWED_CONDITION_VALUES:
+            raise ValueError(
+                f'condition must be one of {ALLOWED_CONDITION_VALUES}'
+            )
+        return v
+
+    @field_validator('manufactured_precision')
+    @classmethod
+    def _check_manufactured_precision(
+        cls, v: Optional[str]
+    ) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in ALLOWED_MANUFACTURED_PRECISIONS:
+            raise ValueError(
+                'manufactured_precision must be one of '
+                f'{ALLOWED_MANUFACTURED_PRECISIONS}'
+            )
+        return v
+
+    @field_validator('salvage_source')
+    @classmethod
+    def _check_salvage_source(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        return v or None
+
+    @field_validator('parent_component')
+    @classmethod
+    def _check_parent_component(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == '':
+            return None
+        try:
+            uuid.UUID(str(v))
+        except (ValueError, AttributeError, TypeError):
+            raise ValueError(
+                'parent_component must be a valid UUID string'
+            )
+        return str(v)
 
 
 @router.patch(

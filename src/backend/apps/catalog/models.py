@@ -6,7 +6,14 @@ import uuid
 from datetime import datetime
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-from pydantic import BaseModel, Field, EmailStr, RootModel, model_validator
+from pydantic import (
+    BaseModel,
+    EmailStr,
+    Field,
+    RootModel,
+    field_validator,
+    model_validator,
+)
 
 # AUTH ------------------------------------------------------------------------
 Role = Literal["user", "admin"]
@@ -69,12 +76,21 @@ class UserInDB(User):
 
 
 # COMPONENTS ------------------------------------------------------------------
+# Phase 1 component type taxonomy.
+# See IMPLEMENTATION_PLAN.md, ADR-002 (sheet -> panel migration) and Phase 1
+# schema scope. `sheet` is intentionally removed and must be migrated to
+# `panel` via scripts/db_maintenance/migrate_phase1_component_schema.py.
 ALLOWED_COMPONENT_TYPES = [
-    "sheet",
+    "panel",
     "beam",
+    "column",
     "slab",
     "rubble",
-    "column"
+    "brick",
+    "pipe",
+    "profile",
+    "connector",
+    "other",
 ]
 
 
@@ -90,6 +106,21 @@ ALLOWED_COMPONENT_SORTKEYS = [
 
 
 ALLOWED_COMPLEXITY_LEVELS = [0, 1, 2, 3]
+
+
+# Condition semantics (Phase 1):
+#   0 = destroyed / retired (red)
+#   1 = poor                (orange)
+#   2 = average             (yellow)
+#   3 = good                (green)
+# A missing `condition` means "unknown / unassessed" and is distinct from 0.
+ALLOWED_CONDITION_VALUES = [0, 1, 2, 3]
+
+
+# Precision of `manufactured_at` (Phase 1). The stored timestamp is always
+# ISO-8601; this field records how precisely the timestamp is known so
+# downstream consumers do not over-interpret the value.
+ALLOWED_MANUFACTURED_PRECISIONS = ["exact", "month", "year", "unknown"]
 
 
 # COMPONENT SPECIFIC TYPES ----------------------------------------------------
@@ -318,7 +349,11 @@ class ComponentModel(BaseModel):
     # base attributes
     componenttype: str = Field(
         alias="type",
-        description="Type of component (sheet, beam, slab, rubble, column)"
+        description=(
+            "Type of component. Must be one of ALLOWED_COMPONENT_TYPES "
+            "(panel, beam, column, slab, rubble, brick, pipe, profile, "
+            "connector, other)."
+        )
     )
     material: str = Field(
         description="Material type of the component"
@@ -406,6 +441,125 @@ class ComponentModel(BaseModel):
         description=("ETag for cache validation (auto-generated from "
                      "lastmodified and key fields)")
     )
+    # Phase 1 lineage + provenance fields ------------------------------------
+    # See IMPLEMENTATION_PLAN.md Phase 1 scope / ADR-008.
+    condition: Optional[int] = Field(
+        None,
+        description=(
+            "Condition grade. 0 = destroyed/retired, 1 = poor, "
+            "2 = average, 3 = good. `None` = unknown / unassessed."
+        )
+    )
+    manufactured_at: Optional[str] = Field(
+        None,
+        description=(
+            "ISO-8601 timestamp (UTC) describing when the component was "
+            "originally manufactured, to the precision indicated by "
+            "`manufactured_precision`. Optional."
+        )
+    )
+    manufactured_precision: Optional[str] = Field(
+        None,
+        description=(
+            "Precision qualifier for `manufactured_at`. Must be one of "
+            "ALLOWED_MANUFACTURED_PRECISIONS (exact, month, year, unknown)."
+        )
+    )
+    salvage_source: Optional[str] = Field(
+        None,
+        description=(
+            "Short free-text description of where the component was "
+            "salvaged from (e.g. building name, demolition site)."
+        )
+    )
+    salvaged_at: Optional[str] = Field(
+        None,
+        description=(
+            "ISO-8601 timestamp (UTC) describing when the component was "
+            "salvaged. Optional. Paired with `salvage_source`."
+        )
+    )
+    parent_component: Optional[str] = Field(
+        None,
+        description=(
+            "Optional UUID of the parent component this component was "
+            "derived from (e.g. when a piece is split into smaller pieces "
+            "and reintroduced into the catalog). Lightweight Phase 1 "
+            "lineage link; will be superseded by the identity/snapshot "
+            "model in Phase 2."
+        )
+    )
+
+    # Phase 1 validators ------------------------------------------------------
+
+    @field_validator('componenttype')
+    @classmethod
+    def _validate_componenttype(cls, v: str) -> str:
+        if v not in ALLOWED_COMPONENT_TYPES:
+            raise ValueError(
+                f'type must be one of {ALLOWED_COMPONENT_TYPES}'
+            )
+        return v
+
+    @field_validator('complexity')
+    @classmethod
+    def _validate_complexity(cls, v: int) -> int:
+        if v not in ALLOWED_COMPLEXITY_LEVELS:
+            raise ValueError(
+                f'complexity must be one of {ALLOWED_COMPLEXITY_LEVELS}'
+            )
+        return v
+
+    @field_validator('condition')
+    @classmethod
+    def _validate_condition(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v not in ALLOWED_CONDITION_VALUES:
+            raise ValueError(
+                f'condition must be one of {ALLOWED_CONDITION_VALUES}'
+            )
+        return v
+
+    @field_validator('manufactured_precision')
+    @classmethod
+    def _validate_manufactured_precision(
+        cls, v: Optional[str]
+    ) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in ALLOWED_MANUFACTURED_PRECISIONS:
+            raise ValueError(
+                'manufactured_precision must be one of '
+                f'{ALLOWED_MANUFACTURED_PRECISIONS}'
+            )
+        return v
+
+    @field_validator('salvage_source')
+    @classmethod
+    def _normalize_salvage_source(
+        cls, v: Optional[str]
+    ) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        # An empty string after trimming collapses to "not provided".
+        return v or None
+
+    @field_validator('parent_component')
+    @classmethod
+    def _validate_parent_component(
+        cls, v: Optional[str]
+    ) -> Optional[str]:
+        if v is None or v == '':
+            return None
+        try:
+            uuid.UUID(str(v))
+        except (ValueError, AttributeError, TypeError):
+            raise ValueError(
+                'parent_component must be a valid UUID string'
+            )
+        return str(v)
 
     class Config:
         extra = "ignore"
@@ -464,27 +618,93 @@ class ComponentModel(BaseModel):
                 "attributes": {"strength": "C30"},
                 "marker_points": [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
                 "validated": True,
-                "etag": "abc123def456"
+                "etag": "abc123def456",
+                "condition": 2,
+                "manufactured_at": "1998-06-01T00:00:00Z",
+                "manufactured_precision": "year",
+                "salvage_source": "Demolition site, Berlin-Wedding",
+                "salvaged_at": "2026-02-14T00:00:00Z",
+                "parent_component": (
+                    "550e8400-e29b-41d4-a716-446655440111"
+                )
             }
         }
 
 
 class UpdateComponentModel(BaseModel):
-    componenttype: Optional[str]
+    componenttype: Optional[str] = None
     lastmodified: str
-    material: Optional[str]
-    dataset: Optional[str]
-    geometry: Optional[ComponentGeometry]
-    complexity: Optional[float]
-    fragment: Optional[bool]
-    assembly: Optional[bool]
-    color: Optional[List[int]]
-    validated: Optional[bool]
-    bbx: Optional[ComponentBoundingBox]
-    bbx_origin: Optional[List[float]]
-    iframe: Optional[ComponentFrame]
-    pca_frame: Optional[ComponentFrame]
-    reserved: Optional[str]
+    material: Optional[str] = None
+    dataset: Optional[str] = None
+    geometry: Optional[ComponentGeometry] = None
+    complexity: Optional[float] = None
+    fragment: Optional[bool] = None
+    assembly: Optional[bool] = None
+    color: Optional[List[int]] = None
+    validated: Optional[bool] = None
+    bbx: Optional[ComponentBoundingBox] = None
+    bbx_origin: Optional[List[float]] = None
+    iframe: Optional[ComponentFrame] = None
+    pca_frame: Optional[ComponentFrame] = None
+    reserved: Optional[str] = None
+    # Phase 1 additions
+    condition: Optional[int] = None
+    manufactured_at: Optional[str] = None
+    manufactured_precision: Optional[str] = None
+    salvage_source: Optional[str] = None
+    salvaged_at: Optional[str] = None
+    parent_component: Optional[str] = None
+
+    @field_validator('componenttype')
+    @classmethod
+    def _validate_componenttype(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in ALLOWED_COMPONENT_TYPES:
+            raise ValueError(
+                f'type must be one of {ALLOWED_COMPONENT_TYPES}'
+            )
+        return v
+
+    @field_validator('condition')
+    @classmethod
+    def _validate_condition(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v not in ALLOWED_CONDITION_VALUES:
+            raise ValueError(
+                f'condition must be one of {ALLOWED_CONDITION_VALUES}'
+            )
+        return v
+
+    @field_validator('manufactured_precision')
+    @classmethod
+    def _validate_manufactured_precision(
+        cls, v: Optional[str]
+    ) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in ALLOWED_MANUFACTURED_PRECISIONS:
+            raise ValueError(
+                'manufactured_precision must be one of '
+                f'{ALLOWED_MANUFACTURED_PRECISIONS}'
+            )
+        return v
+
+    @field_validator('parent_component')
+    @classmethod
+    def _validate_parent_component(
+        cls, v: Optional[str]
+    ) -> Optional[str]:
+        if v is None or v == '':
+            return None
+        try:
+            uuid.UUID(str(v))
+        except (ValueError, AttributeError, TypeError):
+            raise ValueError(
+                'parent_component must be a valid UUID string'
+            )
+        return str(v)
 
     class Config:
         extra = "ignore"

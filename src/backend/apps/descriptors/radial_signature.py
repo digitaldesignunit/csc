@@ -31,11 +31,11 @@ import numpy as np
 
 # MODULE CONSTANTS ------------------------------------------------------------
 
-APPLICABLE_COMPONENT_TYPES: Tuple[str, ...] = ("sheet", "panel")
+APPLICABLE_COMPONENT_TYPES: Tuple[str, ...] = ("panel",)
 """Component types this descriptor is valid for.
 
-`panel` is included ahead of the locked `sheet -> panel` migration
-(see IMPLEMENTATION_PLAN.md, ADR-002) so no change is required at cutover.
+Phase 1 taxonomy: `sheet` has been removed and replaced by `panel`
+(see IMPLEMENTATION_PLAN.md, ADR-002).
 """
 
 SUPPORTED_RESOLUTIONS: Tuple[int, ...] = (16, 32, 64, 128)

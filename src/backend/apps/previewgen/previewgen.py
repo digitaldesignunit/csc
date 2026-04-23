@@ -255,7 +255,7 @@ __example_component_data_a = {
         '_id': '0026b86f-2b7c-4441-a42b-c135401601f9',
         'created': '240522-000248',
         'lastmodified': '240522-000248',
-        'type': 'sheet',
+        'type': 'panel',
         'material': 'corian',
         'geometry': {
             'extrusion': {
