@@ -44,7 +44,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260421
+    Version: 260423
     """
 
     def __init__(self):
@@ -85,7 +85,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'Component Name (e.g. My Beam 01)'
         )
         self.InputParams[3].Description = (
-            'Component type (e.g., "sheet", "rubble")'
+            'Component type (e.g., "panel", "rubble"). Must be one of '
+            'the values exposed by the backend component type enum.'
         )
         self.InputParams[4].Description = (
             'Material type (e.g., "steel", "concrete", "wood")'
@@ -112,13 +113,54 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         )
         self.InputParams[11].Description = (
             'Rhino geometry object(s) - single object or list of objects. '
-            'For single: Mesh or Extrusion for sheets, Mesh for rubble. '
+            'For single: Mesh or Extrusion for panels, Mesh for rubble. '
             'For multiple: all must be Meshes.'
         )
         self.InputParams[12].Description = (
             'Marker points as list of Point3d objects for component '
             'identification and positioning'
         )
+        # Phase 1 provenance / lineage inputs (indices 13-18). All optional.
+        # Guarded so the script does not break if the corresponding ports
+        # have not been added yet to the compiled .ghuser component.
+        _phase1_descriptions = {
+            13: (
+                'Optional condition grade of the component. Accepts an '
+                'integer in {0, 1, 2, 3}: 0=destroyed/retired (red), '
+                '1=poor (orange), 2=average (yellow), 3=good (green). '
+                'Leave unconnected for "unknown".'
+            ),
+            14: (
+                'Optional ISO-8601 UTC timestamp for when the component '
+                'was originally manufactured (e.g. "1998-06-01T00:00:00Z"). '
+                'Leave unconnected if unknown.'
+            ),
+            15: (
+                'Optional precision qualifier for ManufacturedAt. Must be '
+                'one of "exact", "month", "year", "unknown". Leave '
+                'unconnected for "unknown".'
+            ),
+            16: (
+                'Optional short text describing where the component was '
+                'salvaged from (e.g. building name, demolition site, '
+                'address). Free-form string.'
+            ),
+            17: (
+                'Optional ISO-8601 UTC timestamp for when the component '
+                'was salvaged (e.g. "2024-11-03T00:00:00Z").'
+            ),
+            18: (
+                'Optional UUID of the parent component this component was '
+                'derived from (e.g. when a larger piece is split into '
+                'smaller pieces). Must be a valid UUID string.'
+            ),
+        }
+        for _idx, _desc in _phase1_descriptions.items():
+            try:
+                self.InputParams[_idx].Description = _desc
+            except Exception:
+                # Port not present on the component yet; skip silently.
+                pass
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
@@ -225,7 +267,14 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                     'type': 'array', 'items': {
                         'type': 'array', 'items': {'type': 'number'}}},
                 'validated': {'type': 'boolean'},
-                'etag': {'type': 'string'}
+                'etag': {'type': 'string'},
+                # Phase 1 provenance / lineage fields (all optional).
+                'condition': {'type': 'integer'},
+                'manufactured_at': {'type': 'string'},
+                'manufactured_precision': {'type': 'string'},
+                'salvage_source': {'type': 'string'},
+                'salvaged_at': {'type': 'string'},
+                'parent_component': {'type': 'string'}
             },
             'required': ['type', 'material', 'dataset', 'created',
                          'lastmodified', 'complexity', 'fragment', 'assembly',
@@ -375,6 +424,14 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 component_data[field_name] = False
             elif field_name == 'etag':
                 component_data[field_name] = ''
+            elif field_name in (
+                'condition', 'manufactured_at', 'manufactured_precision',
+                'salvage_source', 'salvaged_at', 'parent_component',
+            ):
+                # Phase 1 optional provenance/lineage fields. Skip here;
+                # they are injected after build only when a value was
+                # supplied on the corresponding GH input port.
+                continue
             else:
                 # Handle any other fields from the
                 # schema with appropriate defaults
@@ -1079,7 +1136,13 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             Color: System.Drawing.Color,
             Location: Rhino.Geometry.Vector3d,
             Geometry: System.Collections.Generic.List[Rhino.Geometry.GeometryBase],
-            MarkerPoints: System.Collections.Generic.List[Rhino.Geometry.Point3d]):
+            MarkerPoints: System.Collections.Generic.List[Rhino.Geometry.Point3d],
+            Condition,
+            ManufacturedAt,
+            ManufacturedPrecision,
+            SalvageSource,
+            SalvagedAt,
+            ParentComponent):
 
         # MESH REDUCTION SETTINGS
         # If mesh has tc above this but below reduced threshold,
@@ -1162,6 +1225,69 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                     "lon": Location.Y
                 }
 
+            # ---------------------------------------------------------------
+            # Phase 1 provenance / lineage inputs (all optional). Validate
+            # here and drop to None on invalid values with a warning, so the
+            # component still creates (backend treats missing as null).
+            # ---------------------------------------------------------------
+            if Condition is not None:
+                try:
+                    Condition = int(Condition)
+                except Exception:
+                    self._addWarning(
+                        'Input Condition must be an integer in '
+                        '{0, 1, 2, 3}. Ignoring provided value: '
+                        f'{Condition!r}.'
+                    )
+                    Condition = None
+                else:
+                    if Condition not in (0, 1, 2, 3):
+                        self._addWarning(
+                            'Input Condition must be in {0, 1, 2, 3}. '
+                            f'Ignoring out-of-range value: {Condition}.'
+                        )
+                        Condition = None
+
+            if ManufacturedAt is not None:
+                ManufacturedAt = str(ManufacturedAt).strip()
+                if ManufacturedAt == '':
+                    ManufacturedAt = None
+
+            if ManufacturedPrecision is not None:
+                ManufacturedPrecision = str(ManufacturedPrecision).strip()
+                if ManufacturedPrecision == '':
+                    ManufacturedPrecision = None
+                elif ManufacturedPrecision not in (
+                    'exact', 'month', 'year', 'unknown'
+                ):
+                    self._addWarning(
+                        'Input ManufacturedPrecision must be one of '
+                        '"exact", "month", "year", "unknown". Ignoring '
+                        f'provided value: {ManufacturedPrecision!r}.'
+                    )
+                    ManufacturedPrecision = None
+
+            if SalvageSource is not None:
+                SalvageSource = str(SalvageSource).strip()
+                if SalvageSource == '':
+                    SalvageSource = None
+
+            if SalvagedAt is not None:
+                SalvagedAt = str(SalvagedAt).strip()
+                if SalvagedAt == '':
+                    SalvagedAt = None
+
+            if ParentComponent is not None:
+                ParentComponent = str(ParentComponent).strip()
+                if ParentComponent == '':
+                    ParentComponent = None
+                elif not self.validate_uuid(ParentComponent):
+                    self._addWarning(
+                        'Input ParentComponent must be a valid UUID. '
+                        f'Ignoring provided value: {ParentComponent!r}.'
+                    )
+                    ParentComponent = None
+
             if not Color:
                 msg = ('Input Color failed to collect data. '
                        'Will use Grey as default Color.')
@@ -1188,14 +1314,15 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         msg = ('The "rubble" type expects a Mesh as '
                                'geometry input! Please ensure and try again.')
                         raise ValueError(msg)
-                elif Type == 'sheet':
+                elif Type == 'panel':
                     if not isinstance(
                             single_geometry,
                             (Rhino.Geometry.Mesh, Rhino.Geometry.Extrusion)
                     ):
                         msg = (
-                            'The "sheet" type expects a Mesh or Extrusion as '
-                            'geometry input! Please ensure and try again.'
+                            'The "panel" type expects a Mesh or Extrusion '
+                            'as geometry input! Please ensure and try '
+                            'again.'
                         )
                         raise ValueError(msg)
             else:
@@ -1282,6 +1409,22 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
             # Add marker points to component data
             COMPDATA['marker_points'] = marker_points_data
+
+            # Inject Phase 1 provenance / lineage fields. Only written when
+            # the user wired a value on the corresponding GH input port, so
+            # missing fields are omitted (backend treats them as null).
+            if Condition is not None:
+                COMPDATA['condition'] = int(Condition)
+            if ManufacturedAt:
+                COMPDATA['manufactured_at'] = ManufacturedAt
+            if ManufacturedPrecision:
+                COMPDATA['manufactured_precision'] = ManufacturedPrecision
+            if SalvageSource:
+                COMPDATA['salvage_source'] = SalvageSource
+            if SalvagedAt:
+                COMPDATA['salvaged_at'] = SalvagedAt
+            if ParentComponent:
+                COMPDATA['parent_component'] = ParentComponent
 
             # Validate component data against schema
             if not self.validate_component_data(COMPDATA, schema):
