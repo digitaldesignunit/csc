@@ -213,7 +213,7 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260422
+    Version: 260423
     """
 
     def __init__(self):
@@ -289,8 +289,9 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
         )
         self.OutputParams[7 + i].Description = (
             'Transform mapping world coordinates into the rest frame '
-            '(World XY, origin at centroid). Apply to any other '
-            'geometry to see it in the same frame as the rest curve.'
+            '(origin at centroid; World XY only if RestPositionAlign is '
+            'True). Apply to any other geometry to see it in the same '
+            'frame as the rest curve.'
         )
 
     def _curve_to_polyline_and_plane(self, curve):
@@ -395,15 +396,28 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
             Resolution: int,
             RestPositionAlign: bool,
             NumAngles: int):
-        # Output trees
-        Distances = Grasshopper.DataTree[System.Object]()
-        Tangents = Grasshopper.DataTree[System.Object]()
-        IntersectionPoints = Grasshopper.DataTree[System.Object]()
-        Rays = Grasshopper.DataTree[System.Object]()
-        RestPositionCurve = Grasshopper.DataTree[System.Object]()
-        RestPositionFrame = Grasshopper.DataTree[System.Object]()
-        RestPositionAngle = Grasshopper.DataTree[System.Object]()
-        RestPositionTransform = Grasshopper.DataTree[System.Object]()
+        # Keep list-access behavior by default. If the current input list
+        # (which may represent one incoming branch) has multiple curves,
+        # switch to explicit tree output keyed by run count + item index.
+        multi_input = bool(Curves) and len(Curves) > 1
+        if multi_input:
+            Distances = Grasshopper.DataTree[System.Object]()
+            Tangents = Grasshopper.DataTree[System.Object]()
+            IntersectionPoints = Grasshopper.DataTree[System.Object]()
+            Rays = Grasshopper.DataTree[System.Object]()
+            RestPositionCurve = Grasshopper.DataTree[System.Object]()
+            RestPositionFrame = Grasshopper.DataTree[System.Object]()
+            RestPositionAngle = Grasshopper.DataTree[System.Object]()
+            RestPositionTransform = Grasshopper.DataTree[System.Object]()
+        else:
+            Distances = []
+            Tangents = []
+            IntersectionPoints = []
+            Rays = []
+            RestPositionCurve = []
+            RestPositionFrame = []
+            RestPositionAngle = []
+            RestPositionTransform = []
         __Results = (
             Distances, Tangents, IntersectionPoints, Rays,
             RestPositionCurve, RestPositionFrame,
@@ -451,8 +465,9 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
         self.Component.Message = f'N={Resolution}'
 
         successes = 0
+        rc = self.Component.RunCount - 1
         for branch_idx, curve in enumerate(Curves):
-            path = Grasshopper.Kernel.Data.GH_Path(branch_idx)
+            path = Grasshopper.Kernel.Data.GH_Path(rc, branch_idx)
 
             polyline, plane = self._curve_to_polyline_and_plane(curve)
             if polyline is None or plane is None:
@@ -549,10 +564,16 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
                 ray_lines.append(
                     Rhino.Geometry.Line(world_origin, hit_world))
 
-            Distances.AddRange(distance_values, path)
-            Tangents.AddRange(tangent_values, path)
-            IntersectionPoints.AddRange(hit_points, path)
-            Rays.AddRange(ray_lines, path)
+            if multi_input:
+                Distances.AddRange(distance_values, path)
+                Tangents.AddRange(tangent_values, path)
+                IntersectionPoints.AddRange(hit_points, path)
+                Rays.AddRange(ray_lines, path)
+            else:
+                Distances.extend(distance_values)
+                Tangents.extend(tangent_values)
+                IntersectionPoints.extend(hit_points)
+                Rays.extend(ray_lines)
 
             # Rest-position frame expressed in world coordinates: origin
             # at the 3D centroid on the curve plane, X/Y axes aligned with
@@ -564,15 +585,34 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
             # curve moves it so its centroid sits at the world origin and
             # its rest-aligned axes coincide with the World XY axes -- i.e.
             # exactly what the signature "sees" internally.
-            xform_world_to_rest = Rhino.Geometry.Transform.PlaneToPlane(
-                rest_frame_world, Rhino.Geometry.Plane.WorldXY)
+            if RestPositionAlign:
+                # Full rest-position transform: center + canonical orientation
+                # into World XY.
+                xform_world_to_rest = Rhino.Geometry.Transform.PlaneToPlane(
+                    rest_frame_world, Rhino.Geometry.Plane.WorldXY)
+            else:
+                # No rest-position rotation: keep the curve orientation as-is
+                # in world coordinates and only center it at the origin.
+                xform_world_to_rest = Rhino.Geometry.Transform.Translation(
+                    Rhino.Geometry.Vector3d(
+                        -rest_frame_world.Origin.X,
+                        -rest_frame_world.Origin.Y,
+                        -rest_frame_world.Origin.Z,
+                    )
+                )
             rest_curve = curve.DuplicateCurve()
             rest_curve.Transform(xform_world_to_rest)
 
-            RestPositionCurve.Add(rest_curve, path)
-            RestPositionFrame.Add(rest_frame_world, path)
-            RestPositionAngle.Add(float(angle_deg), path)
-            RestPositionTransform.Add(xform_world_to_rest, path)
+            if multi_input:
+                RestPositionCurve.Add(rest_curve, path)
+                RestPositionFrame.Add(rest_frame_world, path)
+                RestPositionAngle.Add(float(angle_deg), path)
+                RestPositionTransform.Add(xform_world_to_rest, path)
+            else:
+                RestPositionCurve.append(rest_curve)
+                RestPositionFrame.append(rest_frame_world)
+                RestPositionAngle.append(float(angle_deg))
+                RestPositionTransform.append(xform_world_to_rest)
 
             successes += 1
 
@@ -581,7 +621,7 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = 'no output'
         else:
             self.Component.Message = (
-                f'{successes}/{len(Curves)} curves | N={Resolution}')
+                f'N = {Resolution}')
             self._addRemark(
                 f'Computed radial signature for {successes} curve(s) '
                 f'at resolution N={Resolution}'
