@@ -587,6 +587,7 @@ export default function GHInterfacePage() {
             ]}
             outputs={[
               { label: 'ID', description: 'Component ID (GUID)' },
+              { label: 'Name', description: 'Human readable component name' },
               { label: 'Type', description: 'Component type (panel, beam, column, slab, rubble, brick, pipe, profile, connector, other)' },
               { label: 'Material', description: 'Component material' },
               { label: 'Color', description: 'Component color as System.Drawing.Color' },
@@ -596,7 +597,13 @@ export default function GHInterfacePage() {
               { label: 'Descriptors', description: 'Component descriptors/metadata as JSON string' },
               { label: 'PrimitiveGeometry', description: 'Rhino geometry objects (extrusion, mesh, multiple meshes, polyline)' },
               { label: 'MarkerPoints', description: 'Marker points as list of Point3d objects' },
-              { label: 'Attributes', description: 'Component attributes as JSON string' }
+              { label: 'Attributes', description: 'Component attributes as JSON string' },
+              { label: 'Condition', description: 'Component condition grade (0=destroyed/retired, 1=poor, 2=average, 3=good)' },
+              { label: 'ManufacturedAt', description: 'Component manufacturing date as ISO-8601 UTC timestamp' },
+              { label: 'ManufacturedPrecision', description: 'Precision qualifier for ManufacturedAt (exact, month, year, unknown)' },
+              { label: 'SalvageSource', description: 'Component salvage source (e.g. building name, site)' },
+              { label: 'SalvagedAt', description: 'Component salvage date as ISO-8601 UTC timestamp' },
+              { label: 'ParentComponent', description: 'Parent component ID (GUID) this component was derived from' }
             ]}
             tip="Converts JSON component data into individual Grasshopper-compatible outputs for further processing."
             imagePath={resolveStatic('/gh-interface/csc_disassemblecomponent.jpg')}

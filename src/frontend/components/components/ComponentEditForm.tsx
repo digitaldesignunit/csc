@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { hexComponentColor } from '@/lib/utils'
+import { Info } from 'lucide-react'
 
 const COMPONENT_TYPES = [
   'panel',
@@ -27,6 +28,23 @@ const COMPONENT_TYPES = [
   'other',
 ] as const
 const COMPLEXITY_LEVELS = [0, 1, 2, 3] as const
+const CONDITION_VALUES = [0, 1, 2, 3] as const
+const MANUFACTURED_PRECISIONS = ['exact', 'month', 'year', 'unknown'] as const
+
+const CONDITION_LABELS: Record<number, string> = {
+  0: '0 — Destroyed / Retired',
+  1: '1 — Poor',
+  2: '2 — Average',
+  3: '3 — Good',
+}
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Sentinel string used by the condition/precision Selects to represent
+// "no value / unknown". shadcn/ui Select does not accept empty-string
+// SelectItem values.
+const UNSET = '__unset__'
 
 type FormState = {
   name: string
@@ -41,6 +59,15 @@ type FormState = {
   colorB: number
   lat: number
   lon: number
+  // Phase 1 provenance / lineage fields. Empty string / null means "unset";
+  // backend drops nulls (exclude_none=True) so once set these cannot be
+  // cleared through the edit form.
+  condition: number | null
+  manufactured_at: string        // stored as 'YYYY-MM-DD', serialized on submit
+  manufactured_precision: string // one of MANUFACTURED_PRECISIONS or ''
+  salvage_source: string
+  salvaged_at: string            // stored as 'YYYY-MM-DD', serialized on submit
+  parent_component: string
 }
 
 function coerceNumber(value: string, fallback: number): number {
@@ -63,9 +90,49 @@ function hexToRgb(hex: string): [number, number, number] | null {
   return [r, g, b]
 }
 
+// ISO-like string (possibly "YYYY-MM-DDTHH:mm:ssZ" or "YYYY-MM-DD") -> 'YYYY-MM-DD'.
+// Returns '' when the input is not a usable date string.
+function isoToDateInput(value: unknown): string {
+  if (typeof value !== 'string' || value.trim() === '') return ''
+  const trimmed = value.trim()
+  // Already a YYYY-MM-DD prefix? Just take it.
+  const m = trimmed.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (m) return m[1]
+  const d = new Date(trimmed)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toISOString().slice(0, 10)
+}
+
+// 'YYYY-MM-DD' input value -> 'YYYY-MM-DDT00:00:00Z' for the backend. The
+// time-of-day is conventional; provenance dates carry a `manufactured_precision`
+// qualifier rather than a real wall-clock time.
+function dateInputToIso(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed === '') return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return `${trimmed}T00:00:00Z`
+  }
+  return trimmed
+}
+
 function initialStateFromComponent(c: ExtendedComponentModel): FormState {
   const colorArr = Array.isArray(c.color) ? c.color as number[] : [110, 110, 110]
   const loc = (c.location as ComponentLocation | undefined) ?? { lat: 0, lon: 0 }
+  const rawCondition = (c as { condition?: unknown }).condition
+  const condition =
+    typeof rawCondition === 'number' && CONDITION_VALUES.includes(rawCondition as typeof CONDITION_VALUES[number])
+      ? (rawCondition as number)
+      : null
+  const rawPrecision = (c as { manufactured_precision?: unknown }).manufactured_precision
+  const precision =
+    typeof rawPrecision === 'string' &&
+    MANUFACTURED_PRECISIONS.includes(rawPrecision as typeof MANUFACTURED_PRECISIONS[number])
+      ? rawPrecision
+      : ''
+  const rawSalvageSource = (c as { salvage_source?: unknown }).salvage_source
+  const rawManufacturedAt = (c as { manufactured_at?: unknown }).manufactured_at
+  const rawSalvagedAt = (c as { salvaged_at?: unknown }).salvaged_at
+  const rawParent = (c as { parent_component?: unknown }).parent_component
   return {
     name: typeof c.name === 'string' ? c.name : '',
     type: c.type ?? '',
@@ -79,6 +146,12 @@ function initialStateFromComponent(c: ExtendedComponentModel): FormState {
     colorB: clampInt(colorArr[2] ?? 110, 0, 255),
     lat: typeof loc?.lat === 'number' ? loc.lat : 0,
     lon: typeof loc?.lon === 'number' ? loc.lon : 0,
+    condition,
+    manufactured_at: isoToDateInput(rawManufacturedAt),
+    manufactured_precision: precision,
+    salvage_source: typeof rawSalvageSource === 'string' ? rawSalvageSource : '',
+    salvaged_at: isoToDateInput(rawSalvagedAt),
+    parent_component: typeof rawParent === 'string' ? rawParent : '',
   }
 }
 
@@ -164,8 +237,76 @@ export default function ComponentEditForm({
       patch.location = { lat: form.lat, lon: form.lon }
     }
 
+    // Phase 1 provenance / lineage fields. Only include when the user
+    // actually set a value (going back to "unset" is a no-op because the
+    // backend drops nulls via exclude_none=True).
+    const clearingAttempts: string[] = []
+
+    if (form.condition !== initial.condition) {
+      if (form.condition === null) {
+        if (initial.condition !== null) clearingAttempts.push('Condition')
+      } else {
+        patch.condition = form.condition
+      }
+    }
+
+    if (form.manufactured_at !== initial.manufactured_at) {
+      if (form.manufactured_at.trim() === '') {
+        if (initial.manufactured_at.trim() !== '') clearingAttempts.push('Manufactured at')
+      } else {
+        patch.manufactured_at = dateInputToIso(form.manufactured_at)
+      }
+    }
+
+    if (form.manufactured_precision !== initial.manufactured_precision) {
+      if (form.manufactured_precision === '') {
+        if (initial.manufactured_precision !== '') clearingAttempts.push('Manufactured precision')
+      } else {
+        patch.manufactured_precision = form.manufactured_precision
+      }
+    }
+
+    if (form.salvaged_at !== initial.salvaged_at) {
+      if (form.salvaged_at.trim() === '') {
+        if (initial.salvaged_at.trim() !== '') clearingAttempts.push('Salvaged at')
+      } else {
+        patch.salvaged_at = dateInputToIso(form.salvaged_at)
+      }
+    }
+
+    if (form.salvage_source.trim() !== initial.salvage_source.trim()) {
+      const next = form.salvage_source.trim()
+      if (next === '') {
+        if (initial.salvage_source.trim() !== '') clearingAttempts.push('Salvage source')
+      } else {
+        patch.salvage_source = next
+      }
+    }
+
+    if (form.parent_component.trim() !== initial.parent_component.trim()) {
+      const next = form.parent_component.trim()
+      if (next === '') {
+        if (initial.parent_component.trim() !== '') clearingAttempts.push('Parent component')
+      } else if (!UUID_REGEX.test(next)) {
+        setError('Parent component must be a valid UUID.')
+        return
+      } else if (next.toLowerCase() === (component_data._id ?? '').toLowerCase()) {
+        setError('Parent component cannot reference itself.')
+        return
+      } else {
+        patch.parent_component = next.toLowerCase()
+      }
+    }
+
     if (Object.keys(patch).length === 0) {
-      setError('No changes to save.')
+      if (clearingAttempts.length > 0) {
+        setError(
+          'Clearing provenance fields is not supported in Phase 1. '
+          + `The following fields were left unchanged: ${clearingAttempts.join(', ')}.`
+        )
+      } else {
+        setError('No changes to save.')
+      }
       return
     }
 
@@ -186,6 +327,13 @@ export default function ComponentEditForm({
       setError(`Type must be one of: ${COMPONENT_TYPES.join(', ')}.`)
       return
     }
+
+    // Non-fatal note appended to the final success message. Clearing
+    // provenance fields is not supported in Phase 1 because the backend
+    // PATCH drops nulls (exclude_none=True).
+    const skippedNote = clearingAttempts.length > 0
+      ? ` Skipped (clearing not supported in Phase 1): ${clearingAttempts.join(', ')}.`
+      : ''
 
     try {
       setSaving(true)
@@ -211,7 +359,7 @@ export default function ComponentEditForm({
         }
         throw new Error(detail)
       }
-      setSuccess('Component metadata updated successfully.')
+      setSuccess('Component metadata updated successfully.' + skippedNote)
       router.refresh()
       setTimeout(() => {
         router.push(`/components/${component_data._id}`)
@@ -414,6 +562,128 @@ export default function ComponentEditForm({
               value={form.lon}
               onChange={e => setField('lon', coerceNumber(e.target.value, 0))}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Provenance &amp; Lineage</CardTitle>
+          <CardDescription>
+            Optional Phase 1 history fields: condition grade, manufacturing
+            and salvage dates, salvage source, and the parent component this
+            piece was split from.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground sm:col-span-2">
+            <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>
+              Phase 1 limitation: once a provenance field is set it cannot be
+              cleared from this form &mdash; setting a value back to &ldquo;Unknown&rdquo; /
+              empty is skipped on save. Ask a DB admin if you need to unset a
+              value.
+            </span>
+          </div>
+
+          <div>
+            <Label htmlFor="condition">Condition</Label>
+            <Select
+              value={form.condition === null ? UNSET : String(form.condition)}
+              onValueChange={v =>
+                setField('condition', v === UNSET ? null : Number(v))
+              }
+            >
+              <SelectTrigger id="condition">
+                <SelectValue placeholder="Select condition" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={UNSET}>Unknown</SelectItem>
+                {CONDITION_VALUES.map(c => (
+                  <SelectItem key={c} value={String(c)}>
+                    {CONDITION_LABELS[c]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="manufactured_precision">Manufactured precision</Label>
+            <Select
+              value={form.manufactured_precision === '' ? UNSET : form.manufactured_precision}
+              onValueChange={v =>
+                setField('manufactured_precision', v === UNSET ? '' : v)
+              }
+            >
+              <SelectTrigger id="manufactured_precision">
+                <SelectValue placeholder="Select precision" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={UNSET}>Unknown</SelectItem>
+                {MANUFACTURED_PRECISIONS.map(p => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="manufactured_at">Manufactured at</Label>
+            <Input
+              id="manufactured_at"
+              type="date"
+              value={form.manufactured_at}
+              onChange={e => setField('manufactured_at', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="salvaged_at">Salvaged at</Label>
+            <Input
+              id="salvaged_at"
+              type="date"
+              value={form.salvaged_at}
+              onChange={e => setField('salvaged_at', e.target.value)}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <Label htmlFor="salvage_source">Salvage source</Label>
+            <Input
+              id="salvage_source"
+              value={form.salvage_source}
+              onChange={e => setField('salvage_source', e.target.value)}
+              placeholder="e.g. Old warehouse, Demolition site X, Building address"
+              maxLength={500}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <Label htmlFor="parent_component">Parent component (UUID)</Label>
+            <Input
+              id="parent_component"
+              value={form.parent_component}
+              onChange={e => setField('parent_component', e.target.value)}
+              placeholder="e.g. 6f1a4c1e-8b2d-4e3a-9c5f-1234567890ab"
+              list="parent-component-suggestions"
+              spellCheck={false}
+              autoComplete="off"
+              className="font-mono text-xs"
+            />
+            {form.parent_component.trim() !== '' &&
+              !UUID_REGEX.test(form.parent_component.trim()) && (
+                <p className="mt-1 text-xs text-destructive">
+                  Not a valid UUID.
+                </p>
+              )}
+            {form.parent_component.trim() !== '' &&
+              form.parent_component.trim().toLowerCase() ===
+                (component_data._id ?? '').toLowerCase() && (
+                <p className="mt-1 text-xs text-destructive">
+                  A component cannot be its own parent.
+                </p>
+              )}
           </div>
         </CardContent>
       </Card>

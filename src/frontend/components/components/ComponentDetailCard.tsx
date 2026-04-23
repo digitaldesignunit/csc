@@ -23,6 +23,33 @@ interface ExtendedUser {
   email?: string | null
 }
 
+// Phase 1 condition grade -> human label. Spec (IMPLEMENTATION_PLAN.md):
+//   0 = destroyed / retired (red), 1 = poor (orange),
+//   2 = average (yellow),          3 = good (green).
+function conditionLabel(c: number): string {
+  switch (c) {
+    case 0: return '0 — Destroyed / Retired'
+    case 1: return '1 — Poor'
+    case 2: return '2 — Average'
+    case 3: return '3 — Good'
+    default: return String(c)
+  }
+}
+
+function conditionBadgeClass(c: number): string {
+  switch (c) {
+    case 0: return 'bg-red-500/20 text-red-700 dark:text-red-300'
+    case 1: return 'bg-orange-500/20 text-orange-700 dark:text-orange-300'
+    case 2: return 'bg-yellow-500/30 text-yellow-800 dark:text-yellow-200'
+    case 3: return 'bg-green-500/20 text-green-700 dark:text-green-300'
+    default: return 'bg-muted/50 text-foreground'
+  }
+}
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.trim().length > 0
+}
+
 export default function ComponentDetailCard({
   component_data,
   isArchived = false,
@@ -617,6 +644,88 @@ export default function ComponentDetailCard({
                 </div>
 
                 {/* Reserved state is already shown via action buttons; omit duplicate here */}
+              </div>
+
+              {/* Provenance & Lineage Section (Phase 1) */}
+              <div className="space-y-2 pt-2">
+                <h3 className="text-xs font-semibold text-foreground">Provenance &amp; Lineage</h3>
+
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Condition</span>
+                  {typeof component_data.condition === 'number' ? (
+                    <span
+                      className={`text-xs font-semibold px-2 py-1 rounded-md ${conditionBadgeClass(component_data.condition)}`}
+                    >
+                      {conditionLabel(component_data.condition)}
+                    </span>
+                  ) : (
+                    <span className="text-xs italic text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">
+                      Unknown
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Manufactured</span>
+                  {isNonEmptyString(component_data.manufactured_at) ? (
+                    <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
+                      {formatTimestamp(component_data.manufactured_at)}
+                      {isNonEmptyString(component_data.manufactured_precision)
+                        ? ` (${component_data.manufactured_precision})`
+                        : ''}
+                    </span>
+                  ) : (
+                    <span className="text-xs italic text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">
+                      Unknown
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground">Salvaged</span>
+                  {isNonEmptyString(component_data.salvaged_at) ? (
+                    <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
+                      {formatTimestamp(component_data.salvaged_at)}
+                    </span>
+                  ) : (
+                    <span className="text-xs italic text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">
+                      Unknown
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-start justify-between gap-2 p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground flex-shrink-0">Salvage source</span>
+                  {isNonEmptyString(component_data.salvage_source) ? (
+                    <span
+                      className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md max-w-[65%] break-words text-right"
+                      title={component_data.salvage_source}
+                    >
+                      {component_data.salvage_source}
+                    </span>
+                  ) : (
+                    <span className="text-xs italic text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">
+                      Unknown
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between gap-2 p-2 bg-muted/30 rounded-lg border border-border/50">
+                  <span className="text-xs font-medium text-muted-foreground flex-shrink-0">Parent component</span>
+                  {isNonEmptyString(component_data.parent_component) ? (
+                    <Link
+                      href={`/components/${component_data.parent_component}`}
+                      className="font-mono text-[11px] sm:text-xs font-semibold text-primary hover:underline bg-primary/10 px-2 py-1 rounded-md max-w-[65%] truncate"
+                      title={`Open parent component ${component_data.parent_component}`}
+                    >
+                      {component_data.parent_component}
+                    </Link>
+                  ) : (
+                    <span className="text-xs italic text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">
+                      None
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
