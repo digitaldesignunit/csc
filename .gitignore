@@ -21,6 +21,9 @@ __pycache__/
 # COVERAGE FILES
 .coverage
 
+# reference folder
+/reference/
+
 # VIZ FOLDER
 /viz/
 
