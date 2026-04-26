@@ -18,8 +18,7 @@ export interface ComponentFrame {
 }
 
 export interface ComponentGeometry {
-  mesh?: ComponentMesh | unknown; // Mesh geometry (single mesh - backward compat)
-  meshes?: ComponentMesh[] | unknown; // Array of mesh geometries (multiple meshes)
+  meshes?: ComponentMesh[] | unknown; // Array of mesh geometries
   extrusion?: ComponentExtrusion | unknown; // Extrusion geometry
 }
 
@@ -57,7 +56,7 @@ export interface ComponentModel {
   complexity: number; // Complexity level (0-3, where 0 is simplest)
   fragment: boolean; // Whether this component is a fragment
   assembly: boolean; // Whether this component is an assembly
-  geometry: ComponentGeometry; // Component geometry data (mesh, extrusion, etc.)
+  geometry: ComponentGeometry; // Component geometry data (meshes or extrusion)
   color?: number[] | unknown; // RGB color values as [R, G, B] integers (0-255)
   bbx: ComponentBoundingBox; // Bounding box maximum extents as [X, Y, Z] float values (dimensions of the component)
   bbx_origin: number[]; // Bounding box center/origin as [X, Y, Z] float values (vector from world origin to bbx center in PCA space)

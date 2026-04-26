@@ -846,7 +846,7 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
           <ComponentCard
             icon={HelpCircle}
             name="CSC_JSONGetValue"
-            description="Extracts specific values from JSON data using dot notation (e.g., 'geometry.mesh.v')."
+            description="Extracts specific values from JSON data using dot notation (e.g., 'geometry.meshes.0.v')."
             inputs={[
               { label: 'JSON', description: 'JSON string to extract value from' },
               { label: 'KeyPath', description: 'Dot-notation path to the desired value (e.g., "descriptors.material.type")' },

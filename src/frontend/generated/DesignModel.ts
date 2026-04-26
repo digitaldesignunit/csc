@@ -8,7 +8,7 @@ export interface DesignAdditionalGeometry {
   _id?: string; // Globally unique identifier for this additional geometry item
   name?: string | unknown; // Optional human-readable name
   iframe: DesignInsertionFrame; // Insertion frame defining geometry orientation
-  geometry: ComponentGeometry; // Geometry data. Use 'meshes' array; if single mesh, provide array with one entry.
+  geometry: ComponentGeometry; // Geometry data with one or more meshes.
 }
 
 export interface DesignComponent {

@@ -406,148 +406,6 @@ async function loadExternalGeometry(
 }
 
 /** 
- * VisualizeMesh 
- */
-const VisualizeMesh = React.memo(({
-  component_data,
-  geometryMode,
-  visibleMeshes = [],
-  externalMeshes = [],
-  isLoadingExternal = false,
-  geometryError = null,
-  showEdges
-}: {
-  component_data: ComponentModel
-  geometryMode: GeometryMode
-  visibleMeshes?: boolean[]
-  externalMeshes?: THREE.Group[]
-  isLoadingExternal?: boolean
-  geometryError?: string | null
-  showEdges: boolean
-}) => {
-  const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
-
-  // Primitive fallback geometry
-  const mesh_geometry = useMemo(() => {
-    const g = new THREE.BufferGeometry()
-    
-    // Check if geometry has mesh data
-    const geometry = component_data.geometry as ComponentGeometry
-    const mesh = geometry.mesh as ComponentMesh | undefined
-    if (!mesh?.v || !mesh?.f) {
-      return g; // Return empty geometry if structure is invalid
-    }
-    
-    const vertices = mesh.v
-    // Don't apply scaling here - it will be handled by the group scale
-    const flatVertices = vertices.flat()
-    g.setAttribute('position', new THREE.Float32BufferAttribute(flatVertices, 3))
-
-    const faces = mesh.f
-    g.setIndex(faces.flat())
-
-    const colors = mesh.c
-    if (colors && Array.isArray(colors) && colors.length === vertices.length) {
-      const flatColors = colors.flatMap((c) => Array.isArray(c) ? c.map((v) => v / 255) : [])
-      g.setAttribute('color', new THREE.Float32BufferAttribute(flatColors, 3))
-    }
-    
-    // Apply the same coordinate system transformation as external geometry
-    // This ensures primitive geometry appears in the same orientation as reduced/detailed
-    g.rotateX(-Math.PI / 2)
-    g.computeVertexNormals()
-    g.normalizeNormals()
-    return g
-  }, [component_data])
-
-  const colorHex = rgbToHex(
-    Array.isArray(component_data.color) ? component_data.color[0] as number : 0,
-    Array.isArray(component_data.color) ? component_data.color[1] as number : 0,
-    Array.isArray(component_data.color) ? component_data.color[2] as number : 0
-  )
-
-  const mesh_material = useMemo(() => {
-    const geometry = component_data.geometry as ComponentGeometry
-    const mesh = geometry.mesh as ComponentMesh | undefined
-    const hasVertexColors = Boolean(mesh?.c && Array.isArray(mesh.c) && mesh.c.length > 0);
-
-    return new THREE.MeshBasicMaterial({
-      color: colorHex,
-      vertexColors: hasVertexColors,
-      side: THREE.DoubleSide
-    })
-  }, [colorHex, component_data.geometry])
-
-  const edge_geometry = useMemo(() => new THREE.EdgesGeometry(mesh_geometry), [mesh_geometry])
-  const edge_material = useMemo(() => new THREE.LineBasicMaterial({ color: 0x000000 }), [])
-
-  if (isExternalMode) {
-    if (isLoadingExternal) {
-      return (
-        <mesh>
-          <Html center>
-            <LoadingSpinner />
-          </Html>
-        </mesh>
-      )
-    }
-    if (externalMeshes.length > 0) {
-      return (
-        <>
-          {externalMeshes.map((mesh, index) => {
-            if (!visibleMeshes[index]) return null
-            return <primitive key={index} object={mesh} />
-          })}
-        </>
-      )
-    }
-    if (geometryError) {
-      return (
-        <mesh>
-          <Html center>
-            <div
-              style={{
-                minWidth: '200px',
-                padding: '12px',
-                background: 'rgba(255,255,255,0.9)',
-                borderRadius: '4px',
-                textAlign: 'center',
-                border: '1px solid #e5e7eb',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-              }}
-            >
-              <div style={{ color: '#6b7280', fontSize: '14px', marginBottom: '8px' }}>
-                <strong>{geometryError}</strong>
-              </div>
-            </div>
-          </Html>
-        </mesh>
-      )
-    }
-    // fallback if external fail
-    return (
-      <>
-        <mesh visible geometry={mesh_geometry} material={mesh_material} />
-        {showEdges && (
-          <lineSegments geometry={edge_geometry} material={edge_material} />
-        )}
-      </>
-    )
-  } else {
-    // Primitive - group and scale like external geometry
-    return (
-      <group scale={[scale, scale, scale]}>
-        <mesh visible geometry={mesh_geometry} material={mesh_material} />
-        {showEdges && (
-          <lineSegments geometry={edge_geometry} material={edge_material} />
-        )}
-      </group>
-    )
-  }
-})
-VisualizeMesh.displayName = 'VisualizeMesh'
-
-/** 
  * VisualizePanel 
  */
 const VisualizePanel = React.memo(({ component_data }: { component_data: ComponentModel }) => {
@@ -778,26 +636,22 @@ function VisualizeComponent({
   // Infer visualization type based on geometry content rather than just type field
   const geometry = component_data.geometry as ComponentGeometry
   const extrusion = geometry.extrusion as ComponentExtrusion | undefined
-  const mesh = geometry.mesh as ComponentMesh | undefined
   const meshes = geometry.meshes as ComponentMesh[] | undefined
-  
+
   const hasExtrusion = extrusion?.profile && extrusion?.height
-  const hasMesh = mesh?.v && mesh?.f
-  const hasMultipleMeshes = meshes && meshes.length > 0
-  
+  const hasMeshes = meshes && meshes.length > 0
+
   if (hasExtrusion) {
     return <VisualizePanel component_data={component_data} />
-  } else if (hasMultipleMeshes) {
+  } else if (hasMeshes) {
     return <VisualizeMultipleMeshes component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
-  } else if (hasMesh) {
-    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
   }
-  
+
   // Fallback to type-based logic if geometry inference fails
   if (component_data.type === 'panel') {
     return <VisualizePanel component_data={component_data} />
   } else {
-    return <VisualizeMesh component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
+    return <VisualizeMultipleMeshes component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
   }
 }
 
@@ -877,8 +731,6 @@ export default function ComponentViewer({
       // Initialize visibility state for primitive meshes
       if (hasMultipleMeshes && meshes) {
         setVisibleMeshes(new Array(meshes.length).fill(true))
-      } else if (geometry?.mesh) {
-        setVisibleMeshes([true]) // Single mesh
       } else {
         setVisibleMeshes([])
       }
@@ -886,7 +738,7 @@ export default function ComponentViewer({
     return () => {
       isMounted = false
     }
-  }, [geometryMode, component_data, isExternalMode, hasMultipleMeshes, meshes, geometry?.mesh, geometryEndpoint])
+  }, [geometryMode, component_data, isExternalMode, hasMultipleMeshes, meshes, geometryEndpoint])
 
   const onModeChange: React.ChangeEventHandler<HTMLSelectElement> = (e) => {
     const v = e.target.value as GeometryMode

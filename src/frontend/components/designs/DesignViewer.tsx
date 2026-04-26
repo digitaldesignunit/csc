@@ -146,13 +146,11 @@ function convertAdditionalGeometryToMeshes(geometry: unknown, itemId: string): T
     
     const geo = geometry as Record<string, unknown> | null
     const extrusion = geo?.extrusion as Record<string, unknown> | undefined
-    const mesh = geo?.mesh as Record<string, unknown> | undefined
     const meshesArray = geo?.meshes as unknown[] | undefined
-    
+
     const hasExtrusion = extrusion?.profile && extrusion?.height
-    const hasMesh = mesh?.v && mesh?.f
     const hasMultipleMeshes = meshesArray && Array.isArray(meshesArray) && meshesArray.length > 0
-    
+
     if (hasExtrusion) {
       debugLog(`Processing additional extrusion geometry for ${itemId}`)
       // Handle extrusion geometry
@@ -254,62 +252,12 @@ function convertAdditionalGeometryToMeshes(geometry: unknown, itemId: string): T
           meshes.push(group)
         }
       })
-      
-    } else if (hasMesh) {
-      debugLog(`Processing additional single mesh for ${itemId}`)
-      // Handle single mesh
-      const threeGeometry = new THREE.BufferGeometry()
-      
-      // Convert vertices from [[x,y,z], [x,y,z], ...] to [x,y,z,x,y,z,...]
-      const vertices = (mesh.v as number[][]).flat()
-      threeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-      
-      // Convert faces from [[a,b,c], [a,b,c], ...] to [a,b,c,a,b,c,...]
-      const faces = (mesh.f as number[][]).flat()
-      threeGeometry.setIndex(faces)
-      
-      // No coordinate system transformation for additional geometry
-      threeGeometry.computeVertexNormals()
-      threeGeometry.normalizeNormals()
-      
-      // Set colors if available
-      let material: THREE.MeshBasicMaterial
-      if (mesh.c && Array.isArray(mesh.c) && mesh.c.length > 0) {
-        // Convert colors from [[r,g,b], [r,g,b], ...] to [r,g,b,r,g,b,...]
-        const colors = (mesh.c as number[][]).flat()
-        const normalizedColors = normalizeColors(colors)
-        threeGeometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
-        material = new THREE.MeshBasicMaterial({ 
-          vertexColors: true,
-          side: THREE.DoubleSide
-        })
-      } else {
-        // Use a default color
-        material = new THREE.MeshBasicMaterial({ 
-          color: 0x888888,
-          side: THREE.DoubleSide
-        })
-      }
-      
-      const threeMesh = new THREE.Mesh(threeGeometry, material)
-      threeMesh.name = `mesh_${itemId}`
-      
-      // Create edge geometry and material
-      const edgeGeometry = new THREE.EdgesGeometry(threeGeometry)
-      const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
-      const edgeMesh = new THREE.LineSegments(edgeGeometry, edgeMaterial)
-      edgeMesh.name = `mesh_edge_${itemId}`
-      
-      const group = new THREE.Group()
-      group.add(threeMesh)
-      group.add(edgeMesh)
-      meshes.push(group)
     }
-    
+
   } catch (error) {
     debugLog(`Error converting additional geometry for ${itemId}:`, error)
   }
-  
+
   return meshes
 }
 
@@ -324,13 +272,11 @@ function convertGeometryToMeshes(geometry: unknown, componentId: string): THREE.
     
     const geo = geometry as Record<string, unknown> | null
     const extrusion = geo?.extrusion as Record<string, unknown> | undefined
-    const mesh = geo?.mesh as Record<string, unknown> | undefined
     const meshesArray = geo?.meshes as unknown[] | undefined
-    
+
     const hasExtrusion = extrusion?.profile && extrusion?.height
-    const hasMesh = mesh?.v && mesh?.f
     const hasMultipleMeshes = meshesArray && Array.isArray(meshesArray) && meshesArray.length > 0
-    
+
     if (hasExtrusion) {
       debugLog(`Processing extrusion geometry for ${componentId}`)
       // Handle extrusion geometry
@@ -431,61 +377,12 @@ function convertGeometryToMeshes(geometry: unknown, componentId: string): THREE.
           meshes.push(group)
         }
       })
-      
-    } else if (hasMesh) {
-      debugLog(`Processing single mesh for ${componentId}`)
-      // Handle single mesh
-      const threeGeometry = new THREE.BufferGeometry()
-      
-      // Convert vertices from [[x,y,z], [x,y,z], ...] to [x,y,z,x,y,z,...]
-      const vertices = (mesh.v as number[][]).flat()
-      threeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-      
-      // Convert faces from [[a,b,c], [a,b,c], ...] to [a,b,c,a,b,c,...]
-      const faces = (mesh.f as number[][]).flat()
-      threeGeometry.setIndex(faces)
-      
-      threeGeometry.computeVertexNormals()
-      threeGeometry.normalizeNormals()
-      
-      // Set colors if available
-      let material: THREE.MeshBasicMaterial
-      if (mesh.c && Array.isArray(mesh.c) && mesh.c.length > 0) {
-        // Convert colors from [[r,g,b], [r,g,b], ...] to [r,g,b,r,g,b,...]
-        const colors = (mesh.c as number[][]).flat()
-        const normalizedColors = normalizeColors(colors)
-        threeGeometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
-        material = new THREE.MeshBasicMaterial({ 
-          vertexColors: true,
-          side: THREE.DoubleSide
-        })
-      } else {
-        // Use a default color
-        material = new THREE.MeshBasicMaterial({ 
-          color: 0x888888,
-          side: THREE.DoubleSide
-        })
-      }
-      
-      const threeMesh = new THREE.Mesh(threeGeometry, material)
-      threeMesh.name = `mesh_${componentId}`
-      
-      // Create edge geometry and material
-      const edgeGeometry = new THREE.EdgesGeometry(threeGeometry)
-      const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
-      const edgeMesh = new THREE.LineSegments(edgeGeometry, edgeMaterial)
-      edgeMesh.name = `mesh_edge_${componentId}`
-      
-      const group = new THREE.Group()
-      group.add(threeMesh)
-      group.add(edgeMesh)
-      meshes.push(group)
     }
-    
+
   } catch (error) {
     debugLog(`Error converting geometry for ${componentId}:`, error)
   }
-  
+
   return meshes
 }
 
@@ -869,23 +766,19 @@ async function loadComponentGeometry(
       // Extract geometry data using the same logic as ComponentViewer
       const geometry = componentData.geometry
       const extrusion = geometry?.extrusion
-      const mesh = geometry?.mesh
       const meshes = geometry?.meshes
-      
+
       const hasExtrusion = extrusion?.profile && extrusion?.height
-      const hasMesh = mesh?.v && mesh?.f
       const hasMultipleMeshes = meshes && Array.isArray(meshes) && meshes.length > 0
-      
+
       debugLog(`Geometry analysis for ${componentId}:`, {
         hasExtrusion,
-        hasMesh,
         hasMultipleMeshes,
         extrusion: !!extrusion,
-        mesh: !!mesh,
         meshes: meshes?.length || 0
       })
-      
-      if (!hasExtrusion && !hasMesh && !hasMultipleMeshes) {
+
+      if (!hasExtrusion && !hasMultipleMeshes) {
         debugLog(`No usable geometry found in component ${componentId}`)
         debugLog(`Geometry object structure:`, JSON.stringify(geometry, null, 2))
         return { success: false, error: 'not_found', message: 'No usable geometry found in component data' }
