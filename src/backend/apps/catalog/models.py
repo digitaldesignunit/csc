@@ -12,7 +12,6 @@ from pydantic import (
     Field,
     RootModel,
     field_validator,
-    model_validator,
 )
 
 # AUTH ------------------------------------------------------------------------
@@ -279,26 +278,12 @@ class ComponentExtrusion(BaseModel):
 
 
 class ComponentGeometry(BaseModel):
-    mesh: Optional[ComponentMesh] = Field(
-        None, description="Mesh geometry (single mesh - backward compat)"
-    )
     meshes: Optional[List[ComponentMesh]] = Field(
-        None, description="Array of mesh geometries (multiple meshes)"
+        None, description="Array of mesh geometries"
     )
     extrusion: Optional[ComponentExtrusion] = Field(
         None, description="Extrusion geometry"
     )
-
-    @model_validator(mode='after')
-    def validate_mesh_fields(self):
-        """Validate that mesh and meshes fields are not both present."""
-        if self.mesh is not None and self.meshes is not None:
-            raise ValueError(
-                "Cannot have both 'mesh' and 'meshes' fields present. "
-                "Use 'mesh' for single mesh (backward compatibility) or "
-                "'meshes' for multiple meshes."
-            )
-        return self
 
 
 class ComponentFrame(BaseModel):
@@ -365,7 +350,7 @@ class ComponentModel(BaseModel):
     )
     # geometry & data
     geometry: ComponentGeometry = Field(
-        description="Component geometry data (mesh, extrusion, etc.)"
+        description="Component geometry data (meshes or extrusion)"
     )
     color: Optional[List[int]] = Field(
         [110, 110, 110],
@@ -741,10 +726,7 @@ class DesignAdditionalGeometry(BaseModel):
         description="Insertion frame defining geometry orientation"
     )
     geometry: ComponentGeometry = Field(
-        description=(
-            "Geometry data. Use 'meshes' array; if single mesh, provide array "
-            "with one entry."
-        )
+        description="Geometry data with one or more meshes."
     )
 
 

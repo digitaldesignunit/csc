@@ -567,10 +567,9 @@ async def create_component(
     component: ComponentModel = ...,
 ):
     # Exclude etag from database storage - it's only for HTTP caching.
-    # Optional fields that were not provided are stored as null so all
-    # documents in the collection have a stable shape.
     doc = component.model_dump(
         by_alias=True,
+        exclude_none=True,
         exclude={'etag'}
     )
     coll = await get_components_col(request)
@@ -755,15 +754,13 @@ async def get_components(
         current_user_id=current_user.id,
     )
 
-    # Parse through ComponentModel to normalize the response shape.
-    # Optional fields absent from the document are emitted as null so the
-    # response shape is stable across all components.
+    # Parse through ComponentModel to apply exclude_none configuration
     components_clean = []
     for component in components:
         try:
             component_model = ComponentModel(**component)
             components_clean.append(component_model.model_dump(
-                by_alias=True))
+                by_alias=True, exclude_none=True))
         except Exception:
             # If parsing fails, use original component data
             components_clean.append(component)
@@ -808,13 +805,12 @@ async def get_component(
 
     component = components[0]
 
-    # Parse through ComponentModel to normalize the response shape.
-    # Optional fields absent from the document are emitted as null so the
-    # response shape is stable.
+    # Parse through ComponentModel to apply exclude_none configuration
     try:
         component_model = ComponentModel(**component)
         component_clean = component_model.model_dump(
-            by_alias=True)
+            by_alias=True,
+            exclude_none=True)
     except Exception:
         # If parsing fails, use original component data
         component_clean = component
