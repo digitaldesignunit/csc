@@ -44,7 +44,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260423
+    Version: 260426
     """
 
     def __init__(self):
@@ -120,47 +120,31 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'Marker points as list of Point3d objects for component '
             'identification and positioning'
         )
-        # Phase 1 provenance / lineage inputs (indices 13-18). All optional.
-        # Guarded so the script does not break if the corresponding ports
-        # have not been added yet to the compiled .ghuser component.
-        _phase1_descriptions = {
-            13: (
-                'Optional condition grade of the component. Accepts an '
-                'integer in {0, 1, 2, 3}: 0=destroyed/retired (red), '
-                '1=poor (orange), 2=average (yellow), 3=good (green). '
-                'Leave unconnected for "unknown".'
-            ),
-            14: (
-                'Optional ISO-8601 UTC timestamp for when the component '
-                'was originally manufactured (e.g. "1998-06-01T00:00:00Z"). '
-                'Leave unconnected if unknown.'
-            ),
-            15: (
-                'Optional precision qualifier for ManufacturedAt. Must be '
-                'one of "exact", "month", "year", "unknown". Leave '
-                'unconnected for "unknown".'
-            ),
-            16: (
-                'Optional short text describing where the component was '
-                'salvaged from (e.g. building name, demolition site, '
-                'address). Free-form string.'
-            ),
-            17: (
-                'Optional ISO-8601 UTC timestamp for when the component '
-                'was salvaged (e.g. "2024-11-03T00:00:00Z").'
-            ),
-            18: (
-                'Optional UUID of the parent component this component was '
-                'derived from (e.g. when a larger piece is split into '
-                'smaller pieces). Must be a valid UUID string.'
-            ),
-        }
-        for _idx, _desc in _phase1_descriptions.items():
-            try:
-                self.InputParams[_idx].Description = _desc
-            except Exception:
-                # Port not present on the component yet; skip silently.
-                pass
+        self.InputParams[13].Description = (
+            'Optional condition grade. Integer in {0, 1, 2, 3}: '
+            '0=destroyed/retired, 1=poor, 2=average, 3=good. '
+            'Leave unconnected for "unknown".'
+        )
+        self.InputParams[14].Description = (
+            'Optional ISO-8601 UTC timestamp for when the component was '
+            'originally manufactured (e.g. "1998-06-01T00:00:00Z").'
+        )
+        self.InputParams[15].Description = (
+            'Optional precision qualifier for ManufacturedAt. One of '
+            '"exact", "month", "year", "unknown".'
+        )
+        self.InputParams[16].Description = (
+            'Optional short text describing where the component was '
+            'salvaged from (e.g. building name, demolition site).'
+        )
+        self.InputParams[17].Description = (
+            'Optional ISO-8601 UTC timestamp for when the component was '
+            'salvaged (e.g. "2024-11-03T00:00:00Z").'
+        )
+        self.InputParams[18].Description = (
+            'Optional UUID of the parent component this component was '
+            'derived from (e.g. when a larger piece is split).'
+        )
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
@@ -268,7 +252,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         'type': 'array', 'items': {'type': 'number'}}},
                 'validated': {'type': 'boolean'},
                 'etag': {'type': 'string'},
-                # Phase 1 provenance / lineage fields (all optional).
+                # Optional provenance / lineage fields.
                 'condition': {'type': 'integer'},
                 'manufactured_at': {'type': 'string'},
                 'manufactured_precision': {'type': 'string'},
@@ -352,7 +336,13 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             Color,
             dimensions,
             location_data,
-            principal_components):
+            principal_components,
+            Condition,
+            ManufacturedAt,
+            ManufacturedPrecision,
+            SalvageSource,
+            SalvagedAt,
+            ParentComponent):
         """Build component data dictionary using the actual schema."""
         current_time = datetime.utcnow().isoformat() + 'Z'
 
@@ -424,14 +414,18 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 component_data[field_name] = False
             elif field_name == 'etag':
                 component_data[field_name] = ''
-            elif field_name in (
-                'condition', 'manufactured_at', 'manufactured_precision',
-                'salvage_source', 'salvaged_at', 'parent_component',
-            ):
-                # Phase 1 optional provenance/lineage fields. Skip here;
-                # they are injected after build only when a value was
-                # supplied on the corresponding GH input port.
-                continue
+            elif field_name == 'condition':
+                component_data[field_name] = Condition
+            elif field_name == 'manufactured_at':
+                component_data[field_name] = ManufacturedAt
+            elif field_name == 'manufactured_precision':
+                component_data[field_name] = ManufacturedPrecision
+            elif field_name == 'salvage_source':
+                component_data[field_name] = SalvageSource
+            elif field_name == 'salvaged_at':
+                component_data[field_name] = SalvagedAt
+            elif field_name == 'parent_component':
+                component_data[field_name] = ParentComponent
             else:
                 # Handle any other fields from the
                 # schema with appropriate defaults
@@ -1226,8 +1220,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 }
 
             # ---------------------------------------------------------------
-            # Phase 1 provenance / lineage inputs (all optional). Validate
-            # here and drop to None on invalid values with a warning, so the
+            # Provenance / lineage inputs (all optional). Validate here and
+            # drop to None on invalid values with a warning, so the
             # component still creates (backend treats missing as null).
             # ---------------------------------------------------------------
             if Condition is not None:
@@ -1401,7 +1395,9 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             COMPDATA = self.build_component_data_from_schema(
                 schema, ComponentID, Name, Type, Material, Dataset, Complexity,
                 Fragment, Assembly, Color, dimensions, location_data,
-                principal_components
+                principal_components, Condition, ManufacturedAt,
+                ManufacturedPrecision, SalvageSource, SalvagedAt,
+                ParentComponent
             )
 
             # Set the computed bbx_origin
@@ -1409,22 +1405,6 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
             # Add marker points to component data
             COMPDATA['marker_points'] = marker_points_data
-
-            # Inject Phase 1 provenance / lineage fields. Only written when
-            # the user wired a value on the corresponding GH input port, so
-            # missing fields are omitted (backend treats them as null).
-            if Condition is not None:
-                COMPDATA['condition'] = int(Condition)
-            if ManufacturedAt:
-                COMPDATA['manufactured_at'] = ManufacturedAt
-            if ManufacturedPrecision:
-                COMPDATA['manufactured_precision'] = ManufacturedPrecision
-            if SalvageSource:
-                COMPDATA['salvage_source'] = SalvageSource
-            if SalvagedAt:
-                COMPDATA['salvaged_at'] = SalvagedAt
-            if ParentComponent:
-                COMPDATA['parent_component'] = ParentComponent
 
             # Validate component data against schema
             if not self.validate_component_data(COMPDATA, schema):

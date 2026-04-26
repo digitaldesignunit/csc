@@ -34,7 +34,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260423
+    Version: 260426
     """
 
     def __init__(self):
@@ -439,16 +439,21 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                             # If no attributes, add empty dict as JSON string
                             Attributes.Add(json.dumps({}), ghp)
 
-                        Condition.Add(json_comp.get('condition'), ghp)
-                        ManufacturedAt.Add(
-                            json_comp.get('manufactured_at'), ghp)
-                        ManufacturedPrecision.Add(
-                            json_comp.get('manufactured_precision'), ghp)
-                        SalvageSource.Add(
-                            json_comp.get('salvage_source'), ghp)
-                        SalvagedAt.Add(json_comp.get('salvaged_at'), ghp)
-                        ParentComponent.Add(
-                            json_comp.get('parent_component'), ghp)
+                        if json_comp.get('condition') is not None:
+                            Condition.Add(json_comp['condition'], ghp)
+                        if json_comp.get('manufactured_at') is not None:
+                            ManufacturedAt.Add(
+                                json_comp['manufactured_at'], ghp)
+                        if json_comp.get('manufactured_precision') is not None:
+                            ManufacturedPrecision.Add(
+                                json_comp['manufactured_precision'], ghp)
+                        if json_comp.get('salvage_source') is not None:
+                            SalvageSource.Add(json_comp['salvage_source'], ghp)
+                        if json_comp.get('salvaged_at') is not None:
+                            SalvagedAt.Add(json_comp['salvaged_at'], ghp)
+                        if json_comp.get('parent_component') is not None:
+                            ParentComponent.Add(
+                                json_comp['parent_component'], ghp)
 
                     except json.JSONDecodeError as e:
                         msg = f'Failed to parse component data: {str(e)}'
