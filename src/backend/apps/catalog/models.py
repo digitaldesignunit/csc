@@ -76,10 +76,6 @@ class UserInDB(User):
 
 
 # COMPONENTS ------------------------------------------------------------------
-# Phase 1 component type taxonomy.
-# See IMPLEMENTATION_PLAN.md, ADR-002 (sheet -> panel migration) and Phase 1
-# schema scope. `sheet` is intentionally removed and must be migrated to
-# `panel` via scripts/db_maintenance/migrate_phase1_component_schema.py.
 ALLOWED_COMPONENT_TYPES = [
     "panel",
     "beam",
@@ -108,7 +104,7 @@ ALLOWED_COMPONENT_SORTKEYS = [
 ALLOWED_COMPLEXITY_LEVELS = [0, 1, 2, 3]
 
 
-# Condition semantics (Phase 1):
+# Condition semantics:
 #   0 = destroyed / retired (red)
 #   1 = poor                (orange)
 #   2 = average             (yellow)
@@ -117,9 +113,9 @@ ALLOWED_COMPLEXITY_LEVELS = [0, 1, 2, 3]
 ALLOWED_CONDITION_VALUES = [0, 1, 2, 3]
 
 
-# Precision of `manufactured_at` (Phase 1). The stored timestamp is always
-# ISO-8601; this field records how precisely the timestamp is known so
-# downstream consumers do not over-interpret the value.
+# Precision of `manufactured_at`. The stored timestamp is always ISO-8601;
+# this field records how precisely the timestamp is known so downstream
+# consumers do not over-interpret the value.
 ALLOWED_MANUFACTURED_PRECISIONS = ["exact", "month", "year", "unknown"]
 
 
@@ -304,9 +300,6 @@ class ComponentGeometry(BaseModel):
             )
         return self
 
-    class Config:
-        exclude_none = True
-
 
 class ComponentFrame(BaseModel):
     o: List[float] = Field(description="Origin point [x, y, z]")
@@ -441,8 +434,7 @@ class ComponentModel(BaseModel):
         description=("ETag for cache validation (auto-generated from "
                      "lastmodified and key fields)")
     )
-    # Phase 1 lineage + provenance fields ------------------------------------
-    # See IMPLEMENTATION_PLAN.md Phase 1 scope / ADR-008.
+    # Lineage + provenance fields --------------------------------------------
     condition: Optional[int] = Field(
         None,
         description=(
@@ -484,13 +476,9 @@ class ComponentModel(BaseModel):
         description=(
             "Optional UUID of the parent component this component was "
             "derived from (e.g. when a piece is split into smaller pieces "
-            "and reintroduced into the catalog). Lightweight Phase 1 "
-            "lineage link; will be superseded by the identity/snapshot "
-            "model in Phase 2."
+            "and reintroduced into the catalog)."
         )
     )
-
-    # Phase 1 validators ------------------------------------------------------
 
     @field_validator('componenttype')
     @classmethod
@@ -564,7 +552,6 @@ class ComponentModel(BaseModel):
     class Config:
         extra = "ignore"
         populate_by_name = True
-        exclude_none = True
         schema_extra = {
             "example": {
                 "_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -647,7 +634,6 @@ class UpdateComponentModel(BaseModel):
     iframe: Optional[ComponentFrame] = None
     pca_frame: Optional[ComponentFrame] = None
     reserved: Optional[str] = None
-    # Phase 1 additions
     condition: Optional[int] = None
     manufactured_at: Optional[str] = None
     manufactured_precision: Optional[str] = None

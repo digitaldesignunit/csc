@@ -566,10 +566,11 @@ async def create_component(
     current_user: Annotated[User, Depends(get_current_active_user)],
     component: ComponentModel = ...,
 ):
-    # Exclude etag from database storage - it's only for HTTP caching
+    # Exclude etag from database storage - it's only for HTTP caching.
+    # Optional fields that were not provided are stored as null so all
+    # documents in the collection have a stable shape.
     doc = component.model_dump(
         by_alias=True,
-        exclude_none=True,
         exclude={'etag'}
     )
     coll = await get_components_col(request)
@@ -754,13 +755,15 @@ async def get_components(
         current_user_id=current_user.id,
     )
 
-    # Parse through ComponentModel to apply exclude_none configuration
+    # Parse through ComponentModel to normalize the response shape.
+    # Optional fields absent from the document are emitted as null so the
+    # response shape is stable across all components.
     components_clean = []
     for component in components:
         try:
             component_model = ComponentModel(**component)
             components_clean.append(component_model.model_dump(
-                by_alias=True, exclude_none=True))
+                by_alias=True))
         except Exception:
             # If parsing fails, use original component data
             components_clean.append(component)
@@ -805,12 +808,13 @@ async def get_component(
 
     component = components[0]
 
-    # Parse through ComponentModel to apply exclude_none configuration
+    # Parse through ComponentModel to normalize the response shape.
+    # Optional fields absent from the document are emitted as null so the
+    # response shape is stable.
     try:
         component_model = ComponentModel(**component)
         component_clean = component_model.model_dump(
-            by_alias=True,
-            exclude_none=True)
+            by_alias=True)
     except Exception:
         # If parsing fails, use original component data
         component_clean = component
@@ -886,8 +890,7 @@ class ComponentMetadataUpdate(BaseModel):
         default=None,
         description='Geographic location (lat/lon coordinates)',
     )
-    # Phase 1 admin-editable provenance/lineage fields.
-    # See IMPLEMENTATION_PLAN.md Phase 1 scope / ADR-008.
+    # Admin-editable provenance / lineage fields.
     condition: Optional[int] = Field(
         default=None,
         description=(
@@ -926,8 +929,8 @@ class ComponentMetadataUpdate(BaseModel):
     parent_component: Optional[str] = Field(
         default=None,
         description=(
-            'Optional UUID of parent component (lightweight Phase 1 '
-            'lineage link). Use empty string or null to clear.'
+            'Optional UUID of parent component. '
+            'Use empty string or null to clear.'
         ),
     )
 
@@ -1054,10 +1057,13 @@ async def update_component_metadata(
     if not existing:
         raise HTTPException(404, 'Not found')
 
-    # Build $set using alias names (maps componenttype -> 'type')
+    # Build $set using alias names (maps componenttype -> 'type').
+    # exclude_unset=True is the proper PATCH semantics: only fields the
+    # client explicitly sent are written, and an explicit null clears the
+    # field. Fields the client omitted are left untouched.
     update_data: Dict[str, Any] = payload.model_dump(
         by_alias=True,
-        exclude_none=True,
+        exclude_unset=True,
     )
 
     if not update_data:

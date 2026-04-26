@@ -424,12 +424,13 @@ async def get_archived_component(
             detail='Archived component not found'
         )
 
-    # Parse through ComponentModel to apply exclude_none configuration
+    # Parse through ComponentModel to normalize the response shape.
+    # Optional fields absent from the document are emitted as null so the
+    # response shape is stable.
     try:
         component_model = ComponentModel(**component)
         component_clean = component_model.model_dump(
             by_alias=True,
-            exclude_none=True,
             exclude={'etag'}
         )
         return JSONResponse(status_code=200, content=component_clean)
