@@ -76,7 +76,7 @@ export interface ComponentModel {
   manufactured_precision?: string | unknown; // Precision qualifier for `manufactured_at`. Must be one of ALLOWED_MANUFACTURED_PRECISIONS (exact, month, year, unknown).
   salvage_source?: string | unknown; // Short free-text description of where the component was salvaged from (e.g. building name, demolition site).
   salvaged_at?: string | unknown; // ISO-8601 timestamp (UTC) describing when the component was salvaged. Optional. Paired with `salvage_source`.
-  parent_component?: string | unknown; // Optional UUID of the parent component this component was derived from (e.g. when a piece is split into smaller pieces and reintroduced into the catalog). Lightweight Phase 1 lineage link; will be superseded by the identity/snapshot model in Phase 2.
+  parent_component?: string | unknown; // Optional UUID of the parent component this component was derived from (e.g. when a piece is split into smaller pieces and reintroduced into the catalog).
 }
 
 // Utility types for better type safety

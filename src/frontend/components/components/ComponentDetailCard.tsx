@@ -23,7 +23,7 @@ interface ExtendedUser {
   email?: string | null
 }
 
-// Phase 1 condition grade -> human label. Spec (IMPLEMENTATION_PLAN.md):
+// Condition grade -> human label.
 //   0 = destroyed / retired (red), 1 = poor (orange),
 //   2 = average (yellow),          3 = good (green).
 function conditionLabel(c: number): string {
@@ -646,7 +646,7 @@ export default function ComponentDetailCard({
                 {/* Reserved state is already shown via action buttons; omit duplicate here */}
               </div>
 
-              {/* Provenance & Lineage Section (Phase 1) */}
+              {/* Provenance & Lineage */}
               <div className="space-y-2 pt-2">
                 <h3 className="text-xs font-semibold text-foreground">Provenance &amp; Lineage</h3>
 

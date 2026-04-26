@@ -13,8 +13,6 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { hexComponentColor } from '@/lib/utils'
-import { Info } from 'lucide-react'
-
 const COMPONENT_TYPES = [
   'panel',
   'beam',
@@ -59,9 +57,9 @@ type FormState = {
   colorB: number
   lat: number
   lon: number
-  // Phase 1 provenance / lineage fields. Empty string / null means "unset";
-  // backend drops nulls (exclude_none=True) so once set these cannot be
-  // cleared through the edit form.
+  // Provenance / lineage fields. Empty string / null in form state means
+  // "unset" and is sent to the backend as an explicit null in the PATCH
+  // payload, which clears the field.
   condition: number | null
   manufactured_at: string        // stored as 'YYYY-MM-DD', serialized on submit
   manufactured_precision: string // one of MANUFACTURED_PRECISIONS or ''
@@ -237,56 +235,39 @@ export default function ComponentEditForm({
       patch.location = { lat: form.lat, lon: form.lon }
     }
 
-    // Phase 1 provenance / lineage fields. Only include when the user
-    // actually set a value (going back to "unset" is a no-op because the
-    // backend drops nulls via exclude_none=True).
-    const clearingAttempts: string[] = []
-
+    // Provenance / lineage fields. Empty form input is sent as an
+    // explicit null in the PATCH payload to clear the field on the server.
     if (form.condition !== initial.condition) {
-      if (form.condition === null) {
-        if (initial.condition !== null) clearingAttempts.push('Condition')
-      } else {
-        patch.condition = form.condition
-      }
+      patch.condition = form.condition
     }
 
     if (form.manufactured_at !== initial.manufactured_at) {
-      if (form.manufactured_at.trim() === '') {
-        if (initial.manufactured_at.trim() !== '') clearingAttempts.push('Manufactured at')
-      } else {
-        patch.manufactured_at = dateInputToIso(form.manufactured_at)
-      }
+      patch.manufactured_at = form.manufactured_at.trim() === ''
+        ? null
+        : dateInputToIso(form.manufactured_at)
     }
 
     if (form.manufactured_precision !== initial.manufactured_precision) {
-      if (form.manufactured_precision === '') {
-        if (initial.manufactured_precision !== '') clearingAttempts.push('Manufactured precision')
-      } else {
-        patch.manufactured_precision = form.manufactured_precision
-      }
+      patch.manufactured_precision = form.manufactured_precision === ''
+        ? null
+        : form.manufactured_precision
     }
 
     if (form.salvaged_at !== initial.salvaged_at) {
-      if (form.salvaged_at.trim() === '') {
-        if (initial.salvaged_at.trim() !== '') clearingAttempts.push('Salvaged at')
-      } else {
-        patch.salvaged_at = dateInputToIso(form.salvaged_at)
-      }
+      patch.salvaged_at = form.salvaged_at.trim() === ''
+        ? null
+        : dateInputToIso(form.salvaged_at)
     }
 
     if (form.salvage_source.trim() !== initial.salvage_source.trim()) {
       const next = form.salvage_source.trim()
-      if (next === '') {
-        if (initial.salvage_source.trim() !== '') clearingAttempts.push('Salvage source')
-      } else {
-        patch.salvage_source = next
-      }
+      patch.salvage_source = next === '' ? null : next
     }
 
     if (form.parent_component.trim() !== initial.parent_component.trim()) {
       const next = form.parent_component.trim()
       if (next === '') {
-        if (initial.parent_component.trim() !== '') clearingAttempts.push('Parent component')
+        patch.parent_component = null
       } else if (!UUID_REGEX.test(next)) {
         setError('Parent component must be a valid UUID.')
         return
@@ -299,14 +280,7 @@ export default function ComponentEditForm({
     }
 
     if (Object.keys(patch).length === 0) {
-      if (clearingAttempts.length > 0) {
-        setError(
-          'Clearing provenance fields is not supported in Phase 1. '
-          + `The following fields were left unchanged: ${clearingAttempts.join(', ')}.`
-        )
-      } else {
-        setError('No changes to save.')
-      }
+      setError('No changes to save.')
       return
     }
 
@@ -327,13 +301,6 @@ export default function ComponentEditForm({
       setError(`Type must be one of: ${COMPONENT_TYPES.join(', ')}.`)
       return
     }
-
-    // Non-fatal note appended to the final success message. Clearing
-    // provenance fields is not supported in Phase 1 because the backend
-    // PATCH drops nulls (exclude_none=True).
-    const skippedNote = clearingAttempts.length > 0
-      ? ` Skipped (clearing not supported in Phase 1): ${clearingAttempts.join(', ')}.`
-      : ''
 
     try {
       setSaving(true)
@@ -359,7 +326,7 @@ export default function ComponentEditForm({
         }
         throw new Error(detail)
       }
-      setSuccess('Component metadata updated successfully.' + skippedNote)
+      setSuccess('Component metadata updated successfully.')
       router.refresh()
       setTimeout(() => {
         router.push(`/components/${component_data._id}`)
@@ -570,22 +537,13 @@ export default function ComponentEditForm({
         <CardHeader>
           <CardTitle>Provenance &amp; Lineage</CardTitle>
           <CardDescription>
-            Optional Phase 1 history fields: condition grade, manufacturing
-            and salvage dates, salvage source, and the parent component this
-            piece was split from.
+            Optional history fields: condition grade, manufacturing and
+            salvage dates, salvage source, and the parent component this
+            piece was split from. Set a field to &ldquo;Unknown&rdquo; or
+            empty to clear it on save.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground sm:col-span-2">
-            <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
-            <span>
-              Phase 1 limitation: once a provenance field is set it cannot be
-              cleared from this form &mdash; setting a value back to &ldquo;Unknown&rdquo; /
-              empty is skipped on save. Ask a DB admin if you need to unset a
-              value.
-            </span>
-          </div>
-
           <div>
             <Label htmlFor="condition">Condition</Label>
             <Select
