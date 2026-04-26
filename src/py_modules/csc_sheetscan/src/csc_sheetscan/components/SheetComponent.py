@@ -35,9 +35,8 @@ class SheetComponent(BaseComponent):
         }
         # create BaseComponent
         # NOTE: the `csc_sheetscan` pipeline still produces sheet-shaped
-        # components (extruded 2D profile), but the canonical type name
-        # changed from `sheet` to `panel` in Phase 1 of the v0.5 roadmap
-        # (see IMPLEMENTATION_PLAN.md, ADR-002).
+        # components (extruded 2D profile), but the canonical catalog type
+        # name is `panel`.
         super().__init__(
             _id=_id,
             componenttype='panel',
