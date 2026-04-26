@@ -47,7 +47,7 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260426
     """
 
     def __init__(self):
@@ -474,6 +474,7 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
 
     def RunScript(self,
             Run: bool,
+            SaveExamplesOnly: bool,
             RemoveGroupName: str,
             ClearPanelNames: System.Collections.Generic.List[str],
             ReleasePath: str,
@@ -563,22 +564,26 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             )
 
         # Step 5: Save the modified document
-        self.Component.Message = 'Saving document...'
-        save_success, saved_file_path = self.save_document(
-            copied_doc,
-            ReleasePath,
-            Filename
-        )
-        if save_success:
-            saved_file_path = os.path.normpath(
-                os.path.abspath(saved_file_path)
-            )
-            success = True
-            status_message += f'\n Saved release file to: {saved_file_path}'
-            self.Component.Message = 'Operation completed successfully'
+        if SaveExamplesOnly:
+            status_message += f'\n Skipped saving release file (SaveExamplesOnly).'
         else:
-            status_message += '\n Failed to save document!'
-            self.Component.Message = 'Save operation failed'
+            self.Component.Message = 'Saving document...'
+            save_success, saved_file_path = self.save_document(
+                copied_doc,
+                ReleasePath,
+                Filename
+            )
+            if save_success:
+                saved_file_path = os.path.normpath(
+                    os.path.abspath(saved_file_path)
+                )
+                success = True
+                status_message += f'\n Saved release file to: {saved_file_path}'
+                self.Component.Message = 'Operation completed successfully'
+            else:
+                status_message += '\n Failed to save document!'
+                self.Component.Message = 'Save operation failed'
+
 
         # Step 6: Create example files
         if ExampleGroupNames:

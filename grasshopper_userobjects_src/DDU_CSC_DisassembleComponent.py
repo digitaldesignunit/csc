@@ -34,7 +34,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260426
+    Version: 260426.1
     """
 
     def __init__(self):
@@ -98,8 +98,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'Component descriptors/metadata as JSON string'
         )
         self.OutputParams[9+i].Description = (
-            'Rhino geometry objects (extrusion, mesh, multiple meshes, '
-            'polyline)'
+            'Rhino geometry objects (extrusion, meshes, polyline)'
         )
         self.OutputParams[10+i].Description = (
             'Marker points as list of Point3d objects'
