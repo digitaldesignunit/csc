@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">fca10e0a-84c9-4bdb-a05a-43a54647a5a9</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">d5200876-a409-40b8-9ffc-e5f598e904b5</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639127965383934005</item>
+            <item name="Date" type_name="gh_date" type_code="8">639128066665764506</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -110,7 +110,7 @@ Method 0: pure Rhino (default)
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="834">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAALXSURBVEhLtZVNSFRRGIZd5Kog2oVgJbZv0yaiQOncc+d/7r2zCcM0qDaCQWSZ7SJQwSjKRUHhIoK0qDTyzk86GhbuaumqcqdoqxY5zswT58xoM3dG06wLLxzOz/ucc77vfLemxvMRF+xUXs/1zztxJ/J6/1PzNW3LPB8X5NyCVNs7vpH+aJ53BdlxAQkBqaIShT415p3v1aaAnGtAUsCUYNU1+DZiMv/cJKv6p4QeUyfyrtsSQJtPCBZHJR1dYeoth32Bgg5YDh1XwyyMmjBhbAqpClgz//TUR13YodGxudcX5OOQnw9DPu70BmmwHT2m5hQgRoVPVYC613xSsDwmqYs4RC9GWU1KmFbQoqYFK0lJ4LzF/rDD8phJJl79JBWA1XGD/JRBd09YL/4ZNyElybyV5NyCVJukAZOSBsfh2vUwzBYTwQMpA+j0SxQWHo7ZDNwKw4wyNEGB4lIr70qyCcmrBwGaz1kcOW1zty/El2G1mfLsKgOoe8y9k/TfDFF7Kob/gsXCqJ9cwiTvrkFMsuOm3kTPjQg1zTEd+L1+h7lnJvlUeWatA3TnhGB2KMAeM0Z91GaXiHGlOwJpyaoyLQI0RAHTJh1dUXZLh89PfJCuTNvyGCQEP95Ivr40Odpi0XYpynfXR8Y1yZeYK62oa3svudwd4VirpZNAP8hSvwpAMYuYEQz2hvRJFl/79U5VHNQplHRM0pL5Fz5qRYyH/SFyaZUgWwHEBdm4IJM0ON5q02g7zI34YVrCVFHTkrlhH422zYmzFpmEJBc3qtaoCoCGqFOkBEtjJk3tlo5FS2eU+30hBvuCnOmM6L6mdpulMR+kjA3rUlXAb4ih9WggyMk2i0O2zUHL1u3Ht4P6faj3sJH5poB1iGqrwjZZSGNd6CaLfaVzNtCmAG2gYjJeTD/1UhOFti7XVeZ79UdAqZThVkxLteU/2t9qW7/N7Wrd/H9A1jx/Aa9cJ2v5UTM8AAAAAElFTkSuQmCC</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">6778f8f3-445c-484a-82d0-151ec6d810ae</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">e4fafa56-16f8-499d-bc3f-5ccf1acc697b</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">false</item>
@@ -128,7 +128,7 @@ Method 0: pure Rhino (default)
                       <items count="2">
                         <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
                           <X>849</X>
-                          <Y>28347</Y>
+                          <Y>34007</Y>
                           <W>129</W>
                           <H>136</H>
                         </item>
@@ -156,7 +156,7 @@ Method 0: pure Rhino (default)
                             <item name="Access" type_name="gh_int32" type_code="3">1</item>
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of generic curves</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">336c8d7b-12dd-41ca-b750-b09023ac87f9</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">02a04d06-ac1f-414e-bfa8-ae18eda00027</item>
                             <item name="Name" type_name="gh_string" type_code="10">Curves</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Curves</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -190,7 +190,7 @@ Method 0: pure Rhino (default)
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of integer numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">8eb81e29-8634-4353-8791-78aaa28bb4c6</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">70bf22bf-d171-42e2-a88e-de8693af37c6</item>
                             <item name="Name" type_name="gh_string" type_code="10">MaxIter</item>
                             <item name="NickName" type_name="gh_string" type_code="10">MaxIter</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -224,7 +224,7 @@ Method 0: pure Rhino (default)
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of floating point numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">5c3edee1-295c-4312-872c-efebe6fc1b27</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">1a93f8e9-52b5-42ec-bbeb-2b970ec2d301</item>
                             <item name="Name" type_name="gh_string" type_code="10">Tolerance</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Tolerance</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -258,7 +258,7 @@ Method 0: pure Rhino (default)
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of integer numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">b603003c-63ac-4004-a401-3ced66e2deb3</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">2176dcbf-1ada-406a-bb1c-bf0acdf9d520</item>
                             <item name="Name" type_name="gh_string" type_code="10">Starts</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Starts</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -292,7 +292,7 @@ Method 0: pure Rhino (default)
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of integer numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">7161c47f-10d4-4d39-b044-41c974d818ee</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">823be023-50a5-4d76-92ef-f37c57f7f339</item>
                             <item name="Name" type_name="gh_string" type_code="10">Seed</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Seed</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -326,7 +326,7 @@ Method 0: pure Rhino (default)
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">b2103735-6ee9-4360-acfc-fcd9bdca5c01</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">8724f37a-2d53-49b1-81e8-6b40de4777ee</item>
                             <item name="Name" type_name="gh_string" type_code="10">Quads</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Quads</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -360,7 +360,7 @@ Method 0: pure Rhino (default)
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">2bee42bd-365f-423c-af6b-f377e63a9769</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">f25130a3-1aa0-4333-a0cd-f0749003fe17</item>
                             <item name="Name" type_name="gh_string" type_code="10">Areas</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Areas</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
