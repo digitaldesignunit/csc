@@ -159,6 +159,8 @@ export default async function ArchivePage({
           defaultMaterial={material}
           defaultCompType={comptype}
           defaultDataset={dataset}
+          materialsEndpoint="/api/backend/archived/materials"
+          componentTypesEndpoint="/api/backend/archived/types"
           datasetsEndpoint="/api/backend/archived/datasets"
         />
 

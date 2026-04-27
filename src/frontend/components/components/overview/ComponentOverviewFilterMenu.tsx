@@ -13,6 +13,10 @@ interface ComponentOverviewFilterMenuProps {
   defaultMaterial: string
   defaultCompType: string
   defaultDataset: string
+  /** Optional custom endpoint for fetching materials (default: '/api/backend/materials') */
+  materialsEndpoint?: string
+  /** Optional custom endpoint for fetching component types (default: '/api/backend/componenttypes') */
+  componentTypesEndpoint?: string
   /** Optional custom endpoint for fetching datasets (default: '/api/backend/datasets') */
   datasetsEndpoint?: string
 }
@@ -31,6 +35,8 @@ export default function ComponentOverviewFilterMenu({
   defaultMaterial,
   defaultCompType,
   defaultDataset,
+  materialsEndpoint = '/api/backend/materials',
+  componentTypesEndpoint = '/api/backend/componenttypes',
   datasetsEndpoint = '/api/backend/datasets',
 }: ComponentOverviewFilterMenuProps) {
   const router = useRouter()
@@ -49,6 +55,10 @@ export default function ComponentOverviewFilterMenu({
   const [bbxMaxY, setBbxMaxY] = useState('')
   const [bbxMaxZ, setBbxMaxZ] = useState('')
   
+  // State for available materials and component types
+  const [availableMaterials, setAvailableMaterials] = useState<string[]>([])
+  const [availableComponentTypes, setAvailableComponentTypes] = useState<string[]>([])
+
   // State for available datasets
   const [availableDatasets, setAvailableDatasets] = useState<string[]>([])
 
@@ -58,21 +68,34 @@ export default function ComponentOverviewFilterMenu({
     bbxMinX, bbxMinY, bbxMinZ, bbxMaxX, bbxMaxY, bbxMaxZ
   ].filter(Boolean).length
 
-  // Fetch available datasets on component mount
+  // Fetch available filter options on component mount
   useEffect(() => {
-    const fetchDatasets = async () => {
+    const fetchFilterOptions = async () => {
       try {
-        const response = await fetch(datasetsEndpoint)
-        if (response.ok) {
-          const datasets = await response.json()
+        const [materialsResponse, componentTypesResponse, datasetsResponse] = await Promise.all([
+          fetch(materialsEndpoint),
+          fetch(componentTypesEndpoint),
+          fetch(datasetsEndpoint),
+        ])
+
+        if (materialsResponse.ok) {
+          const materials = await materialsResponse.json()
+          setAvailableMaterials(materials)
+        }
+        if (componentTypesResponse.ok) {
+          const types = await componentTypesResponse.json()
+          setAvailableComponentTypes(types)
+        }
+        if (datasetsResponse.ok) {
+          const datasets = await datasetsResponse.json()
           setAvailableDatasets(datasets)
         }
       } catch (error) {
-        console.error('Failed to fetch datasets:', error)
+        console.error('Failed to fetch filter options:', error)
       }
     }
-    fetchDatasets()
-  }, [datasetsEndpoint])
+    fetchFilterOptions()
+  }, [materialsEndpoint, componentTypesEndpoint, datasetsEndpoint])
 
   // Whenever the searchParams themselves change (due to another component),
   // we sync our local state so our inputs reflect the updated query string.
@@ -189,24 +212,40 @@ export default function ComponentOverviewFilterMenu({
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="materialInput" className="text-sm font-medium">Material</Label>
-                  <Input
+                  <select
                     id="materialInput"
-                    placeholder="Filter by material..."
                     value={material}
                     onChange={(e) => setMaterial(e.target.value)}
-                    className="h-8"
-                  />
+                    className="h-8 px-3 py-1 text-sm border border-input rounded-md bg-background"
+                  >
+                    <option value="">Any material</option>
+                    {availableMaterials.length > 0 ? (
+                      availableMaterials.map((mat) => (
+                        <option key={mat} value={mat}>{mat}</option>
+                      ))
+                    ) : (
+                      <option value="" disabled>Loading materials...</option>
+                    )}
+                  </select>
                 </div>
 
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="comptypeInput" className="text-sm font-medium">Component Type</Label>
-                  <Input
+                  <select
                     id="comptypeInput"
-                    placeholder="Filter by type..."
                     value={compType}
                     onChange={(e) => setCompType(e.target.value)}
-                    className="h-8"
-                  />
+                    className="h-8 px-3 py-1 text-sm border border-input rounded-md bg-background"
+                  >
+                    <option value="">Any type</option>
+                    {availableComponentTypes.length > 0 ? (
+                      availableComponentTypes.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))
+                    ) : (
+                      <option value="" disabled>Loading types...</option>
+                    )}
+                  </select>
                 </div>
 
                 <div className="flex flex-col gap-2">
