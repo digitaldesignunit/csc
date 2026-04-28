@@ -5,6 +5,7 @@ import { componentBounds, componentColorString, hexComponentColor, generateGrass
 import { ExtendedComponentModel, ComponentLocation } from '@/generated/ComponentModel'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
@@ -63,6 +64,9 @@ export default function ComponentDetailCard({
   const [archiving, setArchiving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDestructiveActions, setShowDestructiveActions] = useState(false)
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
+  const [archiveAction, setArchiveAction] = useState<'archive' | 'restore' | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const { data: session } = useSession()
   const router = useRouter()
 
@@ -161,10 +165,6 @@ export default function ComponentDetailCard({
   }
 
   const handleArchiveComponent = async () => {
-    if (!confirm('Are you sure you want to archive this component? It will be removed from the main catalog but can be restored later.')) {
-      return
-    }
-
     try {
       setArchiving(true)
       const response = await fetch(`/api/backend/archive/${component_data._id}`, {
@@ -187,10 +187,6 @@ export default function ComponentDetailCard({
   }
 
   const handleUnarchiveComponent = async () => {
-    if (!confirm('Are you sure you want to restore this component from the archive?')) {
-      return
-    }
-
     try {
       setArchiving(true)
       const response = await fetch(`/api/backend/unarchive/${component_data._id}`, {
@@ -212,11 +208,26 @@ export default function ComponentDetailCard({
     }
   }
 
-  const handleDeleteComponent = async () => {
-    if (!confirm('Are you sure you want to PERMANENTLY delete this component? This action cannot be undone!')) {
+  const openArchiveConfirmation = () => {
+    setArchiveAction(isArchived ? 'restore' : 'archive')
+    setArchiveConfirmOpen(true)
+  }
+
+  const handleConfirmArchiveAction = async () => {
+    const selectedAction = archiveAction
+    if (!selectedAction) return
+
+    setArchiveConfirmOpen(false)
+    setArchiveAction(null)
+
+    if (selectedAction === 'archive') {
+      await handleArchiveComponent()
       return
     }
+    await handleUnarchiveComponent()
+  }
 
+  const handleDeleteComponent = async () => {
     try {
       setDeleting(true)
       const response = await fetch(`/api/backend/components/${component_data._id}`, {
@@ -236,6 +247,11 @@ export default function ComponentDetailCard({
     } finally {
       setDeleting(false)
     }
+  }
+
+  const handleConfirmDelete = async () => {
+    setDeleteConfirmOpen(false)
+    await handleDeleteComponent()
   }
 
   // Component Color
@@ -454,7 +470,7 @@ export default function ComponentDetailCard({
               </TooltipProvider>
 
               <Button
-                onClick={isArchived ? handleUnarchiveComponent : handleArchiveComponent}
+                onClick={openArchiveConfirmation}
                 disabled={validating || archiving || deleting}
                 variant={isArchived ? 'default' : 'outline'}
                 className="flex-1"
@@ -499,7 +515,7 @@ export default function ComponentDetailCard({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
-                          onClick={handleDeleteComponent}
+                          onClick={() => setDeleteConfirmOpen(true)}
                           disabled={validating || archiving || deleting}
                           variant="destructive"
                           className="w-full"
@@ -526,6 +542,64 @@ export default function ComponentDetailCard({
             </div>
           </div>
         )}
+
+        <Dialog open={archiveConfirmOpen} onOpenChange={setArchiveConfirmOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {isArchived ? 'Restore component?' : 'Archive component?'}
+              </DialogTitle>
+              <DialogDescription>
+                {isArchived
+                  ? 'This will restore the component to the main catalog.'
+                  : 'This will remove the component from the main catalog, but you can restore it later.'}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setArchiveConfirmOpen(false)
+                  setArchiveAction(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant={isArchived ? 'default' : 'outline'}
+                onClick={handleConfirmArchiveAction}
+                disabled={archiving || validating || deleting}
+              >
+                {isArchived ? 'Confirm Restore' : 'Confirm Archive'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Permanently delete component?</DialogTitle>
+              <DialogDescription>
+                This action cannot be undone. The component and associated files will be permanently removed.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setDeleteConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmDelete}
+                disabled={deleting || validating || archiving}
+              >
+                Confirm Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <div className="mb-4 flex flex-col items-start justify-between gap-4 xl:flex-row">
           {/* Left side metadata */}
