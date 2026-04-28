@@ -453,40 +453,31 @@ export default function ComponentDetailCard({
                 </Tooltip>
               </TooltipProvider>
 
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={isArchived ? handleUnarchiveComponent : handleArchiveComponent}
-                      disabled={validating || archiving || deleting}
-                      variant={isArchived ? 'default' : 'outline'}
-                      className="flex-1"
-                    >
-                      {archiving ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                      ) : isArchived ? (
-                        <>
-                          <RotateCcw className="h-4 w-4 mr-2" />
-                          <span>Restore</span>
-                        </>
-                      ) : (
-                        <>
-                          <Archive className="h-4 w-4 mr-2" />
-                          <span>Archive</span>
-                        </>
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <div className="text-center text-sm">
-                      {isArchived
-                        ? 'Restore this component to the main Catalog'
-                        : 'Archive this component (can be restored later)'
-                      }
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Button
+                onClick={isArchived ? handleUnarchiveComponent : handleArchiveComponent}
+                disabled={validating || archiving || deleting}
+                variant={isArchived ? 'default' : 'outline'}
+                className="flex-1"
+                title={
+                  isArchived
+                    ? 'Restore this component to the main Catalog'
+                    : 'Archive this component (can be restored later)'
+                }
+              >
+                {archiving ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                ) : isArchived ? (
+                  <>
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    <span>Restore</span>
+                  </>
+                ) : (
+                  <>
+                    <Archive className="h-4 w-4 mr-2" />
+                    <span>Archive</span>
+                  </>
+                )}
+              </Button>
             </div>
 
             {/* Destructive Actions - Collapsible */}
