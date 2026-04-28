@@ -11,6 +11,7 @@ import { CheckCircle, Shield, Eye, ChevronDown, ChevronUp, Trash2, ExternalLink 
 import { ComponentModel } from '@/generated/ComponentModel'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatTimestamp } from '@/lib/utils'
 
 export default function ValidationPage() {
@@ -23,6 +24,7 @@ export default function ValidationPage() {
   const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set())
   const [componentData, setComponentData] = useState<Record<string, ComponentModel>>({})
   const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(new Set())
+  const [deleteConfirmComponentId, setDeleteConfirmComponentId] = useState<string | null>(null)
 
   // Redirect non-admin users or expired sessions
   useEffect(() => {
@@ -82,10 +84,6 @@ export default function ValidationPage() {
   }
 
   const deleteComponent = async (componentId: string) => {
-    if (!confirm('Are you sure you want to delete this component? This action cannot be undone.')) {
-      return
-    }
-
     try {
       setDeleting(componentId)
       const response = await fetch(`/api/backend/components/${componentId}`, {
@@ -105,6 +103,13 @@ export default function ValidationPage() {
     } finally {
       setDeleting(null)
     }
+  }
+
+  const confirmDeleteComponent = async () => {
+    const componentId = deleteConfirmComponentId
+    if (!componentId) return
+    setDeleteConfirmComponentId(null)
+    await deleteComponent(componentId)
   }
 
   const togglePreview = async (componentId: string) => {
@@ -321,7 +326,7 @@ export default function ValidationPage() {
                             )}
                           </Button>
                           <Button
-                            onClick={() => deleteComponent(component._id!)}
+                            onClick={() => setDeleteConfirmComponentId(component._id!)}
                             disabled={validating === component._id || deleting === component._id}
                             size="sm"
                             variant="destructive"
@@ -384,6 +389,33 @@ export default function ValidationPage() {
         </Card>
 
       </div>
+      <Dialog
+        open={Boolean(deleteConfirmComponentId)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirmComponentId(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Permanently delete component?</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. The component and associated files will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmComponentId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteComponent}
+              disabled={!deleteConfirmComponentId || deleting === deleteConfirmComponentId}
+            >
+              Confirm Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
