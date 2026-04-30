@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { componentBounds, componentColorString, hexComponentColor, generateGrasshopperPanelXML, formatTimestamp } from '@/lib/utils'
 import { ExtendedComponentModel, ComponentLocation } from '@/generated/ComponentModel'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import ComponentDetailMap from './ComponentDetailMap'
-import { Copy, Check, FileText, CheckCircle, Trash2, Archive, RotateCcw, ChevronDown, Pencil } from 'lucide-react'
+import { Copy, Check, FileText, CheckCircle, Trash2, Archive, RotateCcw, ChevronDown, Pencil, Loader2 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import ComponentOverviewDataTableLocationCell from './overview/ComponentOverviewDataTableLocationCell'
@@ -67,8 +67,48 @@ export default function ComponentDetailCard({
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
   const [archiveAction, setArchiveAction] = useState<'archive' | 'restore' | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [openingParentComponent, setOpeningParentComponent] = useState(false)
+  const [parentComponentStatus, setParentComponentStatus] = useState<'active' | 'archived' | null>(null)
   const { data: session } = useSession()
   const router = useRouter()
+
+  useEffect(() => {
+    const parentId = isNonEmptyString(component_data.parent_component)
+      ? String(component_data.parent_component)
+      : null
+
+    if (!parentId) {
+      setParentComponentStatus(null)
+      return
+    }
+
+    let cancelled = false
+    const resolveParentStatus = async () => {
+      try {
+        setParentComponentStatus(null)
+
+        const activeRes = await fetch(`/api/backend/shallowcomponents/${parentId}`)
+        if (activeRes.ok) {
+          if (!cancelled) setParentComponentStatus('active')
+          return
+        }
+
+        if (activeRes.status === 404) {
+          const archivedRes = await fetch(`/api/backend/archived/components/${parentId}`)
+          if (!cancelled && archivedRes.ok) {
+            setParentComponentStatus('archived')
+          }
+        }
+      } catch (error) {
+        console.error('Failed to resolve parent component status:', error)
+      }
+    }
+
+    resolveParentStatus()
+    return () => {
+      cancelled = true
+    }
+  }, [component_data.parent_component])
 
   const handleCopyToClipboard = async () => {
     try {
@@ -252,6 +292,44 @@ export default function ComponentDetailCard({
   const handleConfirmDelete = async () => {
     setDeleteConfirmOpen(false)
     await handleDeleteComponent()
+  }
+
+  const handleOpenParentComponent = async (parentId: string) => {
+    try {
+      setOpeningParentComponent(true)
+
+      if (parentComponentStatus === 'active') {
+        router.push(`/components/${parentId}`)
+        return
+      }
+      if (parentComponentStatus === 'archived') {
+        router.push(`/archive/components/${parentId}`)
+        return
+      }
+
+      const activeRes = await fetch(`/api/backend/shallowcomponents/${parentId}`)
+      if (activeRes.ok) {
+        router.push(`/components/${parentId}`)
+        return
+      }
+
+      // If not found in active catalog, try archive detail route.
+      // Archive access is admin-only; non-admin users will be redirected by that page.
+      if (activeRes.status === 404) {
+        const archivedRes = await fetch(`/api/backend/archived/components/${parentId}`)
+        if (archivedRes.ok) {
+          router.push(`/archive/components/${parentId}`)
+          return
+        }
+      }
+
+      alert('Parent component could not be found.')
+    } catch (error) {
+      console.error('Failed to resolve parent component:', error)
+      alert('Failed to open parent component. Please try again.')
+    } finally {
+      setOpeningParentComponent(false)
+    }
   }
 
   // Component Color
@@ -778,13 +856,31 @@ export default function ComponentDetailCard({
                 <div className="flex items-center justify-between gap-2 p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground flex-shrink-0">Parent component</span>
                   {isNonEmptyString(component_data.parent_component) ? (
-                    <Link
-                      href={`/components/${component_data.parent_component}`}
-                      className="font-mono text-[11px] sm:text-xs font-semibold text-primary hover:underline bg-primary/10 px-2 py-1 rounded-md max-w-[65%] truncate"
-                      title={`Open parent component ${component_data.parent_component}`}
-                    >
-                      {component_data.parent_component}
-                    </Link>
+                    <div className="inline-flex items-center gap-1.5 max-w-[70%]">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenParentComponent(String(component_data.parent_component))}
+                        disabled={openingParentComponent}
+                        className="inline-flex items-center gap-1 font-mono text-[11px] sm:text-xs font-semibold text-primary hover:underline bg-primary/10 px-2 py-1 rounded-md min-w-0 truncate cursor-pointer disabled:opacity-70 disabled:no-underline disabled:cursor-not-allowed"
+                        title={`Open parent component ${component_data.parent_component}`}
+                      >
+                        {openingParentComponent ? (
+                          <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                        ) : null}
+                        {component_data.parent_component}
+                      </button>
+                      {parentComponentStatus && (
+                        <span
+                          className={`text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md border shrink-0 ${
+                            parentComponentStatus === 'archived'
+                              ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
+                              : 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700'
+                          }`}
+                        >
+                          {parentComponentStatus === 'archived' ? 'Archived' : 'Active'}
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <span className="text-xs italic text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">
                       None
