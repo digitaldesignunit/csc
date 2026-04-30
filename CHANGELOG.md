@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7.0] - 2026-04-30
+
+### Versions
+
+- CSC FastAPI Backend:  0.4.7.0
+- CSC React Frontend:   0.4.7.0
+- CSC Grasshopper Interface: 0.4.5.6
+
+### Changed
+
+#### CSC FastAPI Backend
+
+- **Sorting enhancements for component lists**: Added support for additional sort keys (`name`, `bbx.0`, `bbx.1`, `bbx.2`) and introduced `sortorder=asc|desc` handling for both regular and archived shallow component listing endpoints. Added archive-side sort key validation against the shared allowed-key list.
+
+#### CSC React Frontend
+
+- **Browse/archive table sorting UX**: Implemented clickable table-header sorting with URL-synced `sortkey` + `sortorder`, active sort indicators, per-column toggle between ascending/descending, and explicit reset-sort control.
+- **Filter panel improvements**: Renamed filter section to **Filters & Settings**, added page-size control (`size`) inside the filter panel, and kept it URL-synced with pagination/search state.
+- **Filter input UX**: Switched material and component type filters from free-text inputs to dropdown selectors populated from backend unique-value endpoints (including archive endpoints).
+- **Component detail mobile action UX**: Replaced native browser confirmation popups for archive/restore/delete actions with in-app dialog confirmations for better mobile reliability and consistency.
+- **Validation dashboard delete UX**: Replaced native delete confirmation popup with in-app dialog in admin validation page.
+- **Browse page direct-ID entry UX**: Refined direct component-ID navigation field styling and prominence with a compact, more discoverable inline callout.
+
 ## [0.4.6.0] - 2026-04-22
 
 ### Versions
