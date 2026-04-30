@@ -5,7 +5,7 @@ import hashlib
 import shutil
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional, Literal
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
 from fastapi import (
@@ -413,7 +413,7 @@ async def get_components_stats(
                     {"$sort": {"count": -1}},
                 ],
                 "descriptorsKeys": [
-                    {"$project": {"pairs": {"$objectToArray": {"$ifNull": ["$descriptors", {}]}}}},
+                    {"$project": {"pairs": {"$objectToArray": {"$ifNull": ["$descriptors", {}]}}}},  # NOQA401
                     {"$unwind": "$pairs"},
                     {"$group": {"_id": "$pairs.k", "count": {"$sum": 1}}},
                     {"$sort": {"count": -1}},
@@ -433,8 +433,8 @@ async def get_components_stats(
                     {"$sort": {"_id": 1}},
                 ],
                 "bbx": [
-                    {"$project": {"x": {"$arrayElemAt": ["$bbx", 0]}, "y": {"$arrayElemAt": ["$bbx", 1]}, "z": {"$arrayElemAt": ["$bbx", 2]}}},
-                    {"$bucket": {"groupBy": "$x", "boundaries": [0, 0.5, 1, 2, 5, 10, 20, 50, 100, 1000], "default": ">=1000", "output": {"count": {"$sum": 1}}}},
+                    {"$project": {"x": {"$arrayElemAt": ["$bbx", 0]}, "y": {"$arrayElemAt": ["$bbx", 1]}, "z": {"$arrayElemAt": ["$bbx", 2]}}},  # NOQA401
+                    {"$bucket": {"groupBy": "$x", "boundaries": [0, 0.5, 1, 2, 5, 10, 20, 50, 100, 1000], "default": ">=1000", "output": {"count": {"$sum": 1}}}},  # NOQA401
                 ],
             }
         },
@@ -653,6 +653,10 @@ async def get_components_shallow(
     page: int = Query(0, description='Page number (0=get all, 1+=paginated)'),
     size: int = Query(0, description='Page size (0=get all)'),
     sortkey: str = Query('_id', description='Sort key'),
+    sortorder: Literal['asc', 'desc'] = Query(
+        'asc',
+        description='Sort order: asc or desc',
+    ),
     comptype: str = Query('', description='Component type filter'),
     material: str = Query('', description='Material type filter'),
     dataset: str = Query('', description='Dataset name filter'),
@@ -671,6 +675,8 @@ async def get_components_shallow(
     bbx_max_y: Optional[float] = Query(None, description='Max Y'),
     bbx_max_z: Optional[float] = Query(None, description='Max Z'),
 ):
+    sort_order = -1 if sortorder == 'desc' else 1
+
     match_stage = build_component_match_stage(
         comptype=comptype,
         material=material,
@@ -691,7 +697,7 @@ async def get_components_shallow(
         match_stage,
         projection={'geometry': 0, 'descriptors': 0},
         sortkey=sortkey,
-        sort_order=1,
+        sort_order=sort_order,
         page=page,
         size=size,
         include_username=True,
@@ -709,6 +715,10 @@ async def get_components(
     page: int = Query(0, description='Page number (0=get all, 1+=paginated)'),
     size: int = Query(0, description='Page size (0=get all)'),
     sortkey: str = Query('_id', description='Sort key'),
+    sortorder: Literal['asc', 'desc'] = Query(
+        'asc',
+        description='Sort order: asc or desc',
+    ),
     comptype: str = Query('', description='Component type filter'),
     material: str = Query('', description='Material type filter'),
     dataset: str = Query('', description='Dataset name filter'),
@@ -727,6 +737,8 @@ async def get_components(
     bbx_max_y: Optional[float] = Query(None, description='Max Y'),
     bbx_max_z: Optional[float] = Query(None, description='Max Z'),
 ):
+    sort_order = -1 if sortorder == 'desc' else 1
+
     match_stage = build_component_match_stage(
         comptype=comptype,
         material=material,
@@ -747,7 +759,7 @@ async def get_components(
         match_stage,
         projection={},
         sortkey=sortkey,
-        sort_order=1,
+        sort_order=sort_order,
         page=page,
         size=size,
         include_username=True,

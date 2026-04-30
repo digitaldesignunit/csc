@@ -9,13 +9,18 @@ from the main geometry directory to the archive geometry directory.
 
 import os
 import shutil
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
 from fastapi.responses import JSONResponse, FileResponse
 from pymongo.errors import PyMongoError
 
-from apps.catalog.models import ComponentCount, ComponentModel, User
+from apps.catalog.models import (
+    ALLOWED_COMPONENT_SORTKEYS,
+    ComponentCount,
+    ComponentModel,
+    User,
+)
 from .auth import require_admin
 from .components import build_component_match_stage
 from utility.utility import (
@@ -57,6 +62,10 @@ async def get_archived_components_with_aggregation(
     Similar to get_components_with_aggregation but for archived collection.
     """
     coll = await get_archived_components_col(request)
+
+    # Guard against invalid sort keys
+    if sortkey not in ALLOWED_COMPONENT_SORTKEYS:
+        sortkey = '_id'
 
     # Build aggregation pipeline
     pipeline: list = [{'$match': match_stage}]
@@ -363,6 +372,10 @@ async def get_archived_components_shallow(
     page: int = Query(0, description='Page number (0=get all, 1+=paginated)'),
     size: int = Query(0, description='Page size (0=get all)'),
     sortkey: str = Query('_id', description='Sort key'),
+    sortorder: Literal['asc', 'desc'] = Query(
+        'asc',
+        description='Sort order: asc or desc',
+    ),
     comptype: str = Query('', description='Component type filter'),
     material: str = Query('', description='Material type filter'),
     dataset: str = Query('', description='Dataset name filter'),
@@ -377,6 +390,8 @@ async def get_archived_components_shallow(
     bbx_max_z: Optional[float] = Query(None, description='Max Z'),
 ):
     """List archived components without geometry/descriptors fields."""
+    sort_order = -1 if sortorder == 'desc' else 1
+
     match_stage = build_component_match_stage(
         comptype=comptype,
         material=material,
@@ -396,7 +411,7 @@ async def get_archived_components_shallow(
         match_stage,
         projection={'geometry': 0, 'descriptors': 0},
         sortkey=sortkey,
-        sort_order=1,
+        sort_order=sort_order,
         page=page,
         size=size,
     )

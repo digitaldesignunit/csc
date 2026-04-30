@@ -91,10 +91,14 @@ ALLOWED_COMPONENT_TYPES = [
 
 ALLOWED_COMPONENT_SORTKEYS = [
     "_id",
+    "name",
     "type",
     "material",
     "dataset",
     "color",
+    "bbx.0",
+    "bbx.1",
+    "bbx.2",
     "created",
     "lastmodified",
 ]
