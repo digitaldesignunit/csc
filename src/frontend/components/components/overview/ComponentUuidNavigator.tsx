@@ -24,22 +24,25 @@ export default function ComponentUuidNavigator() {
   }
 
   return (
-    <div className="flex items-end gap-2">
-      <div className="flex-1 space-y-2">
-        <Input
-          id="component-uuid"
-          type="text"
-          placeholder="Enter a component UUID to directly open its detail page..."
-          className="placeholder:text-xs sm:placeholder:text-sm"
-          value={uuid}
-          onChange={(e) => setUuid(e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
+    <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <div className="shrink-0 text-xs font-medium text-foreground">Open by ID</div>
+        <div className="flex-1">
+          <Input
+            id="component-uuid"
+            type="text"
+            placeholder="Paste component UUID..."
+            className="h-9 bg-background placeholder:text-xs border-primary/40 focus-visible:ring-primary/40"
+            value={uuid}
+            onChange={(e) => setUuid(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+        <Button onClick={handleNavigate} disabled={!uuid.trim()} className="h-9 min-w-[80px] px-3">
+          <Search className="h-4 w-4" />
+          <span className="ml-1">Open</span>
+        </Button>
       </div>
-      <Button onClick={handleNavigate} disabled={!uuid.trim()}>
-        <Search className="h-4 w-4" />
-        Open
-      </Button>
     </div>
   )
 }

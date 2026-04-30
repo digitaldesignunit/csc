@@ -13,6 +13,7 @@ interface ComponentOverviewFilterMenuProps {
   defaultMaterial: string
   defaultCompType: string
   defaultDataset: string
+  defaultPageSize?: number
   /** Optional custom endpoint for fetching materials (default: '/api/backend/materials') */
   materialsEndpoint?: string
   /** Optional custom endpoint for fetching component types (default: '/api/backend/componenttypes') */
@@ -35,6 +36,7 @@ export default function ComponentOverviewFilterMenu({
   defaultMaterial,
   defaultCompType,
   defaultDataset,
+  defaultPageSize = 20,
   materialsEndpoint = '/api/backend/materials',
   componentTypesEndpoint = '/api/backend/componenttypes',
   datasetsEndpoint = '/api/backend/datasets',
@@ -54,6 +56,7 @@ export default function ComponentOverviewFilterMenu({
   const [bbxMaxX, setBbxMaxX] = useState('')
   const [bbxMaxY, setBbxMaxY] = useState('')
   const [bbxMaxZ, setBbxMaxZ] = useState('')
+  const [pageSize, setPageSize] = useState(String(defaultPageSize))
   
   // State for available materials and component types
   const [availableMaterials, setAvailableMaterials] = useState<string[]>([])
@@ -111,6 +114,7 @@ export default function ComponentOverviewFilterMenu({
     const newBbxMaxX = searchParams.get('bbx_max_x') || ''
     const newBbxMaxY = searchParams.get('bbx_max_y') || ''
     const newBbxMaxZ = searchParams.get('bbx_max_z') || ''
+    const newPageSize = searchParams.get('size') || String(defaultPageSize)
 
     setMaterial(newMaterial)
     setCompType(newCompType)
@@ -123,7 +127,8 @@ export default function ComponentOverviewFilterMenu({
     setBbxMaxX(newBbxMaxX)
     setBbxMaxY(newBbxMaxY)
     setBbxMaxZ(newBbxMaxZ)
-  }, [searchParams])
+    setPageSize(newPageSize)
+  }, [searchParams, defaultPageSize])
 
   function handleApplyFilters() {
     const params = new URLSearchParams(searchParams.toString())
@@ -149,6 +154,7 @@ export default function ComponentOverviewFilterMenu({
     applyFilterParam('bbx_max_x', bbxMaxX)
     applyFilterParam('bbx_max_y', bbxMaxY)
     applyFilterParam('bbx_max_z', bbxMaxZ)
+    applyFilterParam('size', pageSize)
     
     // Reset page to 1 when applying filters
     params.set('page', '1')
@@ -171,6 +177,7 @@ export default function ComponentOverviewFilterMenu({
     params.delete('bbx_max_x')
     params.delete('bbx_max_y')
     params.delete('bbx_max_z')
+    params.delete('size')
     
     // Reset local state
     setMaterial('')
@@ -184,6 +191,7 @@ export default function ComponentOverviewFilterMenu({
     setBbxMaxX('')
     setBbxMaxY('')
     setBbxMaxZ('')
+    setPageSize(String(defaultPageSize))
     
     // Reset page to 1
     params.set('page', '1')
@@ -198,7 +206,7 @@ export default function ComponentOverviewFilterMenu({
           <AccordionTrigger className="hover:no-underline py-2">
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4" />
-              <span className="font-medium">Filters</span>
+              <span className="font-medium">Filters &amp; Settings</span>
               {activeFiltersCount > 0 && (
                 <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full">
                   {activeFiltersCount}
@@ -284,7 +292,7 @@ export default function ComponentOverviewFilterMenu({
                 </div>
               </div>
 
-              {/* Fragment Filter Row */}
+              {/* Fragment + Settings Row */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="fragmentInput" className="text-sm font-medium">Fragment Status</Label>
@@ -297,6 +305,20 @@ export default function ComponentOverviewFilterMenu({
                     <option value="">Any fragment status</option>
                     <option value="true">Fragment only</option>
                     <option value="false">Non-fragment only</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="pageSizeInput" className="text-sm font-medium">Rows per page</Label>
+                  <select
+                    id="pageSizeInput"
+                    value={pageSize}
+                    onChange={(e) => setPageSize(e.target.value)}
+                    className="h-8 px-3 py-1 text-sm border border-input rounded-md bg-background"
+                  >
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
                   </select>
                 </div>
               </div>
@@ -377,7 +399,7 @@ export default function ComponentOverviewFilterMenu({
               {/* Action Buttons */}
               <div className="flex items-center gap-2 pt-2">
                 <Button onClick={handleApplyFilters} size="sm">
-                  Apply Filters
+                  Apply
                 </Button>
                 <Button variant="secondary" onClick={handleResetFilters} size="sm">
                   Reset All

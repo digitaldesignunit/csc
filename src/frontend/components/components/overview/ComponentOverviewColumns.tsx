@@ -53,7 +53,7 @@ export function createComponentOverviewColumns(
   return [
     {
       accessorKey: 'name',
-      header: () => <ComponentOverviewDataTableHeader header='Name' />,
+      header: () => <ComponentOverviewDataTableHeader header='Name' sortKey='name' />,
       meta: {
         // preview column: can compress a bit, then scroll
         colClassName: 'w-[200px] sm:w-[260px] md:w-[300px]',
@@ -69,7 +69,7 @@ export function createComponentOverviewColumns(
     },
   {
     accessorKey: '_id',
-    header: () => <ComponentOverviewDataTableHeader header='ID' />,
+    header: () => <ComponentOverviewDataTableHeader header='ID' sortKey='_id' />,
     meta: { colClassName: 'w-[220px] sm:w-[260px] md:w-[320px]' },
     cell: ({ row }) => {
       const componentId = row.getValue('_id') as string
@@ -78,7 +78,7 @@ export function createComponentOverviewColumns(
   },
   {
     accessorKey: 'type',
-    header: () => <ComponentOverviewDataTableHeader header='Type' />,
+    header: () => <ComponentOverviewDataTableHeader header='Type' sortKey='type' />,
     meta: { colClassName: 'w-[120px] sm:w-[140px] md:w-[160px]' },
     cell: ({ row }) => {
       const component_type: string = row.getValue('type')
@@ -93,7 +93,7 @@ export function createComponentOverviewColumns(
   },
   {
     accessorKey: 'material',
-    header: () => <ComponentOverviewDataTableHeader header='Material' />,
+    header: () => <ComponentOverviewDataTableHeader header='Material' sortKey='material' />,
     meta: { colClassName: 'w-[140px] sm:w-[160px] md:w-[200px]' },
     cell: ({ row }) => {
       const component_mat: string = row.getValue('material') ?? ''
@@ -108,7 +108,7 @@ export function createComponentOverviewColumns(
   },
   {
     accessorKey: 'dataset',
-    header: () => <ComponentOverviewDataTableHeader header='Dataset' />,
+    header: () => <ComponentOverviewDataTableHeader header='Dataset' sortKey='dataset' />,
     meta: { colClassName: 'w-[160px] sm:w-[180px] md:w-[220px]' },
     cell: ({ row }) => {
       const component_dataset: string = row.getValue('dataset') ?? ''
@@ -123,7 +123,7 @@ export function createComponentOverviewColumns(
   },
   {
     accessorKey: 'bbx',
-    header: () => <ComponentOverviewDataTableHeader header='X' />,
+    header: () => <ComponentOverviewDataTableHeader header='X' sortKey='bbx.0' />,
     meta: { colClassName: 'w-[84px] sm:w-[96px] text-left' },
     cell: ({ row }) => {
       const bbx: ComponentBoundingBox = row.getValue('bbx')
@@ -141,7 +141,7 @@ export function createComponentOverviewColumns(
   },
   {
     accessorKey: 'bbx_y',
-    header: () => <ComponentOverviewDataTableHeader header='Y' />,
+    header: () => <ComponentOverviewDataTableHeader header='Y' sortKey='bbx.1' />,
     meta: { colClassName: 'w-[84px] sm:w-[96px] text-left' },
     cell: ({ row }) => {
       const bbx: ComponentBoundingBox = row.getValue('bbx')
@@ -155,7 +155,7 @@ export function createComponentOverviewColumns(
   },
   {
     accessorKey: 'bbx_z',
-    header: () => <ComponentOverviewDataTableHeader header='Z' />,
+    header: () => <ComponentOverviewDataTableHeader header='Z' sortKey='bbx.2' />,
     meta: { colClassName: 'w-[84px] sm:w-[96px] text-left' },
     cell: ({ row }) => {
       const bbx: ComponentBoundingBox = row.getValue('bbx')
@@ -169,7 +169,7 @@ export function createComponentOverviewColumns(
   },
   {
     accessorKey: 'color',
-    header: () => <ComponentOverviewDataTableHeader header='Color' />,
+    header: () => <ComponentOverviewDataTableHeader header='Color' sortKey='color' />,
     meta: { colClassName: 'w-[140px] sm:w-[160px]' },
     cell: ({ row }) => {
       const color: number[] = row.getValue('color')
@@ -213,7 +213,7 @@ export function createComponentOverviewColumns(
   },
   {
     accessorKey: 'created',
-    header: () => <ComponentOverviewDataTableHeader header='Created' />,
+    header: () => <ComponentOverviewDataTableHeader header='Created' sortKey='created' />,
     meta: { colClassName: 'w-[180px] sm:w-[200px]' },
     cell: ({ row }) => (
       <div className='text-xs truncate'>{formatTimestamp(row.getValue('created'))}</div>
@@ -221,7 +221,7 @@ export function createComponentOverviewColumns(
   },
   {
     accessorKey: 'lastmodified',
-    header: () => <ComponentOverviewDataTableHeader header='Last Modified' />,
+    header: () => <ComponentOverviewDataTableHeader header='Last Modified' sortKey='lastmodified' />,
     meta: { colClassName: 'w-[200px] sm:w-[220px]' },
     cell: ({ row }) => (
       <div className='text-xs truncate'>{formatTimestamp(row.getValue('lastmodified'))}</div>

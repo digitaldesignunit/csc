@@ -14,6 +14,7 @@ type SearchParams = {
   page?: string
   size?: string
   sortkey?: string
+  sortorder?: string
   comptype?: string
   material?: string
   dataset?: string
@@ -28,10 +29,10 @@ type SearchParams = {
 }
 
 async function fetchArchivedComponentsAndTotal({
-  page, size, sortkey, comptype, material, dataset,
+  page, size, sortkey, sortorder, comptype, material, dataset,
   complexity, fragment, bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z,
 }: {
-  page: number; size: number; sortkey: string; comptype: string; material: string; dataset: string
+  page: number; size: number; sortkey: string; sortorder: 'asc' | 'desc'; comptype: string; material: string; dataset: string
   complexity?: string; fragment?: string; bbx_min_x?: string; bbx_min_y?: string; bbx_min_z?: string
   bbx_max_x?: string; bbx_max_y?: string; bbx_max_z?: string
 }) {
@@ -43,6 +44,7 @@ async function fetchArchivedComponentsAndTotal({
     page: String(page),
     size: String(size),
     sortkey,
+    sortorder,
     comptype,
     material,
     dataset,
@@ -122,6 +124,7 @@ export default async function ArchivePage({
   const page = Number(sp?.page ?? 1)
   const size = Number(sp?.size ?? 20)
   const sortkey = sp?.sortkey ?? '_id'
+  const sortorder: 'asc' | 'desc' = sp?.sortorder === 'desc' ? 'desc' : 'asc'
   const comptype = sp?.comptype ?? ''
   const material = sp?.material ?? ''
   const dataset = sp?.dataset ?? ''
@@ -135,7 +138,7 @@ export default async function ArchivePage({
   const bbx_max_z = sp?.bbx_max_z ?? ''
 
   const { items, total } = await fetchArchivedComponentsAndTotal({
-    page, size, sortkey, comptype, material, dataset,
+    page, size, sortkey, sortorder, comptype, material, dataset,
     complexity, fragment, bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z,
   })
 
@@ -159,6 +162,7 @@ export default async function ArchivePage({
           defaultMaterial={material}
           defaultCompType={comptype}
           defaultDataset={dataset}
+          defaultPageSize={size}
           materialsEndpoint="/api/backend/archived/materials"
           componentTypesEndpoint="/api/backend/archived/types"
           datasetsEndpoint="/api/backend/archived/datasets"
