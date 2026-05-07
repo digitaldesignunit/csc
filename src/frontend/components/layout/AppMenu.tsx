@@ -168,6 +168,13 @@ export default function AppMenu() {
               <Archive className="h-4 w-4" />
               Component Archive
             </div>
+            <div
+              onClick={() => handleNavigation('/admin/logs')}
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            >
+              <Terminal className="h-4 w-4" />
+              Backend Logs
+            </div>
           </div>
         </div>
       )}
