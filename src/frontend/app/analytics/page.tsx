@@ -172,7 +172,10 @@ export default function AnalyticsPage() {
     <div className="p-4 md:p-6 lg:p-8">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-semibold">Analytics</h1>
+          <div className="flex items-center gap-2 mb-1">
+            <BarChart2 className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-semibold">Analytics</h1>
+          </div>
           <p className="text-sm text-muted-foreground">Overview and distributions across component attributes</p>
         </div>
         <Button variant="outline" onClick={() => load()} disabled={loading}>

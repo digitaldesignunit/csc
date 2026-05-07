@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Home, Package, Search, Award, FileText, User, Shield, QrCode, Terminal, Layers2, BarChart2, Archive, Send } from 'lucide-react'
+import { Home, Package, Search, Award, FileText, User, Shield, QrCode, Terminal, Layers2, BarChart2, Archive, Send, Logs, BookMarked } from 'lucide-react'
 
 export default function AppMenu() {
   const router = useRouter()
@@ -27,6 +27,13 @@ export default function AppMenu() {
   const handleNavigation = (path: string) => {
     router.push(path)
     // Close mobile menu on navigation
+    if (isMobile) {
+      document.dispatchEvent(new CustomEvent('closeMobileMenu'))
+    }
+  }
+
+  const handleExternalNavigation = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer')
     if (isMobile) {
       document.dispatchEvent(new CustomEvent('closeMobileMenu'))
     }
@@ -172,7 +179,7 @@ export default function AppMenu() {
               onClick={() => handleNavigation('/admin/logs')}
               className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
-              <Terminal className="h-4 w-4" />
+              <Logs className="h-4 w-4" />
               Backend Logs
             </div>
           </div>
@@ -198,6 +205,13 @@ export default function AppMenu() {
           >
             <FileText className="h-4 w-4" />
             Imprint
+          </div>
+          <div
+            onClick={() => handleExternalNavigation('https://api.ddu.uber.space/docs#/')}
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+          >
+            <BookMarked className="h-4 w-4" />
+            API Docs
           </div>
         </div>
       </div>

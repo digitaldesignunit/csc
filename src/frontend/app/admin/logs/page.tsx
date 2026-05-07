@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { Shield, RefreshCw } from 'lucide-react'
+import { Logs, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -109,7 +109,7 @@ export default function AdminLogsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 sm:gap-3 mb-2">
-            <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+            <Logs className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
             <h1 className="text-2xl sm:text-3xl font-bold">Admin Logs</h1>
           </div>
           <p className="text-muted-foreground text-sm sm:text-base">
