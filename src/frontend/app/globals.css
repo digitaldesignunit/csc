@@ -167,3 +167,31 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* ── Sidebar scrollbar ── */
+.sidebar-scroll {
+  scrollbar-width: thin;                      /* Firefox */
+  scrollbar-color: transparent transparent;   /* Firefox: hide until hover */
+}
+.sidebar-scroll:hover {
+  scrollbar-color: var(--border) transparent; /* Firefox: show on hover */
+}
+
+/* Webkit (Chrome, Edge, Safari) */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 0.2s;
+}
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
