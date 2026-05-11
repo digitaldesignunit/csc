@@ -12,7 +12,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from apps.catalog.models import Token, User, UserInDB, UserPublic, RegisterPayload # NOQA
+from apps.catalog.models import Token, User, UserInDB, UserPublic, RegisterPayload, ChangePasswordPayload # NOQA
 from services.email_service import (
     generate_verification_token,
     get_token_expiry,
@@ -346,6 +346,42 @@ async def verify_email(
         'message': 'Email verified successfully. You can now sign in.',
         'email': user.get('email')
     }
+
+
+@router.post('/change-password',
+             status_code=200,
+             summary='Change password for the authenticated user')
+@limiter.limit('5/minute')
+async def change_password(
+    request: Request,
+    payload: ChangePasswordPayload,
+    current_user: Annotated[UserInDB, Depends(get_current_active_user)],
+    users=Depends(users_coll),
+):
+    """
+    Allows an authenticated user to change their own password.
+    Requires the correct current password and a new password (min 8 chars).
+    """
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Current password is incorrect',
+        )
+
+    if payload.current_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='New password must differ from the current password',
+        )
+
+    new_hashed = get_password_hash(payload.new_password)
+    await users.update_one(
+        {'_id': current_user.id},
+        {'$set': {'hashed_password': new_hashed}},
+    )
+
+    print(f'{ts()} [AUTH] Password changed for user: {current_user.email}')
+    return {'message': 'Password changed successfully'}
 
 
 @router.post('/resend-verification',
