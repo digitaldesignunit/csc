@@ -24,6 +24,9 @@ __pycache__/
 # reference folder
 /reference/
 
+# folder for internal future implementation plans
+/future_implementation/
+
 # VIZ FOLDER
 /viz/
 
@@ -42,6 +45,7 @@ __pycache__/
 /src/frontend_OLD/
 
 /gh_dev/00_archive/
+
 
 # MISC
 _archive
