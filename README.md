@@ -1,9 +1,10 @@
 # CSC - Catalog of Second Chances
 
-_Catalog of Second Chances (CSC)_ tries to provide a platform and the
-corresponding tools to leverage a database of uniquely identified, digitized
-building components and materials to create designs that reuse these
-components.
+The _Catalog of Second Chances (CSC)_ is a prototypical digital component database.
+It catalogs digital representations of uniquely identifiable architectural components
+for reuse. Furthermore, it provides corresponding interfaces and tools to leverage
+them via a backend REST-API, a web-frontend as well as a interface for direct
+interaction within Rhino Grasshopper.
 
 ## Prerequisites
 
