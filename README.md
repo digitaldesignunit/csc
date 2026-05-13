@@ -1,5 +1,7 @@
 # CSC - Catalog of Second Chances
 
+[![DOI](https://zenodo.org/badge/761641858.svg)](https://doi.org/10.5281/zenodo.20156666)
+
 The _Catalog of Second Chances (CSC)_ is a prototypical digital component database.
 It catalogs digital representations of uniquely identifiable architectural components
 for reuse. Furthermore, it provides corresponding interfaces and tools to leverage
@@ -608,11 +610,30 @@ by [@AymbericBr](https://github.com/AymericBr).
 [Timberstone Project](https://epfl-enac.github.io/MANSLAB-IBOIS-EESD-timberstone/),
 which is the origin of abovementioned Catalog Explorer.
 
+## Citing
+
+When using, extending or building upon this piece of softare in your work, please reference it accordingly:
+
+### BibTex
+
+```
+@software{eschenbach_2026_20156667,
+  author       = {Eschenbach, Max Benjamin},
+  title        = {Catalog of Second Chances (CSC) - Digital Database
+                   and Corresponding Interfaces for ReUse of
+                   Architectural Components
+                  },
+  month        = may,
+  year         = 2026,
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.20156666},
+  abstract = {The Catalog of Second Chances (CSC) provides a prototypical platform and the corresponding tools to leverage a database of uniquely identified, digitized architectural components for creating designs that reuse these components.},
+  url          = {https://doi.org/10.5281/zenodo.20156666},
+}
+```
+
+### Other Citation Styles
+
+Find pre-written citations in the style of your choice over at [Zenodo](https://zenodo.org/records/20156666) (Citation box on the right side).
+
 # To-Do & Extension Ideas
-
-## Possible Future Integrations
-
-- **Grasshopper Interface Enhancements**: Additional geometry processing components, parametric design tools
-- **Mobile Applications**: Native mobile apps for field work and component identification
-- **AI Integration**: Machine learning for automatic component classification and quality assessment
-- **BIM Integration**: Direct integration with Revit, ArchiCAD, and other BIM software
