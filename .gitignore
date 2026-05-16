@@ -55,4 +55,7 @@ src/backend/apps/catalog/test.json
 src/backend/logs/fastapi.log
 *.3dm.rhl
 
-scripts/*.log
+scripts/**/*.log
+
+# REPO-WIDE LOG OUTPUT (scripts, maintenance, audits)
+/logs/
