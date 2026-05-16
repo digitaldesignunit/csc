@@ -9,6 +9,8 @@ from .downloads import router as downloads_router
 from .ghupdates import router as ghupdates_router
 from .idtransmission import router as idtransmission_router
 from .archive import router as archive_router
+from .identities import router as identities_router
+from .snapshots import router as snapshots_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix='/auth', tags=['auth'])
@@ -21,3 +23,5 @@ api_router.include_router(downloads_router, tags=['downloads'])
 api_router.include_router(ghupdates_router, tags=['ghupdates'])
 api_router.include_router(idtransmission_router, tags=['idtransmission'])
 api_router.include_router(archive_router, tags=['archive'])
+api_router.include_router(identities_router, tags=['identities'])
+api_router.include_router(snapshots_router, tags=['snapshots'])

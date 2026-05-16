@@ -1094,6 +1094,16 @@ class ComponentSnapshot(BaseModel):
         populate_by_name = True
 
 
+class ComposeIdentityResponse(BaseModel):
+    """Compose response: an identity plus its current snapshot.
+
+    Returned by `GET /identities/{identity_id}/compose` - the primary read
+    path for the new data model.
+    """
+    identity: ComponentIdentity
+    snapshot: ComponentSnapshot
+
+
 class UpdateComponentSnapshotModel(BaseModel):
     """PATCH payload for the current snapshot of an identity.
 
