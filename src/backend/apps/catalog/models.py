@@ -12,6 +12,7 @@ from pydantic import (
     Field,
     RootModel,
     field_validator,
+    model_validator,
 )
 
 # AUTH ------------------------------------------------------------------------
@@ -685,6 +686,449 @@ class UpdateComponentModel(BaseModel):
                 'parent_component must be a valid UUID string'
             )
         return str(v)
+
+    class Config:
+        extra = "ignore"
+        populate_by_name = True
+
+
+# COMPONENTS - IDENTITY / SNAPSHOT MODEL ---------------------------------
+
+
+class SnapshotMesh(BaseModel):
+    """Inline mesh primitive on a snapshot.
+
+    Full-fidelity binary PLY companion lives at
+    ``meshes/<snapshot_id>/<index>.ply``, where ``<index>`` is the 0-based
+    position in the snapshot's ``geometry.meshes`` array.
+    """
+    vertices: List[List[float]] = Field(
+        description="Mesh vertices as array of [x, y, z] coordinates"
+    )
+    faces: List[List[int]] = Field(
+        description=(
+            "Mesh faces as array of vertex index lists (triangles or polygons)"
+        )
+    )
+    colors: Optional[List[List[int]]] = Field(
+        None,
+        description=(
+            "Optional per-vertex RGB colors as [r, g, b] integers (0-255); "
+            "parallel to vertices when present"
+        )
+    )
+
+
+class SnapshotPointCloud(BaseModel):
+    """Inline point cloud primitive on a snapshot.
+
+    Low-resolution preview lives inline; the full-fidelity binary PLY
+    companion lives at ``point_clouds/<snapshot_id>/<index>.ply``, where
+    ``<index>`` is the 0-based position in the snapshot's
+    ``geometry.point_clouds`` array.
+    """
+    points: List[List[float]] = Field(
+        description="Point cloud points as array of [x, y, z] coordinates"
+    )
+    colors: Optional[List[List[int]]] = Field(
+        None,
+        description=(
+            "Optional per-point RGB colors as [r, g, b] integers (0-255); "
+            "parallel to points when present"
+        )
+    )
+
+
+class SnapshotExtrusion(BaseModel):
+    """Inline extrusion primitive on a snapshot.
+
+    Profile + height, fully encoded on the snapshot document (no file
+    companion). A snapshot may hold multiple extrusions in
+    ``geometry.extrusions``.
+    """
+    profile: List[List[float]] = Field(
+        description=(
+            "2D profile polyline as array of [x, y] coordinate pairs "
+            "(centered in XY)"
+        )
+    )
+    height: float = Field(description="Extrusion length along Z")
+
+
+class SnapshotGeometry(BaseModel):
+    """Multi-representation geometry block for one snapshot.
+
+    A single snapshot may hold simultaneous representations (multiple
+    meshes + multiple point clouds + multiple extrusions) of the same
+    physical state. Marker points are shared across all representations
+    within the snapshot (same coordinate frame).
+    """
+    meshes: Optional[List[SnapshotMesh]] = Field(
+        None,
+        description="Array of mesh primitives (each backed by a PLY file)"
+    )
+    point_clouds: Optional[List[SnapshotPointCloud]] = Field(
+        None,
+        description=(
+            "Array of point cloud primitives (each backed by a PLY file)"
+        )
+    )
+    extrusions: Optional[List[SnapshotExtrusion]] = Field(
+        None,
+        description=(
+            "Array of extrusion primitives (profile + height; fully inline)"
+        )
+    )
+    marker_points: Optional[List[List[float]]] = Field(
+        None,
+        description=(
+            "Shared marker points as array of [x, y, z] coordinate triplets; "
+            "same coordinate frame as the meshes/point_clouds/extrusions"
+        )
+    )
+
+    @model_validator(mode='after')
+    def _require_at_least_one_representation(self) -> 'SnapshotGeometry':
+        has_mesh = bool(self.meshes)
+        has_point_cloud = bool(self.point_clouds)
+        has_extrusion = bool(self.extrusions)
+        if not (has_mesh or has_point_cloud or has_extrusion):
+            raise ValueError(
+                'geometry must include at least one of: meshes, '
+                'point_clouds, extrusions (marker_points alone is not '
+                'a valid geometry representation)'
+            )
+        return self
+
+
+class ComponentIdentity(BaseModel):
+    """Stable physical-object reference. One per legacy row after M3."""
+    id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        alias="_id",
+        description="Globally unique identity identifier (GUID)"
+    )
+    catalog_number: int = Field(
+        description=(
+            "Monotonic human-facing catalog number; never recycled. "
+            "Display as 'CSC-' + six-digit zero-padded decimal."
+        )
+    )
+    componenttype: str = Field(
+        alias="type",
+        description=(
+            "Type of component. Must be one of ALLOWED_COMPONENT_TYPES."
+        )
+    )
+    material: str = Field(description="Material type of the component")
+    dataset: str = Field(
+        description="Dataset name that this component belongs to"
+    )
+    manufactured_at: Optional[str] = Field(
+        None,
+        description=(
+            "ISO-8601 timestamp (UTC) describing when the component was "
+            "originally manufactured, to the precision indicated by "
+            "`manufactured_precision`."
+        )
+    )
+    manufactured_precision: Optional[str] = Field(
+        None,
+        description=(
+            "Precision qualifier for `manufactured_at`. Must be one of "
+            "ALLOWED_MANUFACTURED_PRECISIONS."
+        )
+    )
+    salvage_source: Optional[str] = Field(
+        None,
+        description=(
+            "Short free-text description of where the component was salvaged "
+            "from (e.g. building name, demolition site)."
+        )
+    )
+    salvaged_at: Optional[str] = Field(
+        None,
+        description=(
+            "ISO-8601 timestamp (UTC) describing when the component was "
+            "salvaged. Paired with `salvage_source`."
+        )
+    )
+    reserved: str = Field(
+        '',
+        description=(
+            "UUID of user who has reserved this component "
+            "(empty if not reserved)"
+        )
+    )
+    attributes: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Additional static metadata about the physical piece"
+    )
+    parent_identities: Optional[List[str]] = Field(
+        None,
+        description=(
+            "UUIDs of immediate parent identities. Single-element for 1:1 "
+            "splits; multi-element for N:1 merges. `None` if no known parent."
+        )
+    )
+    consumed_at: Optional[str] = Field(
+        None,
+        description=(
+            "ISO-8601 timestamp when the physical piece ceased to exist as "
+            "a discrete object (split, demolished, returned). `None` = active."
+        )
+    )
+    current_snapshot_id: str = Field(
+        description=(
+            "UUID of the snapshot in `component_snapshots` that represents "
+            "the current state of this identity."
+        )
+    )
+    created: str = Field(
+        description="ISO timestamp when this identity was first recorded"
+    )
+    lastmodified: str = Field(
+        description="ISO timestamp when this identity was last modified"
+    )
+
+    @field_validator('componenttype')
+    @classmethod
+    def _validate_componenttype(cls, v: str) -> str:
+        if v not in ALLOWED_COMPONENT_TYPES:
+            raise ValueError(
+                f'type must be one of {ALLOWED_COMPONENT_TYPES}'
+            )
+        return v
+
+    @field_validator('manufactured_precision')
+    @classmethod
+    def _validate_manufactured_precision(
+        cls, v: Optional[str]
+    ) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in ALLOWED_MANUFACTURED_PRECISIONS:
+            raise ValueError(
+                'manufactured_precision must be one of '
+                f'{ALLOWED_MANUFACTURED_PRECISIONS}'
+            )
+        return v
+
+    @field_validator('salvage_source')
+    @classmethod
+    def _normalize_salvage_source(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        return v or None
+
+    @field_validator('parent_identities')
+    @classmethod
+    def _validate_parent_identities(
+        cls, v: Optional[List[str]]
+    ) -> Optional[List[str]]:
+        if v is None:
+            return None
+        if len(v) == 0:
+            return None
+        for item in v:
+            try:
+                uuid.UUID(str(item))
+            except (ValueError, AttributeError, TypeError):
+                raise ValueError(
+                    'parent_identities entries must be valid UUID strings'
+                )
+        return [str(item) for item in v]
+
+    class Config:
+        extra = "ignore"
+        populate_by_name = True
+
+
+class ComponentSnapshot(BaseModel):
+    """State of one identity at one point in time. Version 0 created at M3."""
+    id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        alias="_id",
+        description="Globally unique snapshot identifier (GUID)"
+    )
+    identity_id: str = Field(
+        description="UUID of the ComponentIdentity this snapshot belongs to"
+    )
+    version: int = Field(
+        description=(
+            "Per-identity monotonic version, zero-based. First snapshot for "
+            "an identity is `0`. Unique on (identity_id, version). "
+            "Server-assigned: never accept this field from client payloads; "
+            "the backend computes it (`0` on initial create, "
+            "`max(existing)+1` on snapshot evolution)."
+        )
+    )
+    virtual: bool = Field(
+        default=False,
+        description=(
+            "True when this snapshot represents a hypothetical / proposal "
+            "(not yet realized on the physical piece). Migrated snapshots "
+            "from legacy are `False`."
+        )
+    )
+    name: Optional[str] = Field(
+        'Unnamed Component',
+        description=(
+            "Human readable name for this state (can change across "
+            "snapshots, e.g. on remanufacturing)."
+        )
+    )
+    geometry: SnapshotGeometry = Field(
+        description=(
+            "Multi-representation geometry block for this snapshot "
+            "(meshes, point clouds, extrusions, marker_points). At least one "
+            "of meshes / point_clouds / extrusions must be non-empty."
+        )
+    )
+    descriptors: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Descriptors computed from this snapshot's geometry"
+    )
+    bbx: ComponentBoundingBox = Field(
+        description="Bounding box [X, Y, Z] for this snapshot's geometry"
+    )
+    bbx_origin: List[float] = Field(
+        description="Bounding box origin [X, Y, Z] in PCA space"
+    )
+    complexity: int = Field(
+        description="Complexity level (0-3); derived from geometry"
+    )
+    fragment: bool = Field(
+        description="Whether this snapshot's state is a fragment"
+    )
+    assembly: bool = Field(
+        description="Whether this snapshot's state is an assembly"
+    )
+    condition: Optional[int] = Field(
+        None,
+        description=(
+            "Condition grade for this state. 0 = destroyed/retired, "
+            "1 = poor, 2 = average, 3 = good. `None` = unknown."
+        )
+    )
+    color: Optional[List[int]] = Field(
+        [110, 110, 110],
+        description="RGB rendering color as [R, G, B] integers (0-255)"
+    )
+    location: Optional[ComponentLocation] = Field(
+        {'lat': 0.0, 'lon': 0.0},
+        description=(
+            "Geographic location of the piece at the time of this snapshot. "
+            "PATCH-able on the current snapshot without creating a new one."
+        )
+    )
+    processes: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Manufacturing or processing information for this state"
+    )
+    iframe: ComponentFrame = Field(
+        description=(
+            "Insertion frame / transformation matrix for this state"
+        )
+    )
+    pca_frame: ComponentFrame = Field(
+        description=(
+            "PCA frame / principal-component transformation for this state"
+        )
+    )
+    validated: bool = Field(
+        description="Whether this snapshot's state has been validated"
+    )
+    etag: Optional[str] = Field(
+        '',
+        description=(
+            "ETag for cache validation; recomputed from snapshot content."
+        )
+    )
+    created: str = Field(
+        description="ISO timestamp when this snapshot was created"
+    )
+    lastmodified: str = Field(
+        description="ISO timestamp when this snapshot was last modified"
+    )
+
+    @field_validator('version')
+    @classmethod
+    def _validate_version(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError('version must be >= 0')
+        return v
+
+    @field_validator('identity_id')
+    @classmethod
+    def _validate_identity_id(cls, v: str) -> str:
+        try:
+            uuid.UUID(str(v))
+        except (ValueError, AttributeError, TypeError):
+            raise ValueError('identity_id must be a valid UUID string')
+        return str(v)
+
+    @field_validator('complexity')
+    @classmethod
+    def _validate_complexity(cls, v: int) -> int:
+        if v not in ALLOWED_COMPLEXITY_LEVELS:
+            raise ValueError(
+                f'complexity must be one of {ALLOWED_COMPLEXITY_LEVELS}'
+            )
+        return v
+
+    @field_validator('condition')
+    @classmethod
+    def _validate_condition(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v not in ALLOWED_CONDITION_VALUES:
+            raise ValueError(
+                f'condition must be one of {ALLOWED_CONDITION_VALUES}'
+            )
+        return v
+
+    class Config:
+        extra = "ignore"
+        populate_by_name = True
+
+
+class UpdateComponentSnapshotModel(BaseModel):
+    """PATCH payload for the current snapshot of an identity.
+
+    Per ADR-015 write granularity: only metadata fields can be updated in
+    place on the current snapshot. Geometry and any field derived from
+    geometry (`bbx`, `bbx_origin`, `complexity`, `iframe`, `pca_frame`)
+    MUST instead drive a new snapshot version, so those fields are
+    intentionally absent from this model.
+
+    Server-managed fields (`id`, `identity_id`, `version`, `virtual`,
+    `created`, `lastmodified`, `etag`) are not exposed here either.
+
+    Only fields explicitly present in the request payload are applied
+    (`exclude_unset=True` semantics on the consumer side).
+    """
+    name: Optional[str] = None
+    descriptors: Optional[Dict] = None
+    fragment: Optional[bool] = None
+    assembly: Optional[bool] = None
+    condition: Optional[int] = None
+    color: Optional[List[int]] = None
+    location: Optional[ComponentLocation] = None
+    processes: Optional[Dict] = None
+    validated: Optional[bool] = None
+
+    @field_validator('condition')
+    @classmethod
+    def _validate_condition(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v not in ALLOWED_CONDITION_VALUES:
+            raise ValueError(
+                f'condition must be one of {ALLOWED_CONDITION_VALUES}'
+            )
+        return v
 
     class Config:
         extra = "ignore"
