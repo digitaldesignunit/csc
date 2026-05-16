@@ -1,6 +1,6 @@
 # CSC - Catalog of Second Chances
 
-[![DOI](https://zenodo.org/badge/761641858.svg)](https://doi.org/10.5281/zenodo.20156666)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20156666.svg)](https://doi.org/10.5281/zenodo.20156666)
 
 The _Catalog of Second Chances (CSC)_ is a prototypical digital component database.
 It catalogs digital representations of uniquely identifiable architectural components
