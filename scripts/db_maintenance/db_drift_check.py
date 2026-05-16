@@ -1,8 +1,8 @@
 """Drift check: local JSON dumps vs live MongoDB.
 
 Compares the local ``mongodb_collections_local/*.json`` snapshots against the
-live MongoDB collections (``components`` and ``components_archive``) and
-reports any drift:
+live MongoDB collections (``components``, ``components_archive``,
+``component_identities``, ``component_snapshots``) and reports any drift:
 
 * documents present only in local (deleted on live since the dump),
 * documents present only on live (added since the dump),
@@ -52,7 +52,12 @@ LOG_DIR = REPO_ROOT / "logs"
 LOG_FILE = LOG_DIR / "db_drift_check.log"
 JSON_REPORT = LOG_DIR / "db_drift_check.json"
 
-COLLECTIONS = ["components", "components_archive"]
+COLLECTIONS = [
+    "components",
+    "components_archive",
+    "component_identities",
+    "component_snapshots",
+]
 
 # ---------------------------------------------------------------------------
 # Logging
