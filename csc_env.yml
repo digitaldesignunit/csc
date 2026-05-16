@@ -36,3 +36,4 @@ dependencies:
     - trimesh>=3.15.0
     - fast-simplification
     - slowapi
+    - email-validator
