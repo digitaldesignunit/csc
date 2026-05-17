@@ -23,7 +23,8 @@ def compress_and_save_jpeg(
     max_bytes: int,
     max_long_edge_px: int,
 ) -> Tuple[int, int, int]:
-    """Write a JPEG at *dest_path* not larger than *max_bytes*.
+    """
+    Write a JPEG at *dest_path* not larger than *max_bytes*.
 
     Returns (file_size_bytes, width, height).
     """
