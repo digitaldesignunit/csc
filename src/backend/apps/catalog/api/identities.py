@@ -3,7 +3,8 @@
 
 Owns the primary read path of the new data model:
 
-* `GET /identities/{identity_id}/compose` -> identity + current snapshot.
+* `GET /identities` / `GET /identities/count` — catalog list + count
+* `GET /identities/{identity_id}/compose` — identity + current snapshot
 
 Single-snapshot reads: `GET /snapshots/{snapshot_id}` in `snapshots.py`.
 
@@ -17,13 +18,22 @@ available throughout the M4 cutover.
 import hashlib
 import json
 from datetime import datetime, timezone
-from typing import Annotated, Any, Dict
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status
+)
 from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
 from apps.catalog.models import (
+    ComponentCount,
     ComponentIdentity,
     ComponentSnapshot,
     ComposeIdentityResponse,
@@ -31,6 +41,19 @@ from apps.catalog.models import (
     User,
 )
 from .auth import get_current_active_user, require_admin
+from .identity_filters import (
+    ConsumedFilter,
+    ExpandMode,
+    build_identity_match_stage,
+    build_snapshot_match_stage,
+    merge_shallow_catalog_row,
+)
+from .identity_query import (
+    aggregate_identities,
+    build_count_pipeline,
+    build_list_pipeline,
+    count_identities,
+)
 
 
 router = APIRouter()
@@ -68,6 +91,239 @@ def _compute_compose_etag(identity_doc: dict, snapshot_doc: dict) -> str:
         f"{snapshot_doc.get('etag', '')}"
     )
     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
+def _catalog_filter_context(
+    request: Request,
+    *,
+    sortorder: Literal['asc', 'desc'],
+    comptype: str,
+    material: str,
+    dataset: str,
+    validated: int,
+    complexity: Optional[int],
+    fragment: Optional[bool],
+    reserved: Optional[str],
+    bbx_min_x: Optional[float],
+    bbx_min_y: Optional[float],
+    bbx_min_z: Optional[float],
+    bbx_max_x: Optional[float],
+    bbx_max_y: Optional[float],
+    bbx_max_z: Optional[float],
+    consumed_filter: ConsumedFilter,
+) -> Dict[str, Any]:
+    return {
+        'snapshots_collection': (
+            request.app.mongodb_component_snapshots.name
+        ),
+        'sort_order': -1 if sortorder == 'desc' else 1,
+        'identity_match': build_identity_match_stage(
+            comptype=comptype,
+            material=material,
+            dataset=dataset,
+            reserved=reserved,
+            consumed_filter=consumed_filter,
+        ),
+        'snapshot_match': build_snapshot_match_stage(
+            validated=validated,
+            complexity=complexity,
+            fragment=fragment,
+            bbx_min_x=bbx_min_x,
+            bbx_min_y=bbx_min_y,
+            bbx_min_z=bbx_min_z,
+            bbx_max_x=bbx_max_x,
+            bbx_max_y=bbx_max_y,
+            bbx_max_z=bbx_max_z,
+        ),
+    }
+
+
+def _format_list_rows(
+    docs: List[Dict[str, Any]],
+    expand: ExpandMode,
+) -> List[Dict[str, Any]]:
+    if expand == 'shallow':
+        return [merge_shallow_catalog_row(doc) for doc in docs]
+
+    rows: List[Dict[str, Any]] = []
+    for doc in docs:
+        snap = doc.get('current_snapshot') or {}
+        if expand == 'current_snapshot':
+            identity_doc = {
+                k: v for k, v in doc.items()
+                if k not in ('current_snapshot', 'reserved_by_username')
+            }
+            try:
+                identity_model = ComponentIdentity.model_validate(identity_doc)
+                snapshot_model = ComponentSnapshot.model_validate(snap)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f'List row failed Pydantic validation: {exc}',
+                )
+            row = {
+                'identity': identity_model.model_dump(by_alias=True),
+                'snapshot': snapshot_model.model_dump(by_alias=True),
+            }
+            if 'reserved_by_username' in doc:
+                row['reserved_by_username'] = doc['reserved_by_username']
+            rows.append(row)
+            continue
+
+        identity_doc = {
+            k: v for k, v in doc.items()
+            if k not in ('current_snapshot', 'reserved_by_username')
+        }
+        try:
+            identity_model = ComponentIdentity.model_validate(identity_doc)
+            row = identity_model.model_dump(by_alias=True)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f'Identity row failed Pydantic validation: {exc}',
+            )
+        if 'reserved_by_username' in doc:
+            row['reserved_by_username'] = doc['reserved_by_username']
+        rows.append(row)
+    return rows
+
+
+@router.get(
+    '/identities/count',
+    summary='Count identities (current snapshot filters)',
+    response_model=ComponentCount,
+)
+async def count_identities_route(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    comptype: str = Query(''),
+    material: str = Query(''),
+    dataset: str = Query(''),
+    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
+    complexity: Optional[int] = Query(None),
+    fragment: Optional[bool] = Query(None),
+    reserved: Optional[str] = Query(None),
+    bbx_min_x: Optional[float] = Query(None),
+    bbx_min_y: Optional[float] = Query(None),
+    bbx_min_z: Optional[float] = Query(None),
+    bbx_max_x: Optional[float] = Query(None),
+    bbx_max_y: Optional[float] = Query(None),
+    bbx_max_z: Optional[float] = Query(None),
+    consumed_filter: ConsumedFilter = Query('active'),
+    sortorder: Literal['asc', 'desc'] = Query('asc', include_in_schema=False),
+):
+    ctx = _catalog_filter_context(
+        request,
+        sortorder=sortorder,
+        comptype=comptype,
+        material=material,
+        dataset=dataset,
+        validated=validated,
+        complexity=complexity,
+        fragment=fragment,
+        reserved=reserved,
+        bbx_min_x=bbx_min_x,
+        bbx_min_y=bbx_min_y,
+        bbx_min_z=bbx_min_z,
+        bbx_max_x=bbx_max_x,
+        bbx_max_y=bbx_max_y,
+        bbx_max_z=bbx_max_z,
+        consumed_filter=consumed_filter,
+    )
+    try:
+        pipeline = build_count_pipeline(
+            snapshots_collection=ctx['snapshots_collection'],
+            identity_match=ctx['identity_match'],
+            snapshot_match=ctx['snapshot_match'],
+            reserved_filter=reserved,
+            current_user_id=current_user.id,
+            include_username=True,
+        )
+        total = await count_identities(request, pipeline)
+    except PyMongoError as exc:
+        print(f'[ERROR] count_identities_route DB error: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+    return {'count': total}
+
+
+@router.get(
+    '/identities',
+    summary='List identities (join current snapshot)',
+)
+async def list_identities_route(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    page: int = Query(0, description='Page number (0=get all, 1+=paginated)'),
+    size: int = Query(0, description='Page size (0=get all)'),
+    sortkey: str = Query('_id', description='Sort key'),
+    sortorder: Literal['asc', 'desc'] = Query('asc'),
+    comptype: str = Query(''),
+    material: str = Query(''),
+    dataset: str = Query(''),
+    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
+    complexity: Optional[int] = Query(None),
+    fragment: Optional[bool] = Query(None),
+    reserved: Optional[str] = Query(None),
+    bbx_min_x: Optional[float] = Query(None),
+    bbx_min_y: Optional[float] = Query(None),
+    bbx_min_z: Optional[float] = Query(None),
+    bbx_max_x: Optional[float] = Query(None),
+    bbx_max_y: Optional[float] = Query(None),
+    bbx_max_z: Optional[float] = Query(None),
+    consumed_filter: ConsumedFilter = Query('active'),
+    expand: ExpandMode = Query(
+        'shallow',
+        description=(
+            'shallow=legacy catalog row; '
+            'current_snapshot=nested pair; '
+            'none=identity fields only'
+        ),
+    ),
+):
+    ctx = _catalog_filter_context(
+        request,
+        sortorder=sortorder,
+        comptype=comptype,
+        material=material,
+        dataset=dataset,
+        validated=validated,
+        complexity=complexity,
+        fragment=fragment,
+        reserved=reserved,
+        bbx_min_x=bbx_min_x,
+        bbx_min_y=bbx_min_y,
+        bbx_min_z=bbx_min_z,
+        bbx_max_x=bbx_max_x,
+        bbx_max_y=bbx_max_y,
+        bbx_max_z=bbx_max_z,
+        consumed_filter=consumed_filter,
+    )
+    try:
+        pipeline = build_list_pipeline(
+            snapshots_collection=ctx['snapshots_collection'],
+            identity_match=ctx['identity_match'],
+            snapshot_match=ctx['snapshot_match'],
+            sortkey=sortkey,
+            sort_order=ctx['sort_order'],
+            page=page,
+            size=size,
+            include_username=True,
+            current_user_id=current_user.id,
+            reserved_filter=reserved,
+        )
+        docs = await aggregate_identities(request, pipeline)
+    except PyMongoError as exc:
+        print(f'[ERROR] list_identities_route DB error: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    content = _format_list_rows(docs, expand)
+    return JSONResponse(status_code=200, content=content)
 
 
 @router.get(
@@ -170,7 +426,8 @@ async def patch_current_snapshot(
     """Partial update of metadata on the identity's current snapshot.
 
     Only fields present in the request body are applied. Geometry and
-    geometry-derived fields cannot be changed here (new snapshot version instead).
+    geometry-derived fields cannot be changed here
+    (new snapshot version instead).
     Photo files use dedicated routes under `/snapshots/.../photos/...`.
     """
     identities = await get_identities_col(request)
@@ -205,7 +462,10 @@ async def patch_current_snapshot(
 
     update_data: Dict[str, Any] = payload.model_dump(exclude_unset=True)
     if not update_data:
-        raise HTTPException(status_code=400, detail='No updatable fields provided')
+        raise HTTPException(
+            status_code=400,
+            detail='No updatable fields provided'
+        )
 
     now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     update_data['lastmodified'] = now
