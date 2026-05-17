@@ -698,12 +698,22 @@ class UpdateComponentModel(BaseModel):
 class SnapshotMesh(BaseModel):
     """Inline mesh primitive on a snapshot.
 
-    Full-fidelity binary PLY companion lives at
-    ``meshes/<snapshot_id>/<index>.ply``, where ``<index>`` is the 0-based
-    position in the snapshot's ``geometry.meshes`` array.
+    Vertices are in **Rhino Z-up** (CSC canonical). File companions use the
+    same primitive **index** as this entry in ``geometry.meshes[i]``, with
+    **resolution** as the filename (not a second index):
+
+        ``meshes/<snapshot_id>/<i>/reduced.ply``  (catalog default)
+        ``meshes/<snapshot_id>/<i>/detailed.ply`` (optional higher fidelity)
+
+    Multiple distinct mesh bodies use ``i = 0, 1, …``; dual-resolution pairs
+    share the same ``i`` and differ only by ``reduced`` vs ``detailed``. Legacy
+    on-disk OBJ may hold several ``o`` objects in one file; object order maps
+    to ``i`` (not separate OBJ files per primitive).
     """
     vertices: List[List[float]] = Field(
-        description="Mesh vertices as array of [x, y, z] coordinates"
+        description=(
+            "Mesh vertices as [x, y, z] in Rhino Z-up (CSC canonical frame)"
+        )
     )
     faces: List[List[int]] = Field(
         description=(
@@ -765,7 +775,10 @@ class SnapshotGeometry(BaseModel):
     """
     meshes: Optional[List[SnapshotMesh]] = Field(
         None,
-        description="Array of mesh primitives (each backed by a PLY file)"
+        description=(
+            'Mesh primitives; optional PLY files under '
+            '``meshes/<snapshot_id>/<i>/{reduced,detailed}.ply``'
+        )
     )
     point_clouds: Optional[List[SnapshotPointCloud]] = Field(
         None,
@@ -1051,6 +1064,17 @@ class ComponentSnapshot(BaseModel):
         description=(
             "Number of user-uploaded photos on disk for this snapshot; "
             "optional cache for list UI"
+        ),
+    )
+    mesh_ply_resolutions: Optional[Dict[str, List[str]]] = Field(
+        None,
+        description=(
+            "Which resolution files exist on disk per mesh primitive index "
+            "(string keys '0', '1', … matching ``geometry.meshes``). "
+            "Values list role names: "
+            "typically 'reduced', optionally 'detailed'. "
+            "Paths: ``meshes/<snapshot_id>/<i>/reduced.ply`` and "
+            "``.../detailed.ply``. Example: {'0': ['reduced', 'detailed']}."
         ),
     )
     created: str = Field(
