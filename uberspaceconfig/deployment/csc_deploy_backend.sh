@@ -2,6 +2,7 @@
 
 # Variables
 REPO_URL=$GITHUB_DEPLOY_URL
+DEPLOY_BRANCH="main"
 FOLDER2="src/backend"
 DEPLOY_DIR="csc_deploy"
 TARGET2="backend"
@@ -45,7 +46,7 @@ echo "$FOLDER2" >> .git/info/sparse-checkout
 
 # Checkout the repository
 echo "GIT: Checking out main branch..."
-git checkout main
+git checkout $DEPLOY_BRANCH
 echo "GIT: Successfully cloned repository!"
 echo "-----------------------------------------------------------------"
 
