@@ -1046,6 +1046,13 @@ class ComponentSnapshot(BaseModel):
             "ETag for cache validation; recomputed from snapshot content."
         )
     )
+    photo_count: Optional[int] = Field(
+        None,
+        description=(
+            "Number of user-uploaded photos on disk for this snapshot; "
+            "optional cache for list UI"
+        ),
+    )
     created: str = Field(
         description="ISO timestamp when this snapshot was created"
     )
@@ -1102,6 +1109,223 @@ class ComposeIdentityResponse(BaseModel):
     """
     identity: ComponentIdentity
     snapshot: ComponentSnapshot
+
+
+class UpdateComponentIdentityModel(BaseModel):
+    """PATCH payload for identity-side metadata (admin only).
+
+    Snapshot fields (name, geometry, validated, color, etc.) belong on
+    ``PATCH /identities/{id}/current-snapshot`` or a new snapshot version.
+    """
+    componenttype: Optional[str] = Field(
+        default=None,
+        alias='type',
+        description='Component type (one of ALLOWED_COMPONENT_TYPES)',
+    )
+    material: Optional[str] = Field(default=None, max_length=100)
+    dataset: Optional[str] = Field(default=None, max_length=200)
+    manufactured_at: Optional[str] = Field(default=None, max_length=40)
+    manufactured_precision: Optional[str] = Field(default=None)
+    salvage_source: Optional[str] = Field(default=None, max_length=500)
+    salvaged_at: Optional[str] = Field(default=None, max_length=40)
+    reserved: Optional[str] = Field(
+        default=None,
+        description='User UUID who reserved this identity; empty string clears',
+    )
+    attributes: Optional[Dict] = Field(default=None)
+    parent_identities: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            'Parent identity UUIDs. Empty list or null clears lineage.'
+        ),
+    )
+    consumed_at: Optional[str] = Field(
+        default=None,
+        max_length=40,
+        description='ISO timestamp when consumed; null clears for active',
+    )
+
+    @field_validator('componenttype')
+    @classmethod
+    def _validate_componenttype(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in ALLOWED_COMPONENT_TYPES:
+            raise ValueError(
+                f'type must be one of {ALLOWED_COMPONENT_TYPES}'
+            )
+        return v
+
+    @field_validator('manufactured_precision')
+    @classmethod
+    def _validate_manufactured_precision(
+        cls, v: Optional[str]
+    ) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in ALLOWED_MANUFACTURED_PRECISIONS:
+            raise ValueError(
+                'manufactured_precision must be one of '
+                f'{ALLOWED_MANUFACTURED_PRECISIONS}'
+            )
+        return v
+
+    @field_validator('salvage_source')
+    @classmethod
+    def _normalize_salvage_source(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        return v or None
+
+    @field_validator('parent_identities')
+    @classmethod
+    def _validate_parent_identities(
+        cls, v: Optional[List[str]]
+    ) -> Optional[List[str]]:
+        if v is None:
+            return None
+        if len(v) == 0:
+            return None
+        for item in v:
+            try:
+                uuid.UUID(str(item))
+            except (ValueError, AttributeError, TypeError):
+                raise ValueError(
+                    'parent_identities entries must be valid UUID strings'
+                )
+        return [str(item) for item in v]
+
+    @field_validator('material', 'dataset')
+    @classmethod
+    def _strip_non_empty_strings(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        if v == '':
+            raise ValueError('value must not be empty')
+        return v
+
+    class Config:
+        extra = 'ignore'
+        populate_by_name = True
+
+
+class CreateComponentRequest(BaseModel):
+    """Create a new identity plus its version-0 snapshot (ADR-014 #2)."""
+
+    id: Optional[str] = Field(
+        default=None,
+        alias='_id',
+        description='Optional identity UUID; server generates if omitted',
+    )
+    name: Optional[str] = 'Unnamed Component'
+    componenttype: str = Field(alias='type')
+    material: str
+    dataset: str
+    complexity: int
+    fragment: bool
+    assembly: bool
+    geometry: SnapshotGeometry
+    color: Optional[List[int]] = Field(default=[110, 110, 110])
+    bbx: ComponentBoundingBox
+    bbx_origin: List[float]
+    location: Optional[ComponentLocation] = Field(
+        default_factory=lambda: ComponentLocation(lat=0.0, lon=0.0)
+    )
+    descriptors: Optional[Dict] = Field(default_factory=dict)
+    processes: Optional[Dict] = Field(default_factory=dict)
+    iframe: ComponentFrame
+    pca_frame: ComponentFrame
+    validated: bool = False
+    condition: Optional[int] = None
+    manufactured_at: Optional[str] = None
+    manufactured_precision: Optional[str] = None
+    salvage_source: Optional[str] = None
+    salvaged_at: Optional[str] = None
+    reserved: str = ''
+    attributes: Optional[Dict] = Field(default_factory=dict)
+    parent_identities: Optional[List[str]] = None
+    marker_points: Optional[List[List[float]]] = Field(
+        default=None,
+        description=(
+            'Optional marker points merged into geometry.marker_points '
+            'when not already set on geometry'
+        ),
+    )
+
+    @field_validator('componenttype')
+    @classmethod
+    def _validate_componenttype(cls, v: str) -> str:
+        if v not in ALLOWED_COMPONENT_TYPES:
+            raise ValueError(
+                f'type must be one of {ALLOWED_COMPONENT_TYPES}'
+            )
+        return v
+
+    @field_validator('complexity')
+    @classmethod
+    def _validate_complexity(cls, v: int) -> int:
+        if v not in ALLOWED_COMPLEXITY_LEVELS:
+            raise ValueError(
+                f'complexity must be one of {ALLOWED_COMPLEXITY_LEVELS}'
+            )
+        return v
+
+    @field_validator('condition')
+    @classmethod
+    def _validate_condition(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v not in ALLOWED_CONDITION_VALUES:
+            raise ValueError(
+                f'condition must be one of {ALLOWED_CONDITION_VALUES}'
+            )
+        return v
+
+    @field_validator('manufactured_precision')
+    @classmethod
+    def _validate_manufactured_precision(
+        cls, v: Optional[str]
+    ) -> Optional[str]:
+        if v is None:
+            return v
+        if v not in ALLOWED_MANUFACTURED_PRECISIONS:
+            raise ValueError(
+                'manufactured_precision must be one of '
+                f'{ALLOWED_MANUFACTURED_PRECISIONS}'
+            )
+        return v
+
+    @field_validator('salvage_source')
+    @classmethod
+    def _normalize_salvage_source(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        return v or None
+
+    @field_validator('parent_identities')
+    @classmethod
+    def _validate_parent_identities(
+        cls, v: Optional[List[str]]
+    ) -> Optional[List[str]]:
+        if v is None:
+            return None
+        if len(v) == 0:
+            return None
+        for item in v:
+            try:
+                uuid.UUID(str(item))
+            except (ValueError, AttributeError, TypeError):
+                raise ValueError(
+                    'parent_identities entries must be valid UUID strings'
+                )
+        return [str(item) for item in v]
+
+    class Config:
+        extra = 'ignore'
+        populate_by_name = True
 
 
 class UpdateComponentSnapshotModel(BaseModel):

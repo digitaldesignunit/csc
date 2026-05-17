@@ -8,16 +8,15 @@ Owns the primary read path of the new data model:
 
 Single-snapshot reads: `GET /snapshots/{snapshot_id}` in `snapshots.py`.
 
-Write routes: PATCH current snapshot here; create / virtual routes in
-`snapshots.py` when added.
+Write routes: POST create, PATCH identity, PATCH current snapshot here;
+snapshot preview/photo file routes in `snapshots.py`.
 
 Legacy `/components/...` routes in `components.py` are untouched and remain
 available throughout the M4 cutover.
 """
 
 import hashlib
-import json
-from datetime import datetime, timezone
+import uuid
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from fastapi import (
@@ -37,10 +36,19 @@ from apps.catalog.models import (
     ComponentIdentity,
     ComponentSnapshot,
     ComposeIdentityResponse,
+    CreateComponentRequest,
+    UpdateComponentIdentityModel,
     UpdateComponentSnapshotModel,
     User,
 )
 from .auth import get_current_active_user, require_admin
+from .catalog_common import (
+    allocate_catalog_number,
+    compute_snapshot_etag,
+    now_iso,
+    validate_parent_identities,
+    validate_uuid,
+)
 from .identity_filters import (
     ConsumedFilter,
     ExpandMode,
@@ -65,18 +73,6 @@ async def get_identities_col(request: Request):
 
 async def get_snapshots_col(request: Request):
     return request.app.mongodb_component_snapshots
-
-
-def _compute_snapshot_etag(snapshot_doc: Dict[str, Any]) -> str:
-    """sha256 over canonical snapshot JSON, excluding etag and lastmodified."""
-    payload = {
-        k: v for k, v in snapshot_doc.items()
-        if k not in ('etag', 'lastmodified')
-    }
-    serialized = json.dumps(
-        payload, sort_keys=True, separators=(',', ':'), default=str
-    )
-    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
 
 
 def _compute_compose_etag(identity_doc: dict, snapshot_doc: dict) -> str:
@@ -326,6 +322,223 @@ async def list_identities_route(
     return JSONResponse(status_code=200, content=content)
 
 
+@router.post(
+    '/identities',
+    summary='Create identity and version-0 snapshot',
+    response_model=ComposeIdentityResponse,
+    response_model_by_alias=True,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_identity(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    payload: CreateComponentRequest = Body(...),
+):
+    """Allocate catalog_number, insert identity + v0 snapshot, wire current."""
+    identity_id = payload.id or str(uuid.uuid4())
+    validate_uuid(identity_id, label='identity id')
+
+    identities = await get_identities_col(request)
+    snapshots = await get_snapshots_col(request)
+
+    if await identities.find_one({'_id': identity_id}, {'_id': 1}):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f'Identity {identity_id} already exists',
+        )
+
+    await validate_parent_identities(
+        request,
+        payload.parent_identities,
+        self_id=identity_id,
+    )
+
+    geometry = payload.geometry.model_dump()
+    if payload.marker_points and not geometry.get('marker_points'):
+        geometry['marker_points'] = payload.marker_points
+
+    now = now_iso()
+    snapshot_id = str(uuid.uuid4())
+    snapshot_doc: Dict[str, Any] = {
+        '_id': snapshot_id,
+        'identity_id': identity_id,
+        'version': 0,
+        'virtual': False,
+        'name': payload.name or 'Unnamed Component',
+        'geometry': geometry,
+        'descriptors': payload.descriptors or {},
+        'bbx': list(payload.bbx),
+        'bbx_origin': payload.bbx_origin,
+        'complexity': payload.complexity,
+        'fragment': payload.fragment,
+        'assembly': payload.assembly,
+        'condition': payload.condition,
+        'color': payload.color,
+        'location': (
+            payload.location.model_dump()
+            if payload.location is not None
+            else {'lat': 0.0, 'lon': 0.0}
+        ),
+        'processes': payload.processes or {},
+        'iframe': payload.iframe.model_dump(),
+        'pca_frame': payload.pca_frame.model_dump(),
+        'validated': payload.validated,
+        'created': now,
+        'lastmodified': now,
+    }
+    snapshot_doc['etag'] = compute_snapshot_etag(snapshot_doc)
+
+    try:
+        snapshot_model = ComponentSnapshot.model_validate(snapshot_doc)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Invalid snapshot payload: {exc}',
+        )
+
+    catalog_number = await allocate_catalog_number(request)
+    identity_doc: Dict[str, Any] = {
+        '_id': identity_id,
+        'catalog_number': catalog_number,
+        'type': payload.componenttype,
+        'material': payload.material,
+        'dataset': payload.dataset,
+        'manufactured_at': payload.manufactured_at,
+        'manufactured_precision': payload.manufactured_precision,
+        'salvage_source': payload.salvage_source,
+        'salvaged_at': payload.salvaged_at,
+        'reserved': payload.reserved or '',
+        'attributes': payload.attributes or {},
+        'parent_identities': payload.parent_identities,
+        'consumed_at': None,
+        'current_snapshot_id': snapshot_id,
+        'created': now,
+        'lastmodified': now,
+    }
+
+    try:
+        identity_model = ComponentIdentity.model_validate(identity_doc)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Invalid identity payload: {exc}',
+        )
+
+    snapshot_insert = snapshot_model.model_dump(by_alias=True)
+    identity_insert = identity_model.model_dump(by_alias=True)
+
+    try:
+        await snapshots.insert_one(snapshot_insert)
+    except PyMongoError as exc:
+        print(f'[ERROR] create_identity snapshot insert: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    try:
+        await identities.insert_one(identity_insert)
+    except PyMongoError as exc:
+        await snapshots.delete_one({'_id': snapshot_id})
+        print(f'[ERROR] create_identity identity insert: {exc}')
+        if 'duplicate key' in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f'Identity {identity_id} already exists',
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    response_body = {
+        'identity': identity_insert,
+        'snapshot': snapshot_insert,
+    }
+    etag = _compute_compose_etag(identity_insert, snapshot_insert)
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content=response_body,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'private, max-age=3600',
+        },
+    )
+
+
+@router.patch(
+    '/identities/{identity_id}',
+    summary='PATCH identity metadata (admin only)',
+    response_model=ComponentIdentity,
+    response_model_by_alias=True,
+)
+async def patch_identity(
+    request: Request,
+    admin_user: Annotated[User, Depends(require_admin)],
+    identity_id: str,
+    payload: UpdateComponentIdentityModel = Body(...),
+):
+    """Partial update of identity-side fields only."""
+    validate_uuid(identity_id, label='identity id')
+
+    identities = await get_identities_col(request)
+    existing = await identities.find_one({'_id': identity_id})
+    if existing is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Identity {identity_id} not found',
+        )
+
+    update_data: Dict[str, Any] = payload.model_dump(
+        by_alias=True,
+        exclude_unset=True,
+    )
+    if not update_data:
+        raise HTTPException(
+            status_code=400,
+            detail='No updatable fields provided',
+        )
+
+    if 'parent_identities' in update_data:
+        await validate_parent_identities(
+            request,
+            update_data.get('parent_identities'),
+            self_id=identity_id,
+        )
+
+    update_data['lastmodified'] = now_iso()
+
+    try:
+        await identities.update_one(
+            {'_id': identity_id},
+            {'$set': update_data},
+        )
+    except PyMongoError as exc:
+        print(f'[ERROR] patch_identity DB error: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    updated_doc = await identities.find_one({'_id': identity_id})
+    if updated_doc is None:
+        raise HTTPException(
+            status_code=500,
+            detail='Identity missing after update',
+        )
+
+    try:
+        identity_model = ComponentIdentity.model_validate(updated_doc)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Updated identity failed Pydantic validation: {exc}',
+        )
+
+    body = identity_model.model_dump(by_alias=True)
+    return JSONResponse(status_code=200, content=body)
+
+
 @router.get(
     '/identities/{identity_id}/compose',
     summary='Compose identity + current snapshot',
@@ -467,11 +680,10 @@ async def patch_current_snapshot(
             detail='No updatable fields provided'
         )
 
-    now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-    update_data['lastmodified'] = now
+    update_data['lastmodified'] = now_iso()
 
     merged = {**snapshot_doc, **update_data}
-    update_data['etag'] = _compute_snapshot_etag(merged)
+    update_data['etag'] = compute_snapshot_etag(merged)
 
     try:
         await snapshots.update_one(

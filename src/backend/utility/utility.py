@@ -51,6 +51,33 @@ def get_preview_directory() -> str:
     return sanitize_path(os.environ['PREVIEW_DIR'])
 
 
+def get_snapshot_preview_directory() -> str:
+    """Rendered catalog thumbnails keyed by snapshot_id."""
+    explicit = os.getenv('SNAPSHOT_PREVIEW_DIR')
+    if explicit:
+        return sanitize_path(explicit)
+    legacy_preview = get_preview_directory()
+    return sanitize_path(
+        os.path.join(os.path.dirname(legacy_preview), 'snapshot_previews')
+    )
+
+
+def get_snapshot_photos_directory() -> str:
+    """User-uploaded photos keyed by snapshot_id / index."""
+    explicit = os.getenv('SNAPSHOT_PHOTOS_DIR')
+    if explicit:
+        return sanitize_path(explicit)
+    legacy_preview = get_preview_directory()
+    return sanitize_path(
+        os.path.join(os.path.dirname(legacy_preview), 'snapshot_photos')
+    )
+
+
+def get_snapshot_photo_upload_limit_bytes() -> int:
+    mb = int(os.getenv('SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB', '10'))
+    return mb * 1024 * 1024
+
+
 def get_geometry_directory() -> str:
     """
     Read geometry directory from environment variable GEOMETRY_DIR.

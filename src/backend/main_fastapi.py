@@ -22,6 +22,9 @@ from utility import (
     get_cors_origins,
     get_db_connectionstring,
     get_preview_directory,
+    get_snapshot_preview_directory,
+    get_snapshot_photos_directory,
+    get_snapshot_photo_upload_limit_bytes,
     get_geometry_directory,
     get_geometry_archive_directory,
     get_gh_xml_cache_directory,
@@ -92,6 +95,13 @@ async def lifespan(app: FastAPI):
 
     # --- Directories ---------------------------------------------------------
     app.component_preview_dir = get_preview_directory()
+    app.snapshot_preview_dir = get_snapshot_preview_directory()
+    app.snapshot_photos_dir = get_snapshot_photos_directory()
+    app.snapshot_photo_upload_limit_bytes = (
+        get_snapshot_photo_upload_limit_bytes()
+    )
+    os.makedirs(app.snapshot_preview_dir, exist_ok=True)
+    os.makedirs(app.snapshot_photos_dir, exist_ok=True)
     app.component_geometry_dir = get_geometry_directory()
     app.component_geometry_archive_dir = get_geometry_archive_directory()
     app.gh_xml_cache_dir = get_gh_xml_cache_directory()

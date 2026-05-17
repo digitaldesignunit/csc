@@ -45,6 +45,10 @@ export GEOMETRY_DIR="/home/ddu/csc/backend/static/geometry"
 export GEOMETRY_ARCHIVE_DIR="/home/ddu/csc/backend/static/geometry_archive"
 export GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml"
 
+export SNAPSHOT_PREVIEW_DIR="/home/ddu/html/csc_assets/snapshot_previews/"
+export SNAPSHOT_PHOTOS_DIR="/home/ddu/html/csc_assets/snapshot_photos/"
+export SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB=10
+
 # FastAPI 
 export FASTAPI_CORS_ORIGINS="https://ddu.uber.space,http://localhost:3000"
 
