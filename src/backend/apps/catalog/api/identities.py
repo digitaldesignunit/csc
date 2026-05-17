@@ -5,8 +5,10 @@ Owns the primary read path of the new data model:
 
 * `GET /identities/{identity_id}/compose` -> identity + current snapshot.
 
+Single-snapshot reads: `GET /snapshots/{snapshot_id}` in `snapshots.py`.
+
 Write routes (component creation, virtual snapshot proposals, PATCH current
-snapshot) live alongside snapshot routes in `snapshots.py`.
+snapshot) live alongside snapshot reads in `snapshots.py`.
 
 Legacy `/components/...` routes in `components.py` are untouched and remain
 available throughout the M4 cutover.
