@@ -26,6 +26,7 @@ environment=
     GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml",
     FASTAPI_CORS_ORIGINS="https://ddu.uber.space,http://localhost:3000",
     GEOMETRY_UPLOAD_LIMIT_MB="250",
+    SNAPSHOT_MESHES_DIR="/home/ddu/html/csc_assets/meshes",
     SNAPSHOT_PREVIEW_DIR="/home/ddu/html/csc_assets/snapshot_previews",
     SNAPSHOT_PHOTOS_DIR="/home/ddu/html/csc_assets/snapshot_photos",
     SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB="10",

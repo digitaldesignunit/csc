@@ -39,14 +39,16 @@ export SMTP_FROM_EMAIL="noreply@ddu.uber.space"
 export SMTP_FROM_NAME="Catalog of Second Chances"
 export FRONTEND_URL="https://ddu.uber.space"
 
-# Filesystem paths (not secrets, but avoids a config file)
+# Filesystem paths
 export PREVIEW_DIR="/home/ddu/csc/backend/static/previews"
 export GEOMETRY_DIR="/home/ddu/csc/backend/static/geometry"
 export GEOMETRY_ARCHIVE_DIR="/home/ddu/csc/backend/static/geometry_archive"
 export GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml"
 
-export SNAPSHOT_PREVIEW_DIR="/home/ddu/html/csc_assets/snapshot_previews/"
-export SNAPSHOT_PHOTOS_DIR="/home/ddu/html/csc_assets/snapshot_photos/"
+# Snapshot Filesystem paths
+export SNAPSHOT_MESHES_DIR="/home/ddu/html/csc_assets/meshes"
+export SNAPSHOT_PREVIEW_DIR="/home/ddu/html/csc_assets/snapshot_previews"
+export SNAPSHOT_PHOTOS_DIR="/home/ddu/html/csc_assets/snapshot_photos"
 export SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB=10
 export SNAPSHOT_PHOTO_MAX_OUTPUT_MB=2
 export SNAPSHOT_PHOTO_MAX_LONG_EDGE_PX=4096
