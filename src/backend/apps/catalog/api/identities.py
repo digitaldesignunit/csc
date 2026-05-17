@@ -641,7 +641,7 @@ async def patch_current_snapshot(
     Only fields present in the request body are applied. Geometry and
     geometry-derived fields cannot be changed here
     (new snapshot version instead).
-    Photo files use dedicated routes under `/snapshots/.../photos/...`.
+    User photos use `/snapshots/.../photos/...` (JPEG, compressed on upload).
     """
     identities = await get_identities_col(request)
     snapshots = await get_snapshots_col(request)

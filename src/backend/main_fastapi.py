@@ -25,6 +25,8 @@ from utility import (
     get_snapshot_preview_directory,
     get_snapshot_photos_directory,
     get_snapshot_photo_upload_limit_bytes,
+    get_snapshot_photo_max_output_bytes,
+    get_snapshot_photo_max_long_edge_px,
     get_geometry_directory,
     get_geometry_archive_directory,
     get_gh_xml_cache_directory,
@@ -99,6 +101,12 @@ async def lifespan(app: FastAPI):
     app.snapshot_photos_dir = get_snapshot_photos_directory()
     app.snapshot_photo_upload_limit_bytes = (
         get_snapshot_photo_upload_limit_bytes()
+    )
+    app.snapshot_photo_max_output_bytes = (
+        get_snapshot_photo_max_output_bytes()
+    )
+    app.snapshot_photo_max_long_edge_px = (
+        get_snapshot_photo_max_long_edge_px()
     )
     os.makedirs(app.snapshot_preview_dir, exist_ok=True)
     os.makedirs(app.snapshot_photos_dir, exist_ok=True)

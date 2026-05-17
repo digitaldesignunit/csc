@@ -6,6 +6,8 @@ from .utility import ( # NOQA401
     get_snapshot_preview_directory,
     get_snapshot_photos_directory,
     get_snapshot_photo_upload_limit_bytes,
+    get_snapshot_photo_max_output_bytes,
+    get_snapshot_photo_max_long_edge_px,
     get_geometry_directory,
     get_geometry_archive_directory,
     get_gh_xml_cache_directory,

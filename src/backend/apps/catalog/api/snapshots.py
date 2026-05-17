@@ -3,12 +3,12 @@
 
 * `GET /snapshots/{snapshot_id}` — fetch one snapshot by id (ADR-014 #3)
 * `GET /snapshots/{snapshot_id}/preview` — rendered catalog thumbnail
-* `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}` — user photos
+* `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}` — user photos (JPEG)
 """
 
 import io
 import os
-from typing import Annotated, Optional
+from typing import Annotated, Tuple
 
 from fastapi import (
     APIRouter,
@@ -17,7 +17,6 @@ from fastapi import (
     HTTPException,
     Request,
     UploadFile,
-    status,
 )
 from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image
@@ -28,6 +27,12 @@ from utility import ensure_file, read_upload_limited
 
 from .auth import get_current_active_user
 from .catalog_common import validate_uuid
+from .snapshot_images import (
+    PHOTO_EXTENSION,
+    PHOTO_MEDIA_TYPE,
+    compress_and_save_jpeg,
+    photo_filename,
+)
 
 router = APIRouter()
 
@@ -37,13 +42,11 @@ _ALLOWED_PHOTO_TYPES = frozenset({
     'image/webp',
 })
 
+_LEGACY_PHOTO_EXTENSION = '.webp'
+
 
 async def get_snapshots_col(request: Request):
     return request.app.mongodb_component_snapshots
-
-
-async def get_identities_col(request: Request):
-    return request.app.mongodb_component_identities
 
 
 async def _load_snapshot(
@@ -61,27 +64,12 @@ async def _load_snapshot(
     return doc
 
 
-def _resolve_preview_path(
-    request: Request,
-    snapshot_id: str,
-    identity_id: Optional[str],
-) -> str:
-    snapshot_path = os.path.join(
+def _resolve_preview_path(request: Request, snapshot_id: str) -> str:
+    """Return path to snapshot_previews/{snapshot_id}.webp."""
+    return os.path.join(
         request.app.snapshot_preview_dir,
         f'{snapshot_id}.webp',
     )
-    if os.path.exists(snapshot_path):
-        return snapshot_path
-
-    if identity_id:
-        legacy_path = os.path.join(
-            request.app.component_preview_dir,
-            f'{identity_id}.webp',
-        )
-        if os.path.exists(legacy_path):
-            return legacy_path
-
-    raise HTTPException(status_code=404, detail='Preview not found')
 
 
 def _photo_dir(request: Request, snapshot_id: str) -> str:
@@ -91,17 +79,44 @@ def _photo_dir(request: Request, snapshot_id: str) -> str:
 def _photo_path(request: Request, snapshot_id: str, index: int) -> str:
     if index < 0:
         raise HTTPException(status_code=400, detail='index must be >= 0')
-    return os.path.join(_photo_dir(request, snapshot_id), f'{index}.webp')
+    return os.path.join(
+        _photo_dir(request, snapshot_id),
+        photo_filename(index),
+    )
+
+
+def _legacy_photo_path(request: Request, snapshot_id: str, index: int) -> str:
+    return os.path.join(
+        _photo_dir(request, snapshot_id),
+        f'{index}{_LEGACY_PHOTO_EXTENSION}',
+    )
+
+
+def _resolve_photo_path(
+    request: Request,
+    snapshot_id: str,
+    index: int,
+) -> Tuple[str, str]:
+    jpg_path = _photo_path(request, snapshot_id, index)
+    if os.path.exists(jpg_path):
+        return jpg_path, PHOTO_MEDIA_TYPE
+    legacy_path = _legacy_photo_path(request, snapshot_id, index)
+    if os.path.exists(legacy_path):
+        return legacy_path, 'image/webp'
+    raise HTTPException(status_code=404, detail='Photo not found')
 
 
 def _count_photos(request: Request, snapshot_id: str) -> int:
     directory = _photo_dir(request, snapshot_id)
     if not os.path.isdir(directory):
         return 0
-    return sum(
-        1 for name in os.listdir(directory)
-        if name.endswith('.webp') and name[:-5].isdigit()
-    )
+    indices = set()
+    for name in os.listdir(directory):
+        stem, ext = os.path.splitext(name)
+        if (ext in (PHOTO_EXTENSION, _LEGACY_PHOTO_EXTENSION) and
+                stem.isdigit()):
+            indices.add(int(stem))
+    return len(indices)
 
 
 async def _sync_photo_count(request: Request, snapshot_id: str) -> int:
@@ -175,13 +190,9 @@ async def get_snapshot_preview(
     current_user: Annotated[User, Depends(get_current_active_user)],
     snapshot_id: str,
 ):
-    """Serve snapshot_previews/{snapshot_id}.webp, else legacy identity thumb."""
-    doc = await _load_snapshot(request, snapshot_id)
-    path = _resolve_preview_path(
-        request,
-        snapshot_id,
-        doc.get('identity_id'),
-    )
+    """Serve snapshot_previews/{snapshot_id}.webp only."""
+    await _load_snapshot(request, snapshot_id)
+    path = _resolve_preview_path(request, snapshot_id)
     return FileResponse(
         ensure_file(path),
         media_type='image/webp',
@@ -200,11 +211,12 @@ async def get_snapshot_photo(
     index: int,
 ):
     await _load_snapshot(request, snapshot_id)
-    path = _photo_path(request, snapshot_id, index)
+    path, media_type = _resolve_photo_path(request, snapshot_id, index)
+    filename = os.path.basename(path)
     return FileResponse(
         ensure_file(path),
-        media_type='image/webp',
-        filename=f'{index}.webp',
+        media_type=media_type,
+        filename=filename,
     )
 
 
@@ -219,6 +231,9 @@ async def put_snapshot_photo(
     index: int,
     photo: UploadFile = File(..., description='JPEG, PNG, or WebP image'),
 ):
+    """
+    Accept up to upload limit; store JPEG scaled/compressed to max output.
+    """
     await _load_snapshot(request, snapshot_id)
 
     content_type = (photo.content_type or '').split(';', 1)[0].strip().lower()
@@ -238,15 +253,33 @@ async def put_snapshot_photo(
 
     try:
         image = Image.open(io.BytesIO(raw))
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
     except Exception:
         raise HTTPException(status_code=400, detail='Invalid image file')
 
     directory = _photo_dir(request, snapshot_id)
     os.makedirs(directory, exist_ok=True)
     dest = _photo_path(request, snapshot_id, index)
-    image.save(dest, format='WEBP')
+    legacy = _legacy_photo_path(request, snapshot_id, index)
+
+    try:
+        size_bytes, width, height = compress_and_save_jpeg(
+            image,
+            dest,
+            max_bytes=request.app.snapshot_photo_max_output_bytes,
+            max_long_edge_px=request.app.snapshot_photo_max_long_edge_px,
+        )
+    except Exception as exc:
+        print(f'[ERROR] put_snapshot_photo encode: {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail='Failed to process image',
+        )
+
+    if os.path.exists(legacy):
+        try:
+            os.remove(legacy)
+        except OSError as exc:
+            print(f'[WARN] put_snapshot_photo legacy remove: {exc}')
 
     count = await _sync_photo_count(request, snapshot_id)
     return JSONResponse(
@@ -255,6 +288,10 @@ async def put_snapshot_photo(
             'snapshot_id': snapshot_id,
             'index': index,
             'photo_count': count,
+            'format': 'jpeg',
+            'size_bytes': size_bytes,
+            'width': width,
+            'height': height,
         },
     )
 
@@ -270,17 +307,25 @@ async def delete_snapshot_photo(
     index: int,
 ):
     await _load_snapshot(request, snapshot_id)
-    path = _photo_path(request, snapshot_id, index)
 
-    if os.path.exists(path):
-        try:
-            os.remove(path)
-        except OSError as exc:
-            print(f'[ERROR] delete_snapshot_photo: {exc}')
-            raise HTTPException(
-                status_code=500,
-                detail='Failed to delete photo file',
-            )
+    removed = False
+    for path in (
+        _photo_path(request, snapshot_id, index),
+        _legacy_photo_path(request, snapshot_id, index),
+    ):
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+                removed = True
+            except OSError as exc:
+                print(f'[ERROR] delete_snapshot_photo: {exc}')
+                raise HTTPException(
+                    status_code=500,
+                    detail='Failed to delete photo file',
+                )
+
+    if not removed:
+        raise HTTPException(status_code=404, detail='Photo not found')
 
     count = await _sync_photo_count(request, snapshot_id)
     return JSONResponse(

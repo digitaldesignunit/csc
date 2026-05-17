@@ -78,6 +78,18 @@ def get_snapshot_photo_upload_limit_bytes() -> int:
     return mb * 1024 * 1024
 
 
+def get_snapshot_photo_max_output_bytes() -> int:
+    mb = int(os.getenv('SNAPSHOT_PHOTO_MAX_OUTPUT_MB', '2'))
+    return mb * 1024 * 1024
+
+
+def get_snapshot_photo_max_long_edge_px() -> int:
+    px = int(os.getenv('SNAPSHOT_PHOTO_MAX_LONG_EDGE_PX', '4096'))
+    if px < 1:
+        raise ValueError('SNAPSHOT_PHOTO_MAX_LONG_EDGE_PX must be >= 1')
+    return px
+
+
 def get_geometry_directory() -> str:
     """
     Read geometry directory from environment variable GEOMETRY_DIR.
@@ -310,7 +322,8 @@ def get_geometry_upload_limit_bytes() -> int:
 async def read_upload_limited(upload: UploadFile, limit_bytes: int) -> bytes:
     """
     Read an uploaded file into memory, raising 413 if it exceeds limit_bytes.
-    Reads in 64 KB chunks to avoid buffering the entire file before checking size.
+    Reads in 64 KB chunks to avoid buffering the entire file before
+    checking size.
     """
     chunks = []
     total = 0
@@ -322,7 +335,10 @@ async def read_upload_limited(upload: UploadFile, limit_bytes: int) -> bytes:
         if total > limit_bytes:
             raise HTTPException(
                 status_code=413,
-                detail=f'File too large (limit: {limit_bytes // (1024 * 1024)} MB)',
+                detail=(
+                    'File too large '
+                    f'(limit: {limit_bytes // (1024 * 1024)} MB)'
+                    ),
             )
         chunks.append(chunk)
     return b''.join(chunks)
