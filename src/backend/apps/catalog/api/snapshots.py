@@ -26,7 +26,7 @@ from apps.catalog.models import ComponentSnapshot, User
 from utility import ensure_file, read_upload_limited
 
 from .auth import get_current_active_user
-from .catalog_common import validate_uuid
+from .catalog_common import get_snapshots_col, validate_uuid
 from .snapshot_images import (
     PHOTO_EXTENSION,
     PHOTO_MEDIA_TYPE,
@@ -43,10 +43,6 @@ _ALLOWED_PHOTO_TYPES = frozenset({
 })
 
 _LEGACY_PHOTO_EXTENSION = '.webp'
-
-
-async def get_snapshots_col(request: Request):
-    return request.app.mongodb_component_snapshots
 
 
 async def _load_snapshot(

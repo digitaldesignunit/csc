@@ -45,6 +45,8 @@ from .auth import get_current_active_user, require_admin
 from .catalog_common import (
     allocate_catalog_number,
     compute_snapshot_etag,
+    get_identities_col,
+    get_snapshots_col,
     now_iso,
     validate_parent_identities,
     validate_uuid,
@@ -61,18 +63,11 @@ from .identity_query import (
     build_count_pipeline,
     build_list_pipeline,
     count_identities,
+    shallow_row_for_identity,
 )
 
 
 router = APIRouter()
-
-
-async def get_identities_col(request: Request):
-    return request.app.mongodb_component_identities
-
-
-async def get_snapshots_col(request: Request):
-    return request.app.mongodb_component_snapshots
 
 
 def _compute_compose_etag(identity_doc: dict, snapshot_doc: dict) -> str:
@@ -537,6 +532,79 @@ async def patch_identity(
 
     body = identity_model.model_dump(by_alias=True)
     return JSONResponse(status_code=200, content=body)
+
+
+@router.get(
+    '/identities/{identity_id}',
+    summary='Get one identity (shallow, compose, or identity-only)',
+)
+async def get_identity(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    identity_id: str,
+    expand: ExpandMode = Query(
+        'shallow',
+        description=(
+            'shallow=legacy catalog row; '
+            'current_snapshot={identity,snapshot}; none=identity only'
+        ),
+    ),
+):
+    validate_uuid(identity_id, label='identity id')
+
+    if expand == 'shallow':
+        row = await shallow_row_for_identity(request, identity_id)
+        return JSONResponse(status_code=200, content=row)
+
+    identities = await get_identities_col(request)
+    identity_doc = await identities.find_one({'_id': identity_id})
+    if identity_doc is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Identity {identity_id} not found',
+        )
+
+    if expand == 'none':
+        try:
+            model = ComponentIdentity.model_validate(identity_doc)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f'Identity failed Pydantic validation: {exc}',
+            )
+        return JSONResponse(
+            status_code=200,
+            content=model.model_dump(by_alias=True),
+        )
+
+    snapshots = await get_snapshots_col(request)
+    current_snapshot_id = identity_doc.get('current_snapshot_id')
+    if not current_snapshot_id:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Identity {identity_id} has no current_snapshot_id',
+        )
+    snapshot_doc = await snapshots.find_one({'_id': current_snapshot_id})
+    if snapshot_doc is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f'current_snapshot_id={current_snapshot_id} not found',
+        )
+    try:
+        identity_model = ComponentIdentity.model_validate(identity_doc)
+        snapshot_model = ComponentSnapshot.model_validate(snapshot_doc)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Compose row failed Pydantic validation: {exc}',
+        )
+    return JSONResponse(
+        status_code=200,
+        content={
+            'identity': identity_model.model_dump(by_alias=True),
+            'snapshot': snapshot_model.model_dump(by_alias=True),
+        },
+    )
 
 
 @router.get(

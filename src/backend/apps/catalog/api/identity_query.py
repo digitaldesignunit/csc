@@ -4,9 +4,9 @@ Aggregation pipelines for listing identities with current snapshot.
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
-from .identity_filters import resolve_sort_field
+from .identity_filters import merge_shallow_catalog_row, resolve_sort_field
 
 
 def _username_enrichment_stages() -> List[Dict[str, Any]]:
@@ -127,6 +127,32 @@ async def aggregate_identities(
     col = request.app.mongodb_component_identities
     cursor = await col.aggregate(pipeline)
     return [doc async for doc in cursor]
+
+
+async def shallow_row_for_identity(
+    request: Request,
+    identity_id: str,
+) -> dict:
+    """One legacy-style shallow catalog row for a single identity."""
+    pipeline = build_list_pipeline(
+        snapshots_collection=request.app.mongodb_component_snapshots.name,
+        identity_match={'_id': identity_id},
+        snapshot_match={},
+        sortkey='_id',
+        sort_order=1,
+        page=1,
+        size=1,
+        include_username=True,
+        current_user_id=None,
+        reserved_filter=None,
+    )
+    docs = await aggregate_identities(request, pipeline)
+    if not docs:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Identity {identity_id} not found',
+        )
+    return merge_shallow_catalog_row(docs[0])
 
 
 async def count_identities(

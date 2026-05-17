@@ -67,6 +67,14 @@ async def validate_parent_identities(
             )
 
 
+async def get_identities_col(request: Request):
+    return request.app.mongodb_component_identities
+
+
+async def get_snapshots_col(request: Request):
+    return request.app.mongodb_component_snapshots
+
+
 def validate_uuid(value: str, *, label: str = 'id') -> str:
     try:
         uuid.UUID(str(value))
