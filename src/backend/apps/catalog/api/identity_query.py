@@ -125,7 +125,7 @@ async def aggregate_identities(
     pipeline: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     col = request.app.mongodb_component_identities
-    cursor = col.aggregate(pipeline)
+    cursor = await col.aggregate(pipeline)
     return [doc async for doc in cursor]
 
 
@@ -134,7 +134,7 @@ async def count_identities(
     pipeline: List[Dict[str, Any]],
 ) -> int:
     col = request.app.mongodb_component_identities
-    cursor = col.aggregate(pipeline)
+    cursor = await col.aggregate(pipeline)
     results = [doc async for doc in cursor]
     if not results:
         return 0
