@@ -1,13 +1,17 @@
 #!/usr/bin/env python3.9
-"""Routes for the v0.5 `component_snapshots` collection.
+"""
+Routes for the v0.5 `component_snapshots` collection.
 
-* `GET /snapshots/{snapshot_id}` — fetch one snapshot by id (ADR-014 #3)
-* `GET /snapshots/{snapshot_id}/preview` — rendered catalog thumbnail
-* `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}` — user photos (JPEG)
+* `GET /snapshots/{snapshot_id}` - fetch one snapshot by id (ADR-014 #3)
+* `GET /snapshots/{snapshot_id}/preview` - rendered catalog thumbnail
+* `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}` - PLY mesh
+* `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}` - user photos (JPEG)
 """
 
+import hashlib
 import io
 import os
+import stat
 from typing import Annotated, Tuple
 
 from fastapi import (
@@ -41,6 +45,8 @@ _ALLOWED_PHOTO_TYPES = frozenset({
     'image/png',
     'image/webp',
 })
+
+_ALLOWED_RESOLUTIONS = frozenset({'reduced', 'detailed'})
 
 _LEGACY_PHOTO_EXTENSION = '.webp'
 
@@ -173,6 +179,98 @@ async def get_snapshot_by_id(
         headers={
             'ETag': etag,
             'Cache-Control': 'private, max-age=3600',
+        },
+    )
+
+
+def _mesh_path(
+    request: Request,
+    snapshot_id: str,
+    primitive_index: int,
+    resolution: str,
+) -> str:
+    return os.path.join(
+        request.app.snapshot_meshes_dir,
+        snapshot_id,
+        str(primitive_index),
+        f'{resolution}.ply',
+    )
+
+
+def _mesh_etag(path: str) -> str:
+    st = os.stat(path)
+    raw = f'{st[stat.ST_MTIME]}-{st[stat.ST_SIZE]}'
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+@router.get(
+    '/snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}',
+    summary='Get PLY mesh file for snapshot primitive',
+)
+async def get_snapshot_mesh(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    snapshot_id: str,
+    primitive_index: int,
+    resolution: str,
+):
+    """
+    Serve ``meshes/<snapshot_id>/<primitive_index>/{reduced|detailed}.ply``.
+
+    Returns 404 when the file is not on disk or ``mesh_ply_resolutions``
+    does not list the requested resolution for this primitive index.
+    """
+    if primitive_index < 0:
+        raise HTTPException(
+            status_code=400,
+            detail='primitive_index must be >= 0'
+        )
+    if resolution not in _ALLOWED_RESOLUTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'resolution must be one of: {sorted(_ALLOWED_RESOLUTIONS)}'
+            )
+        )
+
+    doc = await _load_snapshot(request, snapshot_id)
+
+    resolutions_map: dict = doc.get('mesh_ply_resolutions') or {}
+    key = str(primitive_index)
+    available = resolutions_map.get(key) or []
+    if resolution not in available:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f'No {resolution} PLY for primitive {primitive_index} '
+                f'on snapshot {snapshot_id}'
+            ),
+        )
+
+    path = _mesh_path(request, snapshot_id, primitive_index, resolution)
+    if not os.path.isfile(path):
+        raise HTTPException(
+            status_code=404,
+            detail=f'PLY file not found on disk: {path}',
+        )
+
+    etag = _mesh_etag(path)
+    if_none_match = request.headers.get('if-none-match')
+    if if_none_match and if_none_match == etag:
+        from fastapi.responses import Response
+        return Response(
+            status_code=304,
+            headers={'ETag': etag},
+        )
+
+    filename = f'{snapshot_id}_{primitive_index}_{resolution}.ply'
+    return FileResponse(
+        path,
+        media_type='model/ply',
+        filename=filename,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'private, max-age=86400',
         },
     )
 

@@ -73,6 +73,17 @@ def get_snapshot_photos_directory() -> str:
     )
 
 
+def get_snapshot_meshes_directory() -> str:
+    """PLY mesh files: meshes/<snapshot_id>/<primitive_index>/{reduced|detailed}.ply."""
+    explicit = os.getenv('SNAPSHOT_MESHES_DIR')
+    if explicit:
+        return sanitize_path(explicit)
+    legacy_preview = get_preview_directory()
+    return sanitize_path(
+        os.path.join(os.path.dirname(legacy_preview), 'meshes')
+    )
+
+
 def get_snapshot_photo_upload_limit_bytes() -> int:
     mb = int(os.getenv('SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB', '10'))
     return mb * 1024 * 1024
