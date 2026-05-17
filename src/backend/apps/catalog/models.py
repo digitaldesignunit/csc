@@ -1130,7 +1130,9 @@ class UpdateComponentIdentityModel(BaseModel):
     salvaged_at: Optional[str] = Field(default=None, max_length=40)
     reserved: Optional[str] = Field(
         default=None,
-        description='User UUID who reserved this identity; empty string clears',
+        description=(
+            'User UUID who reserved this identity; empty string clears'
+        ),
     )
     attributes: Optional[Dict] = Field(default=None)
     parent_identities: Optional[List[str]] = Field(
