@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-05-18T13:27:28.190Z
-// Source: file:C:\Users\EFESTWIN\source\repos\csc\src\frontend\scripts\.catalog-compose.schema.json
+// Generated on: 2026-05-18T14:27:36.929Z
+// Source: https://api.ddu.uber.space/schema/catalog-compose
 
 import type {
   ComponentBoundingBox,

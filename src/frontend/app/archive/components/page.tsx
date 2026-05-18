@@ -1,6 +1,6 @@
 import ComponentOverviewPagination from '@/components/components/overview/ComponentOverviewPagination'
 import ComponentOverviewDataTableWithConfig from '@/components/components/overview/ComponentOverviewDataTableWithConfig'
-import { ComponentModel } from '@/generated/ComponentModel'
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { Card } from '@/components/ui/card'
 import ComponentOverviewFilterMenu from '@/components/components/overview/ComponentOverviewFilterMenu'
 import { Archive } from 'lucide-react'
@@ -48,12 +48,17 @@ async function fetchArchivedComponentsAndTotal({
     comptype,
     material,
     dataset,
+    validated: '0',
+    consumed_filter: 'consumed',
+    expand: 'shallow',
   })
 
   const countParams = new URLSearchParams({
     comptype,
     material,
     dataset,
+    validated: '0',
+    consumed_filter: 'consumed',
   })
 
   // Add filter parameters if they exist
@@ -93,8 +98,8 @@ async function fetchArchivedComponentsAndTotal({
   const fetchOpts = { cache: 'no-store' as const, headers: { cookie } }
 
   const [itemsRes, countRes] = await Promise.all([
-    fetch(`${base}/api/backend/archived/shallowcomponents?${listParams.toString()}`, fetchOpts),
-    fetch(`${base}/api/backend/archived/componentcount?${countParams.toString()}`, fetchOpts),
+    fetch(`${base}/api/backend/identities?${listParams.toString()}`, fetchOpts),
+    fetch(`${base}/api/backend/identities/count?${countParams.toString()}`, fetchOpts),
   ])
 
   if (itemsRes.status === 401 || countRes.status === 401) {
@@ -106,7 +111,7 @@ async function fetchArchivedComponentsAndTotal({
   if (!itemsRes.ok) throw new Error(`Failed to fetch archived components: ${itemsRes.status} ${await itemsRes.text()}`)
   if (!countRes.ok) throw new Error(`Failed to fetch count: ${countRes.status} ${await countRes.text()}`)
 
-  const items = (await itemsRes.json()) as ComponentModel[]
+  const items = (await itemsRes.json()) as CatalogShallowRow[]
   const { count: total } = (await countRes.json()) as { count: number }
   return { items, total }
 }
@@ -163,9 +168,9 @@ export default async function ArchivePage({
           defaultCompType={comptype}
           defaultDataset={dataset}
           defaultPageSize={size}
-          materialsEndpoint="/api/backend/archived/materials"
-          componentTypesEndpoint="/api/backend/archived/types"
-          datasetsEndpoint="/api/backend/archived/datasets"
+          materialsEndpoint="/api/backend/identities/meta/materials?consumed_filter=consumed"
+          componentTypesEndpoint="/api/backend/identities/meta/types?consumed_filter=consumed"
+          datasetsEndpoint="/api/backend/identities/meta/datasets?consumed_filter=consumed"
         />
 
         {/* Components Table */}

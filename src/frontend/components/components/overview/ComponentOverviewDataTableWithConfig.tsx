@@ -1,13 +1,13 @@
 'use client'
 
-import { ComponentModel } from '@/generated/ComponentModel'
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { ComponentOverviewDataTable } from './ComponentOverviewDataTable'
 import { createComponentOverviewColumns, ComponentOverviewColumns } from './ComponentOverviewColumns'
 import { PreviewCellConfig } from './ComponentOverviewDataTablePreviewCell'
 import { useMemo } from 'react'
 
 interface ComponentOverviewDataTableWithConfigProps {
-  data: ComponentModel[]
+  data: CatalogShallowRow[]
   /** Optional config for preview cell customization */
   previewConfig?: PreviewCellConfig
 }

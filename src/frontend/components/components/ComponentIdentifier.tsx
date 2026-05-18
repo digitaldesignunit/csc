@@ -39,9 +39,12 @@ const ComponentIdentifier: React.FC = () => {
   const MSG_NOT_FOUND = 'Component not found in database.'
   const MSG_ERROR = 'Error occurred while checking component.'
 
-  const checkComponentExists = async (componentId: string): Promise<boolean> => {
+  const checkComponentExists = async (identityId: string): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/backend/components/${componentId}`)
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(identityId)}?expand=shallow`,
+        { credentials: 'include', cache: 'no-store' },
+      )
       return response.ok
     } catch (error) {
       console.error('Error checking component:', error)

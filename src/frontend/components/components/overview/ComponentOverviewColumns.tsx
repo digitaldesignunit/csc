@@ -3,7 +3,8 @@
 
 import { useState } from 'react'
 import { ColumnDef } from '@tanstack/react-table'
-import { ComponentModel, ExtendedComponentModel, ComponentBoundingBox } from '@/generated/ComponentModel'
+import { ComponentBoundingBox } from '@/generated/ComponentModel'
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { formatTimestamp, rgbToHex } from '@/lib/utils'
 import ComponentOverviewDataTablePreviewCell, { PreviewCellConfig } from './ComponentOverviewDataTablePreviewCell'
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
@@ -49,7 +50,7 @@ function ComponentOverviewDataTableCopyIdCell({ componentId }: { componentId: st
  */
 export function createComponentOverviewColumns(
   previewConfig?: PreviewCellConfig
-): ColumnDef<ComponentModel>[] {
+): ColumnDef<CatalogShallowRow>[] {
   return [
     {
       accessorKey: 'name',
@@ -234,7 +235,7 @@ export function createComponentOverviewColumns(
     cell: ({ row }) => {
       const reserved: string | null = row.getValue('reserved')
       // Access reserved_by_username from the raw data, not as a table column
-      const reservedByUsername: string | undefined = (row.original as ExtendedComponentModel).reserved_by_username
+      const reservedByUsername = row.original.reserved_by_username ?? undefined
       if (!reserved) {
         return (
           <div className='text-xs text-muted-foreground'>

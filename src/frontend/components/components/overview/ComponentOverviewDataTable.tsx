@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ComponentModel } from '@/generated/ComponentModel'
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -73,7 +73,7 @@ export function ComponentOverviewDataTable<TData, TValue>({
           {table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => {
               // Check if this component is reserved
-              const componentData = row.original as ComponentModel
+              const componentData = row.original as CatalogShallowRow
               const isReserved = componentData?.reserved
               
               return (

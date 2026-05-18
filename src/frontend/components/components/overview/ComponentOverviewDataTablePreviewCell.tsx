@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import ComponentViewer from '../ComponentViewer'
 import ComponentViewerSkeleton from '../ComponentViewerSkeleton'
-import { ComponentModel } from '@/generated/ComponentModel'
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import {
   Sheet,
@@ -45,7 +45,7 @@ export default function ComponentOverviewDataTablePreviewCell({
   component_data,
   config = {},
 }: {
-  component_data: ComponentModel
+  component_data: CatalogShallowRow
   config?: PreviewCellConfig
 }) {
   const { isArchived = false } = config
@@ -59,12 +59,10 @@ export default function ComponentOverviewDataTablePreviewCell({
       ? component_data.name
       : 'Unnamed component'
 
-  const shallowRow = component_data as ComponentModel & {
-    current_snapshot_id?: string
-  }
   const snapshotThumbId =
-    typeof shallowRow.current_snapshot_id === 'string' && shallowRow.current_snapshot_id.trim().length > 0
-      ? shallowRow.current_snapshot_id
+    typeof component_data.current_snapshot_id === 'string' &&
+    component_data.current_snapshot_id.trim().length > 0
+      ? component_data.current_snapshot_id
       : null
 
   const [open, setOpen] = useState(false)

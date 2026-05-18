@@ -1,6 +1,6 @@
 import { ComponentOverviewDataTable } from '@/components/components/overview/ComponentOverviewDataTable'
 import ComponentOverviewPagination from '@/components/components/overview/ComponentOverviewPagination'
-import { ComponentModel } from '@/generated/ComponentModel'
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { ComponentOverviewColumns } from '@/components/components/overview/ComponentOverviewColumns'
 import { Card } from '@/components/ui/card'
 import ComponentOverviewFilterMenu from '@/components/components/overview/ComponentOverviewFilterMenu'
@@ -110,7 +110,7 @@ async function fetchComponentsAndTotal({
   if (!itemsRes.ok) throw new Error(`Failed to fetch components: ${itemsRes.status} ${await itemsRes.text()}`)
   if (!countRes.ok) throw new Error(`Failed to fetch count: ${countRes.status} ${await countRes.text()}`)
 
-  const items = (await itemsRes.json()) as ComponentModel[]
+  const items = (await itemsRes.json()) as CatalogShallowRow[]
   const { count: total } = (await countRes.json()) as { count: number }
   return { items, total }
 }

@@ -95,7 +95,7 @@ export default function AnalyticsPage() {
       if (validatedFilter) params.set('validated', validatedFilter)
       params.set('limit_dim', '10')
 
-      const res = await fetch(`/api/backend/components/stats?${params.toString()}`, { cache: 'no-store' })
+      const res = await fetch(`/api/backend/identities/stats?${params.toString()}`, { cache: 'no-store' })
       if (res.status === 404) {
         // Graceful: render empty stats rather than erroring
         setData({
