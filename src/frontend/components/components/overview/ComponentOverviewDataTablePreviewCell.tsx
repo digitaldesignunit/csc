@@ -36,22 +36,11 @@ async function fetchCatalogComposePreview(
   return (await res.json()) as CatalogComponent
 }
 
-export interface PreviewCellConfig {
-  /** Whether this is for archived components */
-  isArchived?: boolean
-}
-
 export default function ComponentOverviewDataTablePreviewCell({
   component_data,
-  config = {},
 }: {
   component_data: CatalogShallowRow
-  config?: PreviewCellConfig
 }) {
-  const { isArchived = false } = config
-
-  const detailBasePath = isArchived ? '/archive/components' : '/components'
-  const showFindComponent = !isArchived
   const router = useRouter()
   const compId = component_data._id
   const compName =
@@ -87,13 +76,15 @@ export default function ComponentOverviewDataTablePreviewCell({
     } catch (e: unknown) {
       console.error('Error fetching compose for preview:', e)
       if (e instanceof Error && e.message.toLowerCase().includes('unauthorized')) {
-        router.push(`/auth/signin?callbackUrl=${detailBasePath}`)
+        router.push(`/auth/signin?callbackUrl=/components`)
       }
       setOpen(false)
     } finally {
       setIsLoading(false)
     }
   }
+
+  const detailHref = `/components/${compId}`
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -129,7 +120,7 @@ export default function ComponentOverviewDataTablePreviewCell({
         <TooltipProvider>
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
-              <Link href={`${detailBasePath}/${compId}`} className="min-w-0">
+              <Link href={detailHref} className="min-w-0">
                 <Button
                   variant="ghost"
                   className="h-6 px-2 text-xs max-w-[16rem] truncate justify-start"
@@ -161,28 +152,26 @@ export default function ComponentOverviewDataTablePreviewCell({
         )}
 
         <SheetFooter className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
-          <Link href={`${detailBasePath}/${compId}`} className="w-full sm:w-[200px]">
+          <Link href={detailHref} className="w-full sm:w-[200px]">
             <Button variant="outline" className="h-8 w-full">
               Open Detail Page
             </Button>
           </Link>
 
-          {showFindComponent && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link href={`/locate-by-id?reference_id=${compId}`} className="w-full sm:w-[200px]">
-                    <Button variant="outline" className="h-8 w-full">
-                      Locate by ID
-                    </Button>
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="text-center">Find via QR code</div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href={`/locate-by-id?reference_id=${compId}`} className="w-full sm:w-[200px]">
+                  <Button variant="outline" className="h-8 w-full">
+                    Locate by ID
+                  </Button>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="text-center">Find via QR code</div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           <SheetClose asChild className="w-full sm:w-[200px]">
             <Button variant="outline" className="h-8 w-full">

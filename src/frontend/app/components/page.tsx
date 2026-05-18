@@ -1,12 +1,12 @@
 import { ComponentOverviewDataTable } from '@/components/components/overview/ComponentOverviewDataTable'
 import ComponentOverviewPagination from '@/components/components/overview/ComponentOverviewPagination'
-import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { ComponentOverviewColumns } from '@/components/components/overview/ComponentOverviewColumns'
 import { Card } from '@/components/ui/card'
 import ComponentOverviewFilterMenu from '@/components/components/overview/ComponentOverviewFilterMenu'
 import ComponentUuidNavigator from '@/components/components/overview/ComponentUuidNavigator'
-import { Package } from 'lucide-react'
-
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
+import Link from 'next/link'
+import { Archive, Package } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
@@ -29,99 +29,16 @@ type SearchParams = {
   bbx_max_x?: string
   bbx_max_y?: string
   bbx_max_z?: string
-}
-
-async function fetchComponentsAndTotal({
-  page, size, sortkey, sortorder, comptype, material, dataset, validated = 1,
-  complexity, fragment, bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z,
-}: {
-  page: number; size: number; sortkey: string; sortorder: 'asc' | 'desc'; comptype: string; material: string; dataset: string; validated?: number
-  complexity?: string; fragment?: string; bbx_min_x?: string; bbx_min_y?: string; bbx_min_z?: string
-  bbx_max_x?: string; bbx_max_y?: string; bbx_max_z?: string
-}) {
-  const h = await headers()
-  const cookie = h.get('cookie') ?? ''        // <-- forward cookie for middleware & proxy
-  const base = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`
-
-  const listParams = new URLSearchParams({
-    page: String(page),
-    size: String(size),
-    sortkey,
-    sortorder,
-    comptype,
-    material,
-    dataset,
-    validated: String(validated),
-  })
-  
-  const countParams = new URLSearchParams({
-    comptype,
-    material,
-    dataset,
-    validated: String(validated),
-  })
-
-  // Add new filter parameters if they exist
-  if (complexity) {
-    listParams.set('complexity', complexity)
-    countParams.set('complexity', complexity)
-  }
-  if (fragment) {
-    listParams.set('fragment', fragment)
-    countParams.set('fragment', fragment)
-  }
-  if (bbx_min_x) {
-    listParams.set('bbx_min_x', bbx_min_x)
-    countParams.set('bbx_min_x', bbx_min_x)
-  }
-  if (bbx_min_y) {
-    listParams.set('bbx_min_y', bbx_min_y)
-    countParams.set('bbx_min_y', bbx_min_y)
-  }
-  if (bbx_min_z) {
-    listParams.set('bbx_min_z', bbx_min_z)
-    countParams.set('bbx_min_z', bbx_min_z)
-  }
-  if (bbx_max_x) {
-    listParams.set('bbx_max_x', bbx_max_x)
-    countParams.set('bbx_max_x', bbx_max_x)
-  }
-  if (bbx_max_y) {
-    listParams.set('bbx_max_y', bbx_max_y)
-    countParams.set('bbx_max_y', bbx_max_y)
-  }
-  if (bbx_max_z) {
-    listParams.set('bbx_max_z', bbx_max_z)
-    countParams.set('bbx_max_z', bbx_max_z)
-  }
-
-  const fetchOpts = { cache: 'no-store' as const, headers: { cookie } }
-
-  listParams.set('expand', 'shallow')
-
-  const [itemsRes, countRes] = await Promise.all([
-    fetch(`${base}/api/backend/identities?${listParams.toString()}`, fetchOpts),
-    fetch(`${base}/api/backend/identities/count?${countParams.toString()}`, fetchOpts),
-  ])
-
-  if (itemsRes.status === 401 || countRes.status === 401) {
-    redirect('/auth/signin?callbackUrl=/components')
-  }
-  if (!itemsRes.ok) throw new Error(`Failed to fetch components: ${itemsRes.status} ${await itemsRes.text()}`)
-  if (!countRes.ok) throw new Error(`Failed to fetch count: ${countRes.status} ${await countRes.text()}`)
-
-  const items = (await itemsRes.json()) as CatalogShallowRow[]
-  const { count: total } = (await countRes.json()) as { count: number }
-  return { items, total }
+  consumed?: string
 }
 
 export default async function ComponentsPage({
   searchParams,
 }: {
-  // Next 15: searchParams is async
   searchParams: Promise<SearchParams>
 }) {
   const sp = await searchParams
+  const showConsumed = sp?.consumed === '1' || sp?.consumed === 'true'
 
   const page = Number(sp?.page ?? 1)
   const size = Number(sp?.size ?? 20)
@@ -139,49 +56,141 @@ export default async function ComponentsPage({
   const bbx_max_y = sp?.bbx_max_y ?? ''
   const bbx_max_z = sp?.bbx_max_z ?? ''
 
-  const { items, total } = await fetchComponentsAndTotal({
-    page, size, sortkey, sortorder, comptype, material, dataset, validated: 1,
-    complexity, fragment, bbx_min_x, bbx_min_y, bbx_min_z, bbx_max_x, bbx_max_y, bbx_max_z,
+  const h = await headers()
+  const cookie = h.get('cookie') ?? ''
+  const base = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`
+
+  const consumedFilter = showConsumed ? 'consumed' : 'active'
+  const validated = showConsumed ? '0' : '1'
+  const signInCallback = showConsumed ? '/components?consumed=1' : '/components'
+
+  const listParams = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+    sortkey,
+    sortorder,
+    comptype,
+    material,
+    dataset,
+    validated,
+    consumed_filter: consumedFilter,
+    expand: 'shallow',
   })
 
-  // Debug logging in development
-  // if (process.env.NODE_ENV === 'development' && items.length > 0) {
-  //   console.log('[ComponentsPage] Sample component data:', items[0])
-  //   console.log('[ComponentsPage] Sample bbx structure:', items[0]?.bbx, 'Type:', typeof items[0]?.bbx)
-  // }
+  const countParams = new URLSearchParams({
+    comptype,
+    material,
+    dataset,
+    validated,
+    consumed_filter: consumedFilter,
+  })
+
+  for (const [key, value] of [
+    ['complexity', complexity],
+    ['fragment', fragment],
+    ['bbx_min_x', bbx_min_x],
+    ['bbx_min_y', bbx_min_y],
+    ['bbx_min_z', bbx_min_z],
+    ['bbx_max_x', bbx_max_x],
+    ['bbx_max_y', bbx_max_y],
+    ['bbx_max_z', bbx_max_z],
+  ] as const) {
+    if (value) {
+      listParams.set(key, value)
+      countParams.set(key, value)
+    }
+  }
+
+  const fetchOpts = { cache: 'no-store' as const, headers: { cookie } }
+
+  const [itemsRes, countRes] = await Promise.all([
+    fetch(`${base}/api/backend/identities?${listParams.toString()}`, fetchOpts),
+    fetch(`${base}/api/backend/identities/count?${countParams.toString()}`, fetchOpts),
+  ])
+
+  if (itemsRes.status === 401 || countRes.status === 401) {
+    redirect(`/auth/signin?callbackUrl=${encodeURIComponent(signInCallback)}`)
+  }
+  if (!itemsRes.ok) {
+    throw new Error(
+      `Failed to fetch identities: ${itemsRes.status} ${await itemsRes.text()}`,
+    )
+  }
+  if (!countRes.ok) {
+    throw new Error(
+      `Failed to fetch identity count: ${countRes.status} ${await countRes.text()}`,
+    )
+  }
+
+  const items = (await itemsRes.json()) as CatalogShallowRow[]
+  const { count: total } = (await countRes.json()) as { count: number }
+
+  const metaSuffix = showConsumed ? '?consumed_filter=consumed' : ''
+  const materialsEndpoint = `/api/backend/identities/meta/materials${metaSuffix}`
+  const componentTypesEndpoint = `/api/backend/identities/meta/types${metaSuffix}`
+  const datasetsEndpoint = `/api/backend/identities/meta/datasets${metaSuffix}`
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-full">
-      {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <Package className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold">Browse Components</h1>
+      <div className="mb-6 sm:mb-8 space-y-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {showConsumed ? (
+            <Archive className="h-8 w-8 text-primary" />
+          ) : (
+            <Package className="h-8 w-8 text-primary" />
+          )}
+          <h1 className="text-2xl sm:text-3xl font-bold">
+            {showConsumed ? 'Consumed Components' : 'Browse Components'}
+          </h1>
+        </div>
+        {showConsumed && (
+          <p className="text-muted-foreground">
+            Physical pieces marked consumed (no longer in the active catalog).
+            Open any row for the same detail view as active components.
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2 text-sm">
+          <Link
+            href="/components"
+            className={
+              showConsumed
+                ? 'text-muted-foreground hover:text-foreground underline-offset-4 hover:underline'
+                : 'font-medium text-foreground'
+            }
+          >
+            Active catalog
+          </Link>
+          <span className="text-muted-foreground">·</span>
+          <Link
+            href="/components?consumed=1"
+            className={
+              showConsumed
+                ? 'font-medium text-foreground'
+                : 'text-muted-foreground hover:text-foreground underline-offset-4 hover:underline'
+            }
+          >
+            Consumed
+          </Link>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="space-y-2">
-        {/* Filter Section */}
         <ComponentOverviewFilterMenu
           defaultMaterial={material}
           defaultCompType={comptype}
           defaultDataset={dataset}
           defaultPageSize={size}
-          materialsEndpoint="/api/backend/identities/meta/materials"
-          componentTypesEndpoint="/api/backend/identities/meta/types"
-          datasetsEndpoint="/api/backend/identities/meta/datasets"
+          materialsEndpoint={materialsEndpoint}
+          componentTypesEndpoint={componentTypesEndpoint}
+          datasetsEndpoint={datasetsEndpoint}
         />
 
-        {/* UUID Navigator */}
-        <ComponentUuidNavigator />
+        {!showConsumed && <ComponentUuidNavigator />}
 
-        {/* Components Table */}
         <Card className="w-full overflow-x-auto p-0">
           <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={items} />
         </Card>
 
-        {/* Pagination */}
         <ComponentOverviewPagination pageNum={page} pageSize={size} total={total} />
       </div>
     </div>

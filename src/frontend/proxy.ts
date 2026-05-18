@@ -41,8 +41,6 @@ export const config = {
     '/dashboard/:path*',    // protect the dashboard too
     '/dashboard',           // protect dashboard root
     '/admin/:path*',        // protect admin routes
-    '/archive/:path*',      // protect archive routes
-    '/archive',             // protect archive root
     '/api/backend/:path*',  // protect the catch-all proxy too
     '/gh-interface/:path*', // protect the gh-interface too
     '/gh-interface',        // protect gh-interface root

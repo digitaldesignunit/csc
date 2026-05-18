@@ -17,6 +17,8 @@ export type CatalogShallowRow = {
   dataset?: string
   reserved?: string
   catalog_number?: number
+  /** Set when the physical piece is consumed (archived); null = active in catalog */
+  consumed_at?: string | null
   current_snapshot_id?: string
   name?: unknown
   created?: string

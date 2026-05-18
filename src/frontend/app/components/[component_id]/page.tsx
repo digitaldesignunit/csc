@@ -2,7 +2,9 @@
 import ComponentDetailCard from '@/components/components/ComponentDetailCard'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import type { CatalogComponent } from '@/generated/CatalogModels'
-import { Package } from 'lucide-react'
+import { formatTimestamp } from '@/lib/utils'
+import { Archive, Package } from 'lucide-react'
+import Link from 'next/link'
 import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 
@@ -10,6 +12,10 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 type PageParams = { component_id: string }
+
+function isConsumedIdentity(consumedAt: unknown): boolean {
+  return consumedAt !== undefined && consumedAt !== null && String(consumedAt).trim() !== ''
+}
 
 export default async function ComponentDetailPage({
   params,
@@ -44,18 +50,47 @@ export default async function ComponentDetailPage({
   }
 
   const catalog = (await res.json()) as CatalogComponent
+  const isConsumed = isConsumedIdentity(catalog.identity.consumed_at)
+  const consumedAtLabel =
+    isConsumed && catalog.identity.consumed_at
+      ? formatTimestamp(String(catalog.identity.consumed_at))
+      : null
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-full">
-      {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <Package className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold">Component Details</h1>
+      <div className="mb-6 sm:mb-8 space-y-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {isConsumed ? (
+            <Archive className="h-8 w-8 text-primary" />
+          ) : (
+            <Package className="h-8 w-8 text-primary" />
+          )}
+          <h1 className="text-2xl sm:text-3xl font-bold">
+            {isConsumed ? 'Consumed Component' : 'Component Details'}
+          </h1>
         </div>
+
+        {isConsumed && (
+          <div
+            role="status"
+            className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+          >
+            <p className="font-medium">This identity is consumed</p>
+            <p className="mt-1 text-sm text-amber-900/90 dark:text-amber-100/90">
+              It no longer appears in the active catalog
+              {consumedAtLabel ? ` (marked ${consumedAtLabel})` : ''}.
+              Admins can restore it from the actions below.
+            </p>
+            <Link
+              href="/components?consumed=1"
+              className="mt-2 inline-block text-sm font-medium underline underline-offset-4 hover:no-underline"
+            >
+              Browse consumed components
+            </Link>
+          </div>
+        )}
       </div>
 
-      {/* Main Content */}
       <div className="space-y-6">
         <ComponentViewer catalog={catalog} />
         <ComponentDetailCard variant="compose" catalog={catalog} />

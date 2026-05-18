@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { componentBounds, componentColorString, hexComponentColor, generateGrasshopperPanelXML, formatTimestamp } from '@/lib/utils'
 import { ExtendedComponentModel, ComponentLocation } from '@/generated/ComponentModel'
 import type { CatalogComponent } from '@/generated/CatalogModels'
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -50,6 +51,14 @@ function conditionBadgeClass(c: number): string {
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0
+}
+
+function isConsumedShallowRow(row: Pick<CatalogShallowRow, 'consumed_at'>): boolean {
+  return (
+    row.consumed_at !== undefined &&
+    row.consumed_at !== null &&
+    String(row.consumed_at).trim() !== ''
+  )
 }
 
 /** Compose API row → ExtendedComponentModel detail fields (viewer uses `{ identity, snapshot }` directly). */
@@ -116,11 +125,10 @@ function composeCatalogToExtendedRow(catalog: CatalogComponent): ExtendedCompone
 }
 
 export type ComponentDetailCardProps =
-  | { variant: 'compose'; catalog: CatalogComponent; isArchived?: boolean }
-  | { variant: 'legacy'; component_data: ExtendedComponentModel; isArchived?: boolean }
+  | { variant: 'compose'; catalog: CatalogComponent }
+  | { variant: 'legacy'; component_data: ExtendedComponentModel }
 
 export default function ComponentDetailCard(props: ComponentDetailCardProps) {
-  const isArchived = props.isArchived ?? false
   const component_data = useMemo(
     () =>
       props.variant === 'compose'
@@ -128,6 +136,9 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
         : props.component_data,
     [props.variant, props.variant === 'compose' ? props.catalog : props.component_data],
   )
+  const isConsumed = isConsumedShallowRow({
+    consumed_at: component_data.consumed_at ?? null,
+  })
   const [copied, setCopied] = useState(false)
   const [grasshopperCopied, setGrasshopperCopied] = useState(false)
   const [validating, setValidating] = useState(false)
@@ -138,7 +149,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
   const [archiveAction, setArchiveAction] = useState<'archive' | 'restore' | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [openingParentComponent, setOpeningParentComponent] = useState(false)
-  const [parentComponentStatus, setParentComponentStatus] = useState<'active' | 'archived' | null>(null)
+  const [parentComponentStatus, setParentComponentStatus] = useState<'active' | 'consumed' | null>(null)
   const { data: session } = useSession()
   const router = useRouter()
 
@@ -157,22 +168,14 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
       try {
         setParentComponentStatus(null)
 
-        const activeRes = await fetch(
+        const res = await fetch(
           `/api/backend/identities/${encodeURIComponent(parentId)}?expand=shallow`,
           { credentials: 'include' },
         )
-        if (activeRes.ok) {
-          if (!cancelled) setParentComponentStatus('active')
-          return
-        }
-
-        if (activeRes.status === 404) {
-          const archivedRes = await fetch(
-            `/api/backend/archived/components/${encodeURIComponent(parentId)}`,
-            { credentials: 'include' },
-          )
-          if (!cancelled && archivedRes.ok) {
-            setParentComponentStatus('archived')
+        if (res.ok) {
+          const row = (await res.json()) as CatalogShallowRow
+          if (!cancelled) {
+            setParentComponentStatus(isConsumedShallowRow(row) ? 'consumed' : 'active')
           }
         }
       } catch (error) {
@@ -301,8 +304,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
       )
 
       if (response.ok) {
-        // Consumed identities drop off the default catalog list (`consumed_filter=active`).
-        router.push('/components')
+        router.refresh()
       } else {
         console.error('Failed to mark identity as consumed')
         alert('Failed to archive component. Please try again.')
@@ -327,8 +329,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
       )
 
       if (response.ok) {
-        // Redirect to the main component page after successful restoration
-        router.push(`/components/${component_data._id}`)
+        router.refresh()
       } else {
         console.error('Failed to restore identity')
         alert('Failed to restore component. Please try again.')
@@ -342,7 +343,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
   }
 
   const openArchiveConfirmation = () => {
-    setArchiveAction(isArchived ? 'restore' : 'archive')
+    setArchiveAction(isConsumed ? 'restore' : 'archive')
     setArchiveConfirmOpen(true)
   }
 
@@ -395,38 +396,26 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
     try {
       setOpeningParentComponent(true)
 
-      if (parentComponentStatus === 'active') {
+      if (parentComponentStatus === 'active' || parentComponentStatus === 'consumed') {
         router.push(`/components/${parentId}`)
         return
       }
-      if (parentComponentStatus === 'archived') {
-        router.push(`/archive/components/${parentId}`)
-        return
-      }
 
-      const activeRes = await fetch(
+      const res = await fetch(
         `/api/backend/identities/${encodeURIComponent(parentId)}?expand=shallow`,
         { credentials: 'include' },
       )
-      if (activeRes.ok) {
+      if (res.ok) {
         router.push(`/components/${parentId}`)
         return
       }
 
-      // If not found in active catalog, try archive detail route.
-      // Archive access is admin-only; non-admin users will be redirected by that page.
-      if (activeRes.status === 404) {
-        const archivedRes = await fetch(
-          `/api/backend/archived/components/${encodeURIComponent(parentId)}`,
-          { credentials: 'include' },
-        )
-        if (archivedRes.ok) {
-          router.push(`/archive/components/${parentId}`)
-          return
-        }
+      if (res.status === 404) {
+        alert('Parent component could not be found.')
+        return
       }
 
-      alert('Parent component could not be found.')
+      alert('Failed to open parent component. Please try again.')
     } catch (error) {
       console.error('Failed to resolve parent component:', error)
       alert('Failed to open parent component. Please try again.')
@@ -591,7 +580,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
         {session?.user?.role === 'admin' && (
           <div className="mb-4 space-y-3 xl:max-w-md">
             {/* Edit Metadata Action */}
-            {!isArchived && (
+            {!isConsumed && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -653,17 +642,17 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
               <Button
                 onClick={openArchiveConfirmation}
                 disabled={validating || archiving || deleting}
-                variant={isArchived ? 'default' : 'outline'}
+                variant={isConsumed ? 'default' : 'outline'}
                 className="flex-1"
                 title={
-                  isArchived
-                    ? 'Restore this component to the main Catalog'
-                    : 'Archive this component (can be restored later)'
+                  isConsumed
+                    ? 'Restore this identity to the active catalog'
+                    : 'Mark this identity as consumed (can be restored later)'
                 }
               >
                 {archiving ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                ) : isArchived ? (
+                ) : isConsumed ? (
                   <>
                     <RotateCcw className="h-4 w-4 mr-2" />
                     <span>Restore</span>
@@ -728,12 +717,12 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>
-                {isArchived ? 'Restore component?' : 'Archive component?'}
+                {isConsumed ? 'Restore identity?' : 'Mark identity as consumed?'}
               </DialogTitle>
               <DialogDescription>
-                {isArchived
-                  ? 'This will restore the component to the main catalog.'
-                  : 'This will remove the component from the main catalog, but you can restore it later.'}
+                {isConsumed
+                  ? 'This will return the identity to the active catalog.'
+                  : 'This removes the identity from the active catalog. You can restore it later.'}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -747,11 +736,11 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
                 Cancel
               </Button>
               <Button
-                variant={isArchived ? 'default' : 'outline'}
+                variant={isConsumed ? 'default' : 'outline'}
                 onClick={handleConfirmArchiveAction}
                 disabled={archiving || validating || deleting}
               >
-                {isArchived ? 'Confirm Restore' : 'Confirm Archive'}
+                {isConsumed ? 'Confirm restore' : 'Confirm consume'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -975,12 +964,12 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
                       {parentComponentStatus && (
                         <span
                           className={`text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md border shrink-0 ${
-                            parentComponentStatus === 'archived'
+                            parentComponentStatus === 'consumed'
                               ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
                               : 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700'
                           }`}
                         >
-                          {parentComponentStatus === 'archived' ? 'Archived' : 'Active'}
+                          {parentComponentStatus === 'consumed' ? 'Consumed' : 'Active'}
                         </span>
                       )}
                     </div>

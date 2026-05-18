@@ -2,31 +2,15 @@
 
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { ComponentOverviewDataTable } from './ComponentOverviewDataTable'
-import { createComponentOverviewColumns, ComponentOverviewColumns } from './ComponentOverviewColumns'
-import { PreviewCellConfig } from './ComponentOverviewDataTablePreviewCell'
-import { useMemo } from 'react'
+import { ComponentOverviewColumns } from './ComponentOverviewColumns'
 
 interface ComponentOverviewDataTableWithConfigProps {
   data: CatalogShallowRow[]
-  /** Optional config for preview cell customization */
-  previewConfig?: PreviewCellConfig
 }
 
-/**
- * A client-side wrapper that creates columns with custom config.
- * Use this when you need custom column configuration from a server component.
- */
+/** @deprecated Use ComponentOverviewDataTable with ComponentOverviewColumns directly. */
 export default function ComponentOverviewDataTableWithConfig({
   data,
-  previewConfig,
 }: ComponentOverviewDataTableWithConfigProps) {
-  const columns = useMemo(() => {
-    if (previewConfig) {
-      return createComponentOverviewColumns(previewConfig)
-    }
-    return ComponentOverviewColumns
-  }, [previewConfig])
-
-  return <ComponentOverviewDataTable columns={columns} data={data} />
+  return <ComponentOverviewDataTable columns={ComponentOverviewColumns} data={data} />
 }
-

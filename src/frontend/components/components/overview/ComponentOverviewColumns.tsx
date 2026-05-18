@@ -6,7 +6,7 @@ import { ColumnDef } from '@tanstack/react-table'
 import { ComponentBoundingBox } from '@/generated/ComponentModel'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { formatTimestamp, rgbToHex } from '@/lib/utils'
-import ComponentOverviewDataTablePreviewCell, { PreviewCellConfig } from './ComponentOverviewDataTablePreviewCell'
+import ComponentOverviewDataTablePreviewCell from './ComponentOverviewDataTablePreviewCell'
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
 import ComponentOverviewDataTableFilterCell from './ComponentOverviewDataTableFilterCell'
 import ComponentOverviewDataTableLocationCell from './ComponentOverviewDataTableLocationCell'
@@ -44,14 +44,7 @@ function ComponentOverviewDataTableCopyIdCell({ componentId }: { componentId: st
   )
 }
 
-/**
- * Creates component overview columns with customizable preview cell config.
- * This allows reuse for both regular components and archived components.
- */
-export function createComponentOverviewColumns(
-  previewConfig?: PreviewCellConfig
-): ColumnDef<CatalogShallowRow>[] {
-  return [
+export const ComponentOverviewColumns: ColumnDef<CatalogShallowRow>[] = [
     {
       accessorKey: 'name',
       header: () => <ComponentOverviewDataTableHeader header='Name' sortKey='name' />,
@@ -62,15 +55,12 @@ export function createComponentOverviewColumns(
         cellClassName: '',
       },
       cell: ({ row }) => (
-        <ComponentOverviewDataTablePreviewCell
-          component_data={row.original}
-          config={previewConfig}
-        />
+        <ComponentOverviewDataTablePreviewCell component_data={row.original} />
       ),
     },
   {
     accessorKey: '_id',
-    header: () => <ComponentOverviewDataTableHeader header='ID' sortKey='_id' />,
+    header: () => <ComponentOverviewDataTableHeader header='Identity ID' sortKey='_id' />,
     meta: { colClassName: 'w-[220px] sm:w-[260px] md:w-[320px]' },
     cell: ({ row }) => {
       const componentId = row.getValue('_id') as string
@@ -256,8 +246,4 @@ export function createComponentOverviewColumns(
       )
     },
   },
-  ]
-}
-
-// Default columns for regular components (backwards compatible)
-export const ComponentOverviewColumns = createComponentOverviewColumns()
+]
