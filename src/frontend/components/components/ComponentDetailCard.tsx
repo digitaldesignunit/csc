@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { componentBounds, componentColorString, hexComponentColor, generateGrasshopperPanelXML, formatTimestamp } from '@/lib/utils'
-import { ExtendedComponentModel, ComponentLocation } from '@/generated/ComponentModel'
-import type { CatalogComponent } from '@/generated/CatalogModels'
+import { ComponentLocation } from '@/generated/ComponentModel'
+import type { CatalogComponent, ComponentIdentity } from '@/generated/CatalogModels'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -61,84 +61,34 @@ function isConsumedShallowRow(row: Pick<CatalogShallowRow, 'consumed_at'>): bool
   )
 }
 
-/** Compose API row → ExtendedComponentModel detail fields (viewer uses `{ identity, snapshot }` directly). */
-export function composeCatalogToExtendedRow(catalog: CatalogComponent): ExtendedComponentModel {
-  const { identity, snapshot } = catalog
-  const sg = snapshot.geometry
-  const rawMp = sg?.marker_points
-  const marker_points: ExtendedComponentModel['marker_points'] = Array.isArray(rawMp)
-    ? (rawMp as number[][])
-    : []
-
-  const parentIds = identity.parent_identities
-  const parent_component =
-    Array.isArray(parentIds) && parentIds.length > 0 ? String(parentIds[0]) : undefined
-
-  return {
-    _id: identity._id,
-    name:
-      typeof snapshot.name === 'string' && snapshot.name.trim().length > 0
-        ? snapshot.name
-        : 'Unnamed Component',
-    created: String(identity.created ?? snapshot.created ?? ''),
-    lastmodified: String(snapshot.lastmodified ?? identity.lastmodified ?? ''),
-    type: identity.type,
-    material: identity.material,
-    dataset: identity.dataset,
-    complexity: snapshot.complexity,
-    fragment: snapshot.fragment,
-    assembly: snapshot.assembly,
-    geometry: {},
-    color: snapshot.color as ExtendedComponentModel['color'],
-    bbx: snapshot.bbx as ExtendedComponentModel['bbx'],
-    bbx_origin: snapshot.bbx_origin,
-    location: snapshot.location as ExtendedComponentModel['location'],
-    descriptors: snapshot.descriptors as ExtendedComponentModel['descriptors'],
-    processes: snapshot.processes as ExtendedComponentModel['processes'],
-    iframe: snapshot.iframe as ExtendedComponentModel['iframe'],
-    pca_frame: snapshot.pca_frame as ExtendedComponentModel['pca_frame'],
-    reserved: typeof identity.reserved === 'string' ? identity.reserved : '',
-    attributes: identity.attributes as ExtendedComponentModel['attributes'],
-    marker_points,
-    validated: snapshot.validated,
-    etag: snapshot.etag as ExtendedComponentModel['etag'],
-    condition:
-      snapshot.condition !== undefined && snapshot.condition !== null
-        ? (snapshot.condition as ExtendedComponentModel['condition'])
-        : undefined,
-    manufactured_at: identity.manufactured_at as ExtendedComponentModel['manufactured_at'],
-    manufactured_precision:
-      identity.manufactured_precision as ExtendedComponentModel['manufactured_precision'],
-    salvage_source: identity.salvage_source as ExtendedComponentModel['salvage_source'],
-    salvaged_at: identity.salvaged_at as ExtendedComponentModel['salvaged_at'],
-    parent_component,
-    catalog_number: identity.catalog_number,
-    consumed_at:
-      identity.consumed_at === undefined || identity.consumed_at === null
-        ? null
-        : String(identity.consumed_at),
-    current_snapshot_id: identity.current_snapshot_id,
-    parent_identities: Array.isArray(identity.parent_identities)
-      ? identity.parent_identities.map(String)
-      : undefined,
+function primaryParentIdentityId(identity: ComponentIdentity): string | undefined {
+  const ids = identity.parent_identities
+  if (Array.isArray(ids) && ids.length > 0) {
+    return String(ids[0])
   }
+  return undefined
 }
 
-export type ComponentDetailCardProps =
-  | { variant: 'compose'; catalog: CatalogComponent }
-  | { variant: 'legacy'; component_data: ExtendedComponentModel }
+function snapshotDisplayName(
+  snapshot: CatalogComponent['snapshot'],
+): string {
+  return typeof snapshot.name === 'string' && snapshot.name.trim().length > 0
+    ? snapshot.name
+    : 'Unnamed component'
+}
 
-export default function ComponentDetailCard(props: ComponentDetailCardProps) {
-  const component_data = useMemo(
-    () =>
-      props.variant === 'compose'
-        ? composeCatalogToExtendedRow(props.catalog)
-        : props.component_data,
-    [props.variant, props.variant === 'compose' ? props.catalog : props.component_data],
-  )
+export default function ComponentDetailCard({
+  catalog,
+}: {
+  catalog: CatalogComponent
+}) {
+  const { identity, snapshot } = catalog
+  const identityId = identity._id ?? ''
+  const parentIdentityId = primaryParentIdentityId(identity)
   const isConsumed = isConsumedShallowRow({
-    consumed_at: component_data.consumed_at ?? null,
+    consumed_at: identity.consumed_at as string | null | undefined,
   })
+  const reservedBy = typeof identity.reserved === 'string' ? identity.reserved : ''
   const [copied, setCopied] = useState(false)
   const [grasshopperCopied, setGrasshopperCopied] = useState(false)
   const [validating, setValidating] = useState(false)
@@ -154,9 +104,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
   const router = useRouter()
 
   useEffect(() => {
-    const parentId = isNonEmptyString(component_data.parent_component)
-      ? String(component_data.parent_component)
-      : null
+    const parentId = isNonEmptyString(parentIdentityId) ? parentIdentityId : null
 
     if (!parentId) {
       setParentComponentStatus(null)
@@ -187,11 +135,11 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
     return () => {
       cancelled = true
     }
-  }, [component_data.parent_component])
+  }, [parentIdentityId])
 
   const handleCopyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(component_data._id || '')
+      await navigator.clipboard.writeText(identityId || '')
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
@@ -201,7 +149,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
 
   const handleCopyAsGrasshopperPanel = async () => {
     try {
-      const grasshopperXML = generateGrasshopperPanelXML('ComponentID', component_data._id || '')
+      const grasshopperXML = generateGrasshopperPanelXML('ComponentID', identityId || '')
       await navigator.clipboard.writeText(grasshopperXML)
       setGrasshopperCopied(true)
       setTimeout(() => setGrasshopperCopied(false), 2000)
@@ -213,7 +161,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
   const handleReserveComponent = async () => {
     try {
       const response = await fetch(
-        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}/reserve`,
+        `/api/backend/identities/${encodeURIComponent(identityId ?? '')}/reserve`,
         {
           method: 'POST',
           credentials: 'include',
@@ -243,7 +191,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
   const handleReleaseComponent = async () => {
     try {
       const response = await fetch(
-        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}/reserve`,
+        `/api/backend/identities/${encodeURIComponent(identityId ?? '')}/reserve`,
         {
           method: 'DELETE',
           credentials: 'include',
@@ -273,7 +221,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
     try {
       setValidating(true)
       const response = await fetch(
-        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}/validate`,
+        `/api/backend/identities/${encodeURIComponent(identityId ?? '')}/validate`,
         { method: 'GET', credentials: 'include' },
       )
       
@@ -296,7 +244,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
     try {
       setArchiving(true)
       const response = await fetch(
-        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}/consume`,
+        `/api/backend/identities/${encodeURIComponent(identityId ?? '')}/consume`,
         {
           method: 'POST',
           credentials: 'include',
@@ -321,7 +269,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
     try {
       setArchiving(true)
       const response = await fetch(
-        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}/restore`,
+        `/api/backend/identities/${encodeURIComponent(identityId ?? '')}/restore`,
         {
           method: 'POST',
           credentials: 'include',
@@ -365,7 +313,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
     try {
       setDeleting(true)
       const response = await fetch(
-        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}`,
+        `/api/backend/identities/${encodeURIComponent(identityId ?? '')}`,
         {
           method: 'DELETE',
           credentials: 'include',
@@ -425,17 +373,15 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
   }
 
   // Component Color
-  const component_color_str = componentColorString(Array.isArray(component_data.color) ? component_data.color : [])
-  const component_color_hex = hexComponentColor(Array.isArray(component_data.color) ? component_data.color : [])
+  const component_color_str = componentColorString(Array.isArray(snapshot.color) ? snapshot.color : [])
+  const component_color_hex = hexComponentColor(Array.isArray(snapshot.color) ? snapshot.color : [])
 
   // Component Bounds
-  const component_bounds = componentBounds(component_data.bbx)
+  const component_bounds = componentBounds(snapshot.bbx)
 
   // Lat/Lon
-  const { lat, lon } = component_data.location as ComponentLocation || { lat: 37.81627937, lon: 144.95373531 }
-  const componentName = typeof component_data.name === 'string' && component_data.name.trim().length > 0
-    ? component_data.name
-    : 'Unnamed component'
+  const { lat, lon } = snapshot.location as ComponentLocation || { lat: 37.81627937, lon: 144.95373531 }
+  const componentName = snapshotDisplayName(snapshot)
 
   return (
     <Card className="w-full overflow-x-auto">
@@ -446,9 +392,9 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
             <div className="text-sm sm:text-base font-semibold bg-primary/10 border border-border rounded-md px-3 py-2 text-foreground break-words mb-2">
               {componentName}
             </div>
-            <div className="text-sm font-medium text-muted-foreground mb-1">Component ID</div>
+            <div className="text-sm font-medium text-muted-foreground mb-1">Identity ID</div>
             <div className="font-mono text-xs sm:text-sm font-medium bg-accent/20 border border-border rounded-md px-3 py-2 text-foreground break-all">
-              {component_data._id}
+              {identityId}
             </div>
           </div>
           
@@ -510,7 +456,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href={`/locate-by-id?reference_id=${component_data._id}`} className="flex-1">
+                <Link href={`/locate-by-id?reference_id=${identityId}`} className="flex-1">
                   <Button variant="outline" className="w-full">
                     Locate by ID
                   </Button>
@@ -529,9 +475,9 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="flex-1">
-                  {component_data.reserved ? (
+                  {reservedBy ? (
                     // Component is reserved
-                    (session?.user as ExtendedUser)?.id === component_data.reserved ? (
+                    (session?.user as ExtendedUser)?.id === reservedBy ? (
                       // Reserved by current user - show release button
                       <Button 
                         variant="destructive"
@@ -547,7 +493,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
                         className="w-full"
                         disabled
                       >
-                        Reserved by {component_data.reserved_by_username || 'Another User'}
+                        Reserved by another user
                       </Button>
                     )
                   ) : (
@@ -564,10 +510,10 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
               </TooltipTrigger>
               <TooltipContent>
                 <div className="text-center text-sm">
-                  {component_data.reserved ? 
-                    ((session?.user as ExtendedUser)?.id === component_data.reserved ? 
+                  {reservedBy ? 
+                    ((session?.user as ExtendedUser)?.id === reservedBy ? 
                       'Click to release this component' : 
-                      `This component is reserved by ${component_data.reserved_by_username || 'another user'}`) : 
+                      'This component is reserved by another user') : 
                     'Reserve this component for your project'
                   }
                 </div>
@@ -585,7 +531,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Link
-                      href={`/components/${component_data._id}/edit`}
+                      href={`/components/${identityId}/edit`}
                       className="block"
                     >
                       <Button
@@ -614,7 +560,7 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
                   <TooltipTrigger asChild>
                     <Button
                       onClick={handleValidateComponent}
-                      disabled={validating || archiving || deleting || component_data.validated}
+                      disabled={validating || archiving || deleting || snapshot.validated}
                       variant="default"
                       className="bg-green-600 hover:bg-green-700 flex-1"
                     >
@@ -623,14 +569,14 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
                       ) : (
                         <>
                           <CheckCircle className="h-4 w-4 mr-2" />
-                          <span>{component_data.validated ? 'Validated' : 'Validate'}</span>
+                          <span>{snapshot.validated ? 'Validated' : 'Validate'}</span>
                         </>
                       )}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
                     <div className="text-center text-sm">
-                      {component_data.validated
+                      {snapshot.validated
                         ? 'This component is already validated'
                         : 'Validate this component for public use'
                       }
@@ -782,14 +728,14 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Type</span>
                   <span className="text-xs font-semibold text-foreground bg-primary/25 px-2 py-1 rounded-md">
-                    {component_data.type}
+                    {identity.type}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Material</span>
                   <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
-                    {component_data.material}
+                    {identity.material}
                   </span>
                 </div>
 
@@ -839,42 +785,42 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Dataset</span>
                   <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
-                    {component_data.dataset}
+                    {identity.dataset}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Fragment</span>
                   <span className="text-xs font-semibold text-foreground bg-primary/25 px-2 py-1 rounded-md">
-                    {String(component_data.fragment)}
+                    {String(snapshot.fragment)}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Complexity</span>
                   <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
-                    {component_data.complexity}
+                    {snapshot.complexity}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Location</span>
                   <span className="text-xs font-semibold text-foreground bg-primary/25 px-2 py-1 rounded-md max-w-[60%] truncate">
-                    <ComponentOverviewDataTableLocationCell coords={component_data.location as ComponentLocation} showTooltip={false} />
+                    <ComponentOverviewDataTableLocationCell coords={snapshot.location as ComponentLocation} showTooltip={false} />
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Created</span>
                   <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
-                    {formatTimestamp(component_data.created)}
+                    {formatTimestamp(identity.created)}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Last Modified</span>
                   <span className="text-xs font-semibold text-foreground bg-primary/25 px-2 py-1 rounded-md">
-                    {formatTimestamp(component_data.lastmodified)}
+                    {formatTimestamp(snapshot.lastmodified)}
                   </span>
                 </div>
 
@@ -887,11 +833,11 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Condition</span>
-                  {typeof component_data.condition === 'number' ? (
+                  {typeof snapshot.condition === 'number' ? (
                     <span
-                      className={`text-xs font-semibold px-2 py-1 rounded-md ${conditionBadgeClass(component_data.condition)}`}
+                      className={`text-xs font-semibold px-2 py-1 rounded-md ${conditionBadgeClass(snapshot.condition)}`}
                     >
-                      {conditionLabel(component_data.condition)}
+                      {conditionLabel(snapshot.condition)}
                     </span>
                   ) : (
                     <span className="text-xs italic text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">
@@ -902,11 +848,11 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Manufactured</span>
-                  {isNonEmptyString(component_data.manufactured_at) ? (
+                  {isNonEmptyString(identity.manufactured_at) ? (
                     <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
-                      {formatTimestamp(component_data.manufactured_at)}
-                      {isNonEmptyString(component_data.manufactured_precision)
-                        ? ` (${component_data.manufactured_precision})`
+                      {formatTimestamp(identity.manufactured_at)}
+                      {isNonEmptyString(identity.manufactured_precision)
+                        ? ` (${identity.manufactured_precision})`
                         : ''}
                     </span>
                   ) : (
@@ -918,9 +864,9 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground">Salvaged</span>
-                  {isNonEmptyString(component_data.salvaged_at) ? (
+                  {isNonEmptyString(identity.salvaged_at) ? (
                     <span className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md">
-                      {formatTimestamp(component_data.salvaged_at)}
+                      {formatTimestamp(identity.salvaged_at)}
                     </span>
                   ) : (
                     <span className="text-xs italic text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">
@@ -931,12 +877,12 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
 
                 <div className="flex items-start justify-between gap-2 p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground flex-shrink-0">Salvage source</span>
-                  {isNonEmptyString(component_data.salvage_source) ? (
+                  {isNonEmptyString(identity.salvage_source) ? (
                     <span
                       className="text-xs font-semibold text-foreground bg-secondary/25 px-2 py-1 rounded-md max-w-[65%] break-words text-right"
-                      title={component_data.salvage_source}
+                      title={identity.salvage_source}
                     >
-                      {component_data.salvage_source}
+                      {identity.salvage_source}
                     </span>
                   ) : (
                     <span className="text-xs italic text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">
@@ -947,19 +893,19 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
 
                 <div className="flex items-center justify-between gap-2 p-2 bg-muted/30 rounded-lg border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground flex-shrink-0">Parent component</span>
-                  {isNonEmptyString(component_data.parent_component) ? (
+                  {isNonEmptyString(parentIdentityId) ? (
                     <div className="inline-flex items-center gap-1.5 max-w-[70%]">
                       <button
                         type="button"
-                        onClick={() => handleOpenParentComponent(String(component_data.parent_component))}
+                        onClick={() => handleOpenParentComponent(String(parentIdentityId))}
                         disabled={openingParentComponent}
                         className="inline-flex items-center gap-1 font-mono text-[11px] sm:text-xs font-semibold text-primary hover:underline bg-primary/10 px-2 py-1 rounded-md min-w-0 truncate cursor-pointer disabled:opacity-70 disabled:no-underline disabled:cursor-not-allowed"
-                        title={`Open parent component ${component_data.parent_component}`}
+                        title={`Open parent component ${parentIdentityId}`}
                       >
                         {openingParentComponent ? (
                           <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
                         ) : null}
-                        {component_data.parent_component}
+                        {parentIdentityId}
                       </button>
                       {parentComponentStatus && (
                         <span
@@ -989,9 +935,9 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="max-h-64 overflow-auto rounded border border-border bg-muted/40 p-2">
-                    {component_data.descriptors ? (
+                    {snapshot.descriptors ? (
                       <pre className="whitespace-pre-wrap text-xs text-foreground">
-                        <code>{JSON.stringify(component_data.descriptors, null, 2)}</code>
+                        <code>{JSON.stringify(snapshot.descriptors, null, 2)}</code>
                       </pre>
                     ) : (
                       <div className="text-sm text-muted-foreground">No descriptors available.</div>
@@ -1006,13 +952,9 @@ export default function ComponentDetailCard(props: ComponentDetailCardProps) {
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="max-h-64 overflow-auto rounded border border-border bg-muted/40 p-2">
-                    {component_data ? (
-                      <pre className="whitespace-pre-wrap text-xs text-foreground">
-                        <code>{JSON.stringify(component_data, null, 2)}</code>
-                      </pre>
-                    ) : (
-                      <div className="text-sm text-muted-foreground">No raw JSON data available.</div>
-                    )}
+                    <pre className="whitespace-pre-wrap text-xs text-foreground">
+                      <code>{JSON.stringify(catalog, null, 2)}</code>
+                    </pre>
                   </div>
                 </AccordionContent>
               </AccordionItem>

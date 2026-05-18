@@ -6,9 +6,7 @@ import { useSession } from 'next-auth/react'
 import { Pencil } from 'lucide-react'
 
 import ComponentEditForm from '@/components/components/ComponentEditForm'
-import { composeCatalogToExtendedRow } from '@/components/components/ComponentDetailCard'
 import type { CatalogComponent } from '@/generated/CatalogModels'
-import { ExtendedComponentModel } from '@/generated/ComponentModel'
 
 type PageParams = { component_id: string }
 
@@ -25,7 +23,7 @@ export default function ComponentEditPage({
   const router = useRouter()
   const { data: session, status } = useSession()
 
-  const [component, setComponent] = useState<ExtendedComponentModel | null>(null)
+  const [catalog, setCatalog] = useState<CatalogComponent | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notFoundState, setNotFoundState] = useState(false)
@@ -61,13 +59,13 @@ export default function ComponentEditPage({
         if (!res.ok) {
           throw new Error(`Failed to load identity (${res.status})`)
         }
-        const catalog = (await res.json()) as CatalogComponent
-        if (isConsumedIdentity(catalog.identity.consumed_at)) {
+        const data = (await res.json()) as CatalogComponent
+        if (isConsumedIdentity(data.identity.consumed_at)) {
           router.replace(`/components/${component_id}`)
           return
         }
         if (!cancelled) {
-          setComponent(composeCatalogToExtendedRow(catalog))
+          setCatalog(data)
         }
       } catch (err) {
         if (!cancelled) {
@@ -118,7 +116,7 @@ export default function ComponentEditPage({
     )
   }
 
-  if (!component) return null
+  if (!catalog) return null
 
   return (
     <div className="container mx-auto max-w-3xl space-y-6 p-6">
@@ -135,11 +133,11 @@ export default function ComponentEditPage({
         </p>
         <div className="mt-3 break-all rounded-md border border-border bg-muted/40 p-3 font-mono text-xs">
           <span className="text-muted-foreground">Identity ID:</span>{' '}
-          {component._id}
+          {catalog.identity._id}
         </div>
       </div>
 
-      <ComponentEditForm component_data={component} />
+      <ComponentEditForm catalog={catalog} />
     </div>
   )
 }

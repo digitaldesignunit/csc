@@ -93,7 +93,7 @@ export default async function ComponentDetailPage({
 
       <div className="space-y-6">
         <ComponentViewer catalog={catalog} />
-        <ComponentDetailCard variant="compose" catalog={catalog} />
+        <ComponentDetailCard catalog={catalog} />
       </div>
     </div>
   )

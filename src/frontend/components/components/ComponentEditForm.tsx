@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, Save, XCircle } from 'lucide-react'
 
-import { ExtendedComponentModel, ComponentLocation } from '@/generated/ComponentModel'
+import { ComponentLocation } from '@/generated/ComponentModel'
+import type { CatalogComponent } from '@/generated/CatalogModels'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -112,53 +113,54 @@ function dateInputToIso(value: string): string {
   return trimmed
 }
 
-function initialStateFromComponent(c: ExtendedComponentModel): FormState {
-  const colorArr = Array.isArray(c.color) ? c.color as number[] : [110, 110, 110]
-  const loc = (c.location as ComponentLocation | undefined) ?? { lat: 0, lon: 0 }
-  const rawCondition = (c as { condition?: unknown }).condition
+function initialStateFromCatalog(catalog: CatalogComponent): FormState {
+  const { identity, snapshot } = catalog
+  const colorArr = Array.isArray(snapshot.color) ? (snapshot.color as number[]) : [110, 110, 110]
+  const loc = (snapshot.location as ComponentLocation | undefined) ?? { lat: 0, lon: 0 }
+  const rawCondition = snapshot.condition
   const condition =
     typeof rawCondition === 'number' && CONDITION_VALUES.includes(rawCondition as typeof CONDITION_VALUES[number])
       ? (rawCondition as number)
       : null
-  const rawPrecision = (c as { manufactured_precision?: unknown }).manufactured_precision
+  const rawPrecision = identity.manufactured_precision
   const precision =
     typeof rawPrecision === 'string' &&
     MANUFACTURED_PRECISIONS.includes(rawPrecision as typeof MANUFACTURED_PRECISIONS[number])
       ? rawPrecision
       : ''
-  const rawSalvageSource = (c as { salvage_source?: unknown }).salvage_source
-  const rawManufacturedAt = (c as { manufactured_at?: unknown }).manufactured_at
-  const rawSalvagedAt = (c as { salvaged_at?: unknown }).salvaged_at
-  const rawParent = (c as { parent_component?: unknown }).parent_component
+  const parentIds = identity.parent_identities
+  const parentId =
+    Array.isArray(parentIds) && parentIds.length > 0 ? String(parentIds[0]) : ''
   return {
-    name: typeof c.name === 'string' ? c.name : '',
-    type: c.type ?? '',
-    material: c.material ?? '',
-    dataset: c.dataset ?? '',
-    complexity: typeof c.complexity === 'number' ? c.complexity : 0,
-    fragment: Boolean(c.fragment),
-    assembly: Boolean(c.assembly),
+    name: typeof snapshot.name === 'string' ? snapshot.name : '',
+    type: identity.type ?? '',
+    material: identity.material ?? '',
+    dataset: identity.dataset ?? '',
+    complexity: typeof snapshot.complexity === 'number' ? snapshot.complexity : 0,
+    fragment: Boolean(snapshot.fragment),
+    assembly: Boolean(snapshot.assembly),
     colorR: clampInt(colorArr[0] ?? 110, 0, 255),
     colorG: clampInt(colorArr[1] ?? 110, 0, 255),
     colorB: clampInt(colorArr[2] ?? 110, 0, 255),
     lat: typeof loc?.lat === 'number' ? loc.lat : 0,
     lon: typeof loc?.lon === 'number' ? loc.lon : 0,
     condition,
-    manufactured_at: isoToDateInput(rawManufacturedAt),
+    manufactured_at: isoToDateInput(identity.manufactured_at),
     manufactured_precision: precision,
-    salvage_source: typeof rawSalvageSource === 'string' ? rawSalvageSource : '',
-    salvaged_at: isoToDateInput(rawSalvagedAt),
-    parent_component: typeof rawParent === 'string' ? rawParent : '',
+    salvage_source: typeof identity.salvage_source === 'string' ? identity.salvage_source : '',
+    salvaged_at: isoToDateInput(identity.salvaged_at),
+    parent_component: parentId,
   }
 }
 
 export default function ComponentEditForm({
-  component_data,
+  catalog,
 }: {
-  component_data: ExtendedComponentModel
+  catalog: CatalogComponent
 }) {
   const router = useRouter()
-  const initial = useMemo(() => initialStateFromComponent(component_data), [component_data])
+  const identityId = catalog.identity._id ?? ''
+  const initial = useMemo(() => initialStateFromCatalog(catalog), [catalog])
   const [form, setForm] = useState<FormState>(initial)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -230,7 +232,6 @@ export default function ComponentEditForm({
     setError(null)
     setSuccess(null)
 
-    const identityId = component_data._id ?? ''
     const snapshotPatch: Record<string, unknown> = {}
     const identityPatch: Record<string, unknown> = {}
 
@@ -663,7 +664,7 @@ export default function ComponentEditForm({
               )}
             {form.parent_component.trim() !== '' &&
               form.parent_component.trim().toLowerCase() ===
-                (component_data._id ?? '').toLowerCase() && (
+                identityId.toLowerCase() && (
                 <p className="mt-1 text-xs text-destructive">
                   A component cannot be its own parent.
                 </p>
@@ -685,7 +686,7 @@ export default function ComponentEditForm({
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href={`/components/${component_data._id}`}>
+        <Link href={`/components/${identityId}`}>
           <Button type="button" variant="ghost">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to details
