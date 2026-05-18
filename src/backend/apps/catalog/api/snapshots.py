@@ -4,7 +4,7 @@ Routes for the v0.5 `component_snapshots` collection.
 
 * `GET /snapshots/{snapshot_id}` - fetch one snapshot by id (ADR-014 #3)
 * `GET /snapshots/{snapshot_id}/preview` - rendered catalog thumbnail
-* `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}` - PLY mesh
+* `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}` - PLY
 * `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}` - user photos (JPEG)
 """
 
