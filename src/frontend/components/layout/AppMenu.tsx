@@ -3,7 +3,24 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Home, Package, Search, Award, FileText, User, Shield, QrCode, Terminal, Layers2, BarChart2, Archive, Send, Logs, BookMarked } from 'lucide-react'
+import {
+  Home,
+  Package,
+  PackagePlus,
+  Search,
+  Award,
+  FileText,
+  User,
+  Shield,
+  QrCode,
+  Terminal,
+  Layers2,
+  BarChart2,
+  Archive,
+  Send,
+  Logs,
+  BookMarked,
+} from 'lucide-react'
 
 export default function AppMenu() {
   const router = useRouter()
@@ -119,6 +136,13 @@ export default function AppMenu() {
             >
               <Send className="h-4 w-4" />
               Transmit ID
+            </div>
+            <div
+              onClick={() => handleNavigation('/add-component')}
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            >
+              <PackagePlus className="h-4 w-4" />
+              Add Component
             </div>
 
             <div className="my-1 mx-2 border-t border-border/60" />

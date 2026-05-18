@@ -1,6 +1,5 @@
 // app/components/[component_id]/page.tsx
-import ComponentDetailCard from '@/components/components/ComponentDetailCard'
-import ComponentSnapshotPhotoGallery from '@/components/components/ComponentSnapshotPhotoGallery'
+import ComponentDetailPageLayout from '@/components/components/ComponentDetailPageLayout'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { formatTimestamp } from '@/lib/utils'
@@ -94,15 +93,7 @@ export default async function ComponentDetailPage({
 
       <div className="space-y-6">
         <ComponentViewer catalog={catalog} />
-        <ComponentSnapshotPhotoGallery
-          snapshotId={String(catalog.snapshot._id ?? catalog.identity.current_snapshot_id)}
-          photoCountHint={
-            typeof catalog.snapshot.photo_count === 'number'
-              ? catalog.snapshot.photo_count
-              : 0
-          }
-        />
-        <ComponentDetailCard catalog={catalog} />
+        <ComponentDetailPageLayout catalog={catalog} />
       </div>
     </div>
   )
