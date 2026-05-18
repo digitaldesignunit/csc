@@ -128,6 +128,7 @@ def merge_shallow_catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
         'dataset': doc.get('dataset'),
         'reserved': doc.get('reserved', ''),
         'catalog_number': doc.get('catalog_number'),
+        'consumed_at': doc.get('consumed_at'),
         'name': snap.get('name'),
         'created': snap.get('created'),
         'lastmodified': snap.get('lastmodified'),
