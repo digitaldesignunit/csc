@@ -4,15 +4,17 @@
 Owns the primary read path of the new data model:
 
 * `GET /identities` / `GET /identities/count` — catalog list + count
+* `GET /identities/stats` — aggregated stats (identity + current snapshot)
 * `GET /identities/{identity_id}/compose` — identity + current snapshot
+* `GET /schema/catalog-compose` — JSON Schema for the compose body (frontend codegen)
 
 Single-snapshot reads: `GET /snapshots/{snapshot_id}` in `snapshots.py`.
 
 Write routes: POST create, PATCH identity, PATCH current snapshot here;
 snapshot preview/photo file routes in `snapshots.py`.
 
-Legacy `/components/...` routes in `components.py` are untouched and remain
-available throughout the M4 cutover.
+Legacy `/components/...` routes in `components.py` remain for the design
+workspace and other cutover paths.
 """
 
 import hashlib
@@ -61,6 +63,7 @@ from .identity_filters import (
 from .identity_query import (
     aggregate_identities,
     build_count_pipeline,
+    build_identity_stats_pipeline,
     build_list_pipeline,
     count_identities,
     shallow_row_for_identity,
@@ -68,6 +71,18 @@ from .identity_query import (
 
 
 router = APIRouter()
+
+
+@router.get(
+    '/schema/catalog-compose',
+    summary='JSON Schema for GET /identities/{id}/compose (v0.5 compose body)',
+)
+async def get_catalog_compose_json_schema():
+    """
+    Used by the frontend `generate:models` script (see `CatalogModels.ts`).
+    """
+    schema = ComposeIdentityResponse.model_json_schema(by_alias=True)
+    return JSONResponse(status_code=200, content=schema)
 
 
 def _compute_compose_etag(identity_doc: dict, snapshot_doc: dict) -> str:
@@ -238,6 +253,116 @@ async def count_identities_route(
             detail='Internal server error',
         )
     return {'count': total}
+
+
+def _normalize_stats_facet_lists(items):
+    """
+    Map Mongo facet bucket rows to `{label, count}`
+    (same as ``/components/stats``).
+    """
+    out = []
+    for it in items or []:
+        label = it.get('_id')
+        if isinstance(label, bool):
+            label = 'true' if label else 'false'
+        elif label is None:
+            label = 'unknown'
+        out.append({'label': str(label), 'count': int(it.get('count', 0))})
+    return out
+
+
+@router.get(
+    '/identities/stats',
+    summary=(
+        'Aggregated catalog statistics (identities joined to current snapshots)'
+    ),
+)
+async def get_identities_stats(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    comptype: Optional[str] = Query(None, description='Component type filter'),
+    material: Optional[str] = Query(None, description='Material type filter'),
+    dataset: Optional[str] = Query(None, description='Dataset name filter'),
+    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
+    complexity: Optional[int] = Query(None, description='Complexity (0–3)'),
+    fragment: Optional[bool] = Query(None, description='Is fragment'),
+    bbx_min_x: Optional[float] = Query(None, description='Min X'),
+    bbx_min_y: Optional[float] = Query(None, description='Min Y'),
+    bbx_min_z: Optional[float] = Query(None, description='Min Z'),
+    bbx_max_x: Optional[float] = Query(None, description='Max X'),
+    bbx_max_y: Optional[float] = Query(None, description='Max Y'),
+    bbx_max_z: Optional[float] = Query(None, description='Max Z'),
+    limit_dim: int = Query(10, description='Top-N limit for long tail dims'),
+    consumed_filter: ConsumedFilter = Query('active'),
+    sortorder: Literal['asc', 'desc'] = Query('asc', include_in_schema=False),
+):
+    """Same JSON shape as ``GET /components/stats`` backed by ``component_identities``."""
+    ctx = _catalog_filter_context(
+        request,
+        sortorder=sortorder,
+        comptype=comptype or '',
+        material=material or '',
+        dataset=dataset or '',
+        validated=validated,
+        complexity=complexity,
+        fragment=fragment,
+        reserved=None,
+        bbx_min_x=bbx_min_x,
+        bbx_min_y=bbx_min_y,
+        bbx_min_z=bbx_min_z,
+        bbx_max_x=bbx_max_x,
+        bbx_max_y=bbx_max_y,
+        bbx_max_z=bbx_max_z,
+        consumed_filter=consumed_filter,
+    )
+    try:
+        pipeline = build_identity_stats_pipeline(
+            snapshots_collection=ctx['snapshots_collection'],
+            identity_match=ctx['identity_match'],
+            snapshot_match=ctx['snapshot_match'],
+            limit_dim=limit_dim,
+        )
+        docs = await aggregate_identities(request, pipeline)
+        raw = docs[0] if docs else {}
+
+        total_row = raw.get('total') or [{}]
+        total = int(total_row[0].get('count', 0)) if total_row else 0
+
+        def topn(items):
+            rows = _normalize_stats_facet_lists(items)
+            if limit_dim and len(rows) > limit_dim:
+                head = rows[:limit_dim]
+                others_count = sum(r['count'] for r in rows[limit_dim:])
+                head.append({'label': 'others', 'count': others_count})
+                return head
+            return rows
+
+        content = {
+            'total': total,
+            'byType': _normalize_stats_facet_lists(raw.get('byType')),
+            'byMaterial': topn(raw.get('byMaterial')),
+            'byDataset': topn(raw.get('byDataset')),
+            'byComplexity': _normalize_stats_facet_lists(raw.get('byComplexity')),
+            'byValidated': _normalize_stats_facet_lists(raw.get('byValidated')),
+            'byFragment': _normalize_stats_facet_lists(raw.get('byFragment')),
+            'byAssembly': _normalize_stats_facet_lists(raw.get('byAssembly')),
+            'reserved': _normalize_stats_facet_lists(raw.get('reserved')),
+            'descriptorsKeys': topn(raw.get('descriptorsKeys')),
+            'createdMonthly': _normalize_stats_facet_lists(
+                raw.get('createdMonthly')
+            ),
+            'bbxX': _normalize_stats_facet_lists(raw.get('bbx')),
+        }
+        return JSONResponse(status_code=200, content=content)
+    except PyMongoError as exc:
+        print(f'[ERROR] identities stats aggregation DB error: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+    except Exception as exc:
+        print(f'[ERROR] identities stats aggregation: {exc}')
+        raise HTTPException(status_code=500, detail='Internal server error')
 
 
 @router.get(
