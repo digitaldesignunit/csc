@@ -1,6 +1,7 @@
 // app/components/[component_id]/page.tsx
 import ComponentDetailCard from '@/components/components/ComponentDetailCard'
 import ComponentViewer from '@/components/components/ComponentViewer'
+import type { CatalogComponent } from '@/generated/CatalogModels'
 import { Package } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
@@ -21,13 +22,12 @@ export default async function ComponentDetailPage({
 
   const { component_id } = await params
 
-  // Fetch the full component doc via the proxy
   const res = await fetch(
-    `${base}/api/backend/components/${encodeURIComponent(component_id)}`,
+    `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose`,
     {
       cache: 'no-store',
-      headers: { cookie }, // forward session so middleware/proxy allow the call
-    }
+      headers: { cookie },
+    },
   )
 
   if (res.status === 401) {
@@ -39,11 +39,11 @@ export default async function ComponentDetailPage({
   if (!res.ok) {
     const body = await res.text()
     throw new Error(
-      `Failed to fetch component ${component_id}: ${res.status} ${body}`
+      `Failed to fetch compose ${component_id}: ${res.status} ${body}`,
     )
   }
 
-  const component_data = await res.json()
+  const catalog = (await res.json()) as CatalogComponent
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-full">
@@ -57,11 +57,9 @@ export default async function ComponentDetailPage({
 
       {/* Main Content */}
       <div className="space-y-6">
-            <ComponentViewer component_data={component_data} />
-            <ComponentDetailCard component_data={component_data} />
-          </div>
-        
-      
+        <ComponentViewer catalog={catalog} />
+        <ComponentDetailCard variant="compose" catalog={catalog} />
+      </div>
     </div>
   )
 }

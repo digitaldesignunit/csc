@@ -46,9 +46,13 @@ export default function ReservedComponentsPage() {
           <button
             onClick={async () => {
               try {
-                const response = await fetch(`/api/backend/reserve/${componentId}`, {
-                  method: 'DELETE',
-                })
+                const response = await fetch(
+                  `/api/backend/identities/${encodeURIComponent(String(componentId))}/reserve`,
+                  {
+                    method: 'DELETE',
+                    credentials: 'include',
+                  },
+                )
                 if (response.ok) {
                   // Remove from the list
                   setReservedComponents(prev => prev.filter(comp => comp._id !== componentId))
@@ -85,7 +89,10 @@ export default function ReservedComponentsPage() {
       }
 
       // Fetch reserved components from the API
-      const response = await fetch(`/api/backend/reserve/${encodeURIComponent(userId)}`)
+      const response = await fetch(
+        `/api/backend/identities/reserved/${encodeURIComponent(userId)}`,
+        { credentials: 'include' },
+      )
       
       if (!response.ok) {
         if (response.status === 404) {

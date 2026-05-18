@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import { Archive } from 'lucide-react'
-import { ComponentModel } from '@/generated/ComponentModel'
+import type { CatalogComponent } from '@/generated/CatalogModels'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import ComponentDetailCard from '@/components/components/ComponentDetailCard'
 
@@ -14,7 +14,7 @@ export default function ArchivedComponentDetailPage() {
   const params = useParams()
   const component_id = params.component_id as string
 
-  const [component, setComponent] = useState<ComponentModel | null>(null)
+  const [catalog, setCatalog] = useState<CatalogComponent | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,10 +31,14 @@ export default function ArchivedComponentDetailPage() {
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch(`/api/backend/archived/components/${component_id}`)
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(component_id)}/compose`,
+        { credentials: 'include' },
+      )
 
       if (response.status === 404) {
         setError('Archived component not found')
+        setCatalog(null)
         return
       }
 
@@ -42,11 +46,12 @@ export default function ArchivedComponentDetailPage() {
         throw new Error(`Failed to fetch: ${response.status}`)
       }
 
-      const data = await response.json()
-      setComponent(data)
+      const json = (await response.json()) as CatalogComponent
+      setCatalog(json)
     } catch (err) {
       console.error('Failed to fetch archived component:', err)
       setError('Failed to load archived component')
+      setCatalog(null)
     } finally {
       setLoading(false)
     }
@@ -93,7 +98,7 @@ export default function ArchivedComponentDetailPage() {
     )
   }
 
-  if (!component) {
+  if (!catalog) {
     return null
   }
 
@@ -112,13 +117,9 @@ export default function ArchivedComponentDetailPage() {
 
       {/* Main Content */}
       <div className="space-y-6">
-        <ComponentViewer
-          component_data={component}
-          geometryEndpoint={`/api/backend/archived/components/${component_id}/geometry_reduced`}
-        />
-        <ComponentDetailCard component_data={component} isArchived />
+        <ComponentViewer catalog={catalog} />
+        <ComponentDetailCard variant="compose" catalog={catalog} isArchived />
       </div>
     </div>
   )
 }
-

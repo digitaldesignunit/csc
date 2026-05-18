@@ -97,9 +97,11 @@ async function fetchComponentsAndTotal({
 
   const fetchOpts = { cache: 'no-store' as const, headers: { cookie } }
 
+  listParams.set('expand', 'shallow')
+
   const [itemsRes, countRes] = await Promise.all([
-    fetch(`${base}/api/backend/shallowcomponents?${listParams.toString()}`, fetchOpts),
-    fetch(`${base}/api/backend/componentcount?${countParams.toString()}`, fetchOpts),
+    fetch(`${base}/api/backend/identities?${listParams.toString()}`, fetchOpts),
+    fetch(`${base}/api/backend/identities/count?${countParams.toString()}`, fetchOpts),
   ])
 
   if (itemsRes.status === 401 || countRes.status === 401) {
@@ -166,6 +168,9 @@ export default async function ComponentsPage({
           defaultCompType={comptype}
           defaultDataset={dataset}
           defaultPageSize={size}
+          materialsEndpoint="/api/backend/identities/meta/materials"
+          componentTypesEndpoint="/api/backend/identities/meta/types"
+          datasetsEndpoint="/api/backend/identities/meta/datasets"
         />
 
         {/* UUID Navigator */}

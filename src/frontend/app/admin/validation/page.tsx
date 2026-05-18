@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Shield, Eye, ChevronDown, ChevronUp, Trash2, ExternalLink } from 'lucide-react'
 import { ComponentModel } from '@/generated/ComponentModel'
+import type { CatalogComponent } from '@/generated/CatalogModels'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -22,7 +23,7 @@ export default function ValidationPage() {
   const [validating, setValidating] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set())
-  const [componentData, setComponentData] = useState<Record<string, ComponentModel>>({})
+  const [previewById, setPreviewById] = useState<Record<string, CatalogComponent>>({})
   const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(new Set())
   const [deleteConfirmComponentId, setDeleteConfirmComponentId] = useState<string | null>(null)
 
@@ -45,7 +46,10 @@ export default function ValidationPage() {
   const fetchUnvalidatedComponents = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/backend/shallowcomponents?validated=-1&size=100')
+      const response = await fetch(
+        '/api/backend/identities?validated=-1&size=100&expand=shallow',
+        { credentials: 'include' },
+      )
       if (response.ok) {
         const data = await response.json()
         // Sort by created date (newest first)
@@ -66,9 +70,10 @@ export default function ValidationPage() {
   const validateComponent = async (componentId: string) => {
     try {
       setValidating(componentId)
-      const response = await fetch(`/api/backend/validate/${componentId}`, {
-        method: 'GET',
-      })
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(componentId)}/validate`,
+        { method: 'GET', credentials: 'include' },
+      )
       
       if (response.ok) {
         // Remove the validated component from the list
@@ -86,9 +91,13 @@ export default function ValidationPage() {
   const deleteComponent = async (componentId: string) => {
     try {
       setDeleting(componentId)
-      const response = await fetch(`/api/backend/components/${componentId}`, {
-        method: 'DELETE',
-      })
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(componentId)}`,
+        {
+          method: 'DELETE',
+          credentials: 'include',
+        },
+      )
       
       if (response.ok) {
         // Remove the deleted component from the list
@@ -112,36 +121,45 @@ export default function ValidationPage() {
     await deleteComponent(componentId)
   }
 
-  const togglePreview = async (componentId: string) => {
-    setExpandedPreviews(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(componentId)) {
-        newSet.delete(componentId)
-        return newSet
-      } else {
-        newSet.add(componentId)
-        return newSet
+  const fetchComposePreview = async (identityId: string) => {
+    setLoadingPreviews((prev) => new Set(prev).add(identityId))
+    try {
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(identityId)}/compose`,
+        { credentials: 'include', cache: 'no-store' },
+      )
+      if (response.ok) {
+        const json = (await response.json()) as CatalogComponent
+        setPreviewById((prev) => ({
+          ...prev,
+          [identityId]: json,
+        }))
       }
+    } catch (error) {
+      console.error('Failed to fetch compose for preview:', error)
+    } finally {
+      setLoadingPreviews((prev) => {
+        const next = new Set(prev)
+        next.delete(identityId)
+        return next
+      })
+    }
+  }
+
+  const togglePreview = (componentId: string) => {
+    const wasExpanded = expandedPreviews.has(componentId)
+    setExpandedPreviews((prev) => {
+      const next = new Set(prev)
+      if (wasExpanded) {
+        next.delete(componentId)
+      } else {
+        next.add(componentId)
+      }
+      return next
     })
 
-    // If expanding and we don't have the data yet, fetch it
-    if (!expandedPreviews.has(componentId) && !componentData[componentId]) {
-      setLoadingPreviews(prev => new Set(prev).add(componentId))
-      try {
-        const response = await fetch(`/api/backend/components/${componentId}`)
-        if (response.ok) {
-          const data = await response.json()
-          setComponentData(prev => ({ ...prev, [componentId]: data }))
-        }
-      } catch (error) {
-        console.error('Failed to fetch component data:', error)
-      } finally {
-        setLoadingPreviews(prev => {
-          const newSet = new Set(prev)
-          newSet.delete(componentId)
-          return newSet
-        })
-      }
+    if (!wasExpanded && !previewById[componentId]) {
+      void fetchComposePreview(componentId)
     }
   }
 
@@ -368,9 +386,9 @@ export default function ValidationPage() {
                               <div className="flex items-center justify-center h-full">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                               </div>
-                            ) : componentData[component._id!] && component._id ? (
-                              <ComponentViewer 
-                                component_data={componentData[component._id]}
+                            ) : previewById[component._id!] && component._id ? (
+                              <ComponentViewer
+                                catalog={previewById[component._id]}
                               />
                             ) : (
                               <div className="flex items-center justify-center h-full text-muted-foreground">

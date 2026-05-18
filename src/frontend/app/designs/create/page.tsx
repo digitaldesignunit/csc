@@ -26,7 +26,10 @@ export default function CreateDesignPage() {
     
     setIsSearching(true)
     try {
-      const response = await fetch(`/api/backend/shallowcomponents?page=1&size=20&comptype=&material=&dataset=`)
+      const response = await fetch(
+        `/api/backend/identities?page=1&size=20&comptype=&material=&dataset=&expand=shallow`,
+        { credentials: 'include' },
+      )
       if (response.ok) {
         const data = await response.json()
         setSearchResults(data)

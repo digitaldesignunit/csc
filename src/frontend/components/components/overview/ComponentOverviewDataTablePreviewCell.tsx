@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import ComponentViewer from '../ComponentViewer'
 import ComponentViewerSkeleton from '../ComponentViewerSkeleton'
 import { ComponentModel } from '@/generated/ComponentModel'
+import type { CatalogComponent } from '@/generated/CatalogModels'
 import {
   Sheet,
   SheetClose,
@@ -20,22 +21,19 @@ import ComponentPreviewImage from '../ComponentPreviewImage'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-type Geometry = ComponentModel['geometry']
-
-async function fetch_component_geometry(
-  component_id: string,
-  apiBasePath: string = '/api/backend'
-): Promise<{ geometry: Geometry }> {
+async function fetchCatalogComposePreview(
+  identityId: string,
+): Promise<CatalogComponent> {
   const res = await fetch(
-    `${apiBasePath}/components/${encodeURIComponent(component_id)}/geometry`,
-    { method: 'GET', credentials: 'include', cache: 'no-store' }
+    `/api/backend/identities/${encodeURIComponent(identityId)}/compose`,
+    { method: 'GET', credentials: 'include', cache: 'no-store' },
   )
   if (res.status === 401) throw new Error('unauthorized')
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    throw new Error(`Failed to fetch component geometry: ${res.status} ${body}`)
+    throw new Error(`Failed to fetch compose: ${res.status} ${body}`)
   }
-  return res.json() as Promise<{ geometry: Geometry }>
+  return (await res.json()) as CatalogComponent
 }
 
 export interface PreviewCellConfig {
@@ -52,36 +50,44 @@ export default function ComponentOverviewDataTablePreviewCell({
 }) {
   const { isArchived = false } = config
 
-  // Derive paths based on whether this is archived or not
   const detailBasePath = isArchived ? '/archive/components' : '/components'
-  const apiBasePath = isArchived ? '/api/backend/archived' : '/api/backend'
   const showFindComponent = !isArchived
   const router = useRouter()
   const compId = component_data._id
-  const compName = typeof component_data.name === 'string' && component_data.name.trim().length > 0
-    ? component_data.name
-    : 'Unnamed component'
+  const compName =
+    typeof component_data.name === 'string' && component_data.name.trim().length > 0
+      ? component_data.name
+      : 'Unnamed component'
+
+  const shallowRow = component_data as ComponentModel & {
+    current_snapshot_id?: string
+  }
+  const snapshotThumbId =
+    typeof shallowRow.current_snapshot_id === 'string' && shallowRow.current_snapshot_id.trim().length > 0
+      ? shallowRow.current_snapshot_id
+      : null
 
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [geometry, setGeometry] = useState<Geometry | null>(null)
+  const [catalogPreview, setCatalogPreview] = useState<CatalogComponent | null>(
+    null,
+  )
 
-  // Reset state when the row changes (sorting/filtering)
   useEffect(() => {
     setOpen(false)
     setIsLoading(false)
-    setGeometry(null)
+    setCatalogPreview(null)
   }, [compId])
 
   const handleOpenPreview = async () => {
     setOpen(true)
-    if (geometry) return
+    if (catalogPreview) return
     setIsLoading(true)
     try {
-      const data = await fetch_component_geometry(compId as string, apiBasePath)
-      setGeometry(data.geometry)
+      const compose = await fetchCatalogComposePreview(compId as string)
+      setCatalogPreview(compose)
     } catch (e: unknown) {
-      console.error('Error fetching Component Geometry:', e)
+      console.error('Error fetching compose for preview:', e)
       if (e instanceof Error && e.message.toLowerCase().includes('unauthorized')) {
         router.push(`/auth/signin?callbackUrl=${detailBasePath}`)
       }
@@ -93,12 +99,9 @@ export default function ComponentOverviewDataTablePreviewCell({
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      {/* Compact inline preview cell: 40px thumb + clipped name button */}
       <div className="inline-flex items-center gap-2 min-w-0">
         <TooltipProvider>
           <Tooltip delayDuration={200}>
-            {/* Compose triggers: TooltipTrigger wraps SheetTrigger, both asChild,
-              so they attach to the SAME <button> element */}
             <TooltipTrigger asChild>
               <SheetTrigger asChild>
                 <button
@@ -109,7 +112,7 @@ export default function ComponentOverviewDataTablePreviewCell({
                 >
                   <ComponentPreviewImage
                     key={compId}
-                    comp_id={compId as string}
+                    snapshot_id={snapshotThumbId}
                     alt={compId as string}
                     width={40}
                     height={40}
@@ -119,7 +122,6 @@ export default function ComponentOverviewDataTablePreviewCell({
               </SheetTrigger>
             </TooltipTrigger>
 
-            {/* show on desktop; hide on mobile */}
             <TooltipContent side="top" className="hidden sm:block">
               <div className="text-center text-sm">Click to preview this component</div>
             </TooltipContent>
@@ -146,11 +148,9 @@ export default function ComponentOverviewDataTablePreviewCell({
         </TooltipProvider>
       </div>
 
-      {/* Bottom sheet preview */}
       <SheetContent side="bottom" className="sm:max-w-none">
         <SheetHeader>
           <SheetTitle className="text-center text-base">Component Preview</SheetTitle>
-          {/* prevent <p> inside <p> nesting (SheetDescription renders <p>) */}
           <SheetDescription>
             <span className="block text-center text-sm font-semibold">{compName}</span>
             <span className="block text-center text-xs font-bold">{compId}</span>
@@ -158,11 +158,8 @@ export default function ComponentOverviewDataTablePreviewCell({
         </SheetHeader>
 
         {isLoading && <ComponentViewerSkeleton message="Loading Geometry..." />}
-        {!isLoading && geometry && (
-          <ComponentViewer
-            component_data={{ ...component_data, geometry }}
-            geometryEndpoint={isArchived ? `${apiBasePath}/components/${compId}/geometry_reduced` : undefined}
-          />
+        {!isLoading && catalogPreview && (
+          <ComponentViewer catalog={catalogPreview} />
         )}
 
         <SheetFooter className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">

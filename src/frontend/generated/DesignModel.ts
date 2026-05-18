@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-04-26T10:18:25.688Z
+// Generated on: 2026-05-18T13:35:13.286Z
 // Source: https://api.ddu.uber.space/schema/design
 
 import { ComponentGeometry } from './ComponentModel';

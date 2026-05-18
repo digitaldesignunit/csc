@@ -3,7 +3,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
-import { ComponentModel, ComponentGeometry, ComponentMesh, ComponentExtrusion } from '@/generated/ComponentModel'
+import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
+import type { CatalogComponent, SnapshotMesh } from '@/generated/CatalogModels'
+import type { SnapshotMeshRouting } from '@/generated/catalogExtras'
+import { snapshotMeshRoutingFromSnapshot } from '@/generated/catalogExtras'
 import { Card } from '@/components/ui/card'
 import { Bounds, OrbitControls, Html } from '@react-three/drei'
 import { rgbToHex } from '@/lib/utils'
@@ -73,397 +76,270 @@ type GeometryLoadResult = {
   message: string
 }
 
-/**
- * Parse OBJ file manually to extract multiple meshes with vertices, faces, and colors
- */
-function parseOBJ(objContent: string): { meshes: { vertices: number[], faces: number[], colors: number[], name: string }[] } {
-  const lines = objContent.split('\n')
-  const meshes: { vertices: number[], faces: number[], colors: number[], name: string }[] = []
-  
-  let currentMesh: { vertices: number[], faces: number[], colors: number[], name: string } | null = null
-  const globalVertices: number[] = []
-  const globalColors: number[] = []
-  
-  for (const line of lines) {
-    const trimmed = line.trim()
-    
-    // Parse object/group definition: o name or g name
-    if (trimmed.startsWith('o ') || trimmed.startsWith('g ')) {
-      // Save previous mesh if it exists
-      if (currentMesh && currentMesh.faces.length > 0) {
-        meshes.push(currentMesh)
-      }
-      
-      // Start new mesh
-      const name = trimmed.split(/\s+/).slice(1).join(' ') || `Mesh ${meshes.length + 1}`
-      currentMesh = { vertices: [], faces: [], colors: [], name }
-    }
-    
-    // Parse vertex with colors: v x y z r g b
-    if (trimmed.startsWith('v ') && !trimmed.startsWith('vt ') && !trimmed.startsWith('vn ')) {
-      const parts = trimmed.split(/\s+/)
-      if (parts.length >= 4) {
-        // Position
-        globalVertices.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]))
-        
-        // Colors (if present)
-        if (parts.length >= 7) {
-          const r = parseFloat(parts[4])
-          const g = parseFloat(parts[5])
-          const b = parseFloat(parts[6])
-          if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
-            globalColors.push(r, g, b)
-          } else {
-            globalColors.push(0.5, 0.5, 0.5) // Default gray
-          }
-        } else {
-          globalColors.push(0.5, 0.5, 0.5) // Default gray
-        }
-      }
-    }
-    // Parse faces: f v1 v2 v3 (1-indexed)
-    else if (trimmed.startsWith('f ')) {
-      if (!currentMesh) {
-        // If no object/group defined, create a default mesh
-        currentMesh = { vertices: [], faces: [], colors: [], name: 'Default Mesh' }
-      }
-      
-      const parts = trimmed.split(/\s+/)
-      if (parts.length >= 4) {
-        // Convert from 1-indexed to 0-indexed and handle negative indices
-        const faceIndices: number[] = []
-        for (let i = 1; i < parts.length; i++) {
-          const faceIndex = parseInt(parts[i].split('/')[0])
-          const index = faceIndex < 0 ? globalVertices.length / 3 + faceIndex : faceIndex - 1
-          faceIndices.push(index)
-        }
-        
-        // Triangulate faces (convert quads to triangles)
-        if (faceIndices.length === 3) {
-          // Triangle - add as-is
-          currentMesh.faces.push(...faceIndices)
-        } else if (faceIndices.length === 4) {
-          // Quad - split into two triangles
-          currentMesh.faces.push(faceIndices[0], faceIndices[1], faceIndices[2])
-          currentMesh.faces.push(faceIndices[0], faceIndices[2], faceIndices[3])
-        } else if (faceIndices.length > 4) {
-          // N-gon - fan triangulation
-          for (let i = 1; i < faceIndices.length - 1; i++) {
-            currentMesh.faces.push(faceIndices[0], faceIndices[i], faceIndices[i + 1])
-          }
-        }
-      }
-    }
+/** Flat buffers for one mesh primitive (snapshot geometry). */
+type PrimitiveDrawBuffers = {
+  positionsFlat: number[]
+  indices: number[]
+  rawColors?: number[][]
+}
+
+function snapshotMeshesToDrawBuffers(
+  meshes: SnapshotMesh[],
+): PrimitiveDrawBuffers[] {
+  return meshes.map((m) => ({
+    positionsFlat: m.vertices.flat(),
+    indices: m.faces.flat(),
+    rawColors: m.colors ?? undefined,
+  }))
+}
+
+function meshHintForCache(snapshotMesh: SnapshotMeshRouting | null): string {
+  if (!snapshotMesh?.snapshot_id) return 'no-snapshot'
+  return `${snapshotMesh.snapshot_id}:${JSON.stringify(snapshotMesh.mesh_ply_resolutions ?? null)}`
+}
+
+function plyPrimitiveIndicesForMode(
+  manifest: Record<string, string[]> | null | undefined,
+  mode: 'reduced' | 'detailed',
+): number[] {
+  if (!manifest || typeof manifest !== 'object') return []
+  const role = mode === 'reduced' ? 'reduced' : 'detailed'
+  return Object.keys(manifest)
+    .map((k) => Number.parseInt(k, 10))
+    .filter((n) => Number.isFinite(n))
+    .sort((a, b) => a - b)
+    .filter((idx) => {
+      const roles = manifest[String(idx)]
+      return Array.isArray(roles) && roles.includes(role)
+    })
+}
+
+function applyNormalizedVertexColors(geometry: THREE.BufferGeometry): void {
+  const colorAttr = geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+  if (!colorAttr || colorAttr.array.length === 0) return
+
+  const raw = Array.from(colorAttr.array as ArrayLike<number>)
+  const normalized = normalizeColors(raw)
+  geometry.setAttribute(
+    'color',
+    new THREE.Float32BufferAttribute(normalized, colorAttr.itemSize),
+  )
+}
+
+function buildThreeGroupFromPLYGeometry(
+  geometry: THREE.BufferGeometry,
+  meshLabel: string,
+): THREE.Group {
+  applyNormalizedVertexColors(geometry)
+
+  geometry.computeVertexNormals()
+  geometry.normalizeNormals()
+  geometry.rotateX(-Math.PI / 2)
+
+  const hasColors = !!geometry.getAttribute('color')
+
+  const material = hasColors
+    ? new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        side: THREE.DoubleSide,
+        transparent: false,
+        opacity: 1.0,
+      })
+    : new THREE.MeshBasicMaterial({
+        color: 0x888888,
+        side: THREE.DoubleSide,
+        transparent: false,
+        opacity: 1.0,
+      })
+
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.name = meshLabel
+
+  const object = new THREE.Group()
+  object.add(mesh)
+  {
+    const edgeGeometry = new THREE.EdgesGeometry(geometry)
+    const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+    const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial)
+    edges.name = `${meshLabel}_edges`
+    object.add(edges)
   }
-  
-  // Save the last mesh if it exists
-  if (currentMesh && currentMesh.faces.length > 0) {
-    meshes.push(currentMesh)
+  object.scale.set(scale, scale, scale)
+  return object
+}
+
+async function loadSnapshotPlyMeshes(
+  snapshotId: string,
+  mode: Exclude<GeometryMode, 'primitive'>,
+  manifest: Record<string, string[]> | null | undefined,
+): Promise<{ ok: true; meshes: THREE.Group[]; etag?: string } | { ok: false }> {
+  const resolution = mode === 'reduced' ? 'reduced' : 'detailed'
+  const indices = plyPrimitiveIndicesForMode(manifest, resolution)
+  if (indices.length === 0) {
+    return { ok: false }
   }
-  
-  // If no meshes were created (no object/group definitions), create a single mesh from all data
-  if (meshes.length === 0 && globalVertices.length > 0) {
-    const singleMesh = { vertices: globalVertices, faces: [], colors: globalColors, name: 'Single Mesh' }
-    // We need to reconstruct faces from the global data - this is a fallback
-    meshes.push(singleMesh)
-  }
-  
-  // For each mesh, extract the relevant vertices and colors based on face indices
-  for (const mesh of meshes) {
-    if (mesh.faces.length > 0) {
-      const usedVertices = new Set<number>()
-      
-      // Find all unique vertex indices used by this mesh
-      for (let i = 0; i < mesh.faces.length; i++) {
-        usedVertices.add(mesh.faces[i])
+
+  const loader = new PLYLoader()
+  const groups: THREE.Group[] = []
+  const etags: string[] = []
+
+  const headersBase: HeadersInit = { credentials: 'include' }
+
+  for (const primitiveIndex of indices) {
+    const url = `/api/backend/snapshots/${encodeURIComponent(snapshotId)}/meshes/${primitiveIndex}/${resolution}`
+    const headers: HeadersInit = { ...headersBase }
+
+    try {
+      const response = await fetch(url, { headers })
+      const etag = response.headers.get('ETag')
+      if (etag) etags.push(etag)
+
+      if (!response.ok) {
+        debugLog(`PLY fetch failed ${url}: ${response.status}`)
+        return { ok: false }
       }
-      
-      // Create mapping from old indices to new indices
-      const vertexMap = new Map<number, number>()
-      const newVertices: number[] = []
-      const newColors: number[] = []
-      
-      let newIndex = 0
-      for (const oldIndex of usedVertices) {
-        vertexMap.set(oldIndex, newIndex)
-        newIndex++
-        
-        // Copy vertex data
-        if (oldIndex * 3 + 2 < globalVertices.length) {
-          newVertices.push(
-            globalVertices[oldIndex * 3],
-            globalVertices[oldIndex * 3 + 1],
-            globalVertices[oldIndex * 3 + 2]
-          )
-        }
-        
-        // Copy color data
-        if (oldIndex * 3 + 2 < globalColors.length) {
-          newColors.push(
-            globalColors[oldIndex * 3],
-            globalColors[oldIndex * 3 + 1],
-            globalColors[oldIndex * 3 + 2]
-          )
-        }
-      }
-      
-      // Update face indices to use new mapping
-      mesh.faces = mesh.faces.map(oldIndex => vertexMap.get(oldIndex) || 0)
-      mesh.vertices = newVertices
-      mesh.colors = newColors
+
+      const buffer = await response.arrayBuffer()
+      const geom = loader.parse(buffer)
+      const label = `PLY Mesh ${primitiveIndex + 1}`
+      groups.push(buildThreeGroupFromPLYGeometry(geom, label))
+    } catch (err) {
+      debugLog(`PLY load error primitive ${primitiveIndex}:`, err)
+      return { ok: false }
     }
   }
-  
-  debugLog(`Parsed OBJ: ${meshes.length} meshes, ${globalVertices.length / 3} total vertices, ${globalColors.length / 3} total colors`)
-  return { meshes }
+
+  if (groups.length === 0) {
+    return { ok: false }
+  }
+
+  const combinedEtag = etags.length > 0 ? etags.sort().join('|') : undefined
+
+  return {
+    ok: true,
+    meshes: groups,
+    etag: combinedEtag,
+  }
 }
 
 async function loadExternalGeometry(
-  componentId: string,
+  identityId: string,
   mode: Exclude<GeometryMode, 'primitive'>,
-  customEndpoint?: string
+  snapshotRouting: SnapshotMeshRouting | null,
 ): Promise<GeometryLoadResult> {
-  debugLog(`Loading ${mode} geometry for component ${componentId}`)
+  debugLog(`Loading ${mode} PLY geometry for identity ${identityId}`)
 
-  const cacheKey = customEndpoint ? `${customEndpoint}:${mode}` : `${componentId}:${mode}`
+  const hint = meshHintForCache(snapshotRouting)
+  const cacheKey = `${identityId}:${mode}:${hint}`
   const cached = externalGeometryCache.get(cacheKey)
 
-  // Check if we have valid cached data
   if (cached && cached.meshes) {
-    debugLog(`Using cached geometry for ${componentId}: ${cached.meshes.length} meshes`)
+    debugLog(`Using cached geometry for ${identityId}: ${cached.meshes.length} meshes`)
     return { success: true, meshes: cached.meshes }
   }
 
-  // Check if we have cached "not found" state
   if (cached && cached.meshes === null) {
     return {
       success: false,
       error: 'not_found',
-      message: `No ${mode} geometry available for this component`
+      message: `No ${mode} PLY geometry available for this snapshot`,
     }
   }
 
-  // Use custom endpoint if provided, otherwise construct default
-  let objUrl: string
-  if (customEndpoint) {
-    // Replace geometry_reduced with geometry_detailed if mode is detailed
-    if (mode === 'detailed' && customEndpoint.includes('geometry_reduced')) {
-      objUrl = customEndpoint.replace('geometry_reduced', 'geometry_detailed')
-    } else if (mode === 'reduced' && customEndpoint.includes('geometry_detailed')) {
-      objUrl = customEndpoint.replace('geometry_detailed', 'geometry_reduced')
-    } else {
-      objUrl = customEndpoint
-    }
-  } else {
-    const geometryRoute = mode === 'reduced' ? 'geometry_reduced' : 'geometry_detailed'
-    objUrl = `/api/backend/components/${componentId}/${geometryRoute}`
-  }
-
-  try {
-    // Prepare headers for conditional request
-    const headers: HeadersInit = { credentials: 'include' }
-    if (cached?.etag) {
-      headers['If-None-Match'] = cached.etag
-    }
-
-    // Fetch and parse OBJ content manually
-    debugLog(`Fetching OBJ content...`)
-    const response = await fetch(objUrl, { headers })
-    
-    if (response.status === 304) {
-      // Not modified - use cached data
-      debugLog(`Geometry not modified, using cached data`)
-      if (cached && cached.meshes) {
-        return { success: true, meshes: cached.meshes }
-      } else {
-        return { 
-          success: false, 
-          error: 'not_found', 
-          message: `No ${mode} geometry available for this component` 
-        }
-      }
-    }
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch OBJ: ${response.status} ${response.statusText}`)
-    }
-    
-    const objContent = await response.text()
-    const { meshes: parsedMeshes } = parseOBJ(objContent)
-    
-    if (parsedMeshes.length === 0) {
-      throw new Error('No meshes found in OBJ file')
-    }
-
-    const threeMeshes: THREE.Group[] = []
-
-    for (const meshData of parsedMeshes) {
-      if (meshData.vertices.length === 0) continue
-
-      // Build BufferGeometry manually
-      const geometry = new THREE.BufferGeometry()
-      
-      // Set positions
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(meshData.vertices, 3))
-      
-      // Set faces (indices)
-      if (meshData.faces.length > 0) {
-        geometry.setIndex(meshData.faces)
-      }
-      
-      // Set colors if available
-      if (meshData.colors.length > 0) {
-        // Normalize colors using smart normalization
-        const normalizedColors = normalizeColors(meshData.colors)
-        geometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
-        debugLog(`Applied ${normalizedColors.length / 3} normalized vertex colors to ${meshData.name}`)
-      }
-
-      // Compute normals to fix see-through faces
-      geometry.computeVertexNormals()
-      geometry.normalizeNormals()
-      
-      // Debug geometry info
-      debugLog(`${meshData.name} stats: ${meshData.vertices.length / 3} vertices, ${meshData.faces.length / 3} triangles`)
-
-      // Create material with proper settings
-      const material = meshData.colors.length > 0
-        ? new THREE.MeshBasicMaterial({
-            vertexColors: true,
-            side: THREE.DoubleSide,
-            transparent: false,
-            opacity: 1.0
-          })
-        : new THREE.MeshBasicMaterial({ 
-            color: 0x888888, 
-            side: THREE.DoubleSide,
-            transparent: false,
-            opacity: 1.0
-          })
-
-      // Create mesh
-      const mesh = new THREE.Mesh(geometry, material)
-      mesh.name = meshData.name
-
-      // Create group and add mesh (and edges support)
-      const object = new THREE.Group()
-      object.add(mesh)
-      {
-        const edgeGeometry = new THREE.EdgesGeometry(geometry)
-        const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
-        const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial)
-        edges.name = `${meshData.name}_edges`
-        object.add(edges)
-      }
-      
-      // Apply scaling
-      object.scale.set(scale, scale, scale)
-
-      threeMeshes.push(object)
-    }
-
-    debugLog(`Created ${threeMeshes.length} meshes from OBJ file`)
-
-    // Extract ETag from response headers
-    const etag = response.headers.get('ETag')
-    debugLog(`Received ETag: ${etag}`)
-
-    // Cache the individual meshes with ETag and timestamp
-    externalGeometryCache.set(cacheKey, {
-      meshes: threeMeshes,
-      etag: etag || undefined,
-      timestamp: Date.now()
-    })
-    
-    return { success: true, meshes: threeMeshes }
-  } catch (e) {
-    debugLog(`Failed to load external geometry:`, e)
-    
-    let errorType: 'not_found' | 'network_error' | 'parse_error' = 'network_error'
-    let message = `Failed to load ${mode} geometry`
-    
-    if (e instanceof Error) {
-      if (e.message.includes('404') || e.message.includes('not found')) {
-        errorType = 'not_found'
-        message = `No ${mode} geometry available for this component`
-      } else if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-        errorType = 'network_error'
-        message = `Network error loading ${mode} geometry`
-      } else {
-        errorType = 'parse_error'
-        message = `Error parsing ${mode} geometry data`
-      }
-    }
-    
-    // Cache the error state with timestamp
+  if (!snapshotRouting?.snapshot_id) {
+    const msg = `No snapshot routing for ${mode} mode (compose payload missing current snapshot _id)`
     externalGeometryCache.set(cacheKey, {
       meshes: null,
       etag: undefined,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
-    return { success: false, error: errorType, message }
+    return { success: false, error: 'not_found', message: msg }
+  }
+
+  try {
+    const plyResult = await loadSnapshotPlyMeshes(
+      snapshotRouting.snapshot_id,
+      mode,
+      snapshotRouting.mesh_ply_resolutions ?? null,
+    )
+    if (plyResult.ok && plyResult.meshes.length > 0) {
+      externalGeometryCache.set(cacheKey, {
+        meshes: plyResult.meshes,
+        etag: plyResult.etag,
+        timestamp: Date.now(),
+      })
+      debugLog(`Loaded ${plyResult.meshes.length} mesh(es) from PLY`)
+      return { success: true, meshes: plyResult.meshes }
+    }
+  } catch (err) {
+    debugLog('PLY pipeline failed:', err)
+  }
+
+  externalGeometryCache.set(cacheKey, {
+    meshes: null,
+    etag: undefined,
+    timestamp: Date.now(),
+  })
+  return {
+    success: false,
+    error: 'not_found',
+    message: `No ${mode} PLY meshes in snapshot manifest`,
   }
 }
 
-/** 
- * VisualizePanel 
+/**
+ * Extrusion from API `{ profile: [x,y][], height }` (+ material RGB).
  */
-const VisualizePanel = React.memo(({ component_data }: { component_data: ComponentModel }) => {
-  const pline_shape = useMemo(() => {
-    const shape = new THREE.Shape()
-    
-    // Check if geometry has extrusion data
-    const geometry = component_data.geometry as ComponentGeometry
-    const extrusion = geometry.extrusion as ComponentExtrusion | undefined
-    if (!extrusion?.profile || !Array.isArray(extrusion.profile)) {
-      return shape; // Return empty shape if structure is invalid
-    }
-    
-    const points = extrusion.profile
-    shape.moveTo(points[0][0] * scale, points[0][1] * scale)
-    points.forEach((p, i) => {
-      if (i > 0) shape.lineTo(p[0] * scale, p[1] * scale)
-    })
-    return shape
-  }, [component_data])
+const ExtrusionVisualization = React.memo(
+  ({
+    profile,
+    height,
+    colorRgb,
+  }: {
+    profile: number[][]
+    height: number
+    colorRgb: [number, number, number]
+  }) => {
+    const pline_shape = useMemo(() => {
+      const shape = new THREE.Shape()
+      if (!profile?.length) return shape
+      shape.moveTo(profile[0][0] * scale, profile[0][1] * scale)
+      profile.forEach((p, i) => {
+        if (i > 0) shape.lineTo(p[0] * scale, p[1] * scale)
+      })
+      return shape
+    }, [profile])
 
-  const extrude_geometry = useMemo(() => {
-    const geometry = component_data.geometry as ComponentGeometry
-    const extrusion = geometry.extrusion as ComponentExtrusion | undefined
-    if (!extrusion?.profile || !extrusion?.height) {
-      return new THREE.ExtrudeGeometry(new THREE.Shape());
-    }
-    
-    const extrudeSettings = { steps: 2, depth: extrusion.height * scale, bevelEnabled: false }
-    const g = new THREE.ExtrudeGeometry(pline_shape, extrudeSettings)
-    g.translate(0, 0, -extrusion.height * scale * 0.5)
-    g.rotateX(-Math.PI / 2)
-    g.computeVertexNormals()
-    g.normalizeNormals()
-    return g
-  }, [pline_shape, component_data.geometry])
+    const extrude_geometry = useMemo(() => {
+      if (!profile?.length || !height) {
+        return new THREE.ExtrudeGeometry(new THREE.Shape())
+      }
+      const extrudeSettings = { steps: 2, depth: height * scale, bevelEnabled: false }
+      const g = new THREE.ExtrudeGeometry(pline_shape, extrudeSettings)
+      g.translate(0, 0, -height * scale * 0.5)
+      g.rotateX(-Math.PI / 2)
+      g.computeVertexNormals()
+      g.normalizeNormals()
+      return g
+    }, [pline_shape, profile, height])
 
-  const colorHex = rgbToHex(
-    Array.isArray(component_data.color) ? component_data.color[0] as number : 0,
-    Array.isArray(component_data.color) ? component_data.color[1] as number : 0,
-    Array.isArray(component_data.color) ? component_data.color[2] as number : 0
-  )
+    const colorHex = rgbToHex(colorRgb[0], colorRgb[1], colorRgb[2])
+    const edge_geometry = useMemo(() => new THREE.EdgesGeometry(extrude_geometry), [extrude_geometry])
+    const edge_material = useMemo(() => new THREE.LineBasicMaterial({ color: 0x000000 }), [])
 
-  const edge_geometry = useMemo(() => new THREE.EdgesGeometry(extrude_geometry), [extrude_geometry])
-  const edge_material = useMemo(() => new THREE.LineBasicMaterial({ color: 0x000000 }), [])
+    return (
+      <>
+        <mesh visible geometry={extrude_geometry}>
+          <meshStandardMaterial color={new THREE.Color(colorHex)} />
+        </mesh>
+        <lineSegments geometry={edge_geometry} material={edge_material} />
+      </>
+    )
+  },
+)
+ExtrusionVisualization.displayName = 'ExtrusionVisualization'
 
-  return (
-    <>
-      <mesh visible geometry={extrude_geometry}>
-        <meshStandardMaterial color={new THREE.Color(colorHex)} />
-      </mesh>
-      <lineSegments geometry={edge_geometry} material={edge_material} />
-    </>
-  )
-})
-VisualizePanel.displayName = 'VisualizePanel'
-
-/** 
+/**
  * MarkerPoints - renders marker points as red dots
  */
 const MarkerPoints = React.memo(({
@@ -491,11 +367,8 @@ const MarkerPoints = React.memo(({
 })
 MarkerPoints.displayName = 'MarkerPoints'
 
-/** 
- * VisualizeMultipleMeshes - handles multiple meshes with individual visibility controls
- */
 const VisualizeMultipleMeshes = React.memo(({
-  component_data,
+  primitiveDraws,
   geometryMode,
   visibleMeshes = [],
   externalMeshes = [],
@@ -503,7 +376,7 @@ const VisualizeMultipleMeshes = React.memo(({
   geometryError = null,
   showEdges
 }: {
-  component_data: ComponentModel
+  primitiveDraws: PrimitiveDrawBuffers[]
   geometryMode: GeometryMode
   visibleMeshes?: boolean[]
   externalMeshes?: THREE.Group[]
@@ -512,8 +385,6 @@ const VisualizeMultipleMeshes = React.memo(({
   showEdges: boolean
 }) => {
   const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
-  const geometry = component_data.geometry as ComponentGeometry
-  const meshes = (geometry.meshes || []) as ComponentMesh[]
 
   if (isLoadingExternal) {
     return (
@@ -550,7 +421,6 @@ const VisualizeMultipleMeshes = React.memo(({
   }
 
   if (isExternalMode && externalMeshes.length > 0) {
-    // For external geometry, render individual meshes with visibility controls
     return (
       <>
         {externalMeshes.map((mesh, index) => {
@@ -561,45 +431,40 @@ const VisualizeMultipleMeshes = React.memo(({
     )
   }
 
-  // For primitive mode, render individual meshes with visibility controls
-  // Group all meshes together and apply scaling like external geometry
   return (
     <group scale={[scale, scale, scale]}>
-      {meshes.map((mesh: ComponentMesh, index: number) => {
+      {primitiveDraws.map((mesh, index: number) => {
         if (!visibleMeshes[index]) return null
 
-        // Create geometry from mesh data (without scaling here, handled by group)
-        const positions = (mesh.v || []).flat()
-        const indices = (mesh.f || []).flat()
-        const rawColors = mesh.c ? (mesh.c as number[][] || []) : undefined
+        const positions = mesh.positionsFlat
+        const indices = mesh.indices
+        const rawColors = mesh.rawColors
 
-        const geometry = new THREE.BufferGeometry()
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-        geometry.setIndex(indices)
+        const geom = new THREE.BufferGeometry()
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+        geom.setIndex(indices)
 
         if (rawColors && rawColors.length > 0) {
-          // Use smart normalization
           const flatColors = rawColors.flat()
           const normalizedColors = normalizeColors(flatColors)
-          geometry.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
+          geom.setAttribute('color', new THREE.Float32BufferAttribute(normalizedColors, 3))
           debugLog(`Applied ${normalizedColors.length / 3} vertex colors to primitive mesh ${index + 1}`)
         }
 
-        // Apply the same coordinate system transformation as external geometry
-        geometry.rotateX(-Math.PI / 2)
-        geometry.computeVertexNormals()
-        geometry.normalizeNormals()
+        geom.rotateX(-Math.PI / 2)
+        geom.computeVertexNormals()
+        geom.normalizeNormals()
 
         const material = rawColors && rawColors.length > 0
           ? new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })
           : new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.DoubleSide })
 
-        const edgeGeometry = new THREE.EdgesGeometry(geometry)
+        const edgeGeometry = new THREE.EdgesGeometry(geom)
         const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
 
         return (
           <group key={index}>
-            <mesh geometry={geometry} material={material} />
+            <mesh geometry={geom} material={material} />
             {showEdges && (
               <lineSegments geometry={edgeGeometry} material={edgeMaterial} />
             )}
@@ -611,61 +476,97 @@ const VisualizeMultipleMeshes = React.memo(({
 })
 VisualizeMultipleMeshes.displayName = 'VisualizeMultipleMeshes'
 
-/** 
- * VisualizeComponent 
- */
-function VisualizeComponent({
-  component_data,
-  geometryMode,
-  visibleMeshes = [],
-  externalMeshes = [],
-  isLoadingExternal = false,
-  geometryError = null,
-  showEdges
-}: {
-  component_data: ComponentModel
+type VisualizeProps = {
+  catalog: CatalogComponent
   geometryMode: GeometryMode
   visibleMeshes?: boolean[]
   externalMeshes?: THREE.Group[]
   isLoadingExternal?: boolean
   geometryError?: string | null
   showEdges: boolean
-}) {
-  if (!component_data.geometry) return null
-  
-  // Infer visualization type based on geometry content rather than just type field
-  const geometry = component_data.geometry as ComponentGeometry
-  const extrusion = geometry.extrusion as ComponentExtrusion | undefined
-  const meshes = geometry.meshes as ComponentMesh[] | undefined
+}
 
-  const hasExtrusion = extrusion?.profile && extrusion?.height
-  const hasMeshes = meshes && meshes.length > 0
+function snapshotExtrusionRgb(snap: CatalogComponent['snapshot']): [number, number, number] {
+  const c = snap.color
+  return [
+    Array.isArray(c) ? (c[0] as number) : 110,
+    Array.isArray(c) ? (c[1] as number) : 110,
+    Array.isArray(c) ? (c[2] as number) : 110,
+  ]
+}
+
+function VisualizeComponent(props: VisualizeProps) {
+  const sg = props.catalog.snapshot.geometry
+  const ext = sg.extrusions?.[0]
+  const meshesApi = sg.meshes ?? []
+  const primitiveDraws = snapshotMeshesToDrawBuffers(meshesApi)
+
+  const hasExtrusion =
+    !!ext?.profile?.length && typeof ext.height === 'number' && Number.isFinite(ext.height)
+  const hasMeshes = primitiveDraws.length > 0
 
   if (hasExtrusion) {
-    return <VisualizePanel component_data={component_data} />
-  } else if (hasMeshes) {
-    return <VisualizeMultipleMeshes component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
+    return (
+      <ExtrusionVisualization
+        profile={ext!.profile}
+        height={ext!.height}
+        colorRgb={snapshotExtrusionRgb(props.catalog.snapshot)}
+      />
+    )
   }
-
-  // Fallback to type-based logic if geometry inference fails
-  if (component_data.type === 'panel') {
-    return <VisualizePanel component_data={component_data} />
-  } else {
-    return <VisualizeMultipleMeshes component_data={component_data} geometryMode={geometryMode} visibleMeshes={visibleMeshes} externalMeshes={externalMeshes} isLoadingExternal={isLoadingExternal} geometryError={geometryError} showEdges={showEdges} />
+  if (hasMeshes) {
+    return (
+      <VisualizeMultipleMeshes
+        primitiveDraws={primitiveDraws}
+        geometryMode={props.geometryMode}
+        visibleMeshes={props.visibleMeshes}
+        externalMeshes={props.externalMeshes}
+        isLoadingExternal={props.isLoadingExternal}
+        geometryError={props.geometryError}
+        showEdges={props.showEdges}
+      />
+    )
   }
+  if (props.catalog.identity.type === 'panel') {
+    return (
+      <ExtrusionVisualization
+        profile={ext?.profile ?? []}
+        height={typeof ext?.height === 'number' ? ext!.height : 0}
+        colorRgb={snapshotExtrusionRgb(props.catalog.snapshot)}
+      />
+    )
+  }
+  return (
+    <VisualizeMultipleMeshes
+      primitiveDraws={primitiveDraws}
+      geometryMode={props.geometryMode}
+      visibleMeshes={props.visibleMeshes}
+      externalMeshes={props.externalMeshes}
+      isLoadingExternal={props.isLoadingExternal}
+      geometryError={props.geometryError}
+      showEdges={props.showEdges}
+    />
+  )
 }
 
 /**
- * ComponentViewer
+ * Catalog 3D viewer: **`GET /identities/{id}/compose`** payload (`identity` + `snapshot`).
+ * Reduced/detailed modes load **`GET /snapshots/{snapshot_id}/meshes/...`** PLY only.
  */
-export default function ComponentViewer({
-  component_data,
-  geometryEndpoint
-}: {
-  component_data: ComponentModel
-  geometryEndpoint?: string
-}) {
-  // Call ALL hooks FIRST, unconditionally
+export type ComponentViewerProps = { catalog: CatalogComponent }
+
+export default function ComponentViewer({ catalog }: ComponentViewerProps) {
+  const identityId = catalog.identity._id
+  const catalogType = catalog.identity.type
+
+  const snapshotRouting = useMemo(
+    () => snapshotMeshRoutingFromSnapshot(catalog.snapshot),
+    [catalog.snapshot],
+  )
+
+  const canRenderViewport =
+    !!(catalog.snapshot.geometry.meshes?.length || catalog.snapshot.geometry.extrusions?.length)
+
   const [geometryMode, setGeometryMode] = useState<GeometryMode>('primitive')
   const [visibleMeshes, setVisibleMeshes] = useState<boolean[]>([])
   const [externalMeshes, setExternalMeshes] = useState<THREE.Group[]>([])
@@ -674,37 +575,46 @@ export default function ComponentViewer({
   const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
   const [showEdges, setShowEdges] = useState<boolean>(true)
 
-  const isPanel = component_data.type === 'panel'
-  const geometry = component_data.geometry as ComponentGeometry
-  const meshes = useMemo(() => (geometry?.meshes || []) as ComponentMesh[], [geometry?.meshes])
-  const hasMultipleMeshes = meshes && meshes.length > 0
+  const primitiveMeshCount = useMemo(
+    () => catalog.snapshot.geometry.meshes?.length ?? 0,
+    [catalog.snapshot.geometry.meshes],
+  )
+
+  const snapshotMeshCacheKey = useMemo(() => {
+    if (!snapshotRouting?.snapshot_id) return ''
+    return `${snapshotRouting.snapshot_id}:${JSON.stringify(snapshotRouting.mesh_ply_resolutions ?? null)}`
+  }, [snapshotRouting])
+
+  const isPanel = catalogType === 'panel'
+  const hasMultipleMeshes = primitiveMeshCount > 0
   const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
-  
-  // Extract marker points data
+
   const markerPoints = useMemo(() => {
-    const points = component_data.marker_points
+    const points = catalog.snapshot.geometry.marker_points
     if (Array.isArray(points) && points.length > 0) {
-      return points.filter(point => Array.isArray(point) && point.length >= 3)
+      return points.filter((point) => Array.isArray(point) && point.length >= 3)
     }
     return []
-  }, [component_data.marker_points])
+  }, [catalog.snapshot.geometry.marker_points])
+
   const hasMarkerPoints = markerPoints.length > 0
 
-  // Load external geometry centrally
   useEffect(() => {
     let isMounted = true
-    if (isExternalMode && component_data.type !== 'panel' && component_data._id) {
+    if (isExternalMode && catalogType !== 'panel' && identityId) {
       setIsLoadingExternal(true)
       setGeometryError(null)
-      // For external geometry default: hide edges
       setShowEdges(false)
-      loadExternalGeometry(component_data._id.toString(), geometryMode, geometryEndpoint)
+      loadExternalGeometry(
+        identityId.toString(),
+        geometryMode,
+        snapshotRouting,
+      )
         .then((result) => {
           if (isMounted) {
             if (result.success) {
               setExternalMeshes(result.meshes)
               setGeometryError(null)
-              // Initialize visibility state for external meshes
               setVisibleMeshes(new Array(result.meshes.length).fill(true))
             } else {
               setExternalMeshes([])
@@ -726,11 +636,9 @@ export default function ComponentViewer({
       setExternalMeshes([])
       setIsLoadingExternal(false)
       setGeometryError(null)
-      // For primitive default: show edges
       setShowEdges(true)
-      // Initialize visibility state for primitive meshes
-      if (hasMultipleMeshes && meshes) {
-        setVisibleMeshes(new Array(meshes.length).fill(true))
+      if (hasMultipleMeshes) {
+        setVisibleMeshes(new Array(primitiveMeshCount).fill(true))
       } else {
         setVisibleMeshes([])
       }
@@ -738,7 +646,16 @@ export default function ComponentViewer({
     return () => {
       isMounted = false
     }
-  }, [geometryMode, component_data, isExternalMode, hasMultipleMeshes, meshes, geometryEndpoint])
+  }, [
+    geometryMode,
+    catalogType,
+    identityId,
+    isExternalMode,
+    primitiveMeshCount,
+    hasMultipleMeshes,
+    snapshotRouting,
+    snapshotMeshCacheKey,
+  ])
 
   const onModeChange: React.ChangeEventHandler<HTMLSelectElement> = (e) => {
     const v = e.target.value as GeometryMode
@@ -746,27 +663,27 @@ export default function ComponentViewer({
   }
 
   const toggleMeshVisibility = (index: number) => {
-    setVisibleMeshes(prev => {
-      const newVisibility = [...prev]
-      newVisibility[index] = !newVisibility[index]
-      return newVisibility
+    setVisibleMeshes((prev) => {
+      const next = [...prev]
+      next[index] = !next[index]
+      return next
     })
   }
 
   const toggleAllMeshes = () => {
-    const allVisible = visibleMeshes.every(v => v)
-    setVisibleMeshes(prev => prev.map(() => !allVisible))
+    const allVisible = visibleMeshes.every((v) => v)
+    setVisibleMeshes((prev) => prev.map(() => !allVisible))
   }
 
-  const allMeshesVisible = useMemo(() => {
-    return visibleMeshes.length > 0 && visibleMeshes.every(v => v)
-  }, [visibleMeshes])
+  const allMeshesVisible = useMemo(
+    () => visibleMeshes.length > 0 && visibleMeshes.every((v) => v),
+    [visibleMeshes],
+  )
 
-  // Apply edge visibility to external meshes by toggling child LineSegments visibility
   useEffect(() => {
     if (!isExternalMode) return
-    externalMeshes.forEach(group => {
-      group.traverse(obj => {
+    externalMeshes.forEach((group) => {
+      group.traverse((obj) => {
         if ((obj as THREE.LineSegments).isLineSegments && obj.name.endsWith('_edges')) {
           obj.visible = showEdges
         }
@@ -774,14 +691,11 @@ export default function ComponentViewer({
     })
   }, [showEdges, isExternalMode, externalMeshes])
 
-  // Handle the conditional logic AFTER all hooks
-  if (!component_data.geometry) {
+  if (!canRenderViewport) {
     return <ComponentViewerSkeleton message="No Geometry Available" />
   }
 
-  // Build menu sections
   const menuSections: MenuSection[] = [
-    // Geometry Resolution section
     {
       id: 'geometry-mode',
       content: (
@@ -794,15 +708,15 @@ export default function ComponentViewer({
           options={[
             { value: 'primitive', label: 'Primitive' },
             { value: 'reduced', label: 'Reduced' },
-            { value: 'detailed', label: 'Detailed' }
+            { value: 'detailed', label: 'Detailed' },
           ]}
         />
-      )
-    }
+      ),
+    },
   ]
 
-  // Add global toggles if mesh visibility section will be shown
   if ((hasMultipleMeshes && geometryMode === 'primitive') || (isExternalMode && externalMeshes.length > 0)) {
+    const meshCount = isExternalMode ? externalMeshes.length : primitiveMeshCount
     menuSections.push({
       id: 'global-toggles',
       content: (
@@ -820,13 +734,8 @@ export default function ComponentViewer({
             onChange={(checked) => setShowEdges(checked)}
           />
         </div>
-      )
+      ),
     })
-  }
-
-  // Add Mesh Visibility section if applicable
-  if ((hasMultipleMeshes && geometryMode === 'primitive') || (isExternalMode && externalMeshes.length > 0)) {
-    const meshCount = isExternalMode ? externalMeshes.length : meshes.length
     menuSections.push({
       id: 'mesh-visibility',
       title: 'Mesh Visibility',
@@ -835,21 +744,25 @@ export default function ComponentViewer({
       itemCount: meshCount,
       content: (
         <ScrollableCheckboxList
-          items={(isExternalMode 
-            ? Array.from({ length: externalMeshes.length }, (_, i) => i) 
-            : meshes.map((_, i) => i)
+          items={(isExternalMode
+            ? Array.from({ length: externalMeshes.length }, (_, i) => i)
+            : Array.from({ length: primitiveMeshCount }, (_, i) => i)
           ).map((index: number) => ({
             id: String(index),
-            label: isExternalMode ? `External Mesh ${index + 1}` : `Mesh ${index + 1}`,
-            checked: visibleMeshes[index] || false
+            label: isExternalMode
+              ? (
+                  externalMeshes[index]?.children[0]?.name ||
+                  `External Mesh ${index + 1}`
+                )
+              : `Mesh ${index + 1}`,
+            checked: visibleMeshes[index] || false,
           }))}
           onToggle={(id) => toggleMeshVisibility(Number(id))}
         />
-      )
+      ),
     })
   }
 
-  // Add Marker Points section if applicable
   if (hasMarkerPoints) {
     menuSections.push({
       id: 'marker-points',
@@ -861,18 +774,16 @@ export default function ComponentViewer({
           checked={showMarkerPoints}
           onChange={(checked) => setShowMarkerPoints(checked)}
         />
-      )
+      ),
     })
   }
 
   return (
     <div className="flex flex-col md:flex-row gap-2 w-full">
-      {/* Menu - left on desktop, top on mobile */}
       <div className="w-full md:w-64 md:flex-shrink-0 order-2 md:order-1 md:h-[50dvh]">
         <ViewerMenu sections={menuSections} className="h-full" />
       </div>
 
-      {/* Viewport - right on desktop, bottom on mobile */}
       <Card className="flex-1 overflow-hidden order-1 md:order-2 h-[30dvh] sm:h-[40dvh] md:h-[50dvh] p-0">
         <div className="relative w-full h-full">
           <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
@@ -881,19 +792,16 @@ export default function ComponentViewer({
           <pointLight position={[-10, 10, -10]} decay={0} intensity={Math.PI * 0.75} />
 
           <Bounds fit clip observe margin={1.2} maxDuration={1}>
-            <VisualizeComponent 
-              component_data={component_data} 
-              geometryMode={geometryMode} 
-              visibleMeshes={visibleMeshes} 
+            <VisualizeComponent
+              catalog={catalog}
+              geometryMode={geometryMode}
+              visibleMeshes={visibleMeshes}
               externalMeshes={isExternalMode ? externalMeshes : []}
               isLoadingExternal={isLoadingExternal}
               geometryError={geometryError}
               showEdges={showEdges}
             />
-            <MarkerPoints 
-              markerPoints={markerPoints} 
-              visible={showMarkerPoints} 
-            />
+            <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
           </Bounds>
 
           <axesHelper args={[0.1]} />

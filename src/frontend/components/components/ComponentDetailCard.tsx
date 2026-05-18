@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { componentBounds, componentColorString, hexComponentColor, generateGrasshopperPanelXML, formatTimestamp } from '@/lib/utils'
 import { ExtendedComponentModel, ComponentLocation } from '@/generated/ComponentModel'
+import type { CatalogComponent } from '@/generated/CatalogModels'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -51,13 +52,82 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0
 }
 
-export default function ComponentDetailCard({
-  component_data,
-  isArchived = false,
-}: {
-  component_data: ExtendedComponentModel
-  isArchived?: boolean
-}) {
+/** Compose API row → ExtendedComponentModel detail fields (viewer uses `{ identity, snapshot }` directly). */
+function composeCatalogToExtendedRow(catalog: CatalogComponent): ExtendedComponentModel {
+  const { identity, snapshot } = catalog
+  const sg = snapshot.geometry
+  const rawMp = sg?.marker_points
+  const marker_points: ExtendedComponentModel['marker_points'] = Array.isArray(rawMp)
+    ? (rawMp as number[][])
+    : []
+
+  const parentIds = identity.parent_identities
+  const parent_component =
+    Array.isArray(parentIds) && parentIds.length > 0 ? String(parentIds[0]) : undefined
+
+  return {
+    _id: identity._id,
+    name:
+      typeof snapshot.name === 'string' && snapshot.name.trim().length > 0
+        ? snapshot.name
+        : 'Unnamed Component',
+    created: String(identity.created ?? snapshot.created ?? ''),
+    lastmodified: String(snapshot.lastmodified ?? identity.lastmodified ?? ''),
+    type: identity.type,
+    material: identity.material,
+    dataset: identity.dataset,
+    complexity: snapshot.complexity,
+    fragment: snapshot.fragment,
+    assembly: snapshot.assembly,
+    geometry: {},
+    color: snapshot.color as ExtendedComponentModel['color'],
+    bbx: snapshot.bbx as ExtendedComponentModel['bbx'],
+    bbx_origin: snapshot.bbx_origin,
+    location: snapshot.location as ExtendedComponentModel['location'],
+    descriptors: snapshot.descriptors as ExtendedComponentModel['descriptors'],
+    processes: snapshot.processes as ExtendedComponentModel['processes'],
+    iframe: snapshot.iframe as ExtendedComponentModel['iframe'],
+    pca_frame: snapshot.pca_frame as ExtendedComponentModel['pca_frame'],
+    reserved: typeof identity.reserved === 'string' ? identity.reserved : '',
+    attributes: identity.attributes as ExtendedComponentModel['attributes'],
+    marker_points,
+    validated: snapshot.validated,
+    etag: snapshot.etag as ExtendedComponentModel['etag'],
+    condition:
+      snapshot.condition !== undefined && snapshot.condition !== null
+        ? (snapshot.condition as ExtendedComponentModel['condition'])
+        : undefined,
+    manufactured_at: identity.manufactured_at as ExtendedComponentModel['manufactured_at'],
+    manufactured_precision:
+      identity.manufactured_precision as ExtendedComponentModel['manufactured_precision'],
+    salvage_source: identity.salvage_source as ExtendedComponentModel['salvage_source'],
+    salvaged_at: identity.salvaged_at as ExtendedComponentModel['salvaged_at'],
+    parent_component,
+    catalog_number: identity.catalog_number,
+    consumed_at:
+      identity.consumed_at === undefined || identity.consumed_at === null
+        ? null
+        : String(identity.consumed_at),
+    current_snapshot_id: identity.current_snapshot_id,
+    parent_identities: Array.isArray(identity.parent_identities)
+      ? identity.parent_identities.map(String)
+      : undefined,
+  }
+}
+
+export type ComponentDetailCardProps =
+  | { variant: 'compose'; catalog: CatalogComponent; isArchived?: boolean }
+  | { variant: 'legacy'; component_data: ExtendedComponentModel; isArchived?: boolean }
+
+export default function ComponentDetailCard(props: ComponentDetailCardProps) {
+  const isArchived = props.isArchived ?? false
+  const component_data = useMemo(
+    () =>
+      props.variant === 'compose'
+        ? composeCatalogToExtendedRow(props.catalog)
+        : props.component_data,
+    [props.variant, props.variant === 'compose' ? props.catalog : props.component_data],
+  )
   const [copied, setCopied] = useState(false)
   const [grasshopperCopied, setGrasshopperCopied] = useState(false)
   const [validating, setValidating] = useState(false)
@@ -87,14 +157,20 @@ export default function ComponentDetailCard({
       try {
         setParentComponentStatus(null)
 
-        const activeRes = await fetch(`/api/backend/shallowcomponents/${parentId}`)
+        const activeRes = await fetch(
+          `/api/backend/identities/${encodeURIComponent(parentId)}?expand=shallow`,
+          { credentials: 'include' },
+        )
         if (activeRes.ok) {
           if (!cancelled) setParentComponentStatus('active')
           return
         }
 
         if (activeRes.status === 404) {
-          const archivedRes = await fetch(`/api/backend/archived/components/${parentId}`)
+          const archivedRes = await fetch(
+            `/api/backend/archived/components/${encodeURIComponent(parentId)}`,
+            { credentials: 'include' },
+          )
           if (!cancelled && archivedRes.ok) {
             setParentComponentStatus('archived')
           }
@@ -133,12 +209,16 @@ export default function ComponentDetailCard({
 
   const handleReserveComponent = async () => {
     try {
-      const response = await fetch(`/api/backend/reserve/${component_data._id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}/reserve`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
         },
-      })
+      )
 
       if (response.ok) {
         const result = await response.json()
@@ -159,12 +239,16 @@ export default function ComponentDetailCard({
 
   const handleReleaseComponent = async () => {
     try {
-      const response = await fetch(`/api/backend/reserve/${component_data._id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}/reserve`,
+        {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
         },
-      })
+      )
 
       if (response.ok) {
         const result = await response.json()
@@ -185,9 +269,10 @@ export default function ComponentDetailCard({
   const handleValidateComponent = async () => {
     try {
       setValidating(true)
-      const response = await fetch(`/api/backend/validate/${component_data._id}`, {
-        method: 'GET',
-      })
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}/validate`,
+        { method: 'GET', credentials: 'include' },
+      )
       
       if (response.ok) {
         // Redirect to validation page after successful validation
@@ -207,15 +292,19 @@ export default function ComponentDetailCard({
   const handleArchiveComponent = async () => {
     try {
       setArchiving(true)
-      const response = await fetch(`/api/backend/archive/${component_data._id}`, {
-        method: 'POST',
-      })
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}/consume`,
+        {
+          method: 'POST',
+          credentials: 'include',
+        },
+      )
 
       if (response.ok) {
-        // Redirect to archive page after successful archiving
-        router.push('/archive/components')
+        // Consumed identities drop off the default catalog list (`consumed_filter=active`).
+        router.push('/components')
       } else {
-        console.error('Failed to archive component')
+        console.error('Failed to mark identity as consumed')
         alert('Failed to archive component. Please try again.')
       }
     } catch (error) {
@@ -229,15 +318,19 @@ export default function ComponentDetailCard({
   const handleUnarchiveComponent = async () => {
     try {
       setArchiving(true)
-      const response = await fetch(`/api/backend/unarchive/${component_data._id}`, {
-        method: 'POST',
-      })
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}/restore`,
+        {
+          method: 'POST',
+          credentials: 'include',
+        },
+      )
 
       if (response.ok) {
         // Redirect to the main component page after successful restoration
         router.push(`/components/${component_data._id}`)
       } else {
-        console.error('Failed to restore component')
+        console.error('Failed to restore identity')
         alert('Failed to restore component. Please try again.')
       }
     } catch (error) {
@@ -270,9 +363,13 @@ export default function ComponentDetailCard({
   const handleDeleteComponent = async () => {
     try {
       setDeleting(true)
-      const response = await fetch(`/api/backend/components/${component_data._id}`, {
-        method: 'DELETE',
-      })
+      const response = await fetch(
+        `/api/backend/identities/${encodeURIComponent(component_data._id ?? '')}`,
+        {
+          method: 'DELETE',
+          credentials: 'include',
+        },
+      )
 
       if (response.ok) {
         // Redirect to components page after successful deletion
@@ -307,7 +404,10 @@ export default function ComponentDetailCard({
         return
       }
 
-      const activeRes = await fetch(`/api/backend/shallowcomponents/${parentId}`)
+      const activeRes = await fetch(
+        `/api/backend/identities/${encodeURIComponent(parentId)}?expand=shallow`,
+        { credentials: 'include' },
+      )
       if (activeRes.ok) {
         router.push(`/components/${parentId}`)
         return
@@ -316,7 +416,10 @@ export default function ComponentDetailCard({
       // If not found in active catalog, try archive detail route.
       // Archive access is admin-only; non-admin users will be redirected by that page.
       if (activeRes.status === 404) {
-        const archivedRes = await fetch(`/api/backend/archived/components/${parentId}`)
+        const archivedRes = await fetch(
+          `/api/backend/archived/components/${encodeURIComponent(parentId)}`,
+          { credentials: 'include' },
+        )
         if (archivedRes.ok) {
           router.push(`/archive/components/${parentId}`)
           return

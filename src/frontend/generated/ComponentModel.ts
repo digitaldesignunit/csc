@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-04-26T10:18:25.647Z
+// Generated on: 2026-05-18T13:35:13.249Z
 // Source: https://api.ddu.uber.space/schema/component
 
 export type ComponentBoundingBox = number[];
@@ -105,6 +105,11 @@ export function isComponentModel(obj: unknown): obj is ComponentModel {
 // Extension types
 export interface ExtendedComponentModel extends ComponentModel {
   reserved_by_username?: string;
+  /** Current snapshot `_id` (v0.5); used for `/snapshots/{id}/preview` thumbnails */
+  current_snapshot_id?: string;
+  catalog_number?: number;
+  consumed_at?: string | null;
+  parent_identities?: string[];
 }
 
 // Partial type for updates
