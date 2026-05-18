@@ -7,6 +7,9 @@ import Footer from '@/components/layout/Footer'
 import Providers from './providers'
 import SessionMonitor from '@/components/auth/SessionMonitor'
 import CookieNotice from '@/components/common/CookieNotice'
+import BetaPhaseBanner from '@/components/common/BetaPhaseBanner'
+import BetaPhaseLoginNotice from '@/components/common/BetaPhaseLoginNotice'
+import { getBetaLoginMessage, isBetaPhaseEnabled } from '@/lib/beta'
 import { ThemeProvider } from 'next-themes'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -19,6 +22,8 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const betaPhaseEnabled = isBetaPhaseEnabled()
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} min-h-screen flex flex-col`}>
@@ -32,6 +37,7 @@ export default function RootLayout({
         >
           <Providers>
             <SessionMonitor />
+            {betaPhaseEnabled && <BetaPhaseLoginNotice message={getBetaLoginMessage()} />}
             <CookieNotice />
             <div className="flex-grow flex flex-col md:flex-row">
               {/* Desktop Sidebar - hidden on mobile */}
@@ -41,6 +47,7 @@ export default function RootLayout({
 
               {/* Main Content Area */}
               <main className="flex-1 min-w-0 w-full md:w-auto">
+                {betaPhaseEnabled && <BetaPhaseBanner />}
                 <Header />
                 <div className="w-full max-w-full overflow-x-hidden">{children}</div>
               </main>
