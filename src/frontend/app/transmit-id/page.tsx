@@ -25,11 +25,11 @@ export default function TransmitIdPage() {
               <b>Purpose:</b>{' '}Transmit a <b>scanned ID</b> into your active <b>CAD workflow</b>.
             </li>
             <li>
-              <b>Input:</b>{' '}Scan QR code or paste a component ID.
+              <b>Input:</b>{' '}Scan QR code or paste an identity id (physical tag UUID).
             </li>
             <li>
-              <b>Result:</b>{' '}The ID is queued and can be consumed in
-              CAD (i.e. Grasshopper) during component creation.
+              <b>Result:</b>{' '}The id is queued and can be consumed in
+              CAD (i.e. Grasshopper) when creating a new catalog entry.
             </li>
           </ul>
         </div>
@@ -44,8 +44,8 @@ export default function TransmitIdPage() {
               QR Code Scanner
             </CardTitle>
             <CardDescription>
-              Use your device&apos;s camera to scan a component QR code, then
-              transmit the ID to CAD.
+              Use your device&apos;s camera to scan a QR code, then
+              transmit the identity id to CAD.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-1">

@@ -25,7 +25,6 @@ const COMPONENT_TYPES = [
   'connector',
   'other',
 ] as const
-const COMPLEXITY_LEVELS = [0, 1, 2, 3] as const
 const CONDITION_VALUES = [0, 1, 2, 3] as const
 const MANUFACTURED_PRECISIONS = ['exact', 'month', 'year', 'unknown'] as const
 
@@ -172,8 +171,12 @@ export default function ComponentEditForm({
     const load = async () => {
       try {
         const [mRes, dRes] = await Promise.all([
-          fetch('/api/backend/materials').then(r => (r.ok ? r.json() : [])),
-          fetch('/api/backend/datasets').then(r => (r.ok ? r.json() : [])),
+          fetch('/api/backend/identities/meta/materials', { credentials: 'include' }).then(r =>
+            r.ok ? r.json() : [],
+          ),
+          fetch('/api/backend/identities/meta/datasets', { credentials: 'include' }).then(r =>
+            r.ok ? r.json() : [],
+          ),
         ])
         if (cancelled) return
         if (Array.isArray(mRes)) setMaterialSuggestions(mRes.filter(Boolean))
@@ -206,130 +209,155 @@ export default function ComponentEditForm({
     setSuccess(null)
   }
 
+  const parseApiError = async (res: Response): Promise<string> => {
+    let detail = `Failed with status ${res.status}`
+    try {
+      const body = await res.json()
+      if (body?.detail) {
+        detail =
+          typeof body.detail === 'string'
+            ? body.detail
+            : JSON.stringify(body.detail)
+      }
+    } catch {
+      // ignore
+    }
+    return detail
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setSuccess(null)
 
-    // Build a minimal patch: only include fields that actually changed
-    const patch: Record<string, unknown> = {}
-    if (form.name.trim() !== (initial.name ?? '').trim()) patch.name = form.name.trim()
-    if (form.type !== initial.type) patch.type = form.type
-    if (form.material.trim() !== initial.material.trim()) patch.material = form.material.trim()
-    if (form.dataset.trim() !== initial.dataset.trim()) patch.dataset = form.dataset.trim()
-    if (form.complexity !== initial.complexity) patch.complexity = form.complexity
-    if (form.fragment !== initial.fragment) patch.fragment = form.fragment
-    if (form.assembly !== initial.assembly) patch.assembly = form.assembly
+    const identityId = component_data._id ?? ''
+    const snapshotPatch: Record<string, unknown> = {}
+    const identityPatch: Record<string, unknown> = {}
+
+    if (form.name.trim() !== (initial.name ?? '').trim()) {
+      snapshotPatch.name = form.name.trim()
+    }
+    if (form.fragment !== initial.fragment) snapshotPatch.fragment = form.fragment
+    if (form.assembly !== initial.assembly) snapshotPatch.assembly = form.assembly
     if (
       form.colorR !== initial.colorR ||
       form.colorG !== initial.colorG ||
       form.colorB !== initial.colorB
     ) {
-      patch.color = [
+      snapshotPatch.color = [
         clampInt(form.colorR, 0, 255),
         clampInt(form.colorG, 0, 255),
         clampInt(form.colorB, 0, 255),
       ]
     }
     if (form.lat !== initial.lat || form.lon !== initial.lon) {
-      patch.location = { lat: form.lat, lon: form.lon }
+      snapshotPatch.location = { lat: form.lat, lon: form.lon }
     }
-
-    // Provenance / lineage fields. Empty form input is sent as an
-    // explicit null in the PATCH payload to clear the field on the server.
     if (form.condition !== initial.condition) {
-      patch.condition = form.condition
+      snapshotPatch.condition = form.condition
     }
 
+    if (form.type !== initial.type) identityPatch.type = form.type
+    if (form.material.trim() !== initial.material.trim()) {
+      identityPatch.material = form.material.trim()
+    }
+    if (form.dataset.trim() !== initial.dataset.trim()) {
+      identityPatch.dataset = form.dataset.trim()
+    }
     if (form.manufactured_at !== initial.manufactured_at) {
-      patch.manufactured_at = form.manufactured_at.trim() === ''
-        ? null
-        : dateInputToIso(form.manufactured_at)
+      identityPatch.manufactured_at =
+        form.manufactured_at.trim() === ''
+          ? null
+          : dateInputToIso(form.manufactured_at)
     }
-
     if (form.manufactured_precision !== initial.manufactured_precision) {
-      patch.manufactured_precision = form.manufactured_precision === ''
-        ? null
-        : form.manufactured_precision
+      identityPatch.manufactured_precision =
+        form.manufactured_precision === '' ? null : form.manufactured_precision
     }
-
     if (form.salvaged_at !== initial.salvaged_at) {
-      patch.salvaged_at = form.salvaged_at.trim() === ''
-        ? null
-        : dateInputToIso(form.salvaged_at)
+      identityPatch.salvaged_at =
+        form.salvaged_at.trim() === '' ? null : dateInputToIso(form.salvaged_at)
     }
-
     if (form.salvage_source.trim() !== initial.salvage_source.trim()) {
       const next = form.salvage_source.trim()
-      patch.salvage_source = next === '' ? null : next
+      identityPatch.salvage_source = next === '' ? null : next
     }
-
     if (form.parent_component.trim() !== initial.parent_component.trim()) {
       const next = form.parent_component.trim()
       if (next === '') {
-        patch.parent_component = null
+        identityPatch.parent_identities = null
       } else if (!UUID_REGEX.test(next)) {
-        setError('Parent component must be a valid UUID.')
+        setError('Parent identity must be a valid UUID.')
         return
-      } else if (next.toLowerCase() === (component_data._id ?? '').toLowerCase()) {
-        setError('Parent component cannot reference itself.')
+      } else if (next.toLowerCase() === identityId.toLowerCase()) {
+        setError('Parent identity cannot reference itself.')
         return
       } else {
-        patch.parent_component = next.toLowerCase()
+        identityPatch.parent_identities = [next.toLowerCase()]
       }
     }
 
-    if (Object.keys(patch).length === 0) {
+    if (
+      Object.keys(snapshotPatch).length === 0 &&
+      Object.keys(identityPatch).length === 0
+    ) {
       setError('No changes to save.')
       return
     }
 
-    // Client-side basic validation
-    if (typeof patch.name === 'string' && patch.name === '') {
+    if (typeof snapshotPatch.name === 'string' && snapshotPatch.name === '') {
       setError('Name cannot be empty.')
       return
     }
-    if (typeof patch.material === 'string' && patch.material === '') {
+    if (typeof identityPatch.material === 'string' && identityPatch.material === '') {
       setError('Material cannot be empty.')
       return
     }
-    if (typeof patch.dataset === 'string' && patch.dataset === '') {
+    if (typeof identityPatch.dataset === 'string' && identityPatch.dataset === '') {
       setError('Dataset cannot be empty.')
       return
     }
-    if (patch.type && !COMPONENT_TYPES.includes(patch.type as typeof COMPONENT_TYPES[number])) {
+    if (
+      identityPatch.type &&
+      !COMPONENT_TYPES.includes(identityPatch.type as typeof COMPONENT_TYPES[number])
+    ) {
       setError(`Type must be one of: ${COMPONENT_TYPES.join(', ')}.`)
       return
     }
 
     try {
       setSaving(true)
-      const res = await fetch(
-        `/api/backend/components/${encodeURIComponent(component_data._id ?? '')}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patch),
-        }
-      )
-      if (!res.ok) {
-        let detail = `Failed with status ${res.status}`
-        try {
-          const body = await res.json()
-          if (body?.detail) {
-            detail = typeof body.detail === 'string'
-              ? body.detail
-              : JSON.stringify(body.detail)
-          }
-        } catch {
-          // ignore
-        }
-        throw new Error(detail)
+      const base = `/api/backend/identities/${encodeURIComponent(identityId)}`
+      const opts = {
+        method: 'PATCH' as const,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include' as const,
       }
+
+      if (Object.keys(snapshotPatch).length > 0) {
+        const res = await fetch(`${base}/current-snapshot`, {
+          ...opts,
+          body: JSON.stringify(snapshotPatch),
+        })
+        if (!res.ok) {
+          throw new Error(`Snapshot update: ${await parseApiError(res)}`)
+        }
+      }
+
+      if (Object.keys(identityPatch).length > 0) {
+        const res = await fetch(base, {
+          ...opts,
+          body: JSON.stringify(identityPatch),
+        })
+        if (!res.ok) {
+          throw new Error(`Identity update: ${await parseApiError(res)}`)
+        }
+      }
+
       setSuccess('Component metadata updated successfully.')
       router.refresh()
       setTimeout(() => {
-        router.push(`/components/${component_data._id}`)
+        router.push(`/components/${identityId}`)
       }, 600)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -380,19 +408,17 @@ export default function ComponentEditForm({
 
           <div>
             <Label htmlFor="complexity">Complexity</Label>
-            <Select
+            <Input
+              id="complexity"
               value={String(form.complexity)}
-              onValueChange={v => setField('complexity', Number(v))}
-            >
-              <SelectTrigger id="complexity">
-                <SelectValue placeholder="Select complexity" />
-              </SelectTrigger>
-              <SelectContent>
-                {COMPLEXITY_LEVELS.map(c => (
-                  <SelectItem key={c} value={String(c)}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              readOnly
+              disabled
+              className="bg-muted text-muted-foreground"
+              title="Derived from geometry; create a new snapshot to change"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Read-only (geometry-derived).
+            </p>
           </div>
 
           <div>

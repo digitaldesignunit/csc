@@ -23,9 +23,15 @@ import QRScanner, { QRScannerRef } from '@/components/qr/QRScanner'
 
 type TransmitItem = {
   user_id: string
-  component_id: string
+  identity_id: string
   created_at: string
   updated_at: string
+}
+
+type AvailabilityResponse = {
+  identity_id: string
+  available: boolean
+  conflict: 'identity' | 'snapshot' | null
 }
 
 type TransmitStatus =
@@ -36,7 +42,6 @@ type TransmitStatus =
   | 'error'
 
 const API_BASE = '/api/backend/component_id_transmission'
-const COMPONENTS_API_BASE = '/api/backend/components'
 
 function formatTimestamp(iso?: string): string {
   if (!iso) return ''
@@ -87,7 +92,7 @@ const ComponentIdTransmitter: React.FC = () => {
   const fetchPending = useCallback(async () => {
     setIsLoadingPending(true)
     try {
-      const res = await fetch(API_BASE, { cache: 'no-store' })
+      const res = await fetch(API_BASE, { cache: 'no-store', credentials: 'include' })
       if (!res.ok) {
         console.error('Failed to fetch pending transmission:', res.status)
         setPending(null)
@@ -122,26 +127,36 @@ const ComponentIdTransmitter: React.FC = () => {
       setIsCheckingId(true)
       try {
         const res = await fetch(
-          `${COMPONENTS_API_BASE}/${encodeURIComponent(effectiveId)}`,
-          { cache: 'no-store', signal: controller.signal }
+          `${API_BASE}/availability/${encodeURIComponent(effectiveId)}`,
+          { cache: 'no-store', credentials: 'include', signal: controller.signal },
         )
 
-        if (res.status === 200) {
+        if (res.ok) {
+          const data = (await res.json()) as AvailabilityResponse
+          if (data.available) {
+            setIdAlreadyExists(false)
+            setIdCheckMessage('Identity id is available for transmission.')
+          } else if (data.conflict === 'snapshot') {
+            setIdAlreadyExists(true)
+            setIdCheckMessage(
+              'This UUID is already a snapshot id. Use the physical identity id from the tag.',
+            )
+          } else {
+            setIdAlreadyExists(true)
+            setIdCheckMessage(
+              'This identity id already exists in the catalog and cannot be transmitted.',
+            )
+          }
+          return
+        }
+
+        if (res.status === 400) {
           setIdAlreadyExists(true)
-          setIdCheckMessage(
-            'This ID already exists in the catalog and cannot be transmitted.'
-          )
+          setIdCheckMessage('Enter a valid identity UUID.')
           return
         }
 
-        if (res.status === 404) {
-          setIdAlreadyExists(false)
-          setIdCheckMessage('ID is available for transmission.')
-          return
-        }
-
-        // For auth/network/validation edge cases we keep transmit enabled and
-        // let the backend decide on submit.
+        // Auth/network edge cases: let POST validate on submit.
         setIdAlreadyExists(false)
         setIdCheckMessage('')
       } catch (err) {
@@ -190,41 +205,55 @@ const ComponentIdTransmitter: React.FC = () => {
   )
 
   const performTransmit = useCallback(
-    async (componentId: string, forceOverwrite: boolean) => {
+    async (identityId: string, forceOverwrite: boolean) => {
       setStatus('transmitting')
       setStatusMessage('Transmitting...')
       try {
         const res = await fetch(API_BASE, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
-            component_id: componentId,
+            identity_id: identityId,
             force_overwrite: forceOverwrite,
           }),
         })
 
         if (res.status === 409) {
           const data: {
-            status: 'conflict' | 'component_id_exists'
+            status:
+              | 'conflict'
+              | 'identity_id_exists'
+              | 'snapshot_id_exists'
             existing?: TransmitItem
-            new_component_id?: string
+            new_identity_id?: string
             message?: string
           } = await res.json()
 
-          if (data.status === 'conflict' && data.existing && data.new_component_id) {
+          if (
+            data.status === 'identity_id_exists' ||
+            data.status === 'snapshot_id_exists'
+          ) {
+            setStatus('error')
+            setStatusMessage(
+              data.message || 'This UUID cannot be transmitted as a new identity id.',
+            )
+            return
+          }
+
+          if (data.status === 'conflict' && data.existing && data.new_identity_id) {
             setConfirmPayload({
               existing: data.existing,
-              newId: data.new_component_id,
+              newId: data.new_identity_id,
             })
             setConfirmOverwriteOpen(true)
             setStatus('idle')
             setStatusMessage('')
-          } else {
-            setStatus('error')
-            setStatusMessage(
-              data.message || 'This component ID already exists in the catalog.'
-            )
+            return
           }
+
+          setStatus('error')
+          setStatusMessage(data.message || 'Transmission conflict.')
           return
         }
 
@@ -265,7 +294,7 @@ const ComponentIdTransmitter: React.FC = () => {
     if (idAlreadyExists) {
       setStatus('error')
       setStatusMessage(
-        'This ID already exists in the catalog and cannot be transmitted.'
+        'This identity id already exists in the catalog and cannot be transmitted.',
       )
       return
     }
@@ -286,7 +315,7 @@ const ComponentIdTransmitter: React.FC = () => {
 
   const handleClearPending = useCallback(async () => {
     try {
-      const res = await fetch(API_BASE, { method: 'DELETE' })
+      const res = await fetch(API_BASE, { method: 'DELETE', credentials: 'include' })
       if (!res.ok) {
         console.error('Failed to clear pending transmission:', res.status)
         return
@@ -334,7 +363,7 @@ const ComponentIdTransmitter: React.FC = () => {
       : 'bg-muted text-muted-foreground'
 
   const placeholderMessage =
-    'Camera Feed Placeholder.\n\nScan a QR code to transmit the component ID.'
+    'Camera Feed Placeholder.\n\nScan a QR code to transmit the identity id.'
 
   return (
     <div className="flex flex-col items-center">
@@ -351,7 +380,7 @@ const ComponentIdTransmitter: React.FC = () => {
               ) : pending ? (
                 <div className="space-y-1">
                   <div className="font-mono break-all">
-                    {pending.component_id}
+                    {pending.identity_id}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     pending since {formatTimestamp(pending.created_at)}
@@ -384,7 +413,7 @@ const ComponentIdTransmitter: React.FC = () => {
           <div className="flex w-full max-w-sm flex-col gap-2 pb-4">
             <Input
               id="inputFieldTransmitID"
-              placeholder="Component ID (scan or paste)"
+              placeholder="Identity ID (scan or paste)"
               value={inputId}
               onChange={(e) => {
                 setInputId(e.target.value)
@@ -541,7 +570,7 @@ const ComponentIdTransmitter: React.FC = () => {
               Pending ID already exists
             </DialogTitle>
             <DialogDescription>
-              You still have a pending component ID in the queue. Do you
+              You still have a pending identity id in the queue. Do you
               really want to overwrite it?
             </DialogDescription>
           </DialogHeader>
@@ -553,7 +582,7 @@ const ComponentIdTransmitter: React.FC = () => {
                   Current pending
                 </div>
                 <div className="font-mono break-all">
-                  {confirmPayload.existing.component_id}
+                  {confirmPayload.existing.identity_id}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   pending since{' '}

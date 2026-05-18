@@ -62,7 +62,7 @@ function isConsumedShallowRow(row: Pick<CatalogShallowRow, 'consumed_at'>): bool
 }
 
 /** Compose API row → ExtendedComponentModel detail fields (viewer uses `{ identity, snapshot }` directly). */
-function composeCatalogToExtendedRow(catalog: CatalogComponent): ExtendedComponentModel {
+export function composeCatalogToExtendedRow(catalog: CatalogComponent): ExtendedComponentModel {
   const { identity, snapshot } = catalog
   const sg = snapshot.geometry
   const rawMp = sg?.marker_points
