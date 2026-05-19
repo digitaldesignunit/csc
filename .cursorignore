@@ -6,6 +6,7 @@
 
 # ENVIRONMENT FILES
 *.env
+*.env.local
 *.bash_profile
 *fastapi.ini
 *dbconfig.json

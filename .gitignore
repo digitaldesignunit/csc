@@ -25,7 +25,7 @@ __pycache__/
 /reference/
 
 # folder for internal future implementation plans
-/future_implementation/
+#/future_implementation/
 
 # VIZ FOLDER
 /viz/
