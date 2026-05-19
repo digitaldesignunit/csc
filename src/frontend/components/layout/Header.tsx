@@ -6,9 +6,14 @@ import { useTheme } from 'next-themes'
 import AppMenu from '@/components/layout/AppMenu'
 import ThemeToggle from '@/components/common/ThemeToggle'
 import UserItem from '@/components/auth/UserItem'
+import { Badge } from '@/components/ui/badge'
 import { resolveStatic } from '@/lib/utils'
 
-export default function Header() {
+type HeaderProps = {
+  betaBannerText?: string
+}
+
+export default function Header({ betaBannerText }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const { theme, systemTheme } = useTheme()
@@ -55,16 +60,16 @@ export default function Header() {
   return (
     <>
       {/* Main Header */}
-      <div className='flex items-center justify-between gap-4 p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
+      <div className="flex min-h-11 items-center justify-between gap-3 border-b bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:min-h-10 md:px-4 md:py-1.5">
         {/* Left side - Logo and Title */}
-        <div className='flex items-center gap-3'>
+        <div className="flex min-w-0 items-center gap-2 md:gap-2.5">
           {mounted && isMobile && (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={logoSrc}
               alt="Digital Design Unit"
-              width={40}
-              height={40}
+              width={32}
+              height={32}
               className="flex-shrink-0"
               onError={(e) => {
                 console.error('Failed to load DDU logo:', logoSrc)
@@ -72,17 +77,26 @@ export default function Header() {
               }}
             />
           )}
-          <h1 className='text-xl font-bold text-foreground'>Catalog of Second Chances</h1>
+          <h1 className="truncate text-base font-semibold leading-snug text-foreground">
+            Catalog of Second Chances
+          </h1>
+          {betaBannerText ? (
+            <Badge
+              className="shrink-0 overflow-visible border-amber-600 bg-amber-500 px-2.5 py-0.5 text-xs font-bold leading-normal text-amber-950 shadow-sm ring-1 ring-amber-700/25 dark:border-amber-300 dark:bg-amber-400 dark:text-amber-950 dark:ring-amber-200/30"
+            >
+              {betaBannerText}
+            </Badge>
+          ) : null}
         </div>
 
         {/* Right side - Theme toggle and mobile menu button */}
-        <div className='flex items-center gap-3'>
+        <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle />
           
           {/* Mobile menu button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className='md:hidden p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer'
+            className="cursor-pointer rounded-md p-1.5 transition-colors hover:bg-accent hover:text-accent-foreground md:hidden"
             aria-label="Toggle mobile menu"
           >
             {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -92,7 +106,7 @@ export default function Header() {
 
       {/* Mobile UserItem - shown below header on mobile */}
       {isMobile && (
-        <div className='md:hidden p-2 border-b bg-muted/30'>
+        <div className="border-b bg-muted/30 p-1.5 md:hidden">
           <UserItem />
         </div>
       )}

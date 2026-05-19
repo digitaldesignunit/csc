@@ -8,8 +8,8 @@ export default function IdentifyComponent() {
       {/* Header */}
       <div className="mb-3 sm:mb-4">
         <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <QrCode className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold">Scan & Identify</h1>
+          <QrCode className="h-6 w-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-bold">Scan & Identify</h1>
         </div>
         <div className="mt-3 rounded-lg border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800 p-3">
           <ul className="list-disc space-y-1 pl-5 text-sm sm:text-base text-green-800 dark:text-green-200">

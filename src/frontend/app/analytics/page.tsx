@@ -173,8 +173,8 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <BarChart2 className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-semibold">Analytics</h1>
+            <BarChart2 className="h-5 w-5 text-primary" />
+            <h1 className="text-xl font-semibold sm:text-2xl">Analytics</h1>
           </div>
           <p className="text-sm text-muted-foreground">Overview and distributions across component attributes</p>
         </div>

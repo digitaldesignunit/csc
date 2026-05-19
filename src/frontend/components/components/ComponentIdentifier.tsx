@@ -4,10 +4,9 @@ import React, { useState, useRef } from 'react'
 import { Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { Button } from '@/components/ui/button'
 import { CardContent, CardHeader } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
-import { QrCode, Search } from 'lucide-react'
+import { QrCode } from 'lucide-react'
 import QRScanner, { QRScannerRef } from '@/components/qr/QRScanner'
 
 type ScanStatus = 'neutral' | 'scanning' | 'found' | 'not_found' | 'error'
@@ -24,7 +23,6 @@ const ComponentIdentifier: React.FC = () => {
   }
 
   const [scannedID, setScannedID] = useState('')
-  const [inputID, setInputID] = useState('')
   const [isScanning, setIsScanning] = useState(false)
   const [status, setStatus] = useState<ScanStatus>('neutral')
   const [isChecking, setIsChecking] = useState(false)
@@ -96,35 +94,8 @@ const ComponentIdentifier: React.FC = () => {
   const resetScanner = () => {
     if (isScanning) stopScanning()
     setScannedID('')
-    setInputID('')
     setStatus('neutral')
     setIsChecking(false)
-  }
-
-  const handleManualSearch = async () => {
-    if (!inputID.trim()) return
-    
-    setScannedID(inputID.trim())
-    setIsChecking(true)
-    setStatus('scanning')
-    
-    try {
-      const exists = await checkComponentExists(inputID.trim())
-      if (exists) {
-        setStatus('found')
-        // Navigate to component page after a brief delay to show success message
-        setTimeout(() => {
-          router.push(`/components/${inputID.trim()}`)
-        }, 1000)
-      } else {
-        setStatus('not_found')
-      }
-    } catch (error) {
-      console.error('Error checking component:', error)
-      setStatus('error')
-    } finally {
-      setIsChecking(false)
-    }
   }
 
   // theme-friendly classes
@@ -159,47 +130,18 @@ const ComponentIdentifier: React.FC = () => {
 
   return (
     <div className="flex flex-col items-center">
-      <CardHeader className="relative w-full max-w-sm p-1">
-        {/* Manual Input Interface */}
-        {!scannedID && !isScanning && (
-          <div className="flex w-full max-w-sm flex-col gap-2 pb-4">
-            <Input
-              id="inputFieldComponentID"
-              placeholder="Component ID"
-              value={inputID}
-              onChange={(e) => setInputID(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleManualSearch()
-                }
-              }}
-            />
-            <Button 
-              variant="outline" 
-              onClick={handleManualSearch}
-              disabled={!inputID.trim() || isChecking}
-              className="flex items-center gap-2"
-            >
-              <Search className="h-4 w-4" />
-              {isChecking ? 'Checking...' : 'Search Component'}
-            </Button>
-          </div>
-        )}
-
-        {/* Display Scanned ID */}
-        {scannedID && (
-          <div className="w-full grid grid-cols-2 gap-y-3 items-center">
-            <div className="flex justify-start min-w-0 w-20">
-              <span className="text-sm font-medium text-foreground">Component ID:</span>
-            </div>
+      {scannedID ? (
+        <CardHeader className="relative w-full max-w-sm p-1 pb-3">
+          <div className="grid w-full grid-cols-2 items-center gap-y-3">
+            <span className="text-sm font-medium text-foreground">Component ID:</span>
             <div className="flex justify-end items-center">
-              <Badge variant="secondary" className={`no-wrap flex-shrink-0 ${statusBadgeClass}`}>
+              <Badge variant="secondary" className={`flex-shrink-0 ${statusBadgeClass}`}>
                 {scannedID}
               </Badge>
             </div>
           </div>
-        )}
-      </CardHeader>
+        </CardHeader>
+      ) : null}
 
       {/* QR Code Scanner Canvas */}
       <CardContent

@@ -7,8 +7,8 @@ export default function AddComponentPage() {
     <div className="container mx-auto max-w-3xl space-y-6 p-6">
       <div className="space-y-3">
         <div className="flex items-center gap-2 sm:gap-3">
-          <PackagePlus className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold sm:text-3xl">Add Component</h1>
+          <PackagePlus className="h-6 w-6 text-primary" />
+          <h1 className="text-xl font-bold sm:text-2xl">Add Component</h1>
         </div>
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
           <ul className="list-disc space-y-1 pl-5 text-sm text-blue-900 dark:text-blue-100">

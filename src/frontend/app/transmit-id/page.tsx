@@ -14,8 +14,8 @@ export default function TransmitIdPage() {
       {/* Header */}
       <div className="mb-3 sm:mb-4">
         <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <Send className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold">
+          <Send className="h-6 w-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-bold">
             Transmit ID to Grasshopper
           </h1>
         </div>

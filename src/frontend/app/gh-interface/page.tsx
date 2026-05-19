@@ -986,8 +986,8 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-4 flex items-center gap-3">
-          <Terminal className="h-8 w-8 text-primary" />
+        <h1 className="mb-3 flex items-center gap-2 text-2xl font-bold">
+          <Terminal className="h-6 w-6 text-primary" />
           Grasshopper Interface
         </h1>
         <p className="text-lg text-muted-foreground">

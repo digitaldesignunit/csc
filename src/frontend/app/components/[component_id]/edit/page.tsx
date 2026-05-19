@@ -122,8 +122,8 @@ export default function ComponentEditPage({
     <div className="container mx-auto max-w-3xl space-y-6 p-6">
       <div className="mb-4 sm:mb-6">
         <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <Pencil className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold">Edit Component</h1>
+          <Pencil className="h-6 w-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-bold">Edit Component</h1>
         </div>
         <p className="text-muted-foreground text-sm sm:text-base">
           Update the human-readable name, classification, color, and

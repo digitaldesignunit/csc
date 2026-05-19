@@ -109,8 +109,8 @@ export default function AdminLogsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 sm:gap-3 mb-2">
-            <Logs className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-            <h1 className="text-2xl sm:text-3xl font-bold">Admin Logs</h1>
+            <Logs className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+            <h1 className="text-xl sm:text-2xl font-bold">Admin Logs</h1>
           </div>
           <p className="text-muted-foreground text-sm sm:text-base">
             Live backend logs for monitoring and troubleshooting.

@@ -7,9 +7,8 @@ import Footer from '@/components/layout/Footer'
 import Providers from './providers'
 import SessionMonitor from '@/components/auth/SessionMonitor'
 import CookieNotice from '@/components/common/CookieNotice'
-import BetaPhaseBanner from '@/components/common/BetaPhaseBanner'
 import BetaPhaseLoginNotice from '@/components/common/BetaPhaseLoginNotice'
-import { getBetaLoginMessage, isBetaPhaseEnabled } from '@/lib/beta'
+import { getBetaBannerText, getBetaLoginMessage, isBetaPhaseEnabled } from '@/lib/beta'
 import { ThemeProvider } from 'next-themes'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -47,8 +46,9 @@ export default function RootLayout({
 
               {/* Main Content Area */}
               <main className="flex-1 min-w-0 w-full md:w-auto">
-                {betaPhaseEnabled && <BetaPhaseBanner />}
-                <Header />
+                <Header
+                  betaBannerText={betaPhaseEnabled ? getBetaBannerText() : undefined}
+                />
                 <div className="w-full max-w-full overflow-x-hidden">{children}</div>
               </main>
             </div>

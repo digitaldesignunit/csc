@@ -16,8 +16,8 @@ export default async function LocateByIdPage({ searchParams }: LocateByIdProps) 
       {/* Header */}
       <div className="mb-3 sm:mb-4">
         <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <Search className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold">Locate by ID</h1>
+          <Search className="h-6 w-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-bold">Locate by ID</h1>
         </div>
         <div className="mt-3 rounded-lg border bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 p-3">
           <ul className="list-disc space-y-1 pl-5 text-sm sm:text-base text-blue-800 dark:text-blue-200">

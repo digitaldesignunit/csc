@@ -58,14 +58,14 @@ export default async function ComponentDetailPage({
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-full">
-      <div className="mb-6 sm:mb-8 space-y-4">
+      <div className="mb-4 sm:mb-6 space-y-4">
         <div className="flex items-center gap-2 sm:gap-3">
           {isConsumed ? (
-            <Archive className="h-8 w-8 text-primary" />
+            <Archive className="h-6 w-6 text-primary" />
           ) : (
-            <Package className="h-8 w-8 text-primary" />
+            <Package className="h-6 w-6 text-primary" />
           )}
-          <h1 className="text-2xl sm:text-3xl font-bold">
+          <h1 className="text-xl sm:text-2xl font-bold">
             {isConsumed ? 'Consumed Component' : 'Component Details'}
           </h1>
         </div>

@@ -7,7 +7,6 @@ import {
   Home,
   Package,
   PackagePlus,
-  Search,
   Award,
   FileText,
   User,
@@ -111,14 +110,6 @@ export default function AppMenu() {
               <Package className="h-4 w-4" />
               Browse Components
             </div>
-            <div
-              onClick={() => handleNavigation('/locate-by-id')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
-            >
-              <Search className="h-4 w-4" />
-              Locate by ID
-            </div>
-
             <div className="my-1 mx-2 border-t border-border/60" />
             <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Capture

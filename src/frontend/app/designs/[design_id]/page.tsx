@@ -54,10 +54,10 @@ export default async function DesignDetailPage({
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-full">
       {/* Header */}
-      <div className="mb-6 sm:mb-8">
+      <div className="mb-4 sm:mb-6">
         <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <Layers className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold">Design Details</h1>
+          <Layers className="h-6 w-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-bold">Design Details</h1>
         </div>
       </div>
 

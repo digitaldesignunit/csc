@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import ComponentSnapshotGeometryDownload from './ComponentSnapshotGeometryDownload'
 import { ExtendedUser, isConsumedShallowRow } from './componentDetailShared'
 
 type ComponentDetailActionsProps = {
@@ -196,6 +197,10 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
   return (
     <div className="w-full space-y-3 border-t border-border pt-4">
       <div className="flex flex-wrap gap-2">
+        <div className="w-full min-w-[8rem] flex-1">
+          <ComponentSnapshotGeometryDownload catalog={catalog} />
+        </div>
+
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>

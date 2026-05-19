@@ -1,11 +1,13 @@
 import { ComponentOverviewDataTable } from '@/components/components/overview/ComponentOverviewDataTable'
 import ComponentOverviewPagination from '@/components/components/overview/ComponentOverviewPagination'
 import { ComponentOverviewColumns } from '@/components/components/overview/ComponentOverviewColumns'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import ComponentOverviewFilterMenu from '@/components/components/overview/ComponentOverviewFilterMenu'
 import ComponentUuidNavigator from '@/components/components/overview/ComponentUuidNavigator'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 import { Archive, Package } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -132,14 +134,14 @@ export default async function ComponentsPage({
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-full">
-      <div className="mb-6 sm:mb-8 space-y-3">
+      <div className="mb-4 sm:mb-6 space-y-3">
         <div className="flex items-center gap-2 sm:gap-3">
           {showConsumed ? (
-            <Archive className="h-8 w-8 text-primary" />
+            <Archive className="h-6 w-6 text-primary" />
           ) : (
-            <Package className="h-8 w-8 text-primary" />
+            <Package className="h-6 w-6 text-primary" />
           )}
-          <h1 className="text-2xl sm:text-3xl font-bold">
+          <h1 className="text-xl sm:text-2xl font-bold">
             {showConsumed ? 'Consumed Components' : 'Browse Components'}
           </h1>
         </div>
@@ -149,28 +151,29 @@ export default async function ComponentsPage({
             Open any row for the same detail view as active components.
           </p>
         )}
-        <div className="flex flex-wrap gap-2 text-sm">
-          <Link
-            href="/components"
-            className={
-              showConsumed
-                ? 'text-muted-foreground hover:text-foreground underline-offset-4 hover:underline'
-                : 'font-medium text-foreground'
-            }
+        <div className="flex flex-wrap gap-2">
+          <Button
+            asChild
+            size="sm"
+            variant={showConsumed ? 'outline' : 'default'}
+            className={cn(
+              !showConsumed &&
+                'border-green-600 bg-green-600 text-white hover:bg-green-700 hover:text-white dark:border-green-600 dark:bg-green-600 dark:hover:bg-green-700',
+            )}
           >
-            Active catalog
-          </Link>
-          <span className="text-muted-foreground">·</span>
-          <Link
-            href="/components?consumed=1"
-            className={
-              showConsumed
-                ? 'font-medium text-foreground'
-                : 'text-muted-foreground hover:text-foreground underline-offset-4 hover:underline'
-            }
+            <Link href="/components">Active Catalog</Link>
+          </Button>
+          <Button
+            asChild
+            size="sm"
+            variant={showConsumed ? 'default' : 'outline'}
+            className={cn(
+              showConsumed &&
+                'border-orange-600 bg-orange-600 text-white hover:bg-orange-700 hover:text-white dark:border-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700',
+            )}
           >
-            Consumed
-          </Link>
+            <Link href="/components?consumed=1">Consumed Components (Archive)</Link>
+          </Button>
         </div>
       </div>
 
