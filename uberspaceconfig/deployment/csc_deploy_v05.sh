@@ -63,11 +63,11 @@ rsync -a --force "$FOLDER2/" "../$TARGET2/"
 mkdir -p "../$TARGET2/logs"
 echo "-----------------------------------------------------------------"
 
-# Restarting backend and stopping frontend for build
+# Stopping for build
 echo "-------------------------- PROCESSES ----------------------------"
 echo "-----------------------------------------------------------------"
-echo "SVR: Restarting backend..."
-supervisorctl restart fastapi
+echo "SVR: Stopping backend..."
+supervisorctl stop fastapi
 echo "SVR: Stopping frontend..."
 supervisorctl stop frontend
 echo "-----------------------------------------------------------------"
@@ -81,9 +81,11 @@ rm -r .next
 npm i
 npm run build -- --webpack
 
-# Restarting frontend after build
+# Restarting after build
 echo "------------------------- PROCESSES -----------------------------"
 echo "-----------------------------------------------------------------"
+echo "SVR: Starting backend..."
+supervisorctl start fastapi
 echo "SVR: Starting frontend..."
 supervisorctl start frontend
 echo "-----------------------------------------------------------------"
