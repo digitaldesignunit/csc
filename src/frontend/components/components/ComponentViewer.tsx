@@ -4,7 +4,12 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
-import type { CatalogComponent, SnapshotMesh } from '@/generated/CatalogModels'
+import type {
+  CatalogComponent,
+  SnapshotExtrusion,
+  SnapshotGeometry,
+  SnapshotMesh,
+} from '@/generated/CatalogModels'
 import type { SnapshotMeshRouting } from '@/generated/catalogExtras'
 import { snapshotMeshRoutingFromSnapshot } from '@/generated/catalogExtras'
 import { Card } from '@/components/ui/card'
@@ -81,6 +86,18 @@ type PrimitiveDrawBuffers = {
   positionsFlat: number[]
   indices: number[]
   rawColors?: number[][]
+}
+
+function snapshotMeshesFromGeometry(geometry: SnapshotGeometry): SnapshotMesh[] {
+  const meshes = geometry.meshes
+  return Array.isArray(meshes) ? (meshes as SnapshotMesh[]) : []
+}
+
+function snapshotExtrusionsFromGeometry(
+  geometry: SnapshotGeometry,
+): SnapshotExtrusion[] {
+  const extrusions = geometry.extrusions
+  return Array.isArray(extrusions) ? (extrusions as SnapshotExtrusion[]) : []
 }
 
 function vertexColorsFromSnapshot(
@@ -509,9 +526,8 @@ function snapshotExtrusionRgb(snap: CatalogComponent['snapshot']): [number, numb
 
 function VisualizeComponent(props: VisualizeProps) {
   const sg = props.catalog.snapshot.geometry
-  const ext = sg.extrusions?.[0]
-  const meshesApi = sg.meshes ?? []
-  const primitiveDraws = snapshotMeshesToDrawBuffers(meshesApi)
+  const ext = snapshotExtrusionsFromGeometry(sg)[0]
+  const primitiveDraws = snapshotMeshesToDrawBuffers(snapshotMeshesFromGeometry(sg))
 
   const hasExtrusion =
     !!ext?.profile?.length && typeof ext.height === 'number' && Number.isFinite(ext.height)
@@ -576,8 +592,18 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
     [catalog.snapshot],
   )
 
+  const snapshotGeometry = catalog.snapshot.geometry
+  const snapshotMeshes = useMemo(
+    () => snapshotMeshesFromGeometry(snapshotGeometry),
+    [snapshotGeometry],
+  )
+  const snapshotExtrusions = useMemo(
+    () => snapshotExtrusionsFromGeometry(snapshotGeometry),
+    [snapshotGeometry],
+  )
+
   const canRenderViewport =
-    !!(catalog.snapshot.geometry.meshes?.length || catalog.snapshot.geometry.extrusions?.length)
+    snapshotMeshes.length > 0 || snapshotExtrusions.length > 0
 
   const [geometryMode, setGeometryMode] = useState<GeometryMode>('primitive')
   const [visibleMeshes, setVisibleMeshes] = useState<boolean[]>([])
@@ -587,10 +613,7 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
   const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
   const [showEdges, setShowEdges] = useState<boolean>(true)
 
-  const primitiveMeshCount = useMemo(
-    () => catalog.snapshot.geometry.meshes?.length ?? 0,
-    [catalog.snapshot.geometry.meshes],
-  )
+  const primitiveMeshCount = snapshotMeshes.length
 
   const snapshotMeshCacheKey = useMemo(() => {
     if (!snapshotRouting?.snapshot_id) return ''
