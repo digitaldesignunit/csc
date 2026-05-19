@@ -84,6 +84,17 @@ def get_snapshot_meshes_directory() -> str:
     )
 
 
+def get_snapshot_point_clouds_directory() -> str:
+    """PLY point clouds: point_clouds/<snapshot_id>/<index>.ply."""
+    explicit = os.getenv('SNAPSHOT_POINT_CLOUDS_DIR')
+    if explicit:
+        return sanitize_path(explicit)
+    legacy_preview = get_preview_directory()
+    return sanitize_path(
+        os.path.join(os.path.dirname(legacy_preview), 'point_clouds')
+    )
+
+
 def get_snapshot_photo_upload_limit_bytes() -> int:
     mb = int(os.getenv('SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB', '10'))
     return mb * 1024 * 1024

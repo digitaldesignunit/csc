@@ -4,7 +4,10 @@ Routes for the v0.5 `component_snapshots` collection.
 
 * `GET /snapshots/{snapshot_id}` - fetch one snapshot by id (ADR-014 #3)
 * `GET /snapshots/{snapshot_id}/preview` - rendered catalog thumbnail
-* `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}` - PLY
+* `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}` - PLY file or OBJ (`?format=obj`)
+* `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/primitive` - inline mesh (`?format=ply|obj`)
+* `GET /snapshots/{snapshot_id}/extrusions/{index}` - inline extrusion mesh (`?format=ply|obj`)
+* `GET /snapshots/{snapshot_id}/point_clouds/{index}.ply` - file or inline → PLY
 * `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}` - user photos (JPEG)
 """
 
@@ -19,15 +22,29 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Query,
     Request,
     UploadFile,
 )
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from PIL import Image
 from pymongo.errors import PyMongoError
 
 from apps.catalog.models import ComponentSnapshot, User
 from utility import ensure_file, read_upload_limited
+
+from apps.catalog.geometry_mesh_export import (
+    export_extrusion,
+    export_inline_mesh,
+    export_inline_point_cloud_ply,
+    export_mesh_file,
+    get_inline_extrusion_primitive,
+    get_inline_mesh_primitive,
+    get_inline_point_cloud_primitive,
+    mesh_export_extension,
+    mesh_export_media_type,
+    normalize_mesh_format,
+)
 
 from .auth import get_current_active_user
 from .catalog_common import get_snapshots_col, validate_uuid
@@ -203,9 +220,81 @@ def _mesh_etag(path: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
+def _point_cloud_path(
+    request: Request,
+    snapshot_id: str,
+    index: int,
+) -> str:
+    return os.path.join(
+        request.app.snapshot_point_clouds_dir,
+        snapshot_id,
+        f'{index}.ply',
+    )
+
+
+def _mesh_export_attachment_response(
+    content: bytes,
+    filename: str,
+    fmt: str,
+) -> Response:
+    return Response(
+        content=content,
+        media_type=mesh_export_media_type(fmt),  # type: ignore[arg-type]
+        headers={
+            'Content-Disposition': f'attachment; filename="{filename}"',
+            'Cache-Control': 'private, max-age=3600',
+        },
+    )
+
+
+def _http_mesh_format(format: str) -> str:
+    try:
+        return normalize_mesh_format(format)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get(
+    '/snapshots/{snapshot_id}/meshes/{primitive_index}/primitive',
+    summary='Export inline mesh primitive (PLY or OBJ)',
+)
+async def get_snapshot_mesh_primitive(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    snapshot_id: str,
+    primitive_index: int,
+    format: str = Query('ply', description='ply (default) or obj'),
+):
+    """Build mesh from ``geometry.meshes[primitive_index]``; OBJ is converted on the fly."""
+    fmt = _http_mesh_format(format)
+    if primitive_index < 0:
+        raise HTTPException(
+            status_code=400,
+            detail='primitive_index must be >= 0',
+        )
+    doc = await _load_snapshot(request, snapshot_id)
+    try:
+        mesh = get_inline_mesh_primitive(doc, primitive_index)
+        body = export_inline_mesh(mesh, fmt)  # type: ignore[arg-type]
+    except IndexError:
+        raise HTTPException(status_code=404, detail='Mesh primitive not found')
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        print(f'[ERROR] mesh primitive export ({fmt}): {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail=f'Failed to export mesh primitive as {fmt.upper()}',
+        )
+
+    ext = mesh_export_extension(fmt)  # type: ignore[arg-type]
+    filename = f'{snapshot_id}_mesh_{primitive_index}_primitive.{ext}'
+    return _mesh_export_attachment_response(body, filename, fmt)
+
+
 @router.get(
     '/snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}',
-    summary='Get PLY mesh file for snapshot primitive',
+    summary='Get mesh file for snapshot primitive (PLY or OBJ)',
 )
 async def get_snapshot_mesh(
     request: Request,
@@ -213,13 +302,17 @@ async def get_snapshot_mesh(
     snapshot_id: str,
     primitive_index: int,
     resolution: str,
+    format: str = Query('ply', description='ply (default) or obj'),
 ):
     """
     Serve ``meshes/<snapshot_id>/<primitive_index>/{reduced|detailed}.ply``.
 
+    ``?format=obj`` converts the on-disk PLY to OBJ at request time (no duplicate files).
+
     Returns 404 when the file is not on disk or ``mesh_ply_resolutions``
     does not list the requested resolution for this primitive index.
     """
+    fmt = _http_mesh_format(format)
     if primitive_index < 0:
         raise HTTPException(
             status_code=400,
@@ -254,25 +347,124 @@ async def get_snapshot_mesh(
             detail=f'PLY file not found on disk: {path}',
         )
 
-    etag = _mesh_etag(path)
-    if_none_match = request.headers.get('if-none-match')
-    if if_none_match and if_none_match == etag:
-        from fastapi.responses import Response
-        return Response(
-            status_code=304,
-            headers={'ETag': etag},
+    ext = mesh_export_extension(fmt)  # type: ignore[arg-type]
+    filename = f'{snapshot_id}_{primitive_index}_{resolution}.{ext}'
+
+    if fmt == 'ply':
+        etag = _mesh_etag(path)
+        if_none_match = request.headers.get('if-none-match')
+        if if_none_match and if_none_match == etag:
+            from fastapi.responses import Response
+            return Response(
+                status_code=304,
+                headers={'ETag': etag},
+            )
+        return FileResponse(
+            path,
+            media_type='model/ply',
+            filename=filename,
+            headers={
+                'ETag': etag,
+                'Cache-Control': 'private, max-age=86400',
+                'Content-Disposition': f'attachment; filename="{filename}"',
+            },
         )
 
-    filename = f'{snapshot_id}_{primitive_index}_{resolution}.ply'
-    return FileResponse(
-        path,
-        media_type='model/ply',
-        filename=filename,
-        headers={
-            'ETag': etag,
-            'Cache-Control': 'private, max-age=86400',
-        },
-    )
+    try:
+        body = export_mesh_file(path, fmt)  # type: ignore[arg-type]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        print(f'[ERROR] mesh file OBJ conversion: {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail='Failed to convert mesh file to OBJ',
+        )
+    return _mesh_export_attachment_response(body, filename, fmt)
+
+
+@router.get(
+    '/snapshots/{snapshot_id}/extrusions/{index}',
+    summary='Export inline extrusion primitive (PLY or OBJ mesh)',
+)
+async def get_snapshot_extrusion(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    snapshot_id: str,
+    index: int,
+    format: str = Query('ply', description='ply (default) or obj'),
+):
+    """Triangulate ``geometry.extrusions[index]``; OBJ is converted on the fly."""
+    fmt = _http_mesh_format(format)
+    if index < 0:
+        raise HTTPException(status_code=400, detail='index must be >= 0')
+    doc = await _load_snapshot(request, snapshot_id)
+    try:
+        ext = get_inline_extrusion_primitive(doc, index)
+        body = export_extrusion(ext, fmt)  # type: ignore[arg-type]
+    except IndexError:
+        raise HTTPException(status_code=404, detail='Extrusion primitive not found')
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        print(f'[ERROR] extrusion export ({fmt}): {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail=f'Failed to export extrusion as {fmt.upper()}',
+        )
+
+    file_ext = mesh_export_extension(fmt)  # type: ignore[arg-type]
+    filename = f'{snapshot_id}_extrusion_{index}.{file_ext}'
+    return _mesh_export_attachment_response(body, filename, fmt)
+
+
+@router.get(
+    '/snapshots/{snapshot_id}/point_clouds/{index}.ply',
+    summary='Get point cloud PLY (file on disk or generated from inline points)',
+)
+async def get_snapshot_point_cloud_ply(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    snapshot_id: str,
+    index: int,
+):
+    """
+    Serve ``point_clouds/<snapshot_id>/<index>.ply`` when present; otherwise
+    build PLY from ``geometry.point_clouds[index]`` inline points.
+    """
+    if index < 0:
+        raise HTTPException(status_code=400, detail='index must be >= 0')
+
+    doc = await _load_snapshot(request, snapshot_id)
+    path = _point_cloud_path(request, snapshot_id, index)
+    filename = f'{snapshot_id}_point_cloud_{index}.ply'
+
+    if os.path.isfile(path):
+        return FileResponse(
+            path,
+            media_type='model/ply',
+            filename=filename,
+            headers={
+                'Cache-Control': 'private, max-age=86400',
+                'Content-Disposition': f'attachment; filename="{filename}"',
+            },
+        )
+
+    try:
+        pc = get_inline_point_cloud_primitive(doc, index)
+        ply_bytes = export_inline_point_cloud_ply(pc)
+    except IndexError:
+        raise HTTPException(status_code=404, detail='Point cloud not found')
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        print(f'[ERROR] point cloud PLY export: {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail='Failed to export point cloud as PLY',
+        )
+
+    return _mesh_export_attachment_response(ply_bytes, filename, 'ply')
 
 
 @router.get(
