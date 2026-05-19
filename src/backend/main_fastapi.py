@@ -102,6 +102,7 @@ async def lifespan(app: FastAPI):
     app.snapshot_preview_dir = get_snapshot_preview_directory()
     app.snapshot_photos_dir = get_snapshot_photos_directory()
     app.snapshot_meshes_dir = get_snapshot_meshes_directory()
+    app.snapshot_point_clouds_dir = get_snapshot_point_clouds_directory()
     app.snapshot_photo_upload_limit_bytes = (
         get_snapshot_photo_upload_limit_bytes()
     )
