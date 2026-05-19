@@ -1245,7 +1245,13 @@ class CreateComponentRequest(BaseModel):
         alias='_id',
         description='Optional identity UUID; server generates if omitted',
     )
-    name: Optional[str] = 'Unnamed Component'
+    name: Optional[str] = Field(
+        default=None,
+        description=(
+            'Display name; omit or leave empty to auto-generate '
+            'from catalog number (e.g. Component #1234)'
+        ),
+    )
     componenttype: str = Field(alias='type')
     material: str
     dataset: str

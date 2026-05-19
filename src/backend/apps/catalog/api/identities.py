@@ -47,6 +47,7 @@ from .auth import get_current_active_user, require_admin
 from .catalog_common import (
     allocate_catalog_number,
     compute_snapshot_etag,
+    resolve_new_component_name,
     get_identities_col,
     get_snapshots_col,
     now_iso,
@@ -477,6 +478,9 @@ async def create_identity(
     if payload.marker_points and not geometry.get('marker_points'):
         geometry['marker_points'] = payload.marker_points
 
+    catalog_number = await allocate_catalog_number(request)
+    resolved_name = resolve_new_component_name(payload.name, catalog_number)
+
     now = now_iso()
     snapshot_id = str(uuid.uuid4())
     snapshot_doc: Dict[str, Any] = {
@@ -484,7 +488,7 @@ async def create_identity(
         'identity_id': identity_id,
         'version': 0,
         'virtual': False,
-        'name': payload.name or 'Unnamed Component',
+        'name': resolved_name,
         'geometry': geometry,
         'descriptors': payload.descriptors or {},
         'bbx': list(payload.bbx),
@@ -516,7 +520,6 @@ async def create_identity(
             detail=f'Invalid snapshot payload: {exc}',
         )
 
-    catalog_number = await allocate_catalog_number(request)
     identity_doc: Dict[str, Any] = {
         '_id': identity_id,
         'catalog_number': catalog_number,

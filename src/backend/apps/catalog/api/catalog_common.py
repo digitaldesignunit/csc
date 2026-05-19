@@ -28,6 +28,17 @@ def compute_snapshot_etag(snapshot_doc: Dict[str, Any]) -> str:
     return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
 
 
+def resolve_new_component_name(
+    name: Optional[str],
+    catalog_number: int,
+) -> str:
+    """Use catalog number when the client leaves name empty (add-component flow)."""
+    raw = (name or '').strip()
+    if not raw or raw.lower() == 'unnamed component':
+        return f'Component #{catalog_number}'
+    return raw
+
+
 async def allocate_catalog_number(request: Request) -> int:
     """Return the next catalog_number and advance the counter atomically."""
     counters = request.app.mongodb_counters
