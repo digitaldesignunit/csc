@@ -4,7 +4,7 @@ import { PackagePlus } from 'lucide-react'
 
 export default function AddComponentPage() {
   return (
-    <div className="container mx-auto max-w-3xl space-y-6 p-6">
+    <div className="container mx-auto max-w-3xl space-y-4 p-4 sm:space-y-6 sm:p-6">
       <div className="space-y-3">
         <div className="flex items-center gap-2 sm:gap-3">
           <PackagePlus className="h-6 w-6 text-primary" />
@@ -30,7 +30,7 @@ export default function AddComponentPage() {
           <CardTitle className="text-lg">New catalog entry</CardTitle>
           <CardDescription>Follow the steps below. You can go back to edit earlier steps.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6">
           <ComponentAddWizard />
         </CardContent>
       </Card>

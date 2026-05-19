@@ -16,6 +16,9 @@ export const COMPONENT_TYPES = [
 export const CONDITION_VALUES = [0, 1, 2, 3] as const
 export const MANUFACTURED_PRECISIONS = ['exact', 'month', 'year', 'unknown'] as const
 
+/** Select value: pick a custom material/dataset string in a follow-up field. */
+export const CATALOG_META_CUSTOM = '__custom__'
+
 export const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -48,7 +51,7 @@ export const defaultAddComponentFormState = (): AddComponentFormState => ({
   type: 'panel',
   material: '',
   dataset: '',
-  complexity: 0,
+  complexity: 2,
   fragment: false,
   assembly: false,
   colorR: 110,
@@ -66,6 +69,21 @@ export const defaultAddComponentFormState = (): AddComponentFormState => ({
   salvaged_at: '',
   parent_component: '',
 })
+
+/** Label shown in review when the user leaves name empty. */
+export function addComponentDisplayNamePreview(name: string): string {
+  const trimmed = name.trim()
+  if (trimmed) return trimmed
+  return 'Auto-generated (catalog number)'
+}
+
+export function catalogMetaSelectValue(
+  value: string,
+  options: string[],
+): string {
+  if (!value.trim()) return ''
+  return options.includes(value) ? value : CATALOG_META_CUSTOM
+}
 
 function axisAlignedFrame() {
   return {
@@ -126,9 +144,10 @@ export function buildCreateIdentityPayload(
     lon: form.lon,
   }
 
+  const trimmedName = form.name.trim()
+
   const payload: CreateIdentityPayload = {
     _id: identityId,
-    name: form.name.trim() || 'Unnamed Component',
     type: form.type,
     material: form.material.trim(),
     dataset: form.dataset.trim(),
@@ -143,6 +162,10 @@ export function buildCreateIdentityPayload(
     reserved: '',
     attributes: {},
     ...box,
+  }
+
+  if (trimmedName) {
+    payload.name = trimmedName
   }
 
   if (form.condition !== null) {

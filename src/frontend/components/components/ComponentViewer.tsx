@@ -347,9 +347,10 @@ const ExtrusionVisualization = React.memo(
       const g = new THREE.ExtrudeGeometry(pline_shape, extrudeSettings)
       g.translate(0, 0, -height * scale * 0.5)
       g.rotateX(-Math.PI / 2)
-      g.computeVertexNormals()
-      g.normalizeNormals()
-      return g
+      // Indexed extrusion + shared vertices smear normals at cap/side edges.
+      const geom = g.index !== null ? g.toNonIndexed() : g
+      geom.computeVertexNormals()
+      return geom
     }, [pline_shape, profile, height])
 
     const colorHex = rgbToHex(colorRgb[0], colorRgb[1], colorRgb[2])

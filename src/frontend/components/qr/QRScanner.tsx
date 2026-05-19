@@ -10,7 +10,12 @@ interface QRScannerProps {
   config?: {
     aspectRatio?: number
     fps?: number
-    qrbox?: { width: number; height: number }
+    qrbox?:
+      | { width: number; height: number }
+      | ((
+          viewfinderWidth: number,
+          viewfinderHeight: number,
+        ) => { width: number; height: number })
     rememberLastUsedCamera?: boolean
     supportedScanTypes?: Html5QrcodeScanType[]
     formatsToSupport?: Html5QrcodeSupportedFormats[]
@@ -102,7 +107,7 @@ const QRScanner = forwardRef<QRScannerRef, QRScannerProps>(({
   }))
 
   return (
-    <div id={elementId} className="rounded-lg w-full h-full" />
+    <div id={elementId} className="h-full w-full rounded-lg" />
   )
 })
 

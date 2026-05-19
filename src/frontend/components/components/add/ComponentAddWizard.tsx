@@ -11,15 +11,17 @@ import {
   ArrowRight,
   CheckCircle2,
   Loader2,
+  MapPin,
   PackagePlus,
   QrCode,
 } from 'lucide-react'
 
+import CatalogMetaSelect from '@/components/components/add/CatalogMetaSelect'
 import SnapshotPhotoCapture from '@/components/photos/SnapshotPhotoCapture'
 import QRScanner, { QRScannerRef } from '@/components/qr/QRScanner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardContent, CardHeader } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,6 +36,7 @@ import {
   AddComponentFormState,
   COMPONENT_TYPES,
   CONDITION_VALUES,
+  addComponentDisplayNamePreview,
   buildCreateIdentityPayload,
   defaultAddComponentFormState,
   isValidIdentityUuid,
@@ -91,6 +94,8 @@ export default function ComponentAddWizard() {
 
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [locating, setLocating] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
 
   const qrScannerRef = useRef<QRScannerRef | null>(null)
   const elementId = 'add-component-qr-reader'
@@ -320,6 +325,30 @@ export default function ComponentAddWizard() {
 
   const colorHex = hexComponentColor([form.colorR, form.colorG, form.colorB])
 
+  const useCurrentLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported in this browser.')
+      return
+    }
+    setLocating(true)
+    setLocationError(null)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setForm(f => ({
+          ...f,
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+        }))
+        setLocating(false)
+      },
+      err => {
+        setLocationError(err.message || 'Could not read your location.')
+        setLocating(false)
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 },
+    )
+  }, [])
+
   return (
     <div className="space-y-6">
       <nav aria-label="Add component progress" className="flex flex-wrap gap-2">
@@ -339,21 +368,22 @@ export default function ComponentAddWizard() {
       </nav>
 
       {step === 'identity' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <section className="space-y-4 border-t border-border pt-6">
+          <div className="space-y-1">
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
               <QrCode className="h-5 w-5" />
               Scan physical tag
-            </CardTitle>
-            <CardDescription>
+            </h2>
+            <p className="text-sm text-muted-foreground">
               Scan the QR code on the piece to read its identity id. The id must not already exist in
               the catalog.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center space-y-4">
-            {!isScanning && (
-              <div className="flex w-full max-w-sm flex-col gap-2">
-                <Label htmlFor="add-identity-id">Or enter identity id manually</Label>
+            </p>
+          </div>
+          <div className="flex flex-col items-center">
+            <CardHeader className="relative w-full max-w-sm p-1">
+              {!isScanning && (
+                <div className="flex w-full max-w-sm flex-col gap-2 pb-4">
+                  <Label htmlFor="add-identity-id">Or enter identity id manually</Label>
                 <Input
                   id="add-identity-id"
                   value={inputId}
@@ -367,41 +397,43 @@ export default function ComponentAddWizard() {
               </div>
             )}
 
-            {effectiveId && (
-              <div className="grid w-full max-w-sm grid-cols-2 items-center gap-y-3">
-                <span className="text-sm font-medium text-foreground">Identity ID:</span>
-                <div className="flex justify-end">
-                  <Badge variant="secondary" className={`flex-shrink-0 ${identityBadgeClass}`}>
-                    {effectiveId}
-                  </Badge>
+              {effectiveId && (
+                <div className="grid w-full grid-cols-2 items-center gap-y-3">
+                  <span className="text-sm font-medium text-foreground">Identity ID:</span>
+                  <div className="flex justify-end">
+                    <Badge variant="secondary" className={`flex-shrink-0 ${identityBadgeClass}`}>
+                      {effectiveId}
+                    </Badge>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {effectiveId && (
-              <div
-                className={`w-full max-w-sm rounded-md border px-3 py-2 text-sm ${
-                  idAvailable === true
-                    ? 'border-green-300 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950/40 dark:text-green-100'
-                    : idAvailable === false
-                      ? 'border-destructive/40 bg-destructive/10 text-destructive'
-                      : 'border-border bg-muted/40 text-muted-foreground'
-                }`}
-              >
-                {isCheckingId ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Checking availability…
-                  </span>
-                ) : (
-                  idCheckMessage || 'Enter a valid UUID.'
-                )}
-              </div>
-            )}
+              {effectiveId && (isCheckingId || idCheckMessage) && (
+                <div
+                  className={`mt-2 text-xs ${
+                    idAvailable === false
+                      ? 'text-destructive'
+                      : idAvailable === true
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-muted-foreground'
+                  }`}
+                >
+                  {isCheckingId ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Checking availability…
+                    </span>
+                  ) : (
+                    idCheckMessage || 'Enter a valid UUID.'
+                  )}
+                </div>
+              )}
 
-            <div
+            </CardHeader>
+
+            <CardContent
               id={cameraContainerId}
-              className={`relative mx-auto mt-2 h-[500px] w-full max-w-[500px] rounded-xl border-8 bg-card p-0 ${identityBorderClass}`}
+              className={`mt-4 p-0 relative w-full max-w-[500px] h-[500px] border-8 rounded-xl ${identityBorderClass} bg-card`}
             >
               <QRScanner
                 ref={qrScannerRef}
@@ -411,20 +443,20 @@ export default function ComponentAddWizard() {
               />
               {!isScanning && (
                 <div className="absolute inset-0 flex items-center justify-center rounded bg-muted/60 text-center">
-                  <span className="whitespace-pre-wrap px-4 text-sm text-muted-foreground">
+                  <span className="whitespace-pre-wrap text-sm text-muted-foreground px-4">
                     {identityPlaceholderMessage}
                   </span>
                 </div>
               )}
-            </div>
+            </CardContent>
 
-            <div className="flex flex-col items-center space-y-3">
+            <div className="m-4 flex flex-col items-center space-y-3">
               {!isScanning && (
                 <Button
                   type="button"
                   onClick={startScanning}
                   variant="outline"
-                  className="flex w-[200px] items-center gap-2"
+                  className="w-[200px] flex items-center gap-2"
                 >
                   <QrCode className="h-4 w-4" />
                   Start QR Code Scan
@@ -452,34 +484,33 @@ export default function ComponentAddWizard() {
               )}
             </div>
 
-            <div className="flex w-full justify-end pt-2">
+            <div className="flex w-full max-w-[500px] justify-end">
               <Button type="button" onClick={goNext} disabled={!canProceedIdentity}>
                 Continue
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
 
       {step === 'details' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Metadata & dimensions</CardTitle>
-            <CardDescription>
+        <section className="space-y-6 border-t border-border pt-6">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold">Metadata & dimensions</h2>
+            <p className="text-sm text-muted-foreground">
               Enter catalog fields and bounding box size in millimeters (L × W × H). A box
               extrusion is created for the initial snapshot geometry.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+            </p>
+          </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="add-name">Name</Label>
+                <Label htmlFor="add-name">Name (optional)</Label>
                 <Input
                   id="add-name"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Component name"
+                  placeholder="Leave empty to auto-generate from catalog number"
                 />
               </div>
               <div className="space-y-2">
@@ -497,36 +528,24 @@ export default function ComponentAddWizard() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="add-material">Material</Label>
-                <Input
-                  id="add-material"
-                  list="add-material-suggestions"
-                  value={form.material}
-                  onChange={e => setForm(f => ({ ...f, material: e.target.value }))}
-                  required
-                />
-                <datalist id="add-material-suggestions">
-                  {materialSuggestions.map(m => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="add-dataset">Dataset</Label>
-                <Input
-                  id="add-dataset"
-                  list="add-dataset-suggestions"
-                  value={form.dataset}
-                  onChange={e => setForm(f => ({ ...f, dataset: e.target.value }))}
-                  required
-                />
-                <datalist id="add-dataset-suggestions">
-                  {datasetSuggestions.map(d => (
-                    <option key={d} value={d} />
-                  ))}
-                </datalist>
-              </div>
+              <CatalogMetaSelect
+                id="add-material"
+                label="Material"
+                value={form.material}
+                options={materialSuggestions}
+                onChange={material => setForm(f => ({ ...f, material }))}
+                customPlaceholder="Custom material"
+                required
+              />
+              <CatalogMetaSelect
+                id="add-dataset"
+                label="Dataset"
+                value={form.dataset}
+                options={datasetSuggestions}
+                onChange={dataset => setForm(f => ({ ...f, dataset }))}
+                customPlaceholder="Custom dataset"
+                required
+              />
               <div className="space-y-2">
                 <Label>Complexity</Label>
                 <Select
@@ -575,7 +594,7 @@ export default function ComponentAddWizard() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-border p-4">
+            <div>
               <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Bounding box (mm)
               </p>
@@ -624,25 +643,57 @@ export default function ComponentAddWizard() {
                 />
                 <Label htmlFor="add-assembly">Assembly</Label>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="add-lat">Latitude</Label>
-                <Input
-                  id="add-lat"
-                  type="number"
-                  step="any"
-                  value={form.lat}
-                  onChange={e => setForm(f => ({ ...f, lat: parseFloat(e.target.value) || 0 }))}
-                />
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Label className="text-sm font-medium">Location</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  disabled={locating}
+                  onClick={() => useCurrentLocation()}
+                >
+                  {locating ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <MapPin className="mr-2 h-4 w-4" />
+                  )}
+                  Use my current location
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="add-lon">Longitude</Label>
-                <Input
-                  id="add-lon"
-                  type="number"
-                  step="any"
-                  value={form.lon}
-                  onChange={e => setForm(f => ({ ...f, lon: parseFloat(e.target.value) || 0 }))}
-                />
+              {locationError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {locationError}
+                </p>
+              )}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="add-lat">Latitude</Label>
+                  <Input
+                    id="add-lat"
+                    type="number"
+                    step="any"
+                    value={form.lat}
+                    onChange={e =>
+                      setForm(f => ({ ...f, lat: parseFloat(e.target.value) || 0 }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="add-lon">Longitude</Label>
+                  <Input
+                    id="add-lon"
+                    type="number"
+                    step="any"
+                    value={form.lon}
+                    onChange={e =>
+                      setForm(f => ({ ...f, lon: parseFloat(e.target.value) || 0 }))
+                    }
+                  />
+                </div>
               </div>
             </div>
 
@@ -686,30 +737,28 @@ export default function ComponentAddWizard() {
               </div>
             </details>
 
-            <div className="flex justify-between gap-2">
-              <Button type="button" variant="outline" onClick={goBack}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
-              </Button>
-              <Button type="button" onClick={goNext} disabled={!canProceedDetails}>
-                Continue
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="flex justify-between gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={goBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <Button type="button" onClick={goNext} disabled={!canProceedDetails}>
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </section>
       )}
 
       {step === 'photos' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Snapshot photos</CardTitle>
-            <CardDescription>
+        <section className="space-y-4 border-t border-border pt-6">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold">Snapshot photos</h2>
+            <p className="text-sm text-muted-foreground">
               Add photos of the physical piece. Use the camera on site or pick images from your
               device. Photos upload when you finish the wizard.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </p>
+          </div>
             <SnapshotPhotoCapture mode="staged" files={photoFiles} onFilesChange={setPhotoFiles} />
             <div className="flex justify-between gap-2">
               <Button type="button" variant="outline" onClick={goBack}>
@@ -721,22 +770,20 @@ export default function ComponentAddWizard() {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
-          </CardContent>
-        </Card>
+        </section>
       )}
 
       {step === 'finish' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <section className="space-y-4 border-t border-border pt-6">
+          <div className="space-y-1">
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
               Review & create
-            </CardTitle>
-            <CardDescription>
+            </h2>
+            <p className="text-sm text-muted-foreground">
               Confirm the new catalog entry, then create the identity and upload photos.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </p>
+          </div>
             <dl className="grid gap-2 text-sm">
               <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
                 <dt className="text-muted-foreground">Identity id</dt>
@@ -744,7 +791,7 @@ export default function ComponentAddWizard() {
               </div>
               <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
                 <dt className="text-muted-foreground">Name</dt>
-                <dd className="text-right">{form.name.trim() || 'Unnamed Component'}</dd>
+                <dd className="text-right">{addComponentDisplayNamePreview(form.name)}</dd>
               </div>
               <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
                 <dt className="text-muted-foreground">Type / material</dt>
@@ -794,8 +841,7 @@ export default function ComponentAddWizard() {
                 )}
               </Button>
             </div>
-          </CardContent>
-        </Card>
+        </section>
       )}
     </div>
   )
