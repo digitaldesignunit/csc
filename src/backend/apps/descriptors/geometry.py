@@ -101,12 +101,12 @@ def create_mesh_from_extrusion(
 
     Creates a solid mesh by extruding a 2D profile polygon along the Z axis.
     The mesh includes:
-    - Bottom face (at Z=0)
-    - Top face (at Z=height)
+    - Bottom face (at Z=-height/2)
+    - Top face (at Z=+height/2)
     - Side faces connecting bottom and top
 
     Args:
-        profile: List of [x, y] coordinates defining the profile polygon
+        profile: [x, y] vertices, counter-clockwise in XY (+Z view)
         height: Extrusion height (Z direction)
 
     Returns:
@@ -170,22 +170,13 @@ def create_mesh_from_extrusion(
         # Triangle 2: bottom_curr, top_next, top_curr
         faces.append([bottom_curr, top_next, top_curr])
 
-    # Bottom face (triangulate the polygon)
-    # Use simple fan triangulation from first vertex
+    # Bottom / top caps (fan); profile CCW in XY (+Z view).
+    # Bottom normal -Z; top normal +Z.
     if num_points > 2:
         for i in range(1, num_points - 1):
-            faces.append([0, i, i + 1])
-
-    # Top face (triangulate the polygon)
-    # Use simple fan triangulation from first vertex (reversed winding)
-    if num_points > 2:
+            faces.append([0, i + 1, i])
         for i in range(1, num_points - 1):
-            # Reverse winding for top face (offset by num_points)
-            faces.append([
-                num_points,
-                num_points + i + 1,
-                num_points + i
-            ])
+            faces.append([num_points, num_points + i, num_points + i + 1])
 
     faces_array = np.array(faces, dtype=np.int32)
 
