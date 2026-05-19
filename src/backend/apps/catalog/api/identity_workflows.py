@@ -11,6 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
+from apps.catalog.catalog_meta_vocab import (
+    ADDITIONAL_DATASETS,
+    ADDITIONAL_MATERIALS,
+    merge_additional_with_catalog,
+)
 from apps.catalog.models import User
 from .auth import get_current_active_user, require_admin
 from .catalog_common import (
@@ -134,7 +139,9 @@ async def list_reserved_identities(
 
 @router.get(
     '/identities/meta/materials',
-    summary='Distinct materials on identities (optional consumed filter)',
+    summary=(
+        'Materials for dropdowns (catalog distinct + additional suggestions)'
+    ),
 )
 async def list_identity_materials(
     request: Request,
@@ -145,9 +152,8 @@ async def list_identity_materials(
     coll = await get_identities_col(request)
     try:
         values = await coll.distinct('material', match)
-        return JSONResponse(
-            status_code=200, content=sorted(v for v in values if v)
-        )
+        content = merge_additional_with_catalog(ADDITIONAL_MATERIALS, values)
+        return JSONResponse(status_code=200, content=content)
     except PyMongoError as exc:
         print(f'[ERROR] list_identity_materials: {exc}')
         raise HTTPException(status_code=500, detail='Internal server error')
@@ -176,7 +182,9 @@ async def list_identity_types(
 
 @router.get(
     '/identities/meta/datasets',
-    summary='Distinct datasets on identities',
+    summary=(
+        'Datasets for dropdowns (catalog distinct + additional suggestions)'
+    ),
 )
 async def list_identity_datasets(
     request: Request,
@@ -187,9 +195,8 @@ async def list_identity_datasets(
     coll = await get_identities_col(request)
     try:
         values = await coll.distinct('dataset', match)
-        return JSONResponse(
-            status_code=200, content=sorted(v for v in values if v)
-        )
+        content = merge_additional_with_catalog(ADDITIONAL_DATASETS, values)
+        return JSONResponse(status_code=200, content=content)
     except PyMongoError as exc:
         print(f'[ERROR] list_identity_datasets: {exc}')
         raise HTTPException(status_code=500, detail='Internal server error')
