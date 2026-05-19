@@ -10,7 +10,7 @@ import { Bookmark } from 'lucide-react'
 import Link from 'next/link'
 import { ComponentOverviewDataTable } from '@/components/components/overview/ComponentOverviewDataTable'
 import { ComponentOverviewColumns } from '@/components/components/overview/ComponentOverviewColumns'
-import { ComponentModel } from '@/generated/ComponentModel'
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { ColumnDef } from '@tanstack/react-table'
 
 // Type for session user with extended properties
@@ -24,15 +24,16 @@ interface ExtendedUser {
 
 export default function ReservedComponentsPage() {
   const { data: session, status } = useSession()
-  const [reservedComponents, setReservedComponents] = useState<ComponentModel[]>([])
+  const [reservedComponents, setReservedComponents] = useState<CatalogShallowRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Create custom columns for reserved components that include the actions column
-  const ReservedComponentColumns = ComponentOverviewColumns.filter((col: ColumnDef<ComponentModel>) => 
-    (col as ColumnDef<ComponentModel> & { accessorKey?: string }).accessorKey !== 'actions' && 
-    (col as ColumnDef<ComponentModel> & { accessorKey?: string }).accessorKey !== 'reserved'
-  )
+  // Drop overview actions/reserved columns; we add a Release action below.
+  const ReservedComponentColumns = ComponentOverviewColumns.filter(col => {
+    const key = (col as ColumnDef<CatalogShallowRow> & { accessorKey?: string })
+      .accessorKey
+    return key !== 'actions' && key !== 'reserved'
+  })
   
   ReservedComponentColumns.push({
     id: 'actions',
@@ -105,7 +106,7 @@ export default function ReservedComponentsPage() {
       const data = await response.json()
       
       if (data.components && Array.isArray(data.components)) {
-        setReservedComponents(data.components)
+        setReservedComponents(data.components as CatalogShallowRow[])
       } else {
         setReservedComponents([])
       }
