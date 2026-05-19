@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-05-18T14:27:36.929Z
+// Generated on: 2026-05-19T11:25:42.967Z
 // Source: https://api.ddu.uber.space/schema/catalog-compose
 
 import type {
