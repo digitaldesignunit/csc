@@ -83,13 +83,25 @@ type PrimitiveDrawBuffers = {
   rawColors?: number[][]
 }
 
+function vertexColorsFromSnapshot(
+  colors: number[][] | unknown | undefined,
+): number[][] | undefined {
+  if (colors == null || !Array.isArray(colors) || colors.length === 0) {
+    return undefined
+  }
+  if (!colors.every(c => Array.isArray(c))) {
+    return undefined
+  }
+  return colors as number[][]
+}
+
 function snapshotMeshesToDrawBuffers(
   meshes: SnapshotMesh[],
 ): PrimitiveDrawBuffers[] {
   return meshes.map((m) => ({
     positionsFlat: m.vertices.flat(),
     indices: m.faces.flat(),
-    rawColors: m.colors ?? undefined,
+    rawColors: vertexColorsFromSnapshot(m.colors),
   }))
 }
 
