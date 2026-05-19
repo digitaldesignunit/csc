@@ -12,7 +12,6 @@ Routes for the v0.5 `component_snapshots` collection.
 """
 
 import hashlib
-import io
 import os
 import stat
 from typing import Annotated, Tuple
@@ -27,7 +26,6 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import FileResponse, JSONResponse, Response
-from PIL import Image
 from pymongo.errors import PyMongoError
 
 from apps.catalog.models import ComponentSnapshot, User
@@ -52,6 +50,7 @@ from .snapshot_images import (
     PHOTO_EXTENSION,
     PHOTO_MEDIA_TYPE,
     compress_and_save_jpeg,
+    open_upload_photo,
     photo_filename,
 )
 
@@ -138,7 +137,12 @@ def _count_photos(request: Request, snapshot_id: str) -> int:
     return len(indices)
 
 
-async def _sync_photo_count(request: Request, snapshot_id: str) -> int:
+async def refresh_snapshot_photo_count(
+    request: Request,
+    snapshot_id: str,
+    snapshot_doc=None,
+) -> int:
+    """Count photos on disk; update Mongo and optional in-memory doc."""
     count = _count_photos(request, snapshot_id)
     snapshots = await get_snapshots_col(request)
     try:
@@ -147,8 +151,14 @@ async def _sync_photo_count(request: Request, snapshot_id: str) -> int:
             {'$set': {'photo_count': count}},
         )
     except PyMongoError as exc:
-        print(f'[ERROR] _sync_photo_count DB error: {exc}')
+        print(f'[ERROR] refresh_snapshot_photo_count DB error: {exc}')
+    if snapshot_doc is not None:
+        snapshot_doc['photo_count'] = count
     return count
+
+
+async def _sync_photo_count(request: Request, snapshot_id: str) -> int:
+    return await refresh_snapshot_photo_count(request, snapshot_id)
 
 
 @router.get(
@@ -538,7 +548,7 @@ async def put_snapshot_photo(
     )
 
     try:
-        image = Image.open(io.BytesIO(raw))
+        image = open_upload_photo(raw)
     except Exception:
         raise HTTPException(status_code=400, detail='Invalid image file')
 

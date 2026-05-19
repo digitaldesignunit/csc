@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import os
-from typing import Tuple
+from typing import Any, Dict, Tuple
 
 from PIL import Image
 
@@ -14,6 +14,32 @@ PHOTO_MEDIA_TYPE = 'image/jpeg'
 
 def photo_filename(index: int) -> str:
     return f'{index}{PHOTO_EXTENSION}'
+
+
+def open_upload_photo(raw: bytes) -> Image.Image:
+    """
+    Load uploaded image bytes without applying EXIF orientation transforms.
+
+    Pixel data is kept as stored in the file; orientation metadata (if any)
+    is preserved when saving via :func:`compress_and_save_jpeg`.
+    """
+    image = Image.open(io.BytesIO(raw))
+    image.load()
+    return image
+
+
+def _jpeg_exif_save_kwargs(image: Image.Image) -> Dict[str, Any]:
+    """Pass through original EXIF so viewers keep the same orientation."""
+    try:
+        exif = image.getexif()
+        if exif and len(exif) > 0:
+            return {'exif': exif}
+    except Exception:
+        pass
+    raw = image.info.get('exif')
+    if isinstance(raw, bytes) and raw:
+        return {'exif': raw}
+    return {}
 
 
 def compress_and_save_jpeg(
@@ -26,6 +52,8 @@ def compress_and_save_jpeg(
     """
     Write a JPEG at *dest_path* not larger than *max_bytes*.
 
+    Does not rotate or ``exif_transpose``; embeds original EXIF when present.
+
     Returns (file_size_bytes, width, height).
     """
     if max_bytes < 1:
@@ -33,6 +61,7 @@ def compress_and_save_jpeg(
     if max_long_edge_px < 1:
         raise ValueError('max_long_edge_px must be positive')
 
+    exif_kwargs = _jpeg_exif_save_kwargs(image)
     working = image.convert('RGB')
     if max(working.size) > max_long_edge_px:
         working.thumbnail(
@@ -60,6 +89,7 @@ def compress_and_save_jpeg(
             quality=quality,
             optimize=True,
             progressive=True,
+            **exif_kwargs,
         )
         payload = buf.getvalue()
         best_payload = payload

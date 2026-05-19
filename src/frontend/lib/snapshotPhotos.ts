@@ -57,6 +57,87 @@ export async function uploadSnapshotPhotos(
   return uploaded
 }
 
+async function probePhotoIndex(snapshotId: string, index: number): Promise<boolean> {
+  const url = snapshotPhotoUrl(snapshotId, index)
+  try {
+    let res = await fetch(url, {
+      method: 'HEAD',
+      credentials: 'include',
+      cache: 'no-store',
+    })
+    if (res.status === 405 || res.status === 501) {
+      res = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store',
+      })
+    }
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/** Parse ``photo_count`` from compose/list snapshot payloads. */
+export function parseSnapshotPhotoCount(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value))
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = parseInt(value, 10)
+    if (Number.isFinite(n)) return Math.max(0, n)
+  }
+  return null
+}
+
+const UNKNOWN_COUNT_GAP = 4
+
+/**
+ * Resolve occupied photo slot indices.
+ *
+ * - ``photoCount === 0``: no requests (trust compose-synced count).
+ * - ``photoCount > 0``: probe slots in order until that many are found (dense 0..n-1 → n requests).
+ * - ``photoCount === null``: short sequential scan with gap early-exit (stale/missing count).
+ */
+export async function discoverSnapshotPhotoIndices(
+  snapshotId: string,
+  photoCount?: number | null,
+): Promise<number[]> {
+  const count = photoCount === undefined ? null : photoCount
+
+  if (count === 0) {
+    return []
+  }
+
+  const found: number[] = []
+
+  if (count !== null && count > 0) {
+    for (let index = 0; index < MAX_PHOTO_SLOTS; index += 1) {
+      if (await probePhotoIndex(snapshotId, index)) {
+        found.push(index)
+      }
+      if (found.length >= count) {
+        break
+      }
+    }
+    return found
+  }
+
+  let gap = 0
+  for (let index = 0; index < MAX_PHOTO_SLOTS; index += 1) {
+    if (await probePhotoIndex(snapshotId, index)) {
+      found.push(index)
+      gap = 0
+    } else {
+      gap += 1
+      if (gap >= UNKNOWN_COUNT_GAP) {
+        break
+      }
+    }
+  }
+  return found
+}
+
 export async function deleteSnapshotPhoto(snapshotId: string, index: number): Promise<void> {
   const res = await fetch(snapshotPhotoUrl(snapshotId, index), {
     method: 'DELETE',

@@ -16,50 +16,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { snapshotPhotoUrl } from '@/lib/snapshotPhotos'
-
-async function probePhotoIndex(snapshotId: string, index: number): Promise<boolean> {
-  try {
-    const res = await fetch(snapshotPhotoUrl(snapshotId, index), {
-      method: 'HEAD',
-      credentials: 'include',
-      cache: 'no-store',
-    })
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
-async function discoverPhotoIndices(snapshotId: string, photoCount: number): Promise<number[]> {
-  const expected =
-    typeof photoCount === 'number' && Number.isFinite(photoCount)
-      ? Math.max(0, Math.floor(photoCount))
-      : 0
-  if (expected === 0) {
-    return []
-  }
-
-  const found: number[] = []
-  for (let index = 0; index < 32 && found.length < expected; index += 1) {
-    if (await probePhotoIndex(snapshotId, index)) {
-      found.push(index)
-    }
-  }
-  return found
-}
+import {
+  discoverSnapshotPhotoIndices,
+  parseSnapshotPhotoCount,
+  snapshotPhotoUrl,
+} from '@/lib/snapshotPhotos'
 
 type ComponentSnapshotPhotoGalleryProps = {
   snapshotId: string
-  photoCountHint?: number
+  /** From snapshot.photo_count (compose refreshes from disk). */
+  photoCount?: unknown
   compact?: boolean
 }
 
 export default function ComponentSnapshotPhotoGallery({
   snapshotId,
-  photoCountHint = 0,
+  photoCount: photoCountRaw,
   compact = false,
 }: ComponentSnapshotPhotoGalleryProps) {
+  const photoCount = parseSnapshotPhotoCount(photoCountRaw)
   const router = useRouter()
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === 'admin'
@@ -78,7 +53,7 @@ export default function ComponentSnapshotPhotoGallery({
     setLoading(true)
     setError(null)
     try {
-      const found = await discoverPhotoIndices(snapshotId, photoCountHint)
+      const found = await discoverSnapshotPhotoIndices(snapshotId, photoCount)
       setIndices(found)
     } catch {
       setError('Failed to load photos.')
@@ -86,7 +61,7 @@ export default function ComponentSnapshotPhotoGallery({
     } finally {
       setLoading(false)
     }
-  }, [snapshotId, photoCountHint])
+  }, [snapshotId, photoCount])
 
   useEffect(() => {
     refreshPhotos()
@@ -104,7 +79,7 @@ export default function ComponentSnapshotPhotoGallery({
     <>
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 py-4">
-          <div>
+          <div className="flex flex-col gap-0">
             <CardTitle className={`flex items-center gap-2 ${compact ? 'text-base' : 'text-lg'}`}>
               <Camera className="h-4 w-4 shrink-0" />
               Snapshot photos

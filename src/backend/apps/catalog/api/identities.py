@@ -69,6 +69,7 @@ from .identity_query import (
     count_identities,
     shallow_row_for_identity,
 )
+from .snapshots import refresh_snapshot_photo_count
 
 
 router = APIRouter()
@@ -785,6 +786,10 @@ async def compose_identity(
                 f'{identity_id} not found in component_snapshots.'
             ),
         )
+
+    await refresh_snapshot_photo_count(
+        request, current_snapshot_id, snapshot_doc
+    )
 
     etag = _compute_compose_etag(identity_doc, snapshot_doc)
 

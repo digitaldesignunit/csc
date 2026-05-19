@@ -18,8 +18,6 @@ type ComponentDetailPageLayoutProps = {
 export default function ComponentDetailPageLayout({ catalog }: ComponentDetailPageLayoutProps) {
   const { identity, snapshot } = catalog
   const snapshotId = String(snapshot._id ?? identity.current_snapshot_id)
-  const photoCountHint =
-    typeof snapshot.photo_count === 'number' ? snapshot.photo_count : 0
   const location = (snapshot.location as ComponentLocation) ?? { lat: 0, lon: 0 }
 
   return (
@@ -53,7 +51,7 @@ export default function ComponentDetailPageLayout({ catalog }: ComponentDetailPa
       <div className="min-w-0 space-y-4 lg:sticky lg:top-6">
         <ComponentSnapshotPhotoGallery
           snapshotId={snapshotId}
-          photoCountHint={photoCountHint}
+          photoCount={snapshot.photo_count}
           compact
         />
         <ComponentDetailLocationPanel location={location} />
