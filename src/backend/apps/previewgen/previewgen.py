@@ -3,7 +3,7 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from io import BytesIO
 import os
-from typing import Tuple
+from typing import List, Tuple
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import matplotlib.pyplot as plt
@@ -21,65 +21,48 @@ except ImportError:
 
 # FUNCTION DEFINITIONS --------------------------------------------------------
 
-def create_extrusion_component_mesh(
-    component_data: dict
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Create a 3D mesh for an extrusion component.
-
-    Returns:
-        all_points: (V, 3) float array of vertex positions
-        faces: (F, 3) int array of triangle indices
-    """
-    # Convert polyline to numpy array and add z-coordinate (0)
-    points = np.array(component_data['geometry']['extrusion']['profile'])
+def create_extrusion_mesh(extrusion: dict) -> Tuple[np.ndarray, list]:
+    """Create a 3D mesh from one snapshot extrusion primitive."""
+    points = np.array(extrusion['profile'])
+    height = extrusion['height']
     num_points = len(points)
     points_3d_bottom = np.hstack([points, np.zeros((num_points, 1))])
-    # Create the top points by adding the material thickness in the z-direction
     points_3d_top = points_3d_bottom.copy()
-    points_3d_top[:, 2] = component_data['geometry']['extrusion']['height']
-    # Combine bottom and top points
+    points_3d_top[:, 2] = height
     all_points = np.vstack([points_3d_bottom, points_3d_top])
-    # Create faces for the sides
     faces = []
     for i in range(num_points):
         next_i = (i + 1) % num_points
-        face = [
+        faces.append([
             points_3d_bottom[i],
             points_3d_bottom[next_i],
             points_3d_top[next_i],
-            points_3d_top[i]
-        ]
-        faces.append(face)
-    # Create faces for the top and bottom
+            points_3d_top[i],
+        ])
     faces.append(points_3d_bottom.tolist())
     faces.append(points_3d_top.tolist())
-    return (all_points, faces)
+    return all_points, faces
 
 
-def convert_multiple_meshes_component_mesh(component_data: dict):
-    # Build np arrays from multiple mesh data
+def combine_snapshot_meshes(meshes: List[dict]):
+    """Merge snapshot mesh primitives into arrays for rendering."""
     all_vertices = []
     all_faces = []
     all_vertex_colors = []
     all_faces_idx = []
     vertex_offset = 0
 
-    for mesh_data in component_data['geometry']['meshes']:
-        # Build np arrays from mesh data
-        vertices = np.array(mesh_data['v'])
-        # Check for vertex colors
+    for mesh_data in meshes:
+        vertices = np.array(mesh_data['vertices'])
         vertex_colors = None
-        if 'c' in mesh_data:
-            vertex_colors = np.array(mesh_data['c'])
+        if mesh_data.get('colors'):
+            vertex_colors = np.array(mesh_data['colors'])
 
-        faces_idx = mesh_data['f']
-        # Adjust face indices to account for vertex offset
+        faces_idx = mesh_data['faces']
         adjusted_faces_idx = [
             [idx + vertex_offset for idx in face] for face in faces_idx
         ]
 
-        # Add to combined arrays
         all_vertices.extend(vertices)
         all_faces.extend([
             [vertices[idx] for idx in face] for face in faces_idx
@@ -89,41 +72,57 @@ def convert_multiple_meshes_component_mesh(component_data: dict):
         if vertex_colors is not None:
             all_vertex_colors.extend(vertex_colors)
 
-        # Update vertex offset for next mesh
         vertex_offset += len(vertices)
 
-    # Convert to numpy arrays
     combined_vertices = np.array(all_vertices)
-    combined_faces = all_faces
-    combined_faces_idx = all_faces_idx
     combined_vertex_colors = (
         np.array(all_vertex_colors) if all_vertex_colors else None
     )
+    return (
+        combined_vertices,
+        all_faces,
+        combined_vertex_colors,
+        all_faces_idx,
+    )
 
-    return (combined_vertices, combined_faces, combined_vertex_colors,
-            combined_faces_idx)
+
+def combine_extrusion_meshes(
+    extrusions: List[dict],
+) -> Tuple[np.ndarray, list]:
+    """Combine multiple snapshot extrusion primitives into one renderable mesh."""
+    all_vertices = []
+    all_faces = []
+    for extrusion in extrusions:
+        vertices, faces = create_extrusion_mesh(extrusion)
+        all_vertices.append(vertices)
+        all_faces.extend(faces)
+    combined_vertices = (
+        np.vstack(all_vertices) if all_vertices else np.array([])
+    )
+    return combined_vertices, all_faces
 
 
-def create_component_preview_image(
-        component_data: dict,
+def create_snapshot_preview_image(
+        snapshot_data: dict,
         size: int = 800,
         dpi: int = 300) -> Image:
 
-    # Determine preview type based on geometry keys, not component type
-    geometry = component_data.get('geometry', {})
+    geometry = snapshot_data.get('geometry', {})
+    meshes = geometry.get('meshes') or []
+    extrusions = geometry.get('extrusions') or []
 
-    if 'extrusion' in geometry and geometry['extrusion']:
-        vertices, faces = create_extrusion_component_mesh(component_data)
-        vertex_colors = None
-        faces_idx = None
-    elif 'meshes' in geometry and geometry['meshes']:
+    if meshes:
         (vertices, faces,
          vertex_colors,
-         faces_idx) = convert_multiple_meshes_component_mesh(component_data)
+         faces_idx) = combine_snapshot_meshes(meshes)
+    elif extrusions:
+        vertices, faces = combine_extrusion_meshes(extrusions)
+        vertex_colors = None
+        faces_idx = None
     else:
         raise ValueError(
-            f'Component {component_data.get("_id")!r} has no supported '
-            f'geometry (expected "extrusion" or "meshes", got keys: '
+            f'Snapshot {snapshot_data.get("_id")!r} has no supported '
+            f'geometry for preview (expected meshes or extrusions, got keys: '
             f'{list(geometry.keys())})'
         )
 
@@ -139,8 +138,9 @@ def create_component_preview_image(
             face_colors.append(avg_color)
         face_colors = np.array(face_colors) / 255.0
     else:
-        # No vertex colors, use component assigned color
-        face_colors = np.array(component_data['color']) / 255.0
+        # No vertex colors, use snapshot rendering color
+        color = snapshot_data.get('color') or [110, 110, 110]
+        face_colors = np.array(color) / 255.0
 
     # Calculate figsize based on image_size and dpi
     figsize = size / dpi
@@ -251,376 +251,106 @@ def save_preview_image(image: Image, folder: str, filename: str) -> bool:
 
 # TESTS -----------------------------------------------------------------------
 
-__example_component_data_a = {
-        '_id': '0026b86f-2b7c-4441-a42b-c135401601f9',
-        'created': '240522-000248',
-        'lastmodified': '240522-000248',
-        'type': 'panel',
-        'material': 'corian',
-        'geometry': {
-            'extrusion': {
-                'height': 12.0,
-                'profile': [
-                    [-236.5281668056187, 135.9138446188233],
-                    [-235.98666438856054, 136.43043673849218],
-                    [-187.81222509575286, 136.619636378187],
-                    [236.19128468854456, 136.69496037267368],
-                    [236.7078768082133, 136.15345795561552],
-                    [236.95223496355607, 22.86883920802336],
-                    [235.7850096001714, 7.0161038801627456],
-                    [236.75591809603554, 3.2878627042294966],
-                    [236.92702811500726, -0.6862193828435466],
-                    [235.66342362481873, -9.390589013450608],
-                    [236.98900730732123, -20.537947095166373],
-                    [236.91902123370357, -135.93252734186524],
-                    [235.57772033975323, -136.69496037267368],
-                    [-236.59400116300475, -136.69496037267356],
-                    [-236.98900730732095, -119.74676506200217],
-                    [-236.5281668056187, 135.9138446188233]
-                ]
-            }
-        },
-        'complexity': 1,
-        'fragment': True,
-        'assembly': False,
-        'color': [209, 208, 205],
-        'bbx': {
-            'xy': [
-                [-236.98900730732106, -136.69496037267368],
-                [236.98900730732112, -136.69496037267368],
-                [236.98900730732112, 136.69496037267368],
-                [-236.98900730732106, 136.69496037267368]
+__example_snapshot_extrusion = {
+    '_id': '0026b86f-2b7c-4441-a42b-c135401601f9',
+    'color': [209, 208, 205],
+    'geometry': {
+        'extrusions': [{
+            'height': 12.0,
+            'profile': [
+                [-236.5281668056187, 135.9138446188233],
+                [-235.98666438856054, 136.43043673849218],
+                [-187.81222509575286, 136.619636378187],
+                [236.19128468854456, 136.69496037267368],
+                [236.7078768082133, 136.15345795561552],
+                [236.95223496355607, 22.86883920802336],
+                [235.7850096001714, 7.0161038801627456],
+                [236.75591809603554, 3.2878627042294966],
+                [236.92702811500726, -0.6862193828435466],
+                [235.66342362481873, -9.390589013450608],
+                [236.98900730732123, -20.537947095166373],
+                [236.91902123370357, -135.93252734186524],
+                [235.57772033975323, -136.69496037267368],
+                [-236.59400116300475, -136.69496037267356],
+                [-236.98900730732095, -119.74676506200217],
+                [-236.5281668056187, 135.9138446188233],
             ],
-            'xyz': None
-        },
-        'descriptors': {},
-        'validated': True,
-        'iframe': {
-            'o': [0, 0, 0],
-            'x': [1, 0, 0],
-            'y': [0, 1, 0],
-            'z': [0, 0, 1]
-        }
-    }
+        }],
+    },
+}
 
-__example_component_data_b = {
-        '_id': 'a99b2619-0d97-495f-98c4-a6b02db206a3',
-        'created': '240522-083157',
-        'lastmodified': '240522-083157',
-        'type': 'beam',
-        'material': 'timber',
-        'geometry': {
-            'meshes': [{
-                'v': [
-                    [510, 33.5, 26.5],
-                    [510, -33.5, 26.5],
-                    [-510, 33.5, 26.5],
-                    [-510, -33.5, 26.5],
-                    [-510, -33.5, 26.5],
-                    [-510, 33.5, 26.5],
-                    [-510, 36.5, 23.5],
-                    [-510, 36.5, -23.5],
-                    [-510, 33.5, -26.5],
-                    [-510, -33.5, -26.5],
-                    [-510, -36.5, -23.5],
-                    [-510, -36.5, 23.5],
-                    [-510, 33.5, -26.5],
-                    [-510, -33.5, -26.5],
-                    [510, 33.5, -26.5],
-                    [510, -33.5, -26.5],
-                    [510, 33.5, 26.5],
-                    [510, -33.5, 26.5],
-                    [510, -33.5, -26.5],
-                    [510, 33.5, -26.5],
-                    [510, 36.5, -23.5],
-                    [510, 36.5, 23.5],
-                    [510, -36.5, 23.5],
-                    [510, -36.5, -23.5],
-                    [510, 36.5, 23.5],
-                    [-510, 36.5, -23.5],
-                    [-510, 36.5, 23.5],
-                    [510, 36.5, -23.5],
-                    [510, -36.5, 23.5],
-                    [510, -36.5, -23.5],
-                    [-510, -36.5, 23.5],
-                    [-510, -36.5, -23.5],
-                    [510, 33.5, 26.5],
-                    [-510, 33.5, 26.5],
-                    [-510, 36.5, 23.5],
-                    [510, 36.5, 23.5],
-                    [510, -33.5, 26.5],
-                    [-510, -33.5, 26.5],
-                    [-510, -36.5, 23.5],
-                    [510, -36.5, 23.5],
-                    [-510, 33.5, -26.5],
-                    [510, 33.5, -26.5],
-                    [510, 36.5, -23.5],
-                    [-510, 36.5, -23.5],
-                    [-510, -33.5, -26.5],
-                    [510, -33.5, -26.5],
-                    [510, -36.5, -23.5],
-                    [-510, -36.5, -23.5]
-                ],
-                'f': [
-                    [1, 0, 2],
-                    [6, 11, 4],
-                    [11, 6, 7],
-                    [10, 7, 8],
-                    [13, 12, 14],
-                    [18, 19, 20],
-                    [23, 20, 21],
-                    [22, 21, 16],
-                    [27, 25, 26],
-                    [29, 28, 30],
-                    [35, 34, 33],
-                    [39, 36, 37],
-                    [43, 42, 41],
-                    [47, 44, 45],
-                    [1, 2, 3],
-                    [6, 4, 5],
-                    [11, 7, 10],
-                    [10, 8, 9],
-                    [13, 14, 15],
-                    [18, 20, 23],
-                    [23, 21, 22],
-                    [22, 16, 17],
-                    [27, 26, 24],
-                    [29, 30, 31],
-                    [35, 33, 32],
-                    [39, 37, 38],
-                    [43, 41, 40],
-                    [47, 45, 46]
-                ],
-                'c': [
-                    [29, 28, 30],
-                    [35, 33, 32],
-                    [39, 37, 38],
-                    [43, 41, 40],
-                    [47, 45, 46],
-                    [35, 34, 33],
-                    [39, 36, 37],
-                    [43, 42, 41],
-                    [47, 44, 45],
-                    [1, 0, 2],
-                    [6, 11, 4],
-                    [11, 6, 7],
-                    [10, 7, 8],
-                    [13, 12, 14],
-                    [18, 19, 20],
-                    [23, 20, 21],
-                    [22, 21, 16],
-                    [27, 25, 26],
-                    [1, 2, 3],
-                    [6, 4, 5],
-                    [11, 7, 10],
-                    [10, 8, 9],
-                    [13, 14, 15],
-                    [18, 20, 23],
-                    [23, 21, 22],
-                    [22, 16, 17],
-                    [27, 26, 24],
-                    [29, 30, 31],
-                    [27, 25, 26],
-                    [29, 28, 30],
-                    [35, 33, 32],
-                    [39, 37, 38],
-                    [43, 41, 40],
-                    [47, 45, 46],
-                    [35, 34, 33],
-                    [39, 36, 37],
-                    [29, 28, 30],
-                    [35, 33, 32],
-                    [39, 37, 38],
-                    [47, 45, 46],
-                    [35, 34, 33],
-                    [39, 36, 37],
-                    [23, 21, 22],
-                    [22, 16, 17],
-                    [27, 26, 24],
-                    [29, 30, 31],
-                    [27, 25, 26],
-                    [29, 28, 30]
-                ]
-            }]
-        },
-        'complexity': 1,
-        'fragment': True,
-        'assembly': False,
-        'color': [207, 194, 126],
-        'bbx': {
-            'xy': None,
-            'xyz': [
-                [-510, -36.500000000000014, -26.500000000000004],
-                [510, -36.500000000000014, -26.500000000000004],
-                [510, 36.500000000000014, -26.500000000000004],
-                [-510, 36.500000000000014, -26.500000000000004],
-                [-510, -36.500000000000014, 26.500000000000004],
-                [510, -36.500000000000014, 26.500000000000004],
-                [510, 36.500000000000014, 26.500000000000004],
-                [-510, 36.500000000000014, 26.500000000000004]
-            ]
-        },
-        'descriptors': {},
-        'indicators': {},
-        'validated': True,
-        'iframe': {
-            'o': [0, 0, 0],
-            'x': [1, 0, 0],
-            'y': [0, 1, 0],
-            'z': [0, 0, 1]
-        }
-    }
-
-
-__example_component_data_c = {
-        '_id': 'c99b2619-0d97-495f-98c4-a6b02db206a4',
-        'created': '240522-083157',
-        'lastmodified': '240522-083157',
-        'type': 'assembly',
-        'material': 'steel',
-        'geometry': {
-            'meshes': [
-                {
-                    'v': [
-                        [0, 0, 0],
-                        [10, 0, 0],
-                        [10, 10, 0],
-                        [0, 10, 0],
-                        [0, 0, 10],
-                        [10, 0, 10],
-                        [10, 10, 10],
-                        [0, 10, 10]
-                    ],
-                    'f': [
-                        [0, 1, 2],
-                        [0, 2, 3],
-                        [4, 7, 6],
-                        [4, 6, 5],
-                        [0, 4, 5],
-                        [0, 5, 1],
-                        [2, 6, 7],
-                        [2, 7, 3],
-                        [0, 3, 7],
-                        [0, 7, 4],
-                        [1, 5, 6],
-                        [1, 6, 2]
-                    ],
-                    'c': [
-                        [255, 0, 0],
-                        [255, 0, 0],
-                        [255, 0, 0],
-                        [255, 0, 0],
-                        [255, 0, 0],
-                        [255, 0, 0],
-                        [255, 0, 0],
-                        [255, 0, 0],
-                        [255, 0, 0],
-                        [255, 0, 0],
-                        [255, 0, 0],
-                        [255, 0, 0]
-                    ]
-                },
-                {
-                    'v': [
-                        [20, 0, 0],
-                        [30, 0, 0],
-                        [30, 10, 0],
-                        [20, 10, 0],
-                        [20, 0, 10],
-                        [30, 0, 10],
-                        [30, 10, 10],
-                        [20, 10, 10]
-                    ],
-                    'f': [
-                        [0, 1, 2],
-                        [0, 2, 3],
-                        [4, 7, 6],
-                        [4, 6, 5],
-                        [0, 4, 5],
-                        [0, 5, 1],
-                        [2, 6, 7],
-                        [2, 7, 3],
-                        [0, 3, 7],
-                        [0, 7, 4],
-                        [1, 5, 6],
-                        [1, 6, 2]
-                    ],
-                    'c': [
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0],
-                        [0, 255, 0]
-                    ]
-                }
-            ]
-        },
-        'complexity': 2,
-        'fragment': False,
-        'assembly': True,
-        'color': [100, 100, 100],
-        'bbx': {
-            'xy': None,
-            'xyz': [
+__example_snapshot_mesh = {
+    '_id': 'a99b2619-0d97-495f-98c4-a6b02db206a3',
+    'color': [207, 194, 126],
+    'geometry': {
+        'meshes': [{
+            'vertices': [
+                [510, 33.5, 26.5],
+                [510, -33.5, 26.5],
+                [-510, 33.5, 26.5],
                 [0, 0, 0],
-                [30, 0, 0],
-                [30, 10, 0],
-                [0, 10, 0],
-                [0, 0, 10],
-                [30, 0, 10],
-                [30, 10, 10],
-                [0, 10, 10]
-            ]
-        },
-        'descriptors': {},
-        'indicators': {},
-        'validated': True,
-        'iframe': {
-            'o': [0, 0, 0],
-            'x': [1, 0, 0],
-            'y': [0, 1, 0],
-            'z': [0, 0, 1]
-        }
-    }
+            ],
+            'faces': [
+                [0, 1, 2],
+                [0, 2, 3],
+                [1, 0, 3],
+            ],
+            'colors': [
+                [207, 194, 126],
+                [207, 194, 126],
+                [207, 194, 126],
+                [207, 194, 126],
+            ],
+        }],
+    },
+}
+
+__example_snapshot_assembly = {
+    '_id': 'c99b2619-0d97-495f-98c4-a6b02db206a4',
+    'color': [100, 100, 100],
+    'geometry': {
+        'meshes': [
+            {
+                'vertices': [
+                    [0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0],
+                    [0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 10, 10],
+                ],
+                'faces': [
+                    [0, 1, 2], [0, 2, 3], [4, 7, 6], [4, 6, 5],
+                    [0, 4, 5], [0, 5, 1], [2, 6, 7], [2, 7, 3],
+                    [0, 3, 7], [0, 7, 4], [1, 5, 6], [1, 6, 2],
+                ],
+                'colors': [[255, 0, 0]] * 8,
+            },
+            {
+                'vertices': [
+                    [20, 0, 0], [30, 0, 0], [30, 10, 0], [20, 10, 0],
+                    [20, 0, 10], [30, 0, 10], [30, 10, 10], [20, 10, 10],
+                ],
+                'faces': [
+                    [0, 1, 2], [0, 2, 3], [4, 7, 6], [4, 6, 5],
+                    [0, 4, 5], [0, 5, 1], [2, 6, 7], [2, 7, 3],
+                    [0, 3, 7], [0, 7, 4], [1, 5, 6], [1, 6, 2],
+                ],
+                'colors': [[0, 255, 0]] * 8,
+            },
+        ],
+    },
+}
 
 
 if __name__ == '__main__':
     out_dir = os.path.dirname(os.path.abspath(__file__))
-    # Create preview images for example component data
-    save_preview_image(
-        crop_preview_whitespace(
-            create_component_preview_image(
-                component_data=__example_component_data_a
+    for example in (
+        __example_snapshot_extrusion,
+        __example_snapshot_mesh,
+        __example_snapshot_assembly,
+    ):
+        save_preview_image(
+            crop_preview_whitespace(
+                create_snapshot_preview_image(snapshot_data=example),
+                padding=10,
             ),
-            padding=10
-        ),
-        folder=out_dir,
-        filename=__example_component_data_a['_id']
-    )
-    save_preview_image(
-        crop_preview_whitespace(
-            create_component_preview_image(
-                component_data=__example_component_data_b
-            ),
-            padding=10
-        ),
-        folder=out_dir,
-        filename=__example_component_data_b['_id']
-    )
-    save_preview_image(
-        crop_preview_whitespace(
-            create_component_preview_image(
-                component_data=__example_component_data_c
-            ),
-            padding=10
-        ),
-        folder=out_dir,
-        filename=__example_component_data_c['_id']
-    )
+            folder=out_dir,
+            filename=example['_id'],
+        )

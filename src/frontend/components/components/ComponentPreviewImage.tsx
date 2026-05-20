@@ -1,6 +1,8 @@
-// components/ComponentPreviewImage.tsx
-import React from 'react'
+'use client'
+
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
+import { ImageOff } from 'lucide-react'
 
 interface ComponentPreviewImageProps {
   /** Current snapshot id — thumbnail from `GET /snapshots/{snapshot_id}/preview`. */
@@ -12,6 +14,31 @@ interface ComponentPreviewImageProps {
   className?: string
 }
 
+function PreviewPlaceholder({
+  width,
+  height,
+  maxHeight,
+  className,
+}: Pick<
+  ComponentPreviewImageProps,
+  'width' | 'height' | 'maxHeight' | 'className'
+>) {
+  const aspectRatio = width / height
+  const maxWidth = maxHeight * aspectRatio
+
+  return (
+    <div
+      className={`flex flex-col items-center justify-center gap-0.5 bg-muted text-muted-foreground ${className ?? ''}`}
+      style={{ width, height, maxHeight, maxWidth }}
+      role="img"
+      aria-label="No preview available"
+    >
+      <ImageOff className="size-3.5 shrink-0 opacity-70" aria-hidden />
+      <span className="text-[9px] leading-none opacity-70">No preview</span>
+    </div>
+  )
+}
+
 export default function ComponentPreviewImage({
   snapshot_id,
   alt,
@@ -20,18 +47,22 @@ export default function ComponentPreviewImage({
   maxHeight,
   className,
 }: ComponentPreviewImageProps) {
+  const [loadFailed, setLoadFailed] = useState(false)
   const aspectRatio = width / height
   const maxWidth = maxHeight * aspectRatio
 
-  if (!snapshot_id || snapshot_id.trim().length === 0) {
+  useEffect(() => {
+    setLoadFailed(false)
+  }, [snapshot_id])
+
+  if (!snapshot_id || snapshot_id.trim().length === 0 || loadFailed) {
     return (
-      <div
-        className={`flex items-center justify-center bg-muted text-[10px] text-muted-foreground ${className ?? ''}`}
-        style={{ width, height, maxHeight, maxWidth }}
-        aria-hidden
-      >
-        —
-      </div>
+      <PreviewPlaceholder
+        width={width}
+        height={height}
+        maxHeight={maxHeight}
+        className={className}
+      />
     )
   }
 
@@ -51,6 +82,7 @@ export default function ComponentPreviewImage({
         unoptimized
         loading="lazy"
         sizes={`${width}px`}
+        onError={() => setLoadFailed(true)}
       />
     </div>
   )

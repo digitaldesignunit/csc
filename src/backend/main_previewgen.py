@@ -16,11 +16,11 @@ from pymongo import AsyncMongoClient
 
 from utility import (
     get_db_connectionstring,
-    get_preview_directory,
+    get_snapshot_preview_directory,
     create_logging_timestamp as logts
 )
 from apps.previewgen import (
-    create_component_preview_image,
+    create_snapshot_preview_image,
     crop_preview_whitespace,
     save_preview_image
 )
@@ -28,100 +28,102 @@ from apps.previewgen import (
 
 async def initialize_preview_generation() -> Tuple[List[dict], List[str]]:
     """
-    Initialize preview generation by comparing component ids in database with
-    preview images in preview directory. Return list of missing previews.
+    Compare snapshot ids in ``component_snapshots`` with rendered previews in
+    ``snapshot_previews/``. Return snapshots missing previews and stale files.
     """
-    # initialize preview generation directory
-    preview_dir = get_preview_directory()
-    # try to create directory if it does not exist
+    preview_dir = get_snapshot_preview_directory()
     os.makedirs(preview_dir, exist_ok=True)
-    # read all file names in directory and create set from it
+
     preview_images = set()
     for file_name in os.listdir(preview_dir):
         if os.path.isfile(os.path.join(preview_dir, file_name)):
             preview_images.add(os.path.splitext(file_name)[0])
-    # set up database client and select collections
+
     mongodb_client = AsyncMongoClient(
         get_db_connectionstring()
     )
     mongodb = mongodb_client['csc']
-    mongodb_components = mongodb['components']
-    mongodb_components_archived = mongodb['components_archive']
-    # retrieve all component ids from database (both main and archived)
-    component_ids = {
-        str(c['_id']) async for c in mongodb_components.find({}, {'_id': 1})
-    }
-    archived_component_ids = {
-        str(c['_id']) async for c in mongodb_components_archived.find(
+    mongodb_snapshots = mongodb['component_snapshots']
+
+    snapshot_ids = {
+        str(snapshot['_id']) async for snapshot in mongodb_snapshots.find(
             {}, {'_id': 1}
         )
     }
-    # Union of both sets - previews for archived components should be kept
-    all_component_ids = component_ids | archived_component_ids
-    # compare both sets and find component ids with missing previews
-    # Only generate previews for main (non-archived) components
-    missing_preview_ids = list(component_ids - preview_images)
-    # Only consider stale if not in main OR archive collection
-    stale_preview_ids = list(preview_images - all_component_ids)
-    # for all missing preview ids, retrieve type, materialthickness and
-    # geometry from database
-    missing_preview_components = []
+    missing_preview_ids = list(snapshot_ids - preview_images)
+    stale_preview_ids = list(preview_images - snapshot_ids)
+
+    missing_preview_snapshots = []
     projection = {
-        'type': 1,
-        'materialthickness': 1,
         'geometry': 1,
-        'color': 1}
-    for comp_id in missing_preview_ids:
-        component = await mongodb_components.find_one(
-            {'_id': comp_id}, projection
+        'color': 1,
+    }
+    for snapshot_id in missing_preview_ids:
+        snapshot = await mongodb_snapshots.find_one(
+            {'_id': snapshot_id}, projection
         )
-        if component:
-            missing_preview_components.append(component)
-    # close mongodb client
+        if snapshot:
+            missing_preview_snapshots.append(snapshot)
+
     await mongodb_client.close()
-    # return list of missing preview ids
-    return missing_preview_components, stale_preview_ids
+    return missing_preview_snapshots, stale_preview_ids
 
 
 if __name__ == '__main__':
-    preview_dir = get_preview_directory()
-    missing_preview_components, stale_preview_ids = asyncio.run(
+    preview_dir = get_snapshot_preview_directory()
+    missing_preview_snapshots, stale_preview_ids = asyncio.run(
         initialize_preview_generation()
     )
-    if not missing_preview_components:
+
+    if stale_preview_ids:
+        for snapshot_id in stale_preview_ids:
+            stale_path = os.path.join(preview_dir, f'{snapshot_id}.webp')
+            if os.path.isfile(stale_path):
+                os.remove(stale_path)
+                ts = logts()
+                print(
+                    f'[PREVIEWGEN] {ts} Deleted stale preview image '
+                    f'for {snapshot_id}.'
+                )
+    else:
         ts = logts()
         print(f'[PREVIEWGEN] {ts} No stale preview images found.')
-    else:
-        # delete all stale preview images
-        for comp_id in stale_preview_ids:
-            os.remove(os.path.join(preview_dir, f'{comp_id}.webp'))
-            ts = logts()
-            print(f'[PREVIEWGEN] {ts} Deleted stale preview image '
-                  f'for {comp_id}.')
-    if not missing_preview_components:
+
+    if not missing_preview_snapshots:
         ts = logts()
         print(f'[PREVIEWGEN] {ts} All previews are present.')
     else:
         ts = logts()
-        print(f'[PREVIEWGEN] {ts} Found {len(missing_preview_components)}'
-              ' missing previews.')
-        # call preview generation for every missing preview id
-        for component_data in missing_preview_components:
+        print(
+            f'[PREVIEWGEN] {ts} Found {len(missing_preview_snapshots)} '
+            'missing previews.'
+        )
+        for snapshot_data in missing_preview_snapshots:
+            snapshot_id = snapshot_data['_id']
             ts = logts()
-            print(f'[PREVIEWGEN] {ts} Generating preview for '
-                  f'{component_data["_id"]}')
-            # call preview generation function
-            save_preview_image(
-                crop_preview_whitespace(
-                    create_component_preview_image(
-                        component_data=component_data,
-                        size=800
-                        ),
-                    padding=2
-                ),
-                folder=preview_dir,
-                filename=component_data['_id']
+            print(
+                f'[PREVIEWGEN] {ts} Generating preview for {snapshot_id}'
             )
+            try:
+                save_preview_image(
+                    crop_preview_whitespace(
+                        create_snapshot_preview_image(
+                            snapshot_data=snapshot_data,
+                            size=800,
+                        ),
+                        padding=2,
+                    ),
+                    folder=preview_dir,
+                    filename=snapshot_id,
+                )
+            except ValueError as exc:
+                ts = logts()
+                print(
+                    f'[PREVIEWGEN] {ts} Skipped preview for '
+                    f'{snapshot_id}: {exc}'
+                )
+                continue
             ts = logts()
-            print(f'[PREVIEWGEN] {ts} Preview for '
-                  f'{component_data["_id"]} generated.')
+            print(
+                f'[PREVIEWGEN] {ts} Preview for {snapshot_id} generated.'
+            )
