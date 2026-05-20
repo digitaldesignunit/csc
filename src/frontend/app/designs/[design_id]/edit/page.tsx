@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { DesignComponent, DesignModel } from '@/generated/DesignModel'
 import { ComponentModel } from '@/generated/ComponentModel'
 import { Plus, X, Search } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface EditDesignPageProps {
   params: Promise<{ design_id: string }>
@@ -41,12 +42,12 @@ export default function EditDesignPage({ params }: EditDesignPageProps) {
           setDescription(typeof design.description === 'string' ? design.description : '')
           setComponents(design.components || [])
         } else {
-          alert('Failed to load design')
+          toast.error('Failed to load design')
           router.push('/designs')
         }
       } catch (error) {
         console.error('Error loading design:', error)
-        alert('Failed to load design')
+        toast.error('Failed to load design')
         router.push('/designs')
       } finally {
         setIsLoading(false)
@@ -99,7 +100,7 @@ export default function EditDesignPage({ params }: EditDesignPageProps) {
     e.preventDefault()
     
     if (components.length === 0) {
-      alert('Please add at least one component to the design')
+      toast.warning('Please add at least one component to the design')
       return
     }
 
@@ -121,11 +122,11 @@ export default function EditDesignPage({ params }: EditDesignPageProps) {
         router.push(`/designs/${designId}`)
       } else {
         const error = await response.text()
-        alert(`Failed to update design: ${error}`)
+        toast.error(`Failed to update design: ${error}`)
       }
     } catch (error) {
       console.error('Error updating design:', error)
-      alert('Failed to update design')
+      toast.error('Failed to update design')
     } finally {
       setIsSubmitting(false)
     }

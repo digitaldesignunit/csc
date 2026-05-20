@@ -49,6 +49,10 @@ export interface ComponentSnapshot {
   validated: boolean; // Whether this snapshot's state has been validated
   etag?: string | unknown; // ETag for cache validation; recomputed from snapshot content.
   photo_count?: number | unknown; // Number of user-uploaded photos on disk for this snapshot; optional cache for list UI
+  added_by_user_id?: string | unknown; // User who created this snapshot (v0 = who added the identity)
+  added_by_username?: string | unknown; // Username at create time for display
+  notes?: string | unknown; // Free-text notes for this snapshot state
+  quantity?: number; // Count of identical physical items (default 1)
   mesh_ply_resolutions?: Record<string, unknown> | unknown; // Which resolution files exist on disk per mesh primitive index (string keys '0', '1', … matching ``geometry.meshes``). Values list role names: typically 'reduced', optionally 'detailed'. Paths: ``meshes/<snapshot_id>/<i>/reduced.ply`` and ``.../detailed.ply``. Example: {'0': ['reduced', 'detailed']}.
   created: string; // ISO timestamp when this snapshot was created
   lastmodified: string; // ISO timestamp when this snapshot was last modified

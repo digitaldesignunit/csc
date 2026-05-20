@@ -14,6 +14,7 @@ import ComponentViewer from '@/components/components/ComponentViewer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatTimestamp } from '@/lib/utils'
+import { toast } from 'sonner'
 
 export default function ValidationPage() {
   const { data: session, status } = useSession()
@@ -104,11 +105,11 @@ export default function ValidationPage() {
         setComponents(prev => prev.filter(c => c._id !== componentId))
       } else {
         console.error('Failed to delete component')
-        alert('Failed to delete component. Please try again.')
+        toast.error('Failed to delete component. Please try again.')
       }
     } catch (error) {
       console.error('Error deleting component:', error)
-      alert('Failed to delete component. Please try again.')
+      toast.error('Failed to delete component. Please try again.')
     } finally {
       setDeleting(null)
     }

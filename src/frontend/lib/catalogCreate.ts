@@ -35,15 +35,18 @@ export type AddComponentFormState = {
   colorB: number
   lat: number
   lon: number
-  lengthMm: number
-  widthMm: number
-  heightMm: number
+  /** Text inputs for L/W/H (mm); parsed on submit so fields can be cleared while typing. */
+  lengthMm: string
+  widthMm: string
+  heightMm: string
   condition: number | null
   manufactured_at: string
   manufactured_precision: string
   salvage_source: string
   salvaged_at: string
   parent_component: string
+  notes: string
+  quantity: number
 }
 
 export const defaultAddComponentFormState = (): AddComponentFormState => ({
@@ -59,15 +62,17 @@ export const defaultAddComponentFormState = (): AddComponentFormState => ({
   colorB: 110,
   lat: 0,
   lon: 0,
-  lengthMm: 100,
-  widthMm: 100,
-  heightMm: 10,
+  lengthMm: '100',
+  widthMm: '100',
+  heightMm: '10',
   condition: null,
   manufactured_at: '',
   manufactured_precision: '',
   salvage_source: '',
   salvaged_at: '',
   parent_component: '',
+  notes: '',
+  quantity: 1,
 })
 
 /** Label shown in review when the user leaves name empty. */
@@ -92,6 +97,21 @@ function axisAlignedFrame() {
     y: [0, 1, 0],
     z: [0, 0, 1],
   }
+}
+
+/** Parse a dimension text field; returns NaN when empty or invalid. */
+export function parseDimensionMm(value: string): number {
+  const trimmed = value.trim().replace(',', '.')
+  if (!trimmed) return Number.NaN
+  return parseFloat(trimmed)
+}
+
+/** Allow empty and partial decimals while the user types (e.g. "12.", ".5"). */
+export function sanitizeDimensionInput(value: string): string {
+  const v = value.replace(',', '.')
+  if (v === '') return ''
+  if (/^\d*\.?\d*$/.test(v)) return v
+  return v.slice(0, -1)
 }
 
 export function buildBoxExtrusionFromDimensions(lengthMm: number, widthMm: number, heightMm: number) {
@@ -137,7 +157,11 @@ export function buildCreateIdentityPayload(
   identityId: string,
   form: AddComponentFormState,
 ): CreateIdentityPayload {
-  const box = buildBoxExtrusionFromDimensions(form.lengthMm, form.widthMm, form.heightMm)
+  const box = buildBoxExtrusionFromDimensions(
+    parseDimensionMm(form.lengthMm),
+    parseDimensionMm(form.widthMm),
+    parseDimensionMm(form.heightMm),
+  )
 
   const location: ComponentLocation = {
     lat: form.lat,
@@ -184,6 +208,16 @@ export function buildCreateIdentityPayload(
   }
   if (form.parent_component.trim() && UUID_REGEX.test(form.parent_component.trim())) {
     payload.parent_identities = [form.parent_component.trim()]
+  }
+
+  const notes = form.notes.trim()
+  if (notes) {
+    payload.notes = notes
+  }
+
+  const qty = Math.max(1, Math.floor(form.quantity))
+  if (qty !== 1) {
+    payload.quantity = qty
   }
 
   return payload

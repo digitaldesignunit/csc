@@ -57,6 +57,15 @@ export function snapshotDisplayName(snapshot: CatalogComponent['snapshot']): str
     : 'Unnamed component'
 }
 
+/** Display name for who added the snapshot (username only; never expose user ids). */
+export function snapshotAddedByDisplay(
+  snapshot: Pick<CatalogComponent['snapshot'], 'added_by_username'>,
+): string | null {
+  return isNonEmptyString(snapshot.added_by_username)
+    ? snapshot.added_by_username.trim()
+    : null
+}
+
 export interface ExtendedUser {
   id?: string
   sub?: string

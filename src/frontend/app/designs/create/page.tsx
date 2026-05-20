@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { DesignComponent } from '@/generated/DesignModel'
 import { ComponentModel } from '@/generated/ComponentModel'
 import { Plus, X, Search } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function CreateDesignPage() {
   const router = useRouter()
@@ -64,7 +65,7 @@ export default function CreateDesignPage() {
     e.preventDefault()
     
     if (components.length === 0) {
-      alert('Please add at least one component to the design')
+      toast.warning('Please add at least one component to the design')
       return
     }
 
@@ -87,11 +88,11 @@ export default function CreateDesignPage() {
         router.push(`/designs/${createdDesign._id}`)
       } else {
         const error = await response.text()
-        alert(`Failed to create design: ${error}`)
+        toast.error(`Failed to create design: ${error}`)
       }
     } catch (error) {
       console.error('Error creating design:', error)
-      alert('Failed to create design')
+      toast.error('Failed to create design')
     } finally {
       setIsSubmitting(false)
     }

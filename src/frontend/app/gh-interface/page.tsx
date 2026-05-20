@@ -6,6 +6,7 @@ import { resolveStatic } from '@/lib/utils'
 import { Terminal, BookOpen, Code, Database, Settings, HelpCircle, ChevronRight, ChevronDown, FileImage, Download, Check, FileText, ArrowRight, WandSparkles, Sparkles, Box } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { toast } from 'sonner'
 
 export default function GHInterfacePage() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['getting-started']))
@@ -100,7 +101,7 @@ export default function GHInterfacePage() {
         const res = await fetch(`/api/backend/ghupdates/xml/${encodeURIComponent(xmlName)}`)
         if (!res.ok) {
           console.error('Failed to fetch XML:', res.status)
-          alert('XML not available for this component.')
+          toast.error('XML not available for this component.')
           return
         }
         const xmlText = await res.text()
@@ -109,7 +110,7 @@ export default function GHInterfacePage() {
         setTimeout(() => setCopied(false), 2000)
       } catch (err) {
         console.error('Copy XML error:', err)
-        alert('Copy to clipboard failed.')
+        toast.error('Copy to clipboard failed.')
       } finally {
         setIsCopying(false)
       }

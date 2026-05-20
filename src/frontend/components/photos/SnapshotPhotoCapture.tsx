@@ -6,6 +6,16 @@ import { Camera, ImagePlus, Loader2, Trash2, ZoomIn } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -65,6 +75,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null)
   const [stagedItems, setStagedItems] = useState<StagedItem[]>([])
 
   const stagedFiles = props.mode === 'staged' ? props.files : []
@@ -166,24 +177,22 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
     [disabled, maxPhotos, props],
   )
 
-  const removeLiveIndex = useCallback(
-    async (index: number) => {
-      if (props.mode !== 'live' || disabled) return
-      if (!window.confirm(`Delete photo ${index + 1}?`)) return
+  const confirmDeleteLivePhoto = useCallback(async () => {
+    const index = pendingDeleteIndex
+    if (index === null || props.mode !== 'live' || disabled) return
 
-      setBusy(true)
-      setError(null)
-      try {
-        await deleteSnapshotPhoto(props.snapshotId, index)
-        await props.onChange()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Delete failed.')
-      } finally {
-        setBusy(false)
-      }
-    },
-    [disabled, props],
-  )
+    setPendingDeleteIndex(null)
+    setBusy(true)
+    setError(null)
+    try {
+      await deleteSnapshotPhoto(props.snapshotId, index)
+      await props.onChange()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed.')
+    } finally {
+      setBusy(false)
+    }
+  }, [disabled, pendingDeleteIndex, props])
 
   const onCameraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -346,7 +355,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
                     size="icon"
                     className="absolute right-1 top-1 h-7 w-7 opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100"
                     disabled={disabled || busy}
-                    onClick={() => void removeLiveIndex(index)}
+                    onClick={() => setPendingDeleteIndex(index)}
                     aria-label={`Delete photo ${index + 1}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -362,6 +371,34 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
           {props.mode === 'staged' ? ' ready to upload' : ' on this snapshot'}
         </p>
       )}
+
+      <AlertDialog
+        open={pendingDeleteIndex !== null}
+        onOpenChange={open => {
+          if (!open) setPendingDeleteIndex(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete photo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteIndex !== null
+                ? `Photo #${pendingDeleteIndex} will be removed from this snapshot. This cannot be undone.`
+                : 'This photo will be removed from this snapshot.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={busy}
+              onClick={() => void confirmDeleteLivePhoto()}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={lightboxSrc !== null} onOpenChange={open => !open && setLightboxSrc(null)}>
         <DialogContent className="max-w-4xl overflow-hidden p-0">

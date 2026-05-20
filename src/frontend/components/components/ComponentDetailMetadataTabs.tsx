@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
@@ -26,6 +27,7 @@ import {
   isConsumedShallowRow,
   isNonEmptyString,
   primaryParentIdentityId,
+  snapshotAddedByDisplay,
 } from './componentDetailShared'
 
 const tabsListClass = cn(
@@ -93,6 +95,7 @@ function CatalogMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
   )
   const componentColorHex = hexComponentColor(Array.isArray(snapshot.color) ? snapshot.color : [])
   const bounds = componentBounds(snapshot.bbx)
+  const addedBy = snapshotAddedByDisplay(snapshot)
 
   return (
     <>
@@ -121,6 +124,25 @@ function CatalogMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
       <MetadataRow label="Complexity">
         <ValueChip tone="secondary">{snapshot.complexity}</ValueChip>
       </MetadataRow>
+      <MetadataRow label="Quantity">
+        <ValueChip tone="primary">
+          {typeof snapshot.quantity === 'number' && snapshot.quantity >= 1
+            ? snapshot.quantity
+            : 1}
+        </ValueChip>
+      </MetadataRow>
+      {addedBy && (
+        <MetadataRow label="Added by">
+          <ValueChip tone="secondary">{addedBy}</ValueChip>
+        </MetadataRow>
+      )}
+      {isNonEmptyString(snapshot.notes) && (
+        <MetadataRow label="Notes">
+          <ValueChip tone="secondary" className="max-w-[14rem] whitespace-pre-wrap break-words">
+            {String(snapshot.notes)}
+          </ValueChip>
+        </MetadataRow>
+      )}
       <div className="border-b border-border/60 py-2 last:border-0">
         <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Bounding box
@@ -363,13 +385,13 @@ function useParentComponentStatus(catalog: CatalogComponent) {
         return
       }
       if (res.status === 404) {
-        alert('Parent component could not be found.')
+        toast.error('Parent component could not be found.')
         return
       }
-      alert('Failed to open parent component. Please try again.')
+      toast.error('Failed to open parent component. Please try again.')
     } catch (error) {
       console.error('Failed to resolve parent component:', error)
-      alert('Failed to open parent component. Please try again.')
+      toast.error('Failed to open parent component. Please try again.')
     } finally {
       setOpeningParentComponent(false)
     }

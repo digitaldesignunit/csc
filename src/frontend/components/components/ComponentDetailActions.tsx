@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import ComponentSnapshotGeometryDownload from './ComponentSnapshotGeometryDownload'
+import { toast } from 'sonner'
 import { ExtendedUser, isConsumedShallowRow } from './componentDetailShared'
 
 type ComponentDetailActionsProps = {
@@ -66,10 +67,10 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
         window.location.reload()
       } else {
         const error = await response.json()
-        alert(`Failed to reserve component: ${error.detail || 'Unknown error'}`)
+        toast.error(`Failed to reserve component: ${error.detail || 'Unknown error'}`)
       }
     } catch {
-      alert('Failed to reserve component. Please try again.')
+      toast.error('Failed to reserve component. Please try again.')
     }
   }
 
@@ -87,10 +88,10 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
         window.location.reload()
       } else {
         const error = await response.json()
-        alert(`Failed to release component: ${error.detail || 'Unknown error'}`)
+        toast.error(`Failed to release component: ${error.detail || 'Unknown error'}`)
       }
     } catch {
-      alert('Failed to release component. Please try again.')
+      toast.error('Failed to release component. Please try again.')
     }
   }
 
@@ -104,10 +105,10 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
       if (response.ok) {
         router.push('/admin/validation')
       } else {
-        alert('Failed to validate component. Please try again.')
+        toast.error('Failed to validate component. Please try again.')
       }
     } catch {
-      alert('Failed to validate component. Please try again.')
+      toast.error('Failed to validate component. Please try again.')
     } finally {
       setValidating(false)
     }
@@ -123,10 +124,10 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
       if (response.ok) {
         router.refresh()
       } else {
-        alert('Failed to archive component. Please try again.')
+        toast.error('Failed to archive component. Please try again.')
       }
     } catch {
-      alert('Failed to archive component. Please try again.')
+      toast.error('Failed to archive component. Please try again.')
     } finally {
       setArchiving(false)
     }
@@ -142,10 +143,10 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
       if (response.ok) {
         router.refresh()
       } else {
-        alert('Failed to restore component. Please try again.')
+        toast.error('Failed to restore component. Please try again.')
       }
     } catch {
-      alert('Failed to restore component. Please try again.')
+      toast.error('Failed to restore component. Please try again.')
     } finally {
       setArchiving(false)
     }
@@ -178,10 +179,10 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
       if (response.ok) {
         router.push('/components')
       } else {
-        alert('Failed to delete component. Please try again.')
+        toast.error('Failed to delete component. Please try again.')
       }
     } catch {
-      alert('Failed to delete component. Please try again.')
+      toast.error('Failed to delete component. Please try again.')
     } finally {
       setDeleting(false)
     }

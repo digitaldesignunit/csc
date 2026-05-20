@@ -1,6 +1,7 @@
 'use client';
 
 import { SessionProvider } from 'next-auth/react';
+import { Toaster } from '@/components/ui/sonner';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -10,6 +11,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       refetchWhenOffline={false} // Don't check when offline
     >
       {children}
+      <Toaster richColors closeButton />
     </SessionProvider>
   );
 }

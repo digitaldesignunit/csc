@@ -25,6 +25,8 @@ import { CardContent, CardHeader } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { OptionalDateInput } from '@/components/ui/optional-date-input'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -36,11 +38,14 @@ import {
   AddComponentFormState,
   COMPONENT_TYPES,
   CONDITION_VALUES,
+  MANUFACTURED_PRECISIONS,
   addComponentDisplayNamePreview,
   buildCreateIdentityPayload,
   defaultAddComponentFormState,
   isValidIdentityUuid,
   normalizeScannedIdentityId,
+  parseDimensionMm,
+  sanitizeDimensionInput,
 } from '@/lib/catalogCreate'
 import { uploadSnapshotPhotos } from '@/lib/snapshotPhotos'
 import { hexComponentColor } from '@/lib/utils'
@@ -258,9 +263,10 @@ export default function ComponentAddWizard() {
   const canProceedDetails =
     form.material.trim().length > 0 &&
     form.dataset.trim().length > 0 &&
-    form.lengthMm > 0 &&
-    form.widthMm > 0 &&
-    form.heightMm > 0
+    parseDimensionMm(form.lengthMm) > 0 &&
+    parseDimensionMm(form.widthMm) > 0 &&
+    parseDimensionMm(form.heightMm) > 0 &&
+    form.quantity >= 1
 
   const stepIndex = STEPS.indexOf(step)
 
@@ -565,6 +571,36 @@ export default function ComponentAddWizard() {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="add-quantity">Quantity</Label>
+                <Input
+                  id="add-quantity"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.quantity}
+                  onChange={e =>
+                    setForm(f => ({
+                      ...f,
+                      quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
+                    }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Identical items counted as one catalog entry (e.g. matching fixtures).
+                </p>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="add-notes">Notes (optional)</Label>
+                <Textarea
+                  id="add-notes"
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Site observations, markings, storage location, etc."
+                  rows={3}
+                  maxLength={5000}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="add-color">Color (hex)</Label>
                 <div className="flex gap-2">
                   <Input
@@ -610,14 +646,15 @@ export default function ComponentAddWizard() {
                     <Label htmlFor={id}>{label}</Label>
                     <Input
                       id={id}
-                      type="number"
-                      min={0.1}
-                      step={0.1}
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="mm"
                       value={form[key]}
                       onChange={e =>
                         setForm(f => ({
                           ...f,
-                          [key]: parseFloat(e.target.value) || 0,
+                          [key]: sanitizeDimensionInput(e.target.value),
                         }))
                       }
                     />
@@ -725,6 +762,58 @@ export default function ComponentAddWizard() {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label>Manufactured precision</Label>
+                  <Select
+                    value={
+                      form.manufactured_precision === '' ? UNSET : form.manufactured_precision
+                    }
+                    onValueChange={v =>
+                      setForm(f => ({
+                        ...f,
+                        manufactured_precision: v === UNSET ? '' : v,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Unknown" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={UNSET}>Unknown</SelectItem>
+                      {MANUFACTURED_PRECISIONS.map(p => (
+                        <SelectItem key={p} value={p}>
+                          {p}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <OptionalDateInput
+                  id="add-manufactured-at"
+                  label="Manufactured at"
+                  value={form.manufactured_at}
+                  onChange={manufactured_at => setForm(f => ({ ...f, manufactured_at }))}
+                />
+
+                <OptionalDateInput
+                  id="add-salvaged-at"
+                  label="Salvaged at"
+                  value={form.salvaged_at}
+                  onChange={salvaged_at => setForm(f => ({ ...f, salvaged_at }))}
+                />
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="add-salvage-source">Salvage source</Label>
+                  <Input
+                    id="add-salvage-source"
+                    value={form.salvage_source}
+                    onChange={e => setForm(f => ({ ...f, salvage_source: e.target.value }))}
+                    placeholder="e.g. demolition site, building name"
+                    maxLength={500}
+                  />
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="add-parent">Parent identity id</Label>
                   <Input
                     id="add-parent"
@@ -806,10 +895,23 @@ export default function ComponentAddWizard() {
               <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
                 <dt className="text-muted-foreground">Dimensions (mm)</dt>
                 <dd className="tabular-nums text-right">
-                  {form.lengthMm.toFixed(1)} × {form.widthMm.toFixed(1)} ×{' '}
-                  {form.heightMm.toFixed(1)}
+                  {parseDimensionMm(form.lengthMm).toFixed(1)} ×{' '}
+                  {parseDimensionMm(form.widthMm).toFixed(1)} ×{' '}
+                  {parseDimensionMm(form.heightMm).toFixed(1)}
                 </dd>
               </div>
+              <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
+                <dt className="text-muted-foreground">Quantity</dt>
+                <dd className="tabular-nums text-right">{form.quantity}</dd>
+              </div>
+              {form.notes.trim() && (
+                <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
+                  <dt className="shrink-0 text-muted-foreground">Notes</dt>
+                  <dd className="max-w-[60%] whitespace-pre-wrap text-right text-xs">
+                    {form.notes.trim()}
+                  </dd>
+                </div>
+              )}
               <div className="flex justify-between gap-4 py-1.5">
                 <dt className="text-muted-foreground">Photos</dt>
                 <dd className="text-right">{photoFiles.length}</dd>

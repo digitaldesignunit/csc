@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { OptionalDateInput } from '@/components/ui/optional-date-input'
+import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { hexComponentColor } from '@/lib/utils'
@@ -66,6 +68,8 @@ type FormState = {
   salvage_source: string
   salvaged_at: string            // stored as 'YYYY-MM-DD', serialized on submit
   parent_component: string
+  notes: string
+  quantity: number
 }
 
 function coerceNumber(value: string, fallback: number): number {
@@ -150,6 +154,11 @@ function initialStateFromCatalog(catalog: CatalogComponent): FormState {
     salvage_source: typeof identity.salvage_source === 'string' ? identity.salvage_source : '',
     salvaged_at: isoToDateInput(identity.salvaged_at),
     parent_component: parentId,
+    notes: typeof snapshot.notes === 'string' ? snapshot.notes : '',
+    quantity:
+      typeof snapshot.quantity === 'number' && snapshot.quantity >= 1
+        ? Math.floor(snapshot.quantity)
+        : 1,
   }
 }
 
@@ -256,6 +265,13 @@ export default function ComponentEditForm({
     }
     if (form.condition !== initial.condition) {
       snapshotPatch.condition = form.condition
+    }
+    if (form.notes.trim() !== initial.notes.trim()) {
+      const next = form.notes.trim()
+      snapshotPatch.notes = next === '' ? null : next
+    }
+    if (form.quantity !== initial.quantity) {
+      snapshotPatch.quantity = Math.max(1, Math.floor(form.quantity))
     }
 
     if (form.type !== initial.type) identityPatch.type = form.type
@@ -458,6 +474,42 @@ export default function ComponentEditForm({
             </datalist>
           </div>
 
+          <div>
+            <Label htmlFor="quantity">Quantity</Label>
+            <Input
+              id="quantity"
+              type="number"
+              min={1}
+              step={1}
+              value={form.quantity}
+              onChange={e =>
+                setField('quantity', Math.max(1, parseInt(e.target.value, 10) || 1))
+              }
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              value={form.notes}
+              onChange={e => setField('notes', e.target.value)}
+              rows={3}
+              maxLength={5000}
+              placeholder="Optional notes for this snapshot"
+            />
+          </div>
+
+          {typeof catalog.snapshot.added_by_username === 'string' &&
+            catalog.snapshot.added_by_username.trim() !== '' && (
+              <div className="sm:col-span-2 text-sm text-muted-foreground">
+                Added to catalog by{' '}
+                <span className="font-medium text-foreground">
+                  {catalog.snapshot.added_by_username}
+                </span>
+              </div>
+            )}
+
           <div className="flex items-center gap-6 sm:col-span-2">
             <label className="flex items-center gap-2 text-sm">
               <Checkbox
@@ -613,25 +665,19 @@ export default function ComponentEditForm({
             </Select>
           </div>
 
-          <div>
-            <Label htmlFor="manufactured_at">Manufactured at</Label>
-            <Input
-              id="manufactured_at"
-              type="date"
-              value={form.manufactured_at}
-              onChange={e => setField('manufactured_at', e.target.value)}
-            />
-          </div>
+          <OptionalDateInput
+            id="manufactured_at"
+            label="Manufactured at"
+            value={form.manufactured_at}
+            onChange={v => setField('manufactured_at', v)}
+          />
 
-          <div>
-            <Label htmlFor="salvaged_at">Salvaged at</Label>
-            <Input
-              id="salvaged_at"
-              type="date"
-              value={form.salvaged_at}
-              onChange={e => setField('salvaged_at', e.target.value)}
-            />
-          </div>
+          <OptionalDateInput
+            id="salvaged_at"
+            label="Salvaged at"
+            value={form.salvaged_at}
+            onChange={v => setField('salvaged_at', v)}
+          />
 
           <div className="sm:col-span-2">
             <Label htmlFor="salvage_source">Salvage source</Label>

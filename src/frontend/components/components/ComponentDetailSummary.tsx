@@ -7,7 +7,12 @@ import type { CatalogComponent } from '@/generated/CatalogModels'
 import { generateGrasshopperPanelXML } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { isConsumedShallowRow, snapshotDisplayName } from './componentDetailShared'
+import {
+  isConsumedShallowRow,
+  isNonEmptyString,
+  snapshotAddedByDisplay,
+  snapshotDisplayName,
+} from './componentDetailShared'
 
 type ComponentDetailSummaryProps = {
   catalog: CatalogComponent
@@ -21,6 +26,7 @@ export default function ComponentDetailSummary({ catalog }: ComponentDetailSumma
     consumed_at: identity.consumed_at as string | null | undefined,
   })
   const reservedBy = typeof identity.reserved === 'string' ? identity.reserved.trim() : ''
+  const addedBy = snapshotAddedByDisplay(snapshot)
 
   const [copied, setCopied] = useState(false)
   const [grasshopperCopied, setGrasshopperCopied] = useState(false)
@@ -118,6 +124,23 @@ export default function ComponentDetailSummary({ catalog }: ComponentDetailSumma
           </span>
         ) : null}
       </div>
+
+      {addedBy && (
+        <p className="text-xs text-muted-foreground">
+          Added by <span className="font-medium text-foreground">{addedBy}</span>
+        </p>
+      )}
+
+      {isNonEmptyString(snapshot.notes) && (
+        <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Notes
+          </p>
+          <p className="mt-1 text-sm whitespace-pre-wrap break-words text-foreground">
+            {String(snapshot.notes)}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

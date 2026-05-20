@@ -12,6 +12,7 @@ import { ComponentOverviewDataTable } from '@/components/components/overview/Com
 import { ComponentOverviewColumns } from '@/components/components/overview/ComponentOverviewColumns'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { ColumnDef } from '@tanstack/react-table'
+import { toast } from 'sonner'
 
 // Type for session user with extended properties
 interface ExtendedUser {
@@ -59,11 +60,11 @@ export default function ReservedComponentsPage() {
                   setReservedComponents(prev => prev.filter(comp => comp._id !== componentId))
                 } else {
                   const error = await response.json()
-                  alert(`Failed to release component: ${error.detail || 'Unknown error'}`)
+                  toast.error(`Failed to release component: ${error.detail || 'Unknown error'}`)
                 }
               } catch (err) {
                 console.error('Error releasing component:', err)
-                alert('Failed to release component')
+                toast.error('Failed to release component')
               }
             }}
             className='px-2 py-1 text-xs bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 transition-colors cursor-pointer'
