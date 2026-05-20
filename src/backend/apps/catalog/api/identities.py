@@ -508,6 +508,10 @@ async def create_identity(
         'iframe': payload.iframe.model_dump(),
         'pca_frame': payload.pca_frame.model_dump(),
         'validated': payload.validated,
+        'added_by_user_id': current_user.id,
+        'added_by_username': current_user.username,
+        'notes': payload.notes,
+        'quantity': payload.quantity,
         'created': now,
         'lastmodified': now,
     }

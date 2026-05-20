@@ -1066,6 +1066,31 @@ class ComponentSnapshot(BaseModel):
             "optional cache for list UI"
         ),
     )
+    added_by_user_id: Optional[str] = Field(
+        None,
+        description=(
+            "User id of whoever created this snapshot (set on v0 create; "
+            "records who added the identity to the catalog)"
+        ),
+    )
+    added_by_username: Optional[str] = Field(
+        None,
+        description="Username at create time (display cache for added_by_user_id)",
+    )
+    notes: Optional[str] = Field(
+        None,
+        max_length=5000,
+        description="Free-text notes for this snapshot state",
+    )
+    quantity: int = Field(
+        default=1,
+        ge=1,
+        le=999_999,
+        description=(
+            "Number of identical physical items represented by this "
+            "catalog entry (e.g. a batch of matching fixtures)"
+        ),
+    )
     mesh_ply_resolutions: Optional[Dict[str, List[str]]] = Field(
         None,
         description=(
@@ -1278,6 +1303,17 @@ class CreateComponentRequest(BaseModel):
     reserved: str = ''
     attributes: Optional[Dict] = Field(default_factory=dict)
     parent_identities: Optional[List[str]] = None
+    notes: Optional[str] = Field(
+        default=None,
+        max_length=5000,
+        description='Optional notes stored on the initial snapshot',
+    )
+    quantity: int = Field(
+        default=1,
+        ge=1,
+        le=999_999,
+        description='Count of identical items (initial snapshot)',
+    )
     marker_points: Optional[List[List[float]]] = Field(
         default=None,
         description=(
@@ -1355,6 +1391,14 @@ class CreateComponentRequest(BaseModel):
                 )
         return [str(item) for item in v]
 
+    @field_validator('notes')
+    @classmethod
+    def _normalize_create_notes(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
+
     class Config:
         extra = 'ignore'
         populate_by_name = True
@@ -1384,6 +1428,8 @@ class UpdateComponentSnapshotModel(BaseModel):
     location: Optional[ComponentLocation] = None
     processes: Optional[Dict] = None
     validated: Optional[bool] = None
+    notes: Optional[str] = Field(default=None, max_length=5000)
+    quantity: Optional[int] = Field(default=None, ge=1, le=999_999)
 
     @field_validator('condition')
     @classmethod
@@ -1395,6 +1441,14 @@ class UpdateComponentSnapshotModel(BaseModel):
                 f'condition must be one of {ALLOWED_CONDITION_VALUES}'
             )
         return v
+
+    @field_validator('notes')
+    @classmethod
+    def _normalize_patch_notes(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        return v or None
 
     class Config:
         extra = "ignore"
