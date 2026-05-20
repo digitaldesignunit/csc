@@ -114,12 +114,62 @@ export function sanitizeDimensionInput(value: string): string {
   return v.slice(0, -1)
 }
 
-export function buildBoxExtrusionFromDimensions(lengthMm: number, widthMm: number, heightMm: number) {
-  const l = Math.max(0.1, lengthMm)
-  const w = Math.max(0.1, widthMm)
-  const h = Math.max(0.1, heightMm)
-  const hx = l / 2
-  const hy = w / 2
+function sortedBoxSideLengths(
+  lengthMm: number,
+  widthMm: number,
+  heightMm: number,
+): [number, number, number] {
+  return [
+    Math.max(0.1, lengthMm),
+    Math.max(0.1, widthMm),
+    Math.max(0.1, heightMm),
+  ].sort((a, b) => b - a) as [number, number, number]
+}
+
+/** Human-readable axis assignment for the add-component dimension hint. */
+export function boxAxisAssignmentHint(componentType: string): string {
+  if (componentType.toLowerCase() === 'column') {
+    return 'longest → Z, middle → X, shortest → Y'
+  }
+  return 'longest → X, middle → Y, shortest → Z'
+}
+
+/**
+ * Sort L/W/H into canonical box axes.
+ * Default: longest → X, middle → Y, shortest → Z.
+ * Column: longest → Z, middle → X, shortest → Y.
+ */
+export function canonicalizeBoxAxesMm(
+  lengthMm: number,
+  widthMm: number,
+  heightMm: number,
+  componentType?: string,
+): { xMm: number; yMm: number; zMm: number } {
+  const [longest, middle, shortest] = sortedBoxSideLengths(
+    lengthMm,
+    widthMm,
+    heightMm,
+  )
+  if (componentType?.toLowerCase() === 'column') {
+    return { xMm: middle, yMm: shortest, zMm: longest }
+  }
+  return { xMm: longest, yMm: middle, zMm: shortest }
+}
+
+export function buildBoxExtrusionFromDimensions(
+  lengthMm: number,
+  widthMm: number,
+  heightMm: number,
+  componentType?: string,
+) {
+  const { xMm, yMm, zMm } = canonicalizeBoxAxesMm(
+    lengthMm,
+    widthMm,
+    heightMm,
+    componentType,
+  )
+  const hx = xMm / 2
+  const hy = yMm / 2
 
   return {
     geometry: {
@@ -131,11 +181,11 @@ export function buildBoxExtrusionFromDimensions(lengthMm: number, widthMm: numbe
             [hx, hy],
             [-hx, hy],
           ],
-          height: h,
+          height: zMm,
         },
       ],
     },
-    bbx: [l, w, h] as [number, number, number],
+    bbx: [xMm, yMm, zMm] as [number, number, number],
     bbx_origin: [0, 0, 0] as [number, number, number],
     iframe: axisAlignedFrame(),
     pca_frame: axisAlignedFrame(),
@@ -161,6 +211,7 @@ export function buildCreateIdentityPayload(
     parseDimensionMm(form.lengthMm),
     parseDimensionMm(form.widthMm),
     parseDimensionMm(form.heightMm),
+    form.type,
   )
 
   const location: ComponentLocation = {

@@ -41,6 +41,8 @@ import {
   MANUFACTURED_PRECISIONS,
   addComponentDisplayNamePreview,
   buildCreateIdentityPayload,
+  canonicalizeBoxAxesMm,
+  boxAxisAssignmentHint,
   defaultAddComponentFormState,
   isValidIdentityUuid,
   normalizeScannedIdentityId,
@@ -505,8 +507,8 @@ export default function ComponentAddWizard() {
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">Metadata & dimensions</h2>
             <p className="text-sm text-muted-foreground">
-              Enter catalog fields and bounding box size in millimeters (L × W × H). A box
-              extrusion is created for the initial snapshot geometry.
+              Enter catalog fields and bounding box size in millimeters (L × W × H). Values
+              are assigned to X, Y, and Z by size ({boxAxisAssignmentHint(form.type)}).
             </p>
           </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -661,6 +663,10 @@ export default function ComponentAddWizard() {
                   </div>
                 ))}
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Entered L/W/H need not match axis order — they are sorted on save (
+                {boxAxisAssignmentHint(form.type)}).
+              </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -893,11 +899,17 @@ export default function ComponentAddWizard() {
                 <dd className="text-right">{form.dataset}</dd>
               </div>
               <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
-                <dt className="text-muted-foreground">Dimensions (mm)</dt>
+                <dt className="text-muted-foreground">Dimensions X × Y × Z (mm)</dt>
                 <dd className="tabular-nums text-right">
-                  {parseDimensionMm(form.lengthMm).toFixed(1)} ×{' '}
-                  {parseDimensionMm(form.widthMm).toFixed(1)} ×{' '}
-                  {parseDimensionMm(form.heightMm).toFixed(1)}
+                  {(() => {
+                    const { xMm, yMm, zMm } = canonicalizeBoxAxesMm(
+                      parseDimensionMm(form.lengthMm),
+                      parseDimensionMm(form.widthMm),
+                      parseDimensionMm(form.heightMm),
+                      form.type,
+                    )
+                    return `${xMm.toFixed(1)} × ${yMm.toFixed(1)} × ${zMm.toFixed(1)}`
+                  })()}
                 </dd>
               </div>
               <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
