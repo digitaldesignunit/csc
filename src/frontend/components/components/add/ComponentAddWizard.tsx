@@ -740,9 +740,14 @@ export default function ComponentAddWizard() {
               </div>
             </div>
 
-            <details className="rounded-lg border border-border/60 p-3">
-              <summary className="cursor-pointer text-sm font-medium">Provenance (optional)</summary>
-              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-medium">Provenance (optional)</p>
+                <p className="text-xs text-muted-foreground">
+                  Condition, manufacture and salvage dates, source, and parent identity.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Condition</Label>
                   <Select
@@ -830,7 +835,7 @@ export default function ComponentAddWizard() {
                   />
                 </div>
               </div>
-            </details>
+            </div>
 
           <div className="flex justify-between gap-2 pt-2">
             <Button type="button" variant="outline" onClick={goBack}>

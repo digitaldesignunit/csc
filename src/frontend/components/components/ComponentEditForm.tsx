@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { hexComponentColor } from '@/lib/utils'
+import CatalogMetaSelect from '@/components/components/add/CatalogMetaSelect'
 const COMPONENT_TYPES = [
   'panel',
   'beam',
@@ -438,41 +439,25 @@ export default function ComponentEditForm({
             </p>
           </div>
 
-          <div>
-            <Label htmlFor="material">Material</Label>
-            <Input
-              id="material"
-              value={form.material}
-              onChange={e => setField('material', e.target.value)}
-              placeholder="e.g. wood, concrete"
-              list="material-suggestions"
-              maxLength={100}
-              required
-            />
-            <datalist id="material-suggestions">
-              {materialSuggestions.map(m => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-          </div>
+          <CatalogMetaSelect
+            id="edit-material"
+            label="Material"
+            value={form.material}
+            options={materialSuggestions}
+            onChange={material => setField('material', material)}
+            customPlaceholder="Custom material"
+            required
+          />
 
-          <div>
-            <Label htmlFor="dataset">Dataset</Label>
-            <Input
-              id="dataset"
-              value={form.dataset}
-              onChange={e => setField('dataset', e.target.value)}
-              placeholder="e.g. demo, batch-2025-04"
-              list="dataset-suggestions"
-              maxLength={200}
-              required
-            />
-            <datalist id="dataset-suggestions">
-              {datasetSuggestions.map(d => (
-                <option key={d} value={d} />
-              ))}
-            </datalist>
-          </div>
+          <CatalogMetaSelect
+            id="edit-dataset"
+            label="Dataset"
+            value={form.dataset}
+            options={datasetSuggestions}
+            onChange={dataset => setField('dataset', dataset)}
+            customPlaceholder="Custom dataset"
+            required
+          />
 
           <div>
             <Label htmlFor="quantity">Quantity</Label>

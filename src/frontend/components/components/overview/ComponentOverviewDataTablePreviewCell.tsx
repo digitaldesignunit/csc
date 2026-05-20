@@ -96,7 +96,7 @@ export default function ComponentOverviewDataTablePreviewCell({
                 <button
                   type="button"
                   onClick={handleOpenPreview}
-                  className="h-10 w-10 shrink-0 overflow-hidden rounded-md border bg-white focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border bg-white focus:outline-none focus:ring-2 focus:ring-ring"
                   aria-label="Open component preview"
                 >
                   <ComponentPreviewImage
@@ -106,6 +106,7 @@ export default function ComponentOverviewDataTablePreviewCell({
                     width={40}
                     height={40}
                     maxHeight={40}
+                    className="h-full w-full"
                   />
                 </button>
               </SheetTrigger>
