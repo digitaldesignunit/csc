@@ -27,4 +27,5 @@ Pillow
 # --- Descriptor computation ---
 trimesh>=3.15.0
 scipy
+scikit-learn
 robust-laplacian>=1.0.0
