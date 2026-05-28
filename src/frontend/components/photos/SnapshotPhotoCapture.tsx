@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Camera, ImagePlus, Loader2, Trash2, ZoomIn } from 'lucide-react'
 
+import PhotoLightboxDialog, { type PhotoLightboxItem } from '@/components/photos/PhotoLightboxDialog'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -16,19 +17,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  ALLOWED_PHOTO_TYPES,
   MAX_PHOTO_SLOTS,
   deleteSnapshotPhoto,
+  isAllowedPhotoFile,
   nextAvailablePhotoIndex,
   snapshotPhotoUrl,
   uploadSnapshotPhoto,
+  type SnapshotPhotoMutationResult,
 } from '@/lib/snapshotPhotos'
 
 type StagedItem = {
@@ -49,7 +44,7 @@ type SnapshotPhotoCaptureLiveProps = {
   mode: 'live'
   snapshotId: string
   indices: number[]
-  onChange: () => void | Promise<void>
+  onChange: (result?: SnapshotPhotoMutationResult) => void | Promise<void>
   maxPhotos?: number
   disabled?: boolean
   compact?: boolean
@@ -59,9 +54,13 @@ export type SnapshotPhotoCaptureProps =
   | SnapshotPhotoCaptureStagedProps
   | SnapshotPhotoCaptureLiveProps
 
-function isAllowedPhotoFile(file: File): boolean {
-  const contentType = (file.type || '').toLowerCase()
-  return ALLOWED_PHOTO_TYPES.includes(contentType as (typeof ALLOWED_PHOTO_TYPES)[number])
+function filesFromInput(input: HTMLInputElement | null): File[] {
+  if (!input?.files?.length) return []
+  return Array.from(input.files)
+}
+
+function resetFileInput(input: HTMLInputElement | null) {
+  if (input) input.value = ''
 }
 
 export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
@@ -74,7 +73,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
 
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const [lightboxPosition, setLightboxPosition] = useState<number | null>(null)
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null)
   const [stagedItems, setStagedItems] = useState<StagedItem[]>([])
 
@@ -155,6 +154,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
         }
 
         const used = new Set(props.indices)
+        let latestPhotoCount: number | undefined
         for (const file of valid) {
           if (used.size >= maxPhotos) {
             setError(`Maximum of ${maxPhotos} photos.`)
@@ -162,16 +162,21 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
           }
           const slot = nextAvailablePhotoIndex(used)
           if (slot === null) break
-          await uploadSnapshotPhoto(props.snapshotId, slot, file)
+          const result = await uploadSnapshotPhoto(props.snapshotId, slot, file)
+          if (result.photoCount !== undefined) {
+            latestPhotoCount = result.photoCount
+          }
           used.add(slot)
         }
-        await props.onChange()
+        await props.onChange(
+          latestPhotoCount === undefined ? undefined : { photoCount: latestPhotoCount },
+        )
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Upload failed.')
       } finally {
         setBusy(false)
-        if (cameraInputRef.current) cameraInputRef.current.value = ''
-        if (galleryInputRef.current) galleryInputRef.current.value = ''
+        resetFileInput(cameraInputRef.current)
+        resetFileInput(galleryInputRef.current)
       }
     },
     [disabled, maxPhotos, props],
@@ -185,8 +190,8 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
     setBusy(true)
     setError(null)
     try {
-      await deleteSnapshotPhoto(props.snapshotId, index)
-      await props.onChange()
+      const result = await deleteSnapshotPhoto(props.snapshotId, index)
+      await props.onChange(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed.')
     } finally {
@@ -195,19 +200,20 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
   }, [disabled, pendingDeleteIndex, props])
 
   const onCameraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
+    const files = filesFromInput(e.currentTarget)
+    resetFileInput(e.currentTarget)
+    const file = files[0]
     if (!file) return
     if (props.mode === 'staged') addStagedFiles([file])
     else void addLiveFiles([file])
   }
 
   const onGalleryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const list = e.target.files
-    e.target.value = ''
-    if (!list?.length) return
-    if (props.mode === 'staged') addStagedFiles(list)
-    else void addLiveFiles(list)
+    const files = filesFromInput(e.currentTarget)
+    resetFileInput(e.currentTarget)
+    if (files.length === 0) return
+    if (props.mode === 'staged') addStagedFiles(files)
+    else void addLiveFiles(files)
   }
 
   const gridClass = compact
@@ -225,6 +231,32 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
       src: snapshotPhotoUrl(props.snapshotId, index),
     }))
   }, [props])
+
+  const lightboxItems = useMemo<PhotoLightboxItem[]>(() => {
+    if (props.mode === 'staged') {
+      return stagedItems.map((item, i) => ({
+        src: item.previewUrl,
+        alt: `Staged photo ${i + 1}`,
+        caption: `Photo ${i + 1}`,
+      }))
+    }
+    return liveTiles.map(({ index, src }) => ({
+      src,
+      alt: `Snapshot photo slot ${index}`,
+      caption: `Slot #${index}`,
+    }))
+  }, [props.mode, stagedItems, liveTiles])
+
+  useEffect(() => {
+    if (lightboxPosition === null) return
+    if (lightboxItems.length === 0) {
+      setLightboxPosition(null)
+      return
+    }
+    if (lightboxPosition >= lightboxItems.length) {
+      setLightboxPosition(lightboxItems.length - 1)
+    }
+  }, [lightboxItems.length, lightboxPosition])
 
   return (
     <div className="space-y-3">
@@ -303,7 +335,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
                   <button
                     type="button"
                     className="relative h-full w-full"
-                    onClick={() => setLightboxSrc(item.previewUrl)}
+                    onClick={() => setLightboxPosition(index)}
                     aria-label={`Preview photo ${index + 1}`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -326,13 +358,13 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
                   </Button>
                 </div>
               ))
-            : liveTiles.map(({ index, src }) => (
+            : liveTiles.map(({ index, src }, position) => (
                 <div key={index} className={thumbClass}>
                   <button
                     type="button"
                     className="relative h-full w-full"
-                    onClick={() => setLightboxSrc(src)}
-                    aria-label={`View photo ${index + 1}`}
+                    onClick={() => setLightboxPosition(position)}
+                    aria-label={`View photo ${position + 1}`}
                   >
                     <Image
                       src={src}
@@ -400,20 +432,16 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={lightboxSrc !== null} onOpenChange={open => !open && setLightboxSrc(null)}>
-        <DialogContent className="max-w-4xl overflow-hidden p-0">
-          <DialogHeader className="p-4 pb-0">
-            <DialogTitle>Photo preview</DialogTitle>
-            <DialogDescription>User-uploaded snapshot image</DialogDescription>
-          </DialogHeader>
-          {lightboxSrc && (
-            <div className="relative mx-4 mb-4 h-[min(70vh,560px)] w-[calc(100%-2rem)] overflow-hidden rounded-md bg-muted">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={lightboxSrc} alt="Preview" className="h-full w-full object-contain" />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <PhotoLightboxDialog
+        open={lightboxPosition !== null}
+        onOpenChange={open => {
+          if (!open) setLightboxPosition(null)
+        }}
+        items={lightboxItems}
+        index={lightboxPosition}
+        onIndexChange={setLightboxPosition}
+        title="Photo preview"
+      />
     </div>
   )
 }

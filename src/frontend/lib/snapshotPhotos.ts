@@ -1,6 +1,47 @@
 const MAX_PHOTO_SLOTS = 32
 export const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 
+const PHOTO_EXTENSION_TO_MIME: Record<string, (typeof ALLOWED_PHOTO_TYPES)[number]> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+}
+
+function extensionMimeType(filename: string): (typeof ALLOWED_PHOTO_TYPES)[number] | null {
+  const match = filename.trim().toLowerCase().match(/\.([a-z0-9]+)$/)
+  if (!match) return null
+  return PHOTO_EXTENSION_TO_MIME[match[1]] ?? null
+}
+
+/** Resolve MIME from file.type and filename (gallery picks often omit type). */
+export function resolvePhotoMimeType(file: File): (typeof ALLOWED_PHOTO_TYPES)[number] | null {
+  const raw = (file.type || '').split(';', 1)[0].trim().toLowerCase()
+  if (raw === 'image/jpg' || raw === 'image/pjpeg') return 'image/jpeg'
+  if (ALLOWED_PHOTO_TYPES.includes(raw as (typeof ALLOWED_PHOTO_TYPES)[number])) {
+    return raw as (typeof ALLOWED_PHOTO_TYPES)[number]
+  }
+  return extensionMimeType(file.name)
+}
+
+export function isAllowedPhotoFile(file: File): boolean {
+  return resolvePhotoMimeType(file) !== null
+}
+
+/** Ensure upload FormData has a valid image MIME (some OS pickers leave type empty). */
+export function normalizePhotoFile(file: File): File {
+  const mime = resolvePhotoMimeType(file)
+  if (!mime) {
+    throw new Error('Use JPEG, PNG, or WebP.')
+  }
+  if (file.type === mime) return file
+  return new File([file], file.name, { type: mime, lastModified: file.lastModified })
+}
+
+export type SnapshotPhotoMutationResult = {
+  photoCount?: number
+}
+
 export function snapshotPhotoUrl(snapshotId: string, index: number): string {
   return `/api/backend/snapshots/${encodeURIComponent(snapshotId)}/photos/${index}`
 }
@@ -17,14 +58,11 @@ export async function uploadSnapshotPhoto(
   snapshotId: string,
   index: number,
   file: File,
-): Promise<void> {
-  const contentType = (file.type || '').toLowerCase()
-  if (!ALLOWED_PHOTO_TYPES.includes(contentType as (typeof ALLOWED_PHOTO_TYPES)[number])) {
-    throw new Error('Use JPEG, PNG, or WebP.')
-  }
+): Promise<SnapshotPhotoMutationResult> {
+  const normalized = normalizePhotoFile(file)
 
   const form = new FormData()
-  form.append('photo', file)
+  form.append('photo', normalized)
   const res = await fetch(snapshotPhotoUrl(snapshotId, index), {
     method: 'PUT',
     body: form,
@@ -33,6 +71,13 @@ export async function uploadSnapshotPhoto(
   if (!res.ok) {
     const body = await res.text().catch(() => '')
     throw new Error(body || `Upload failed (${res.status})`)
+  }
+  try {
+    const data = (await res.json()) as { photo_count?: unknown }
+    const photoCount = parseSnapshotPhotoCount(data.photo_count)
+    return photoCount === null ? {} : { photoCount }
+  } catch {
+    return {}
   }
 }
 
@@ -55,6 +100,26 @@ export async function uploadSnapshotPhotos(
   }
 
   return uploaded
+}
+
+export async function deleteSnapshotPhoto(
+  snapshotId: string,
+  index: number,
+): Promise<SnapshotPhotoMutationResult> {
+  const res = await fetch(snapshotPhotoUrl(snapshotId, index), {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Delete failed (${res.status})`)
+  }
+  try {
+    const data = (await res.json()) as { photo_count?: unknown }
+    const photoCount = parseSnapshotPhotoCount(data.photo_count)
+    return photoCount === null ? {} : { photoCount }
+  } catch {
+    return {}
+  }
 }
 
 async function probePhotoIndex(snapshotId: string, index: number): Promise<boolean> {
@@ -136,16 +201,6 @@ export async function discoverSnapshotPhotoIndices(
     }
   }
   return found
-}
-
-export async function deleteSnapshotPhoto(snapshotId: string, index: number): Promise<void> {
-  const res = await fetch(snapshotPhotoUrl(snapshotId, index), {
-    method: 'DELETE',
-    credentials: 'include',
-  })
-  if (!res.ok && res.status !== 404) {
-    throw new Error(`Delete failed (${res.status})`)
-  }
 }
 
 export { MAX_PHOTO_SLOTS }

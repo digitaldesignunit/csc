@@ -1,25 +1,19 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Camera, Loader2, X, ZoomIn } from 'lucide-react'
+import { Camera, Loader2, ZoomIn } from 'lucide-react'
 
 import SnapshotPhotoCapture from '@/components/photos/SnapshotPhotoCapture'
-import { Button } from '@/components/ui/button'
+import PhotoLightboxDialog, { type PhotoLightboxItem } from '@/components/photos/PhotoLightboxDialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import {
   discoverSnapshotPhotoIndices,
   parseSnapshotPhotoCount,
   snapshotPhotoUrl,
+  type SnapshotPhotoMutationResult,
 } from '@/lib/snapshotPhotos'
 
 type ComponentSnapshotPhotoGalleryProps = {
@@ -34,38 +28,78 @@ export default function ComponentSnapshotPhotoGallery({
   photoCount: photoCountRaw,
   compact = false,
 }: ComponentSnapshotPhotoGalleryProps) {
-  const photoCount = parseSnapshotPhotoCount(photoCountRaw)
+  const photoCountFromProps = parseSnapshotPhotoCount(photoCountRaw)
   const router = useRouter()
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === 'admin'
 
+  const [knownPhotoCount, setKnownPhotoCount] = useState<number | null>(photoCountFromProps)
   const [indices, setIndices] = useState<number[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [lightboxPosition, setLightboxPosition] = useState<number | null>(null)
 
-  const refreshPhotos = useCallback(async () => {
-    if (!snapshotId) {
-      setIndices([])
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const found = await discoverSnapshotPhotoIndices(snapshotId, photoCount)
-      setIndices(found)
-    } catch {
-      setError('Failed to load photos.')
-      setIndices([])
-    } finally {
-      setLoading(false)
-    }
-  }, [snapshotId, photoCount])
+  useEffect(() => {
+    setKnownPhotoCount(photoCountFromProps)
+  }, [photoCountFromProps])
+
+  const refreshPhotos = useCallback(
+    async (opts?: { afterMutation?: boolean; photoCountHint?: number | null }) => {
+      if (!snapshotId) {
+        setIndices([])
+        setLoading(false)
+        return
+      }
+      setLoading(true)
+      setError(null)
+      try {
+        let countForDiscovery = opts?.photoCountHint ?? knownPhotoCount
+        if (opts?.afterMutation && countForDiscovery === 0) {
+          countForDiscovery = null
+        }
+        const found = await discoverSnapshotPhotoIndices(snapshotId, countForDiscovery)
+        setIndices(found)
+        if (opts?.photoCountHint !== undefined && opts.photoCountHint !== null) {
+          setKnownPhotoCount(opts.photoCountHint)
+        } else if (found.length > 0) {
+          setKnownPhotoCount(found.length)
+        } else if (opts?.afterMutation) {
+          setKnownPhotoCount(0)
+        }
+      } catch {
+        setError('Failed to load photos.')
+        setIndices([])
+      } finally {
+        setLoading(false)
+      }
+    },
+    [snapshotId, knownPhotoCount],
+  )
 
   useEffect(() => {
     refreshPhotos()
   }, [refreshPhotos])
+
+  const lightboxItems = useMemo<PhotoLightboxItem[]>(
+    () =>
+      indices.map(index => ({
+        src: snapshotPhotoUrl(snapshotId, index),
+        alt: `Snapshot photo slot ${index}`,
+        caption: `Slot #${index}`,
+      })),
+    [indices, snapshotId],
+  )
+
+  useEffect(() => {
+    if (lightboxPosition === null) return
+    if (lightboxItems.length === 0) {
+      setLightboxPosition(null)
+      return
+    }
+    if (lightboxPosition >= lightboxItems.length) {
+      setLightboxPosition(lightboxItems.length - 1)
+    }
+  }, [lightboxItems.length, lightboxPosition])
 
   const gridClass = compact
     ? 'flex flex-wrap gap-2'
@@ -108,8 +142,11 @@ export default function ComponentSnapshotPhotoGallery({
               mode="live"
               snapshotId={snapshotId}
               indices={indices}
-              onChange={async () => {
-                await refreshPhotos()
+              onChange={async (result?: SnapshotPhotoMutationResult) => {
+                await refreshPhotos({
+                  afterMutation: true,
+                  photoCountHint: result?.photoCount,
+                })
                 router.refresh()
               }}
               compact={compact}
@@ -121,13 +158,13 @@ export default function ComponentSnapshotPhotoGallery({
           ) : (
             <>
               <div className={gridClass}>
-                {indices.map(index => (
+                {indices.map((index, position) => (
                   <div key={index} className={thumbClass}>
                     <button
                       type="button"
                       className="relative h-full w-full"
-                      onClick={() => setLightboxIndex(index)}
-                      aria-label={`View photo ${index + 1}`}
+                      onClick={() => setLightboxPosition(position)}
+                      aria-label={`View photo ${position + 1}`}
                     >
                       <Image
                         src={snapshotPhotoUrl(snapshotId, index)}
@@ -155,39 +192,16 @@ export default function ComponentSnapshotPhotoGallery({
         </CardContent>
       </Card>
 
-      <Dialog
-        open={lightboxIndex !== null}
+      <PhotoLightboxDialog
+        open={lightboxPosition !== null}
         onOpenChange={open => {
-          if (!open) setLightboxIndex(null)
+          if (!open) setLightboxPosition(null)
         }}
-      >
-        <DialogContent className="max-w-4xl overflow-hidden p-0">
-          <DialogHeader className="p-4 pb-0">
-            <DialogTitle>Snapshot photo</DialogTitle>
-            <DialogDescription>
-              {lightboxIndex !== null ? `Slot #${lightboxIndex}` : ''}
-            </DialogDescription>
-          </DialogHeader>
-          {lightboxIndex !== null && (
-            <div className="relative mx-4 mb-4 h-[min(70vh,560px)] w-[calc(100%-2rem)] overflow-hidden rounded-md bg-muted">
-              <Image
-                src={snapshotPhotoUrl(snapshotId, lightboxIndex)}
-                alt={`Snapshot photo ${lightboxIndex + 1}`}
-                fill
-                className="object-contain"
-                unoptimized
-                sizes="(max-width: 896px) 100vw"
-              />
-            </div>
-          )}
-          <div className="flex justify-end gap-2 border-t border-border p-4">
-            <Button type="button" variant="outline" onClick={() => setLightboxIndex(null)}>
-              <X className="mr-2 h-4 w-4" />
-              Close
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        items={lightboxItems}
+        index={lightboxPosition}
+        onIndexChange={setLightboxPosition}
+        title="Snapshot photo"
+      />
     </>
   )
 }
