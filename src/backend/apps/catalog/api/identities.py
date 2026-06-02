@@ -7,6 +7,7 @@ Owns the primary read path of the new data model:
 * `GET /identities/stats` — aggregated stats (identity + current snapshot)
 * `GET /identities/{identity_id}/compose` — identity + current snapshot
 * `GET /schema/catalog-compose` — JSON Schema for the compose body (frontend codegen)
+* `GET /schema/create-identity` — JSON Schema for POST /identities (Grasshopper)
 
 Single-snapshot reads: `GET /snapshots/{snapshot_id}` in `snapshots.py`.
 
@@ -18,6 +19,7 @@ workspace and other cutover paths.
 """
 
 import hashlib
+import json
 import uuid
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
@@ -28,7 +30,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
-    status
+    status,
 )
 from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
@@ -85,6 +87,36 @@ async def get_catalog_compose_json_schema():
     """
     schema = ComposeIdentityResponse.model_json_schema(by_alias=True)
     return JSONResponse(status_code=200, content=schema)
+
+
+def _schema_etag(schema: dict) -> str:
+    schema_string = json.dumps(schema, sort_keys=True, separators=(',', ':'))
+    return hashlib.md5(schema_string.encode('utf-8')).hexdigest()
+
+
+def _check_schema_conditional_request(request: Request, etag: str) -> bool:
+    if_none_match = request.headers.get('if-none-match')
+    return bool(if_none_match and if_none_match == etag)
+
+
+@router.get(
+    '/schema/create-identity',
+    summary='JSON Schema for POST /identities (CreateComponentRequest)',
+)
+async def get_create_identity_json_schema(request: Request):
+    """Grasshopper CreateComponentIdentity and catalog create flows."""
+    schema = CreateComponentRequest.model_json_schema(by_alias=True)
+    etag = _schema_etag(schema)
+    if _check_schema_conditional_request(request, etag):
+        return JSONResponse(status_code=304, content=None, headers={'ETag': etag})
+    return JSONResponse(
+        status_code=200,
+        content=schema,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=86400',
+        },
+    )
 
 
 def _compute_compose_etag(identity_doc: dict, snapshot_doc: dict) -> str:
