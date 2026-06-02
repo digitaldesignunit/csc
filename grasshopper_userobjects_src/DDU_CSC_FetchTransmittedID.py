@@ -38,7 +38,7 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260422.1
+    Version: 260518
     """
 
     def __init__(self):
@@ -112,7 +112,7 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
                 pending = payload.get('pending')
 
                 if pending and isinstance(pending, dict):
-                    component_id = str(pending.get('component_id', '') or '')
+                    component_id = str(pending.get('identity_id', '') or '')
                     self.Component.Message = 'Pending transmitted ID found'
                     self._addRemark(
                         f'Fetched pending transmitted ID: {component_id}'

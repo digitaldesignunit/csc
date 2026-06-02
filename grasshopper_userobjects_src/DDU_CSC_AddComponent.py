@@ -41,7 +41,7 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260422
+    Version: 260518
     """
 
     def __init__(self):
@@ -426,7 +426,7 @@ class CSC_AddComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 try:
                     consume_response = auth_core.authorized_post(
                         '/component_id_transmission/consume',
-                        json_body={'component_id': component_id}
+                        json_body={'identity_id': component_id}
                     )
                     if consume_response.status_code == 200:
                         consume_payload = consume_response.json()
