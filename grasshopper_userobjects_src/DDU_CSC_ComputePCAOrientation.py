@@ -14,6 +14,7 @@ print('ENV OK!')
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import numpy as np  # NOQA
+from scipy.spatial import ConvexHull  # NOQA
 from sklearn.decomposition import PCA  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
@@ -21,15 +22,19 @@ import System  # NOQA
 import Grasshopper  # NOQA
 import Rhino  # NOQA
 
+# One PCA sample per this many mm² of triangle area (3D mesh path).
+REFERENCE_FACE_AREA_MM2 = 100.0
+
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
 ghenv.Component.Name = 'ComputePCAOrientation'  # NOQA
 ghenv.Component.NickName = 'ComputePCAOrientation'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '7 Geometry Tools'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Computes Principal Component Analysis (PCA) orientation for input '
-    'geometry. Returns the object oriented bounding box obtained using PCA, '
-    'aligned geometry, translation vector, and PCA transformation matrix.'
+    'Computes PCA orientation for input geometry. 3D meshes and breps use '
+    'face-area-weighted sampling before PCA; extrusions use a 2D minimum '
+    'bounding rectangle. Returns OBB, aligned geometry, translation vector, '
+    'and PCA transformation matrix.'
 )
 
 
@@ -37,7 +42,7 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260603
     """
 
     def __init__(self):
@@ -118,24 +123,198 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         centered_geometry.Transform(translation_xform)
         return centered_geometry, translation_vector
 
+    def _triangle_area(self, v0, v1, v2):
+        return float(0.5 * np.linalg.norm(np.cross(v1 - v0, v2 - v0)))
+
+    def sample_points_area_weighted_from_mesh(
+            self,
+            mesh,
+            reference_face_area=REFERENCE_FACE_AREA_MM2,
+            min_samples_per_face=1):
+        """
+        Build a PCA point cloud by repeating face centroids weighted by area.
+        """
+        vertices = np.array(
+            [[v.X, v.Y, v.Z] for v in mesh.Vertices],
+            dtype=np.float64,
+        )
+        if mesh.Faces.Count == 0:
+            return vertices
+
+        samples = []
+        ref_area = max(reference_face_area, 1e-6)
+        for face_idx in range(mesh.Faces.Count):
+            face = mesh.Faces[face_idx]
+            if face.IsTriangle:
+                triangles = [[face.A, face.B, face.C]]
+            elif face.IsQuad:
+                triangles = [
+                    [face.A, face.B, face.C],
+                    [face.A, face.C, face.D],
+                ]
+            else:
+                continue
+
+            for tri in triangles:
+                v0, v1, v2 = (
+                    vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+                )
+                area = self._triangle_area(v0, v1, v2)
+                count = max(
+                    min_samples_per_face,
+                    int(round(area / ref_area)),
+                )
+                centroid = (v0 + v1 + v2) / 3.0
+                samples.extend([centroid] * count)
+
+        if not samples:
+            return vertices
+        return np.vstack(samples)
+
+    def sample_points_for_pca_3d(self, geometry):
+        """
+        Collect area-weighted PCA samples from mesh or brep geometry.
+        NOTE: Currently not used due to very long runtime
+        """
+        if isinstance(geometry, Rhino.Geometry.Mesh):
+            return self.sample_points_area_weighted_from_mesh(geometry)
+
+        if isinstance(geometry, Rhino.Geometry.Brep):
+            mp = Rhino.Geometry.MeshingParameters.Default
+            brep_meshes = Rhino.Geometry.Mesh.CreateFromBrep(geometry, mp)
+            if brep_meshes:
+                chunks = [
+                    self.sample_points_area_weighted_from_mesh(m)
+                    for m in brep_meshes
+                ]
+                return np.vstack(chunks)
+
+            return np.array(
+                [[p.Location.X, p.Location.Y, p.Location.Z]
+                 for p in geometry.Vertices],
+                dtype=np.float64,
+            )
+
+        raise RuntimeError(
+            'Area-weighted 3D sampling not implemented for geometry of type '
+            f'{type(geometry)}!'
+        )
+
     def compute_obb_3d(self, points):
         """
         Compute object oriented bounding box for 3D points using PCA.
-        Returns dimensions sorted by length (X=longest, Y=second, Z=shortest).
+        Returns unsorted dimensions and bounding box origin.
         """
-        # Apply PCA to find principal axes
         pca = PCA(n_components=3)
         pca.fit(points)
-        # Get principal components (eigenvectors)
         principal_components = pca.components_
-        # Transform points to PCA space
+
+        det = np.linalg.det(principal_components)
+        if det < 0:
+            principal_components[2] = -principal_components[2]
+
         pca_points = np.dot(points, principal_components.T)
-        # Find bounds in PCA space
         min_bounds = np.min(pca_points, axis=0)
         max_bounds = np.max(pca_points, axis=0)
-        # Compute dimensions
         dimensions = max_bounds - min_bounds
-        return dimensions.tolist(), principal_components
+        bbx_origin = (min_bounds + max_bounds) / 2.0
+
+        return dimensions.tolist(), principal_components, bbx_origin.tolist()
+
+    def minimum_bounding_rectangle(self, points):
+        """
+        Compute minimum bounding rectangle for 2D points.
+        Returns rectangle corners and angle.
+        """
+        hull = ConvexHull(points)
+        hull_points = points[hull.vertices]
+
+        min_area = float('inf')
+        best_rectangle = None
+        best_angle = 0
+
+        for i in range(len(hull_points)):
+            p1 = hull_points[i]
+            p2 = hull_points[(i + 1) % len(hull_points)]
+            edge_vec = p2 - p1
+            angle = np.arctan2(edge_vec[1], edge_vec[0])
+            cos_angle = np.cos(-angle)
+            sin_angle = np.sin(-angle)
+            rot_matrix = np.array([[cos_angle, -sin_angle],
+                                   [sin_angle, cos_angle]])
+            rotated_points = np.dot(points, rot_matrix.T)
+
+            min_x = np.min(rotated_points[:, 0])
+            max_x = np.max(rotated_points[:, 0])
+            min_y = np.min(rotated_points[:, 1])
+            max_y = np.max(rotated_points[:, 1])
+            area = (max_x - min_x) * (max_y - min_y)
+
+            if area < min_area:
+                min_area = area
+                best_angle = angle
+                best_rectangle = np.array([
+                    [min_x, min_y],
+                    [max_x, min_y],
+                    [max_x, max_y],
+                    [min_x, max_y]
+                ])
+                inv_rot_matrix = np.array([
+                    [cos_angle, sin_angle],
+                    [-sin_angle, cos_angle]
+                ])
+                best_rectangle = np.dot(best_rectangle, inv_rot_matrix.T)
+
+        return best_rectangle, best_angle
+
+    def compute_obb_2d(self, points, height):
+        """
+        Compute OBB for extrusions using minimum bounding rectangle in XY.
+        Returns unsorted dimensions and bounding box origin.
+        """
+        points_2d = points[:, :2]
+        mbr, optimal_angle = self.minimum_bounding_rectangle(points_2d)
+
+        cos_angle = np.cos(-optimal_angle)
+        sin_angle = np.sin(-optimal_angle)
+        rot_matrix = np.array([
+            [cos_angle, -sin_angle],
+            [sin_angle, cos_angle]
+        ])
+        rotated_points = np.dot(points_2d, rot_matrix.T)
+
+        min_x = np.min(rotated_points[:, 0])
+        max_x = np.max(rotated_points[:, 0])
+        min_y = np.min(rotated_points[:, 1])
+        max_y = np.max(rotated_points[:, 1])
+
+        x_dim = max_x - min_x
+        y_dim = max_y - min_y
+        bbx_center_2d = [(min_x + max_x) / 2.0, (min_y + max_y) / 2.0]
+
+        min_z = np.min(points[:, 2])
+        max_z = np.max(points[:, 2])
+        z_center = (min_z + max_z) / 2.0
+        bbx_origin_2d = [bbx_center_2d[0], bbx_center_2d[1], z_center]
+
+        if x_dim >= y_dim:
+            dimensions = [x_dim, y_dim, height]
+            principal_components = np.array([
+                [cos_angle, -sin_angle, 0],
+                [sin_angle, cos_angle, 0],
+                [0, 0, 1]
+            ])
+        else:
+            dimensions = [y_dim, x_dim, height]
+            cos_angle_90 = np.cos(-optimal_angle + np.pi / 2)
+            sin_angle_90 = np.sin(-optimal_angle + np.pi / 2)
+            principal_components = np.array([
+                [cos_angle_90, -sin_angle_90, 0],
+                [sin_angle_90, cos_angle_90, 0],
+                [0, 0, 1]
+            ])
+
+        return dimensions, principal_components, bbx_origin_2d
 
     def rhino_xform(self, transformation_matrix) -> Rhino.Geometry.Transform:
         """
@@ -237,21 +416,31 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addError(msg)
                 return (ObjectOrientedBBX, AlignedGeometry,
                         AlignedBBX, TranslationVector, PCAXForm)
-            # Process geometry to extract points
-            points, compute_3d = self.process_geometry(Geometry)
             # Center geometry at world origin
             (centered_geometry,
              translation_vector) = self.center_geometry_at_origin(Geometry)
+            # Process geometry to extract points
+            centered_points, compute_3d = self.process_geometry(
+                centered_geometry
+            )
             # Get Rhino translation vector
             TranslationVector = Rhino.Geometry.Vector3d(
                 *translation_vector.tolist()
             )
-            # Centered points
-            centered_points = points - translation_vector
-            # Compute object oriented bounding box and PCA transformation
-            dimensions, principal_components = (
-                self.compute_obb_3d(centered_points)
-            )
+            if compute_3d:
+                # centered_points = self.sample_points_for_pca_3d(
+                #     centered_geometry
+                # )
+                dimensions, principal_components, bbx_origin = (
+                    self.compute_obb_3d(centered_points)
+                )
+            else:
+                height = centered_geometry.PathStart.DistanceTo(
+                    centered_geometry.PathEnd
+                )
+                dimensions, principal_components, bbx_origin = (
+                    self.compute_obb_2d(centered_points, height)
+                )
             # Create PCA transformation matrix and XForm
             # The principal components define the new coordinate system
             # We want to transform the geometry TO align with this system

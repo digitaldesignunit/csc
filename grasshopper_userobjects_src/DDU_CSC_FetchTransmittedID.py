@@ -38,7 +38,7 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260518
+    Version: 260603
     """
 
     def __init__(self):
@@ -86,7 +86,7 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
             return None
         return auth_core
 
-    def RunScript(self):
+    def RunScript(self, Refresh):
         component_id = Grasshopper.DataTree[object]()
 
         # Get AuthCore instance from sticky storage

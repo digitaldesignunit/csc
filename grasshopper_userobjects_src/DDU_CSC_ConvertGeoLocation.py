@@ -32,7 +32,7 @@ class CSC_ConvertGeoLocation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260203
+    Version: 260603
     """
 
     def __init__(self):

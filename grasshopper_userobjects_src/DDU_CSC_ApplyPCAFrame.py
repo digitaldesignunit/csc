@@ -29,12 +29,11 @@ ghenv.Component.Description = (  # NOQA
     'Rhino geometry and transforms it to align with the world XY plane.'
 )
 
-
 class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260603
     """
 
     def __init__(self):

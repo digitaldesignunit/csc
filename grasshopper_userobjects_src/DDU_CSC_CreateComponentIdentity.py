@@ -12,10 +12,10 @@ print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
+import struct  # NOQA
 import uuid  # NOQA
 import os  # NOQA
 import platform  # NOQA
-from datetime import datetime  # NOQA
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import numpy as np  # NOQA
@@ -28,23 +28,26 @@ import Grasshopper  # NOQA
 import Rhino  # NOQA
 import scriptcontext as sc  # NOQA
 
+# One PCA sample per this many mm² of triangle area (3D mesh path).
+REFERENCE_FACE_AREA_MM2 = 100.0
+
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'CreateComponent'  # NOQA
-ghenv.Component.NickName = 'CreateComponent'  # NOQA
+ghenv.Component.Name = 'CreateComponentIdentity'  # NOQA
+ghenv.Component.NickName = 'CreateComponentIdentity'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Creates a complete component JSON string from input geometry. '
-    'Computes PCA orientation, handles mesh reduction, saves geometry '
-    'files locally, and builds component data according to the schema.'
+    'Builds a POST /identities payload (CreateComponentRequest) from Rhino '
+    'geometry. Computes PCA orientation, mesh reduction, stages binary PLY '
+    'files under pending_identity_assets/{identity_id}/meshes/<i>/.'
 )
 
 
-class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
+class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260426
+    Version: 260603
     """
 
     def __init__(self):
@@ -74,12 +77,11 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'If set to True, clears all stored locally '
-            'saved geometry files for component creation '
-            '(this does NOT affect the regular cache!)'
+            'If True, clears pending_identity_assets staging '
+            '(does not affect Session API cache)'
         )
         self.InputParams[1].Description = (
-            'Component ID (must be a valid UUID)'
+            'Identity ID from physical tag (valid UUID)'
         )
         self.InputParams[2].Description = (
             'Component Name (e.g. My Beam 01)'
@@ -142,306 +144,297 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'salvaged (e.g. "2024-11-03T00:00:00Z").'
         )
         self.InputParams[18].Description = (
-            'Optional UUID of the parent component this component was '
-            'derived from (e.g. when a larger piece is split).'
+            'Optional parent identity UUID (lineage after split/merge)'
+        )
+        self.InputParams[19].Description = (
+            'Optional free-text notes for the initial snapshot (max 5000)'
+        )
+        self.InputParams[20].Description = (
+            'Count of identical physical items (integer >= 1, default 1)'
         )
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Component data as JSON string adhering to ComponentModel '
-            'structure. Contains geometry, PCA frame, bounding box, '
-            'and metadata.'
+            'CreateComponentRequest JSON for POST /identities '
+            '(SnapshotMesh vertices/faces/colors, extrusions[], PCA frames)'
         )
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
         auth_core = sc.sticky.get('CSC_AuthCore')
         if auth_core is None:
-            self._addWarning('No authentication found. '
-                             'Using hardcoded schema.')
+            self._addWarning(
+                'No authentication found. Using hardcoded create schema.'
+            )
             return None
         return auth_core
 
-    def get_component_schema(self):
-        """Get component schema from cache or fallback to hardcoded schema."""
-        # Try to get schema from AuthCore cache first
+    def get_create_payload_schema(self):
+        """Get CreateComponentRequest schema from Session cache or fallback."""
         auth_core = self.get_auth_core_from_sticky()
-        if auth_core and hasattr(auth_core, 'get_component_schema'):
+        if auth_core and hasattr(auth_core, 'get_create_identity_schema'):
             try:
-                schema = auth_core.get_component_schema()
+                schema = auth_core.get_create_identity_schema()
                 if schema:
-                    self._addRemark('Using cached component schema')
+                    self._addRemark('Using cached create-identity schema')
                     return schema
-                else:
-                    self._addWarning('Failed to get cached schema, '
-                                     'using hardcoded schema')
+                self._addWarning(
+                    'Failed to get cached create-identity schema; '
+                    'using hardcoded fallback'
+                )
             except Exception as e:
-                self._addWarning(f'Error fetching cached schema: {str(e)}, '
-                                 'using hardcoded schema')
+                self._addWarning(
+                    f'Error fetching create-identity schema: {e}; '
+                    'using hardcoded fallback'
+                )
 
-        # Fallback to hardcoded schema
-        self._addRemark('Using hardcoded component schema')
-        return self.get_hardcoded_schema()
+        self._addRemark('Using hardcoded create-identity schema')
+        return self.get_hardcoded_create_schema()
 
-    def get_hardcoded_schema(self):
-        """Get hardcoded component schema as fallback."""
+    def get_hardcoded_create_schema(self):
+        """
+        Minimal CreateComponentRequest schema when Session is unavailable.
+        """
         return {
             'type': 'object',
+            'required': [
+                'type', 'material', 'dataset', 'complexity', 'fragment',
+                'assembly', 'geometry', 'bbx', 'bbx_origin', 'iframe',
+                'pca_frame',
+            ],
             'properties': {
-                '_id': {'type': 'string', 'format': 'uuid'},
+                '_id': {'type': 'string'},
                 'name': {'type': 'string'},
                 'type': {'type': 'string'},
                 'material': {'type': 'string'},
                 'dataset': {'type': 'string'},
-                'created': {'type': 'string', 'format': 'date-time'},
-                'lastmodified': {'type': 'string', 'format': 'date-time'},
-                'complexity': {'type': 'integer', 'minimum': 0, 'maximum': 3},
+                'complexity': {'type': 'integer'},
                 'fragment': {'type': 'boolean'},
                 'assembly': {'type': 'boolean'},
-                'geometry': {
-                    'type': 'object',
-                    'properties': {
-                        'meshes': {
-                            'type': 'array',
-                            'description': 'Array of mesh geometries',
-                            'items': {
-                                'type': 'object',
-                                'properties': {
-                                    'v': {'type': 'array',
-                                          'items': {
-                                            'type': 'array',
-                                            'items': {'type': 'number'}}},
-                                    'f': {'type': 'array',
-                                          'items': {
-                                            'type': 'array',
-                                            'items': {'type': 'integer'}}},
-                                    'c': {'type': 'array',
-                                          'items': {
-                                            'type': 'array',
-                                            'items': {'type': 'integer'}}}
-                                }
-                            }
-                        },
-                        'extrusion': {
-                            'type': 'object',
-                            'description': 'Extrusion geometry',
-                            'properties': {
-                                'profile': {'type': 'array',
-                                            'items': {
-                                                'type': 'array',
-                                                'items': {'type': 'number'}}},
-                                'height': {'type': 'number'}
-                            }
-                        }
-                    }
-                },
-                'color': {'type': 'array', 'items': {'type': 'integer'}},
-                'bbx': {'type': 'array', 'items': {'type': 'number'}},
-                'bbx_origin': {'type': 'array', 'items': {'type': 'number'}},
+                'geometry': {'type': 'object'},
+                'color': {'type': 'array'},
+                'bbx': {'type': 'array'},
+                'bbx_origin': {'type': 'array'},
                 'location': {'type': 'object'},
-                'descriptors': {'type': 'object'},
-                'processes': {'type': 'object'},
                 'iframe': {'type': 'object'},
                 'pca_frame': {'type': 'object'},
-                'reserved': {'type': 'string'},
-                'attributes': {'type': 'object'},
-                'marker_points': {
-                    'type': 'array', 'items': {
-                        'type': 'array', 'items': {'type': 'number'}}},
                 'validated': {'type': 'boolean'},
-                'etag': {'type': 'string'},
-                # Optional provenance / lineage fields.
-                'condition': {'type': 'integer'},
-                'manufactured_at': {'type': 'string'},
-                'manufactured_precision': {'type': 'string'},
-                'salvage_source': {'type': 'string'},
-                'salvaged_at': {'type': 'string'},
-                'parent_component': {'type': 'string'}
+                'marker_points': {'type': 'array'},
+                'parent_identities': {'type': 'array'},
+                'notes': {'type': 'string'},
+                'quantity': {'type': 'integer'},
             },
-            'required': ['type', 'material', 'dataset', 'created',
-                         'lastmodified', 'complexity', 'fragment', 'assembly',
-                         'geometry', 'bbx', 'bbx_origin', 'iframe',
-                         'pca_frame', 'reserved', 'validated']
         }
 
-    def validate_component_data(self, component_data, schema):
-        """Validate component data against schema."""
+    def validate_create_payload(self, payload, schema):
+        """Validate create payload against schema required fields."""
         try:
-            # Basic validation - check required fields
             required_fields = schema.get('required', [])
-            missing_fields = []
-
-            for field in required_fields:
-                if field not in component_data:
-                    missing_fields.append(field)
-
+            missing_fields = [
+                field for field in required_fields if field not in payload
+            ]
             if missing_fields:
-                self._addWarning(f'Missing required fields: '
-                                 f'{", ".join(missing_fields)}')
+                self._addError(
+                    f'Missing required fields: {", ".join(missing_fields)}'
+                )
                 return False
 
-            # Type validation for key fields
-            if not isinstance(component_data.get('complexity'), int):
-                self._addWarning('Complexity must be an integer')
+            if not isinstance(payload.get('complexity'), int):
+                self._addError('complexity must be an integer')
+                return False
+            if not isinstance(payload.get('fragment'), bool):
+                self._addError('fragment must be a boolean')
+                return False
+            if not isinstance(payload.get('assembly'), bool):
+                self._addError('assembly must be a boolean')
                 return False
 
-            if not isinstance(component_data.get('fragment'), bool):
-                self._addWarning('Fragment must be a boolean')
-                return False
-
-            if not isinstance(component_data.get('assembly'), bool):
-                self._addWarning('Assembly must be a boolean')
-                return False
-
-            # Validate optional color field
-            color = component_data.get('color', [])
+            color = payload.get('color', [])
             if color and (not isinstance(color, list) or len(color) != 3):
-                self._addWarning(
-                    'Color must be a list of 3 integers [R, G, B]')
+                self._addError('color must be a list of 3 integers [R, G, B]')
                 return False
 
-            # Validate required frame fields
-            if not isinstance(component_data.get('iframe'), dict):
-                self._addWarning('iframe must be a dictionary with frame data')
+            if not isinstance(payload.get('iframe'), dict):
+                self._addError('iframe must be a frame object')
+                return False
+            if not isinstance(payload.get('pca_frame'), dict):
+                self._addError('pca_frame must be a frame object')
                 return False
 
-            if not isinstance(component_data.get('pca_frame'), dict):
-                self._addWarning('pca_frame must be a dictionary with '
-                                 'frame data')
-                return False
-
-            if not isinstance(component_data.get('reserved'), str):
-                self._addWarning('reserved must be a string (UUID or empty)')
+            geometry = payload.get('geometry') or {}
+            if not (
+                geometry.get('meshes')
+                or geometry.get('extrusions')
+                or geometry.get('point_clouds')
+            ):
+                self._addError(
+                    'geometry must include meshes, extrusions, or point_clouds'
+                )
                 return False
 
             return True
 
         except Exception as e:
-            self._addWarning(f'Validation error: {str(e)}')
+            self._addError(f'Validation error: {str(e)}')
             return False
 
-    def build_component_data_from_schema(
+    def build_create_payload(
             self,
-            schema,
-            ComponentID: str,
-            Name: str,
-            Type: str,
-            Material: str,
-            Dataset: str,
-            Complexity: int,
-            Fragment: bool,
-            Assembly: bool,
-            Color,
+            identity_id: str,
+            name: str,
+            component_type: str,
+            material: str,
+            dataset: str,
+            complexity: int,
+            fragment: bool,
+            assembly: bool,
+            color,
             dimensions,
             location_data,
             principal_components,
-            Condition,
-            ManufacturedAt,
-            ManufacturedPrecision,
-            SalvageSource,
-            SalvagedAt,
-            ParentComponent):
-        """Build component data dictionary using the actual schema."""
-        current_time = datetime.utcnow().isoformat() + 'Z'
+            condition,
+            manufactured_at,
+            manufactured_precision,
+            salvage_source,
+            salvaged_at,
+            parent_identity,
+            notes,
+            quantity):
+        """Build POST /identities JSON body (CreateComponentRequest)."""
+        payload = {
+            '_id': identity_id,
+            'type': component_type,
+            'material': material,
+            'dataset': dataset,
+            'complexity': int(complexity),
+            'fragment': bool(fragment),
+            'assembly': bool(assembly),
+            'geometry': {},
+            'color': [color.R, color.G, color.B],
+            'bbx': dimensions,
+            'bbx_origin': [0.0, 0.0, 0.0],
+            'location': location_data or {'lat': 0.0, 'lon': 0.0},
+            'descriptors': {},
+            'processes': {},
+            'attributes': {},
+            'iframe': {
+                'o': [0.0, 0.0, 0.0],
+                'x': [1.0, 0.0, 0.0],
+                'y': [0.0, 1.0, 0.0],
+                'z': [0.0, 0.0, 1.0],
+            },
+            'pca_frame': {
+                'o': [0.0, 0.0, 0.0],
+                'x': principal_components[0].tolist(),
+                'y': principal_components[1].tolist(),
+                'z': principal_components[2].tolist(),
+            },
+            'validated': False,
+        }
 
-        # Get all properties from the schema
-        properties = schema.get('properties', {})
-        component_data = {}
+        trimmed_name = (name or '').strip()
+        if trimmed_name:
+            payload['name'] = trimmed_name
 
-        # Build component data based on schema properties
-        for field_name, field_schema in properties.items():
-            if field_name == '_id':
-                component_data[field_name] = ComponentID
-            elif field_name == 'name':
-                component_data[field_name] = Name if Name else (
-                    f'{str(Type).capitalize()} Component made '
-                    f'from {str(Material).capitalize()}'
-                )
-            elif field_name == 'type':
-                component_data[field_name] = Type
-            elif field_name == 'material':
-                component_data[field_name] = Material
-            elif field_name == 'dataset':
-                component_data[field_name] = Dataset
-            elif field_name == 'created':
-                component_data[field_name] = current_time
-            elif field_name == 'lastmodified':
-                component_data[field_name] = current_time
-            elif field_name == 'complexity':
-                component_data[field_name] = int(Complexity)
-            elif field_name == 'fragment':
-                component_data[field_name] = bool(Fragment)
-            elif field_name == 'assembly':
-                component_data[field_name] = bool(Assembly)
-            elif field_name == 'geometry':
-                component_data[field_name] = {}  # Will be filled later
-            elif field_name == 'color':
-                component_data[field_name] = [Color.R, Color.G, Color.B]
-            elif field_name == 'bbx':
-                component_data[field_name] = dimensions
-            elif field_name == 'bbx_origin':
-                # This will be set later after PCA computation
-                component_data[field_name] = [0.0, 0.0, 0.0]  # Placeholder
-            elif field_name == 'location':
-                component_data[field_name] = location_data
-            elif field_name == 'descriptors':
-                component_data[field_name] = {}
-            elif field_name == 'processes':
-                component_data[field_name] = {}
-            elif field_name == 'iframe':
-                component_data[field_name] = {
-                    'o': [0.0, 0.0, 0.0],
-                    'x': [1.0, 0.0, 0.0],
-                    'y': [0.0, 1.0, 0.0],
-                    'z': [0.0, 0.0, 1.0]
-                }
-            elif field_name == 'pca_frame':
-                component_data[field_name] = {
-                    'o': [0.0, 0.0, 0.0],
-                    'x': principal_components[0].tolist(),
-                    'y': principal_components[1].tolist(),
-                    'z': principal_components[2].tolist()
-                }
-            elif field_name == 'reserved':
-                component_data[field_name] = ''
-            elif field_name == 'attributes':
-                component_data[field_name] = {}
-            elif field_name == 'marker_points':
-                component_data[field_name] = []
-            elif field_name == 'validated':
-                component_data[field_name] = False
-            elif field_name == 'etag':
-                component_data[field_name] = ''
-            elif field_name == 'condition':
-                component_data[field_name] = Condition
-            elif field_name == 'manufactured_at':
-                component_data[field_name] = ManufacturedAt
-            elif field_name == 'manufactured_precision':
-                component_data[field_name] = ManufacturedPrecision
-            elif field_name == 'salvage_source':
-                component_data[field_name] = SalvageSource
-            elif field_name == 'salvaged_at':
-                component_data[field_name] = SalvagedAt
-            elif field_name == 'parent_component':
-                component_data[field_name] = ParentComponent
+        if condition is not None:
+            payload['condition'] = condition
+        if manufactured_at:
+            payload['manufactured_at'] = manufactured_at
+        if manufactured_precision:
+            payload['manufactured_precision'] = manufactured_precision
+        if salvage_source:
+            payload['salvage_source'] = salvage_source
+        if salvaged_at:
+            payload['salvaged_at'] = salvaged_at
+        if parent_identity:
+            payload['parent_identities'] = [parent_identity]
+
+        trimmed_notes = (notes or '').strip()
+        if trimmed_notes:
+            payload['notes'] = trimmed_notes[:5000]
+
+        try:
+            qty = int(quantity) if quantity is not None else 1
+        except (TypeError, ValueError):
+            qty = 1
+        qty = max(1, min(999_999, qty))
+        if qty != 1:
+            payload['quantity'] = qty
+
+        return payload
+
+    def mesh_to_inline_primitive(self, mesh, default_rgb):
+        """SnapshotMesh dict (vertices/faces/colors, Rhino Z-up)."""
+        vertices = [[p.X, p.Y, p.Z] for p in mesh.Vertices]
+        faces = []
+        for face in mesh.Faces:
+            if face.IsTriangle:
+                faces.append([face.A, face.B, face.C])
+            elif face.IsQuad:
+                faces.append([face.A, face.B, face.C])
+                faces.append([face.A, face.C, face.D])
+
+        if mesh.VertexColors.Count > 0:
+            colors = [
+                [mesh.VertexColors[i].R, mesh.VertexColors[i].G,
+                 mesh.VertexColors[i].B]
+                for i in range(mesh.Vertices.Count)
+            ]
+        else:
+            colors = [list(default_rgb)] * len(vertices)
+
+        return {
+            'vertices': vertices,
+            'faces': faces,
+            'colors': colors,
+        }
+
+    def save_rhino_mesh_as_ply_binary(self, mesh, file_path, default_rgb):
+        """Write binary little-endian PLY (Rhino Z-up) with per-vertex RGB."""
+        vertices = []
+        colors = []
+        has_vc = mesh.VertexColors.Count > 0
+        for i in range(mesh.Vertices.Count):
+            v = mesh.Vertices[i]
+            vertices.append((v.X, v.Y, v.Z))
+            if has_vc and i < mesh.VertexColors.Count:
+                c = mesh.VertexColors[i]
+                colors.append((c.R, c.G, c.B))
             else:
-                # Handle any other fields from the
-                # schema with appropriate defaults
-                field_type = field_schema.get('type', 'string')
-                if field_type == 'string':
-                    component_data[field_name] = ''
-                elif field_type == 'integer':
-                    component_data[field_name] = 0
-                elif field_type == 'boolean':
-                    component_data[field_name] = False
-                elif field_type == 'array':
-                    component_data[field_name] = []
-                elif field_type == 'object':
-                    component_data[field_name] = {}
+                colors.append(default_rgb)
 
-        return component_data
+        faces = []
+        for face in mesh.Faces:
+            if face.IsTriangle:
+                faces.append((face.A, face.B, face.C))
+            elif face.IsQuad:
+                faces.append((face.A, face.B, face.C))
+                faces.append((face.A, face.C, face.D))
+
+        header = (
+            'ply\n'
+            'format binary_little_endian 1.0\n'
+            f'element vertex {len(vertices)}\n'
+            'property float x\n'
+            'property float y\n'
+            'property float z\n'
+            'property uchar red\n'
+            'property uchar green\n'
+            'property uchar blue\n'
+            f'element face {len(faces)}\n'
+            'property list uchar int vertex_indices\n'
+            'end_header\n'
+        )
+
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'wb') as handle:
+            handle.write(header.encode('ascii'))
+            for (x, y, z), (r, g, b) in zip(vertices, colors):
+                handle.write(struct.pack('<fffBBB', x, y, z, r, g, b))
+            for tri in faces:
+                handle.write(struct.pack('<Biii', 3, tri[0], tri[1], tri[2]))
 
     def center_geometry_at_origin(self, geometry):
         """
@@ -466,6 +459,83 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         )
         centered_geometry.Transform(translation_xform)
         return centered_geometry, translation_vector
+
+    def _triangle_area(self, v0, v1, v2):
+        return float(0.5 * np.linalg.norm(np.cross(v1 - v0, v2 - v0)))
+
+    def sample_points_area_weighted_from_mesh(
+            self,
+            mesh,
+            reference_face_area=REFERENCE_FACE_AREA_MM2,
+            min_samples_per_face=1):
+        """
+        Build a PCA point cloud by repeating face centroids weighted by area.
+        """
+        vertices = np.array(
+            [[v.X, v.Y, v.Z] for v in mesh.Vertices],
+            dtype=np.float64,
+        )
+        if mesh.Faces.Count == 0:
+            return vertices
+
+        samples = []
+        ref_area = max(reference_face_area, 1e-6)
+        for face_idx in range(mesh.Faces.Count):
+            face = mesh.Faces[face_idx]
+            if face.IsTriangle:
+                triangles = [[face.A, face.B, face.C]]
+            elif face.IsQuad:
+                triangles = [
+                    [face.A, face.B, face.C],
+                    [face.A, face.C, face.D],
+                ]
+            else:
+                continue
+
+            for tri in triangles:
+                v0, v1, v2 = (
+                    vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
+                )
+                area = self._triangle_area(v0, v1, v2)
+                count = max(
+                    min_samples_per_face,
+                    int(round(area / ref_area)),
+                )
+                centroid = (v0 + v1 + v2) / 3.0
+                samples.extend([centroid] * count)
+
+        if not samples:
+            return vertices
+        return np.vstack(samples)
+
+    def sample_points_for_pca_3d(self, geometry):
+        """
+        Collect area-weighted PCA samples from mesh or brep geometry.
+        NOTE: CUrrently not used due to long runtime
+        """
+        if isinstance(geometry, Rhino.Geometry.Mesh):
+            return self.sample_points_area_weighted_from_mesh(geometry)
+
+        if isinstance(geometry, Rhino.Geometry.Brep):
+            mp = Rhino.Geometry.MeshingParameters.Default
+            brep_meshes = Rhino.Geometry.Mesh.CreateFromBrep(geometry, mp)
+            if brep_meshes:
+                chunks = [
+                    self.sample_points_area_weighted_from_mesh(m)
+                    for m in brep_meshes
+                ]
+                return np.vstack(chunks)
+
+            return np.array(
+                [[p.Location.X, p.Location.Y, p.Location.Z]
+                 for p in geometry.Vertices],
+                dtype=np.float64,
+            )
+
+        raise RuntimeError(
+            'Area-weighted 3D sampling not implemented for geometry of type '
+            f'{type(geometry)}!'
+        )
 
     def compute_obb_3d(self, points):
         """
@@ -694,83 +764,65 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             return False
         return str(uuid_obj) == uuid_to_test
 
-    def get_geometry_folder_path(self, component_id: str) -> str:
-        """
-        Get the geometry folder path for a component.
-        Returns the appropriate path based on the operating system.
-        """
+    def get_pending_assets_root(self) -> str:
+        """Root directory for staged identity mesh PLY files."""
         if platform.system() == 'Windows':
             base_path = os.path.expandvars('%APPDATA%')
-            geometry_path = os.path.join(
-                base_path, 'DDU_CSC', 'create_component_geometry', component_id
+            return os.path.join(
+                base_path,
+                'DDU_CSC',
+                'pending_identity_assets'
             )
-        else:  # macOS and Linux
-            base_path = os.path.expanduser('~')
-            geometry_path = os.path.join(
-                base_path, 'Library', 'Application Support', 'DDU_CSC',
-                'create_component_geometry', component_id
-            )
+        base_path = os.path.expanduser('~')
+        return os.path.join(
+            base_path, 'Library', 'Application Support', 'DDU_CSC',
+            'pending_identity_assets',
+        )
 
-        return geometry_path
+    def get_identity_assets_dir(self, identity_id: str) -> str:
+        return os.path.join(self.get_pending_assets_root(), identity_id)
 
-    def create_geometry_folder(self, component_id: str) -> str:
-        """
-        Create the geometry folder for a component if it doesn't exist.
-        Returns the folder path.
-        """
-        folder_path = self.get_geometry_folder_path(component_id)
-        os.makedirs(folder_path, exist_ok=True)
-        return folder_path
+    def get_mesh_primitive_dir(
+            self,
+            identity_id: str,
+            primitive_index: int
+    ) -> str:
+        return os.path.join(
+            self.get_identity_assets_dir(identity_id),
+            'meshes',
+            str(primitive_index),
+        )
 
-    def clear_create_component_geometry_directory(self):
-        """
-        Clear all files in the create_component_geometry directory.
-        This does NOT affect the regular cache directories.
-        """
+    def write_staging_manifest(self, identity_id: str, mesh_primitives: dict):
+        """Write manifest.json for AddComponent upload handoff."""
+        manifest = {
+            'identity_id': identity_id,
+            'coordinate_frame': 'rhino_z_up',
+            'mesh_primitives': mesh_primitives,
+        }
+        assets_dir = self.get_identity_assets_dir(identity_id)
+        os.makedirs(assets_dir, exist_ok=True)
+        manifest_path = os.path.join(assets_dir, 'manifest.json')
+        with open(manifest_path, 'w', encoding='utf-8') as handle:
+            json.dump(manifest, handle, indent=2)
+
+    def clear_pending_identity_assets_directory(self):
+        """Clear all staged pending_identity_assets (not Session cache)."""
         try:
-            if platform.system() == 'Windows':
-                base_path = os.path.expandvars('%APPDATA%')
-                geometry_dir = os.path.join(
-                    base_path, 'DDU_CSC', 'create_component_geometry'
-                )
-            else:  # macOS and Linux
-                base_path = os.path.expanduser('~')
-                geometry_dir = os.path.join(
-                    base_path, 'Library', 'Application Support', 'DDU_CSC',
-                    'create_component_geometry'
-                )
-
-            if os.path.exists(geometry_dir):
-                # Remove all files and subdirectories
-                for root, dirs, files in os.walk(geometry_dir, topdown=False):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        try:
-                            os.remove(file_path)
-                        except (OSError, IOError):
-                            pass  # Silently continue if file can't be removed
-                    for dir_name in dirs:
-                        dir_path = os.path.join(root, dir_name)
-                        try:
-                            os.rmdir(dir_path)
-                        except (OSError, IOError):
-                            pass  # Silently continue if dir can't be removed
-
+            assets_dir = self.get_pending_assets_root()
+            if os.path.exists(assets_dir):
+                import shutil
+                shutil.rmtree(assets_dir, ignore_errors=True)
+                os.makedirs(assets_dir, exist_ok=True)
                 self._addRemark(
-                    'Cleared create_component_geometry '
-                    f'directory: {geometry_dir}'
+                    f'Cleared pending_identity_assets: {assets_dir}'
                 )
                 return True
-            else:
-                self._addRemark(
-                    'create_component_geometry directory does not exist'
-                )
-                return True
-
+            self._addRemark('pending_identity_assets does not exist yet')
+            return True
         except Exception as e:
             self._addWarning(
-                'Failed to clear create_component_geometry '
-                f' directory: {str(e)}'
+                f'Failed to clear pending_identity_assets: {str(e)}'
             )
             return False
 
@@ -787,273 +839,144 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         reduced_mesh.Compact()
         return reduced_mesh
 
+    def _stage_mesh_ply_files(
+            self,
+            identity_id: str,
+            primitive_index: int,
+            detailed_mesh,
+            reduced_mesh,
+            default_rgb,
+            mesh_primitive_threshold: int,
+            mesh_reduced_threshold: int,
+            mesh_reduced_target: int,
+            mesh_primitive_target: int):
+        """
+        Reduce meshes if needed and write detailed.ply / reduced.ply for one
+        primitive index. Returns (primitive_mesh, resolutions_on_disk).
+        """
+        if detailed_mesh is None:
+            return None, []
+
+        face_count = detailed_mesh.Faces.Count
+        reduced = None
+        primitive = detailed_mesh
+        resolutions = []
+
+        primitive_dir = self.get_mesh_primitive_dir(
+            identity_id, primitive_index)
+        detailed_path = os.path.join(primitive_dir, 'detailed.ply')
+        reduced_path = os.path.join(primitive_dir, 'reduced.ply')
+
+        if os.path.exists(detailed_path) or os.path.exists(reduced_path):
+            self._addWarning(
+                f'PLY files already exist for identity {identity_id} '
+                f'primitive {primitive_index}; skipping overwrite.'
+            )
+            if face_count > mesh_reduced_threshold:
+                primitive = self.reduce_mesh(
+                    detailed_mesh, mesh_primitive_target)
+            elif face_count > mesh_primitive_threshold:
+                primitive = self.reduce_mesh(
+                    detailed_mesh, mesh_primitive_target)
+            return primitive, []
+
+        save_detailed = face_count > mesh_primitive_target
+        save_reduced = face_count > mesh_reduced_threshold
+
+        if face_count > mesh_reduced_threshold:
+            reduced = self.reduce_mesh(detailed_mesh, mesh_reduced_target)
+            primitive = self.reduce_mesh(detailed_mesh, mesh_primitive_target)
+        elif face_count > mesh_primitive_threshold:
+            primitive = self.reduce_mesh(detailed_mesh, mesh_primitive_target)
+
+        try:
+            if save_detailed:
+                self.save_rhino_mesh_as_ply_binary(
+                    detailed_mesh, detailed_path, default_rgb)
+                resolutions.append('detailed')
+            if save_reduced and reduced is not None:
+                self.save_rhino_mesh_as_ply_binary(
+                    reduced, reduced_path, default_rgb)
+                resolutions.append('reduced')
+            if resolutions:
+                self._addRemark(
+                    f'Staged PLY for primitive {primitive_index}: '
+                    f'{", ".join(resolutions)}'
+                )
+        except Exception as e:
+            self._addWarning(f'Failed to stage PLY files: {str(e)}')
+            resolutions = []
+
+        return primitive, resolutions
+
     def process_mesh_geometry(
         self,
         geometry: Rhino.Geometry.Mesh,
-        component_id: str,
+        identity_id: str,
+        default_rgb,
         mesh_primitive_threshold: int = 8000,
         mesh_reduced_threshold: int = 15000,
         mesh_reduced_target: int = 10000,
-        mesh_primitive_target: int = 500
+        mesh_primitive_target: int = 500,
     ) -> tuple:
         """
-        Process mesh geometry and create reduced/primitive versions if needed.
-        Returns (original_mesh, reduced_mesh, primitive_mesh, files_saved)
+        Returns (original, reduced, primitive_mesh, mesh_primitives dict).
         """
-        # Get face count
-        face_count = geometry.Faces.Count
-
-        # Initialize return values
+        primitive_mesh, resolutions = self._stage_mesh_ply_files(
+            identity_id,
+            0,
+            geometry,
+            None,
+            default_rgb,
+            mesh_primitive_threshold,
+            mesh_reduced_threshold,
+            mesh_reduced_target,
+            mesh_primitive_target,
+        )
+        mesh_primitives = {}
+        if resolutions:
+            mesh_primitives['0'] = resolutions
         reduced_mesh = None
-        primitive_mesh = None
-        files_saved = False
-
-        # Check if geometry files already exist
-        folder_path = self.get_geometry_folder_path(component_id)
-        detailed_obj_path = os.path.join(folder_path, 'mesh.obj')
-        reduced_obj_path = os.path.join(folder_path, 'mesh_reduced.obj')
-        files_exist = (os.path.exists(detailed_obj_path) or
-                       os.path.exists(reduced_obj_path))
-        if files_exist:
-            self._addWarning(
-                f'Geometry files already exist for component {component_id}. '
-                f'Skipping file saving but computing primitive geometry.'
-            )
-
-        # Determine what versions to create based on face count
-        if face_count > mesh_reduced_threshold:
-            # Create both reduced and primitive versions
-            if not files_exist:
-                reduced_mesh = self.reduce_mesh(
-                    geometry,
-                    mesh_reduced_target
-                )
-            primitive_mesh = self.reduce_mesh(
-                geometry,
-                mesh_primitive_target
-            )
-            files_saved = not files_exist  # Only save if files don't exist
-        elif face_count > mesh_primitive_threshold:
-            # Create only primitive version
-            primitive_mesh = self.reduce_mesh(
-                geometry,
-                mesh_primitive_target
-            )
-            files_saved = not files_exist  # Only save if files don't exist
-        else:
-            # Use original as primitive, no files saved
-            primitive_mesh = geometry
-
-        # Save files if needed and files don't already exist
-        if files_saved:
-            try:
-                folder_path = self.create_geometry_folder(component_id)
-
-                # Save original/detailed mesh with object declaration
-                detailed_obj_path = os.path.join(folder_path, 'mesh.obj')
-                self.save_multiple_meshes_as_obj(
-                    [geometry], detailed_obj_path
-                )
-
-                # Save reduced mesh if created
-                if reduced_mesh is not None:
-                    reduced_obj_path = os.path.join(
-                        folder_path, 'mesh_reduced.obj'
-                    )
-                    self.save_multiple_meshes_as_obj(
-                        [reduced_mesh], reduced_obj_path
-                    )
-
-                self._addRemark(f'Saved geometry files to {folder_path}')
-
-            except Exception as e:
-                self._addWarning(f'Failed to save geometry files: {str(e)}')
-                files_saved = False
-
-        return geometry, reduced_mesh, primitive_mesh, files_saved
+        if geometry.Faces.Count > mesh_reduced_threshold:
+            reduced_mesh = self.reduce_mesh(geometry, mesh_reduced_target)
+        return geometry, reduced_mesh, primitive_mesh, mesh_primitives
 
     def process_multiple_meshes_geometry(
             self,
             meshes,
-            component_id,
+            identity_id,
+            default_rgb,
             mesh_primitive_threshold: int = 8000,
             mesh_reduced_threshold: int = 15000,
             mesh_reduced_target: int = 10000,
             mesh_primitive_target: int = 500):
-        """
-        Process multiple meshes for geometry reduction and file saving.
-        Returns list of primitive meshes and files_saved status.
-        """
-        if not meshes or len(meshes) == 0:
-            return [], False
+        """Returns (primitive_meshes, mesh_primitives dict)."""
+        if not meshes:
+            return [], {}
 
         primitive_meshes = []
-        reduced_meshes = []
-        files_saved = False
+        mesh_primitives = {}
 
-        # Check if files already exist
-        folder_path = self.create_geometry_folder(component_id)
-        detailed_obj_path = os.path.join(folder_path, 'mesh.obj')
-        reduced_obj_path = os.path.join(folder_path, 'mesh_reduced.obj')
-        files_exist = (os.path.exists(detailed_obj_path) or
-                       os.path.exists(reduced_obj_path))
-
-        if files_exist:
-            self._addWarning(
-                f'Geometry files already exist for component {component_id}. '
-                f'Skipping file saving but computing primitive geometry.'
-            )
-
-        # Check if any mesh needs file saving
-        # Save detailed files if any mesh has > 500 faces
-        # Save reduced files if any mesh has > 5000 faces
-        needs_detailed_saving = any(mesh is not None and
-                                    mesh.Faces.Count > mesh_primitive_target
-                                    for mesh in meshes)
-        needs_reduced_saving = any(mesh is not None and
-                                   mesh.Faces.Count > mesh_reduced_threshold
-                                   for mesh in meshes)
-        needs_file_saving = needs_detailed_saving or needs_reduced_saving
-
-        # Process each mesh
-        for i, mesh in enumerate(meshes):
+        for index, mesh in enumerate(meshes):
             if mesh is None:
                 primitive_meshes.append(None)
-                reduced_meshes.append(None)
                 continue
-
-            # Determine face count for this mesh
-            face_count = mesh.Faces.Count
-
-            # Create versions based on face count (matching single mesh logic)
-            if face_count > mesh_reduced_threshold:
-                # Create both reduced and primitive versions
-                if not files_exist and needs_file_saving:
-                    reduced_mesh = self.reduce_mesh(
-                        mesh,
-                        mesh_reduced_target
-                    )
-                else:
-                    reduced_mesh = None
-                primitive_mesh = self.reduce_mesh(
-                    mesh,
-                    mesh_primitive_target
-                )
-            elif face_count > mesh_primitive_threshold:
-                # Create only primitive version
-                reduced_mesh = None
-                primitive_mesh = self.reduce_mesh(
-                    mesh,
-                    mesh_primitive_target
-                )
-            else:
-                # Use original as primitive, no files saved
-                reduced_mesh = None
-                primitive_mesh = mesh
-
+            primitive_mesh, resolutions = self._stage_mesh_ply_files(
+                identity_id,
+                index,
+                mesh,
+                None,
+                default_rgb,
+                mesh_primitive_threshold,
+                mesh_reduced_threshold,
+                mesh_reduced_target,
+                mesh_primitive_target,
+            )
             primitive_meshes.append(primitive_mesh)
-            reduced_meshes.append(reduced_mesh)
+            if resolutions:
+                mesh_primitives[str(index)] = resolutions
 
-        # Set files_saved flag (only save if files don't exist and needed)
-        files_saved = not files_exist and needs_file_saving
-
-        # Save files if needed and files don't already exist
-        if files_saved:
-            try:
-                # Save detailed files if any mesh has > 500 faces
-                if needs_detailed_saving:
-                    self.save_multiple_meshes_as_obj(
-                        meshes, detailed_obj_path
-                    )
-
-                # Save reduced files if any mesh has > 5000 faces
-                if needs_reduced_saving:
-                    # Include ALL meshes but use reduced
-                    # versions where available
-                    reduced_meshes_for_saving = []
-                    for i, mesh in enumerate(meshes):
-                        if mesh is not None:
-                            if reduced_meshes[i] is not None:
-                                # Use reduced version if available
-                                reduced_meshes_for_saving.append(
-                                    reduced_meshes[i])
-                            else:
-                                # Use original mesh if no reduced version
-                                reduced_meshes_for_saving.append(mesh)
-
-                    if reduced_meshes_for_saving:
-                        self.save_multiple_meshes_as_obj(
-                            reduced_meshes_for_saving, reduced_obj_path
-                        )
-
-                self._addRemark(f'Saved geometry files to {folder_path}')
-
-            except Exception as e:
-                self._addWarning(f'Failed to save geometry files: {str(e)}')
-                files_saved = False
-
-        return primitive_meshes, files_saved
-
-    def save_multiple_meshes_as_obj(self, meshes, file_path):
-        """
-        Save meshes as a single OBJ file with object declarations.
-        Each mesh becomes a separate object in the OBJ file.
-        Works for both single meshes (wrapped in list) and multiple meshes.
-        Uses v X Y Z R G B format for vertices with RGB integer colors.
-        No MTL file generation - colors are embedded in OBJ file.
-        """
-        obj_content = '# OBJ file generated by DDU_CSC\n'
-        obj_content += '# Meshes with object declarations\n'
-        obj_content += '# Vertex colors embedded (no MTL file)\n\n'
-
-        vertex_offset = 0
-
-        for i, mesh in enumerate(meshes):
-            if mesh is None:
-                continue
-
-            # Add object declaration
-            obj_content += f'o object_{i}\n'
-
-            # Add vertices with coordinate system mapping (Rhino Z -> OBJ Y)
-            # and colors in v X Y Z R G B format
-            has_vertex_colors = mesh.VertexColors.Count > 0
-            for i, vertex in enumerate(mesh.Vertices):
-                # Map Rhino (X,Y,Z) to OBJ (X,Z,-Y) coordinate system
-                if has_vertex_colors and i < mesh.VertexColors.Count:
-                    # Use vertex color if available
-                    color = mesh.VertexColors[i]
-                    obj_content += (f'v {vertex.X} {vertex.Z} {-vertex.Y} '
-                                    f'{color.R} {color.G} {color.B}\n')
-                else:
-                    # Use default white color if no vertex colors
-                    obj_content += (f'v {vertex.X} {vertex.Z} {-vertex.Y} '
-                                    f'255 255 255\n')
-
-            # Add texture coordinates if available
-            if mesh.TextureCoordinates.Count > 0:
-                for tex_coord in mesh.TextureCoordinates:
-                    obj_content += f'vt {tex_coord.X} {tex_coord.Y}\n'
-
-            # Add faces (OBJ uses 1-based indexing, adjust for vertex offset)
-            for face in mesh.Faces:
-                if face.IsTriangle:
-                    obj_content += (f'f {face.A + 1 + vertex_offset} '
-                                    f'{face.B + 1 + vertex_offset} '
-                                    f'{face.C + 1 + vertex_offset}\n')
-                elif face.IsQuad:
-                    obj_content += (f'f {face.A + 1 + vertex_offset} '
-                                    f'{face.B + 1 + vertex_offset} '
-                                    f'{face.C + 1 + vertex_offset} '
-                                    f'{face.D + 1 + vertex_offset}\n')
-
-            # Update vertex offset for next mesh
-            vertex_offset += mesh.Vertices.Count
-            obj_content += '\n'
-
-        # Write OBJ file
-        with open(file_path, 'w') as f:
-            f.write(obj_content)
+        return primitive_meshes, mesh_primitives
 
     def compute_pca_for_multiple_meshes(self, meshes):
         """
@@ -1065,19 +988,20 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         if not meshes or len(meshes) == 0:
             return None, None, None, None
 
-        # Collect all points from all meshes
-        all_points = []
+        # Collect area-weighted samples from all meshes
+        sample_chunks = []
         for mesh in meshes:
             if mesh is None:
                 continue
-            for vertex in mesh.Vertices:
-                all_points.append([vertex.X, vertex.Y, vertex.Z])
+            # sample_chunks.append(
+            #     self.sample_points_area_weighted_from_mesh(mesh)
+            # )
+            sample_chunks.append(mesh.Vertices)
 
-        if not all_points:
+        if not sample_chunks:
             return None, None, None, None
 
-        # Convert to numpy array
-        points_array = np.array(all_points)
+        points_array = np.vstack(sample_chunks)
 
         # Center the assembly at origin (like single meshes)
         # Compute centroid of all points
@@ -1109,9 +1033,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
         (centered_mesh, translation_vector) = (
             self.center_geometry_at_origin(mesh)
         )
-        # Extract points from the centered first mesh
-        centered_points, compute_3d = self.process_geometry(centered_mesh)
-        # Compute PCA for the centered first mesh only
+        # Area-weighted samples from the centered first mesh
+        centered_points, _ = self.process_geometry(centered_mesh)
         dimensions, principal_components, bbx_origin = (
             self.compute_obb_3d(centered_points)
         )
@@ -1119,7 +1042,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
     def RunScript(self,
             ClearLocalStorage: bool,
-            ComponentID: str,
+            IdentityID: str,
             Name: str,
             Type: str,
             Material: str,
@@ -1136,7 +1059,9 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             ManufacturedPrecision,
             SalvageSource,
             SalvagedAt,
-            ParentComponent):
+            ParentIdentity,
+            Quantity,
+            Notes):
 
         # MESH REDUCTION SETTINGS
         # If mesh has tc above this but below reduced threshold,
@@ -1156,9 +1081,9 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
             # Handle ClearLocalStorage input
             if ClearLocalStorage:
                 self._addRemark(
-                    'Clearing create_component_geometry directory...'
+                    'Clearing pending_identity_assets directory...'
                 )
-                if self.clear_create_component_geometry_directory():
+                if self.clear_pending_identity_assets_directory():
                     self.Component.Message = (
                         'Local storage cleared successfully'
                     )
@@ -1167,20 +1092,24 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 return ComponentData
 
             # Initialize schema validation
-            self._addRemark('Initializing component creation with '
-                            'schema validation...')
+            self._addRemark(
+                'Initializing identity create payload '
+                'with schema validation...'
+            )
 
-            # sanitize input and abort if not present
-            if not ComponentID:
-                msg = 'Input ComponentID failed to collect data!'
+            if not IdentityID:
+                msg = 'Input IdentityID failed to collect data!'
                 self._addWarning(msg)
                 return ComponentData
-            elif not self.validate_uuid(ComponentID):
-                msg = 'Input ComponentID is not a valid UUID! Aborting...'
+            elif not self.validate_uuid(IdentityID):
+                msg = 'Input IdentityID is not a valid UUID! Aborting...'
                 self._addError(msg)
                 return ComponentData
             if not Name:
-                msg = "Input Name failed to collect data. Using auto-generated name!"
+                msg = (
+                    'Input Name failed to collect data. '
+                    'Using auto-generated name!'
+                )
                 self._addRemark(msg)
                 Name = ''
             if not Type:
@@ -1271,16 +1200,33 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 if SalvagedAt == '':
                     SalvagedAt = None
 
-            if ParentComponent is not None:
-                ParentComponent = str(ParentComponent).strip()
-                if ParentComponent == '':
-                    ParentComponent = None
-                elif not self.validate_uuid(ParentComponent):
+            if ParentIdentity is not None:
+                ParentIdentity = str(ParentIdentity).strip()
+                if ParentIdentity == '':
+                    ParentIdentity = None
+                elif not self.validate_uuid(ParentIdentity):
                     self._addWarning(
-                        'Input ParentComponent must be a valid UUID. '
-                        f'Ignoring provided value: {ParentComponent!r}.'
+                        'Input ParentIdentity must be a valid UUID. '
+                        f'Ignoring provided value: {ParentIdentity!r}.'
                     )
-                    ParentComponent = None
+                    ParentIdentity = None
+
+            if Notes is not None:
+                Notes = str(Notes)
+            if Quantity is not None:
+                try:
+                    Quantity = int(Quantity)
+                except (TypeError, ValueError):
+                    self._addWarning(
+                        'Input Quantity must be an integer;'
+                        f'ignoring {Quantity!r}'
+                    )
+                    Quantity = 1
+                if Quantity < 1 or Quantity > 999_999:
+                    self._addWarning(
+                        'Input Quantity must be between 1 and 999999; using 1'
+                    )
+                    Quantity = 1
 
             if not Color:
                 msg = ('Input Color failed to collect data. '
@@ -1330,7 +1276,8 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                             'Rhino.Geometry.Mesh objects.')
                         raise ValueError(msg)
 
-            self.Component.Message = f'Processing {Type} component...'
+            self.Component.Message = f'Processing {Type} identity...'
+            default_rgb = (Color.R, Color.G, Color.B)
 
             # Process geometry to extract points and compute PCA
             if len(Geometry) == 1:
@@ -1340,12 +1287,13 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 (centered_geometry, translation_vector) = (
                     self.center_geometry_at_origin(single_geometry)
                 )
-                # Extract CENTEREDpoints from the CENTERED geometry
                 centered_points, compute_3d = self.process_geometry(
                     centered_geometry
                 )
-                # Compute object oriented bounding box and PCA transformation
                 if compute_3d:
+                    # centered_points = self.sample_points_for_pca_3d(
+                    #     centered_geometry
+                    # )
                     dimensions, principal_components, bbx_origin = (
                         self.compute_obb_3d(centered_points))
                 else:
@@ -1374,8 +1322,7 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 centered_geometry = None  # Not used for multiple meshes
                 compute_3d = True  # Always 3D for multiple meshes
 
-            # Get component schema first
-            schema = self.get_component_schema()
+            schema = self.get_create_payload_schema()
 
             # Process marker points - apply same transformation as geometry
             marker_points_data = []
@@ -1391,25 +1338,18 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         ]
                         marker_points_data.append(transformed_point)
 
-            # Create component data dictionary based on schema
-            COMPDATA = self.build_component_data_from_schema(
-                schema, ComponentID, Name, Type, Material, Dataset, Complexity,
+            payload = self.build_create_payload(
+                IdentityID, Name, Type, Material, Dataset, Complexity,
                 Fragment, Assembly, Color, dimensions, location_data,
                 principal_components, Condition, ManufacturedAt,
                 ManufacturedPrecision, SalvageSource, SalvagedAt,
-                ParentComponent
+                ParentIdentity, Notes, Quantity,
             )
+            payload['bbx_origin'] = bbx_origin
+            if marker_points_data:
+                payload['marker_points'] = marker_points_data
 
-            # Set the computed bbx_origin
-            COMPDATA['bbx_origin'] = bbx_origin
-
-            # Add marker points to component data
-            COMPDATA['marker_points'] = marker_points_data
-
-            # Validate component data against schema
-            if not self.validate_component_data(COMPDATA, schema):
-                self._addWarning('Component data validation failed, '
-                                 'but continuing...')
+            mesh_primitives = {}
 
             # Process geometry input based on type
             if len(Geometry) == 1:
@@ -1417,44 +1357,25 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 single_geometry = Geometry[0]
                 if isinstance(single_geometry, Rhino.Geometry.Mesh):
                     # Process single mesh
-                    (original_mesh,
-                     reduced_mesh,
+                    (_original_mesh,
+                     _reduced_mesh,
                      primitive_mesh,
-                     files_saved) = (
-                        self.process_mesh_geometry(
-                            centered_geometry,
-                            ComponentID,
-                            mesh_primitive_threshold=MESH_PRIMITIVE_THRESHOLD,
-                            mesh_reduced_threshold=MESH_REDUCED_THRESHOLD,
-                            mesh_reduced_target=MESH_REDUCED_TARGET,
-                            mesh_primitive_target=MESH_PRIMITIVE_TARGET
-                        )
+                     staged) = self.process_mesh_geometry(
+                        centered_geometry,
+                        IdentityID,
+                        default_rgb,
+                        mesh_primitive_threshold=MESH_PRIMITIVE_THRESHOLD,
+                        mesh_reduced_threshold=MESH_REDUCED_THRESHOLD,
+                        mesh_reduced_target=MESH_REDUCED_TARGET,
+                        mesh_primitive_target=MESH_PRIMITIVE_TARGET,
                     )
-
-                    # Use primitive mesh for JSON geometry data
-                    vertices = [[p.X, p.Y, p.Z]
-                                for p in primitive_mesh.Vertices]
-                    faces = [[f[0], f[1], f[2]]
-                             for f in primitive_mesh.Faces]
-
-                    # Extract vertex colors if available
-                    colors = []
-                    if primitive_mesh.VertexColors.Count > 0:
-                        colors = [[c.R, c.G, c.B]
-                                  for c in primitive_mesh.VertexColors]
-                    else:
-                        # Use default color if no vertex colors
-                        colors = [[Color.R, Color.G, Color.B]] * len(vertices)
-
-                    # Use new meshes format even for single mesh
-                    comp_geometry = {
-                        'meshes': [{
-                            'v': vertices,
-                            'f': faces,
-                            'c': colors
-                        }]
+                    mesh_primitives.update(staged)
+                    payload['geometry'] = {
+                        'meshes': [
+                            self.mesh_to_inline_primitive(
+                                primitive_mesh, default_rgb)
+                        ],
                     }
-                    COMPDATA['geometry'] = comp_geometry
 
                 elif isinstance(single_geometry, Rhino.Geometry.Extrusion):
                     # Handle single extrusion (existing logic)
@@ -1482,14 +1403,12 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                     height = centered_geometry.PathStart.DistanceTo(
                         centered_geometry.PathEnd)
 
-                    # Create extrusion geometry data
-                    comp_extrusion = {
-                        'extrusion': {
+                    payload['geometry'] = {
+                        'extrusions': [{
                             'profile': [[p.X, p.Y] for p in polyline],
-                            'height': height
-                        }
+                            'height': height,
+                        }],
                     }
-                    COMPDATA['geometry'] = comp_extrusion
             else:
                 # HANDLE MULTIPLE MESHES
                 # Center all meshes using the translation
@@ -1512,54 +1431,42 @@ class CSC_CreateComponent(Grasshopper.Kernel.GH_ScriptInstance):
                     else:
                         centered_meshes.append(None)
 
-                # Process multiple meshes (now centered)
-                primitive_meshes, files_saved = (
+                primitive_meshes, staged = (
                     self.process_multiple_meshes_geometry(
                         centered_meshes,
-                        ComponentID,
+                        IdentityID,
+                        default_rgb,
                         mesh_primitive_threshold=MESH_PRIMITIVE_THRESHOLD,
                         mesh_reduced_threshold=MESH_REDUCED_THRESHOLD,
                         mesh_reduced_target=MESH_REDUCED_TARGET,
-                        mesh_primitive_target=MESH_PRIMITIVE_TARGET
+                        mesh_primitive_target=MESH_PRIMITIVE_TARGET,
                     )
                 )
-
-                # Create meshes array for JSON geometry data
+                mesh_primitives.update(staged)
                 meshes_data = []
                 for primitive_mesh in primitive_meshes:
-                    vertices = [[p.X, p.Y, p.Z]
-                                for p in primitive_mesh.Vertices]
-                    faces = [[f[0], f[1], f[2]]
-                             for f in primitive_mesh.Faces]
+                    if primitive_mesh is None:
+                        continue
+                    meshes_data.append(
+                        self.mesh_to_inline_primitive(
+                            primitive_mesh, default_rgb)
+                    )
+                payload['geometry'] = {'meshes': meshes_data}
 
-                    # Extract vertex colors if available
-                    colors = []
-                    if primitive_mesh.VertexColors.Count > 0:
-                        colors = [[c.R, c.G, c.B]
-                                  for c in primitive_mesh.VertexColors]
-                    else:
-                        # Use default color if no vertex colors
-                        colors = [[Color.R, Color.G, Color.B]] * len(vertices)
+            if mesh_primitives:
+                self.write_staging_manifest(IdentityID, mesh_primitives)
 
-                    meshes_data.append({
-                        'v': vertices,
-                        'f': faces,
-                        'c': colors
-                    })
+            if not self.validate_create_payload(payload, schema):
+                self._addWarning(
+                    'Create payload validation failed, but continuing...'
+                )
 
-                comp_geometry = {
-                    'meshes': meshes_data
-                }
-                COMPDATA['geometry'] = comp_geometry
+            ComponentData = json.dumps(payload)
 
-            # create json string
-            ComponentData = json.dumps(COMPDATA)
-
-            # Update success message
             self.Component.Message = (
-                f'Successfully created {Type} component {ComponentID}'
+                f'Built create payload for identity {IdentityID}'
             )
-            self._addRemark(f'Created {Type} component {ComponentID}')
+            self._addRemark(f'Created {Type} identity payload {IdentityID}')
 
             # return output
             return ComponentData

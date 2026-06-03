@@ -45,7 +45,7 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 251203
+Version: 260603
 """
 
 
@@ -353,7 +353,7 @@ class _ComponentCache(object):
                             design_data = pickle.load(f)
                         return design_data, metadata.get('etag'), True
 
-                elif cache_key == 'schema:component':
+                elif cache_key == 'schema:create_identity':
                     # Schema data is stored directly in metadata
                     return metadata.get('data'), metadata.get('etag'), True
 
@@ -449,7 +449,7 @@ class _ComponentCache(object):
                         'type': 'design'
                     }
 
-                elif cache_key == 'schema:component':
+                elif cache_key == 'schema:create_identity':
                     # Schema data - store directly in metadata
                     metadata = {
                         'cache_key': cache_key,
@@ -1234,76 +1234,69 @@ class _AuthCore(object):
 
         return response
 
-    def get_component_schema(self, force_refresh=False):
+    def get_create_identity_schema(self, force_refresh=False):
         """
-        Get component schema with caching support.
+        Get CreateComponentRequest JSON Schema (POST /identities).
 
         Args:
             force_refresh: Force refresh of schema even if cached
 
         Returns:
-            Component schema dictionary or None if failed
+            Schema dictionary or None if failed
         """
-        # Schema endpoints are unprotected, so we can access without auth
-        # But we still need to check if we have a valid base_url
+        cache_key = 'schema:create_identity'
+        endpoint = '/schema/create-identity'
+
         if not self.base_url:
             raise RuntimeError(
                 'Base URL not configured. Please sign in first.')
 
-        # If cache is disabled, make regular request
-        # (schema endpoint is unprotected)
         if not self._cache:
             try:
-                response = requests.get(f'{self.base_url}/schema/component')
+                response = requests.get(f'{self.base_url}{endpoint}')
                 if response.status_code == 200:
                     return response.json()
                 return None
             except Exception:
                 return None
 
-        # Check cache first (unless force refresh)
         if not force_refresh:
             cached_schema, cached_etag, is_from_cache = self._cache.get(
-                'schema:component')
+                cache_key)
             if is_from_cache:
                 return cached_schema
 
-        # Make request to get schema (unprotected endpoint)
         try:
-            # Prepare headers for conditional request
             headers = {}
             if not force_refresh:
                 cached_schema, cached_etag, is_from_cache = self._cache.get(
-                    'schema:component')
+                    cache_key)
                 if is_from_cache and cached_etag:
                     headers['If-None-Match'] = cached_etag
 
-            response = requests.get(f'{self.base_url}/schema/component',
-                                    headers=headers)
+            response = requests.get(
+                f'{self.base_url}{endpoint}',
+                headers=headers,
+            )
 
             if response.status_code == 304 and not force_refresh:
-                # Not modified - return cached data
-                cached_schema, _, is_from_cache = self._cache.get(
-                    'schema:component')
+                cached_schema, _, is_from_cache = self._cache.get(cache_key)
                 if is_from_cache:
                     return cached_schema
 
             elif response.status_code == 200:
-                # Data changed or first request - cache the response
                 try:
                     data = response.json()
                     etag = response.headers.get('ETag')
-                    self._cache.set('schema:component', data, etag)
+                    self._cache.set(cache_key, data, etag)
                     return data
                 except (ValueError, KeyError):
                     return None
 
             return None
         except Exception:
-            # If request fails and we have cached schema, return cached version
             if not force_refresh:
-                cached_schema, _, is_from_cache = self._cache.get(
-                    'schema:component')
+                cached_schema, _, is_from_cache = self._cache.get(cache_key)
                 if is_from_cache:
                     return cached_schema
             return None
@@ -1575,16 +1568,20 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                         f'Already signed in as: {current_user}'
                     )
 
-                    # Fetch and cache component schema
+                    # Fetch and cache create-identity schema
                     try:
-                        schema = auth_core.get_component_schema()
+                        schema = auth_core.get_create_identity_schema()
                         if schema:
                             status_messages.append(
-                                'Schema cached successfully')
-                            self._addRemark('Schema cached successfully')
+                                'Create-identity schema cached')
+                            self._addRemark(
+                                'Create-identity schema cached successfully'
+                            )
                         else:
                             status_messages.append('Failed to cache schema')
-                            self._addWarning('Failed to cache schema')
+                            self._addWarning(
+                                'Failed to cache create-identity schema'
+                            )
                     except Exception as e:
                         status_messages.append(
                             f'Schema caching failed: {str(e)}')
@@ -1648,16 +1645,20 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                     # Update sticky storage
                     sc.sticky['CSC_AuthCore'] = auth_core
 
-                    # Fetch and cache component schema
+                    # Fetch and cache create-identity schema
                     try:
-                        schema = auth_core.get_component_schema()
+                        schema = auth_core.get_create_identity_schema()
                         if schema:
                             status_messages.append(
-                                'Schema cached successfully')
-                            self._addRemark('Schema cached successfully')
+                                'Create-identity schema cached')
+                            self._addRemark(
+                                'Create-identity schema cached successfully'
+                            )
                         else:
                             status_messages.append('Failed to cache schema')
-                            self._addWarning('Failed to cache schema')
+                            self._addWarning(
+                                'Failed to cache create-identity schema'
+                            )
                     except Exception as e:
                         status_messages.append(
                             f'Schema caching failed: {str(e)}')
