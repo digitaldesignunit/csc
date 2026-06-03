@@ -2,13 +2,20 @@
 """
 Routes for the v0.5 `component_snapshots` collection.
 
-* `GET /snapshots/{snapshot_id}` - fetch one snapshot by id (ADR-014 #3)
-* `GET /snapshots/{snapshot_id}/preview` - rendered catalog thumbnail
-* `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}` - PLY file or OBJ (`?format=obj`)
-* `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/primitive` - inline mesh (`?format=ply|obj`)
-* `GET /snapshots/{snapshot_id}/extrusions/{index}` - inline extrusion mesh (`?format=ply|obj`)
-* `GET /snapshots/{snapshot_id}/point_clouds/{index}.ply` - file or inline → PLY
-* `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}` - user photos (JPEG)
+* `GET /snapshots/{snapshot_id}`
+    -> fetch one snapshot by id (ADR-014 #3)
+* `GET /snapshots/{snapshot_id}/preview`
+    -> rendered catalog thumbnail
+* `GET|PUT /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}`
+    -> PLY file (GET also supports `?format=obj`)
+* `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/primitive`
+    -> inline mesh (`?format=ply|obj`)
+* `GET /snapshots/{snapshot_id}/extrusions/{index}`
+    -> inline extrusion mesh (`?format=ply|obj`)
+* `GET /snapshots/{snapshot_id}/point_clouds/{index}.ply`
+    -> file or inline → PLY
+* `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}`
+    -> user photos (JPEG)
 """
 
 import hashlib
@@ -45,7 +52,12 @@ from apps.catalog.geometry_mesh_export import (
 )
 
 from .auth import get_current_active_user
-from .catalog_common import get_snapshots_col, validate_uuid
+from .catalog_common import (
+    compute_snapshot_etag,
+    get_snapshots_col,
+    now_iso,
+    validate_uuid,
+)
 from .snapshot_images import (
     PHOTO_EXTENSION,
     PHOTO_MEDIA_TYPE,
@@ -275,7 +287,10 @@ async def get_snapshot_mesh_primitive(
     primitive_index: int,
     format: str = Query('ply', description='ply (default) or obj'),
 ):
-    """Build mesh from ``geometry.meshes[primitive_index]``; OBJ is converted on the fly."""
+    """
+    Build mesh from ``geometry.meshes[primitive_index]``;
+    OBJ is converted on the fly.
+    """
     fmt = _http_mesh_format(format)
     if primitive_index < 0:
         raise HTTPException(
@@ -317,7 +332,8 @@ async def get_snapshot_mesh(
     """
     Serve ``meshes/<snapshot_id>/<primitive_index>/{reduced|detailed}.ply``.
 
-    ``?format=obj`` converts the on-disk PLY to OBJ at request time (no duplicate files).
+    ``?format=obj`` converts the on-disk PLY to OBJ
+    at request time (no duplicate files).
 
     Returns 404 when the file is not on disk or ``mesh_ply_resolutions``
     does not list the requested resolution for this primitive index.
@@ -393,6 +409,146 @@ async def get_snapshot_mesh(
     return _mesh_export_attachment_response(body, filename, fmt)
 
 
+async def _register_mesh_ply_resolution(
+    request: Request,
+    snapshot_id: str,
+    snapshot_doc: dict,
+    primitive_index: int,
+    resolution: str,
+) -> dict:
+    """
+    Record one on-disk PLY resolution and refresh snapshot etag.
+    """
+    key = str(primitive_index)
+    resolutions_map = dict(snapshot_doc.get('mesh_ply_resolutions') or {})
+    current = list(resolutions_map.get(key) or [])
+    if resolution not in current:
+        current.append(resolution)
+    order = {'reduced': 0, 'detailed': 1}
+    current.sort(key=lambda r: order.get(r, 99))
+    resolutions_map[key] = current
+
+    modified = now_iso()
+    merged = dict(snapshot_doc)
+    merged['mesh_ply_resolutions'] = resolutions_map
+    merged['lastmodified'] = modified
+    etag = compute_snapshot_etag(merged)
+
+    snapshots = await get_snapshots_col(request)
+    try:
+        await snapshots.update_one(
+            {'_id': snapshot_id},
+            {'$set': {
+                'mesh_ply_resolutions': resolutions_map,
+                'lastmodified': modified,
+                'etag': etag,
+            }},
+        )
+    except PyMongoError as exc:
+        print(f'[ERROR] _register_mesh_ply_resolution DB error: {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail='Failed to update snapshot mesh manifest',
+        )
+
+    return resolutions_map
+
+
+@router.put(
+    '/snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}',
+    summary='Upload or replace mesh PLY for snapshot primitive',
+)
+async def put_snapshot_mesh_ply(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    snapshot_id: str,
+    primitive_index: int,
+    resolution: str,
+    mesh_file: UploadFile = File(..., description='Binary PLY mesh file'),
+):
+    """
+    Store ``meshes/<snapshot_id>/<primitive_index>/{reduced|detailed}.ply``
+    and register the resolution on ``mesh_ply_resolutions``.
+    """
+    if primitive_index < 0:
+        raise HTTPException(
+            status_code=400,
+            detail='primitive_index must be >= 0',
+        )
+    if resolution not in _ALLOWED_RESOLUTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'resolution must be one of: {sorted(_ALLOWED_RESOLUTIONS)}'
+            ),
+        )
+
+    filename = (mesh_file.filename or '').lower()
+    if not filename.endswith('.ply'):
+        raise HTTPException(
+            status_code=400,
+            detail='Mesh file must be a .ply file',
+        )
+
+    doc = await _load_snapshot(request, snapshot_id)
+    meshes = (doc.get('geometry') or {}).get('meshes') or []
+    if primitive_index >= len(meshes):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'primitive_index {primitive_index} out of range; '
+                f'snapshot has {len(meshes)} mesh primitive(s)'
+            ),
+        )
+
+    raw = await read_upload_limited(
+        mesh_file,
+        request.app.geometry_upload_limit_bytes,
+    )
+    if len(raw) < 3 or raw[:3] != b'ply':
+        raise HTTPException(
+            status_code=400,
+            detail='Invalid PLY file (expected ASCII or binary PLY header)',
+        )
+
+    dest_dir = os.path.join(
+        request.app.snapshot_meshes_dir,
+        snapshot_id,
+        str(primitive_index),
+    )
+    os.makedirs(dest_dir, exist_ok=True)
+    dest = os.path.join(dest_dir, f'{resolution}.ply')
+
+    try:
+        with open(dest, 'wb') as handle:
+            handle.write(raw)
+    except OSError as exc:
+        print(f'[ERROR] put_snapshot_mesh_ply write: {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail='Failed to save mesh file',
+        )
+
+    resolutions_map = await _register_mesh_ply_resolution(
+        request,
+        snapshot_id,
+        doc,
+        primitive_index,
+        resolution,
+    )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            'snapshot_id': snapshot_id,
+            'primitive_index': primitive_index,
+            'resolution': resolution,
+            'size_bytes': len(raw),
+            'mesh_ply_resolutions': resolutions_map,
+        },
+    )
+
+
 @router.get(
     '/snapshots/{snapshot_id}/extrusions/{index}',
     summary='Export inline extrusion primitive (PLY or OBJ mesh)',
@@ -404,7 +560,10 @@ async def get_snapshot_extrusion(
     index: int,
     format: str = Query('ply', description='ply (default) or obj'),
 ):
-    """Triangulate ``geometry.extrusions[index]``; OBJ is converted on the fly."""
+    """
+    Triangulate ``geometry.extrusions[index]``;
+    OBJ is converted on the fly.
+    """
     fmt = _http_mesh_format(format)
     if index < 0:
         raise HTTPException(status_code=400, detail='index must be >= 0')
@@ -413,7 +572,10 @@ async def get_snapshot_extrusion(
         ext = get_inline_extrusion_primitive(doc, index)
         body = export_extrusion(ext, fmt)  # type: ignore[arg-type]
     except IndexError:
-        raise HTTPException(status_code=404, detail='Extrusion primitive not found')
+        raise HTTPException(
+            status_code=404,
+            detail='Extrusion primitive not found'
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -430,7 +592,10 @@ async def get_snapshot_extrusion(
 
 @router.get(
     '/snapshots/{snapshot_id}/point_clouds/{index}.ply',
-    summary='Get point cloud PLY (file on disk or generated from inline points)',
+    summary=(
+        'Get point cloud PLY (file on disk or '
+        'generated from inline points)'
+    )
 )
 async def get_snapshot_point_cloud_ply(
     request: Request,

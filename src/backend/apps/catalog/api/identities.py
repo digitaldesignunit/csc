@@ -3,11 +3,20 @@
 
 Owns the primary read path of the new data model:
 
-* `GET /identities` / `GET /identities/count` — catalog list + count
-* `GET /identities/stats` — aggregated stats (identity + current snapshot)
-* `GET /identities/{identity_id}/compose` — identity + current snapshot
-* `GET /schema/catalog-compose` — JSON Schema for the compose body (frontend codegen)
-* `GET /schema/create-identity` — JSON Schema for POST /identities (Grasshopper)
+* `GET /identities` / `GET /identities/count`
+    -> catalog list + count
+
+* `GET /identities/stats`
+    -> aggregated stats (identity + current snapshot)
+
+* `GET /identities/{identity_id}/compose`
+    -> identity + current snapshot
+
+* `GET /schema/catalog-compose`
+    -> JSON Schema for the compose body (frontend codegen)
+
+* `GET /schema/create-identity`
+    -> JSON Schema for POST /identities (Grasshopper)
 
 Single-snapshot reads: `GET /snapshots/{snapshot_id}` in `snapshots.py`.
 
@@ -108,7 +117,10 @@ async def get_create_identity_json_schema(request: Request):
     schema = CreateComponentRequest.model_json_schema(by_alias=True)
     etag = _schema_etag(schema)
     if _check_schema_conditional_request(request, etag):
-        return JSONResponse(status_code=304, content=None, headers={'ETag': etag})
+        return JSONResponse(
+            status_code=304,
+            content=None,
+            headers={'ETag': etag})
     return JSONResponse(
         status_code=200,
         content=schema,
@@ -308,7 +320,8 @@ def _normalize_stats_facet_lists(items):
 @router.get(
     '/identities/stats',
     summary=(
-        'Aggregated catalog statistics (identities joined to current snapshots)'
+        'Aggregated catalog statistics '
+        '(identities joined to current snapshots)'
     ),
 )
 async def get_identities_stats(
@@ -330,7 +343,10 @@ async def get_identities_stats(
     consumed_filter: ConsumedFilter = Query('active'),
     sortorder: Literal['asc', 'desc'] = Query('asc', include_in_schema=False),
 ):
-    """Same JSON shape as ``GET /components/stats`` backed by ``component_identities``."""
+    """
+    Same JSON shape as ``GET /components/stats``
+    backed by ``component_identities``.
+    """
     ctx = _catalog_filter_context(
         request,
         sortorder=sortorder,
@@ -376,8 +392,12 @@ async def get_identities_stats(
             'byType': _normalize_stats_facet_lists(raw.get('byType')),
             'byMaterial': topn(raw.get('byMaterial')),
             'byDataset': topn(raw.get('byDataset')),
-            'byComplexity': _normalize_stats_facet_lists(raw.get('byComplexity')),
-            'byValidated': _normalize_stats_facet_lists(raw.get('byValidated')),
+            'byComplexity': _normalize_stats_facet_lists(
+                raw.get('byComplexity')
+            ),
+            'byValidated': _normalize_stats_facet_lists(
+                raw.get('byValidated')
+            ),
             'byFragment': _normalize_stats_facet_lists(raw.get('byFragment')),
             'byAssembly': _normalize_stats_facet_lists(raw.get('byAssembly')),
             'reserved': _normalize_stats_facet_lists(raw.get('reserved')),
@@ -385,7 +405,7 @@ async def get_identities_stats(
             'createdMonthly': _normalize_stats_facet_lists(
                 raw.get('createdMonthly')
             ),
-            'bbxX': _normalize_stats_facet_lists(raw.get('bbx')),
+            'bbxX': _normalize_stats_facet_lists(raw.get('bbx'))
         }
         return JSONResponse(status_code=200, content=content)
     except PyMongoError as exc:
