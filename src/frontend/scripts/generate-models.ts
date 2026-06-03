@@ -9,6 +9,8 @@
  * - `/schema/component` → `ComponentModel` (legacy document; designs, etc.)
  * - `/schema/design` → `DesignModel`
  * - `/schema/catalog-compose` → `CatalogModels` (v0.5 `GET /identities/{id}/compose` body)
+ * - `/schema/snapshot-summary` → `SnapshotSummaryItem` in `SnapshotModels.ts`
+ * - `/schema/pending-validation-snapshot` → `PendingValidationSnapshotItem` in `SnapshotModels.ts`
  */
 
 import fs from 'fs'
@@ -68,6 +70,36 @@ function writeGeneratedModel(
   console.log(`📝 Generated TypeScript model: ${outFile}`)
 }
 
+async function appendModelFromSchema(
+  schemaPath: string,
+  interfaceName: string,
+  outputFileName: string,
+) {
+  console.log(`🔍 Fetching ${interfaceName} schema from ${BACKEND_URL}${schemaPath}...`)
+  const response = await fetch(`${BACKEND_URL}${schemaPath}`)
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch schema (${interfaceName}): ${response.status} ${response.statusText}`,
+    )
+  }
+  const schema = await response.json()
+  console.log(`✅ ${interfaceName} schema fetched successfully`)
+
+  const outFile = path.join(OUTPUT_DIR, outputFileName)
+  const typescriptBlock = generateTypeScriptInterface(
+    schema,
+    interfaceName,
+    schemaPath,
+    { catalogCompose: false },
+  )
+  const interfaceOnly = typescriptBlock.replace(
+    /^[\s\S]*?export interface /,
+    'export interface ',
+  )
+  fs.appendFileSync(outFile, `\n${interfaceOnly}`)
+  console.log(`📝 Appended ${interfaceName} to ${outFile}`)
+}
+
 async function run() {
   try {
     await generateModel('/schema/component', 'ComponentModel', 'ComponentModel.ts')
@@ -78,11 +110,24 @@ async function run() {
       catalogCompose: true,
     })
 
+    await generateModel(
+      '/schema/snapshot-summary',
+      'SnapshotSummaryItem',
+      'SnapshotModels.ts',
+    )
+
+    await appendModelFromSchema(
+      '/schema/pending-validation-snapshot',
+      'PendingValidationSnapshotItem',
+      'SnapshotModels.ts',
+    )
+
     const indexFile = path.join(OUTPUT_DIR, 'index.ts')
     const indexContent = `// Auto-generated models from backend OpenAPI schema
 export * from './ComponentModel';
 export * from './DesignModel';
 export * from './CatalogModels';
+export * from './SnapshotModels';
 export * from './catalogExtras';
 `
     fs.writeFileSync(indexFile, indexContent)

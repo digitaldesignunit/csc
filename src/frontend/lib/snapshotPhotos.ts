@@ -42,8 +42,17 @@ export type SnapshotPhotoMutationResult = {
   photoCount?: number
 }
 
+export type SnapshotPhotoListResponse = {
+  indices: number[]
+  count: number
+}
+
 export function snapshotPhotoUrl(snapshotId: string, index: number): string {
   return `/api/backend/snapshots/${encodeURIComponent(snapshotId)}/photos/${index}`
+}
+
+function snapshotPhotoListUrl(snapshotId: string): string {
+  return `/api/backend/snapshots/${encodeURIComponent(snapshotId)}/photos`
 }
 
 export function nextAvailablePhotoIndex(used: Iterable<number>): number | null {
@@ -122,27 +131,6 @@ export async function deleteSnapshotPhoto(
   }
 }
 
-async function probePhotoIndex(snapshotId: string, index: number): Promise<boolean> {
-  const url = snapshotPhotoUrl(snapshotId, index)
-  try {
-    let res = await fetch(url, {
-      method: 'HEAD',
-      credentials: 'include',
-      cache: 'no-store',
-    })
-    if (res.status === 405 || res.status === 501) {
-      res = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',
-        cache: 'no-store',
-      })
-    }
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
 /** Parse ``photo_count`` from compose/list snapshot payloads. */
 export function parseSnapshotPhotoCount(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -155,52 +143,51 @@ export function parseSnapshotPhotoCount(value: unknown): number | null {
   return null
 }
 
-const UNKNOWN_COUNT_GAP = 4
-
 /**
- * Resolve occupied photo slot indices.
+ * Fetch occupied photo slot indices in one request.
  *
- * - ``photoCount === 0``: no requests (trust compose-synced count).
- * - ``photoCount > 0``: probe slots in order until that many are found (dense 0..n-1 → n requests).
- * - ``photoCount === null``: short sequential scan with gap early-exit (stale/missing count).
+ * When ``photoCount === 0``, returns [] without calling the API.
  */
-export async function discoverSnapshotPhotoIndices(
+export async function fetchSnapshotPhotoIndices(
   snapshotId: string,
   photoCount?: number | null,
 ): Promise<number[]> {
-  const count = photoCount === undefined ? null : photoCount
+  if (!snapshotId) {
+    return []
+  }
+
+  const count =
+    photoCount === undefined ? null : photoCount
 
   if (count === 0) {
     return []
   }
 
-  const found: number[] = []
-
-  if (count !== null && count > 0) {
-    for (let index = 0; index < MAX_PHOTO_SLOTS; index += 1) {
-      if (await probePhotoIndex(snapshotId, index)) {
-        found.push(index)
-      }
-      if (found.length >= count) {
-        break
-      }
-    }
-    return found
+  const res = await fetch(snapshotPhotoListUrl(snapshotId), {
+    credentials: 'include',
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to list snapshot photos (${res.status})`)
   }
 
-  let gap = 0
-  for (let index = 0; index < MAX_PHOTO_SLOTS; index += 1) {
-    if (await probePhotoIndex(snapshotId, index)) {
-      found.push(index)
-      gap = 0
-    } else {
-      gap += 1
-      if (gap >= UNKNOWN_COUNT_GAP) {
-        break
-      }
-    }
+  const data = (await res.json()) as SnapshotPhotoListResponse
+  if (!Array.isArray(data.indices)) {
+    return []
   }
-  return found
+
+  return data.indices.filter(
+    (index): index is number =>
+      typeof index === 'number' && Number.isInteger(index) && index >= 0,
+  )
+}
+
+/** @deprecated Use {@link fetchSnapshotPhotoIndices}. */
+export async function discoverSnapshotPhotoIndices(
+  snapshotId: string,
+  photoCount?: number | null,
+): Promise<number[]> {
+  return fetchSnapshotPhotoIndices(snapshotId, photoCount)
 }
 
 export { MAX_PHOTO_SLOTS }

@@ -2,4 +2,5 @@
 export * from './ComponentModel';
 export * from './DesignModel';
 export * from './CatalogModels';
+export * from './SnapshotModels';
 export * from './catalogExtras';

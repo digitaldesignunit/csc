@@ -10,7 +10,7 @@ import SnapshotPhotoCapture from '@/components/photos/SnapshotPhotoCapture'
 import PhotoLightboxDialog, { type PhotoLightboxItem } from '@/components/photos/PhotoLightboxDialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  discoverSnapshotPhotoIndices,
+  fetchSnapshotPhotoIndices,
   parseSnapshotPhotoCount,
   snapshotPhotoUrl,
   type SnapshotPhotoMutationResult,
@@ -53,18 +53,16 @@ export default function ComponentSnapshotPhotoGallery({
       setLoading(true)
       setError(null)
       try {
-        let countForDiscovery = opts?.photoCountHint ?? knownPhotoCount
-        if (opts?.afterMutation && countForDiscovery === 0) {
-          countForDiscovery = null
-        }
-        const found = await discoverSnapshotPhotoIndices(snapshotId, countForDiscovery)
+        const countForFetch =
+          opts?.photoCountHint ??
+          (opts?.afterMutation ? null : knownPhotoCount ?? photoCountFromProps)
+
+        const found = await fetchSnapshotPhotoIndices(snapshotId, countForFetch)
         setIndices(found)
         if (opts?.photoCountHint !== undefined && opts.photoCountHint !== null) {
           setKnownPhotoCount(opts.photoCountHint)
-        } else if (found.length > 0) {
+        } else {
           setKnownPhotoCount(found.length)
-        } else if (opts?.afterMutation) {
-          setKnownPhotoCount(0)
         }
       } catch {
         setError('Failed to load photos.')
@@ -73,12 +71,18 @@ export default function ComponentSnapshotPhotoGallery({
         setLoading(false)
       }
     },
-    [snapshotId, knownPhotoCount],
+    [snapshotId, knownPhotoCount, photoCountFromProps],
   )
 
   useEffect(() => {
-    refreshPhotos()
-  }, [refreshPhotos])
+    if (photoCountFromProps === 0) {
+      setIndices([])
+      setKnownPhotoCount(0)
+      setLoading(false)
+      return
+    }
+    void refreshPhotos()
+  }, [photoCountFromProps, refreshPhotos, snapshotId])
 
   const lightboxItems = useMemo<PhotoLightboxItem[]>(
     () =>

@@ -1,7 +1,9 @@
 // app/components/[component_id]/page.tsx
 import ComponentDetailPageLayout from '@/components/components/ComponentDetailPageLayout'
+import ComponentDetailSnapshotBanner from '@/components/components/ComponentDetailSnapshotBanner'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import type { CatalogComponent } from '@/generated/CatalogModels'
+import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { formatTimestamp } from '@/lib/utils'
 import { Archive, Package } from 'lucide-react'
 import Link from 'next/link'
@@ -12,6 +14,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 type PageParams = { component_id: string }
+type PageSearchParams = { snapshot_id?: string }
 
 function isConsumedIdentity(consumedAt: unknown): boolean {
   return consumedAt !== undefined && consumedAt !== null && String(consumedAt).trim() !== ''
@@ -19,25 +22,39 @@ function isConsumedIdentity(consumedAt: unknown): boolean {
 
 export default async function ComponentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<PageParams>
+  searchParams: Promise<PageSearchParams>
 }) {
   const h = await headers()
   const cookie = h.get('cookie') ?? ''
   const base = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`
 
   const { component_id } = await params
+  const { snapshot_id: requestedSnapshotId } = await searchParams
 
-  const res = await fetch(
-    `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose`,
-    {
-      cache: 'no-store',
-      headers: { cookie },
-    },
-  )
+  const fetchOpts = { cache: 'no-store' as const, headers: { cookie } }
+
+  const composeUrl = requestedSnapshotId
+    ? `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose?${new URLSearchParams({ snapshot_id: requestedSnapshotId }).toString()}`
+    : `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose`
+
+  const [composeRes, snapshotsRes] = await Promise.all([
+    fetch(composeUrl, fetchOpts),
+    fetch(
+      `${base}/api/backend/identities/${encodeURIComponent(component_id)}/snapshots`,
+      fetchOpts,
+    ),
+  ])
+
+  const res = composeRes
 
   if (res.status === 401) {
-    redirect(`/auth/signin?callbackUrl=/components/${component_id}`)
+    const callback = requestedSnapshotId
+      ? `/components/${component_id}?snapshot_id=${encodeURIComponent(requestedSnapshotId)}`
+      : `/components/${component_id}`
+    redirect(`/auth/signin?callbackUrl=${encodeURIComponent(callback)}`)
   }
   if (res.status === 404) {
     notFound()
@@ -50,6 +67,24 @@ export default async function ComponentDetailPage({
   }
 
   const catalog = (await res.json()) as CatalogComponent
+  let snapshots: SnapshotSummaryItem[] = []
+  if (snapshotsRes.ok) {
+    snapshots = (await snapshotsRes.json()) as SnapshotSummaryItem[]
+  }
+
+  const liveSnapshotId = String(catalog.identity.current_snapshot_id ?? '')
+  const activeSnapshotId = String(catalog.snapshot._id ?? liveSnapshotId)
+  const isViewingLive = activeSnapshotId === liveSnapshotId
+  const liveVersion =
+    snapshots.find((row) => row._id === liveSnapshotId)?.version ??
+    (typeof catalog.snapshot.version === 'number' && isViewingLive
+      ? catalog.snapshot.version
+      : snapshots.find((row) => row.is_current)?.version ?? 0)
+  const viewingVersion =
+    typeof catalog.snapshot.version === 'number'
+      ? catalog.snapshot.version
+      : snapshots.find((row) => row._id === activeSnapshotId)?.version ?? 0
+
   const isConsumed = isConsumedIdentity(catalog.identity.consumed_at)
   const consumedAtLabel =
     isConsumed && catalog.identity.consumed_at
@@ -92,8 +127,21 @@ export default async function ComponentDetailPage({
       </div>
 
       <div className="space-y-6">
+        {!isViewingLive && (
+          <ComponentDetailSnapshotBanner
+            identityId={component_id}
+            viewingVersion={viewingVersion}
+            liveVersion={liveVersion}
+            isPending={!catalog.snapshot.validated}
+          />
+        )}
         <ComponentViewer catalog={catalog} />
-        <ComponentDetailPageLayout catalog={catalog} />
+        <ComponentDetailPageLayout
+          catalog={catalog}
+          snapshots={snapshots}
+          activeSnapshotId={activeSnapshotId}
+          liveSnapshotId={liveSnapshotId}
+        />
       </div>
     </div>
   )

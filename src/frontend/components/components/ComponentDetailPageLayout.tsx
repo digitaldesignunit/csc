@@ -10,13 +10,24 @@ import ComponentDetailMetadataTabs, {
 } from './ComponentDetailMetadataTabs'
 import ComponentDetailSummary from './ComponentDetailSummary'
 import ComponentSnapshotPhotoGallery from './ComponentSnapshotPhotoGallery'
+import ComponentSnapshotVersionList from './ComponentSnapshotVersionList'
+import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 
 type ComponentDetailPageLayoutProps = {
   catalog: CatalogComponent
+  snapshots?: SnapshotSummaryItem[]
+  activeSnapshotId: string
+  liveSnapshotId: string
 }
 
-export default function ComponentDetailPageLayout({ catalog }: ComponentDetailPageLayoutProps) {
+export default function ComponentDetailPageLayout({
+  catalog,
+  snapshots = [],
+  activeSnapshotId,
+  liveSnapshotId,
+}: ComponentDetailPageLayoutProps) {
   const { identity, snapshot } = catalog
+  const identityId = String(identity._id ?? '')
   const snapshotId = String(snapshot._id ?? identity.current_snapshot_id)
   const location = (snapshot.location as ComponentLocation) ?? { lat: 0, lon: 0 }
 
@@ -28,6 +39,12 @@ export default function ComponentDetailPageLayout({ catalog }: ComponentDetailPa
         <CardContent className="space-y-4 pt-6">
           <ComponentDetailSummary catalog={catalog} />
           <ComponentDetailActions catalog={catalog} />
+          <ComponentSnapshotVersionList
+            identityId={identityId}
+            snapshots={snapshots}
+            activeSnapshotId={activeSnapshotId}
+            liveSnapshotId={liveSnapshotId}
+          />
 
           <section className="hidden border-t border-border pt-4 2xl:block">
             <h3 className="mb-3 border-b border-border pb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">

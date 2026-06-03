@@ -96,19 +96,26 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
   }
 
   const handleValidateComponent = async () => {
+    const snapshotId = String(snapshot._id ?? '')
+    if (!snapshotId) {
+      toast.error('No snapshot id available for validation.')
+      return
+    }
+
     try {
       setValidating(true)
       const response = await fetch(
-        `/api/backend/identities/${encodeURIComponent(identityId)}/validate`,
-        { method: 'GET', credentials: 'include' },
+        `/api/backend/snapshots/${encodeURIComponent(snapshotId)}/validate`,
+        { method: 'POST', credentials: 'include' },
       )
       if (response.ok) {
-        router.push('/admin/validation')
+        router.refresh()
+        toast.success('Snapshot validated')
       } else {
-        toast.error('Failed to validate component. Please try again.')
+        toast.error('Failed to validate snapshot. Please try again.')
       }
     } catch {
-      toast.error('Failed to validate component. Please try again.')
+      toast.error('Failed to validate snapshot. Please try again.')
     } finally {
       setValidating(false)
     }
