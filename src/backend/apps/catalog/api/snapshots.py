@@ -2,6 +2,10 @@
 """
 Routes for the v0.5 `component_snapshots` collection.
 
+* `GET /snapshots/pending-validation`
+    -> admin queue of unvalidated snapshots
+* `POST /snapshots/{snapshot_id}/validate`
+    -> admin validate + promote to live
 * `GET /snapshots/{snapshot_id}`
     -> fetch one snapshot by id (ADR-014 #3)
 * `GET /snapshots/{snapshot_id}/preview`
@@ -21,7 +25,7 @@ Routes for the v0.5 `component_snapshots` collection.
 import hashlib
 import os
 import stat
-from typing import Annotated, Tuple
+from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 from fastapi import (
     APIRouter,
@@ -35,7 +39,13 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pymongo.errors import PyMongoError
 
-from apps.catalog.models import ComponentSnapshot, User
+from apps.catalog.models import (
+    ComponentIdentity,
+    ComponentSnapshot,
+    ComposeIdentityResponse,
+    PendingValidationSnapshotItem,
+    User,
+)
 from utility import ensure_file, read_upload_limited
 
 from apps.catalog.geometry_mesh_export import (
@@ -51,11 +61,13 @@ from apps.catalog.geometry_mesh_export import (
     normalize_mesh_format,
 )
 
-from .auth import get_current_active_user
+from .auth import get_current_active_user, require_admin
 from .catalog_common import (
     compute_snapshot_etag,
+    get_identities_col,
     get_snapshots_col,
     now_iso,
+    validate_snapshot_and_promote,
     validate_uuid,
 )
 from .snapshot_images import (
@@ -171,6 +183,126 @@ async def refresh_snapshot_photo_count(
 
 async def _sync_photo_count(request: Request, snapshot_id: str) -> int:
     return await refresh_snapshot_photo_count(request, snapshot_id)
+
+
+@router.get(
+    '/snapshots/pending-validation',
+    summary='List unvalidated snapshots awaiting admin approval',
+    response_model=List[PendingValidationSnapshotItem],
+    response_model_by_alias=True,
+)
+async def list_pending_validation_snapshots(
+    request: Request,
+    admin_user: Annotated[User, Depends(require_admin)],
+):
+    """
+    All snapshots with ``validated=false``,
+    newest first, with identity context.
+    """
+    snapshots = await get_snapshots_col(request)
+    identities = await get_identities_col(request)
+
+    try:
+        pending_docs = await snapshots.find(
+            {'validated': False},
+            {
+                '_id': 1,
+                'identity_id': 1,
+                'version': 1,
+                'validated': 1,
+                'name': 1,
+                'created': 1,
+            },
+        ).sort('created', -1).to_list(length=None)
+    except PyMongoError as exc:
+        print(f'[ERROR] list_pending_validation_snapshots: {exc}')
+        raise HTTPException(status_code=500, detail='Internal server error')
+
+    items: List[Dict[str, Any]] = []
+    for snap in pending_docs:
+        identity_id = snap.get('identity_id')
+        if not identity_id:
+            continue
+
+        identity_doc = await identities.find_one(
+            {'_id': identity_id},
+            {
+                '_id': 1,
+                'current_snapshot_id': 1,
+                'catalog_number': 1,
+                'type': 1,
+                'material': 1,
+            },
+        )
+        if identity_doc is None:
+            continue
+
+        current_snapshot_id = identity_doc.get('current_snapshot_id')
+        live_version: Optional[int] = None
+        if current_snapshot_id:
+            current_snap = await snapshots.find_one(
+                {'_id': current_snapshot_id},
+                {'version': 1},
+            )
+            if current_snap is not None:
+                live_version = current_snap.get('version')
+
+        row = {
+            **snap,
+            'is_current': snap.get('_id') == current_snapshot_id,
+            'catalog_number': identity_doc.get('catalog_number'),
+            'type': identity_doc.get('type'),
+            'material': identity_doc.get('material'),
+            'live_version': live_version,
+        }
+        try:
+            items.append(
+                PendingValidationSnapshotItem.model_validate(row).model_dump(
+                    by_alias=True
+                )
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f'Pending validation row failed validation: {exc}',
+            )
+
+    return JSONResponse(status_code=200, content=items)
+
+
+@router.post(
+    '/snapshots/{snapshot_id}/validate',
+    summary='Validate snapshot and promote to live (admin only)',
+    response_model=ComposeIdentityResponse,
+    response_model_by_alias=True,
+)
+async def validate_snapshot_route(
+    request: Request,
+    admin_user: Annotated[User, Depends(require_admin)],
+    snapshot_id: str,
+):
+    """Mark snapshot validated and set ``current_snapshot_id`` to it."""
+    identity_doc, snapshot_doc = await validate_snapshot_and_promote(
+        request,
+        snapshot_id,
+    )
+
+    try:
+        identity_model = ComponentIdentity.model_validate(identity_doc)
+        snapshot_model = ComponentSnapshot.model_validate(snapshot_doc)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Stored document failed Pydantic validation: {exc}',
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            'identity': identity_model.model_dump(by_alias=True),
+            'snapshot': snapshot_model.model_dump(by_alias=True),
+        },
+    )
 
 
 @router.get(

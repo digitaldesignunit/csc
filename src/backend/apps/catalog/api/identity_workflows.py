@@ -19,10 +19,10 @@ from apps.catalog.catalog_meta_vocab import (
 from apps.catalog.models import User
 from .auth import get_current_active_user, require_admin
 from .catalog_common import (
-    compute_snapshot_etag,
     get_identities_col,
     get_snapshots_col,
     now_iso,
+    validate_snapshot_and_promote,
     validate_uuid,
 )
 from .identity_filters import (
@@ -318,29 +318,10 @@ async def validate_identity_snapshot(
     admin_user: Annotated[User, Depends(require_admin)],
     identity_id: str,
 ):
+    """Validate the identity's live snapshot and ensure it stays current."""
     identity = await _load_identity(request, identity_id)
     snapshot = await _load_current_snapshot(request, identity)
-    snapshots = await get_snapshots_col(request)
-
-    if not snapshot.get('validated', False):
-        now = now_iso()
-        update: Dict[str, Any] = {
-            'validated': True,
-            'lastmodified': now,
-        }
-        merged = {**snapshot, **update}
-        update['etag'] = compute_snapshot_etag(merged)
-        try:
-            await snapshots.update_one(
-                {'_id': snapshot['_id']},
-                {'$set': update},
-            )
-        except PyMongoError as exc:
-            print(f'[ERROR] validate_identity_snapshot: {exc}')
-            raise HTTPException(
-                status_code=500, detail='Internal server error'
-            )
-
+    await validate_snapshot_and_promote(request, snapshot['_id'])
     row = await shallow_row_for_identity(request, identity_id)
     return JSONResponse(status_code=200, content=row)
 

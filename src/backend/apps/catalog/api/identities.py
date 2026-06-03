@@ -11,7 +11,10 @@ Owns the primary read path of the new data model:
     -> aggregated stats (identity + current snapshot)
 
 * `GET /identities/{identity_id}/compose`
-    -> identity + current snapshot
+    -> identity + current snapshot (optional `?snapshot_id=`)
+
+* `GET /identities/{identity_id}/snapshots`
+    -> summary list of all snapshot versions for one identity
 
 * `GET /schema/catalog-compose`
     -> JSON Schema for the compose body (frontend codegen)
@@ -60,6 +63,7 @@ from apps.catalog.models import (
     ComposeIdentityResponse,
     CreateComponentRequest,
     CreateSnapshotRequest,
+    SnapshotSummaryItem,
     UpdateComponentIdentityModel,
     UpdateComponentSnapshotModel,
     User,
@@ -181,6 +185,37 @@ def _compute_compose_etag(identity_doc: dict, snapshot_doc: dict) -> str:
         f"{snapshot_doc.get('etag', '')}"
     )
     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
+def _compose_json_response(
+    identity_doc: dict,
+    snapshot_doc: dict,
+    *,
+    etag: Optional[str] = None,
+    status_code: int = status.HTTP_200_OK,
+) -> JSONResponse:
+    try:
+        identity_model = ComponentIdentity.model_validate(identity_doc)
+        snapshot_model = ComponentSnapshot.model_validate(snapshot_doc)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Stored document failed Pydantic validation: {exc}',
+        )
+
+    response_body = {
+        'identity': identity_model.model_dump(by_alias=True),
+        'snapshot': snapshot_model.model_dump(by_alias=True),
+    }
+    resolved_etag = etag or _compute_compose_etag(identity_doc, snapshot_doc)
+    return JSONResponse(
+        status_code=status_code,
+        content=response_body,
+        headers={
+            'ETag': resolved_etag,
+            'Cache-Control': 'private, max-age=3600',
+        },
+    )
 
 
 def _catalog_filter_context(
@@ -737,8 +772,11 @@ async def create_snapshot(
     payload: CreateSnapshotRequest = Body(...),
 ):
     """
-    Insert snapshot at version max+1 and advance
-    identity current pointer.
+    Insert snapshot at version max+1.
+
+    Unvalidated snapshots remain pending and do not advance
+    ``current_snapshot_id``. Validated snapshots (``validated=true``)
+    are promoted immediately. Rejects when another pending snapshot exists.
     """
     validate_uuid(identity_id, label='identity id')
 
@@ -750,6 +788,19 @@ async def create_snapshot(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f'Identity {identity_id} not found',
+        )
+
+    pending = await snapshots.find_one(
+        {'identity_id': identity_id, 'validated': False},
+        {'_id': 1, 'version': 1},
+    )
+    if pending is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                'Identity already has a pending snapshot awaiting validation '
+                f'(version {pending.get("version")})'
+            ),
         )
 
     snapshot_id = payload.id or str(uuid.uuid4())
@@ -832,31 +883,33 @@ async def create_snapshot(
             detail='Internal server error',
         )
 
-    identity_update = {
-        'current_snapshot_id': snapshot_id,
-        'lastmodified': now,
-    }
-    try:
-        result = await identities.update_one(
-            {'_id': identity_id},
-            {'$set': identity_update},
-        )
-    except PyMongoError as exc:
-        await snapshots.delete_one({'_id': snapshot_id})
-        print(f'[ERROR] create_snapshot identity update: {exc}')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Internal server error',
-        )
+    promote = bool(payload.validated)
+    if promote:
+        identity_update: Dict[str, Any] = {
+            'current_snapshot_id': snapshot_id,
+            'lastmodified': now,
+        }
+        try:
+            result = await identities.update_one(
+                {'_id': identity_id},
+                {'$set': identity_update},
+            )
+        except PyMongoError as exc:
+            await snapshots.delete_one({'_id': snapshot_id})
+            print(f'[ERROR] create_snapshot identity update: {exc}')
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='Internal server error',
+            )
 
-    if result.matched_count == 0:
-        await snapshots.delete_one({'_id': snapshot_id})
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Identity {identity_id} not found',
-        )
+        if result.matched_count == 0:
+            await snapshots.delete_one({'_id': snapshot_id})
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'Identity {identity_id} not found',
+            )
 
-    identity_doc = {**identity_doc, **identity_update}
+        identity_doc = {**identity_doc, **identity_update}
     identity_insert = ComponentIdentity.model_validate(
         identity_doc
     ).model_dump(by_alias=True)
@@ -874,6 +927,78 @@ async def create_snapshot(
             'Cache-Control': 'private, max-age=3600',
         },
     )
+
+
+@router.get(
+    '/identities/{identity_id}/snapshots',
+    summary='List snapshot versions for an identity (summary rows)',
+    response_model=List[SnapshotSummaryItem],
+    response_model_by_alias=True,
+)
+async def list_identity_snapshots(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    identity_id: str,
+):
+    """Return all snapshots for one identity, ordered by version ascending."""
+    validate_uuid(identity_id, label='identity id')
+
+    identities = await get_identities_col(request)
+    snapshots = await get_snapshots_col(request)
+
+    identity_doc = await identities.find_one(
+        {'_id': identity_id},
+        {'_id': 1, 'current_snapshot_id': 1},
+    )
+    if identity_doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Identity {identity_id} not found',
+        )
+
+    current_snapshot_id = identity_doc.get('current_snapshot_id')
+
+    try:
+        cursor = snapshots.find(
+            {'identity_id': identity_id},
+            {
+                '_id': 1,
+                'identity_id': 1,
+                'version': 1,
+                'validated': 1,
+                'virtual': 1,
+                'name': 1,
+                'created': 1,
+                'lastmodified': 1,
+            },
+        ).sort('version', 1)
+        docs = await cursor.to_list(length=None)
+    except PyMongoError as exc:
+        print(f'[ERROR] list_identity_snapshots DB error: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    items: List[Dict[str, Any]] = []
+    for doc in docs:
+        row = {
+            **doc,
+            'is_current': doc.get('_id') == current_snapshot_id,
+        }
+        try:
+            items.append(
+                SnapshotSummaryItem.model_validate(row).model_dump(
+                    by_alias=True
+                )
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f'Snapshot summary failed validation: {exc}',
+            )
+
+    return JSONResponse(status_code=200, content=items)
 
 
 @router.patch(
@@ -1024,7 +1149,7 @@ async def get_identity(
 
 @router.get(
     '/identities/{identity_id}/compose',
-    summary='Compose identity + current snapshot',
+    summary='Compose identity + snapshot (current or specific version)',
     response_model=ComposeIdentityResponse,
     response_model_by_alias=True,
 )
@@ -1032,17 +1157,26 @@ async def compose_identity(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
     identity_id: str,
+    snapshot_id: Optional[str] = Query(
+        default=None,
+        description=(
+            'Optional snapshot UUID. When omitted, returns the live '
+            '(current_snapshot_id) snapshot. When set, must belong to this '
+            'identity (used for admin preview of pending versions).'
+        ),
+    ),
 ):
-    """Return the identity document plus its current snapshot.
-
-    This is the canonical read path for the new data model. The response
-    shape is `{ "identity": ComponentIdentity, "snapshot": ComponentSnapshot }`
-    with both objects serialised by alias (`_id` instead of `id`).
-
-    Returns 404 if the identity is unknown. A 500 is raised if the identity
-    references a `current_snapshot_id` that cannot be resolved (data
-    integrity bug; `m3_verify` should catch this).
     """
+    Return the identity document plus a snapshot.
+
+    Default: the live snapshot referenced by ``current_snapshot_id``.
+    With ``?snapshot_id=``: the specific snapshot
+    (must match ``identity_id``).
+    """
+    validate_uuid(identity_id, label='identity id')
+    if snapshot_id is not None:
+        validate_uuid(snapshot_id, label='snapshot id')
+
     identities = await get_identities_col(request)
     snapshots = await get_snapshots_col(request)
 
@@ -1053,29 +1187,45 @@ async def compose_identity(
             detail=f'Identity {identity_id} not found',
         )
 
-    current_snapshot_id = identity_doc.get('current_snapshot_id')
-    if not current_snapshot_id:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f'Identity {identity_id} has no current_snapshot_id; '
-                'data integrity error.'
-            ),
-        )
+    if snapshot_id is not None:
+        snapshot_doc = await snapshots.find_one({'_id': snapshot_id})
+        if snapshot_doc is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f'Snapshot {snapshot_id} not found',
+            )
+        if snapshot_doc.get('identity_id') != identity_id:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f'Snapshot {snapshot_id} does not belong to identity '
+                    f'{identity_id}'
+                ),
+            )
+    else:
+        current_snapshot_id = identity_doc.get('current_snapshot_id')
+        if not current_snapshot_id:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f'Identity {identity_id} has no current_snapshot_id; '
+                    'data integrity error.'
+                ),
+            )
 
-    snapshot_doc = await snapshots.find_one({'_id': current_snapshot_id})
-    if snapshot_doc is None:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f'current_snapshot_id={current_snapshot_id} of identity '
-                f'{identity_id} not found in component_snapshots.'
-            ),
-        )
+        snapshot_doc = await snapshots.find_one({'_id': current_snapshot_id})
+        if snapshot_doc is None:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f'current_snapshot_id={current_snapshot_id} of identity '
+                    f'{identity_id} not found in component_snapshots.'
+                ),
+            )
 
-    await refresh_snapshot_photo_count(
-        request, current_snapshot_id, snapshot_doc
-    )
+        await refresh_snapshot_photo_count(
+            request, current_snapshot_id, snapshot_doc
+        )
 
     etag = _compute_compose_etag(identity_doc, snapshot_doc)
 
@@ -1087,27 +1237,10 @@ async def compose_identity(
             headers={'ETag': etag},
         )
 
-    try:
-        identity_model = ComponentIdentity.model_validate(identity_doc)
-        snapshot_model = ComponentSnapshot.model_validate(snapshot_doc)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f'Stored document failed Pydantic validation: {exc}',
-        )
-
-    response_body = {
-        'identity': identity_model.model_dump(by_alias=True),
-        'snapshot': snapshot_model.model_dump(by_alias=True),
-    }
-
-    return JSONResponse(
-        status_code=200,
-        content=response_body,
-        headers={
-            'ETag': etag,
-            'Cache-Control': 'private, max-age=3600',
-        },
+    return _compose_json_response(
+        identity_doc,
+        snapshot_doc,
+        etag=etag,
     )
 
 

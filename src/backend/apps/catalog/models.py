@@ -1075,7 +1075,10 @@ class ComponentSnapshot(BaseModel):
     )
     added_by_username: Optional[str] = Field(
         None,
-        description="Username at create time (display cache for added_by_user_id)",
+        description=(
+            "Username at create time "
+            "(display cache for added_by_user_id)"
+        ),
     )
     notes: Optional[str] = Field(
         None,
@@ -1158,6 +1161,43 @@ class ComposeIdentityResponse(BaseModel):
     """
     identity: ComponentIdentity
     snapshot: ComponentSnapshot
+
+
+class SnapshotSummaryItem(BaseModel):
+    """Lightweight row for ``GET /identities/{id}/snapshots``."""
+    id: str = Field(alias='_id')
+    identity_id: str
+    version: int
+    validated: bool
+    virtual: bool = False
+    is_current: bool
+    name: Optional[str] = None
+    created: str
+    lastmodified: str
+
+    class Config:
+        populate_by_name = True
+
+
+class PendingValidationSnapshotItem(BaseModel):
+    """Row for admin ``GET /snapshots/pending-validation`` queue."""
+    id: str = Field(alias='_id')
+    identity_id: str
+    version: int
+    validated: bool = False
+    is_current: bool
+    name: Optional[str] = None
+    created: str
+    catalog_number: Optional[int] = None
+    componenttype: Optional[str] = Field(default=None, alias='type')
+    material: Optional[str] = None
+    live_version: Optional[int] = Field(
+        default=None,
+        description='Version of the identity current (live) snapshot, if any',
+    )
+
+    class Config:
+        populate_by_name = True
 
 
 class UpdateComponentIdentityModel(BaseModel):

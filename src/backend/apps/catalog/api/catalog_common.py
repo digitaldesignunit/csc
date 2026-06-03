@@ -32,7 +32,9 @@ def resolve_new_component_name(
     name: Optional[str],
     catalog_number: int,
 ) -> str:
-    """Use catalog number when the client leaves name empty (add-component flow)."""
+    """
+    Use catalog number when the client leaves name empty (add-component flow).
+    """
     raw = (name or '').strip()
     if not raw or raw.lower() == 'unnamed component':
         return f'Component #{catalog_number}'
@@ -95,3 +97,85 @@ def validate_uuid(value: str, *, label: str = 'id') -> str:
             detail=f'Invalid {label}',
         )
     return str(value)
+
+
+async def validate_snapshot_and_promote(
+    request: Request,
+    snapshot_id: str,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Mark a snapshot validated and set it as the identity's live snapshot.
+
+    Idempotent when the snapshot is already validated and current.
+    """
+    from pymongo.errors import PyMongoError
+
+    validate_uuid(snapshot_id, label='snapshot id')
+    snapshots = await get_snapshots_col(request)
+    identities = await get_identities_col(request)
+
+    snapshot_doc = await snapshots.find_one({'_id': snapshot_id})
+    if snapshot_doc is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Snapshot {snapshot_id} not found',
+        )
+
+    identity_id = snapshot_doc.get('identity_id')
+    if not identity_id:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Snapshot {snapshot_id} has no identity_id',
+        )
+
+    identity_doc = await identities.find_one({'_id': identity_id})
+    if identity_doc is None:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f'Identity {identity_id} not found for snapshot {snapshot_id}'
+            ),
+        )
+
+    now = now_iso()
+
+    if not snapshot_doc.get('validated', False):
+        snap_update: Dict[str, Any] = {
+            'validated': True,
+            'lastmodified': now,
+        }
+        merged = {**snapshot_doc, **snap_update}
+        snap_update['etag'] = compute_snapshot_etag(merged)
+        try:
+            await snapshots.update_one(
+                {'_id': snapshot_id},
+                {'$set': snap_update},
+            )
+        except PyMongoError as exc:
+            print(f'[ERROR] validate_snapshot_and_promote snapshot: {exc}')
+            raise HTTPException(
+                status_code=500,
+                detail='Internal server error',
+            )
+        snapshot_doc = {**snapshot_doc, **snap_update}
+
+    current_snapshot_id = identity_doc.get('current_snapshot_id')
+    if current_snapshot_id != snapshot_id:
+        identity_update = {
+            'current_snapshot_id': snapshot_id,
+            'lastmodified': now,
+        }
+        try:
+            await identities.update_one(
+                {'_id': identity_id},
+                {'$set': identity_update},
+            )
+        except PyMongoError as exc:
+            print(f'[ERROR] validate_snapshot_and_promote identity: {exc}')
+            raise HTTPException(
+                status_code=500,
+                detail='Internal server error',
+            )
+        identity_doc = {**identity_doc, **identity_update}
+
+    return identity_doc, snapshot_doc
