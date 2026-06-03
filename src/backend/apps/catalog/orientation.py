@@ -2,7 +2,7 @@
 """
 Canonical PCA / OBB orientation for catalog snapshots.
 
-Ports the Grasshopper ``DDU_CSC_CreateComponent`` orientation pipeline so the
+Ports the Grasshopper ``DDU_CSC_CreateComponentIdentity`` orientation pipeline so the
 same ``compute_obb_3d``, ``compute_obb_2d``, and minimum-bounding-rectangle
 logic can run in the backend, maintenance scripts, and (eventually) GH.
 
@@ -13,9 +13,8 @@ Geometry contract (matches legacy ingest):
       describe the oriented bounding box in PCA space.
     * ``iframe`` remains identity at create time.
 
-3D meshes use **face-area-weighted** sample points (centroid repeats) before
-PCA to reduce bias from sparse / irregular vertex distributions. Extrusions
-use the 2D minimum-bounding-rectangle path (same as GH), not 3D vertex PCA.
+3D meshes use mesh **vertices** for PCA (same as GH create). Extrusions use
+the 2D minimum-bounding-rectangle path, not 3D vertex PCA.
 """
 
 from __future__ import annotations
@@ -27,13 +26,8 @@ import numpy as np
 from scipy.spatial import ConvexHull
 from sklearn.decomposition import PCA
 
-from apps.descriptors.geometry import create_mesh_from_extrusion
-
 FrameDict = Dict[str, List[float]]
 GeometryDict = Dict[str, Any]
-
-# One PCA sample per this many square millimetres of triangle area (3D path).
-DEFAULT_REFERENCE_FACE_AREA_MM2 = 100.0
 
 
 @dataclass(frozen=True)
@@ -90,7 +84,7 @@ def minimum_bounding_rectangle(
     """
     Minimum-area bounding rectangle of 2D points (convex-hull edge sweep).
 
-    Port of ``DDU_CSC_CreateComponent.minimum_bounding_rectangle``.
+    Port of ``DDU_CSC_CreateComponentIdentity.minimum_bounding_rectangle``.
 
     Returns:
         Rectangle corners (4, 2) and ``optimal_angle`` (radians).
@@ -154,7 +148,7 @@ def compute_obb_3d(
     """
     3D OBB via sklearn PCA on a point cloud.
 
-    Port of ``DDU_CSC_CreateComponent.compute_obb_3d``.
+    Port of ``DDU_CSC_CreateComponentIdentity.compute_obb_3d``.
 
     Returns:
         ``dimensions`` (unsorted, PCA axis order),
@@ -190,7 +184,7 @@ def compute_obb_2d(
     """
     Extrusion OBB via 2D minimum bounding rectangle + extrusion height.
 
-    Port of ``DDU_CSC_CreateComponent.compute_obb_2d``.
+    Port of ``DDU_CSC_CreateComponentIdentity.compute_obb_2d``.
 
     Args:
         points: (N, 3) sample points (typically extrusion solid corners).
@@ -247,86 +241,15 @@ def compute_obb_2d(
     return dimensions, principal_components, bbx_origin
 
 
-def _triangle_area(v0: np.ndarray, v1: np.ndarray, v2: np.ndarray) -> float:
-    return float(0.5 * np.linalg.norm(np.cross(v1 - v0, v2 - v0)))
-
-
-def sample_points_area_weighted(
-    vertices: np.ndarray,
-    faces: Sequence[Sequence[int]],
-    *,
-    reference_face_area: float = DEFAULT_REFERENCE_FACE_AREA_MM2,
-    min_samples_per_face: int = 1,
-) -> np.ndarray:
-    """Build a PCA point cloud by repeating face centroids weighted by area."""
-    if vertices.size == 0:
-        raise ValueError('Cannot sample from empty vertices')
-    if not faces:
-        return np.asarray(vertices, dtype=np.float64)
-
-    samples: List[np.ndarray] = []
-    ref_area = max(reference_face_area, 1e-6)
-
-    for face in faces:
-        idx = [int(i) for i in face]
-        if len(idx) == 3:
-            triangles = [idx]
-        elif len(idx) == 4:
-            triangles = [[idx[0], idx[1], idx[2]], [idx[0], idx[2], idx[3]]]
-        else:
-            raise ValueError(
-                f'Faces must be triangles or quads, got {len(idx)} indices'
-            )
-
-        for tri in triangles:
-            v0, v1, v2 = vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
-            area = _triangle_area(v0, v1, v2)
-            count = max(
-                min_samples_per_face,
-                int(round(area / ref_area)),
-            )
-            centroid = (v0 + v1 + v2) / 3.0
-            samples.extend([centroid] * count)
-
-    if not samples:
-        return np.asarray(vertices, dtype=np.float64)
-
-    return np.vstack(samples)
-
-
-def _mesh_primitive_vertices_faces(
-    mesh: Dict[str, Any],
-) -> Tuple[np.ndarray, List[List[int]]]:
+def _mesh_vertices(mesh: Dict[str, Any]) -> np.ndarray:
     vertices_raw = mesh.get('vertices') or mesh.get('v')
-    faces_raw = mesh.get('faces') or mesh.get('f')
-    if not vertices_raw or not faces_raw:
-        raise ValueError('Mesh primitive requires vertices and faces')
-    return (
-        np.asarray(vertices_raw, dtype=np.float64),
-        [[int(i) for i in face] for face in faces_raw],
-    )
+    if not vertices_raw:
+        raise ValueError('Mesh primitive requires vertices')
+    return np.asarray(vertices_raw, dtype=np.float64)
 
 
-def _collect_mesh_sample_points(
-    meshes: Sequence[Dict[str, Any]],
-    *,
-    use_area_weighted_sampling: bool,
-    reference_face_area: float,
-) -> np.ndarray:
-    chunks: List[np.ndarray] = []
-    for mesh in meshes:
-        vertices, faces = _mesh_primitive_vertices_faces(mesh)
-        if use_area_weighted_sampling:
-            chunks.append(
-                sample_points_area_weighted(
-                    vertices,
-                    faces,
-                    reference_face_area=reference_face_area,
-                )
-            )
-        else:
-            chunks.append(vertices)
-    return np.vstack(chunks)
+def _collect_mesh_vertices(meshes: Sequence[Dict[str, Any]]) -> np.ndarray:
+    return np.vstack([_mesh_vertices(mesh) for mesh in meshes])
 
 
 def extrusion_corner_points_3d(
@@ -367,20 +290,6 @@ def extrusion_corner_points_3d(
     return np.vstack([bottom, top])
 
 
-def _extrusion_sample_points_area_weighted(
-    profile: Sequence[Sequence[float]],
-    height: float,
-    *,
-    reference_face_area: float,
-) -> np.ndarray:
-    mesh = create_mesh_from_extrusion(list(profile), float(height))
-    return sample_points_area_weighted(
-        np.asarray(mesh.vertices, dtype=np.float64),
-        mesh.faces.tolist(),
-        reference_face_area=reference_face_area,
-    )
-
-
 def _normalize_extrusions(geometry: GeometryDict) -> List[Dict[str, Any]]:
     extrusions = list(geometry.get('extrusions') or [])
     if extrusions:
@@ -399,18 +308,15 @@ def compute_snapshot_orientation(
     geometry: GeometryDict,
     *,
     assembly: bool = False,
-    use_area_weighted_sampling: bool = True,
-    reference_face_area: float = DEFAULT_REFERENCE_FACE_AREA_MM2,
 ) -> OrientationResult:
     """
     Compute ``bbx``, ``bbx_origin``, and ``pca_frame`` for snapshot geometry.
 
     Routing (matches GH create-component behaviour):
-        * **Meshes present** - 3D PCA (area-weighted samples when enabled).
+        * **Meshes present** - 3D PCA on mesh vertices.
           Multiple meshes: all meshes when ``assembly=True``, else first only.
         * **Extrusions only, single primitive** - 2D MBR / ``compute_obb_2d``.
-        * **Extrusions only, multiple** - 3D PCA on combined
-          area-weighted samples.
+        * **Extrusions only, multiple** - 3D PCA on combined profile corners.
 
     Raises:
         ValueError: when no supported geometry representation is present.
@@ -420,11 +326,7 @@ def compute_snapshot_orientation(
 
     if meshes:
         selected = meshes if assembly else [meshes[0]]
-        points = _collect_mesh_sample_points(
-            selected,
-            use_area_weighted_sampling=use_area_weighted_sampling,
-            reference_face_area=reference_face_area,
-        )
+        points = _collect_mesh_vertices(selected)
         centered, _ = center_points(points)
         dimensions, principal_components, bbx_origin = compute_obb_3d(centered)
     elif len(extrusions) == 1:
@@ -439,10 +341,9 @@ def compute_snapshot_orientation(
         )
     elif len(extrusions) > 1:
         chunks = [
-            _extrusion_sample_points_area_weighted(
+            extrusion_corner_points_3d(
                 ext.get('profile') or [],
                 float(ext.get('height') or 0),
-                reference_face_area=reference_face_area,
             )
             for ext in extrusions
         ]
