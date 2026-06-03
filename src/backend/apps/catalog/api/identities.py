@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.9
-"""Routes for the v0.5 `component_identities` collection.
+"""
+Routes for the v0.5 `component_identities` collection.
 
 Owns the primary read path of the new data model:
 
@@ -23,8 +24,13 @@ Owns the primary read path of the new data model:
 
 Single-snapshot reads: `GET /snapshots/{snapshot_id}` in `snapshots.py`.
 
-Write routes: POST create identity, POST new snapshot version, PATCH identity,
-PATCH current snapshot here; snapshot preview/photo file routes in `snapshots.py`.
+Write routes:
+* `POST create identity`
+* `POST new snapshot version`
+* `PATCH identity`
+
+PATCH current snapshot here;
+snapshot preview/photo file routes in `snapshots.py`.
 
 Legacy `/components/...` routes in `components.py` remain for the design
 workspace and other cutover paths.
@@ -114,7 +120,10 @@ def _check_schema_conditional_request(request: Request, etag: str) -> bool:
 
 @router.get(
     '/schema/create-snapshot',
-    summary='JSON Schema for POST /identities/{id}/snapshots (CreateSnapshotRequest)',
+    summary=(
+        'JSON Schema for POST '
+        '/identities/{id}/snapshots (CreateSnapshotRequest)'
+    ),
 )
 async def get_create_snapshot_json_schema(request: Request):
     """
@@ -727,7 +736,10 @@ async def create_snapshot(
     identity_id: str,
     payload: CreateSnapshotRequest = Body(...),
 ):
-    """Insert snapshot at version max+1 and advance identity current pointer."""
+    """
+    Insert snapshot at version max+1 and advance
+    identity current pointer.
+    """
     validate_uuid(identity_id, label='identity id')
 
     identities = await get_identities_col(request)
