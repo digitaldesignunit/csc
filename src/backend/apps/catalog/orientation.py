@@ -2,9 +2,10 @@
 """
 Canonical PCA / OBB orientation for catalog snapshots.
 
-Ports the Grasshopper ``DDU_CSC_CreateComponentIdentity`` orientation pipeline so the
-same ``compute_obb_3d``, ``compute_obb_2d``, and minimum-bounding-rectangle
-logic can run in the backend, maintenance scripts, and (eventually) GH.
+Ports the Grasshopper ``DDU_CSC_CreateComponentIdentity`` orientation pipeline
+so the same ``compute_obb_3d``, ``compute_obb_2d``,
+and minimum-bounding-rectangle logic can run in the backend,
+maintenance scripts, and (eventually) GH.
 
 Geometry contract (matches legacy ingest):
     * Snapshot geometry is **centered at the world origin** but **not** rotated
