@@ -6,6 +6,8 @@ Routes for the v0.5 `component_snapshots` collection.
     -> admin queue of unvalidated snapshots
 * `POST /snapshots/{snapshot_id}/validate`
     -> admin validate + promote to live
+* `DELETE /snapshots/{snapshot_id}`
+    -> admin reject / discard a pending (unvalidated) snapshot
 * `GET /snapshots/{snapshot_id}`
     -> fetch one snapshot by id (ADR-014 #3)
 * `GET /snapshots/{snapshot_id}/preview`
@@ -24,6 +26,7 @@ Routes for the v0.5 `component_snapshots` collection.
 
 import hashlib
 import os
+import shutil
 import stat
 from typing import Annotated, Any, Dict, List, Optional, Tuple
 
@@ -104,6 +107,31 @@ async def _load_snapshot(
             detail=f'Snapshot {snapshot_id} not found',
         )
     return doc
+
+
+def _delete_snapshot_disk_assets(request: Request, snapshot_id: str) -> None:
+    """Best-effort cleanup of on-disk assets for one snapshot."""
+    preview_path = os.path.join(
+        request.app.snapshot_preview_dir,
+        f'{snapshot_id}.webp',
+    )
+    if os.path.exists(preview_path):
+        try:
+            os.remove(preview_path)
+        except OSError as exc:
+            print(f'[WARN] delete snapshot preview {snapshot_id}: {exc}')
+
+    for parent in (
+        request.app.snapshot_photos_dir,
+        request.app.snapshot_meshes_dir,
+        request.app.snapshot_point_clouds_dir,
+    ):
+        target = os.path.join(parent, snapshot_id)
+        if os.path.isdir(target):
+            try:
+                shutil.rmtree(target)
+            except OSError as exc:
+                print(f'[WARN] delete snapshot assets {target}: {exc}')
 
 
 def _resolve_preview_path(request: Request, snapshot_id: str) -> str:
@@ -301,6 +329,85 @@ async def validate_snapshot_route(
         content={
             'identity': identity_model.model_dump(by_alias=True),
             'snapshot': snapshot_model.model_dump(by_alias=True),
+        },
+    )
+
+
+@router.delete(
+    '/snapshots/{snapshot_id}',
+    summary='Reject and delete a pending snapshot (admin only)',
+)
+async def delete_pending_snapshot(
+    request: Request,
+    admin_user: Annotated[User, Depends(require_admin)],
+    snapshot_id: str,
+):
+    """
+    Remove an unvalidated snapshot that is not the identity's live version.
+
+    Use ``DELETE /identities/{id}`` when rejecting a brand-new (v0) component.
+    """
+    validate_uuid(snapshot_id, label='snapshot id')
+
+    snapshots = await get_snapshots_col(request)
+    identities = await get_identities_col(request)
+
+    snapshot_doc = await snapshots.find_one({'_id': snapshot_id})
+    if snapshot_doc is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Snapshot {snapshot_id} not found',
+        )
+
+    if snapshot_doc.get('validated', False):
+        raise HTTPException(
+            status_code=409,
+            detail='Cannot delete a validated snapshot',
+        )
+
+    identity_id = snapshot_doc.get('identity_id')
+    if not identity_id:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Snapshot {snapshot_id} has no identity_id',
+        )
+
+    identity_doc = await identities.find_one({'_id': identity_id})
+    if identity_doc is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Identity {identity_id} not found',
+        )
+
+    if identity_doc.get('current_snapshot_id') == snapshot_id:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                'Cannot delete the live snapshot. For a new unvalidated '
+                'component (v0), delete the identity instead.'
+            ),
+        )
+
+    _delete_snapshot_disk_assets(request, snapshot_id)
+
+    try:
+        result = await snapshots.delete_one({'_id': snapshot_id})
+    except PyMongoError as exc:
+        print(f'[ERROR] delete_pending_snapshot DB: {exc}')
+        raise HTTPException(status_code=500, detail='Internal server error')
+
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail=f'Snapshot {snapshot_id} not found',
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            'ok': True,
+            'snapshot_id': snapshot_id,
+            'identity_id': identity_id,
         },
     )
 
