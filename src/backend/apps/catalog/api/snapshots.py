@@ -20,6 +20,8 @@ Routes for the v0.5 `component_snapshots` collection.
     -> inline extrusion mesh (`?format=ply|obj`)
 * `GET /snapshots/{snapshot_id}/point_clouds/{index}.ply`
     -> file or inline → PLY
+* `GET /snapshots/{snapshot_id}/photos`
+    -> list occupied photo slot indices (no per-slot probing)
 * `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}`
     -> user photos (JPEG)
 """
@@ -176,17 +178,21 @@ def _resolve_photo_path(
     raise HTTPException(status_code=404, detail='Photo not found')
 
 
-def _count_photos(request: Request, snapshot_id: str) -> int:
+def _list_photo_indices(request: Request, snapshot_id: str) -> List[int]:
     directory = _photo_dir(request, snapshot_id)
     if not os.path.isdir(directory):
-        return 0
-    indices = set()
+        return []
+    indices: set[int] = set()
     for name in os.listdir(directory):
         stem, ext = os.path.splitext(name)
         if (ext in (PHOTO_EXTENSION, _LEGACY_PHOTO_EXTENSION) and
                 stem.isdigit()):
             indices.add(int(stem))
-    return len(indices)
+    return sorted(indices)
+
+
+def _count_photos(request: Request, snapshot_id: str) -> int:
+    return len(_list_photo_indices(request, snapshot_id))
 
 
 async def refresh_snapshot_photo_count(
@@ -897,6 +903,24 @@ async def get_snapshot_preview(
         ensure_file(path),
         media_type='image/webp',
         filename=f'{snapshot_id}.webp',
+    )
+
+
+@router.get(
+    '/snapshots/{snapshot_id}/photos',
+    summary='List occupied photo slot indices for a snapshot',
+)
+async def list_snapshot_photos(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    snapshot_id: str,
+):
+    """Return sorted slot indices and count from disk (one directory read)."""
+    await _load_snapshot(request, snapshot_id)
+    indices = _list_photo_indices(request, snapshot_id)
+    return JSONResponse(
+        status_code=200,
+        content={'indices': indices, 'count': len(indices)},
     )
 
 
