@@ -1226,6 +1226,9 @@ async def compose_identity(
                     f'{identity_id}'
                 ),
             )
+        await refresh_snapshot_photo_count(
+            request, snapshot_id, snapshot_doc
+        )
     else:
         current_snapshot_id = identity_doc.get('current_snapshot_id')
         if not current_snapshot_id:
