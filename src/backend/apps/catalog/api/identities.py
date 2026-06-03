@@ -64,6 +64,7 @@ from apps.catalog.models import (
     CreateComponentRequest,
     CreateSnapshotRequest,
     SnapshotSummaryItem,
+    PendingValidationSnapshotItem,
     UpdateComponentIdentityModel,
     UpdateComponentSnapshotModel,
     User,
@@ -109,6 +110,29 @@ async def get_catalog_compose_json_schema():
     Used by the frontend `generate:models` script (see `CatalogModels.ts`).
     """
     schema = ComposeIdentityResponse.model_json_schema(by_alias=True)
+    return JSONResponse(status_code=200, content=schema)
+
+
+@router.get(
+    '/schema/snapshot-summary',
+    summary=(
+        'JSON Schema for GET /identities/{id}/snapshots '
+        'row (SnapshotSummaryItem)'
+    ),
+)
+async def get_snapshot_summary_json_schema():
+    """Used by frontend `generate:models` (see `SnapshotModels.ts`)."""
+    schema = SnapshotSummaryItem.model_json_schema(by_alias=True)
+    return JSONResponse(status_code=200, content=schema)
+
+
+@router.get(
+    '/schema/pending-validation-snapshot',
+    summary='JSON Schema for GET /snapshots/pending-validation row',
+)
+async def get_pending_validation_snapshot_json_schema():
+    """Used by frontend `generate:models` (see `SnapshotModels.ts`)."""
+    schema = PendingValidationSnapshotItem.model_json_schema(by_alias=True)
     return JSONResponse(status_code=200, content=schema)
 
 
