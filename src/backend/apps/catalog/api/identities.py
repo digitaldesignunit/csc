@@ -18,10 +18,13 @@ Owns the primary read path of the new data model:
 * `GET /schema/create-identity`
     -> JSON Schema for POST /identities (Grasshopper)
 
+* `GET /schema/create-snapshot`
+    -> JSON Schema for POST /identities/{id}/snapshots (Grasshopper)
+
 Single-snapshot reads: `GET /snapshots/{snapshot_id}` in `snapshots.py`.
 
-Write routes: POST create, PATCH identity, PATCH current snapshot here;
-snapshot preview/photo file routes in `snapshots.py`.
+Write routes: POST create identity, POST new snapshot version, PATCH identity,
+PATCH current snapshot here; snapshot preview/photo file routes in `snapshots.py`.
 
 Legacy `/components/...` routes in `components.py` remain for the design
 workspace and other cutover paths.
@@ -50,6 +53,7 @@ from apps.catalog.models import (
     ComponentSnapshot,
     ComposeIdentityResponse,
     CreateComponentRequest,
+    CreateSnapshotRequest,
     UpdateComponentIdentityModel,
     UpdateComponentSnapshotModel,
     User,
@@ -106,6 +110,31 @@ def _schema_etag(schema: dict) -> str:
 def _check_schema_conditional_request(request: Request, etag: str) -> bool:
     if_none_match = request.headers.get('if-none-match')
     return bool(if_none_match and if_none_match == etag)
+
+
+@router.get(
+    '/schema/create-snapshot',
+    summary='JSON Schema for POST /identities/{id}/snapshots (CreateSnapshotRequest)',
+)
+async def get_create_snapshot_json_schema(request: Request):
+    """
+    Grasshopper CreateComponentSnapshot and snapshot-evolution flows.
+    """
+    schema = CreateSnapshotRequest.model_json_schema(by_alias=True)
+    etag = _schema_etag(schema)
+    if _check_schema_conditional_request(request, etag):
+        return JSONResponse(
+            status_code=304,
+            content=None,
+            headers={'ETag': etag})
+    return JSONResponse(
+        status_code=200,
+        content=schema,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=86400',
+        },
+    )
 
 
 @router.get(
@@ -630,6 +659,195 @@ async def create_identity(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
         )
+
+    response_body = {
+        'identity': identity_insert,
+        'snapshot': snapshot_insert,
+    }
+    etag = _compute_compose_etag(identity_insert, snapshot_insert)
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content=response_body,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'private, max-age=3600',
+        },
+    )
+
+
+async def _next_snapshot_version(
+    snapshots,
+    identity_id: str,
+) -> int:
+    """Return max(existing version) + 1 for one identity."""
+    doc = await snapshots.find_one(
+        {'identity_id': identity_id},
+        sort=[('version', -1)],
+        projection={'version': 1},
+    )
+    if doc is None:
+        return 0
+    return int(doc['version']) + 1
+
+
+async def _resolve_snapshot_name(
+    snapshots,
+    identity_doc: dict,
+    requested_name: Optional[str],
+) -> str:
+    trimmed = (requested_name or '').strip()
+    if trimmed and trimmed.lower() != 'unnamed component':
+        return trimmed
+
+    current_snapshot_id = identity_doc.get('current_snapshot_id')
+    if current_snapshot_id:
+        current = await snapshots.find_one(
+            {'_id': current_snapshot_id},
+            {'name': 1},
+        )
+        if current and current.get('name'):
+            return str(current['name'])
+
+    catalog_number = identity_doc.get('catalog_number')
+    if catalog_number is not None:
+        return f'Component #{catalog_number}'
+    return 'Unnamed Component'
+
+
+@router.post(
+    '/identities/{identity_id}/snapshots',
+    summary='Create new snapshot version for an existing identity',
+    response_model=ComposeIdentityResponse,
+    response_model_by_alias=True,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_snapshot(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    identity_id: str,
+    payload: CreateSnapshotRequest = Body(...),
+):
+    """Insert snapshot at version max+1 and advance identity current pointer."""
+    validate_uuid(identity_id, label='identity id')
+
+    identities = await get_identities_col(request)
+    snapshots = await get_snapshots_col(request)
+
+    identity_doc = await identities.find_one({'_id': identity_id})
+    if identity_doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Identity {identity_id} not found',
+        )
+
+    snapshot_id = payload.id or str(uuid.uuid4())
+    validate_uuid(snapshot_id, label='snapshot id')
+
+    if await snapshots.find_one({'_id': snapshot_id}, {'_id': 1}):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f'Snapshot {snapshot_id} already exists',
+        )
+
+    geometry = payload.geometry.model_dump()
+    if payload.marker_points and not geometry.get('marker_points'):
+        geometry['marker_points'] = payload.marker_points
+
+    resolved_name = await _resolve_snapshot_name(
+        snapshots,
+        identity_doc,
+        payload.name,
+    )
+    next_version = await _next_snapshot_version(snapshots, identity_id)
+    now = now_iso()
+
+    snapshot_doc: Dict[str, Any] = {
+        '_id': snapshot_id,
+        'identity_id': identity_id,
+        'version': next_version,
+        'virtual': payload.virtual,
+        'name': resolved_name,
+        'geometry': geometry,
+        'descriptors': payload.descriptors or {},
+        'bbx': list(payload.bbx),
+        'bbx_origin': payload.bbx_origin,
+        'complexity': payload.complexity,
+        'fragment': payload.fragment,
+        'assembly': payload.assembly,
+        'condition': payload.condition,
+        'color': payload.color,
+        'location': (
+            payload.location.model_dump()
+            if payload.location is not None
+            else {'lat': 0.0, 'lon': 0.0}
+        ),
+        'processes': payload.processes or {},
+        'iframe': payload.iframe.model_dump(),
+        'pca_frame': payload.pca_frame.model_dump(),
+        'validated': payload.validated,
+        'added_by_user_id': current_user.id,
+        'added_by_username': current_user.username,
+        'notes': payload.notes,
+        'quantity': payload.quantity,
+        'created': now,
+        'lastmodified': now,
+    }
+    snapshot_doc['etag'] = compute_snapshot_etag(snapshot_doc)
+
+    try:
+        snapshot_model = ComponentSnapshot.model_validate(snapshot_doc)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Invalid snapshot payload: {exc}',
+        )
+
+    snapshot_insert = snapshot_model.model_dump(by_alias=True)
+
+    try:
+        await snapshots.insert_one(snapshot_insert)
+    except PyMongoError as exc:
+        print(f'[ERROR] create_snapshot insert: {exc}')
+        if 'duplicate key' in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f'Snapshot version conflict for identity {identity_id}'
+                ),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    identity_update = {
+        'current_snapshot_id': snapshot_id,
+        'lastmodified': now,
+    }
+    try:
+        result = await identities.update_one(
+            {'_id': identity_id},
+            {'$set': identity_update},
+        )
+    except PyMongoError as exc:
+        await snapshots.delete_one({'_id': snapshot_id})
+        print(f'[ERROR] create_snapshot identity update: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    if result.matched_count == 0:
+        await snapshots.delete_one({'_id': snapshot_id})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Identity {identity_id} not found',
+        )
+
+    identity_doc = {**identity_doc, **identity_update}
+    identity_insert = ComponentIdentity.model_validate(
+        identity_doc
+    ).model_dump(by_alias=True)
 
     response_body = {
         'identity': identity_insert,

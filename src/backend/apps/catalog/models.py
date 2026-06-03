@@ -1404,6 +1404,90 @@ class CreateComponentRequest(BaseModel):
         populate_by_name = True
 
 
+class CreateSnapshotRequest(BaseModel):
+    """Create a new real snapshot version for an existing identity."""
+
+    id: Optional[str] = Field(
+        default=None,
+        alias='_id',
+        description='Optional snapshot UUID; server generates if omitted',
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description=(
+            'Display name for this snapshot state; omit to inherit the '
+            'current snapshot name'
+        ),
+    )
+    complexity: int
+    fragment: bool
+    assembly: bool
+    geometry: SnapshotGeometry
+    color: Optional[List[int]] = Field(default=[110, 110, 110])
+    bbx: ComponentBoundingBox
+    bbx_origin: List[float]
+    location: Optional[ComponentLocation] = Field(
+        default_factory=lambda: ComponentLocation(lat=0.0, lon=0.0)
+    )
+    descriptors: Optional[Dict] = Field(default_factory=dict)
+    processes: Optional[Dict] = Field(default_factory=dict)
+    iframe: ComponentFrame
+    pca_frame: ComponentFrame
+    validated: bool = False
+    virtual: bool = False
+    condition: Optional[int] = None
+    notes: Optional[str] = Field(
+        default=None,
+        max_length=5000,
+        description='Optional notes stored on the new snapshot',
+    )
+    quantity: int = Field(
+        default=1,
+        ge=1,
+        le=999_999,
+        description='Count of identical items for this snapshot state',
+    )
+    marker_points: Optional[List[List[float]]] = Field(
+        default=None,
+        description=(
+            'Optional marker points merged into geometry.marker_points '
+            'when not already set on geometry'
+        ),
+    )
+
+    @field_validator('complexity')
+    @classmethod
+    def _validate_complexity(cls, v: int) -> int:
+        if v not in ALLOWED_COMPLEXITY_LEVELS:
+            raise ValueError(
+                f'complexity must be one of {ALLOWED_COMPLEXITY_LEVELS}'
+            )
+        return v
+
+    @field_validator('condition')
+    @classmethod
+    def _validate_condition(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v not in ALLOWED_CONDITION_VALUES:
+            raise ValueError(
+                f'condition must be one of {ALLOWED_CONDITION_VALUES}'
+            )
+        return v
+
+    @field_validator('notes')
+    @classmethod
+    def _normalize_snapshot_notes(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        return v or None
+
+    class Config:
+        extra = 'ignore'
+        populate_by_name = True
+
+
 class UpdateComponentSnapshotModel(BaseModel):
     """PATCH payload for the current snapshot of an identity.
 
