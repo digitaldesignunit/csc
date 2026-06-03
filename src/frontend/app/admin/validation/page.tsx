@@ -36,6 +36,14 @@ type DeleteTarget = {
   identityId: string
 }
 
+function liveVersionNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
 export default function ValidationPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -279,11 +287,14 @@ export default function ValidationPage() {
                 <div className="grid gap-4">
                   {pendingSnapshots.map((row) => {
                     const snapshotId = row._id
+                    const liveVersion = liveVersionNumber(row.live_version)
+                    const componentType = optionalString(row.type)
+                    const material = optionalString(row.material)
                     const isNewIdentity = row.version === 0
                     const isVersionUpdate =
                       !isNewIdentity &&
-                      row.live_version != null &&
-                      row.version > row.live_version
+                      liveVersion != null &&
+                      row.version > liveVersion
 
                     return (
                       <div
@@ -310,21 +321,21 @@ export default function ValidationPage() {
                                   New identity
                                 </Badge>
                               )}
-                              {isVersionUpdate && (
+                              {isVersionUpdate && liveVersion != null && (
                                 <Badge variant="outline" className="text-xs">
-                                  Update from v{row.live_version}
+                                  Update from v{liveVersion}
                                 </Badge>
                               )}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 mb-2">
-                              {row.type && (
+                              {componentType && (
                                 <Badge variant="secondary" className="text-xs">
-                                  {row.type}
+                                  {componentType}
                                 </Badge>
                               )}
-                              {row.material && (
+                              {material && (
                                 <Badge variant="outline" className="text-xs">
-                                  {row.material}
+                                  {material}
                                 </Badge>
                               )}
                             </div>
