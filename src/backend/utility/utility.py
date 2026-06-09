@@ -5,13 +5,7 @@ import datetime
 import hashlib
 import json
 import os
-import uuid
-from typing import TYPE_CHECKING
-
 from fastapi import HTTPException, UploadFile
-
-if TYPE_CHECKING:
-    from fastapi import Request
 
 
 # FUNCTION DEFINITIONS --------------------------------------------------------
@@ -44,55 +38,27 @@ def get_cors_origins() -> list:
     return [o.strip() for o in origins_str.split(',') if o.strip()]
 
 
-def get_preview_directory() -> str:
-    """
-    Read preview directory from environment variable PREVIEW_DIR.
-    """
-    return sanitize_path(os.environ['PREVIEW_DIR'])
-
-
 def get_snapshot_preview_directory() -> str:
     """Rendered catalog thumbnails keyed by snapshot_id."""
-    explicit = os.getenv('SNAPSHOT_PREVIEW_DIR')
-    if explicit:
-        return sanitize_path(explicit)
-    legacy_preview = get_preview_directory()
-    return sanitize_path(
-        os.path.join(os.path.dirname(legacy_preview), 'snapshot_previews')
-    )
+    return sanitize_path(os.environ['SNAPSHOT_PREVIEW_DIR'])
 
 
 def get_snapshot_photos_directory() -> str:
     """User-uploaded photos keyed by snapshot_id / index."""
-    explicit = os.getenv('SNAPSHOT_PHOTOS_DIR')
-    if explicit:
-        return sanitize_path(explicit)
-    legacy_preview = get_preview_directory()
-    return sanitize_path(
-        os.path.join(os.path.dirname(legacy_preview), 'snapshot_photos')
-    )
+    return sanitize_path(os.environ['SNAPSHOT_PHOTOS_DIR'])
 
 
 def get_snapshot_meshes_directory() -> str:
-    """PLY mesh files: meshes/<snapshot_id>/<primitive_index>/{reduced|detailed}.ply."""
-    explicit = os.getenv('SNAPSHOT_MESHES_DIR')
-    if explicit:
-        return sanitize_path(explicit)
-    legacy_preview = get_preview_directory()
-    return sanitize_path(
-        os.path.join(os.path.dirname(legacy_preview), 'meshes')
-    )
+    """
+    PLY mesh files:
+        meshes/<snapshot_id>/<primitive_index>/{reduced|detailed}.ply.
+    """
+    return sanitize_path(os.environ['SNAPSHOT_MESHES_DIR'])
 
 
 def get_snapshot_point_clouds_directory() -> str:
     """PLY point clouds: point_clouds/<snapshot_id>/<index>.ply."""
-    explicit = os.getenv('SNAPSHOT_POINT_CLOUDS_DIR')
-    if explicit:
-        return sanitize_path(explicit)
-    legacy_preview = get_preview_directory()
-    return sanitize_path(
-        os.path.join(os.path.dirname(legacy_preview), 'point_clouds')
-    )
+    return sanitize_path(os.environ['SNAPSHOT_POINT_CLOUDS_DIR'])
 
 
 def get_snapshot_photo_upload_limit_bytes() -> int:
@@ -110,21 +76,6 @@ def get_snapshot_photo_max_long_edge_px() -> int:
     if px < 1:
         raise ValueError('SNAPSHOT_PHOTO_MAX_LONG_EDGE_PX must be >= 1')
     return px
-
-
-def get_geometry_directory() -> str:
-    """
-    Read geometry directory from environment variable GEOMETRY_DIR.
-    """
-    return sanitize_path(os.environ['GEOMETRY_DIR'])
-
-
-def get_geometry_archive_directory() -> str:
-    """
-    Read geometry archive directory from environment variable
-    GEOMETRY_ARCHIVE_DIR.
-    """
-    return sanitize_path(os.environ['GEOMETRY_ARCHIVE_DIR'])
 
 
 def get_gh_xml_cache_directory() -> str:
@@ -165,106 +116,6 @@ def get_current_timestamp_z() -> str:
     Example: '2024-06-21T09:31:39Z'
     """
     return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
-
-
-def generate_component_etag(component_data: dict) -> str:
-    """
-    Generate ETag for a component using hybrid hash approach.
-
-    Creates a hash from lastmodified timestamp and key component fields
-    (id, type, material, validated) for efficient cache validation.
-
-    Args:
-        component_data: Component data dictionary
-
-    Returns:
-        ETag string (hex digest of MD5 hash)
-    """
-    # Extract key fields for ETag generation
-    key_fields = {
-        'lastmodified': component_data.get('lastmodified', ''),
-        'id': component_data.get('_id', component_data.get('id', '')),
-        'type': component_data.get('type',
-                                   component_data.get('componenttype', '')),
-        'material': component_data.get('material', ''),
-        'validated': str(component_data.get('validated', False))
-    }
-
-    # Create a consistent string representation
-    etag_string = json.dumps(key_fields, sort_keys=True,
-                             separators=(',', ':'))
-
-    # Generate MD5 hash
-    etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
-    return etag_hash
-
-
-def generate_geometry_etag(file_path: str, component_id: str) -> str:
-    """
-    Generate ETag for a geometry file using file stats.
-
-    Args:
-        file_path: Path to the geometry file
-        component_id: Component ID for uniqueness
-
-    Returns:
-        ETag string (MD5 hash of file stats + component_id)
-    """
-    try:
-        if not os.path.exists(file_path):
-            return f'geometry-{component_id}-not-found'
-
-        stat = os.stat(file_path)
-        # Use modification time and file size for ETag
-        etag_data = f'{component_id}-{stat.st_mtime}-{stat.st_size}'
-        return hashlib.md5(etag_data.encode('utf-8')).hexdigest()
-    except (OSError, IOError):
-        return f'geometry-{component_id}-error'
-
-
-def check_geometry_conditional_request(request: 'Request', etag: str) -> bool:
-    """
-    Check if request is a conditional request for geometry with If-None-Match.
-
-    Args:
-        request: FastAPI request object
-        etag: Current ETag of the geometry resource
-
-    Returns:
-        True if resource hasn't changed (should return 304), False otherwise
-    """
-    if_none_match = request.headers.get('if-none-match')
-    if if_none_match and if_none_match == etag:
-        return True
-    return False
-
-
-def generate_etag_for_components(components: list) -> str:
-    """
-    Generate ETag for a list of components using the individual component
-    ETag function.
-
-    Args:
-        components: List of component dictionaries
-
-    Returns:
-        ETag string (MD5 hash of component ETags)
-    """
-
-    # Generate ETag for each component and collect them
-    component_etags = []
-    for comp in components:
-        etag = generate_component_etag(comp)
-        component_etags.append(etag)
-
-    # Sort for consistent hashing
-    component_etags.sort()
-
-    # Create hash of all component ETags
-    etag_string = json.dumps(component_etags, separators=(',', ':'))
-    etag_hash = hashlib.md5(etag_string.encode('utf-8')).hexdigest()
-
-    return etag_hash
 
 
 def generate_design_etag(design_data: dict) -> str:
@@ -364,15 +215,6 @@ async def read_upload_limited(upload: UploadFile, limit_bytes: int) -> bytes:
             )
         chunks.append(chunk)
     return b''.join(chunks)
-
-
-def validate_component_id(component_id: str) -> str:
-    """Reject non-UUID component IDs before they can be used in file paths."""
-    try:
-        uuid.UUID(component_id)
-    except (ValueError, AttributeError):
-        raise HTTPException(status_code=400, detail='Invalid component ID')
-    return component_id
 
 
 def ensure_file(path: str) -> str:

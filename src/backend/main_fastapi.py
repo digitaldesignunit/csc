@@ -21,7 +21,6 @@ from limiter import limiter
 from utility import (
     get_cors_origins,
     get_db_connectionstring,
-    get_preview_directory,
     get_snapshot_preview_directory,
     get_snapshot_photos_directory,
     get_snapshot_meshes_directory,
@@ -29,8 +28,6 @@ from utility import (
     get_snapshot_photo_upload_limit_bytes,
     get_snapshot_photo_max_output_bytes,
     get_snapshot_photo_max_long_edge_px,
-    get_geometry_directory,
-    get_geometry_archive_directory,
     get_gh_xml_cache_directory,
     get_geometry_upload_limit_bytes,
 )
@@ -47,9 +44,10 @@ _REQUIRED_ENV = [
     'SMTP_PASSWORD',
     'SMTP_FROM_EMAIL',
     'FRONTEND_URL',
-    'PREVIEW_DIR',
-    'GEOMETRY_DIR',
-    'GEOMETRY_ARCHIVE_DIR',
+    'SNAPSHOT_PREVIEW_DIR',
+    'SNAPSHOT_PHOTOS_DIR',
+    'SNAPSHOT_MESHES_DIR',
+    'SNAPSHOT_POINT_CLOUDS_DIR',
     'GH_XML_CACHE_DIR',
     'FASTAPI_CORS_ORIGINS',
 ]
@@ -83,8 +81,6 @@ async def lifespan(app: FastAPI):
 
     app.mongodb = app.mongodb_client['csc']
     app.mongodb_users = app.mongodb['users']
-    app.mongodb_components = app.mongodb['components']
-    app.mongodb_components_archived = app.mongodb['components_archive']
     app.mongodb_designs = app.mongodb['designs']
     app.mongodb_component_id_transmission = app.mongodb[
         'component_id_transmission'
@@ -98,7 +94,6 @@ async def lifespan(app: FastAPI):
     await app.mongodb_users.create_index('username', unique=True)
 
     # --- Directories ---------------------------------------------------------
-    app.component_preview_dir = get_preview_directory()
     app.snapshot_preview_dir = get_snapshot_preview_directory()
     app.snapshot_photos_dir = get_snapshot_photos_directory()
     app.snapshot_meshes_dir = get_snapshot_meshes_directory()
@@ -116,8 +111,6 @@ async def lifespan(app: FastAPI):
     os.makedirs(app.snapshot_photos_dir, exist_ok=True)
     os.makedirs(app.snapshot_meshes_dir, exist_ok=True)
     os.makedirs(app.snapshot_point_clouds_dir, exist_ok=True)
-    app.component_geometry_dir = get_geometry_directory()
-    app.component_geometry_archive_dir = get_geometry_archive_directory()
     app.gh_xml_cache_dir = get_gh_xml_cache_directory()
     app.geometry_upload_limit_bytes = get_geometry_upload_limit_bytes()
     print(

@@ -3,8 +3,6 @@
 Identity lifecycle workflows for the v0.5 model (reserve, validate, consume).
 """
 
-import os
-import shutil
 from typing import Annotated, Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -35,6 +33,8 @@ from .identity_query import (
     build_list_pipeline,
     shallow_row_for_identity,
 )
+from .snapshots import _delete_snapshot_disk_assets
+
 router = APIRouter()
 
 
@@ -437,45 +437,7 @@ async def delete_identity(
         snapshot_ids.append(current_id)
 
     for snapshot_id in snapshot_ids:
-        preview_path = os.path.join(
-            request.app.snapshot_preview_dir,
-            f'{snapshot_id}.webp',
-        )
-        if os.path.exists(preview_path):
-            try:
-                os.remove(preview_path)
-            except OSError as exc:
-                print(f'[WARN] delete_identity preview: {exc}')
-
-        photos_dir = os.path.join(
-            request.app.snapshot_photos_dir,
-            snapshot_id,
-        )
-        if os.path.isdir(photos_dir):
-            try:
-                shutil.rmtree(photos_dir)
-            except OSError as exc:
-                print(f'[WARN] delete_identity photos: {exc}')
-
-    legacy_preview = os.path.join(
-        request.app.component_preview_dir,
-        f'{identity_id}.webp',
-    )
-    if os.path.exists(legacy_preview):
-        try:
-            os.remove(legacy_preview)
-        except OSError as exc:
-            print(f'[WARN] delete_identity legacy preview: {exc}')
-
-    geometry_dir = os.path.join(
-        request.app.component_geometry_dir,
-        identity_id,
-    )
-    if os.path.isdir(geometry_dir):
-        try:
-            shutil.rmtree(geometry_dir)
-        except OSError as exc:
-            print(f'[WARN] delete_identity geometry: {exc}')
+        _delete_snapshot_disk_assets(request, snapshot_id)
 
     try:
         await snapshots.delete_many({'identity_id': identity_id})

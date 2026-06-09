@@ -10,8 +10,8 @@ const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 MB
 
 // Geometry uploads must go directly to the FastAPI backend - not via this proxy.
 const BLOCKED_PATTERNS = [
-  /^\/components\/[^/]+\/geometry\/add_reduced$/,
-  /^\/components\/[^/]+\/geometry\/add_detailed$/,
+  /^\/snapshots\/[^/]+\/meshes\/[^/]+\/reduced$/,
+  /^\/snapshots\/[^/]+\/meshes\/[^/]+\/detailed$/,
 ]
 
 function buildTargetUrl(pathParts: string[] | undefined, srcUrl: URL) {

@@ -37,8 +37,6 @@ Write routes:
 
 PATCH current snapshot here;
 snapshot preview/photo file routes in `snapshots.py`.
-
-Legacy `/components/...` routes in `components.py` are scheduled for removal.
 """
 
 import hashlib
