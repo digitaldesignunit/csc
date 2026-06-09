@@ -35,7 +35,7 @@
     "next": "16.2.6",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
-    "npm": "^11.14.1",
+    "npm": "^11.16.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.6",
     "react-day-picker": "^10.0.1",
