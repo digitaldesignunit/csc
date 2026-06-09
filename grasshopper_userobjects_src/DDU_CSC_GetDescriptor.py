@@ -188,9 +188,7 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
 
         return result_tree
 
-    def RunScript(self,
-            Input: System.Collections.Generic.List[object],
-            DescriptorKey: str):
+    def RunScript(self, Input: list[object], DescriptorKey: str):
         # set up output trees and results tuple
         DescriptorValues = Grasshopper.DataTree[System.Object]()
         try:
