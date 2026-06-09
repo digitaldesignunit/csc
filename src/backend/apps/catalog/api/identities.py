@@ -146,6 +146,11 @@ def _check_schema_conditional_request(request: Request, etag: str) -> bool:
     return bool(if_none_match and if_none_match == etag)
 
 
+def _list_etag(content: Any) -> str:
+    payload = json.dumps(content, sort_keys=True, separators=(',', ':'))
+    return hashlib.md5(payload.encode('utf-8')).hexdigest()
+
+
 @router.get(
     '/schema/create-snapshot',
     summary=(
@@ -590,7 +595,21 @@ async def list_identities_route(
         )
 
     content = _format_list_rows(docs, expand)
-    return JSONResponse(status_code=200, content=content)
+    etag = _list_etag(content)
+    if _check_schema_conditional_request(request, etag):
+        return JSONResponse(
+            status_code=304,
+            content=None,
+            headers={'ETag': etag},
+        )
+    return JSONResponse(
+        status_code=200,
+        content=content,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'private, max-age=3600',
+        },
+    )
 
 
 @router.post(
