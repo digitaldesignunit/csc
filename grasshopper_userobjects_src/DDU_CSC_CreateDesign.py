@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -28,10 +23,10 @@ ghenv.Component.NickName = 'CreateDesign'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Creates a design JSON string from component data, ready for posting to '
-    'the Catalog. Validates input against design schema and generates '
-    'complete design payload with UUID, timestamps, and component references. '
-    'Does NOT post the design - only generates the JSON string.'
+    'Creates a design JSON string from compose JSON ({identity, snapshot}), '
+    'ready for posting to the Catalog. Pins each placement to a specific '
+    'snapshot and stores the design insertion iframe. Does NOT post '
+    'the design - only generates the JSON string.'
 )
 
 
@@ -39,7 +34,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260316
+    Version: 260609
     """
 
     def __init__(self):
@@ -75,7 +70,8 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
             'Design description (optional)'
         )
         self.InputParams[2].Description = (
-            'List of component JSON strings'
+            'List of compose JSON strings ({identity, snapshot}) with '
+            'snapshot.iframe set to the design placement frame'
         )
         self.InputParams[3].Description = (
             'AdditionalGeometry (List of Mesh)'
@@ -103,7 +99,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                     "items": {
                         "type": "object",
                         "properties": {
-                            "component": {"type": "string"},
+                            "snapshot": {"type": "string"},
                             "iframe": {
                                 "type": "object",
                                 "properties": {
@@ -119,7 +115,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                                 "required": ["o", "x", "y", "z"]
                             }
                         },
-                        "required": ["component", "iframe"]
+                        "required": ["snapshot", "iframe"]
                     }
                 },
                 "additional_geometry": {
@@ -127,7 +123,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                     "items": {
                         "type": "object",
                         "properties": {
-                            "id": {"type": "string"},
+                            "_id": {"type": "string"},
                             "name": {"type": "string"},
                             "iframe": {
                                 "type": "object",
@@ -183,7 +179,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                                 "required": ["meshes"]
                             }
                         },
-                        "required": ["id", "iframe", "geometry"]
+                        "required": ["_id", "iframe", "geometry"]
                     }
                 }
             },
@@ -270,36 +266,46 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
         self._addRemark('Using hardcoded design schema')
         return self._get_hardcoded_schema()
 
-    def validate_component_data(self, component_data: Dict[str, Any],
-                                schema: Dict[str, Any]) -> bool:
-        """Validate component data against schema."""
+    def _validate_iframe(self, iframe, label='iframe') -> bool:
+        """Validate an insertion-frame dict."""
+        if not isinstance(iframe, dict):
+            self._addWarning(f'{label} must be a dictionary')
+            return False
+        for field in ('o', 'x', 'y', 'z'):
+            if field not in iframe:
+                self._addWarning(f'{label} missing {field} field')
+                return False
+            if (not isinstance(iframe[field], list) or
+                    len(iframe[field]) != 3):
+                self._addWarning(f'{label} {field} must be 3D vector')
+                return False
+        return True
+
+    def validate_compose_data(self, compose_data: Dict[str, Any]) -> bool:
+        """Validate compose JSON for design placement."""
         try:
-            # Check if component has required fields
-            if '_id' not in component_data:
-                self._addWarning('Component missing _id field')
+            if not isinstance(compose_data, dict):
+                self._addWarning('Compose data must be a dictionary')
                 return False
 
-            if 'iframe' not in component_data:
-                self._addWarning('Component missing iframe field')
+            snapshot = compose_data.get('snapshot')
+            if not isinstance(snapshot, dict):
+                self._addWarning('Compose missing snapshot object')
                 return False
 
-            # Validate iframe structure
-            iframe = component_data['iframe']
-            required_iframe_fields = ['o', 'x', 'y', 'z']
-            for field in required_iframe_fields:
-                if field not in iframe:
-                    self._addWarning(f'Component iframe missing {field} field')
-                    return False
-                if not (isinstance(iframe[field], list) or
-                        len(iframe[field]) != 3):
-                    self._addWarning(
-                        f'Component iframe {field} must be 3D vector'
-                    )
-                    return False
+            snapshot_id = snapshot.get('_id') or snapshot.get('id')
+            if not snapshot_id:
+                self._addWarning('Compose snapshot missing _id field')
+                return False
 
-            return True
+            iframe = snapshot.get('iframe')
+            if iframe is None:
+                self._addWarning('Compose snapshot missing iframe field')
+                return False
+
+            return self._validate_iframe(iframe, 'Compose snapshot iframe')
         except Exception as e:
-            self._addWarning(f'Error validating component: {str(e)}')
+            self._addWarning(f'Error validating compose: {str(e)}')
             return False
 
     def create_design_payload(self, design_name: str, design_description: str,
@@ -308,26 +314,26 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                               ) -> Optional[Dict[str, Any]]:
         """Create design payload from component data and additional meshes."""
         try:
-            # Get design schema
-            schema = self.get_design_schema()
+            # Warm design schema cache (fallback used when offline)
+            self.get_design_schema()
 
-            # Parse and validate component data
+            # Parse and validate compose JSON
             components = []
-            for i, component_json in enumerate(component_data_list):
+            for i, compose_json in enumerate(component_data_list):
                 try:
-                    component_data = json.loads(component_json)
-                    if not self.validate_component_data(
-                            component_data, schema):
-                        self._addWarning(f'Invalid component at index {i}')
+                    compose_data = json.loads(compose_json)
+                    if not self.validate_compose_data(compose_data):
+                        self._addWarning(f'Invalid compose at index {i}')
                         continue
-                    component_id = component_data['_id']
-                    iframe = component_data['iframe']
+                    snapshot = compose_data['snapshot']
+                    snapshot_id = snapshot.get('_id') or snapshot.get('id')
+                    iframe = snapshot['iframe']
                     components.append(
-                        {'component': component_id, 'iframe': iframe}
+                        {'snapshot': snapshot_id, 'iframe': iframe}
                     )
                 except Exception as e:
                     self._addWarning(
-                        f'Error processing component {i}: {str(e)}'
+                        f'Error processing compose {i}: {str(e)}'
                     )
                     continue
 
@@ -358,7 +364,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                             'z': [0.0, 0.0, 1.0]
                         }
                         additional_geometry.append({
-                            'id': str(uuid.uuid4()),
+                            '_id': str(uuid.uuid4()),
                             'iframe': iframe,
                             'geometry': geom
                         })

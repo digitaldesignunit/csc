@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -30,8 +25,8 @@ ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Adds a new design to the remote database. Takes design data (JSON), '
     'validates it, and makes an authenticated POST request to add the design '
-    'to the Catalog. Designs contain component references and additional '
-    'geometry embedded directly in the JSON.'
+    'to the Catalog. Designs pin specific snapshots and may embed '
+    'additional geometry directly in the JSON.'
 )
 
 
@@ -39,7 +34,7 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260316
+    Version: 260609
     """
 
     def __init__(self):
@@ -165,8 +160,8 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addError(msg)
                 return AddedDesignData
 
-            if 'component' not in comp:
-                msg = f'Component at index {i} missing "component" field.'
+            if 'snapshot' not in comp:
+                msg = f'Component at index {i} missing "snapshot" field.'
                 self._addError(msg)
                 return AddedDesignData
 
@@ -218,8 +213,10 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addError(msg)
                 return AddedDesignData
 
-            if 'id' not in ag:
-                msg = f'Additional geometry at index {i} missing "id" field.'
+            ag_id = ag.get('_id') or ag.get('id')
+            if not ag_id:
+                msg = (f'Additional geometry at index {i} missing "_id" '
+                       'field.')
                 self._addError(msg)
                 return AddedDesignData
 
@@ -271,7 +268,7 @@ class CSC_AddDesign(Grasshopper.Kernel.GH_ScriptInstance):
 
         if not Run:
             status_msg = (f'Ready to add design with {len(components)} '
-                          'components')
+                          'snapshot placements')
             if additional_geometry:
                 status_msg += (f' and {len(additional_geometry)} additional '
                                'geometries')

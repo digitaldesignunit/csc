@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -29,10 +24,10 @@ ghenv.Component.NickName = 'FetchDesign'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Fetches a design from the remote Catalog along with all its contained '
-    'components. Updates each component\'s iframe with the design\'s iframe '
-    'and returns both design JSON and components with updated iframes. Uses '
-    'caching for optimal performance.'
+    'Fetches a design from the remote Catalog along with all pinned snapshot '
+    'placements. Resolves each snapshot reference to compose JSON '
+    '({identity, snapshot}) and overwrites snapshot.iframe with the design '
+    'insertion frame. Uses caching for optimal performance.'
 )
 
 
@@ -40,7 +35,7 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260316
+    Version: 260609
     """
 
     def __init__(self):
@@ -80,7 +75,8 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
             'Design JSON string'
         )
         self.OutputParams[1+i].Description = (
-            'Components with updated iframes from design'
+            'Compose JSON per placement ({identity, snapshot}) with '
+            'snapshot.iframe set from the design'
         )
         self.OutputParams[2+i].Description = (
             'Additional geometry items (list of JSON strings)'
@@ -118,10 +114,10 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
             if ('meshes' in geometry_data and
                     isinstance(geometry_data['meshes'], list)):
                 for i, mesh_data in enumerate(geometry_data['meshes']):
-                    if 'v' in mesh_data and 'f' in mesh_data:
+                    vl = mesh_data.get('v') or mesh_data.get('vertices')
+                    fl = mesh_data.get('f') or mesh_data.get('faces')
+                    if vl and fl:
                         mesh = Rhino.Geometry.Mesh()
-                        vl = mesh_data['v']
-                        fl = mesh_data['f']
 
                         # Add vertices
                         [mesh.Vertices.Add(*v) for v in vl]
@@ -158,31 +154,54 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
 
         return meshes
 
-    def apply_iframe_transformation(self, component_data, iframe):
+    def fetch_compose_for_snapshot(self, auth_core, snapshot_id, iframe):
         """
-        Update component iframe with design iframe (geometry unchanged).
-
-        Args:
-            component_data: Component data dictionary
-            iframe: Design iframe with o, x, y, z vectors
-
-        Returns:
-            Component data with updated iframe (geometry unchanged)
+        Resolve a design snapshot reference to compose JSON with the design
+        insertion frame applied to snapshot.iframe.
         """
-        try:
-            # Create a copy of the component data to avoid modifying original
-            updated_component = component_data.copy()
+        snap_response = auth_core.cached_get(
+            f'/snapshots/{snapshot_id}',
+            f'snapshot:{snapshot_id}')
 
-            # Update the iframe field with the design's iframe
-            # This is what we want: replace the component's iframe with the
-            # design's iframe
-            updated_component['iframe'] = iframe
+        if snap_response.status_code != 200:
+            self._addWarning(
+                f'Failed to fetch snapshot {snapshot_id}: '
+                f'{snap_response.status_code}')
+            return None
 
-            return updated_component
+        snapshot_doc = snap_response.json()
+        identity_id = snapshot_doc.get('identity_id')
+        if not identity_id:
+            self._addWarning(
+                f'Snapshot {snapshot_id} missing identity_id')
+            return None
 
-        except Exception as e:
-            self._addWarning(f'Error updating iframe: {str(e)}')
-            return component_data
+        compose_response = auth_core.cached_get(
+            f'/identities/{identity_id}/compose',
+            f'compose:{identity_id}:{snapshot_id}',
+            params={'snapshot_id': snapshot_id})
+
+        if compose_response.status_code != 200:
+            self._addWarning(
+                f'Failed to fetch compose for snapshot {snapshot_id}: '
+                f'{compose_response.status_code}')
+            return None
+
+        compose = compose_response.json()
+        identity = compose.get('identity')
+        snapshot = compose.get('snapshot')
+        if not isinstance(identity, dict) or not isinstance(snapshot, dict):
+            self._addWarning(
+                f'Invalid compose payload for snapshot {snapshot_id}')
+            return None
+
+        updated_snapshot = dict(snapshot)
+        updated_snapshot['iframe'] = iframe
+        return {'identity': identity, 'snapshot': updated_snapshot}
+
+    def _additional_geometry_id(self, item):
+        """Return additional geometry item id (_id or legacy id)."""
+        return item.get('_id') or item.get('id') or 'unknown'
 
     def RunScript(self, DesignID: str):
         # Init outputs
@@ -233,35 +252,21 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 design_data = response.json()
                 self._addRemark(f'Successfully fetched design: {design_id}')
 
-                # Extract component IDs and iframes from design
+                # Resolve pinned snapshot placements to compose JSON
                 components_data = []
                 if 'components' in design_data:
                     for comp_ref in design_data['components']:
-                        comp_id = comp_ref.get('component')
+                        snapshot_id = comp_ref.get('snapshot')
                         iframe = comp_ref.get('iframe')
 
-                        if comp_id and iframe:
-                            # Fetch component data using cached_get
-                            comp_response = auth_core.cached_get(
-                                f'/components/{comp_id}',
-                                f'component:{comp_id}')
-
-                            if comp_response.status_code == 200:
-                                component_data = comp_response.json()
-
-                                # Update iframe with design iframe
-                                updated_component = (
-                                    self.apply_iframe_transformation(
-                                        component_data, iframe))
-                                components_data.append(updated_component)
-
-                            else:
-                                self._addWarning(
-                                    f'Failed to fetch component {comp_id}: '
-                                    f'{comp_response.status_code}')
+                        if snapshot_id and iframe:
+                            compose = self.fetch_compose_for_snapshot(
+                                auth_core, snapshot_id, iframe)
+                            if compose:
+                                components_data.append(compose)
                         else:
                             self._addWarning(
-                                'Invalid component reference in design')
+                                'Invalid snapshot reference in design')
 
                 # Extract additional geometry from design
                 additional_geometry_data = []
@@ -272,7 +277,7 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
 
                     # Create Rhino meshes for additional geometry
                     for item in additional_geometry_data:
-                        item_id = item.get('id', 'unknown')
+                        item_id = self._additional_geometry_id(item)
                         geometry_data = item.get('geometry', {})
                         iframe = item.get('iframe', {})
 
@@ -329,7 +334,7 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 AdditionalGeometry = additional_geometry_meshes
 
                 self.Component.Message = (
-                    f'Design fetched: {len(components_data)} components, '
+                    f'Design fetched: {len(components_data)} snapshots, '
                     f'{len(additional_geometry_data)} additional geometry '
                     f'items')
 
