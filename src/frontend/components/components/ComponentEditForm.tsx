@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, Save, XCircle } from 'lucide-react'
 
-import { ComponentLocation } from '@/generated/ComponentModel'
+import { ComponentLocation } from '@/generated/CatalogSharedTypes'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'

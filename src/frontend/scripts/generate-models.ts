@@ -6,7 +6,7 @@
  * All schemas are fetched from `FASTAPI_URL` (override with env when generating
  * against a local backend), e.g. `FASTAPI_URL=http://127.0.0.1:8000 npm run generate:models`.
  *
- * - `/schema/component` → `ComponentModel` (legacy document; designs, etc.)
+ * - `/schema/catalog-shared` → `CatalogSharedTypes.ts` (frames, location, design mesh types)
  * - `/schema/design` → `DesignModel`
  * - `/schema/catalog-compose` → `CatalogModels` (v0.5 `GET /identities/{id}/compose` body)
  * - `/schema/snapshot-summary` → `SnapshotSummaryItem` in `SnapshotModels.ts`
@@ -19,8 +19,8 @@ import path from 'path'
 const BACKEND_URL = process.env.FASTAPI_URL || 'https://api.ddu.uber.space'
 const OUTPUT_DIR = path.join(process.cwd(), 'generated')
 
-/** Reuse legacy `ComponentModel.ts` defs to avoid duplicate exports from `index.ts`. */
-const CATALOG_DEFS_FROM_COMPONENT_MODEL = new Set([
+/** Reuse shared defs from `CatalogSharedTypes.ts` in compose/design outputs. */
+const SHARED_DEFS_FROM_CATALOG_SHARED = new Set([
   'ComponentBoundingBox',
   'ComponentFrame',
   'ComponentLocation',
@@ -30,9 +30,10 @@ async function generateModel(
   schemaPath: string,
   interfaceName: string,
   outputFileName: string,
-  options?: { catalogCompose?: boolean },
+  options?: { catalogCompose?: boolean; defsOnly?: boolean },
 ) {
   const catalogCompose = options?.catalogCompose ?? false
+  const defsOnly = options?.defsOnly ?? false
   console.log(`🔍 Fetching ${interfaceName} schema from ${BACKEND_URL}${schemaPath}...`)
   const response = await fetch(`${BACKEND_URL}${schemaPath}`)
   if (!response.ok) {
@@ -44,6 +45,7 @@ async function generateModel(
   console.log(`✅ ${interfaceName} schema fetched successfully`)
   writeGeneratedModel(schema, interfaceName, schemaPath, outputFileName, {
     catalogCompose,
+    defsOnly,
   })
 }
 
@@ -52,7 +54,7 @@ function writeGeneratedModel(
   rootInterfaceName: string,
   schemaPath: string,
   outputFileName: string,
-  opts: { catalogCompose: boolean },
+  opts: { catalogCompose: boolean; defsOnly: boolean },
 ) {
   if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true })
@@ -90,7 +92,7 @@ async function appendModelFromSchema(
     schema,
     interfaceName,
     schemaPath,
-    { catalogCompose: false },
+    { catalogCompose: false, defsOnly: false },
   )
   const interfaceOnly = typescriptBlock.replace(
     /^[\s\S]*?export interface /,
@@ -102,7 +104,12 @@ async function appendModelFromSchema(
 
 async function run() {
   try {
-    await generateModel('/schema/component', 'ComponentModel', 'ComponentModel.ts')
+    await generateModel(
+      '/schema/catalog-shared',
+      'CatalogSharedTypesEnvelope',
+      'CatalogSharedTypes.ts',
+      { defsOnly: true },
+    )
 
     await generateModel('/schema/design', 'DesignModel', 'DesignModel.ts')
 
@@ -124,7 +131,7 @@ async function run() {
 
     const indexFile = path.join(OUTPUT_DIR, 'index.ts')
     const indexContent = `// Auto-generated models from backend OpenAPI schema
-export * from './ComponentModel';
+export * from './CatalogSharedTypes';
 export * from './DesignModel';
 export * from './CatalogModels';
 export * from './SnapshotModels';
@@ -152,7 +159,7 @@ type Schema = Record<string, unknown> & {
   allOf?: Schema[]
 }
 
-const SHARED_COMPONENT_DEFS = new Set([
+const SHARED_DESIGN_DEFS = new Set([
   'ComponentExtrusion',
   'ComponentGeometry',
   'ComponentMesh',
@@ -166,7 +173,7 @@ function generateTypeScriptInterface(
   schema: Record<string, unknown>,
   rootInterfaceName: string,
   schemaPath: string,
-  opts: { catalogCompose: boolean },
+  opts: { catalogCompose: boolean; defsOnly: boolean },
 ): string {
   const { properties, required = [], $defs } = schema as {
     properties: Record<string, unknown>
@@ -181,7 +188,7 @@ function generateTypeScriptInterface(
 
   if (rootInterfaceName === 'DesignModel') {
     interfaceCode += `
-import { ComponentGeometry } from './ComponentModel';
+import { ComponentGeometry } from './CatalogSharedTypes';
 `
   }
 
@@ -191,7 +198,7 @@ import type {
   ComponentBoundingBox,
   ComponentFrame,
   ComponentLocation,
-} from './ComponentModel';
+} from './CatalogSharedTypes';
 `
   }
 
@@ -200,10 +207,10 @@ import type {
 
   if ($defs) {
     for (const [defName, defSchema] of Object.entries($defs)) {
-      if (rootInterfaceName === 'DesignModel' && SHARED_COMPONENT_DEFS.has(defName)) {
+      if (rootInterfaceName === 'DesignModel' && SHARED_DESIGN_DEFS.has(defName)) {
         continue
       }
-      if (opts.catalogCompose && CATALOG_DEFS_FROM_COMPONENT_MODEL.has(defName)) {
+      if (opts.catalogCompose && SHARED_DEFS_FROM_CATALOG_SHARED.has(defName)) {
         continue
       }
       interfaceCode += generateNestedInterface(
@@ -216,22 +223,24 @@ import type {
     }
   }
 
-  interfaceCode += `export interface ${rootInterfaceName} {\n`
+  if (!opts.defsOnly) {
+    interfaceCode += `export interface ${rootInterfaceName} {\n`
 
-  for (const [propName, propSchema] of Object.entries(properties)) {
-    const isRequired = (required as string[]).includes(propName)
-    const typeAnnotation = getTypeScriptType(propSchema as Schema, $defs, opts)
-    const comment = (propSchema as Record<string, unknown>).description
-      ? ` // ${(propSchema as Record<string, unknown>).description}`
-      : ''
+    for (const [propName, propSchema] of Object.entries(properties)) {
+      const isRequired = (required as string[]).includes(propName)
+      const typeAnnotation = getTypeScriptType(propSchema as Schema, $defs, opts)
+      const comment = (propSchema as Record<string, unknown>).description
+        ? ` // ${(propSchema as Record<string, unknown>).description}`
+        : ''
 
-    interfaceCode += `  ${propName}${isRequired ? '' : '?'}: ${typeAnnotation};${comment}\n`
+      interfaceCode += `  ${propName}${isRequired ? '' : '?'}: ${typeAnnotation};${comment}\n`
+    }
+
+    interfaceCode += '}\n\n'
   }
 
-  interfaceCode += '}\n\n'
-
-  if (rootInterfaceName === 'ComponentModel') {
-    interfaceCode += `// Utility types for better type safety
+  if (opts.defsOnly) {
+    interfaceCode += `// Shared catalog value types (frames, location, design mesh geometry, etc.)
 export type ComponentType =
   | 'panel'
   | 'beam'
@@ -246,27 +255,6 @@ export type ComponentType =
 export type ComponentComplexity = 0 | 1 | 2 | 3;
 export type ComponentCondition = 0 | 1 | 2 | 3;
 export type ComponentManufacturedPrecision = 'exact' | 'month' | 'year' | 'unknown';
-
-// Type guards
-export function isComponentModel(obj: unknown): obj is ComponentModel {
-  return obj !== null && 
-         typeof obj === 'object' && 
-         '_id' in obj && 
-         'type' in obj;
-}
-
-// Extension types
-export interface ExtendedComponentModel extends ComponentModel {
-  reserved_by_username?: string;
-  /** Current snapshot \`_id\` (v0.5); used for \`/snapshots/{id}/preview\` thumbnails */
-  current_snapshot_id?: string;
-  catalog_number?: number;
-  consumed_at?: string | null;
-  parent_identities?: string[];
-}
-
-// Partial type for updates
-export type PartialComponentModel = Partial<ComponentModel>;
 `
   }
 
@@ -284,7 +272,7 @@ function generateNestedInterface(
   name: string,
   schema: Record<string, unknown>,
   $defs: Record<string, unknown> | undefined,
-  genOpts: { catalogCompose: boolean },
+  genOpts: { catalogCompose: boolean; defsOnly?: boolean },
 ): string {
   const { properties, required = [] } = schema as {
     properties?: Record<string, unknown>
@@ -322,7 +310,7 @@ function getTypeScriptType(
     const refPath = schema.$ref
     if (refPath.startsWith('#/$defs/')) {
       const refName = refPath.replace('#/$defs/', '')
-      if (catalogCompose && CATALOG_DEFS_FROM_COMPONENT_MODEL.has(refName)) {
+      if (catalogCompose && SHARED_DEFS_FROM_CATALOG_SHARED.has(refName)) {
         return refName
       }
       return refName

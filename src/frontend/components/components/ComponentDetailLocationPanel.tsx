@@ -2,7 +2,7 @@
 
 import { MapPin } from 'lucide-react'
 
-import { ComponentLocation } from '@/generated/ComponentModel'
+import { ComponentLocation } from '@/generated/CatalogSharedTypes'
 import { formatLocation, formatLocationMapsLink } from '@/lib/utils'
 import ComponentDetailMap from './ComponentDetailMap'
 

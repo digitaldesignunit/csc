@@ -4,7 +4,7 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/comp
 import React from 'react'
 import ComponentDetailMap from '../ComponentDetailMap';
 import { formatLocation, formatLocationMapsLink } from '@/lib/utils'
-import { ComponentLocation } from '@/generated/ComponentModel'
+import { ComponentLocation } from '@/generated/CatalogSharedTypes'
 
 export default function ComponentOverviewDataTableLocationCell({ coords, showTooltip = true }: { coords: ComponentLocation, showTooltip?: boolean }) {
   const location: string = formatLocation(coords)

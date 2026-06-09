@@ -1,7 +1,7 @@
 'use client'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
-import { ComponentLocation } from '@/generated/ComponentModel'
+import { ComponentLocation } from '@/generated/CatalogSharedTypes'
 import { Card, CardContent } from '@/components/ui/card'
 import ComponentDetailActions from './ComponentDetailActions'
 import ComponentDetailLocationPanel from './ComponentDetailLocationPanel'

@@ -1,8 +1,8 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-06-09T16:56:04.258Z
+// Generated on: 2026-06-09T18:24:15.684Z
 // Source: https://api.ddu.uber.space/schema/design
 
-import { ComponentGeometry } from './ComponentModel';
+import { ComponentGeometry } from './CatalogSharedTypes';
 
 export interface DesignAdditionalGeometry {
   _id?: string; // Globally unique identifier for this additional geometry item

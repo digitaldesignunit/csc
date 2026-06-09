@@ -1,12 +1,12 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-06-09T16:56:04.325Z
+// Generated on: 2026-06-09T18:24:15.734Z
 // Source: https://api.ddu.uber.space/schema/catalog-compose
 
 import type {
   ComponentBoundingBox,
   ComponentFrame,
   ComponentLocation,
-} from './ComponentModel';
+} from './CatalogSharedTypes';
 
 export interface ComponentIdentity {
   _id?: string; // Globally unique identity identifier (GUID)

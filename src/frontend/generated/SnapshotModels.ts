@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-06-09T16:56:04.356Z
+// Generated on: 2026-06-09T18:24:15.754Z
 // Source: https://api.ddu.uber.space/schema/snapshot-summary
 
 export interface SnapshotSummaryItem {

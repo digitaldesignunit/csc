@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import { ColumnDef } from '@tanstack/react-table'
-import { ComponentBoundingBox } from '@/generated/ComponentModel'
+import { ComponentBoundingBox } from '@/generated/CatalogSharedTypes'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { formatTimestamp, rgbToHex } from '@/lib/utils'
 import ComponentOverviewDataTablePreviewCell from './ComponentOverviewDataTablePreviewCell'

@@ -1,4 +1,4 @@
-import type { ComponentLocation } from '@/generated/ComponentModel'
+import type { ComponentLocation } from '@/generated/CatalogSharedTypes'
 
 export const COMPONENT_TYPES = [
   'panel',
