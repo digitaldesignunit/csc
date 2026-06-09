@@ -6,6 +6,7 @@ dependencies:
   - python=3.9.18
   - pip
   - coverage
+  - cairosvg
   - flake8
   - invoke>=0.14
   - numpy>=1.15.4
