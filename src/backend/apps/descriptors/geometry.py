@@ -481,7 +481,7 @@ def load_extrusion_mesh_for_descriptor(
     return mesh
 
 
-# COMPONENT-LEVEL LOADING ----------------------------------------------------
+# DESCRIPTOR MESH LOADING ----------------------------------------------------
 
 LoggerFn = Callable[[str], None]
 
@@ -489,6 +489,141 @@ LoggerFn = Callable[[str], None]
 def _noop_logger(_message: str) -> None:
     return None
 
+
+# SNAPSHOT-LEVEL LOADING -----------------------------------------------------
+
+def _first_extrusion(geometry: Dict) -> Optional[Dict]:
+    """Return the first extrusion primitive from snapshot or legacy geometry."""
+    extrusions = geometry.get('extrusions') or []
+    if extrusions:
+        return extrusions[0]
+    legacy = geometry.get('extrusion')
+    return legacy if isinstance(legacy, dict) else None
+
+
+def _inline_mesh_vertices_faces(
+    mesh_data: Dict,
+) -> Tuple[Optional[List[List[float]]], Optional[List[List[int]]]]:
+    """Read vertices/faces from inline mesh (snapshot or legacy keys)."""
+    vertices = mesh_data.get('v') or mesh_data.get('vertices')
+    faces = mesh_data.get('f') or mesh_data.get('faces')
+    if vertices and faces:
+        return vertices, faces
+    return None, None
+
+
+def get_snapshot_mesh_paths(
+    meshes_dir: str,
+    snapshot_id: str,
+    primitive_index: int = 0,
+    resolutions: Optional[Tuple[str, ...]] = None,
+) -> Dict[str, Optional[str]]:
+    """Resolve on-disk PLY paths for one snapshot mesh primitive."""
+    paths: Dict[str, Optional[str]] = {}
+    base = os.path.join(meshes_dir, snapshot_id, str(primitive_index))
+    for resolution in resolutions or ('detailed', 'reduced'):
+        path = os.path.join(base, f'{resolution}.ply')
+        paths[resolution] = path if os.path.isfile(path) else None
+    return paths
+
+
+def load_snapshot_mesh(
+    snapshot: Dict,
+    meshes_dir: Optional[str] = None,
+    *,
+    logger: LoggerFn = _noop_logger,
+) -> Optional[trimesh.Trimesh]:
+    """Load the best available mesh for a component snapshot.
+
+    Priority:
+        1. ``detailed.ply`` on disk (``meshes/<snapshot_id>/<i>/``)
+        2. ``reduced.ply`` on disk
+        3. inline ``geometry.meshes[0]`` (``vertices``/``faces`` or ``v``/``f``)
+        4. ``geometry.extrusions[0]`` or legacy ``geometry.extrusion``
+
+    The snapshot's ``pca_frame`` is applied when present.
+    """
+    snapshot_id = str(snapshot.get('_id', '<unknown>'))
+    pca_frame = snapshot.get('pca_frame')
+
+    if meshes_dir is not None:
+        manifest = (snapshot.get('mesh_ply_resolutions') or {}).get('0') or []
+        preferred = ('detailed', 'reduced')
+        resolutions = tuple(
+            r for r in preferred if r in manifest
+        ) + tuple(r for r in manifest if r not in preferred)
+        if not resolutions:
+            resolutions = preferred
+        paths = get_snapshot_mesh_paths(
+            meshes_dir, snapshot_id, 0, resolutions)
+        for label, path in paths.items():
+            if not path:
+                continue
+            try:
+                from apps.catalog.geometry_mesh_export import (
+                    load_trimesh_from_ply_file,
+                )
+                logger(f'Loading {label}.ply for snapshot {snapshot_id}')
+                mesh = load_trimesh_from_ply_file(path)
+                if pca_frame is not None:
+                    mesh = apply_pca_frame_transform(mesh, pca_frame)
+                logger(
+                    f'Loaded {label}.ply ({len(mesh.vertices)} vertices, '
+                    f'{len(mesh.faces)} faces)'
+                )
+                return mesh
+            except Exception as exc:
+                logger(f'Failed to load {label}.ply: {exc}')
+
+    geometry = snapshot.get('geometry') or {}
+    primitive_source: Optional[str] = None
+    primitive_loader: Optional[Callable[[], trimesh.Trimesh]] = None
+
+    meshes = geometry.get('meshes')
+    if meshes:
+        mesh_data = meshes[0]
+        vertices, faces = _inline_mesh_vertices_faces(mesh_data)
+        if vertices and faces:
+            primitive_source = 'geometry.meshes[0]'
+
+            def _load_from_meshes() -> trimesh.Trimesh:
+                return load_primitive_mesh_for_descriptor(
+                    vertices=vertices,
+                    faces=faces,
+                    pca_frame=pca_frame,
+                )
+            primitive_loader = _load_from_meshes
+
+    extrusion = _first_extrusion(geometry)
+    if primitive_loader is None and extrusion:
+        primitive_source = 'geometry.extrusions[0]'
+
+        def _load_from_extrusion() -> trimesh.Trimesh:
+            return load_extrusion_mesh_for_descriptor(
+                profile=extrusion['profile'],
+                height=extrusion['height'],
+                pca_frame=pca_frame,
+            )
+        primitive_loader = _load_from_extrusion
+
+    if primitive_loader is None:
+        logger(f'No geometry source available for snapshot {snapshot_id}')
+        return None
+
+    try:
+        logger(f'Loading {primitive_source} for snapshot {snapshot_id}')
+        mesh = primitive_loader()
+        logger(
+            f'Loaded {primitive_source} ({len(mesh.vertices)} vertices, '
+            f'{len(mesh.faces)} faces)'
+        )
+        return mesh
+    except Exception as exc:
+        logger(f'Failed to load {primitive_source}: {exc}')
+        return None
+
+
+# LEGACY COMPONENT-LEVEL LOADING -------------------------------------------
 
 def get_component_geometry_paths(
     geometry_dir: str,

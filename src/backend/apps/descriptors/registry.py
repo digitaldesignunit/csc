@@ -167,13 +167,23 @@ def is_missing(component: Mapping[str, Any], spec: DescriptorSpec) -> bool:
     return False
 
 
-def build_missing_query(specs: Iterable[DescriptorSpec]) -> Dict[str, Any]:
-    """Build a Mongo query matching components missing at least one spec.
+def build_missing_query(
+    specs: Iterable[DescriptorSpec],
+    *,
+    include_applicability: bool = True,
+) -> Dict[str, Any]:
+    """
+    Build a Mongo query matching documents missing at least one spec.
 
     For each spec, a clause of the form
         (applicability_filter) AND (any output key missing)
-    is OR-combined. A top-level catch-all for components with no
-    ``descriptors`` field at all is also included.
+    is OR-combined when ``include_applicability`` is True. Snapshot
+    documents store ``type`` on the parent identity, so the cron runner
+    passes ``include_applicability=False`` and re-checks applicability
+    in memory on an assembled compute document.
+
+    A top-level catch-all for documents with no ``descriptors`` field at
+    all is also included.
     """
     or_conditions: List[Dict[str, Any]] = [
         {'descriptors': {'$exists': False}}
@@ -185,7 +195,7 @@ def build_missing_query(specs: Iterable[DescriptorSpec]) -> Dict[str, Any]:
             key_missing_clauses.append({field_path: {'$exists': False}})
             key_missing_clauses.append({field_path: None})
         any_key_missing: Dict[str, Any] = {'$or': key_missing_clauses}
-        if spec.applicability_filter:
+        if include_applicability and spec.applicability_filter:
             or_conditions.append({
                 '$and': [dict(spec.applicability_filter), any_key_missing]
             })

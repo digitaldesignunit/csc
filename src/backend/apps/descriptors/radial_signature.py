@@ -63,7 +63,10 @@ def get_profile_from_component(
     with a short human-readable explanation suitable for logging.
     """
     geometry = component.get("geometry") or {}
+    extrusions = geometry.get("extrusions") or []
     extrusion = geometry.get("extrusion") or {}
+    if extrusions:
+        extrusion = extrusions[0]
     profile = extrusion.get("profile")
     if not profile:
         return None, "no extrusion profile"
