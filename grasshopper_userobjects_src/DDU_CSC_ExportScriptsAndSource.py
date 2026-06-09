@@ -540,6 +540,8 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                             f'Updated source for {latest_comp[1]}: '
                             f'{sorted_versions[k]} -> {latest_version}'
                         )
+                    # replace old icons with new icons
+                    # old_comp[3].Icon = latest_comp[3].Icon
                 # THEN UPDATE DICT!
                 UpdateMessages.append(
                     f'Updated in Dict: {latest_comp[0]} - '
