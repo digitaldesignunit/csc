@@ -448,26 +448,26 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Database}
             name="CSC_FilterComponents"
-            description="Filters a list of component data based on various criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Works with local component data."
+            description="Filters a list of compose JSON entries ({identity, snapshot}) based on various criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Works with local compose data from fetch components."
             inputs={[
-              { label: 'Type', description: 'Component type filter (e.g., "beam", "slab", "column")' },
-              { label: 'Material', description: 'Material type filter (e.g., "concrete", "steel", "wood")' },
-              { label: 'Dataset', description: 'Dataset name filter (e.g., "sas_cita_scans", "mineral_composite_sheets")' },
-              { label: 'Complexity', description: 'Complexity level filter (0-3, where 0=simple, 3=complex)' },
-              { label: 'Fragment', description: 'Fragment status filter (True for fragments, False for complete)' },
-              { label: "MinDimensionX", description: "Minimum X dimension filter (bounding box)" },
-              { label: "MaxDimensionX", description: "Maximum X dimension filter (bounding box)" },
-              { label: "MinDimensionY", description: "Minimum Y dimension filter (bounding box)" },
-              { label: "MaxDimensionY", description: "Maximum Y dimension filter (bounding box)" },
-              { label: "MinDimensionZ", description: "Minimum Z dimension filter (bounding box)" },
-              { label: "MaxDimensionZ", description: "Maximum Z dimension filter (bounding box)" },
-              { label: 'ComponentData', description: 'Component data to filter (from FetchComponents or similar)' },
+              { label: 'Type', description: 'Component type filter (identity.type, e.g., "beam", "slab", "column")' },
+              { label: 'Material', description: 'Material type filter (identity.material, e.g., "concrete", "steel", "wood")' },
+              { label: 'Dataset', description: 'Dataset name filter (identity.dataset, e.g., "sas_cita_scans", "mineral_composite_sheets")' },
+              { label: 'Complexity', description: 'Complexity level filter (snapshot.complexity, 0-3, where 0=simple, 3=complex)' },
+              { label: 'Fragment', description: 'Fragment status filter (snapshot.fragment, True for fragments, False for complete)' },
+              { label: "MinDimensionX", description: "Minimum X dimension filter (snapshot.bbx)" },
+              { label: "MaxDimensionX", description: "Maximum X dimension filter (snapshot.bbx)" },
+              { label: "MinDimensionY", description: "Minimum Y dimension filter (snapshot.bbx)" },
+              { label: "MaxDimensionY", description: "Maximum Y dimension filter (snapshot.bbx)" },
+              { label: "MinDimensionZ", description: "Minimum Z dimension filter (snapshot.bbx)" },
+              { label: "MaxDimensionZ", description: "Maximum Z dimension filter (snapshot.bbx)" },
+              { label: 'ComponentData', description: 'Compose JSON strings to filter ({identity, snapshot}), e.g. from FetchAllComponents, FetchComponents, or FetchFilteredComponents' },
             ]}
             outputs={[
               { label: 'FilterDescription', description: 'Human-readable description of the applied filters' },
-              { label: 'FilteredComponentData', description: 'Filtered ComponentData as JSON strings. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
+              { label: 'FilteredComponentData', description: 'Filtered compose JSON strings ({identity, snapshot}). Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
             ]}
-            tip="Works with local component data. Use after FetchComponents or FetchAllComponents to filter results locally."
+            tip="Local filter for compose data. Use after FetchAllComponents, FetchComponents, or FetchFilteredComponents to narrow results without another API call."
             imagePath={resolveStatic('/gh-interface/csc_filtercomponents.jpg')}
           />
 
@@ -724,29 +724,29 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Settings}
             name="CSC_BakeComponents"
-            description="Bakes component geometry from Grasshopper into the Rhino document as actual Rhino objects."
+            description="Bakes compose entries ({identity, snapshot}) into the Rhino document as meshes or primitive geometry."
             inputs={[
               { label: 'Bake', description: 'Toggle to bake components to Rhino' },
-              { label: 'ComponentData', description: 'Component data from FetchComponents' }
+              { label: 'ComponentData', description: 'Compose JSON strings from FetchComponents' }
             ]}
             outputs={[
               { label: 'None', description: 'This component has no outputs' }
             ]}
-            tip="Converts Grasshopper component data into actual Rhino objects in the document."
+            tip="Uses cached PLY meshes when available, falls back to snapshot extrusions/meshes. Stores full compose JSON on csc_component user text."
             imagePath={resolveStatic('/gh-interface/csc_bakecomponents.jpg')}
           />
 
           <ComponentCard
             icon={Settings}
             name="CSC_SyncWithRhinoDoc"
-            description="Synchronizes component data with the current Rhino document."
+            description="Reads baked objects from the Rhino document and updates snapshot.iframe in compose JSON."
             inputs={[
               { label: 'Sync', description: 'Trigger to sync components with Rhino document' }
             ]}
             outputs={[
-              { label: 'ComponentData', description: 'DataTree containing all component data found in the document, with updated iframe information based on current object positions' }
+              { label: 'ComponentData', description: 'DataTree of compose JSON with updated snapshot.iframe from text tags or geometry bounds' }
             ]}
-            tip="Updates component iframe information based on current object positions in the Rhino document."
+            tip="Groups objects by identity._id. Prefers text-tag planes over combined bounding-box frames."
             imagePath={resolveStatic('/gh-interface/csc_syncwithrhinodoc.jpg')}
           />
 
@@ -923,15 +923,15 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
           <ComponentCard
             icon={HelpCircle}
             name="CSC_GetDescriptor"
-            description="Retrieves a specific descriptor from multiple component_data inputs. Accepts a list of component_data JSON strings or geometries with attached component_data. Returns the descriptor values for the specified key from the descriptors array. Handles single values, lists, and nested lists by mapping them to appropriate Grasshopper data structures with input indices as the first path level."
+            description="Retrieves a specific descriptor from multiple compose inputs ({identity, snapshot}). Accepts compose JSON strings or geometries with the csc_component userdata. Returns descriptor values for the specified key from snapshot.descriptors. Handles single values, lists, and nested lists by mapping them to appropriate Grasshopper data structures with input indices as the first path level."
             inputs={[
-              { label: 'Input', description: 'List of component data as JSON strings OR geometries with attached component_data userdata' },
-              { label: 'DescriptorKey', description: 'Key string to retrieve from the descriptors array in component_data' }
+              { label: 'Input', description: 'List of compose JSON strings ({identity, snapshot}) OR geometries with the \'csc_component\' compose userdata' },
+              { label: 'DescriptorKey', description: 'Key string to retrieve from snapshot.descriptors' }
             ]}
             outputs={[
               { label: 'DescriptorValues', description: 'Descriptor value for the specified key, or empty if not found. Output is structured as a DataTree with input indices as the first path level' }
             ]}
-            tip="Handles complex nested data structures automatically and preserves data tree paths from the input structure."
+            tip="Handles complex nested descriptor structures automatically and preserves data tree paths from the input structure."
           />
         </div>
       )
