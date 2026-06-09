@@ -1598,12 +1598,15 @@ class DesignInsertionFrame(BaseModel):
 
 
 class DesignComponent(BaseModel):
-    """Component reference with its insertion frame in the design."""
-    component: str = Field(
-        description="Component ID (GUID) reference"
+    """Snapshot reference with its insertion frame in the design."""
+    snapshot: str = Field(
+        description=(
+            "Snapshot ID (GUID) reference - a specific catalog version, "
+            "not the identity's current snapshot"
+        )
     )
     iframe: DesignInsertionFrame = Field(
-        description="Insertion frame defining component orientation"
+        description="Insertion frame defining snapshot placement in design space"
     )
 
 
@@ -1654,9 +1657,9 @@ class DesignModel(BaseModel):
     lastmodified: str = Field(
         description="ISO timestamp when design was last modified"
     )
-    # components and respective insertion frames
+    # snapshot placements and respective insertion frames
     components: List[DesignComponent] = Field(
-        description="List of components and their insertion frames"
+        description="List of snapshot placements and their insertion frames"
     )
     # additional geometry (design-scoped)
     additional_geometry: List[DesignAdditionalGeometry] = Field(
@@ -1680,7 +1683,7 @@ class DesignModel(BaseModel):
                 "lastmodified": "2024-01-15T10:30:00Z",
                 "components": [
                     {
-                        "component": "550e8400-e29b-41d4-a716-446655440000",
+                        "snapshot": "550e8400-e29b-41d4-a716-446655440010",
                         "iframe": {
                             "o": [0.0, 0.0, 0.0],
                             "x": [1.0, 0.0, 0.0],
@@ -1689,7 +1692,7 @@ class DesignModel(BaseModel):
                         }
                     },
                     {
-                        "component": "550e8400-e29b-41d4-a716-446655440001",
+                        "snapshot": "550e8400-e29b-41d4-a716-446655440011",
                         "iframe": {
                             "o": [100.0, 0.0, 0.0],
                             "x": [1.0, 0.0, 0.0],
@@ -1737,7 +1740,7 @@ class CreateDesignRequest(BaseModel):
         description="Design description (optional)"
     )
     components: List[DesignComponent] = Field(
-        description="List of components and their insertion frames"
+        description="List of snapshot placements and their insertion frames"
     )
     additional_geometry: List[DesignAdditionalGeometry] = Field(
         default_factory=list,
@@ -1760,7 +1763,7 @@ class UpdateDesignModel(BaseModel):
     )
     components: Optional[List[DesignComponent]] = Field(
         None,
-        description="List of components and their insertion frames"
+        description="List of snapshot placements and their insertion frames"
     )
     additional_geometry: Optional[List[DesignAdditionalGeometry]] = Field(
         None,

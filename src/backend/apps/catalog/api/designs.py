@@ -19,6 +19,7 @@ from apps.catalog.models import (  # NOQA
     User,
 )
 from .auth import get_current_active_user
+from .catalog_common import get_snapshots_col, validate_uuid
 from utility import (
     generate_design_etag,
     generate_etag_for_designs,
@@ -35,10 +36,6 @@ router = APIRouter()
 
 async def get_designs_col(request: Request):
     return request.app.mongodb_designs
-
-
-async def get_components_col(request: Request):
-    return request.app.mongodb_components
 
 
 async def get_users_col(request: Request):
@@ -69,16 +66,21 @@ def check_conditional_request(request: Request, etag: str) -> bool:
     return False
 
 
-async def validate_component_ids(
-    component_ids: List[str], components_col
+async def validate_snapshot_ids(
+    snapshot_ids: List[str], snapshots_col
 ) -> bool:
-    """Validate that all component IDs exist in the database."""
+    """Validate that all snapshot IDs exist in component_snapshots."""
+    if not snapshot_ids:
+        return False
     try:
-        # Query using GUID strings directly (not ObjectIds)
-        count = await components_col.count_documents(
-            {"_id": {"$in": component_ids}}
+        for snapshot_id in snapshot_ids:
+            validate_uuid(snapshot_id, label='snapshot id')
+        count = await snapshots_col.count_documents(
+            {"_id": {"$in": snapshot_ids}}
         )
-        return count == len(component_ids)
+        return count == len(snapshot_ids)
+    except HTTPException:
+        raise
     except Exception:
         return False
 
@@ -290,17 +292,16 @@ async def create_design(
     design_data: CreateDesignRequest,
     current_user: Annotated[User, Depends(get_current_active_user)],
     designs_col=Depends(get_designs_col),
-    components_col=Depends(get_components_col),
+    snapshots_col=Depends(get_snapshots_col),
     users_col=Depends(get_users_col),
 ):
     """Create a new design."""
     try:
-        # Validate component IDs exist
-        component_ids = [comp.component for comp in design_data.components]
-        if not await validate_component_ids(component_ids, components_col):
+        snapshot_ids = [comp.snapshot for comp in design_data.components]
+        if not await validate_snapshot_ids(snapshot_ids, snapshots_col):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="One or more component IDs do not exist"
+                detail="One or more snapshot IDs do not exist"
             )
         # Enforce limits for additional geometry
         additional_geometry = getattr(design_data, 'additional_geometry', [])
@@ -398,7 +399,7 @@ async def update_design(
     design_data: UpdateDesignModel,
     current_user: Annotated[User, Depends(get_current_active_user)],
     designs_col=Depends(get_designs_col),
-    components_col=Depends(get_components_col),
+    snapshots_col=Depends(get_snapshots_col),
     users_col=Depends(get_users_col),
 ):
     """Update an existing design."""
@@ -417,13 +418,12 @@ async def update_design(
                 detail="You can only update your own designs"
             )
 
-        # Validate component IDs if provided
         if design_data.components:
-            component_ids = [comp.component for comp in design_data.components]
-            if not await validate_component_ids(component_ids, components_col):
+            snapshot_ids = [comp.snapshot for comp in design_data.components]
+            if not await validate_snapshot_ids(snapshot_ids, snapshots_col):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="One or more component IDs do not exist"
+                    detail="One or more snapshot IDs do not exist"
                 )
 
         # Prepare update data
