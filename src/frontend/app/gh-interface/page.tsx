@@ -532,17 +532,17 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Database}
             name="CSC_FetchDesign"
-            description="Fetches a design from the remote Catalog along with all its contained components. Updates each component's iframe with the design's iframe and returns both design JSON and components with updated iframes. Uses caching for optimal performance."
+            description="Fetches a design from the remote Catalog along with all pinned snapshot placements. Resolves each snapshot reference to compose JSON ({identity, snapshot}) and overwrites snapshot.iframe with the design insertion frame. Uses caching for optimal performance."
             inputs={[
               { label: 'DesignID', description: 'Design ID to fetch' }
             ]}
             outputs={[
               { label: 'DesignData', description: 'Design JSON string' },
-              { label: 'ComponentData', description: 'Components with updated iframes from design' },
+              { label: 'ComponentData', description: 'Compose JSON per placement with design iframe applied' },
               { label: 'AdditionalGeometryData', description: 'Additional geometry items (list of JSON strings)' },
               { label: 'AdditionalGeometry', description: 'Additional geometry as Rhino meshes' }
             ]}
-            tip="Designs contain both component references and embedded additional geometry. Components are automatically updated with the design's iframe."
+            tip="Designs pin specific snapshot versions, not identity/current. Use DisassembleComponent on ComponentData outputs."
             imagePath={resolveStatic('/gh-interface/csc_fetchdesign.jpg')}
           />
         </div>
@@ -671,11 +671,11 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Code}
             name="CSC_CreateDesign"
-            description="Creates a design JSON string from component data, ready for posting to the Catalog. Validates input against design schema and generates complete design payload with UUID, timestamps, and component references. Does NOT post the design - only generates the JSON string."
+            description="Creates a design JSON string from compose JSON ({identity, snapshot}), ready for posting to the Catalog. Pins each placement to a specific snapshot version and stores the design insertion iframe. Does NOT post the design - only generates the JSON string."
             inputs={[
               { label: 'DesignName', description: 'Design name (mandatory)' },
               { label: 'DesignDescription', description: 'Design description (optional)' },
-              { label: 'ComponentData', description: 'List of component JSON strings' },
+              { label: 'ComponentData', description: 'List of compose JSON strings with snapshot.iframe set to the design placement' },
               { label: 'AdditionalGeometry', description: 'AdditionalGeometry (List of Mesh)' }
             ]}
             outputs={[
@@ -688,7 +688,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Code}
             name="CSC_AddDesign"
-            description="Adds a new design to the remote database. Takes design data (JSON), validates it, and makes an authenticated POST request to add the design to the Catalog. Designs contain component references and additional geometry embedded directly in the JSON."
+            description="Adds a new design to the remote database. Takes design data (JSON), validates it, and makes an authenticated POST request to add the design to the Catalog. Designs pin specific snapshot versions and may embed additional geometry directly in the JSON."
             inputs={[
               { label: 'DesignData', description: 'Design data as JSON string to add to the database' },
               { label: 'Run', description: 'Toggle to execute the add operation' }
@@ -696,7 +696,7 @@ export default function GHInterfacePage() {
             outputs={[
               { label: 'AddedDesignData', description: 'The added design data returned from the server as JSON' }
             ]}
-            tip="Validates design data including component references and additional geometry before posting to the database."
+            tip="Validates design data including snapshot placements and additional geometry before posting to the database."
             imagePath={resolveStatic('/gh-interface/csc_adddesign.jpg')}
           />
 
@@ -994,8 +994,8 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
             <div className="space-y-3">
               <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
                 <li>Authenticate with <strong>CSC_Session</strong></li>
-                <li>Create components with <strong>CSC_CreateComponent</strong></li>
-                <li>Create design with <strong>CSC_CreateDesign</strong> (includes additional geometry)</li>
+                <li>Fetch compose JSON with <strong>CSC_FetchComponents</strong> and place with <strong>CSC_SyncWithRhinoDoc</strong></li>
+                <li>Create design with <strong>CSC_CreateDesign</strong> from compose JSON (includes additional geometry)</li>
                 <li>Save design to database with <strong>CSC_AddDesign</strong></li>
                 <li>Fetch and work with design using <strong>CSC_FetchDesign</strong></li>
               </ol>

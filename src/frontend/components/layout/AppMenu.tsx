@@ -56,16 +56,16 @@ export default function AppMenu() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* MAIN Section */}
-      <div className="space-y-2">
-        <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
+      <div className="space-y-1">
+        <h3 className="text-xs font-semibold text-muted-foreground px-2 uppercase tracking-wider">
           Main
         </h3>
-        <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
+        <div>
           <div
             onClick={() => handleNavigation('/')}
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
           >
             <Home className="h-4 w-4" />
             Home / About
@@ -76,14 +76,14 @@ export default function AppMenu() {
             <>
               <div
                 onClick={() => handleNavigation('/dashboard')}
-                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+                className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
               >
                 <User className="h-4 w-4" />
                 Dashboard
               </div>
               <div
                 onClick={() => handleNavigation('/gh-interface')}
-                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+                className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
               >
                 <Terminal className="h-4 w-4" />
                 GH Interface
@@ -95,54 +95,54 @@ export default function AppMenu() {
 
       {/* COMPONENTS Section - Only visible to logged in users */}
       {session && !session.error && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
+        <div className="space-y-1">
+          <h3 className="text-xs font-semibold text-muted-foreground px-2 uppercase tracking-wider">
             Components
           </h3>
-          <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
-            <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div>
+            <div className="px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Explore
             </div>
             <div
               onClick={() => handleNavigation('/components')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Package className="h-4 w-4" />
               Browse Components
             </div>
-            <div className="my-1 mx-2 border-t border-border/60" />
-            <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="my-0.5 mx-2 border-t border-border/60" />
+            <div className="px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Capture
             </div>
             <div
               onClick={() => handleNavigation('/identify')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <QrCode className="h-4 w-4" />
               Scan & Identify
             </div>
             <div
               onClick={() => handleNavigation('/transmit-id')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Send className="h-4 w-4" />
               Transmit ID
             </div>
             <div
               onClick={() => handleNavigation('/add-component')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <PackagePlus className="h-4 w-4" />
               Add Component
             </div>
 
-            <div className="my-1 mx-2 border-t border-border/60" />
-            <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="my-0.5 mx-2 border-t border-border/60" />
+            <div className="px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Insights
             </div>
             <div
               onClick={() => handleNavigation('/analytics')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <BarChart2 className="h-4 w-4" />
               Analytics
@@ -153,14 +153,14 @@ export default function AppMenu() {
 
       {/* DESIGNS Section - Only visible to logged in users */}
       {session && !session.error && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
+        <div className="space-y-1">
+          <h3 className="text-xs font-semibold text-muted-foreground px-2 uppercase tracking-wider">
             Designs
           </h3>
-          <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
+          <div>
             <div
               onClick={() => handleNavigation('/designs')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Layers2 className="h-4 w-4" />
               Browse Designs
@@ -171,28 +171,28 @@ export default function AppMenu() {
 
       {/* Admin Navigation - Only visible to admin users */}
       {session?.user?.role === 'admin' && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
+        <div className="space-y-1">
+          <h3 className="text-xs font-semibold text-muted-foreground px-2 uppercase tracking-wider">
             Admin
           </h3>
-          <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
+          <div>
             <div
               onClick={() => handleNavigation('/admin/validation')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Shield className="h-4 w-4" />
               Component Validation
             </div>
             <div
               onClick={() => handleNavigation('/components?consumed=1')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Archive className="h-4 w-4" />
               Consumed Components
             </div>
             <div
               onClick={() => handleNavigation('/admin/logs')}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Logs className="h-4 w-4" />
               Backend Logs
@@ -202,28 +202,28 @@ export default function AppMenu() {
       )}
 
       {/* OTHER Section */}
-      <div className="space-y-2">
-        <h3 className="text-xs font-semibold text-muted-foreground px-3 uppercase tracking-wider">
+      <div className="space-y-1">
+        <h3 className="text-xs font-semibold text-muted-foreground px-2 uppercase tracking-wider">
           Other
         </h3>
-        <div className="rounded-lg bg-popover text-popover-foreground p-1 border">
+        <div>
           <div
             onClick={() => handleNavigation('/credits')}
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
           >
             <Award className="h-4 w-4" />
             Credits
           </div>
           <div
             onClick={() => handleNavigation('/imprint')}
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
           >
             <FileText className="h-4 w-4" />
             Imprint
           </div>
           <div
             onClick={() => handleExternalNavigation('https://api.ddu.uber.space/docs#/')}
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
           >
             <BookMarked className="h-4 w-4" />
             API Docs
