@@ -1153,6 +1153,19 @@ class ComponentSnapshot(BaseModel):
         populate_by_name = True
 
 
+class CatalogSharedTypesEnvelope(BaseModel):
+    """
+    Codegen-only envelope exporting shared catalog value types.
+
+    Not used as a request/response body. Referenced by
+    ``GET /schema/catalog-shared`` for frontend model generation.
+    """
+    frame: ComponentFrame
+    location: ComponentLocation
+    bbx: ComponentBoundingBox
+    geometry: ComponentGeometry
+
+
 class ComposeIdentityResponse(BaseModel):
     """Compose response: an identity plus its current snapshot.
 
@@ -1606,7 +1619,9 @@ class DesignComponent(BaseModel):
         )
     )
     iframe: DesignInsertionFrame = Field(
-        description="Insertion frame defining snapshot placement in design space"
+        description=(
+            "Insertion frame defining snapshot placement in design space"
+        )
     )
 
 

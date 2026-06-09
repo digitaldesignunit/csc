@@ -19,6 +19,9 @@ Owns the primary read path of the new data model:
 * `GET /schema/catalog-compose`
     -> JSON Schema for the compose body (frontend codegen)
 
+* `GET /schema/catalog-shared`
+    -> JSON Schema for shared catalog value types (frontend codegen)
+
 * `GET /schema/create-identity`
     -> JSON Schema for POST /identities (Grasshopper)
 
@@ -35,8 +38,7 @@ Write routes:
 PATCH current snapshot here;
 snapshot preview/photo file routes in `snapshots.py`.
 
-Legacy `/components/...` routes in `components.py` remain for the design
-workspace and other cutover paths.
+Legacy `/components/...` routes in `components.py` are scheduled for removal.
 """
 
 import hashlib
@@ -57,6 +59,7 @@ from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
 from apps.catalog.models import (
+    CatalogSharedTypesEnvelope,
     ComponentCount,
     ComponentIdentity,
     ComponentSnapshot,
@@ -110,6 +113,18 @@ async def get_catalog_compose_json_schema():
     Used by the frontend `generate:models` script (see `CatalogModels.ts`).
     """
     schema = ComposeIdentityResponse.model_json_schema(by_alias=True)
+    return JSONResponse(status_code=200, content=schema)
+
+
+@router.get(
+    '/schema/catalog-shared',
+    summary='JSON Schema for shared catalog value types (frontend codegen)',
+)
+async def get_catalog_shared_json_schema():
+    """
+    Used by the frontend `generate:models` script (see `CatalogSharedTypes.ts`).
+    """
+    schema = CatalogSharedTypesEnvelope.model_json_schema(by_alias=True)
     return JSONResponse(status_code=200, content=schema)
 
 
