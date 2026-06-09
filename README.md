@@ -65,7 +65,7 @@ example!).
 
 ## Setting up Environment Variables
 
-All secrets and configuration are passed via environment variables — no config
+All secrets and configuration are passed via environment variables - no config
 files with credentials are used in the backend.
 
 ### Backend environment variables
@@ -74,7 +74,7 @@ The backend reads all configuration from the environment at startup and will
 exit immediately with a clear error listing any missing variables. There are
 two places you need to set them:
 
-**1. `~/.bash_profile`** — for shell scripts and cron jobs (see
+**1. `~/.bash_profile`** - for shell scripts and cron jobs (see
 `uberspaceconfig/.bash_profile.example` for the full template):
 
 ```bash
@@ -101,7 +101,7 @@ export FASTAPI_CORS_ORIGINS="https://ddu.uber.space,http://localhost:3000"
 
 Apply immediately by running: `source ~/.bash_profile`
 
-**2. `~/etc/services.d/fastapi.ini`** — for the supervisord-managed FastAPI
+**2. `~/etc/services.d/fastapi.ini`** - for the supervisord-managed FastAPI
 service (supervisord does _not_ read `~/.bash_profile`). Copy
 `uberspaceconfig/etc/services.d/fastapi.ini.example` to the server, fill in
 the real values in the `environment=` block, and keep it off git (it is
@@ -295,7 +295,7 @@ for services:
 - This folder contains two configuration files for _Supervisor_
 - For `fastapi.ini`: use `fastapi.ini.example` as a template, fill in the real
   values in the `environment=` block, and transfer your filled-in copy to the
-  server — never commit the file with real secrets (it is gitignored)
+  server - never commit the file with real secrets (it is gitignored)
 - For `react-frontend.ini`: transfer as-is, no user-specific values needed. It
   only sets `NODE_ENV=production`; all frontend configuration is baked in at
   build time via `.env`.
@@ -492,8 +492,8 @@ Ready-made crontab entries for all jobs are in `uberspaceconfig/crontab/`.
 Two deployment scripts are provided in `uberspaceconfig/deployment/`. Both
 require `GITHUB_DEPLOY_URL` to be set in `~/.bash_profile`.
 
-- `csc_deploy.sh` — full deploy: pulls backend + frontend, restarts backend, rebuilds and restarts frontend
-- `csc_deploy_backend.sh` — backend only: pulls backend, restarts FastAPI
+- `csc_deploy.sh` - full deploy: pulls backend + frontend, restarts backend, rebuilds and restarts frontend
+- `csc_deploy_backend.sh` - backend only: pulls backend, restarts FastAPI
 
 ## OpenAPI Model Generation
 

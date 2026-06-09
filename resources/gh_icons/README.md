@@ -4,8 +4,8 @@ This folder is the source-of-truth for **CSC (Catalog of Second Chances) Grassho
 
 Each component gets:
 
-1. An **SVG source file** — the canonical, LLM-editable artwork (text in git, diffable, tweakable in chat)
-2. A **24×24 PNG export** — rasterized from the SVG for Grasshopper UserObjects
+1. An **SVG source file** -> the canonical, LLM-editable artwork (text in git, diffable, tweakable in chat)
+2. A **24×24 PNG export** -> rasterized from the SVG for Grasshopper UserObjects
 
 **Why SVG first:** Grasshopper ultimately needs a 24×24 bitmap, but SVG is the working format. An LLM can read, edit, and regenerate `.svg` files directly (paths, strokes, colours) without re-prompting an image model for every tweak.
 
@@ -24,7 +24,7 @@ resources/gh_icons/
 
 **Naming:** use the component `NickName` exactly as defined in source (e.g. `CSC_Session.svg`, `CreateComponentIdentity.svg`).
 
-Icons are applied when exporting UserObjects via `ExportScriptsAndSource` (single shared icon path today) or by setting `IconOverride` on individual components — both expect the **PNG** in `24x24/`.
+Icons are applied when exporting UserObjects via `ExportScriptsAndSource` (single shared icon path today) or by setting `IconOverride` on individual components -> both expect the **PNG** in `24x24/`.
 
 ---
 
@@ -38,13 +38,13 @@ Based on the [official Grasshopper icon guide](https://developer.rhino3d.com/en/
 | --- | --- |
 | **Canvas** | `viewBox="0 0 24 24"`, `width="24"`, `height="24"` |
 | **Format** | Plain **SVG** (XML), no embedded raster images |
-| **Geometry** | `<path>`, `<line>`, `<rect>`, `<circle>`, `<polygon>` — prefer paths for complex shapes |
+| **Geometry** | `<path>`, `<line>`, `<rect>`, `<circle>`, `<polygon>` -> prefer paths for complex shapes |
 | **Strokes** | Explicit `stroke` + `stroke-width` (typically 1–2 in 24×24 units); use `stroke-linecap="round"` / `stroke-linejoin="round"` where helpful |
 | **Fills** | Solid fills only; avoid gradients, filters, and masks unless strictly necessary |
 | **Safe content area** | Keep artwork inside **x/y 2–22** (~20×20 px, **2 px margin** on all sides) |
 | **Background** | Transparent (no background `<rect>`) |
 | **Structure** | Keep markup minimal and readable; optional `<g id="symbol">` / `<g id="shadow">` groups |
-| **Colours** | Hex or named colours in attributes (`fill="#000000"`), not CSS classes — easier for LLMs to edit |
+| **Colours** | Hex or named colours in attributes (`fill="#000000"`), not CSS classes -> easier for LLMs to edit |
 
 Minimal SVG skeleton:
 
@@ -62,7 +62,7 @@ Minimal SVG skeleton:
 | **Size** | **24 × 24 px** exactly |
 | **Format** | **PNG**, 32-bit RGBA |
 | **Source** | Rasterized from the matching `svg/{NickName}.svg` |
-| **Drop shadow** (optional, recommended) | Blur 2 px · black · alpha 65/255 (~25%) · offset +1 px right, +1 px down — implement in SVG or at export time |
+| **Drop shadow** (optional, recommended) | Blur 2 px · black · alpha 65/255 (~25%) · offset +1 px right, +1 px down -> implement in SVG or at export time |
 | **Style** | Match native Grasshopper icons: clear line weights, high contrast, limited palette, simple geometric symbols, readable at canvas zoom |
 
 ### CSC visual identity (secondary)
@@ -79,7 +79,7 @@ Prefer one accent colour per icon; avoid gradients and fine detail that disappea
 **SVG source**
 
 - [ ] `viewBox="0 0 24 24"` with artwork in the 2–22 safe area
-- [ ] Vector paths only — no embedded PNG/JPEG
+- [ ] Vector paths only -> no embedded PNG/JPEG
 - [ ] Transparent background
 - [ ] Readable on light **and** dark Grasshopper canvas backgrounds
 - [ ] No text labels (too small at 24×24)
@@ -112,7 +112,7 @@ Use nearest-neighbour or a sharp downscale if exporting from a larger intermedia
 
 Use this README as the prompt context when generating icons. **Output SVG source code**, then rasterize to PNG.
 
-LLMs should prefer **writing/editing `.svg` files** over generating bitmaps — the SVG can be iterated in chat (“ thicken the stroke”, “ swap accent to `#ef509c`”, “ move symbol 1px left”).
+LLMs should prefer **writing/editing `.svg` files** over generating bitmaps -> the SVG can be iterated in chat (“ thicken the stroke”, “ swap accent to `#ef509c`”, “ move symbol 1px left”).
 
 ### Base prompt template (SVG)
 
@@ -140,7 +140,7 @@ If using an image model, still end up with SVG: trace or redraw the result as pa
 
 ### Suggested visual metaphors (starting points)
 
-Use these as hints for the `{short visual metaphor}` field—not literal labels.
+Use these as hints for the `{short visual metaphor}` field->not literal labels.
 
 | Area | Metaphor ideas |
 | --- | --- |
@@ -187,13 +187,13 @@ All components below live in `grasshopper_userobjects_src/`. Descriptions are sh
 | `AddComponentIdentity` | POSTs a new catalog identity (+ v0 snapshot) from `CreateComponentIdentity` JSON; uploads staged PLY meshes; may consume a pending transmitted ID. |
 | `AddComponentSnapshot` | POSTs a new snapshot for an existing identity from `CreateComponentSnapshot` JSON; uploads staged PLY mesh files. |
 | `AddDesign` | Validates design JSON and POSTs a new design (component refs + embedded geometry) to the Catalog. |
-| `FetchAllComponents` | GET `/identities` — fetches all identities joined with current snapshots as compose JSON `{identity, snapshot}`; cached. |
+| `FetchAllComponents` | GET `/identities` -> fetches all identities joined with current snapshots as compose JSON `{identity, snapshot}`; cached. |
 | `FetchComponents` | Fetches specific catalog components by ID; handles missing IDs; supports cache. |
 | `FetchDesign` | Fetches a design and its components; applies the design iframe to each component; returns design JSON, component data, and extra geometry. |
 | `FetchFilteredComponents` | Server-side filtered catalog query (type, material, dataset, complexity, dimensions, reservation status). |
 | `FetchDetailedGeometry` | Fetches high-fidelity snapshot geometry as binary PLY (ETag cache); falls back to reduced PLY, then inline primitive meshes. |
 | `FetchReducedGeometry` | Fetches catalog-default reduced snapshot geometry as binary PLY (ETag cache); falls back to inline primitive meshes. |
-| `FetchGeometry` | Legacy combined fetch — downloads reduced or detailed mesh geometry from JSON, geometry userdata, or component ID. Prefer `FetchDetailedGeometry` / `FetchReducedGeometry`. |
+| `FetchGeometry` | Legacy combined fetch -> downloads reduced or detailed mesh geometry from JSON, geometry userdata, or component ID. Prefer `FetchDetailedGeometry` / `FetchReducedGeometry`. |
 | `FetchTransmittedID` | Returns the pending transmitted component ID for the signed-in user from the backend. |
 | `FilterComponents` | Locally filters a list of compose/component JSON by type, material, dataset, complexity, fragment, and bounding-box size. |
 
@@ -207,7 +207,7 @@ All components below live in `grasshopper_userobjects_src/`. Descriptions are sh
 | `CreateUUID` | Generates and caches UUIDs; refresh input forces a new value. |
 | `DisassembleComponent` | Splits compose JSON `{identity, snapshot}` into Grasshopper-native outputs: metadata, descriptors, PCA frame, bbox, reconstructed geometry. |
 | `GetComponentData` | Reads `csc_component` userdata JSON from Rhino geometry objects. |
-| `ApplyPCAFrame` | Inverse PCA transform — aligns component JSON or geometry to the world XY plane. |
+| `ApplyPCAFrame` | Inverse PCA transform -> aligns component JSON or geometry to the world XY plane. |
 | `TransformComponent` | Applies a Rhino transform to a snapshot insertion frame in compose JSON. |
 
 ### 4 RhinoDoc Interaction
@@ -270,6 +270,6 @@ These appear in `grasshopper_userobjects_xml/` for backward compatibility but **
 ## References
 
 - [Grasshopper Icons (McNeel developer guide)](https://developer.rhino3d.com/en/guides/grasshopper/grasshopper-icons/)
-- [Grasshopper_Icon_Set.zip](https://developer.rhino3d.com/en/guides/grasshopper/grasshopper-icons/) — official vector reference
+- [Grasshopper_Icon_Set.zip](https://developer.rhino3d.com/en/guides/grasshopper/grasshopper-icons/) -> official vector reference
 - Component source: `grasshopper_userobjects_src/`
 - SubCategory numbering: `grasshopper_development/README.md`
