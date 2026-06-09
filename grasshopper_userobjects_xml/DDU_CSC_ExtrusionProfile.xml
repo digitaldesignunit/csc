@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">837eac93-9a53-4dc1-ba45-7d04a8adb9c8</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">a2614225-632b-4967-933c-1bcc9d5c254d</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639166107638635274</item>
+            <item name="Date" type_name="gh_date" type_code="8">639166173421892322</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -101,14 +101,13 @@
               </items>
               <chunks count="1">
                 <chunk name="Container">
-                  <items count="16">
+                  <items count="15">
                     <item name="Description" type_name="gh_string" type_code="10">Extract the profile curves of an Extrusion.</item>
                     <item name="GraftStandardOutputLines" type_name="gh_bool" type_code="1">true</item>
-                    <item name="Hidden" type_name="gh_bool" type_code="1">true</item>
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="662">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAIrSURBVEhL7ZRNaBNBFMe3fuHJ6kmhN0+ihJD3JruSEBYU08SkmbEY8KKCglDwoyoU9dJYUfQStVohmQ0RvUVQPIr0oB48tNCKUBUFhVBra3ZWD1apNSsTEwgjJG3JMT9Yln3z/7+3+/bNaFqbVoKInR6PZ5MabwkOzW+8t/v02JB5aAERs36/f4eqWREysUN5SjDuOMxy5fVgz8APg/jLAPDE5/NFNE3rUH1N+S8x5Z9sxvsEtUbl85t4+rVJApOI6ALATdXflKlY+otMNJ24Y0/33D7uJgvrZFzeHWrdl2sfe24Vu3VTFoir/obYNBOQCUa7U8WdRP8DACVEvOL1ervkuqu5He9i10ekZmLvtc+qvymC8bw0f2McCSFbEfEGAHwHgAUAOGua5pqwPzQuGHfnaPax6m+ISGY6BeXzDrNe1cd1Xd8AACdlOwDgwqng/kX5EoJaJ+p1TXkRuXRYGh+FzwtCyBHTNNerGkLIwefRoaeVAvtyXnW9Ie6xzNoiHXlrU14+GkiUEXEWES8ahrG5XieYNSGYJdzBwVX18SVRSuS2O5TPl2h2JqyHCtVR/Fn7ydU2LjqML6//9Tg011+ZpEjqfbXAzPCuPiYYPyeYNV7ddGdU35KRoygYr/T5ZfTy5FQ8/bu2k23GfwnGH84m81tU37Ioxe52CWrZ/6aFz41Frz4bCB34ECCG/KJhVb8ivvZmttm9POgmC6trMUQMtuywa9OmKX8BNBgPg8iCbqQAAAAASUVORK5CYII=</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">cda13853-f637-4c4b-a600-88d9a7b975fb</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">a84a0abb-f6de-40e9-9748-7a6075cac403</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -150,7 +149,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of Extrusions</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">f84768ff-ccea-47e4-b6f6-ba1d9cf17c2a</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">b76804fe-8aaf-49a9-af43-a852b943efbe</item>
                             <item name="Name" type_name="gh_string" type_code="10">ExtrusionGeometry</item>
                             <item name="NickName" type_name="gh_string" type_code="10">ExtrusionGeometry</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -184,7 +183,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of integer numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">a35484a7-03a1-43f4-ba1c-46d76406b440</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">6247576e-c88b-4e64-8244-ec4028d681b3</item>
                             <item name="Name" type_name="gh_string" type_code="10">ProfileIndex</item>
                             <item name="NickName" type_name="gh_string" type_code="10">ProfileIndex</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -218,7 +217,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of floating point numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">cde18785-967f-4174-a838-acd6f01363c3</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">e8aba52c-5438-4a66-8aa6-685b22a991e2</item>
                             <item name="Name" type_name="gh_string" type_code="10">ProfileParameter</item>
                             <item name="NickName" type_name="gh_string" type_code="10">ProfileParameter</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -252,7 +251,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">6fb74d58-50b2-4dfe-84bd-852e116b8947</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">016a9b93-61a9-414b-aa7c-5ec8cc5059c6</item>
                             <item name="Name" type_name="gh_string" type_code="10">ProfileCurve</item>
                             <item name="NickName" type_name="gh_string" type_code="10">ProfileCurve</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -304,10 +303,10 @@
                     <chunk name="ScriptEditor">
                       <items count="1">
                         <item name="StartBounds" type_name="gh_drawing_rectangle" type_code="34">
-                          <X>-272</X>
-                          <Y>-1127</Y>
+                          <X>-8</X>
+                          <Y>-701</Y>
                           <W>829</W>
-                          <H>990</H>
+                          <H>1032</H>
                         </item>
                       </items>
                     </chunk>
