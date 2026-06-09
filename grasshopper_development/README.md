@@ -63,10 +63,10 @@ ghenv.Component.SubCategory = '1 User'
 ghenv.Component.SubCategory = '2 Catalog Interface'
 ghenv.Component.SubCategory = '3 Component Operations'
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'
-
+ghenv.Component.SubCategory = '5 Matchamking Tools'
 ghenv.Component.SubCategory = '6 Data Tools'
 ghenv.Component.SubCategory = '7 Geometry Tools'
-ghenv.Component.SubCategory = '8 Visualisation'
+ghenv.Component.SubCategory = '8 Visualization'
 ghenv.Component.SubCategory = '9 Admin Actions'
 ```
 
