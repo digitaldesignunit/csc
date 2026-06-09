@@ -44,6 +44,15 @@ function optionalString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
 }
 
+function isIdentityValidation(row: PendingValidationSnapshotItem): boolean {
+  return row.version === 0
+}
+
+function pendingSnapshotHref(identityId: string, snapshotId: string): string {
+  const params = new URLSearchParams({ snapshot_id: snapshotId })
+  return `/components/${encodeURIComponent(identityId)}?${params.toString()}`
+}
+
 export default function ValidationPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -96,8 +105,13 @@ export default function ValidationPage() {
       )
 
       if (response.ok) {
-        setPendingSnapshots((prev) => prev.filter((row) => row._id !== snapshotId))
-        toast.success('Snapshot validated and promoted to live')
+        const row = pendingSnapshots.find((item) => item._id === snapshotId)
+        setPendingSnapshots((prev) => prev.filter((item) => item._id !== snapshotId))
+        toast.success(
+          row && isIdentityValidation(row)
+            ? 'New identity validated and published'
+            : 'Snapshot validated and promoted to live',
+        )
       } else {
         console.error('Failed to validate snapshot')
         toast.error('Failed to validate snapshot. Please try again.')
@@ -223,6 +237,204 @@ export default function ValidationPage() {
     return `Identity ${row.identity_id.slice(0, 8)}`
   }
 
+  const pendingIdentities = pendingSnapshots.filter(isIdentityValidation)
+  const pendingSnapshotUpdates = pendingSnapshots.filter(
+    (row) => !isIdentityValidation(row),
+  )
+  const deleteTargetRow = deleteTarget
+    ? pendingSnapshots.find((row) => row._id === deleteTarget.snapshotId)
+    : null
+
+  const renderValidationRow = (row: PendingValidationSnapshotItem) => {
+    const snapshotId = row._id
+    const liveVersion = liveVersionNumber(row.live_version)
+    const componentType = optionalString(row.type)
+    const material = optionalString(row.material)
+    const identityValidation = isIdentityValidation(row)
+    const componentHref = pendingSnapshotHref(row.identity_id, snapshotId)
+
+    return (
+      <div
+        key={snapshotId}
+        className="border rounded-lg hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-4 gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <h3 className="font-medium text-sm sm:text-base truncate">
+                <Link
+                  href={componentHref}
+                  className="text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-1 transition-colors"
+                >
+                  {displayName(row)}
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              </h3>
+              <Badge variant="secondary" className="text-xs">
+                v{row.version}
+              </Badge>
+              {identityValidation ? (
+                <Badge className="text-xs bg-blue-600 hover:bg-blue-600">
+                  Identity validation
+                </Badge>
+              ) : (
+                <Badge className="text-xs bg-violet-600 hover:bg-violet-600">
+                  Snapshot update
+                </Badge>
+              )}
+              {!identityValidation && liveVersion != null && (
+                <Badge variant="outline" className="text-xs">
+                  Live is v{liveVersion}
+                </Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              {componentType && (
+                <Badge variant="secondary" className="text-xs">
+                  {componentType}
+                </Badge>
+              )}
+              {material && (
+                <Badge variant="outline" className="text-xs">
+                  {material}
+                </Badge>
+              )}
+            </div>
+            <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
+              <p className="break-all">
+                Identity:{' '}
+                <Link href={componentHref} className="text-primary hover:underline">
+                  {row.identity_id}
+                </Link>
+              </p>
+              <p className="break-all">Snapshot: {snapshotId}</p>
+              <p>Submitted: {formatTimestamp(row.created)}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 lg:ml-4 lg:flex-shrink-0">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={() => togglePreview(row)}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2 w-full sm:w-auto"
+                  >
+                    {loadingPreviews.has(snapshotId) ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                    {expandedPreviews.has(snapshotId) ? (
+                      <>
+                        <ChevronUp className="h-4 w-4" />
+                        <span className="hidden sm:inline">Hide</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4" />
+                        <span className="hidden sm:inline">Preview</span>
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Preview this pending snapshot in 3D</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button
+              onClick={() => validateSnapshot(snapshotId)}
+              disabled={validating === snapshotId || deleting === snapshotId}
+              size="sm"
+              className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
+            >
+              {validating === snapshotId ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">
+                    {identityValidation ? 'Validate identity' : 'Validate snapshot'}
+                  </span>
+                </>
+              )}
+            </Button>
+            {identityValidation ? (
+              <Button
+                onClick={() =>
+                  setDeleteTarget({
+                    snapshotId,
+                    identityId: row.identity_id,
+                  })
+                }
+                disabled={validating === snapshotId || deleting === snapshotId}
+                size="sm"
+                variant="destructive"
+                className="w-full sm:w-auto"
+              >
+                {deleting === snapshotId ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Delete</span>
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => rejectSnapshot(snapshotId)}
+                disabled={validating === snapshotId || deleting === snapshotId}
+                size="sm"
+                variant="destructive"
+                className="w-full sm:w-auto"
+              >
+                {deleting === snapshotId ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Reject</span>
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {expandedPreviews.has(snapshotId) && (
+          <div className="p-3 sm:p-4 bg-muted/30 rounded-b-lg border-t">
+            <div className="mb-3">
+              <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                {identityValidation ? 'New identity preview' : 'Pending snapshot preview'} — v
+                {row.version}
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                Interactive 3D view with orbit controls. Use mouse to rotate, scroll to zoom.
+              </p>
+            </div>
+            <div className="h-full w-full">
+              {loadingPreviews.has(snapshotId) ? (
+                <div className="flex items-center justify-center h-full min-h-[200px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : previewById[snapshotId] ? (
+                <ComponentViewer catalog={previewById[snapshotId]} />
+              ) : (
+                <div className="flex items-center justify-center h-full min-h-[200px] text-muted-foreground">
+                  Failed to load snapshot preview
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (status === 'loading') {
     return (
       <div className="container mx-auto p-6">
@@ -245,7 +457,8 @@ export default function ValidationPage() {
           <h1 className="text-xl sm:text-2xl font-bold">Validation Dashboard</h1>
         </div>
         <p className="text-muted-foreground text-sm sm:text-base">
-          Review pending snapshots before they become the live catalog version
+          Review new identities and snapshot updates before they appear in the
+          live catalog
         </p>
       </div>
 
@@ -253,7 +466,23 @@ export default function ValidationPage() {
         <Card className="p-3">
           <div className="text-center">
             <div className="text-lg font-bold">{pendingSnapshots.length}</div>
-            <p className="text-xs text-muted-foreground">Pending Snapshots</p>
+            <p className="text-xs text-muted-foreground">Total pending</p>
+          </div>
+        </Card>
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">
+              {pendingSnapshots.filter(isIdentityValidation).length}
+            </div>
+            <p className="text-xs text-muted-foreground">Identity validation</p>
+          </div>
+        </Card>
+        <Card className="p-3">
+          <div className="text-center">
+            <div className="text-lg font-bold">
+              {pendingSnapshots.filter((row) => !isIdentityValidation(row)).length}
+            </div>
+            <p className="text-xs text-muted-foreground">Snapshot updates</p>
           </div>
         </Card>
       </div>
@@ -268,11 +497,11 @@ export default function ValidationPage() {
             ) : pendingSnapshots.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-                <p className="text-lg font-medium">All snapshots are validated!</p>
-                <p>No pending snapshots require validation.</p>
+                <p className="text-lg font-medium">All caught up!</p>
+                <p>No identities or snapshot updates require validation.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <Button
                     onClick={fetchPendingSnapshots}
@@ -284,197 +513,34 @@ export default function ValidationPage() {
                   </Button>
                 </div>
 
-                <div className="grid gap-4">
-                  {pendingSnapshots.map((row) => {
-                    const snapshotId = row._id
-                    const liveVersion = liveVersionNumber(row.live_version)
-                    const componentType = optionalString(row.type)
-                    const material = optionalString(row.material)
-                    const isNewIdentity = row.version === 0
-                    const isVersionUpdate =
-                      !isNewIdentity &&
-                      liveVersion != null &&
-                      row.version > liveVersion
+                {pendingIdentities.length > 0 && (
+                  <section className="space-y-3">
+                    <div>
+                      <h2 className="text-base font-semibold">Identity validation</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Brand-new components awaiting first approval
+                      </p>
+                    </div>
+                    <div className="grid gap-4">
+                      {pendingIdentities.map(renderValidationRow)}
+                    </div>
+                  </section>
+                )}
 
-                    return (
-                      <div
-                        key={snapshotId}
-                        className="border rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-4 gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                              <h3 className="font-medium text-sm sm:text-base truncate">
-                                <Link
-                                  href={`/components/${row.identity_id}`}
-                                  className="text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-1 transition-colors"
-                                >
-                                  {displayName(row)}
-                                  <ExternalLink className="h-3 w-3" />
-                                </Link>
-                              </h3>
-                              <Badge variant="secondary" className="text-xs">
-                                v{row.version}
-                              </Badge>
-                              {isNewIdentity && (
-                                <Badge variant="outline" className="text-xs">
-                                  New identity
-                                </Badge>
-                              )}
-                              {isVersionUpdate && liveVersion != null && (
-                                <Badge variant="outline" className="text-xs">
-                                  Update from v{liveVersion}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                              {componentType && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {componentType}
-                                </Badge>
-                              )}
-                              {material && (
-                                <Badge variant="outline" className="text-xs">
-                                  {material}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
-                              <p className="break-all">
-                                Identity:{' '}
-                                <Link
-                                  href={`/components/${row.identity_id}`}
-                                  className="text-primary hover:underline"
-                                >
-                                  {row.identity_id}
-                                </Link>
-                              </p>
-                              <p className="break-all">Snapshot: {snapshotId}</p>
-                              <p>Submitted: {formatTimestamp(row.created)}</p>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 lg:ml-4 lg:flex-shrink-0">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    onClick={() => togglePreview(row)}
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex items-center gap-2 w-full sm:w-auto"
-                                  >
-                                    {loadingPreviews.has(snapshotId) ? (
-                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                                    ) : (
-                                      <Eye className="h-4 w-4" />
-                                    )}
-                                    {expandedPreviews.has(snapshotId) ? (
-                                      <>
-                                        <ChevronUp className="h-4 w-4" />
-                                        <span className="hidden sm:inline">Hide</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <ChevronDown className="h-4 w-4" />
-                                        <span className="hidden sm:inline">Preview</span>
-                                      </>
-                                    )}
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Preview this pending snapshot in 3D</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <Button
-                              onClick={() => validateSnapshot(snapshotId)}
-                              disabled={validating === snapshotId || deleting === snapshotId}
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
-                            >
-                              {validating === snapshotId ? (
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                              ) : (
-                                <>
-                                  <CheckCircle className="h-4 w-4 sm:mr-2" />
-                                  <span className="hidden sm:inline">Validate</span>
-                                </>
-                              )}
-                            </Button>
-                            {isNewIdentity ? (
-                              <Button
-                                onClick={() =>
-                                  setDeleteTarget({
-                                    snapshotId,
-                                    identityId: row.identity_id,
-                                  })
-                                }
-                                disabled={validating === snapshotId || deleting === snapshotId}
-                                size="sm"
-                                variant="destructive"
-                                className="w-full sm:w-auto"
-                              >
-                                {deleting === snapshotId ? (
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                ) : (
-                                  <>
-                                    <Trash2 className="h-4 w-4 sm:mr-2" />
-                                    <span className="hidden sm:inline">Delete</span>
-                                  </>
-                                )}
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={() => rejectSnapshot(snapshotId)}
-                                disabled={validating === snapshotId || deleting === snapshotId}
-                                size="sm"
-                                variant="destructive"
-                                className="w-full sm:w-auto"
-                              >
-                                {deleting === snapshotId ? (
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                ) : (
-                                  <>
-                                    <Trash2 className="h-4 w-4 sm:mr-2" />
-                                    <span className="hidden sm:inline">Reject</span>
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-
-                        {expandedPreviews.has(snapshotId) && (
-                          <div className="p-3 sm:p-4 bg-muted/30 rounded-b-lg border-t">
-                            <div className="mb-3">
-                              <h4 className="text-sm font-medium text-muted-foreground mb-2">
-                                Pending snapshot preview — v{row.version}
-                              </h4>
-                              <p className="text-xs text-muted-foreground">
-                                Interactive 3D view with orbit controls. Use mouse to rotate,
-                                scroll to zoom.
-                              </p>
-                            </div>
-                            <div className="h-full w-full">
-                              {loadingPreviews.has(snapshotId) ? (
-                                <div className="flex items-center justify-center h-full min-h-[200px]">
-                                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                                </div>
-                              ) : previewById[snapshotId] ? (
-                                <ComponentViewer catalog={previewById[snapshotId]} />
-                              ) : (
-                                <div className="flex items-center justify-center h-full min-h-[200px] text-muted-foreground">
-                                  Failed to load snapshot preview
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+                {pendingSnapshotUpdates.length > 0 && (
+                  <section className="space-y-3">
+                    <div>
+                      <h2 className="text-base font-semibold">Snapshot updates</h2>
+                      <p className="text-sm text-muted-foreground">
+                        New geometry versions for existing identities — live catalog
+                        stays on the current version until approved
+                      </p>
+                    </div>
+                    <div className="grid gap-4">
+                      {pendingSnapshotUpdates.map(renderValidationRow)}
+                    </div>
+                  </section>
+                )}
               </div>
             )}
           </CardContent>
@@ -490,12 +556,12 @@ export default function ValidationPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {deleteTarget && pendingSnapshots.find((r) => r._id === deleteTarget.snapshotId)?.version === 0
+              {deleteTargetRow && isIdentityValidation(deleteTargetRow)
                 ? 'Permanently delete new component?'
                 : 'Reject pending snapshot?'}
             </DialogTitle>
             <DialogDescription>
-              {deleteTarget && pendingSnapshots.find((r) => r._id === deleteTarget.snapshotId)?.version === 0
+              {deleteTargetRow && isIdentityValidation(deleteTargetRow)
                 ? 'This removes the identity and its initial snapshot. Only available for brand-new components that have not been validated yet.'
                 : 'This discards the pending snapshot and its uploaded geometry. The live catalog version is unchanged.'}
             </DialogDescription>
