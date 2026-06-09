@@ -133,7 +133,7 @@ export default function DesignDetailCard({
                 </div>
 
                 <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border border-border/50">
-                  <span className="text-xs font-medium text-muted-foreground">Components</span>
+                  <span className="text-xs font-medium text-muted-foreground">Snapshots</span>
                   <span className="text-xs font-semibold text-foreground bg-accent/10 px-2 py-1 rounded-md">
                     {design.components.length}
                   </span>

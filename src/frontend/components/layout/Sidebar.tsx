@@ -66,7 +66,7 @@ export default function Sidebar() {
   return (
     <div className='fixed top-0 left-0 flex flex-col w-[250px] h-screen border-r bg-background z-40 overflow-hidden'>
 
-      {/* Zone 1: Logo + UserItem — pinned */}
+      {/* Zone 1: Logo + UserItem - pinned */}
       <div className='flex-shrink-0 flex flex-col gap-3 p-2 pt-3'>
         {mounted && (
           <div className='flex justify-center'>
@@ -87,7 +87,7 @@ export default function Sidebar() {
         <UserItem />
       </div>
 
-      {/* Zone 2: Navigation — scrollable, with bottom fade hint */}
+      {/* Zone 2: Navigation - scrollable, with bottom fade hint */}
       <div className='relative flex-1 min-h-0'>
         <div
           ref={navRef}
@@ -96,14 +96,14 @@ export default function Sidebar() {
           <AppMenu />
         </div>
 
-        {/* Top shadow — appears once the user scrolls away from the top */}
+        {/* Top shadow - appears once the user scrolls away from the top */}
         <div
           aria-hidden
           className='pointer-events-none absolute top-0 left-0 right-0 h-14 transition-opacity duration-200'
           style={{ opacity: showTopFade ? 1 : 0, background: topShadow }}
         />
 
-        {/* Bottom shadow — fades out when scrolled to the bottom */}
+        {/* Bottom shadow - fades out when scrolled to the bottom */}
         <div
           aria-hidden
           className='pointer-events-none absolute bottom-0 left-0 right-0 h-14 transition-opacity duration-200'

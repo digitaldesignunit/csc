@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-06-03T16:45:25.911Z
+// Generated on: 2026-06-09T16:56:04.258Z
 // Source: https://api.ddu.uber.space/schema/design
 
 import { ComponentGeometry } from './ComponentModel';
@@ -12,8 +12,8 @@ export interface DesignAdditionalGeometry {
 }
 
 export interface DesignComponent {
-  component: string; // Component ID (GUID) reference
-  iframe: DesignInsertionFrame; // Insertion frame defining component orientation
+  snapshot: string; // Snapshot ID (GUID) reference - a specific catalog version, not the identity's current snapshot
+  iframe: DesignInsertionFrame; // Insertion frame defining snapshot placement in design space
 }
 
 export interface DesignInsertionFrame {
@@ -30,7 +30,7 @@ export interface DesignModel {
   creator: string; // UUID of user who created this design
   created: string; // ISO timestamp when design was created
   lastmodified: string; // ISO timestamp when design was last modified
-  components: DesignComponent[]; // List of components and their insertion frames
+  components: DesignComponent[]; // List of snapshot placements and their insertion frames
   additional_geometry?: DesignAdditionalGeometry[]; // List of additional static meshes embedded in the design. Always present; may be empty.
 }
 

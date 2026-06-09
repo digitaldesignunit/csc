@@ -88,7 +88,7 @@ export default async function DesignsPage({
             <div className="text-lg font-bold">
               {items.reduce((sum, design) => sum + (design.components?.length || 0), 0)}
             </div>
-            <p className="text-xs text-muted-foreground">Components</p>
+            <p className="text-xs text-muted-foreground">Snapshots</p>
           </div>
         </Card>
         
@@ -109,7 +109,7 @@ export default async function DesignsPage({
                 : 0
               }
             </div>
-            <p className="text-xs text-muted-foreground">Avg. Components/Design</p>
+            <p className="text-xs text-muted-foreground">Avg. Snapshots/Design</p>
           </div>
         </Card>
       </div>
@@ -167,7 +167,7 @@ function DesignCard({ design }: { design: DesignModel }) {
           </div>
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <Badge className="text-xs">
-              {componentCount} component{componentCount !== 1 ? 's' : ''}
+              {componentCount} snapshot{componentCount !== 1 ? 's' : ''}
             </Badge>
             <Badge variant="secondary"className="text-xs">
               {addGeomCount} add. geom.

@@ -6,7 +6,7 @@ import { ImageOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ComponentPreviewImageProps {
-  /** Current snapshot id — thumbnail from `GET /snapshots/{snapshot_id}/preview`. */
+  /** Current snapshot id - thumbnail from `GET /snapshots/{snapshot_id}/preview`. */
   snapshot_id: string | null | undefined
   alt: string
   width: number

@@ -3,10 +3,9 @@ import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 import DesignViewer from '@/components/designs/DesignViewer'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import Link from 'next/link'
 import { getServerSession } from 'next-auth'
 import DesignDetailCard from '@/components/designs/DesignDetailCard'
+import DesignPlacementList from '@/components/designs/DesignPlacementList'
 import { Layers } from 'lucide-react'
 
 export const runtime = 'nodejs'
@@ -69,38 +68,16 @@ export default async function DesignDetailPage({
         {/* Design Details - Second section like ComponentDetailCard */}
         <DesignDetailCard design={design} canEdit={canEdit} />
 
-        {/* Component List */}
+        {/* Snapshot placements */}
         <Card>
           <CardHeader>
-            <CardTitle>Components in this Design</CardTitle>
+            <CardTitle>Snapshots in this Design</CardTitle>
             <CardDescription>
-              List of all components used in this design assembly
+              Specific snapshot versions placed in this design assembly
             </CardDescription>
           </CardHeader>
           <div className="px-6 pb-4">
-            <div className="space-y-2">
-              {design.components.map((comp, index) => (
-                <div key={comp.component} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-sm text-muted-foreground">#{index + 1}</span>
-                    <div>
-                      <div className="font-small">{comp.component}</div>
-                      <div className="text-sm text-muted-foreground">
-                        o: [{comp.iframe.o.map(v => v.toFixed(2)).join(', ')}] <br />
-                        x: [{comp.iframe.x.map(v => v.toFixed(2)).join(', ')}] <br />
-                        y: [{comp.iframe.y.map(v => v.toFixed(2)).join(', ')}] <br />
-                        z: [{comp.iframe.z.map(v => v.toFixed(2)).join(', ')}] <br />
-                      </div>
-                    </div>
-                  </div>
-                  <Link href={`/components/${comp.component}`}>
-                    <Button variant="outline" size="sm">
-                      View Component
-                    </Button>
-                  </Link>
-                </div>
-              ))}
-            </div>
+            <DesignPlacementList placements={design.components} />
           </div>
         </Card>
       </div>
