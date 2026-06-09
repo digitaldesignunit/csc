@@ -420,14 +420,14 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Database}
             name="CSC_FetchComponents"
-            description="Fetches specific components from the remote Catalog by their IDs. Supports caching and handles individual component retrieval with error handling for missing components."
+            description="Fetches specific identities (with their current snapshot) from the remote Catalog by their identity IDs. Supports caching and returns compose JSON ({identity, snapshot}) with error handling for missing identities."
             inputs={[
-              { label: 'ComponentID', description: 'One or many ComponentIDs to fetch' }
+              { label: 'ComponentID', description: 'One or many identity IDs (UUIDs) to fetch' }
             ]}
             outputs={[
-              { label: 'ComponentData', description: 'The ComponentData that was fetched from the server as JSON. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
+              { label: 'ComponentData', description: 'Compose JSON per entry ({identity, snapshot}) fetched from the server. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
             ]}
-            tip="Supports caching for faster subsequent access. Handles missing components gracefully."
+            tip="Supports ETag caching for faster subsequent access. Handles missing identities gracefully."
             imagePath={resolveStatic('/gh-interface/csc_fetchcomponents.jpg')}
           />
 
@@ -474,7 +474,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Database}
             name="CSC_FetchFilteredComponents"
-            description="Fetches components from the remote Catalog based on filter criteria (type, material, dataset, complexity, dimensions, reservation status). Builds query parameters and returns filtered results."
+            description="Fetches identities (with their current snapshot) from the remote Catalog based on filter criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Mirrors the web catalog filter menu and returns compose JSON ({identity, snapshot}) results."
             inputs={[
               { label: 'Type', description: 'Component type filter (e.g., "beam", "slab", "column")' },
               { label: 'Material', description: 'Material type filter (e.g., "concrete", "steel", "wood")' },
@@ -491,26 +491,41 @@ export default function GHInterfacePage() {
             ]}
             outputs={[
               { label: 'FilterDescription', description: 'Human-readable description of the applied filters and query' },
-              { label: 'ComponentData', description: 'The ComponentData that was fetched from the server as JSON. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
+              { label: 'ComponentData', description: 'Compose JSON per entry ({identity, snapshot}) fetched from the server. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
             ]}
-            tip="More efficient than fetching all components and filtering locally. Use this for large datasets with server-side filtering."
+            tip="Filters mirror the web catalog filter menu (plus a reservation-status filter) and run server-side on validated current snapshots. More efficient than fetching all components and filtering locally."
             imagePath={resolveStatic('/gh-interface/csc_fetchfilteredcomponents.jpg')}
           />
 
           <ComponentCard
             icon={Database}
-            name="CSC_FetchGeometry"
-            description="Fetches detailed, reduced, or primitive geometry for a component from the API or local cache. Converts OBJ data to Rhino geometry objects and applies iframe transformations from the component json."
+            name="CSC_FetchReducedGeometry"
+            description="Fetches the reduced (catalog default) snapshot geometry as binary PLY from the API or local cache, parses it to Rhino meshes, and applies the snapshot iframe transform."
             inputs={[
-              { label: 'Input', description: 'Input can be:\na) A geometry object with \'csc_component\' userstring\nb) A JSON string containing component data\nc) Just the component _id' },
-              { label: 'Detailed', description: 'True for detailed geometry, False for reduced' }
+              { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' compose userstring\nb) A compose JSON string ({identity, snapshot})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
             ]}
             outputs={[
-              { label: 'GeometryData', description: 'Fetched geometry as Rhino.Geometry.GeometryBase objects (can be multiple meshes)' },
-              { label: 'GeometryType', description: 'Geometry type: detailed, reduced, or primitive' },
-              { label: 'ComponentID', description: 'Component ID that was processed' }
+              { label: 'GeometryData', description: 'Fetched reduced geometry as Rhino.Geometry.Mesh objects (one per snapshot mesh primitive)' },
+              { label: 'GeometrySource', description: 'Per-mesh source: reduced (PLY) or primitive (inline fallback)' },
+              { label: 'SnapshotID', description: 'Snapshot ID that was processed' }
             ]}
-            tip="Falls back to primitive geometry if no additional geometry exists. Supports multiple input formats for flexibility."
+            tip="Falls back to the inline snapshot geometry (primitive meshes) when no reduced PLY is available."
+            imagePath={resolveStatic('/gh-interface/csc_fetchgeometry.jpg')}
+          />
+
+          <ComponentCard
+            icon={Database}
+            name="CSC_FetchDetailedGeometry"
+            description="Fetches the detailed (high fidelity) snapshot geometry as binary PLY from the API or local cache, parses it to Rhino meshes, and applies the snapshot iframe transform."
+            inputs={[
+              { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' compose userstring\nb) A compose JSON string ({identity, snapshot})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
+            ]}
+            outputs={[
+              { label: 'GeometryData', description: 'Fetched detailed geometry as Rhino.Geometry.Mesh objects (one per snapshot mesh primitive)' },
+              { label: 'GeometrySource', description: 'Per-mesh source: detailed/reduced (PLY) or primitive (inline fallback)' },
+              { label: 'SnapshotID', description: 'Snapshot ID that was processed' }
+            ]}
+            tip="Falls back to reduced PLY, then inline snapshot geometry, when no detailed PLY is available."
             imagePath={resolveStatic('/gh-interface/csc_fetchgeometry.jpg')}
           />
 
@@ -582,92 +597,74 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Code}
             name="CSC_DisassembleComponent"
-            description="Converts component JSON data back into Grasshopper-compatible geometry and metadata."
+            description="Parses compose JSON ({identity, snapshot}) back into Grasshopper-compatible geometry and metadata."
             inputs={[
-              { label: 'ComponentData', description: 'The ComponentData that was fetched from the server as JSON.' }
+              { label: 'ComponentData', description: 'Compose JSON ({identity, snapshot}) fetched from the server.' }
             ]}
             outputs={[
-              { label: 'ID', description: 'Component ID (GUID)' },
-              { label: 'Name', description: 'Human readable component name' },
+              { label: 'ID', description: 'Identity ID (GUID)' },
+              { label: 'Name', description: 'Snapshot name' },
               { label: 'Type', description: 'Component type (panel, beam, column, slab, rubble, brick, pipe, profile, connector, other)' },
               { label: 'Material', description: 'Component material' },
-              { label: 'Color', description: 'Component color as System.Drawing.Color' },
-              { label: 'Location', description: 'Component location as Point3d (X=latitude, Y=longitude, Z=0)' },
-              { label: 'BoundingBox', description: 'Component bounding box as Rhino.Geometry.BoundingBox' },
-              { label: 'PCAFrame', description: 'PCA frame at world origin as Rhino.Geometry.Plane' },
-              { label: 'Descriptors', description: 'Component descriptors/metadata as JSON string' },
-              { label: 'PrimitiveGeometry', description: 'Rhino geometry objects (extrusion, mesh, multiple meshes, polyline)' },
+              { label: 'Color', description: 'Snapshot color as System.Drawing.Color' },
+              { label: 'Location', description: 'Snapshot location as Point3d (X=latitude, Y=longitude, Z=0)' },
+              { label: 'BoundingBox', description: 'Snapshot bounding box as Rhino.Geometry.BoundingBox' },
+              { label: 'PCAFrame', description: 'Snapshot PCA frame at world origin as Rhino.Geometry.Plane' },
+              { label: 'Descriptors', description: 'Snapshot descriptors/metadata as JSON string' },
+              { label: 'PrimitiveGeometry', description: 'Rhino geometry objects (extrusions, meshes, point clouds)' },
               { label: 'MarkerPoints', description: 'Marker points as list of Point3d objects' },
-              { label: 'Attributes', description: 'Component attributes as JSON string' },
-              { label: 'Condition', description: 'Component condition grade (0=destroyed/retired, 1=poor, 2=average, 3=good)' },
+              { label: 'Attributes', description: 'Identity attributes as JSON string' },
+              { label: 'Condition', description: 'Snapshot condition grade (0=destroyed/retired, 1=poor, 2=average, 3=good)' },
               { label: 'ManufacturedAt', description: 'Component manufacturing date as ISO-8601 UTC timestamp' },
               { label: 'ManufacturedPrecision', description: 'Precision qualifier for ManufacturedAt (exact, month, year, unknown)' },
               { label: 'SalvageSource', description: 'Component salvage source (e.g. building name, site)' },
               { label: 'SalvagedAt', description: 'Component salvage date as ISO-8601 UTC timestamp' },
-              { label: 'ParentComponent', description: 'Parent component ID (GUID) this component was derived from' }
+              { label: 'ParentComponent', description: 'Parent identity IDs (GUIDs) this identity was derived from' }
             ]}
-            tip="Converts JSON component data into individual Grasshopper-compatible outputs for further processing."
+            tip="Parses compose JSON into individual Grasshopper-compatible outputs for further processing."
             imagePath={resolveStatic('/gh-interface/csc_disassemblecomponent.jpg')}
           />
 
           <ComponentCard
             icon={Code}
             name="CSC_TransformComponent"
-            description="Applies transformations to component insertion frames for positioning and orientation."
+            description="Applies transformations to snapshot insertion frames for positioning and orientation."
             inputs={[
-              { label: 'ComponentData', description: 'JSON string containing component data' },
-              { label: 'XForm', description: 'Rhino transform to apply to the insertion frame' }
+              { label: 'ComponentData', description: 'Compose JSON string ({identity, snapshot})' },
+              { label: 'XForm', description: 'Rhino transform to apply to the snapshot insertion frame' }
             ]}
             outputs={[
-              { label: 'XComponentData', description: 'Transformed component data as JSON string' }
+              { label: 'XComponentData', description: 'Transformed compose JSON string ({identity, snapshot})' }
             ]}
-            tip="Updates the component's insertion frame with the applied transformation while preserving all other component data."
+            tip="Updates the snapshot's insertion frame with the applied transformation while preserving all other compose data."
             imagePath={resolveStatic('/gh-interface/csc_transformcomponent.jpg')}
           />
 
           <ComponentCard
             icon={Code}
-            name="CSC_ArrangeComponents"
-            description="Arranges components in an even square grid based on their bounding boxes. Calculates grid cell size from the largest component dimension."
-            inputs={[
-              { label: 'ComponentData', description: 'Component data as JSON strings' },
-              { label: 'Spacing', description: 'Additional spacing between grid cells (default: 100.0)' },
-              { label: 'InsertionPoint', description: 'Insertion point (starting corner of grid, default: 0,0,0)' }
-            ]}
-            outputs={[
-              { label: 'GridCells', description: 'Grid cell outlines as polylines' },
-              { label: 'GridPlanes', description: 'XY planes at center of each grid cell' },
-              { label: 'XForm', description: 'Transformations from world origin to grid cell planes' }
-            ]}
-            tip="Automatically determines optimal grid size based on component bounding boxes."
-            imagePath={resolveStatic('/gh-interface/csc_arrangecomponents.jpg')}
-          />
-
-          <ComponentCard
-            icon={Code}
             name="CSC_GetComponentData"
-            description="Extracts the csc_component user data (JSON string) from Rhino geometry objects. Safely retrieves and parses component data stored as user strings."
+            description="Extracts the csc_component compose data ({identity, snapshot} JSON string) from Rhino geometry objects. Safely retrieves and parses the compose data stored as user strings."
             inputs={[
-              { label: 'Geometry', description: 'Geometry objects with component userdata' }
+              { label: 'Geometry', description: 'Geometry objects with the \'csc_component\' compose userdata' }
             ]}
             outputs={[
-              { label: 'ComponentData', description: 'Component data as JSON strings extracted from geometry userdata' }
+              { label: 'ComponentData', description: 'Compose JSON strings ({identity, snapshot}) extracted from geometry userdata' }
             ]}
-            tip="Useful for retrieving component information from geometry that was previously processed by CSC components."
+            tip="Useful for retrieving compose data from geometry that was previously processed by CSC components."
             imagePath={resolveStatic('/gh-interface/csc_getcomponentdata.jpg')}
           />
 
           <ComponentCard
             icon={Code}
             name="CSC_ApplyPCAFrame"
-            description="Applies an inverse PCA transformation to align geometry or component data with the world coordinate system. Takes either component JSON or Rhino geometry and transforms it to align with the world XY plane."
+            description="Applies an inverse PCA transformation to align geometry or compose data with the world coordinate system, using the snapshot pca_frame. Takes either compose JSON ({identity, snapshot}) or Rhino geometry and transforms it to align with the world XY plane."
             inputs={[
-              { label: 'Input', description: 'ComponentData (JSON string) or geometry objects with component userdata' }
+              { label: 'Input', description: 'Compose JSON string ({identity, snapshot}) or geometry objects with the \'csc_component\' compose userdata' }
             ]}
             outputs={[
-              { label: 'Output', description: 'Transformed ComponentData (if input was JSON) or transformed geometry with updated userdata (if input was geometry)' }
+              { label: 'Output', description: 'Transformed compose JSON (if input was JSON) or transformed geometry with updated compose userdata (if input was geometry)' }
             ]}
-            tip="Handles both JSON component data and geometry objects with component userdata automatically."
+            tip="Handles both compose JSON and geometry objects with compose userdata automatically."
             imagePath={resolveStatic('/gh-interface/csc_applypcaframe.jpg')}
           />
 
@@ -823,6 +820,32 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
       )
     },
     {
+      id: 'visualization',
+      title: 'Visualization',
+      icon: Sparkles,
+      content: (
+        <div className="space-y-6 pt-2">
+          <ComponentCard
+            icon={Code}
+            name="CSC_CreateArrangement"
+            description="Arranges components in an even square grid based on their snapshot bounding boxes. Calculates grid cell size from the largest component dimension."
+            inputs={[
+              { label: 'ComponentData', description: 'Compose JSON strings ({identity, snapshot})' },
+              { label: 'Spacing', description: 'Additional spacing between grid cells (default: 100.0)' },
+              { label: 'InsertionPoint', description: 'Insertion point (starting corner of grid, default: 0,0,0)' }
+            ]}
+            outputs={[
+              { label: 'GridCells', description: 'Grid cell outlines as polylines' },
+              { label: 'GridPlanes', description: 'XY planes at center of each grid cell' },
+              { label: 'XForm', description: 'Transformations from world origin to grid cell planes' }
+            ]}
+            tip="Automatically determines optimal grid size based on component bounding boxes."
+            imagePath={resolveStatic('/gh-interface/csc_arrangecomponents.jpg')}
+          />
+        </div>
+      )
+    },
+    {
       id: 'utility-components',
       title: 'Utility Components',
       icon: HelpCircle,
@@ -937,7 +960,7 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
             <div className="space-y-3">
               <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
                 <li>Authenticate with <strong>CSC_Session</strong></li>
-                <li>Fetch all your reserved components with <strong>CSC_FetchFilteredComponents</strong></li>
+                <li>Fetch all your reserved components with <strong>CSC_FetchFilteredComponents</strong> (set ReservedStatus = 1)</li>
                 <li>Work with geometry using <strong>CSC_DisassembleComponent</strong></li>
                 <li>Release unused components using the web interface to make them available again</li>
               </ol>
