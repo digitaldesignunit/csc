@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -24,12 +19,12 @@ ghenv.Component.NickName = 'GetDescriptor'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '6 Data Tools'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Retrieves a specific descriptor from multiple component_data inputs. '
-    'Accepts a list of component_data JSON strings or geometries with '
-    'attached component_data. Returns the descriptor values for the specified '
-    'key from the descriptors array. Handles single values, lists, and nested '
-    'lists by mapping them to appropriate Grasshopper data structures with '
-    'input indices as the first path level.'
+    'Retrieves a specific descriptor from multiple compose inputs '
+    '({identity, snapshot}). Accepts compose JSON strings or geometries '
+    'with the csc_component userdata. Returns descriptor values for the '
+    'specified key from snapshot.descriptors. Handles single values, lists, '
+    'and nested lists by mapping them to appropriate Grasshopper data '
+    'structures with input indices as the first path level.'
 )
 
 
@@ -37,7 +32,7 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260609
     """
 
     def __init__(self):
@@ -70,12 +65,11 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
         self.Component.VariableParameterMaintenance()
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'List of component data as JSON strings OR geometries with '
-            'attached component_data userdata'
+            'List of compose JSON strings ({identity, snapshot}) OR '
+            'geometries with the \'csc_component\' compose userdata'
         )
         self.InputParams[1].Description = (
-            'Key string to retrieve from the descriptors array in '
-            'component_data'
+            'Key string to retrieve from snapshot.descriptors'
         )
         # Initialize output param descriptions
         i = 0
@@ -85,15 +79,15 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
             'Descriptor value for the specified key, or empty if not found'
         )
 
-    def extract_component_data_from_geometry(self, geometry):
+    def extract_compose_from_geometry(self, geometry):
         """
-        Extract component data from geometry userdata.
+        Extract compose data ({identity, snapshot}) from geometry userdata.
 
         Args:
             geometry: Rhino geometry object with userdata
 
         Returns:
-            Component data dictionary or None
+            Compose dictionary or None
         """
         try:
             if hasattr(geometry, 'GetUserString'):
@@ -101,34 +95,36 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
                 if userdata:
                     return json.loads(userdata)
         except Exception as e:
-            self._addWarning(f'Could not extract component data: {str(e)}')
+            self._addWarning(f'Could not extract compose data: {str(e)}')
         return None
 
-    def get_descriptor_value(self, component_data, descriptor_key):
+    def get_descriptor_value(self, compose, descriptor_key):
         """
-        Extract descriptor value from component_data using the specified key.
+        Extract descriptor value from snapshot.descriptors using the key.
 
         Args:
-            component_data: Dictionary containing component data
+            compose: Compose dictionary ({identity, snapshot})
             descriptor_key: String key to look for in descriptors
 
         Returns:
             Descriptor value or None if not found
         """
         try:
-            if 'descriptors' in component_data:
-                descriptors = component_data['descriptors']
-                if (isinstance(descriptors, dict) and
-                        descriptor_key in descriptors):
-                    return descriptors[descriptor_key]
-                else:
-                    self._addWarning(
-                        f'Descriptor key "{descriptor_key}" not found in '
-                        'descriptors')
-                    return None
-            else:
-                self._addWarning('No descriptors found in component_data')
+            snapshot = (
+                compose.get('snapshot') if isinstance(compose, dict) else None
+            )
+            if not isinstance(snapshot, dict):
+                self._addWarning('Compose JSON has no snapshot')
                 return None
+
+            descriptors = snapshot.get('descriptors')
+            if isinstance(descriptors, dict) and descriptor_key in descriptors:
+                return descriptors[descriptor_key]
+
+            self._addWarning(
+                f'Descriptor key "{descriptor_key}" not found in '
+                'snapshot.descriptors')
+            return None
         except Exception as e:
             self._addError(f'Error extracting descriptor: {str(e)}')
             return None
@@ -216,39 +212,37 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
             # Process each input item
             input_list = list(Input)
             for input_index, input_item in enumerate(input_list):
-                # Determine input type and extract component data
-                component_data = None
+                # Determine input type and extract compose data
+                compose = None
 
-                # Check if input is a JSON string (ComponentData)
+                # Check if input is a compose JSON string
                 if isinstance(input_item, str):
                     try:
-                        component_data = json.loads(input_item)
+                        compose = json.loads(input_item)
                         self._addRemark(
-                            f'Input {input_index} detected as ComponentData '
-                            'JSON')
+                            f'Input {input_index} detected as compose JSON')
                     except json.JSONDecodeError:
-                        msg = (f'Input {input_index} is not valid JSON '
-                               'ComponentData!')
+                        msg = (f'Input {input_index} is not valid compose '
+                               'JSON!')
                         self._addError(msg)
                         continue
                 else:
-                    # Input is geometry - extract component data from userdata
-                    component_data = self.extract_component_data_from_geometry(
-                        input_item)
-                    if not component_data:
-                        msg = (f'Could not extract component data from '
+                    # Input is geometry - extract compose from userdata
+                    compose = self.extract_compose_from_geometry(input_item)
+                    if not compose:
+                        msg = (f'Could not extract compose data from '
                                f'input {input_index}!')
                         self._addError(msg)
                         continue
 
                     self._addRemark(
                         f'Input {input_index} detected as geometry with '
-                        'component userdata')
+                        'compose userdata')
 
                 # Extract descriptor value
                 try:
                     descriptor_value = self.get_descriptor_value(
-                        component_data, DescriptorKey)
+                        compose, DescriptorKey)
 
                     if descriptor_value is not None:
                         # Convert descriptor to appropriate Grasshopper data

@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -27,8 +22,8 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Scans the active Rhino document for objects with csc_component user '
-    'data and updates their iframe (insertion frame) based on current '
-    'geometry position in Rhino.'
+    'data (compose JSON) and updates snapshot.iframe based on text tag '
+    'planes or combined geometry bounds.'
 )
 
 
@@ -36,7 +31,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260609
     """
 
     def __init__(self):
@@ -73,16 +68,16 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'DataTree containing all component data found in the document, '
-            'with updated iframe information based on current object positions'
+            'DataTree of compose JSON ({identity, snapshot}) found in the '
+            'document, with snapshot.iframe updated from object positions'
         )
 
     def find_objects_with_csc_component(self, doc):
         """
         Find all objects in the document that have the 'csc_component' userkey.
         Also find text tags that are grouped with these components.
-        Groups objects by component ID to handle multiple meshes correctly.
-        Returns a list of tuples: (component_id, component_data, objects_list,
+        Groups objects by identity._id to handle multiple meshes correctly.
+        Returns a list of tuples: (identity_id, compose, objects_list,
                                    combined_path)
         """
         components_dict = {}
@@ -111,22 +106,24 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                                 obj, 'csc_component', True)
                     if component_data:
                         try:
-                            # Parse the JSON data
-                            parsed_data = json.loads(component_data)
-                            component_id = parsed_data.get('_id', 'unknown')
-                            # Group objects by component ID
-                            if component_id not in components_dict:
-                                components_dict[component_id] = {
-                                    'component_data': parsed_data,
+                            compose = json.loads(component_data)
+                            identity = compose.get('identity')
+                            if not isinstance(identity, dict):
+                                self._addWarning(
+                                    f'Invalid compose JSON for object '
+                                    f'{obj.Id}: missing identity'
+                                )
+                                continue
+                            identity_id = identity.get('_id', 'unknown')
+                            if identity_id not in components_dict:
+                                components_dict[identity_id] = {
+                                    'compose': compose,
                                     'objects': [],
                                     'paths': []
                                 }
-                            # Add object to the component group
                             obj_path = self.get_object_path(obj, doc)
-                            components_dict[component_id]['objects'].append(
-                                obj
-                            )
-                            components_dict[component_id]['paths'].append(
+                            components_dict[identity_id]['objects'].append(obj)
+                            components_dict[identity_id]['paths'].append(
                                 obj_path)
                         except json.JSONDecodeError as e:
                             self._addWarning(
@@ -135,13 +132,12 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                             )
                             continue
 
-            for component_id, data in components_dict.items():
-                # Find all groups whose name starts with the component_id
+            for identity_id, data in components_dict.items():
                 groups = doc.Groups
                 for i in range(groups.Count):
                     group = groups[i]
                     if (group and isinstance(group.Name, str) and
-                            group.Name.startswith(component_id)):
+                            group.Name.startswith(identity_id)):
                         # Get all objects in this specific group instance
                         group_objects = rs.ObjectsByGroup(group.Name)
                         for obj_id in group_objects:
@@ -152,8 +148,8 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                                 data['objects'].append(obj)
                                 data['paths'].append(obj_path)
                                 self._addRemark(
-                                    'Found text tag for component '
-                                    f'{component_id}'
+                                    'Found text tag for identity '
+                                    f'{identity_id}'
                                 )
 
         except Exception as e:
@@ -163,11 +159,11 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
 
         # Convert to list format for compatibility
         components_list = []
-        for component_id, data in components_dict.items():
-            combined_path = ' | '.join(data['paths'])  # Combine all paths
+        for identity_id, data in components_dict.items():
+            combined_path = ' | '.join(data['paths'])
             components_list.append((
-                component_id,
-                data['component_data'],
+                identity_id,
+                data['compose'],
                 data['objects'],
                 combined_path
             ))
@@ -195,17 +191,20 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
             pass
         return f"Object_{obj}"
 
-    def update_component_frame(self, objects_list, component_data):
+    def update_component_frame(self, objects_list, compose):
         """
-        Update the component's iframe based on text tag plane if available,
-        otherwise fall back to combined bounding box of all objects.
-        Returns updated component data.
+        Update snapshot.iframe from a text tag plane when available,
+        otherwise from the combined bounding box of all objects.
+        Returns updated compose JSON.
         """
         try:
             if not objects_list:
-                return component_data
+                return compose
 
-            # First, try to find a text object (tag) and use its plane
+            snapshot = compose.get('snapshot')
+            if not isinstance(snapshot, dict):
+                return compose
+
             for obj in objects_list:
                 if rs.IsText(obj):
                     try:
@@ -224,18 +223,15 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                                   tagplane.ZAxis.Y,
                                   tagplane.ZAxis.Z]
                         }
-                        # Update the iframe in component data
-                        if 'iframe' not in component_data:
-                            component_data['iframe'] = {}
-                        component_data['iframe'].update(tagframe)
-                        return component_data
+                        snapshot['iframe'] = tagframe
+                        compose['snapshot'] = snapshot
+                        return compose
                     except Exception as e:
                         self._addWarning(
                             f'Error extracting plane from text tag: {str(e)}'
                         )
                         continue
 
-            # Fallback: Calculate combined bounding box for all objects
             combined_bbox = None
             for obj in objects_list:
                 if hasattr(obj, 'Geometry'):
@@ -249,31 +245,26 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                                 combined_bbox = (
                                     Rhino.Geometry.BoundingBox.Union(
                                         combined_bbox, bbox))
-            # convert to box
-            combined_bbox = Rhino.Geometry.Box(combined_bbox)
 
+            combined_bbox = Rhino.Geometry.Box(combined_bbox)
             if combined_bbox and combined_bbox.IsValid:
-                # Create frame based on combined bounding box
                 center = combined_bbox.Center
                 x_axis = combined_bbox.Plane.XAxis
                 y_axis = combined_bbox.Plane.YAxis
                 z_axis = combined_bbox.Plane.ZAxis
-
-                # Update the iframe in component data
-                if 'iframe' not in component_data:
-                    component_data['iframe'] = {}
-                component_data['iframe'].update({
+                snapshot['iframe'] = {
                     'o': [center.X, center.Y, center.Z],
                     'x': [x_axis.X, x_axis.Y, x_axis.Z],
                     'y': [y_axis.X, y_axis.Y, y_axis.Z],
                     'z': [z_axis.X, z_axis.Y, z_axis.Z]
-                })
-                return component_data
+                }
+                compose['snapshot'] = snapshot
+                return compose
         except Exception as e:
             self._addWarning(
                 f'Error updating frame for component: {str(e)}'
             )
-        return component_data
+        return compose
 
     def RunScript(self, Sync: bool):
         # init outputs
@@ -299,34 +290,28 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                 return DocumentComponents
             # Create output datatree
             # Process each component (now grouped by component ID)
-            for i, (component_id, component_data, objects_list,
+            for i, (identity_id, compose, objects_list,
                     combined_path) in enumerate(objects_with_component):
                 try:
-                    # Update the component's frame based on combined
-                    # bounding box of all objects from the same component
-                    updated_data = self.update_component_frame(
-                        objects_list, component_data
-                    )
-                    # Create datatree path
+                    updated_compose = self.update_component_frame(
+                        objects_list, compose)
                     ghp = Grasshopper.Kernel.Data.GH_Path(i)
-                    # Add updated component data to datatree
-                    DocumentComponents.Add(json.dumps(updated_data), ghp)
+                    DocumentComponents.Add(json.dumps(updated_compose), ghp)
 
-                    # Log success message with object count
                     object_count = len(objects_list)
                     if object_count == 1:
                         self._addRemark(
-                            f'Updated component {component_id} '
+                            f'Updated identity {identity_id} '
                             f'from {combined_path}'
                         )
                     else:
                         self._addRemark(
-                            f'Updated component {component_id} '
-                            f'({object_count} meshes) from {combined_path}'
+                            f'Updated identity {identity_id} '
+                            f'({object_count} objects) from {combined_path}'
                         )
                 except Exception as e:
                     msg = (
-                        f'Error processing component {component_id} '
+                        f'Error processing identity {identity_id} '
                         f'from {combined_path}: {str(e)}'
                     )
                     self._addWarning(msg)

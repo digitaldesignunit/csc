@@ -388,7 +388,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         Replaces source code of gh scriptable components.
         """
         # extract data
-        script_type, nickname, name, obj, source = old_script_comp_values
+        script_type, nickname, name, obj, source, iconpath = old_script_comp_values
         # check for type and decide action
         if (script_type == "PY3" or
                 script_type == 'IPY2' or

@@ -125,19 +125,39 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     def ComponentExtrusions(
             self,
             geometry: dict) -> list[Rhino.Geometry.Extrusion]:
-        """Create extrusions from geometry.extrusions list."""
+        """Create capped extrusions from geometry.extrusions list."""
         extrusions = []
+        tol = Rhino.RhinoMath.SqrtEpsilon
         for extr in geometry.get('extrusions', []) or []:
-            pl = Rhino.Geometry.Polyline()
+            profile = extr.get('profile') or []
+            if len(profile) < 3:
+                continue
+
             pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
-                   for pt in extr['profile']]
+                   for pt in profile]
+            # Stored profiles are open; drop a duplicate closing vertex
+            if len(pts) >= 2 and pts[0].DistanceTo(pts[-1]) <= tol:
+                pts = pts[:-1]
+            if len(pts) < 3:
+                continue
+
+            pl = Rhino.Geometry.Polyline()
             pl.AddRange(pts)
-            height = extr['height']
+            if not pl.IsClosed:
+                pl.Add(pl[0])
+
+            height = float(extr.get('height', 0))
+            if height <= 0:
+                continue
+
             cxt = Rhino.Geometry.Extrusion.Create(
                 pl.ToPolylineCurve(),
                 Rhino.Geometry.Plane.WorldXY,
                 height,
                 True)
+            if cxt is None:
+                continue
+
             # move extrusion downwards half material
             # thickness to center it at the origin
             cxt.Translate(Rhino.Geometry.Vector3d(0, 0, height * -0.5))

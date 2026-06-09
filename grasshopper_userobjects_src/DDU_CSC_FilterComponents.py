@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -24,9 +19,10 @@ ghenv.Component.NickName = 'FilterComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Filters a list of component data based on various criteria (type, '
-    'material, dataset, complexity, fragment, bounding box dimensions). '
-    'Works with local component data.'
+    'Filters a list of compose JSON entries ({identity, snapshot}) based on '
+    'various criteria (type, material, dataset, complexity, fragment, '
+    'bounding box dimensions). Works with local compose data from fetch '
+    'components.'
 )
 
 
@@ -34,7 +30,7 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260316
+    Version: 260609
     """
 
     def __init__(self):
@@ -98,7 +94,8 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Maximum Z dimension filter (bounding box)'
         )
         self.InputParams[11].Description = (
-            'Component data to filter (from FetchComponents or similar)'
+            'Compose JSON strings to filter ({identity, snapshot}), e.g. from '
+            'FetchAllComponents, FetchComponents, or FetchFilteredComponents'
         )
         # Initialize output param descriptions
         i = 0
@@ -108,47 +105,51 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Human-readable description of the applied filters'
         )
         self.OutputParams[1+i].Description = (
-            'Filtered ComponentData as JSON strings. Use '
+            'Filtered compose JSON strings ({identity, snapshot}). Use '
             '\'DisassembleComponent\' to access the individual fields '
             'ready for Grasshopper'
         )
 
-    def apply_filters(self, component_data: dict, filter_params: dict) -> bool:
+    def apply_filters(self, compose: dict, filter_params: dict) -> bool:
         """
-        Apply all filters to a single component and return True if it passes.
+        Apply all filters to a single compose entry and return True if it
+        passes. Identity fields (type, material, dataset) and snapshot
+        fields (complexity, fragment, bbx) are evaluated separately.
         """
+        identity = compose.get('identity') or {}
+        snapshot = compose.get('snapshot') or {}
 
-        # Type filter
+        # Type filter (identity)
         if filter_params.get('type') and filter_params['type'].strip():
-            if (component_data.get('type', '').lower() !=
+            if (identity.get('type', '').lower() !=
                     filter_params['type'].lower()):
                 return False
 
-        # Material filter
+        # Material filter (identity)
         if filter_params.get('material') and filter_params['material'].strip():
-            if (component_data.get('material', '').lower() !=
+            if (identity.get('material', '').lower() !=
                     filter_params['material'].lower()):
                 return False
 
-        # Dataset filter
+        # Dataset filter (identity)
         if filter_params.get('dataset') and filter_params['dataset'].strip():
-            if (component_data.get('dataset', '').lower() !=
+            if (identity.get('dataset', '').lower() !=
                     filter_params['dataset'].lower()):
                 return False
 
-        # Complexity filter
+        # Complexity filter (snapshot)
         if filter_params.get('complexity') is not None:
-            if component_data.get('complexity') != filter_params['complexity']:
+            if snapshot.get('complexity') != filter_params['complexity']:
                 return False
 
-        # Fragment filter
+        # Fragment filter (snapshot)
         if filter_params.get('fragment') is not None:
-            if component_data.get('fragment') != filter_params['fragment']:
+            if snapshot.get('fragment') != filter_params['fragment']:
                 return False
 
-        # Bounding box filters
+        # Bounding box filters (snapshot)
         # Note: bbx is stored as [X, Y, Z] where X, Y, Z are dimensions
-        bbx = component_data.get('bbx')
+        bbx = snapshot.get('bbx')
         if (bbx and isinstance(bbx, list) and len(bbx) >= 3):
             bbx_x = bbx[0]
             bbx_y = bbx[1]
@@ -229,7 +230,7 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
             ComponentData: Grasshopper.DataTree[str]):
         # Validate input data
         if not ComponentData or ComponentData.DataCount == 0:
-            msg = ('No component data provided. '
+            msg = ('No compose data provided. '
                    'Please connect ComponentData input.')
             self._addWarning(msg)
             self.Component.Message = msg
@@ -309,17 +310,25 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 for j, comp in enumerate(ComponentData.Branches[i]):
                     total_count += 1
                     try:
-                        # Load component data
-                        component_data = json.loads(comp)
+                        # Load compose JSON
+                        compose = json.loads(comp)
+                        identity = compose.get('identity')
+                        snapshot = compose.get('snapshot')
+                        if not isinstance(identity, dict) or not isinstance(
+                                snapshot, dict):
+                            self._addWarning(
+                                'Skipping entry: not compose JSON '
+                                '({identity, snapshot})')
+                            continue
 
                         # Apply filters
-                        if self.apply_filters(component_data, filter_params):
-                            # Component passes all filters, add to output
+                        if self.apply_filters(compose, filter_params):
+                            # Entry passes all filters, add to output
                             FilteredComponentData.Add(comp, ghp)
                             filtered_count += 1
 
                     except json.JSONDecodeError as e:
-                        msg = f'Failed to parse component data: {str(e)}'
+                        msg = f'Failed to parse compose JSON: {str(e)}'
                         self._addWarning(msg)
                         continue
                     except Exception as e:

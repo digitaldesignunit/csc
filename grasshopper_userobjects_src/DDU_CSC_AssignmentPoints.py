@@ -27,6 +27,7 @@ ghenv.Component.Description = (  # NOQA
     'Hungarian assignment (SciPy).'
 )
 
+
 def _weighted_euclidean_distance(pt1, pt2, weights):
     p1 = np.asarray(pt1, dtype=np.float64)
     p2 = np.asarray(pt2, dtype=np.float64)

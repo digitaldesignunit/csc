@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -26,9 +21,10 @@ ghenv.Component.NickName = 'BakeComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Bakes fetched components into the Rhino document as actual geometry. '
-    'Creates layers, groups, and attaches component data as user text. '
-    'Prioritizes cached geometry over primitive representations.'
+    'Bakes compose entries ({identity, snapshot}) into the Rhino document '
+    'as actual geometry. Creates layers, groups, and attaches the full '
+    'compose JSON as user text. Prioritizes cached PLY meshes over inline '
+    'snapshot primitives.'
 )
 
 
@@ -36,7 +32,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260609
     """
 
     def __init__(self):
@@ -69,75 +65,97 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Toggle to bake components to Rhino'
         )
         self.InputParams[1].Description = (
-            'Component data from FetchComponents'
+            'Compose JSON strings ({identity, snapshot}) from fetch '
+            'components'
         )
 
-    def ComponentExtrusionProfile(
+    def ComponentExtrusions(
             self,
-            json_comp: dict) -> Rhino.Geometry.Polyline:
-        pl = Rhino.Geometry.Polyline()
-        pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
-               for pt in json_comp['geometry']['extrusion']['profile']]
-        pl.AddRange(pts)
-        return pl
+            geometry: dict) -> list[Rhino.Geometry.Extrusion]:
+        """Create capped extrusions from geometry.extrusions list."""
+        extrusions = []
+        tol = Rhino.RhinoMath.SqrtEpsilon
+        for extr in geometry.get('extrusions', []) or []:
+            profile = extr.get('profile') or []
+            if len(profile) < 3:
+                continue
 
-    def ComponentExtrusion(
-            self,
-            json_comp: dict) -> Rhino.Geometry.Extrusion:
-        pl = Rhino.Geometry.Polyline()
-        pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
-               for pt in json_comp['geometry']['extrusion']['profile']]
-        pl.AddRange(pts)
-        cxt = Rhino.Geometry.Extrusion.Create(
-            pl.ToPolylineCurve(),
-            Rhino.Geometry.Plane.WorldXY,
-            json_comp['geometry']['extrusion']['height'],
-            True)
-        # move extrusion downwards half material
-        # thickness to center it at the origin
-        cxt.Translate(Rhino.Geometry.Vector3d(
-            0, 0, json_comp['geometry']['extrusion']['height'] * -0.5))
-        return cxt
+            pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
+                   for pt in profile]
+            if len(pts) >= 2 and pts[0].DistanceTo(pts[-1]) <= tol:
+                pts = pts[:-1]
+            if len(pts) < 3:
+                continue
 
-    def ComponentMeshes(self, json_comp: dict) -> list:
-        """Create multiple meshes from geometry.meshes field."""
-        meshes = []
-        for i, mesh_data in enumerate(json_comp['geometry']['meshes']):
-            mesh = Rhino.Geometry.Mesh()
-            vl = mesh_data['v']
-            fl = mesh_data['f']
-            [mesh.Vertices.Add(*v) for v in vl]
-            [mesh.Faces.AddFace(*f) for f in fl]
+            pl = Rhino.Geometry.Polyline()
+            pl.AddRange(pts)
+            if not pl.IsClosed:
+                pl.Add(pl[0])
 
-            # Try to get mesh-specific colors first
+            height = float(extr.get('height', 0))
+            if height <= 0:
+                continue
+
+            cxt = Rhino.Geometry.Extrusion.Create(
+                pl.ToPolylineCurve(),
+                Rhino.Geometry.Plane.WorldXY,
+                height,
+                True)
+            if cxt is None:
+                continue
+
+            cxt.Translate(Rhino.Geometry.Vector3d(0, 0, height * -0.5))
+            extrusions.append(cxt)
+        return extrusions
+
+    def build_inline_mesh(self, mesh_data, default_color):
+        """Build a Rhino mesh from an inline SnapshotMesh."""
+        vertices = mesh_data.get('vertices')
+        faces = mesh_data.get('faces')
+        if not vertices or not faces:
+            return None
+        mesh = Rhino.Geometry.Mesh()
+        for v in vertices:
+            mesh.Vertices.Add(float(v[0]), float(v[1]), float(v[2]))
+        for f in faces:
+            if len(f) == 3:
+                mesh.Faces.AddFace(f[0], f[1], f[2])
+            elif len(f) == 4:
+                mesh.Faces.AddFace(f[0], f[1], f[2], f[3])
+        colors = mesh_data.get('colors')
+        if colors and len(colors) == len(vertices):
+            for c in colors:
+                mesh.VertexColors.Add(int(c[0]), int(c[1]), int(c[2]))
+        elif default_color:
             try:
-                cl = mesh_data['c']
-                [mesh.VertexColors.Add(
-                    System.Drawing.Color.FromArgb(*c)) for c in cl]
-            except KeyError:
-                # Fallback: use component color for all vertices
-                try:
-                    component_color = System.Drawing.Color.FromArgb(
-                        255, *json_comp['color'])
-                    for _ in range(len(vl)):
-                        mesh.VertexColors.Add(component_color)
-                except (KeyError, TypeError):
-                    # If even component color fails, use a default gray
-                    default_color = System.Drawing.Color.Gray
-                    for _ in range(len(vl)):
-                        mesh.VertexColors.Add(default_color)
-                    self._addWarning(
-                        f'Mesh {i} in component {json_comp["_id"]} '
-                        f'using default gray color')
+                r, g, b = default_color
+                for _ in range(len(vertices)):
+                    mesh.VertexColors.Add(int(r), int(g), int(b))
+            except (ValueError, TypeError):
+                pass
+        mesh.Normals.ComputeNormals()
+        mesh.Compact()
+        return mesh
 
-            mesh.RebuildNormals()
-            mesh.UnifyNormals()
-            mesh.Compact()
+    def ComponentMeshes(
+            self,
+            geometry: dict,
+            snapshot_color,
+            identity_id: str) -> list[Rhino.Geometry.Mesh]:
+        """Create meshes from snapshot.geometry.meshes inline primitives."""
+        meshes = []
+        for idx, mesh_data in enumerate(geometry.get('meshes', []) or []):
+            mesh = self.build_inline_mesh(mesh_data, snapshot_color)
+            if mesh is None:
+                self._addWarning(
+                    f'Inline mesh {idx} in identity {identity_id} is invalid')
+                continue
             meshes.append(mesh)
         return meshes
 
-    def ComponentColor(self, json_comp: dict) -> System.Drawing.Color:
-        return System.Drawing.Color.FromArgb(255, *json_comp['color'])
+    def ComponentColor(self, snapshot: dict) -> System.Drawing.Color:
+        color = snapshot.get('color') or [110, 110, 110]
+        return System.Drawing.Color.FromArgb(255, *color)
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -149,30 +167,40 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
             return None
         return auth_core
 
-    def fetch_cached_geometry(self, auth_core, component_id, detailed=True):
-        """Fetch cached geometry from binary cache."""
-        try:
-            if not auth_core or not auth_core._cache:
-                return None
-
-            geometry_type = 'detailed' if detailed else 'reduced'
-            (cached_meshes,
-             cached_etag,
-             is_from_cache) = auth_core._cache.get_geometry_binary(
-                component_id, geometry_type
-            )
-
-            # Check if we got valid meshes from cache
-            if is_from_cache and cached_meshes and len(cached_meshes) > 0:
-                self._addRemark(
-                    f'Using cached {geometry_type} geometry '
-                    f'for {component_id}'
-                )
-                return cached_meshes
+    def fetch_snapshot_meshes(self, auth_core, snapshot):
+        """
+        Fetch snapshot meshes via the unified PLY cache (detailed, then
+        reduced), falling back to inline snapshot.geometry.meshes primitives.
+        """
+        if not auth_core:
             return None
-        except Exception as e:
-            self._addWarning(f'Error fetching cached geometry: {str(e)}')
+
+        snapshot_id = snapshot.get('_id')
+        geometry = snapshot.get('geometry', {}) or {}
+        inline_meshes = geometry.get('meshes', []) or []
+        if not snapshot_id or not inline_meshes:
             return None
+
+        res_map = snapshot.get('mesh_ply_resolutions', {}) or {}
+        default_color = snapshot.get('color') or [110, 110, 110]
+        meshes = []
+
+        for i in range(len(inline_meshes)):
+            mesh = None
+            available = res_map.get(str(i), []) or []
+            for resolution in ('detailed', 'reduced'):
+                if resolution in available:
+                    m, _etag, _from_cache = auth_core.cached_get_snapshot_mesh(
+                        snapshot_id, i, resolution)
+                    if m is not None:
+                        mesh = m
+                        break
+            if mesh is None:
+                mesh = self.build_inline_mesh(inline_meshes[i], default_color)
+            if mesh is not None:
+                meshes.append(mesh)
+
+        return meshes if meshes else None
 
     def RunScript(self,
             Bake: bool,
@@ -196,17 +224,30 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
             sc.doc = Rhino.RhinoDoc.ActiveDoc
 
             for i, cd in enumerate(ComponentData):
+                comp_id = f'item {i}'
                 try:
-                    # create path (not used in baking but kept for consistency)
-                    _ = Grasshopper.Kernel.Data.GH_Path(i)
-                    # load json component
-                    json_comp = json.loads(cd)
-                    # extract ID
-                    comp_id = json_comp['_id']
+                    compose = json.loads(cd)
+                    identity = compose.get('identity')
+                    snapshot = compose.get('snapshot')
+                    if (not isinstance(identity, dict) or
+                            not isinstance(snapshot, dict)):
+                        msg = (
+                            f'Invalid compose JSON at index {i}: '
+                            'expected {{identity, snapshot}}'
+                        )
+                        self._addWarning(msg)
+                        continue
+
+                    identity_id = identity.get('_id')
+                    if not identity_id:
+                        self._addWarning(
+                            f'Missing identity._id in compose at index {i}')
+                        continue
+                    comp_id = identity_id
 
                     # determine unique group name (groups must be unique)
                     # use suffix indexing: <uuid>_1, <uuid>_2, ...
-                    base_group_name = comp_id
+                    base_group_name = identity_id
                     idx = 1
                     existing_names = set()
                     for grp in sc.doc.Groups:
@@ -221,36 +262,23 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                             break
                         idx += 1
 
-                    # get insertion plane
+                    # get insertion plane from snapshot
                     try:
-                        # try to extract insertion frame
-                        iframe = json_comp['iframe']
+                        iframe = snapshot['iframe']
                         iplane = Rhino.Geometry.Plane(
                             Rhino.Geometry.Point3d(*iframe['o']),
                             Rhino.Geometry.Vector3d(*iframe['x']),
                             Rhino.Geometry.Vector3d(*iframe['y']),
                         )
-                    except KeyError:
-                        # if there is no respective key, create world xy plane
+                    except (KeyError, TypeError):
                         iplane = Rhino.Geometry.Plane.WorldXY
 
                     xform = Rhino.Geometry.Transform.PlaneToPlane(
                         Rhino.Geometry.Plane.WorldXY,
                         iplane)
 
-                    # Try to get cached geometry first
-                    cached_meshes = self.fetch_cached_geometry(
-                        auth_core,
-                        comp_id,
-                        detailed=True
-                    )
-                    if not cached_meshes:
-                        # Fall back to reduced geometry
-                        cached_meshes = self.fetch_cached_geometry(
-                            auth_core,
-                            comp_id,
-                            detailed=False
-                        )
+                    cached_meshes = self.fetch_snapshot_meshes(
+                        auth_core, snapshot)
 
                     # create component geometry
                     geo_ids = []
@@ -287,38 +315,47 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                                 )
                                 continue
                     else:
-                        # Fall back to primitive geometry
-                        for key in sorted(json_comp['geometry'].keys()):
-                            if key == 'extrusion':
-                                xtr = self.ComponentExtrusion(json_comp)
-                                xtr.Transform(xform)
-                                geo_ids.append(sc.doc.Objects.Add(xtr))
+                        geometry = snapshot.get('geometry', {}) or {}
+                        for key in sorted(geometry.keys()):
+                            if key == 'extrusions':
+                                for xtr in self.ComponentExtrusions(geometry):
+                                    xtr.Transform(xform)
+                                    geo_id = sc.doc.Objects.Add(xtr)
+                                    if geo_id != System.Guid.Empty:
+                                        geo_ids.append(geo_id)
                             elif key == 'meshes':
-                                # Handle multiple meshes
-                                meshes = self.ComponentMeshes(json_comp)
+                                meshes = self.ComponentMeshes(
+                                    geometry,
+                                    snapshot.get('color'),
+                                    identity_id)
                                 for j, mesh in enumerate(meshes):
                                     mesh.Transform(xform)
                                     geo_id = sc.doc.Objects.Add(mesh)
-                                    geo_ids.append(geo_id)
-                                    # Add mesh index as user text
-                                    rs.SetUserText(geo_id, 'csc_mesh_index',
-                                                   str(j))
+                                    if geo_id != System.Guid.Empty:
+                                        geo_ids.append(geo_id)
+                                        rs.SetUserText(
+                                            geo_id, 'csc_mesh_index', str(j))
+                            elif key in ('marker_points', 'point_clouds'):
+                                continue
                             else:
                                 msg = (f'Missing implementation for geometry '
                                        f'of type \'{key}\'!')
                                 self._addWarning(msg)
-                                self.Component.Message = msg
-                                continue
+
+                    if not geo_ids:
+                        self._addWarning(
+                            f'No geometry baked for identity {identity_id}')
+                        continue
 
                     # add objects to document
                     # create layers if they are not present
                     lay_parent = 'CSC_COMPONENTS'
-                    lay_name = comp_id
+                    lay_name = identity_id
                     layer = '::'.join([lay_parent, lay_name])
                     if not rs.IsLayer(lay_parent):
                         rs.AddLayer(lay_parent)
                     if not rs.IsLayer(layer):
-                        rs.AddLayer(layer, self.ComponentColor(json_comp))
+                        rs.AddLayer(layer, self.ComponentColor(snapshot))
 
                     # set layer and add component data as user strings
                     for gid in geo_ids:
@@ -331,7 +368,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
                     # create tag
                     tag = Rhino.Geometry.TextEntity()
-                    tag.Text = comp_id
+                    tag.Text = identity_id
                     tag.Plane = iplane
                     # specify height in millimeters
                     usf = Rhino.RhinoMath.UnitScale(
