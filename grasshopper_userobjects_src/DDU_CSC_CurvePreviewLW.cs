@@ -32,7 +32,7 @@ public class Script_Instance : GH_ScriptInstance
 
         Author: Max Benjamin Eschenbach
         License: MIT License
-        Version: 251022
+        Version: 260609
     */
     #endregion
 
@@ -49,7 +49,7 @@ public class Script_Instance : GH_ScriptInstance
         this.Component.Name = "CurvePreviewLW";
         this.Component.NickName = "CurvePreviewLW";
         this.Component.Category = "DDU_CSC";
-        this.Component.SubCategory = "8 Visualisation";
+        this.Component.SubCategory = "8 Visualization";
         this.Component.Description = (
             "Render curves with custom LineWeights."
         );

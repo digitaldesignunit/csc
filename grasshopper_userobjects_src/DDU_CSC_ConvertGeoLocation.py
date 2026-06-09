@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
 import System  # NOQA
@@ -32,7 +27,7 @@ class CSC_ConvertGeoLocation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260603
+    Version: 260609
     """
 
     def __init__(self):

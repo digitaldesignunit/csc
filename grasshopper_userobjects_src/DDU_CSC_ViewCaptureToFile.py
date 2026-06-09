@@ -24,7 +24,7 @@ import scriptcontext as sc  # NOQA
 ghenv.Component.Name = 'ViewCaptureToFile'  # NOQA
 ghenv.Component.NickName = 'ViewCaptureToFile'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '8 Visualisation'  # NOQA
+ghenv.Component.SubCategory = '8 Visualization'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Captures the active Rhino viewport to an image file (PNG). Supports '
     'custom dimensions, background colors, and visibility options for '
@@ -36,7 +36,7 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Anders Holden Deleuran (updated 2025 by Max Benjamin Eschenbach)
     License: MIT License
-    Version: 251203
+    Version: 260609
     """
 
     def __init__(self):

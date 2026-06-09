@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
@@ -32,7 +27,7 @@ class CSC_ExtrusionProfile(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260423
+    Version: 260609
     """
 
     def __init__(self):
@@ -57,7 +52,7 @@ class CSC_ExtrusionProfile(Grasshopper.Kernel.GH_ScriptInstance):
         """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
-    
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -89,9 +84,10 @@ class CSC_ExtrusionProfile(Grasshopper.Kernel.GH_ScriptInstance):
         ProfileCurve = Grasshopper.DataTree[System.Object]()
         # defaults
         if not ExtrusionGeometry:
-            self._addWarning('Input Parameter ExtrusionGeometry failed to colect data.')
-            self.Component.Message = (
-                f'No Profile extracted.')
+            self._addWarning(
+                'Input Parameter ExtrusionGeometry failed to collect data.'
+            )
+            self.Component.Message = ('No Profile extracted.')
             return ProfileCurve
         if ProfileIndex is None:
             ProfileIndex = 0
@@ -104,15 +100,21 @@ class CSC_ExtrusionProfile(Grasshopper.Kernel.GH_ScriptInstance):
         if ProfileParameter is None:
             ProfileParameter = 0.5
         elif ProfileParameter < 0:
-            self._addWarning('ProfileParameter was set to 0.0! Must be >= 0.0 and <= 1.0!')
+            self._addWarning(
+                'ProfileParameter was set to 0.0! '
+                'Must be >= 0.0 and <= 1.0!'
+            )
             ProfileParameter = 0.0
         elif ProfileParameter > 1:
-            self._addWarning('ProfileParameter was set to 1.0! Must be >= 0.0 and <= 1.0!')
+            self._addWarning(
+                'ProfileParameter was set to 1.0! '
+                'Must be >= 0.0 and <= 1.0!'
+            )
             ProfileParameter = 0.0
         # finally extract profile curve
         ProfileCurve = ExtrusionGeometry.Profile3d(0, 0.5)
         self.Component.Message = (
-            f'Extrusion Profile at i = {ProfileIndex} | s = {ProfileParameter}')
+            f'Extrusion Profile at i = {ProfileIndex} | s = {ProfileParameter}'
+        )
         # return results
         return ProfileCurve
-

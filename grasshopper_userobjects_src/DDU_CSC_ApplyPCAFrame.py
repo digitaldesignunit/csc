@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -24,16 +19,18 @@ ghenv.Component.NickName = 'ApplyPCAFrame'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Applies an inverse PCA transformation to align geometry or component '
-    'data with the world coordinate system. Takes either component JSON or '
-    'Rhino geometry and transforms it to align with the world XY plane.'
+    'Applies an inverse PCA transformation to align geometry or compose data '
+    'with the world coordinate system. Takes either compose JSON '
+    '({identity, snapshot}) or Rhino geometry and transforms it to align '
+    'with the world XY plane using the snapshot pca_frame.'
 )
+
 
 class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260603
+    Version: 260609
     """
 
     def __init__(self):
@@ -63,8 +60,8 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'ComponentData (JSON string) or geometry objects with '
-            'component userdata'
+            'Compose JSON string ({identity, snapshot}) or geometry objects '
+            'with the \'csc_component\' compose userdata'
         )
         # Set "No type hint"
         self.InputParams[0].TypeHints.Select(System.Object)
@@ -74,8 +71,8 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Transformed ComponentData (if input was JSON) or '
-            'transformed geometry with updated userdata '
+            'Transformed compose JSON (if input was JSON) or '
+            'transformed geometry with updated compose userdata '
             '(if input was geometry)'
         )
 
@@ -114,20 +111,20 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
 
     def extract_component_data_from_geometry(self, geometry):
         """
-        Extract component data from geometry userdata.
+        Extract compose data ({identity, snapshot}) from geometry userdata.
 
         Args:
             geometry: Rhino geometry object with userdata
 
         Returns:
-            Component data dictionary or None
+            Compose dictionary or None
         """
         try:
             userdata = geometry.GetUserString('csc_component')
             if userdata:
                 return json.loads(userdata)
         except Exception as e:
-            self._addWarning(f'Could not extract component data: {str(e)}')
+            self._addWarning(f'Could not extract compose data: {str(e)}')
         return None
 
     def apply_pca_transform_to_geometry(self, geometry, pca_transform):
@@ -167,43 +164,52 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         try:
             self.Component.Message = 'Processing input...'
 
-            # Determine input type and extract component data
-            component_data = None
+            # Determine input type and extract compose data
+            compose = None
             geometry_objects = []
             input_is_geometry = False
 
-            # Check if input is a JSON string (ComponentData)
+            # Check if input is a compose JSON string
             if isinstance(Input, str):
                 try:
-                    component_data = json.loads(Input)
-                    self._addRemark('Input detected as ComponentData JSON')
+                    compose = json.loads(Input)
+                    self._addRemark('Input detected as compose JSON')
                 except json.JSONDecodeError:
-                    msg = 'Input is not valid JSON ComponentData!'
+                    msg = 'Input is not valid compose JSON!'
                     self._addError(msg)
                     self.Component.Message = msg
                     return Output
             else:
-                # Input is geometry - extract component data from userdata
+                # Input is geometry - extract compose data from userdata
                 input_is_geometry = True
                 geometry_objects = (Input if isinstance(Input, list)
                                     else [Input])
 
-                # Try to extract component data from first geometry object
-                component_data = self.extract_component_data_from_geometry(
+                # Try to extract compose data from first geometry object
+                compose = self.extract_component_data_from_geometry(
                     geometry_objects[0])
-                if not component_data:
-                    msg = ('Could not extract component data from '
+                if not compose:
+                    msg = ('Could not extract compose data from '
                            'geometry userdata!')
                     self._addError(msg)
                     self.Component.Message = msg
                     return Output
 
                 self._addRemark('Input detected as geometry with '
-                                'component userdata')
+                                'compose userdata')
 
-            # Extract PCA frame from component data
+            # Resolve the snapshot (holds pca_frame + iframe)
+            snapshot = (compose.get('snapshot')
+                        if isinstance(compose, dict) else None)
+            if not isinstance(snapshot, dict):
+                msg = 'Compose JSON has no snapshot!'
+                self._addError(msg)
+                self.Component.Message = msg
+                return Output
+
+            # Extract PCA frame from the snapshot
             try:
-                pca_frame = component_data['pca_frame']
+                pca_frame = snapshot['pca_frame']
                 pca_plane = self.FrameDictToPlane(pca_frame)
 
                 # Create inverse PCA transform (from PCA space to world space)
@@ -212,23 +218,32 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
 
                 self._addRemark('PCA frame found, creating inverse transform')
             except KeyError:
-                msg = 'Component data does not contain pca_frame!'
+                msg = 'Snapshot does not contain pca_frame!'
                 self._addError(msg)
                 self.Component.Message = msg
                 return Output
 
-            # Create transformed component data
-            transformed_component_data = component_data.copy()
+            # Default identity frame
+            DEFAULT_FRAME = {
+                'o': [0.0, 0.0, 0.0],
+                'x': [1.0, 0.0, 0.0],
+                'y': [0.0, 1.0, 0.0],
+                'z': [0.0, 0.0, 1.0]
+            }
+
+            # Build a transformed compose (copy identity + snapshot shallowly;
+            # the iframe key is replaced wholesale, never mutated in place)
+            transformed_compose = {
+                'identity': compose.get('identity'),
+                'snapshot': dict(snapshot),
+            }
+            transformed_snapshot = transformed_compose['snapshot']
 
             # Update iframe to preserve translation but update orientation
             try:
                 # Get existing iframe or create default
-                original_iframe = transformed_component_data.get('iframe', {
-                    'o': [0.0, 0.0, 0.0],
-                    'x': [1.0, 0.0, 0.0],
-                    'y': [0.0, 1.0, 0.0],
-                    'z': [0.0, 0.0, 1.0]
-                })
+                original_iframe = transformed_snapshot.get(
+                    'iframe', DEFAULT_FRAME)
 
                 # Convert iframe to plane
                 iframe_plane = self.FrameDictToPlane(original_iframe)
@@ -238,7 +253,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                 # For JSON input, just apply inverse PCA
                 if not input_is_geometry:
                     iframe_plane.Transform(pca_transform)
-                    transformed_component_data['iframe'] = (
+                    transformed_snapshot['iframe'] = (
                         self.PlaneToFrameDict(iframe_plane))
 
                 self._addRemark('Updated iframe with PCA orientation')
@@ -253,12 +268,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                 # 3. Apply iframe transformation again
                 try:
                     # Get the original iframe
-                    original_iframe = component_data.get('iframe', {
-                        'o': [0.0, 0.0, 0.0],
-                        'x': [1.0, 0.0, 0.0],
-                        'y': [0.0, 1.0, 0.0],
-                        'z': [0.0, 0.0, 1.0]
-                    })
+                    original_iframe = snapshot.get('iframe', DEFAULT_FRAME)
 
                     # Convert iframe to plane
                     iframe_plane = self.FrameDictToPlane(original_iframe)
@@ -282,8 +292,8 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                     compound_iframe_plane.Transform(inverse_iframe_transform)
                     compound_iframe_plane.Transform(pca_transform)
 
-                    # Update the component data with the transformed iframe
-                    transformed_component_data['iframe'] = (
+                    # Update the snapshot with the transformed iframe
+                    transformed_snapshot['iframe'] = (
                         self.PlaneToFrameDict(compound_iframe_plane))
 
                     # Transform geometry objects: inverse iframe -> PCA ->
@@ -300,11 +310,11 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                         # Step 3: Apply iframe transformation again
                         transformed_geometry.Transform(iframe_transform)
 
-                        # Update userdata with transformed component data
+                        # Update userdata with transformed compose data
                         if hasattr(transformed_geometry, 'SetUserString'):
                             transformed_geometry.SetUserString(
                                 'csc_component',
-                                json.dumps(transformed_component_data))
+                                json.dumps(transformed_compose))
                         Output = transformed_geometry
 
                     self._addRemark(f'Transformed {len(geometry_objects)} '
@@ -321,15 +331,15 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                         if hasattr(transformed_geometry, 'SetUserString'):
                             transformed_geometry.SetUserString(
                                 'csc_component',
-                                json.dumps(transformed_component_data))
+                                json.dumps(transformed_compose))
 
                         Output = transformed_geometry
                     self._addRemark(f'Transformed {len(geometry_objects)} '
                                     'geometry objects with PCA only')
             else:
-                # Output transformed component data as JSON
-                Output = json.dumps(transformed_component_data)
-                self._addRemark('Output transformed ComponentData as JSON')
+                # Output transformed compose data as JSON
+                Output = json.dumps(transformed_compose)
+                self._addRemark('Output transformed compose JSON')
 
             # Update success message
             if input_is_geometry:
@@ -339,7 +349,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                 )
             else:
                 self.Component.Message = ('Successfully applied PCA frame '
-                                          'to ComponentData')
+                                          'to compose JSON')
 
             return Output
 

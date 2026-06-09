@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -24,9 +19,9 @@ ghenv.Component.NickName = 'GetComponentData'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    ' Extracts the csc_component user data (JSON string) from Rhino '
-    'geometry objects. Safely retrieves and parses component data stored '
-    'as user strings.'
+    'Extracts the csc_component compose data ({identity, snapshot} JSON '
+    'string) from Rhino geometry objects. Safely retrieves and parses the '
+    'compose data stored as user strings.'
 )
 
 
@@ -34,7 +29,7 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260609
     """
 
     def __init__(self):
@@ -64,26 +59,26 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Geometry objects with component userdata'
+            'Geometry objects with the \'csc_component\' compose userdata'
         )
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Component data as JSON strings extracted from '
+            'Compose JSON strings ({identity, snapshot}) extracted from '
             'geometry userdata'
         )
 
     def extract_component_data_from_geometry(self, geometry):
         """
-        Extract component data from geometry userdata.
+        Extract compose data ({identity, snapshot}) from geometry userdata.
 
         Args:
             geometry: Rhino geometry object with userdata
 
         Returns:
-            Component data dictionary or None
+            Compose dictionary or None
         """
         try:
             if hasattr(geometry, 'GetUserString'):
@@ -122,17 +117,16 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
                                      f'skipping')
                     continue
 
-                # Extract component data
-                component_data = self.extract_component_data_from_geometry(
-                    geo)
-                if component_data:
+                # Extract compose data
+                compose = self.extract_component_data_from_geometry(geo)
+                if compose:
                     # Add to output
                     ComponentData.Add(
-                        json.dumps(component_data),
+                        json.dumps(compose),
                         Grasshopper.Kernel.Data.GH_Path(i)
                     )
                     successful_extractions += 1
-                    self._addRemark(f'Successfully extracted component data '
+                    self._addRemark(f'Successfully extracted compose data '
                                     f'from geometry {i}')
                 else:
                     # Add empty string to maintain data tree structure
@@ -140,21 +134,21 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
                         '',
                         Grasshopper.Kernel.Data.GH_Path(i)
                     )
-                    self._addWarning(f'Failed to extract component data '
+                    self._addWarning(f'Failed to extract compose data '
                                      f'from geometry {i}')
 
             # Update success message
             if successful_extractions == 0:
-                msg = 'No component data found in any geometry objects'
+                msg = 'No compose data found in any geometry objects'
                 self._addError(msg)
                 self.Component.Message = msg
             elif successful_extractions == len(Geometry):
-                self._addRemark(f'Extracted component data from '
+                self._addRemark(f'Extracted compose data from '
                                 f'{successful_extractions} out of '
                                 f'{len(Geometry)} geometry objects')
             else:
                 self._addWarning('Some geometry objects did not contain '
-                                 'valid component data')
+                                 'valid compose data')
 
             return ComponentData
 

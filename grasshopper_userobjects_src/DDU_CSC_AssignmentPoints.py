@@ -6,9 +6,6 @@ print('ENV OK!')
 # r: requests
 # r: numpy
 # r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import numpy as np  # NOQA
@@ -41,7 +38,7 @@ class CSC_AssignmentPoints(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260423
+    Version: 260609
     """
 
     def __init__(self):

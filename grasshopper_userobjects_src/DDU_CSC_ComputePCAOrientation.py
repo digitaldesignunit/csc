@@ -7,8 +7,6 @@ print('ENV OK!')
 # r: numpy
 # r: scipy
 # r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
@@ -42,7 +40,7 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260603
+    Version: 260609
     """
 
     def __init__(self):

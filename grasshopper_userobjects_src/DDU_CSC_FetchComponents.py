@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -28,9 +23,10 @@ ghenv.Component.NickName = 'FetchComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Fetches specific components from the remote Catalog by their IDs. '
-    'Supports caching and handles individual component retrieval with error '
-    'handling for missing components.'
+    'Fetches specific identities (with their current snapshot) from the '
+    'remote Catalog by their identity IDs. Supports caching and returns '
+    'compose JSON ({identity, snapshot}) with error handling for missing '
+    'identities.'
 )
 
 
@@ -38,7 +34,7 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260316
+    Version: 260609
     """
 
     def __init__(self):
@@ -67,15 +63,17 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
-        self.InputParams[0].Description = 'One or many ComponentIDs to fetch'
+        self.InputParams[0].Description = (
+            'One or many identity IDs (UUIDs) to fetch'
+        )
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'The ComponentData that was fetched from the server as JSON. '
-            'Use \'DisassembleComponent\' to access the individual fields '
-            'ready for Grasshopper'
+            'Compose JSON per entry ({identity, snapshot}) fetched from the '
+            'server. Use \'DisassembleComponent\' to access the individual '
+            'fields ready for Grasshopper'
         )
 
     def get_auth_core_from_sticky(self):
@@ -103,9 +101,9 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = msg
             return
 
-        # Validate ComponentID input
+        # Validate identity ID input
         if not ComponentID:
-            msg = 'Please provide ComponentID(s) to fetch.'
+            msg = 'Please provide identity ID(s) to fetch.'
             self._addWarning(msg)
             self.Component.Message = msg
             return
@@ -114,7 +112,7 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
         component_ids = list(ComponentID)
         for _id in component_ids:
             if not auth_core.validate_uuid(_id):
-                msg = f'ComponentID <{_id}> is not a valid UUID!'
+                msg = f'Identity ID <{_id}> is not a valid UUID!'
                 self._addWarning(msg)
                 self.Component.Message = msg
                 return
@@ -128,20 +126,20 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
             ComponentData = Grasshopper.DataTree[System.Object]()
             __Results = (ComponentData,)
 
-            # Fetch each component
+            # Fetch each identity's current-snapshot compose
             for i, _id in enumerate(component_ids):
                 try:
-                    # Make cached request to fetch specific component
-                    response = auth_core.cached_get(
-                        f'/components/{_id}', f'component:{_id}')
+                    # Unified catalog cache (identity + snapshot stored
+                    # independently, compose assembled on read).
+                    response = auth_core.cached_get_compose(_id)
 
                     if response.status_code == 200:
-                        # Successfully fetched component (from server or cache)
+                        # Successfully fetched compose (from server or cache)
                         json_comp = response.json()
 
                         # Create datatree path
                         ghp = Grasshopper.Kernel.Data.GH_Path(i)
-                        # Add component data to the datatree
+                        # Add compose JSON to the datatree
                         ComponentData.Add(json.dumps(json_comp), ghp)
 
                         self._addRemark(
@@ -149,7 +147,7 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
                         )
 
                     elif response.status_code == 404:
-                        msg = f'Component {_id} not found on server.'
+                        msg = f'Identity {_id} not found on server.'
                         self._addWarning(msg)
                         self.Component.Message = msg
 

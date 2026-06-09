@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -28,8 +23,9 @@ ghenv.Component.NickName = 'FetchAllComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Fetches all available components from the remote Catalog API with '
-    'caching support. Returns all components as a list of JSON strings.'
+    'Fetches all catalog identities (joined with their current snapshot) '
+    'from the remote Catalog API via GET /identities with caching support. '
+    'Returns each entry as a compose JSON string ({identity, snapshot}).'
 )
 
 
@@ -37,7 +33,7 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260316
+    Version: 260609
     """
 
     def __init__(self):
@@ -70,9 +66,9 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'The ComponentData that was fetched from the server as JSON. '
-            'Use \'DisassembleComponent\' to access the individual fields '
-            'ready for Grasshopper'
+            'Compose JSON per entry ({identity, snapshot}) fetched from '
+            'GET /identities. Use \'DisassembleComponent\' to access the '
+            'individual fields ready for Grasshopper'
         )
 
     def get_auth_core_from_sticky(self):
@@ -101,13 +97,16 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
             return
 
         try:
-            self.Component.Message = 'Fetching components (with cache)...'
+            self.Component.Message = 'Fetching identities (with cache)...'
 
-            # Make cached request to fetch all components
-            response = auth_core.cached_get('/components', 'all_components')
+            # Unified catalog cache: stores identity + snapshot independently
+            # and reassembles compose rows (no separate all_identities blob).
+            response = auth_core.cached_list_identities(
+                {'expand': 'current_snapshot'},
+            )
 
             if response.status_code == 200:
-                # Successfully fetched components
+                # Successfully fetched identities (from server or cache)
                 json_comps = response.json()
                 component_count = len(json_comps)
 
@@ -122,11 +121,11 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 ComponentData = Grasshopper.DataTree[System.Object]()
                 __Results = (ComponentData,)
 
-                # Loop over all components and add them to the data tree
+                # Loop over all compose entries and add them to the data tree
                 for i, json_comp in enumerate(json_comps):
                     # Create datatree path
                     ghp = Grasshopper.Kernel.Data.GH_Path(0, i)
-                    # Add component data to the datatree
+                    # Add compose data ({identity, snapshot}) to the datatree
                     ComponentData.Add(json.dumps(json_comp), ghp)
 
                 return __Results

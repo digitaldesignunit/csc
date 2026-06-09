@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os  # NOQA
@@ -44,7 +39,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260609
     """
 
     def __init__(self):
@@ -581,10 +576,11 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     uo_install_dir = os.path.dirname(installed_uos[0])
                 else:
                     uo_install_dir = os.path.join(uo_dir, CATEGORY)
-                installed_uo_names = [
-                    os.path.splitext(os.path.basename(p))[0]
+                installed_uo_paths = {
+                    os.path.splitext(os.path.basename(p))[0]: p
                     for p in installed_uos
-                ]
+                }
+                installed_uo_names = list(installed_uo_paths.keys())
                 msg = f'Found {len(installed_uos)} installed UserObjects.'
                 self._addRemark(msg)
                 Status.Add(msg)
@@ -607,6 +603,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     uo for uo in api_uo_names
                     if uo not in set_installed_uo_names
                 ]
+                stale_uo_names = [
+                    uo for uo in set_installed_uo_names
+                    if uo not in api_uo_names
+                ]
                 if missing_uo_names:
                     msg = (
                         f'Found {len(missing_uo_names)} UserObjects that '
@@ -614,6 +614,14 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                         'them.'
                     )
                     self._addRemark(msg)
+                    Status.Add(msg)
+                if stale_uo_names:
+                    msg = (
+                        f'Found {len(stale_uo_names)} stale UserObjects not '
+                        'on server (will be deleted on InstallUpdates): '
+                        f'{", ".join(sorted(stale_uo_names))}'
+                    )
+                    self._addWarning(msg)
                     Status.Add(msg)
                 msg = (
                     'Toggle InstallUpdates to True to install updates from '
@@ -672,7 +680,32 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
 
                 # currently, we need to install/replace all userobjects
                 # since we can't check userobjects file versions
-                # (TODO: add userobject file version checking)
+                # TODO: add userobject file version checking
+                # first, we delete all stale user objects, using the actual
+                # path each userobject was discovered at (they may live in
+                # different subfolders due to the recursive glob)
+                deleted_stale = 0
+                for uo_name in stale_uo_names:
+                    stale_file = installed_uo_paths.get(uo_name) or os.path.join(
+                        uo_install_dir, uo_name + '.ghuser'
+                    )
+                    try:
+                        os.remove(stale_file)
+                        deleted_stale += 1
+                    except OSError as e:
+                        msg = (
+                            f'Could not delete stale UserObject {uo_name}: '
+                            f'{str(e)}'
+                        )
+                        self._addWarning(msg)
+                        Status.Add(msg)
+                if stale_uo_names:
+                    msg = (
+                        f'Deleted {deleted_stale} of {len(stale_uo_names)} '
+                        'stale UserObject files.'
+                    )
+                    self._addRemark(msg)
+                    Status.Add(msg)
                 missing_uo_names = api_uo_names
                 # loop over missing userobjects and save them
                 written_uo_files = []

@@ -5,10 +5,6 @@ print('ENV OK!')
 # r: charset_normalizer
 # r: requests
 # r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
@@ -25,9 +21,9 @@ import Rhino  # NOQA
 ghenv.Component.Name = 'VisualizeEmbedding'  # NOQA
 ghenv.Component.NickName = 'VisualizeEmbedding'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '8 Visualisation'  # NOQA
+ghenv.Component.SubCategory = '8 Visualization'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Visualises a low-dimensional embedding (e.g. from PCA or t-SNE) by '
+    'Visualizes a low-dimensional embedding (e.g. from PCA or t-SNE) by '
     'placing the associated input geometry at its embedding coordinate. '
     'Supports 1D, 2D and 3D layouts; when the embedding has more than 3 '
     'dimensions the remaining dimensions (4, 5, 6) are mapped to RGB colour '
@@ -140,7 +136,7 @@ class CSC_VisualizeEmbedding(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260423
+    Version: 260609
     """
 
     def __init__(self):

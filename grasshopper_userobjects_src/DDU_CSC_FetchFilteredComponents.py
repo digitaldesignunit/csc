@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -28,9 +23,10 @@ ghenv.Component.NickName = 'FetchFilteredComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Fetches components from the remote Catalog based on filter criteria '
-    '(type, material, dataset, complexity, dimensions, reservation status). '
-    'Builds query parameters and returns filtered results.'
+    'Fetches identities (with their current snapshot) from the remote '
+    'Catalog based on filter criteria (type, material, dataset, complexity, '
+    'fragment, bounding box dimensions). Mirrors the web catalog filter '
+    'menu and returns compose JSON ({identity, snapshot}) results.'
 )
 
 
@@ -38,7 +34,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260316
+    Version: 260609
     """
 
     def __init__(self):
@@ -113,9 +109,9 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Human-readable description of the applied filters and query'
         )
         self.OutputParams[1+i].Description = (
-            'The ComponentData that was fetched from the server as JSON. '
-            'Use \'DisassembleComponent\' to access the individual fields '
-            'ready for Grasshopper')
+            'Compose JSON per entry ({identity, snapshot}) fetched from the '
+            'server. Use \'DisassembleComponent\' to access the individual '
+            'fields ready for Grasshopper')
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -142,7 +138,16 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             MinDimensionZ,
             MaxDimensionZ,
             ReservedStatus):
-        """Build query parameters for filtering components."""
+        """
+        Build query parameters for filtering identities.
+
+        Mirrors the web catalog filter menu
+        (ComponentOverviewFilterMenu): comptype, material, dataset,
+        complexity, fragment, and bounding box dimensions. ``validated``
+        is left to the server default (validated-only), matching the web.
+        Adds a reservation-status filter on top (not part of the web
+        catalog filter menu): 1=reserved by current user, 0=not reserved.
+        """
         params = {}
 
         # Add type filter if provided
@@ -164,17 +169,17 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         if Complexity is not None:
             params['complexity'] = Complexity
 
-        # Add fragment filter if provided
+        # Add fragment filter if provided (web sends 'true'/'false')
         if Fragment is not None:
-            params['fragment'] = Fragment
+            params['fragment'] = 'true' if Fragment else 'false'
 
         # Add reservation status filter if provided
+        # (backend: reserved=true -> reserved by current user,
+        #  reserved=false -> not reserved by anyone)
         if ReservedStatus is not None and ReservedStatus != -1:
             if ReservedStatus == 0:
-                # Fetch components that are not reserved by anyone
                 params['reserved'] = 'false'
             elif ReservedStatus == 1:
-                # Fetch components reserved by current user
                 params['reserved'] = 'true'
 
         # Add bounding box filters if provided
@@ -263,7 +268,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         try:
             self.Component.Message = 'Building filter query...'
 
-            # Build filter query parameters
+            # Build filter query parameters (parity with web filter menu)
             filter_params = self.build_filter_query_params(
                 Type, Material, Dataset, Complexity, Fragment,
                 MinDimensionX, MaxDimensionX, MinDimensionY,
@@ -271,13 +276,9 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 ReservedStatus
             )
 
-            # Build the query string
-            query_string = '&'.join([
-                f'{k}={v}' for k, v in filter_params.items()
-            ])
-            endpoint = '/components'
-            if query_string:
-                endpoint += f'?{query_string}'
+            # Request params: filters + compose expansion (identity+snapshot)
+            request_params = dict(filter_params)
+            request_params['expand'] = 'current_snapshot'
 
             # Generate human-readable filter description
             filter_description = self.generate_filter_description(
@@ -285,17 +286,15 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             )
 
             self.Component.Message = (
-                'Fetching filtered components (with cache)...'
+                'Fetching filtered identities (with cache)...'
             )
 
-            # Create cache key based on filter parameters
-            cache_key = (f'filtered:{query_string}' if query_string
-                         else 'filtered:all')
-            # Make cached request to fetch filtered components
-            response = auth_core.cached_get(endpoint, cache_key, filter_params)
+            # Unified catalog cache (same identity/snapshot store as
+            # FetchAllComponents and FetchComponents).
+            response = auth_core.cached_list_identities(request_params)
 
             if response.status_code == 200:
-                # Successfully fetched components
+                # Successfully fetched compose entries
                 json_comps = response.json()
                 component_count = len(json_comps)
 
@@ -313,11 +312,11 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 ComponentData = Grasshopper.DataTree[System.Object]()
                 __Results = (FilterDescription, ComponentData)
 
-                # Loop over all components and add them to the data tree
+                # Loop over all compose entries and add them to the data tree
                 for i, json_comp in enumerate(json_comps):
                     # Create datatree path
                     ghp = Grasshopper.Kernel.Data.GH_Path(0, i)
-                    # Add component data to the datatree
+                    # Add compose JSON to the datatree
                     ComponentData.Add(json.dumps(json_comp), ghp)
 
                 # Add filter description to the filter query output

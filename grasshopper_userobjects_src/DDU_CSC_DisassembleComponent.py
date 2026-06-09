@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -24,9 +19,9 @@ ghenv.Component.NickName = 'DisassembleComponent'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Parses component data (JSON) and outputs individual fields as '
-    'Grasshopper-native types. Reconstructs geometry, bounding boxes, '
-    'PCA frames, and metadata from component JSON.'
+    'Parses compose JSON ({identity, snapshot}) and outputs individual '
+    'fields as Grasshopper-native types. Reconstructs geometry, bounding '
+    'boxes, PCA frames, and metadata from the identity/snapshot pair.'
 )
 
 
@@ -34,7 +29,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260426.1
+    Version: 260609
     """
 
     def __init__(self):
@@ -64,17 +59,17 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'The ComponentData that was fetched from the server as JSON.'
+            'Compose JSON ({identity, snapshot}) fetched from the server.'
         )
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Component ID (GUID)'
+            'Identity ID (GUID)'
         )
         self.OutputParams[1+i].Description = (
-            'Component name (e.g. My Component 01)'
+            'Snapshot name (e.g. My Component 01)'
         )
         self.OutputParams[2+i].Description = (
             'Component type (panel, beam, slab, etc.)'
@@ -83,31 +78,31 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'Component material'
         )
         self.OutputParams[4+i].Description = (
-            'Component color as System.Drawing.Color'
+            'Snapshot color as System.Drawing.Color'
         )
         self.OutputParams[5+i].Description = (
-            'Component location as Point3d (X=latitude, Y=longitude, Z=0)'
+            'Snapshot location as Point3d (X=latitude, Y=longitude, Z=0)'
         )
         self.OutputParams[6+i].Description = (
-            'Component bounding box as Rhino.Geometry.BoundingBox'
+            'Snapshot bounding box as Rhino.Geometry.BoundingBox'
         )
         self.OutputParams[7+i].Description = (
-            'PCA frame at world origin as Rhino.Geometry.Plane'
+            'Snapshot PCA frame at world origin as Rhino.Geometry.Plane'
         )
         self.OutputParams[8+i].Description = (
-            'Component descriptors/metadata as JSON string'
+            'Snapshot descriptors/metadata as JSON string'
         )
         self.OutputParams[9+i].Description = (
-            'Rhino geometry objects (extrusion, meshes, polyline)'
+            'Rhino geometry objects (extrusions, meshes, point clouds)'
         )
         self.OutputParams[10+i].Description = (
             'Marker points as list of Point3d objects'
         )
         self.OutputParams[11+i].Description = (
-            'Component attributes as JSON string'
+            'Identity attributes as JSON string'
         )
         self.OutputParams[12+i].Description = (
-            'Component condition grade (0=destroyed/retired, 1=poor, '
+            'Snapshot condition grade (0=destroyed/retired, 1=poor, '
             '2=average, 3=good)'
         )
         self.OutputParams[13+i].Description = (
@@ -124,64 +119,63 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'Component salvage date as ISO-8601 UTC timestamp'
         )
         self.OutputParams[17+i].Description = (
-            'Parent component ID (GUID) this component was derived from'
+            'Parent identity IDs (GUIDs) this identity was derived from'
         )
 
-    def ComponentExtrusionProfile(
+    def ComponentExtrusions(
             self,
-            json_comp: dict) -> Rhino.Geometry.Polyline:
-        pl = Rhino.Geometry.Polyline()
-        pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
-               for pt in json_comp['geometry']['extrusion']['profile']]
-        pl.AddRange(pts)
-        return pl
+            geometry: dict) -> list[Rhino.Geometry.Extrusion]:
+        """Create extrusions from geometry.extrusions list."""
+        extrusions = []
+        for extr in geometry.get('extrusions', []) or []:
+            pl = Rhino.Geometry.Polyline()
+            pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
+                   for pt in extr['profile']]
+            pl.AddRange(pts)
+            height = extr['height']
+            cxt = Rhino.Geometry.Extrusion.Create(
+                pl.ToPolylineCurve(),
+                Rhino.Geometry.Plane.WorldXY,
+                height,
+                True)
+            # move extrusion downwards half material
+            # thickness to center it at the origin
+            cxt.Translate(Rhino.Geometry.Vector3d(0, 0, height * -0.5))
+            extrusions.append(cxt)
+        return extrusions
 
-    def ComponentExtrusion(
+    def ComponentMeshes(
             self,
-            json_comp: dict) -> Rhino.Geometry.Extrusion:
-        pl = Rhino.Geometry.Polyline()
-        pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
-               for pt in json_comp['geometry']['extrusion']['profile']]
-        pl.AddRange(pts)
-        cxt = Rhino.Geometry.Extrusion.Create(
-            pl.ToPolylineCurve(),
-            Rhino.Geometry.Plane.WorldXY,
-            json_comp['geometry']['extrusion']['height'],
-            True)
-        # move extrusion downwards half material
-        # thickness to center it at the origin
-        cxt.Translate(Rhino.Geometry.Vector3d(
-            0, 0, json_comp['geometry']['extrusion']['height'] * -0.5))
-        return cxt
-
-    def ComponentMeshes(self, json_comp: dict) -> list[Rhino.Geometry.Mesh]:
+            geometry: dict,
+            snapshot_color,
+            identity_id: str) -> list[Rhino.Geometry.Mesh]:
         """Create multiple meshes from geometry.meshes field."""
         meshes = []
-        for i, mesh_data in enumerate(json_comp['geometry']['meshes']):
+        for idx, mesh_data in enumerate(geometry.get('meshes', []) or []):
             mesh = Rhino.Geometry.Mesh()
-            vl = mesh_data['v']
-            fl = mesh_data['f']
+            vl = mesh_data['vertices']
+            fl = mesh_data['faces']
             [mesh.Vertices.Add(*v) for v in vl]
             [mesh.Faces.AddFace(*f) for f in fl]
             # Try to get mesh-specific colors first
-            try:
-                cl = mesh_data['c']
+            cl = mesh_data.get('colors')
+            if cl:
                 [mesh.VertexColors.Add(
                     System.Drawing.Color.FromArgb(*c)) for c in cl]
-            except KeyError:
-                # Fallback: use component color for all vertices
+            else:
+                # Fallback: use snapshot color for all vertices
                 try:
                     component_color = System.Drawing.Color.FromArgb(
-                        255, *json_comp['color'])
+                        255, *snapshot_color)
                     for _ in range(len(vl)):
                         mesh.VertexColors.Add(component_color)
                 except (KeyError, TypeError):
-                    # If even component color fails, use a default gray
+                    # If even snapshot color fails, use a default gray
                     default_color = System.Drawing.Color.Gray
                     for _ in range(len(vl)):
                         mesh.VertexColors.Add(default_color)
                     self._addWarning(
-                        f'Mesh {i} in component {json_comp["_id"]} '
+                        f'Mesh {idx} in identity {identity_id} '
                         f'using default gray color')
             mesh.RebuildNormals()
             mesh.UnifyNormals()
@@ -189,18 +183,39 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             meshes.append(mesh)
         return meshes
 
-    def ComponentColor(self, json_comp: dict) -> System.Drawing.Color:
-        return System.Drawing.Color.FromArgb(255, *json_comp['color'])
+    def ComponentPointClouds(
+            self,
+            geometry: dict) -> list[Rhino.Geometry.PointCloud]:
+        """Create point clouds from geometry.point_clouds field."""
+        clouds = []
+        for pc_data in geometry.get('point_clouds', []) or []:
+            cloud = Rhino.Geometry.PointCloud()
+            pts = pc_data.get('points', [])
+            cl = pc_data.get('colors')
+            if cl and len(cl) == len(pts):
+                for p, c in zip(pts, cl):
+                    cloud.Add(
+                        Rhino.Geometry.Point3d(p[0], p[1], p[2]),
+                        System.Drawing.Color.FromArgb(*c))
+            else:
+                for p in pts:
+                    cloud.Add(Rhino.Geometry.Point3d(p[0], p[1], p[2]))
+            clouds.append(cloud)
+        return clouds
+
+    def ComponentColor(self, snapshot: dict) -> System.Drawing.Color:
+        color = snapshot.get('color') or [110, 110, 110]
+        return System.Drawing.Color.FromArgb(255, *color)
 
     def ComponentBoundingBox(
             self,
-            json_comp: dict) -> Rhino.Geometry.BoundingBox:
-        xtx = json_comp['bbx'][0]
-        xty = json_comp['bbx'][1]
-        xtz = json_comp['bbx'][2]
+            snapshot: dict) -> Rhino.Geometry.BoundingBox:
+        xtx = snapshot['bbx'][0]
+        xty = snapshot['bbx'][1]
+        xtz = snapshot['bbx'][2]
 
         # Get bbx_origin (center of bounding box in PCA space)
-        bbx_origin = json_comp.get('bbx_origin', [0.0, 0.0, 0.0])
+        bbx_origin = snapshot.get('bbx_origin', [0.0, 0.0, 0.0])
 
         # Create bounding box at bbx_origin in PCA space
         bbx = Rhino.Geometry.BoundingBox(
@@ -217,7 +232,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
         # Transform from PCA space back to original component space
         try:
-            pca_frame = json_comp.get('pca_frame', {})
+            pca_frame = snapshot.get('pca_frame', {})
             if pca_frame:
                 # Create PCA frame plane at world origin
                 pca_origin = Rhino.Geometry.Point3d(
@@ -242,10 +257,10 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
         return bbx
 
-    def ComponentPCAPlane(self, json_comp: dict) -> Rhino.Geometry.Plane:
-        """Get PCA plane at world origin from component data."""
+    def ComponentPCAPlane(self, snapshot: dict) -> Rhino.Geometry.Plane:
+        """Get PCA plane at world origin from snapshot data."""
         try:
-            pca_frame = json_comp.get('pca_frame', {})
+            pca_frame = snapshot.get('pca_frame', {})
             if pca_frame:
                 pca_x = Rhino.Geometry.Vector3d(
                     *pca_frame.get('x', [1, 0, 0]))
@@ -309,26 +324,35 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
             # loop over all branches
             for i in range(ComponentData.BranchCount):
+                ghp = ComponentData.Paths[i]
                 for j, comp in enumerate(ComponentData.Branches[i]):
                     try:
-                        json_comp = json.loads(comp)
-                        # create datatree path
-                        ghp = ComponentData.Paths[i]
+                        compose = json.loads(comp)
+                        identity = compose.get('identity') or {}
+                        snapshot = compose.get('snapshot') or {}
+                        if not identity or not snapshot:
+                            self._addWarning(
+                                'Compose JSON missing identity/snapshot, '
+                                'skipping entry')
+                            continue
+
+                        identity_id = identity.get('_id')
+
                         # add directly available metadata to the
                         # respective datatrees
-                        ID.Add(json_comp['_id'], ghp)
-                        Name.Add(json_comp['name'], ghp)
-                        Type.Add(json_comp['type'], ghp)
-                        Material.Add(json_comp['material'], ghp)
+                        ID.Add(identity_id, ghp)
+                        Name.Add(snapshot.get('name'), ghp)
+                        Type.Add(identity.get('type'), ghp)
+                        Material.Add(identity.get('material'), ghp)
 
-                        # create system color from rgb values
-                        color = self.ComponentColor(json_comp)
+                        # create system color from snapshot rgb values
+                        color = self.ComponentColor(snapshot)
                         Color.Add(color, ghp)
 
                         # process location data
                         try:
-                            location_data = json_comp.get('location', {})
-                            if (location_data and 'lat' in location_data and
+                            location_data = snapshot.get('location', {}) or {}
+                            if ('lat' in location_data and
                                     'lon' in location_data):
                                 location_point = Rhino.Geometry.Point3d(
                                     location_data['lat'],
@@ -345,72 +369,84 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
 
                         # process insertion frame
                         try:
-                            iframe = json_comp['iframe']
+                            iframe = snapshot['iframe']
                             iplane = Rhino.Geometry.Plane(
                                 Rhino.Geometry.Point3d(*iframe['o']),
                                 Rhino.Geometry.Vector3d(*iframe['x']),
                                 Rhino.Geometry.Vector3d(*iframe['y']),
                             )
-                        except KeyError:
+                        except (KeyError, TypeError):
                             iplane = Rhino.Geometry.Plane.WorldXY
 
                         xform = Rhino.Geometry.Transform.PlaneToPlane(
                             Rhino.Geometry.Plane.WorldXY,
                             iplane)
 
-                        # treat geometry key in a special way because
-                        # it may hold multiple geometry types
-                        for key in sorted(json_comp['geometry'].keys()):
-                            if key == 'extrusion':
-                                xtr = self.ComponentExtrusion(json_comp)
-                                # transform to iframe
-                                xtr.Transform(xform)
-                                # set user string
-                                xtr.SetUserString('csc_component', comp)
-                                # add to datatree
-                                PrimitiveGeometry.Add(xtr, ghp)
+                        # treat geometry block in a special way because
+                        # it may hold multiple representations
+                        geometry = snapshot.get('geometry', {}) or {}
+                        for key in sorted(geometry.keys()):
+                            if key == 'extrusions':
+                                for xtr in self.ComponentExtrusions(geometry):
+                                    # transform to iframe
+                                    xtr.Transform(xform)
+                                    # set user string
+                                    xtr.SetUserString('csc_component', comp)
+                                    # add to datatree
+                                    PrimitiveGeometry.Add(xtr, ghp)
                             elif key == 'meshes':
                                 # Handle multiple meshes
-                                meshes = self.ComponentMeshes(json_comp)
-                                for i, mesh in enumerate(meshes):
+                                meshes = self.ComponentMeshes(
+                                    geometry,
+                                    snapshot.get('color'),
+                                    identity_id)
+                                for mesh_idx, mesh in enumerate(meshes):
                                     # transform to iframe
                                     mesh.Transform(xform)
                                     # set user string with mesh index
                                     mesh.SetUserString('csc_component', comp)
                                     mesh.SetUserString('csc_mesh_index',
-                                                       str(i))
+                                                       str(mesh_idx))
                                     # add to datatree
                                     PrimitiveGeometry.Add(mesh, ghp)
+                            elif key == 'point_clouds':
+                                clouds = self.ComponentPointClouds(geometry)
+                                for cloud in clouds:
+                                    # transform to iframe
+                                    cloud.Transform(xform)
+                                    # set user string
+                                    cloud.SetUserString('csc_component', comp)
+                                    # add to datatree
+                                    PrimitiveGeometry.Add(cloud, ghp)
+                            elif key == 'marker_points':
+                                # handled separately below
+                                continue
                             else:
                                 msg = (f'Missing implementation for geometry '
                                        f'of type \'{key}\'!')
                                 self._addWarning(msg)
 
                         # construct boundingbox
-                        bbx = self.ComponentBoundingBox(json_comp)
+                        bbx = self.ComponentBoundingBox(snapshot)
 
                         # apply iframe transform
                         bbx.Transform(xform)
                         BoundingBox.Add(bbx, ghp)
 
                         # get PCA plane at world origin
-                        pca_plane = self.ComponentPCAPlane(json_comp)
+                        pca_plane = self.ComponentPCAPlane(snapshot)
                         # apply iframe transform to PCA plane
                         pca_plane.Transform(xform)
                         PCAFrame.Add(pca_plane, ghp)
 
                         # add descriptors
-                        try:
-                            descriptors = json_comp.get('descriptors', {})
-                            Descriptors.Add(json.dumps(descriptors), ghp)
-                        except KeyError:
-                            # If no descriptors, add empty dict as JSON string
-                            Descriptors.Add(json.dumps({}), ghp)
+                        descriptors = snapshot.get('descriptors', {}) or {}
+                        Descriptors.Add(json.dumps(descriptors), ghp)
 
-                        # process marker points
+                        # process marker points (now nested under geometry)
                         try:
-                            marker_points_data = json_comp.get(
-                                'marker_points', [])
+                            marker_points_data = geometry.get(
+                                'marker_points', []) or []
                             marker_points_list = []
                             for point_data in marker_points_data:
                                 if (isinstance(point_data, list) and
@@ -430,32 +466,31 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                         if marker_points_list:
                             MarkerPoints.AddRange(marker_points_list, ghp)
 
-                        # process attributes
-                        try:
-                            attributes = json_comp.get('attributes', {})
-                            Attributes.Add(json.dumps(attributes), ghp)
-                        except KeyError:
-                            # If no attributes, add empty dict as JSON string
-                            Attributes.Add(json.dumps({}), ghp)
+                        # process attributes (identity-level)
+                        attributes = identity.get('attributes', {}) or {}
+                        Attributes.Add(json.dumps(attributes), ghp)
 
-                        if json_comp.get('condition') is not None:
-                            Condition.Add(json_comp['condition'], ghp)
-                        if json_comp.get('manufactured_at') is not None:
+                        # snapshot-level state
+                        if snapshot.get('condition') is not None:
+                            Condition.Add(snapshot['condition'], ghp)
+
+                        # identity-level provenance
+                        if identity.get('manufactured_at') is not None:
                             ManufacturedAt.Add(
-                                json_comp['manufactured_at'], ghp)
-                        if json_comp.get('manufactured_precision') is not None:
+                                identity['manufactured_at'], ghp)
+                        if identity.get('manufactured_precision') is not None:
                             ManufacturedPrecision.Add(
-                                json_comp['manufactured_precision'], ghp)
-                        if json_comp.get('salvage_source') is not None:
-                            SalvageSource.Add(json_comp['salvage_source'], ghp)
-                        if json_comp.get('salvaged_at') is not None:
-                            SalvagedAt.Add(json_comp['salvaged_at'], ghp)
-                        if json_comp.get('parent_component') is not None:
-                            ParentComponent.Add(
-                                json_comp['parent_component'], ghp)
+                                identity['manufactured_precision'], ghp)
+                        if identity.get('salvage_source') is not None:
+                            SalvageSource.Add(identity['salvage_source'], ghp)
+                        if identity.get('salvaged_at') is not None:
+                            SalvagedAt.Add(identity['salvaged_at'], ghp)
+                        parent_identities = identity.get('parent_identities')
+                        if parent_identities:
+                            ParentComponent.AddRange(parent_identities, ghp)
 
                     except json.JSONDecodeError as e:
-                        msg = f'Failed to parse component data: {str(e)}'
+                        msg = f'Failed to parse compose data: {str(e)}'
                         self._addError(msg)
                     except Exception as e:
                         msg = f'Error processing component: {str(e)}'

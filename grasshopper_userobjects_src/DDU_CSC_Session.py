@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import time  # NOQA
@@ -18,6 +13,7 @@ import os  # NOQA
 import hashlib  # NOQA
 import pickle  # NOQA
 import math  # NOQA
+import struct  # NOQA
 from threading import RLock  # NOQA
 import uuid  # NOQA
 from datetime import datetime, timedelta  # NOQA
@@ -38,15 +34,50 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '1 User'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Handles user authentication with the remote API, manages access '
-    'tokens, and provides caching functionality for API responses and '
-    'geometry. Stores authentication state in scriptcontext.sticky.'
+    'tokens, and provides a unified catalog cache (identities and '
+    'snapshots stored independently, mesh PLY geometry cached per '
+    'snapshot). Stores authentication state in scriptcontext.sticky.'
 )
 
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 260603
+Version: 260609
 """
+
+
+def _compute_compose_etag(identity_doc, snapshot_doc):
+    """Match backend ``_compute_compose_etag`` (identity + snapshot pair)."""
+    payload = (
+        f"{identity_doc.get('lastmodified', '')}::"
+        f"{snapshot_doc.get('etag', '')}"
+    )
+    return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
+def _query_cache_key(params):
+    """Stable cache key for a GET /identities query parameter dict."""
+    if not params:
+        return 'query:identities'
+    items = sorted((str(k), str(v)) for k, v in params.items())
+    payload = '&'.join(f'{k}={v}' for k, v in items)
+    return 'query:' + hashlib.md5(payload.encode('utf-8')).hexdigest()
+
+
+class _CachedResponse(object):
+    """Minimal response wrapper for cache hits (status 200 + JSON body)."""
+
+    def __init__(self, data, etag=None, status_code=200):
+        self.status_code = status_code
+        self._data = data
+        self._etag = etag
+
+    def json(self):
+        return self._data
+
+    @property
+    def headers(self):
+        return {'ETag': self._etag} if self._etag else {}
 
 
 # ComponentCache - Embedded ---------------------------------------------------
@@ -63,6 +94,8 @@ class _ComponentCache(object):
         self.ttl_hours = ttl_hours
         self.cache_dir = cache_dir or self._get_default_cache_dir()
         self.components_dir = os.path.join(self.cache_dir, 'components')
+        self.identities_dir = os.path.join(self.cache_dir, 'identities')
+        self.snapshots_dir = os.path.join(self.cache_dir, 'snapshots')
         self.designs_dir = os.path.join(self.cache_dir, 'designs')
         self.metadata_dir = os.path.join(self.cache_dir, 'metadata')
         self.geometry_dir = os.path.join(self.cache_dir, 'component_geometry')
@@ -85,8 +118,9 @@ class _ComponentCache(object):
     def _ensure_cache_dirs(self):
         """Create cache directories if they don't exist."""
         dirs = [
-            self.cache_dir, self.components_dir, self.designs_dir,
-            self.metadata_dir, self.geometry_dir
+            self.cache_dir, self.components_dir, self.identities_dir,
+            self.snapshots_dir, self.designs_dir, self.metadata_dir,
+            self.geometry_dir
         ]
         for directory in dirs:
             if not os.path.exists(directory):
@@ -134,6 +168,193 @@ class _ComponentCache(object):
         # Use binary cache
         self.set_binary(cache_key, data, etag, filters)
 
+    def _write_metadata(self, cache_key, metadata):
+        metadata_file = os.path.join(
+            self.metadata_dir,
+            f"{self._get_cache_key_hash(cache_key)}.json"
+        )
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+    def _read_metadata(self, cache_key):
+        metadata_file = os.path.join(
+            self.metadata_dir,
+            f"{self._get_cache_key_hash(cache_key)}.json"
+        )
+        if not os.path.exists(metadata_file):
+            return None
+        with open(metadata_file, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+        if self._is_expired(metadata.get('cached_at', '')):
+            return None
+        return metadata
+
+    # Identity / snapshot catalog cache (v0.5) -------------------------------
+
+    def set_identity(self, identity_id, identity_doc):
+        """Store one identity document (keyed by identity id)."""
+        with self._lock:
+            try:
+                cache_key = f'identity:{identity_id}'
+                identity_file = os.path.join(
+                    self.identities_dir, f'{identity_id}.pkl'
+                )
+                with open(identity_file, 'wb') as f:
+                    pickle.dump(identity_doc, f)
+                self._write_metadata(cache_key, {
+                    'cache_key': cache_key,
+                    'cached_at': datetime.now().isoformat(),
+                    'etag': identity_doc.get('lastmodified'),
+                    'type': 'identity',
+                    'current_snapshot_id': identity_doc.get(
+                        'current_snapshot_id'),
+                })
+            except (IOError, pickle.PickleError):
+                pass
+
+    def get_identity(self, identity_id):
+        """Return (identity_doc, etag, is_cached)."""
+        with self._lock:
+            try:
+                cache_key = f'identity:{identity_id}'
+                metadata = self._read_metadata(cache_key)
+                if metadata is None:
+                    return None, None, False
+                identity_file = os.path.join(
+                    self.identities_dir, f'{identity_id}.pkl'
+                )
+                if not os.path.exists(identity_file):
+                    return None, None, False
+                with open(identity_file, 'rb') as f:
+                    identity_doc = pickle.load(f)
+                return identity_doc, metadata.get('etag'), True
+            except (IOError, pickle.PickleError, KeyError):
+                return None, None, False
+
+    def set_snapshot(self, snapshot_id, snapshot_doc):
+        """Store one snapshot document (keyed by snapshot id)."""
+        with self._lock:
+            try:
+                cache_key = f'snapshot:{snapshot_id}'
+                snapshot_file = os.path.join(
+                    self.snapshots_dir, f'{snapshot_id}.pkl'
+                )
+                with open(snapshot_file, 'wb') as f:
+                    pickle.dump(snapshot_doc, f)
+                self._write_metadata(cache_key, {
+                    'cache_key': cache_key,
+                    'cached_at': datetime.now().isoformat(),
+                    'etag': snapshot_doc.get('etag'),
+                    'type': 'snapshot',
+                    'identity_id': snapshot_doc.get('identity_id'),
+                })
+            except (IOError, pickle.PickleError):
+                pass
+
+    def get_snapshot(self, snapshot_id):
+        """Return (snapshot_doc, etag, is_cached)."""
+        with self._lock:
+            try:
+                cache_key = f'snapshot:{snapshot_id}'
+                metadata = self._read_metadata(cache_key)
+                if metadata is None:
+                    return None, None, False
+                snapshot_file = os.path.join(
+                    self.snapshots_dir, f'{snapshot_id}.pkl'
+                )
+                if not os.path.exists(snapshot_file):
+                    return None, None, False
+                with open(snapshot_file, 'rb') as f:
+                    snapshot_doc = pickle.load(f)
+                return snapshot_doc, metadata.get('etag'), True
+            except (IOError, pickle.PickleError, KeyError):
+                return None, None, False
+
+    def ingest_compose_row(self, row):
+        """
+        Store identity + snapshot from one compose row.
+
+        Returns the identity id when both parts were stored, else None.
+        """
+        if not isinstance(row, dict):
+            return None
+        identity = row.get('identity')
+        snapshot = row.get('snapshot')
+        if not isinstance(identity, dict) or not isinstance(snapshot, dict):
+            return None
+        identity_id = identity.get('_id') or identity.get('id')
+        snapshot_id = snapshot.get('_id') or snapshot.get('id')
+        if not identity_id or not snapshot_id:
+            return None
+        self.set_identity(identity_id, identity)
+        self.set_snapshot(snapshot_id, snapshot)
+        return identity_id
+
+    def ingest_compose_rows(self, rows):
+        """Store many compose rows; return ordered identity ids."""
+        identity_ids = []
+        for row in rows or []:
+            identity_id = self.ingest_compose_row(row)
+            if identity_id:
+                identity_ids.append(identity_id)
+        return identity_ids
+
+    def assemble_compose(self, identity_id):
+        """
+        Build {identity, snapshot} from independently cached documents.
+
+        Uses identity.current_snapshot_id to pick the snapshot.
+        """
+        identity_doc, _, identity_ok = self.get_identity(identity_id)
+        if not identity_ok or not identity_doc:
+            return None
+        snapshot_id = identity_doc.get('current_snapshot_id')
+        if not snapshot_id:
+            return None
+        snapshot_doc, _, snapshot_ok = self.get_snapshot(snapshot_id)
+        if not snapshot_ok or not snapshot_doc:
+            return None
+        return {'identity': identity_doc, 'snapshot': snapshot_doc}
+
+    def set_query(self, query_key, identity_ids, etag=None, params=None):
+        """Store list-query metadata (identity id index + list ETag)."""
+        with self._lock:
+            try:
+                self._write_metadata(query_key, {
+                    'cache_key': query_key,
+                    'cached_at': datetime.now().isoformat(),
+                    'etag': etag,
+                    'type': 'query',
+                    'identity_ids': list(identity_ids),
+                    'params': params,
+                })
+            except (IOError, TypeError):
+                pass
+
+    def get_query(self, query_key):
+        """Return (identity_ids, etag, is_cached) for a list query."""
+        with self._lock:
+            try:
+                metadata = self._read_metadata(query_key)
+                if metadata is None:
+                    return None, None, False
+                return (
+                    metadata.get('identity_ids') or [],
+                    metadata.get('etag'),
+                    True,
+                )
+            except (IOError, KeyError):
+                return None, None, False
+
+    def assemble_compose_list(self, identity_ids):
+        """Build compose rows from cached identity/snapshot documents."""
+        rows = []
+        for identity_id in identity_ids or []:
+            compose = self.assemble_compose(identity_id)
+            if compose:
+                rows.append(compose)
+        return rows
+
     def invalidate(self, pattern=None):
         """
         Invalidate cache entries.
@@ -147,6 +368,8 @@ class _ComponentCache(object):
                     # Clear all cache
                     for directory in [
                             self.components_dir,
+                            self.identities_dir,
+                            self.snapshots_dir,
                             self.metadata_dir,
                             self.geometry_dir
                     ]:
@@ -183,6 +406,14 @@ class _ComponentCache(object):
                     [f for f in os.listdir(self.components_dir)
                      if f.endswith('.pkl')]
                 )
+                identity_count = len(
+                    [f for f in os.listdir(self.identities_dir)
+                     if f.endswith('.pkl')]
+                )
+                snapshot_count = len(
+                    [f for f in os.listdir(self.snapshots_dir)
+                     if f.endswith('.pkl')]
+                )
                 metadata_count = len(
                     [f for f in os.listdir(self.metadata_dir)
                      if f.endswith('.json')]
@@ -190,7 +421,10 @@ class _ComponentCache(object):
 
                 # Calculate total cache size
                 total_size = 0
-                for directory in [self.components_dir, self.metadata_dir]:
+                for directory in [
+                        self.components_dir, self.identities_dir,
+                        self.snapshots_dir, self.metadata_dir
+                ]:
                     for filename in os.listdir(directory):
                         file_path = os.path.join(directory, filename)
                         if os.path.isfile(file_path):
@@ -222,6 +456,8 @@ class _ComponentCache(object):
 
                 return {
                     'component_count': component_count,
+                    'identity_count': identity_count,
+                    'snapshot_count': snapshot_count,
                     'metadata_count': metadata_count,
                     'geometry_count': geometry_count,
                     'design_count': design_count,
@@ -234,6 +470,8 @@ class _ComponentCache(object):
             except (IOError, OSError):
                 return {
                     'component_count': 0,
+                    'identity_count': 0,
+                    'snapshot_count': 0,
                     'metadata_count': 0,
                     'geometry_count': 0,
                     'design_count': 0,
@@ -242,46 +480,6 @@ class _ComponentCache(object):
                     'design_size_bytes': 0,
                     'cache_dir': self.cache_dir
                 }
-
-    def get_geometry(self, component_id, geometry_type):
-        """
-        Get cached geometry for a component.
-
-        Args:
-            component_id: Component ID
-            geometry_type: 'reduced' or 'detailed'
-
-        Returns:
-            Tuple of (geometry_data, etag, is_from_cache) or
-            (None, None, False) if not found
-        """
-        # Try binary cache first
-        return self.get_geometry_binary(component_id, geometry_type)
-
-    def set_geometry(self, component_id, geometry_type, geometry_data, etag):
-        """
-        Cache geometry data for a component.
-
-        Args:
-            component_id: Component ID
-            geometry_type: 'reduced' or 'detailed'
-            geometry_data: OBJ file content as string
-            etag: ETag from server response
-        """
-        # Convert OBJ string to Rhino meshes and store as binary
-        try:
-            meshes = self._convert_obj_to_meshes(geometry_data)
-            if meshes:  # Only store if conversion succeeded
-                self.set_geometry_binary(
-                    component_id,
-                    geometry_type,
-                    meshes,
-                    etag
-                )
-        except Exception as e:
-            # Don't cache anything if conversion fails
-            self._addError(
-                f"Error converting OBJ to meshes: {str(e)}")
 
     def get_binary(self, cache_key):
         """
@@ -325,22 +523,6 @@ class _ComponentCache(object):
                             component_data = pickle.load(f)
                         return component_data, metadata.get('etag'), True
 
-                elif (cache_key == 'all_components' or
-                        cache_key.startswith('filtered:')):
-                    # Collection of components
-                    components = []
-                    for comp_ref in metadata.get('components', []):
-                        comp_id = comp_ref.get('id')
-                        if comp_id:
-                            comp_file = os.path.join(
-                                self.components_dir, f"{comp_id}.pkl"
-                            )
-                            if os.path.exists(comp_file):
-                                with open(comp_file, 'rb') as f:
-                                    components.append(pickle.load(f))
-
-                    return components, metadata.get('etag'), True
-
                 elif cache_key.startswith('design:'):
                     # Individual design
                     design_id = cache_key.split(':', 1)[1]
@@ -379,6 +561,9 @@ class _ComponentCache(object):
         with self._lock:
             try:
                 current_time = datetime.now().isoformat()
+                # Guards against unhandled cache keys (avoids referencing an
+                # unassigned ``metadata`` at the write step below).
+                metadata = None
 
                 if cache_key.startswith('component:'):
                     # Individual component
@@ -397,37 +582,6 @@ class _ComponentCache(object):
                         'cached_at': current_time,
                         'etag': etag,
                         'type': 'component'
-                    }
-
-                elif (cache_key == 'all_components' or
-                        cache_key.startswith('filtered:')):
-                    # Collection of components
-                    components = []
-                    for component in data:
-                        comp_id = component.get('_id') or component.get('id')
-                        if comp_id:
-                            # Store individual component as pickle
-                            comp_file = os.path.join(
-                                self.components_dir, f"{comp_id}.pkl"
-                            )
-                            with open(comp_file, 'wb') as f:
-                                pickle.dump(component, f)
-
-                            # Add reference to metadata
-                            components.append({
-                                'id': comp_id,
-                                'etag': component.get('etag'),
-                                'lastmodified': component.get('lastmodified')
-                            })
-
-                    # Store metadata
-                    metadata = {
-                        'cache_key': cache_key,
-                        'cached_at': current_time,
-                        'etag': etag,
-                        'type': 'collection',
-                        'components': components,
-                        'filters': filters
                     }
 
                 elif cache_key.startswith('design:'):
@@ -469,6 +623,10 @@ class _ComponentCache(object):
                         'data': data
                     }
 
+                # Unhandled cache key: nothing to persist, bail out safely
+                if metadata is None:
+                    return
+
                 # Write metadata file
                 metadata_file = os.path.join(
                     self.metadata_dir,
@@ -481,21 +639,23 @@ class _ComponentCache(object):
                 # Silently fail cache writes to not break main functionality
                 pass
 
-    def get_geometry_binary(self, component_id, geometry_type):
+    def get_mesh_binary(self, snapshot_id, primitive_index, resolution):
         """
-        Get cached geometry from binary cache.
+        Get one cached snapshot-primitive mesh from binary cache.
 
         Args:
-            component_id: Component ID
-            geometry_type: 'reduced' or 'detailed'
+            snapshot_id: Snapshot UUID
+            primitive_index: Index into the snapshot geometry.meshes array
+            resolution: 'reduced' or 'detailed'
 
         Returns:
-            Tuple of (meshes, etag, is_from_cache) or
-            (None, None, False) if not found
+            Tuple of (mesh, etag, is_from_cache) or (None, None, False)
         """
         with self._lock:
             try:
-                cache_key = f'geometry:{geometry_type}:{component_id}'
+                cache_key = (
+                    f'mesh:{resolution}:{snapshot_id}:{primitive_index}'
+                )
                 metadata_file = os.path.join(
                     self.metadata_dir,
                     f"{self._get_cache_key_hash(cache_key)}.json"
@@ -511,90 +671,74 @@ class _ComponentCache(object):
                 if self._is_expired(metadata.get('cached_at', '')):
                     return None, None, False
 
-                # Get geometry file path
-                geometry_file = os.path.join(
+                # Get mesh file path
+                mesh_file = os.path.join(
                     self.geometry_dir,
-                    geometry_type,
-                    f"{component_id}.pkl"
+                    resolution,
+                    f"{snapshot_id}_{primitive_index}.pkl"
                 )
 
-                if os.path.exists(geometry_file):
-                    with open(geometry_file, 'rb') as f:
-                        mesh_json_strings = pickle.load(f)
-
-                    # Reconstruct meshes from JSON using FromJSON
-                    meshes = []
-                    for json_string in mesh_json_strings:
-                        try:
-                            mesh = Rhino.Geometry.Mesh.FromJSON(json_string)
-                            if mesh:
-                                meshes.append(mesh)
-                        except Exception as e:
-                            # Log error but continue with other meshes
-                            self._addError(
-                                f"Error reconstructing mesh "
-                                f"from JSON: {str(e)}")
-                            continue
-
-                    # If no meshes could be reconstructed, return failure
-                    if not meshes:
-                        return None, None, False
-
-                    return meshes, metadata.get('etag'), True
+                if os.path.exists(mesh_file):
+                    with open(mesh_file, 'rb') as f:
+                        mesh_json = pickle.load(f)
+                    mesh = Rhino.Geometry.Mesh.FromJSON(mesh_json)
+                    if mesh:
+                        return mesh, metadata.get('etag'), True
 
                 return None, None, False
 
             except (IOError, pickle.PickleError, KeyError):
                 return None, None, False
 
-    def set_geometry_binary(self, component_id, geometry_type, meshes, etag):
+    def set_mesh_binary(
+            self, snapshot_id, primitive_index, resolution, mesh, etag):
         """
-        Cache geometry data as binary.
+        Cache one snapshot-primitive mesh as binary (mesh ToJSON pickle).
 
         Args:
-            component_id: Component ID
-            geometry_type: 'reduced' or 'detailed'
-            meshes: List of Rhino.Geometry.Mesh objects
+            snapshot_id: Snapshot UUID
+            primitive_index: Index into the snapshot geometry.meshes array
+            resolution: 'reduced' or 'detailed'
+            mesh: Rhino.Geometry.Mesh object (already parsed from PLY)
             etag: ETag from server response
         """
         with self._lock:
             try:
                 current_time = datetime.now().isoformat()
-                cache_key = f'geometry:{geometry_type}:{component_id}'
+                cache_key = (
+                    f'mesh:{resolution}:{snapshot_id}:{primitive_index}'
+                )
 
                 # Create geometry subdirectory
                 geometry_subdir = os.path.join(
-                    self.geometry_dir, geometry_type
+                    self.geometry_dir, resolution
                 )
                 os.makedirs(geometry_subdir, exist_ok=True)
 
-                # Convert meshes to JSON strings using ToJSON
-                mesh_json_strings = []
-                for mesh in meshes:
-                    # Use ToJSON with SerializationOptions to include user data
-                    options = Rhino.FileIO.SerializationOptions()
-                    options.WriteUserData = True
-                    options.WriteRenderMeshes = True
-                    options.WriteAnalysisMeshes = True
+                # Convert mesh to JSON string using ToJSON
+                options = Rhino.FileIO.SerializationOptions()
+                options.WriteUserData = True
+                options.WriteRenderMeshes = True
+                options.WriteAnalysisMeshes = True
+                mesh_json = mesh.ToJSON(options)
 
-                    json_string = mesh.ToJSON(options)
-                    mesh_json_strings.append(json_string)
-
-                # Store JSON strings as pickle
-                geometry_file = os.path.join(
-                    geometry_subdir, f"{component_id}.pkl"
+                # Store JSON string as pickle
+                mesh_file = os.path.join(
+                    geometry_subdir,
+                    f"{snapshot_id}_{primitive_index}.pkl"
                 )
-                with open(geometry_file, 'wb') as f:
-                    pickle.dump(mesh_json_strings, f)
+                with open(mesh_file, 'wb') as f:
+                    pickle.dump(mesh_json, f)
 
                 # Store metadata
                 metadata = {
                     'cache_key': cache_key,
                     'cached_at': current_time,
                     'etag': etag,
-                    'type': 'geometry',
-                    'geometry_type': geometry_type,
-                    'component_id': component_id
+                    'type': 'mesh',
+                    'resolution': resolution,
+                    'snapshot_id': snapshot_id,
+                    'primitive_index': primitive_index
                 }
 
                 metadata_file = os.path.join(
@@ -608,292 +752,141 @@ class _ComponentCache(object):
                 # Silently fail cache writes to not break main functionality
                 pass
 
-    def _convert_obj_to_meshes(self, obj_content):
-        """
-        Convert OBJ file content to list of Rhino.Geometry.Mesh objects.
-        Optimized version with improved performance for large files.
-        Supports multiple objects (o object_0, o object_1, etc.) and
-        v X Y Z R G B format with RGB integer colors.
-        Returns list of mesh objects or empty list if conversion fails.
-        """
-        try:
-            if not obj_content or not obj_content.strip():
-                return []
 
-            # Pre-allocate data structures for better performance
-            meshes = []
-            global_vertices = []
-            global_normals = []
-            global_vertex_colors = []
-
-            # Current mesh data
-            current_mesh_data = {
-                'vertices': [],
-                'faces': [],
-                'normals': [],
-                'vertex_colors': [],
-                'name': 'default'
-            }
-
-            # Parse lines more efficiently
-            lines = obj_content.splitlines()
-
-            # Pre-process lines to avoid repeated string operations
-            processed_lines = []
-            for line in lines:
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    parts = line.split()
-                    if parts:
-                        processed_lines.append(parts)
-
-            # Process lines without excessive logging
-            for i, parts in enumerate(processed_lines):
-                if parts[0] == 'o':  # object declaration
-                    # Save previous mesh if it exists
-                    if (current_mesh_data['vertices'] and
-                            current_mesh_data['faces']):
-                        mesh = self._create_mesh_from_data(current_mesh_data)
-                        if mesh:
-                            meshes.append(mesh)
-
-                    # Start new mesh
-                    current_mesh_data = {
-                        'vertices': [],
-                        'faces': [],
-                        'normals': [],
-                        'vertex_colors': [],
-                        'name': (parts[1] if len(parts) > 1
-                                 else f'object_{len(meshes)}')
-                    }
-
-                elif parts[0] == 'v':  # vertex
-                    if len(parts) >= 4:
-                        # Use tuple instead of Point3d for better performance
-                        x = float(parts[1])
-                        y = float(parts[2])
-                        z = float(parts[3])
-                        vertex = (x, y, z)
-                        global_vertices.append(vertex)
-                        current_mesh_data['vertices'].append(vertex)
-
-                        # Check for vertex colors in v X Y Z R G B format
-                        if len(parts) >= 7:
-                            # Extract RGB integer values
-                            r = int(parts[4])
-                            g = int(parts[5])
-                            b = int(parts[6])
-                            color = (r, g, b)
-                            global_vertex_colors.append(color)
-                            current_mesh_data['vertex_colors'].append(color)
-                        else:
-                            # No color data, use default white
-                            color = (255, 255, 255)
-                            global_vertex_colors.append(color)
-                            current_mesh_data['vertex_colors'].append(color)
-
-                elif parts[0] == 'vn':  # vertex normal
-                    if len(parts) >= 4:
-                        nx = float(parts[1])
-                        ny = float(parts[2])
-                        nz = float(parts[3])
-                        normal = (nx, ny, nz)
-                        global_normals.append(normal)
-                        current_mesh_data['normals'].append(normal)
-
-                elif parts[0] == 'f':  # face
-                    if len(parts) >= 4:
-                        # Optimized face processing
-                        face_vertices = []
-                        for i in range(1, len(parts)):
-                            # Handle different OBJ face formats
-                            # (v, v/vt, v//vn, v/vt/vn)
-                            vertex_part = parts[i].split('/')[0]
-                            if vertex_part:
-                                # OBJ is 1-indexed, convert to 0-indexed
-                                vertex_index = int(vertex_part) - 1
-                                if 0 <= vertex_index < len(global_vertices):
-                                    # Use direct local index calculation
-                                    vertices_len = len(
-                                        current_mesh_data['vertices']
-                                    )
-                                    local_index = (
-                                        vertex_index -
-                                        (len(global_vertices) - vertices_len)
-                                    )
-                                    if (0 <= local_index < len(
-                                            current_mesh_data['vertices'])):
-                                        face_vertices.append(local_index)
-                        if len(face_vertices) >= 3:
-                            current_mesh_data['faces'].append(face_vertices)
-
-            # Handle the last mesh
-            if (current_mesh_data['vertices'] and
-                    current_mesh_data['faces']):
-                mesh = self._create_mesh_from_data(current_mesh_data)
-                if mesh:
-                    meshes.append(mesh)
-
-            # If no objects were found, treat as single mesh
-            # (backward compatibility)
-            if not meshes and global_vertices:
-                # Collect all faces from the global context
-                global_faces = []
-                for line in lines:
-                    line = line.strip()
-                    if (not line or line.startswith('#') or
-                            line.startswith('o')):
-                        continue
-                    parts = line.split()
-                    if not parts or parts[0] != 'f':
-                        continue
-                    if len(parts) >= 4:
-                        face_vertices = []
-                        for i in range(1, len(parts)):
-                            vertex_part = parts[i].split('/')[0]
-                            if vertex_part:
-                                vertex_index = int(vertex_part) - 1
-                                if 0 <= vertex_index < len(global_vertices):
-                                    face_vertices.append(vertex_index)
-                        if len(face_vertices) >= 3:
-                            global_faces.append(face_vertices)
-
-                if global_faces:
-                    single_mesh = Rhino.Geometry.Mesh()
-                    self._finalize_mesh(single_mesh, global_vertices,
-                                        global_faces, global_normals,
-                                        global_vertex_colors)
-                    meshes.append(single_mesh)
-
-            if not meshes:
-                return []
-
-            return meshes
-
-        except Exception as e:
-            self._addError(
-                f"Error converting OBJ to meshes: {str(e)}")
-            return []
-
-    def _create_mesh_from_data(self, mesh_data):
-        """
-        Optimized method to create a Rhino mesh from pre-processed data.
-        Uses bulk operations for better performance.
-        """
-        try:
-            vertices = mesh_data['vertices']
-            faces = mesh_data['faces']
-            normals = mesh_data['normals']
-            vertex_colors = mesh_data['vertex_colors']
-
-            if not vertices or not faces:
-                return None
-
-            # Create mesh
-            mesh = Rhino.Geometry.Mesh()
-
-            # Convert tuples to Point3d objects in bulk
-            point3d_vertices = []
-            for x, y, z in vertices:
-                point3d_vertices.append(Rhino.Geometry.Point3d(x, y, z))
-
-            # Add vertices in bulk
-            mesh.Vertices.AddVertices(point3d_vertices)
-
-            # Add faces efficiently
-            for face in faces:
-                if len(face) == 3:
-                    mesh.Faces.AddFace(face[0], face[1], face[2])
-                elif len(face) == 4:
-                    mesh.Faces.AddFace(face[0], face[1], face[2], face[3])
-                else:
-                    # Triangulate polygon faces
-                    for i in range(1, len(face) - 1):
-                        mesh.Faces.AddFace(face[0], face[i], face[i + 1])
-
-            # Add normals if available
-            if normals and len(normals) == len(vertices):
-                mesh.Normals.Clear()
-                for nx, ny, nz in normals:
-                    mesh.Normals.Add(Rhino.Geometry.Vector3d(nx, ny, nz))
-                mesh.Normals.ComputeNormals()
-            else:
-                mesh.Normals.ComputeNormals()
-
-            # Add vertex colors if available
-            if vertex_colors and len(vertex_colors) == len(vertices):
-                for r, g, b in vertex_colors:
-                    mesh.VertexColors.Add(r, g, b)
-
-            # Apply coordinate system transformation
-            mesh.Rotate(
-                (math.pi / 2),
-                Rhino.Geometry.Plane.WorldXY.XAxis,
-                Rhino.Geometry.Point3d(0, 0, 0)
-            )
-
-            # Set mesh name
-            mesh.UserDictionary.Set('Name', mesh_data['name'])
-
-            # Compute mesh properties
-            mesh.Compact()
-
-            return mesh
-
-        except Exception as e:
-            self._addError(
-                f"Error creating mesh from data: {str(e)}")
+def _parse_ply_binary_to_mesh(ply_bytes):
+    """
+    Parse a binary_little_endian PLY (CSC canonical, Rhino Z-up) into a
+    single Rhino.Geometry.Mesh. Supports float/double vertex coords,
+    optional uchar red/green/blue, and a face list (uchar count + int
+    indices). No coordinate rotation is applied (PLY is already Z-up).
+    Returns the mesh or None on failure.
+    """
+    try:
+        if not ply_bytes:
             return None
 
-    def _finalize_mesh(self, mesh, vertices, faces, normals, vertex_colors):
-        """
-        Helper method to finalize a mesh with vertices, faces, normals,
-        and colors.
-        """
-        try:
-            # Add vertices
-            for vertex in vertices:
-                mesh.Vertices.Add(vertex)
-
-            # Add faces
-            for face in faces:
-                if len(face) == 3:
-                    mesh.Faces.AddFace(face[0], face[1], face[2])
-                elif len(face) == 4:
-                    mesh.Faces.AddFace(face[0], face[1], face[2], face[3])
-                else:
-                    # Triangulate polygon faces
-                    for i in range(1, len(face) - 1):
-                        mesh.Faces.AddFace(face[0], face[i], face[i + 1])
-
-            # Add normals if available
-            if normals and len(normals) == len(vertices):
-                mesh.Normals.Clear()
-                for normal in normals:
-                    mesh.Normals.Add(normal)
-                mesh.Normals.ComputeNormals()
-            else:
-                mesh.Normals.ComputeNormals()
-
-            # Add vertex colors if available
-            if vertex_colors and len(vertex_colors) == len(vertices):
-                for color in vertex_colors:
-                    r, g, b = color
-                    mesh.VertexColors.Add(r, g, b)
-
-            # rotate around x-axis to normalize for Rhino
-            mesh.Rotate(
-                (math.pi / 2),
-                Rhino.Geometry.Plane.WorldXY.XAxis,
-                Rhino.Geometry.Point3d(0, 0, 0)
-            )
-            # Compute mesh properties
-            mesh.Compact()
-
-        except Exception as e:
-            self._addError(
-                f"Error finalizing mesh: {str(e)}")
+        # Locate end of (ascii) header
+        marker = b'end_header\n'
+        header_end = ply_bytes.find(marker)
+        if header_end == -1:
+            print('PLY: missing end_header')
             return None
+        header_text = ply_bytes[:header_end].decode('ascii', 'ignore')
+        body = ply_bytes[header_end + len(marker):]
+
+        if 'binary_little_endian' not in header_text:
+            print('PLY: only binary_little_endian supported')
+            return None
+
+        # Parse header elements/properties
+        _type_fmt = {
+            'char': 'b', 'int8': 'b',
+            'uchar': 'B', 'uint8': 'B',
+            'short': 'h', 'int16': 'h',
+            'ushort': 'H', 'uint16': 'H',
+            'int': 'i', 'int32': 'i',
+            'uint': 'I', 'uint32': 'I',
+            'float': 'f', 'float32': 'f',
+            'double': 'd', 'float64': 'd',
+        }
+        _type_size = {
+            'b': 1, 'B': 1, 'h': 2, 'H': 2,
+            'i': 4, 'I': 4, 'f': 4, 'd': 8,
+        }
+
+        vertex_count = 0
+        face_count = 0
+        vertex_props = []  # list of (fmt_char, name)
+        face_list = None  # (count_fmt, index_fmt)
+        current = None
+        for raw_line in header_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            tok = line.split()
+            if tok[0] == 'element':
+                current = tok[1]
+                if current == 'vertex':
+                    vertex_count = int(tok[2])
+                elif current == 'face':
+                    face_count = int(tok[2])
+            elif tok[0] == 'property':
+                if tok[1] == 'list':
+                    count_fmt = _type_fmt.get(tok[2], 'B')
+                    index_fmt = _type_fmt.get(tok[3], 'i')
+                    face_list = (count_fmt, index_fmt)
+                elif current == 'vertex':
+                    fmt = _type_fmt.get(tok[1])
+                    if fmt:
+                        vertex_props.append((fmt, tok[2]))
+
+        if face_list is None:
+            face_list = ('B', 'i')
+
+        # Read vertices
+        vertex_struct = struct.Struct(
+            '<' + ''.join(f for f, _ in vertex_props)
+        )
+        names = [n for _, n in vertex_props]
+        ix = names.index('x') if 'x' in names else 0
+        iy = names.index('y') if 'y' in names else 1
+        iz = names.index('z') if 'z' in names else 2
+        has_color = ('red' in names and 'green' in names and
+                     'blue' in names)
+        if has_color:
+            ir = names.index('red')
+            ig = names.index('green')
+            ib = names.index('blue')
+
+        mesh = Rhino.Geometry.Mesh()
+        offset = 0
+        vsize = vertex_struct.size
+        colors = []
+        for _ in range(vertex_count):
+            vals = vertex_struct.unpack_from(body, offset)
+            offset += vsize
+            mesh.Vertices.Add(
+                float(vals[ix]), float(vals[iy]), float(vals[iz])
+            )
+            if has_color:
+                colors.append(
+                    (int(vals[ir]), int(vals[ig]), int(vals[ib]))
+                )
+
+        # Read faces
+        count_fmt, index_fmt = face_list
+        count_struct = struct.Struct('<' + count_fmt)
+        count_size = _type_size[count_fmt]
+        index_size = _type_size[index_fmt]
+        for _ in range(face_count):
+            (n,) = count_struct.unpack_from(body, offset)
+            offset += count_size
+            idx_struct = struct.Struct('<' + index_fmt * n)
+            indices = idx_struct.unpack_from(body, offset)
+            offset += index_size * n
+            if n == 3:
+                mesh.Faces.AddFace(indices[0], indices[1], indices[2])
+            elif n == 4:
+                mesh.Faces.AddFace(
+                    indices[0], indices[1], indices[2], indices[3]
+                )
+            elif n > 4:
+                for k in range(1, n - 1):
+                    mesh.Faces.AddFace(
+                        indices[0], indices[k], indices[k + 1]
+                    )
+
+        if has_color and len(colors) == mesh.Vertices.Count:
+            for r, g, b in colors:
+                mesh.VertexColors.Add(r, g, b)
+
+        mesh.Normals.ComputeNormals()
+        mesh.Compact()
+        return mesh
+
+    except Exception as e:
+        print(f'Error parsing PLY: {str(e)}')
+        return None
 
 
 # AuthCore - Embedded ---------------------------------------------------------
@@ -1121,118 +1114,223 @@ class _AuthCore(object):
 
         # Handle response
         if response.status_code == 304 and is_from_cache:
-            # Not modified - return cached data
-            # Create a mock response with cached data
-            class MockResponse:
-                def __init__(self, data, etag):
-                    self.status_code = 200
-                    self._data = data
-                    self._etag = etag
-
-                def json(self):
-                    return self._data
-
-                @property
-                def headers(self):
-                    return {'ETag': self._etag} if self._etag else {}
-
-            return MockResponse(cached_data, cached_etag)
+            return _CachedResponse(cached_data, cached_etag)
 
         elif response.status_code == 200:
-            # Data changed or first request - cache the response
+            # Data changed or first request - cache the response.
+            # Cache writes must never break the fetch, so swallow any
+            # parse/serialise/IO error and just return the live response.
             try:
                 data = response.json()
                 etag = response.headers.get('ETag')
                 self._cache.set(cache_key, data, etag, params)
-            except (ValueError, KeyError):
-                # If we can't parse JSON or cache, just return response
+            except Exception:
                 pass
 
         return response
 
-    def cached_get_geometry(self, component_id, geometry_type, timeout=60):
+    def cached_list_identities(
+            self,
+            params=None,
+            extra_headers=None,
+            timeout=60):
         """
-        Make a cached GET request for geometry with ETag support.
+        Fetch GET /identities with unified identity/snapshot caching.
 
-        Args:
-            component_id: Component ID
-            geometry_type: 'reduced' or 'detailed'
-            timeout: Request timeout
-
-        Returns:
-            Response object with geometry data
+        List responses store per-identity and per-snapshot documents plus a
+        lightweight query index (identity ids + list ETag). A 304 reassembles
+        compose rows from the individual caches.
         """
         if not self.is_valid():
             raise RuntimeError(
                 'Access token missing or expired. Please sign in again.'
             )
 
-        # If cache is disabled, make regular request
+        params = dict(params or {})
+        query_key = _query_cache_key(params)
+
         if not self._cache:
-            path = f'/components/{component_id}/geometry_{geometry_type}'
-            return self.authorized_get(path, timeout=timeout)
+            return self.authorized_get(
+                '/identities', params, extra_headers, timeout)
 
-        # Check binary cache first
-        (cached_meshes,
-         cached_etag,
-         is_from_binary_cache) = self._cache.get_geometry_binary(
-            component_id, geometry_type)
+        identity_ids, query_etag, has_query = self._cache.get_query(
+            query_key)
 
-        # Prepare headers
         headers = self.auth_header()
+        if extra_headers:
+            headers.update(extra_headers)
+        if has_query and query_etag:
+            headers['If-None-Match'] = query_etag
 
-        # Add conditional request header if we have cached data
-        if is_from_binary_cache and cached_etag:
-            headers['If-None-Match'] = cached_etag
+        response = requests.get(
+            self.base_url + '/identities',
+            params=params,
+            headers=headers,
+            timeout=timeout
+        )
 
-        # Make request
-        path = f'/components/{component_id}/geometry_{geometry_type}'
+        if response.status_code == 304:
+            if has_query and identity_ids:
+                rows = self._cache.assemble_compose_list(identity_ids)
+                if rows:
+                    return _CachedResponse(rows, query_etag)
+            # Stale query index — refetch without conditional header
+            headers = self.auth_header()
+            if extra_headers:
+                headers.update(extra_headers)
+            response = requests.get(
+                self.base_url + '/identities',
+                params=params,
+                headers=headers,
+                timeout=timeout
+            )
+
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                if isinstance(data, list):
+                    stored_ids = self._cache.ingest_compose_rows(data)
+                    list_etag = response.headers.get('ETag')
+                    self._cache.set_query(
+                        query_key, stored_ids, list_etag, params)
+            except Exception:
+                pass
+
+        return response
+
+    def cached_get_compose(
+            self,
+            identity_id,
+            extra_headers=None,
+            timeout=20):
+        """
+        Fetch GET /identities/{id}/compose with identity/snapshot caching.
+
+        Compose ETag is derived from cached identity.lastmodified and
+        snapshot.etag (same as the backend). A 304 returns the assembled
+        pair from cache.
+        """
+        if not self.is_valid():
+            raise RuntimeError(
+                'Access token missing or expired. Please sign in again.'
+            )
+
+        path = f'/identities/{identity_id}/compose'
+
+        if not self._cache:
+            return self.authorized_get(
+                path, None, extra_headers, timeout)
+
+        compose = self._cache.assemble_compose(identity_id)
+        compose_etag = None
+        if compose:
+            compose_etag = _compute_compose_etag(
+                compose['identity'], compose['snapshot'])
+
+        headers = self.auth_header()
+        if extra_headers:
+            headers.update(extra_headers)
+        if compose_etag:
+            headers['If-None-Match'] = compose_etag
+
         response = requests.get(
             self.base_url + path,
             headers=headers,
             timeout=timeout
         )
 
-        # Handle response
-        if response.status_code == 304 and is_from_binary_cache:
-            # Not modified - return cached data as OBJ text
-            # Convert cached meshes back to OBJ for compatibility
+        if response.status_code == 304:
+            if compose:
+                return _CachedResponse(compose, compose_etag)
+            # Stale identity/snapshot pair — refetch without conditional
+            headers = self.auth_header()
+            if extra_headers:
+                headers.update(extra_headers)
+            response = requests.get(
+                self.base_url + path,
+                headers=headers,
+                timeout=timeout
+            )
+
+        if response.status_code == 200:
             try:
-                obj_text = self._convert_meshes_to_obj(cached_meshes)
+                data = response.json()
+                self._cache.ingest_compose_row(data)
             except Exception:
-                # Fallback: return empty OBJ
-                obj_text = "# No geometry data available"
-
-            class MockResponse:
-                def __init__(self, data, etag):
-                    self.status_code = 200
-                    self._data = data
-                    self._etag = etag
-
-                @property
-                def text(self):
-                    return self._data
-
-                @property
-                def headers(self):
-                    return {'ETag': self._etag} if self._etag else {}
-
-            return MockResponse(obj_text, cached_etag)
-
-        elif response.status_code == 200:
-            # Data changed or first request - cache the response
-            try:
-                geometry_data = response.text
-                etag = response.headers.get('ETag')
-                # Use the updated set_geometry method which converts to binary
-                self._cache.set_geometry(
-                    component_id, geometry_type, geometry_data, etag
-                )
-            except (ValueError, KeyError):
-                # If we can't cache, just return response
                 pass
 
         return response
+
+    def cached_get_snapshot_mesh(self, snapshot_id, primitive_index,
+                                 resolution, timeout=60):
+        """
+        Fetch one snapshot-primitive mesh PLY with ETag caching.
+
+        Args:
+            snapshot_id: Snapshot UUID
+            primitive_index: Index into the snapshot geometry.meshes array
+            resolution: 'reduced' or 'detailed'
+            timeout: Request timeout
+
+        Returns:
+            Tuple of (mesh, etag, is_from_cache). ``mesh`` is None when the
+            requested resolution is unavailable (404) or on parse/transport
+            error, signalling the caller to fall back to inline geometry.
+        """
+        if not self.is_valid():
+            raise RuntimeError(
+                'Access token missing or expired. Please sign in again.'
+            )
+
+        path = (
+            f'/snapshots/{snapshot_id}/meshes/'
+            f'{primitive_index}/{resolution}'
+        )
+
+        # If cache is disabled, fetch + parse without caching
+        if not self._cache:
+            response = self.authorized_get(path, timeout=timeout)
+            if response.status_code == 200:
+                mesh = _parse_ply_binary_to_mesh(response.content)
+                etag = response.headers.get('ETag')
+                return mesh, etag, False
+            return None, None, False
+
+        # Check binary cache first
+        (cached_mesh,
+         cached_etag,
+         is_from_cache) = self._cache.get_mesh_binary(
+            snapshot_id, primitive_index, resolution)
+
+        # Prepare headers (conditional request when we have cached data)
+        headers = self.auth_header()
+        if is_from_cache and cached_etag:
+            headers['If-None-Match'] = cached_etag
+
+        response = requests.get(
+            self.base_url + path,
+            headers=headers,
+            timeout=timeout
+        )
+
+        if response.status_code == 304 and is_from_cache:
+            # Not modified - return cached mesh
+            return cached_mesh, cached_etag, True
+
+        if response.status_code == 200:
+            mesh = _parse_ply_binary_to_mesh(response.content)
+            etag = response.headers.get('ETag')
+            if mesh is not None:
+                try:
+                    self._cache.set_mesh_binary(
+                        snapshot_id, primitive_index, resolution, mesh, etag
+                    )
+                except (ValueError, KeyError):
+                    pass
+            return mesh, etag, False
+
+        # 404 / other -> unavailable; caller falls back to inline geometry
+        return None, None, False
 
     def get_create_identity_schema(self, force_refresh=False):
         """
@@ -1375,71 +1473,6 @@ class _AuthCore(object):
                     return cached_schema
             return None
 
-    def _convert_meshes_to_obj(self, meshes):
-        """
-        Convert Rhino.Geometry.Mesh objects to OBJ file content.
-        This is used for compatibility when returning cached binary data
-        as OBJ text.
-        """
-        try:
-            if not meshes:
-                return "# No geometry data available"
-
-            obj_lines = []
-            vertex_offset = 0
-
-            for mesh_idx, mesh in enumerate(meshes):
-                # Add object declaration
-                obj_lines.append(f"o object_{mesh_idx}")
-
-                # Add vertices
-                for i in range(mesh.Vertices.Count):
-                    vertex = mesh.Vertices[i]
-                    obj_lines.append(f"v {vertex.X} {vertex.Y} {vertex.Z}")
-
-                # Add vertex colors if available
-                if mesh.VertexColors.Count > 0:
-                    for i in range(mesh.Vertices.Count):
-                        if i < mesh.VertexColors.Count:
-                            color = mesh.VertexColors[i]
-                            obj_lines.append(
-                                f"v {mesh.Vertices[i].X} "
-                                f"{mesh.Vertices[i].Y} "
-                                f"{mesh.Vertices[i].Z} "
-                                f"{color.R} {color.G} {color.B}"
-                            )
-                        else:
-                            vertex = mesh.Vertices[i]
-                            obj_lines.append(
-                                f"v {vertex.X} {vertex.Y} {vertex.Z}"
-                            )
-
-                # Add faces (adjust indices for OBJ format)
-                for i in range(mesh.Faces.Count):
-                    face = mesh.Faces[i]
-                    if face.IsTriangle:
-                        obj_lines.append(
-                            f"f {face.A + vertex_offset + 1} "
-                            f"{face.B + vertex_offset + 1} "
-                            f"{face.C + vertex_offset + 1}"
-                        )
-                    elif face.IsQuad:
-                        obj_lines.append(
-                            f"f {face.A + vertex_offset + 1} "
-                            f"{face.B + vertex_offset + 1} "
-                            f"{face.C + vertex_offset + 1} "
-                            f"{face.D + vertex_offset + 1}"
-                        )
-
-                vertex_offset += mesh.Vertices.Count
-
-            return "\n".join(obj_lines)
-
-        except Exception as e:
-            return f"# Error converting meshes to OBJ: {str(e)}"
-
-
-# SignIn Grasshopper Component ------------------------------------------------
 
 class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
     """

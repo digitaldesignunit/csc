@@ -5,10 +5,6 @@ print('ENV OK!')
 # r: charset_normalizer
 # r: requests
 # r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
@@ -88,7 +84,8 @@ def _rotation_matrix_2d(angle_rad: float) -> np.ndarray:
 
 def _rest_position(profile: np.ndarray,
                    num_angles: int = _DEFAULT_REST_ANGLES):
-    """Rotate a planar polygon into its canonical rest orientation.
+    """
+    Rotate a planar polygon into its canonical rest orientation.
 
     Faithful port of the legacy C# `RestPosition` routine: for each of
     ``num_angles`` sample angles in [0, pi), rotate the centered profile and
@@ -134,7 +131,8 @@ def _rest_position(profile: np.ndarray,
 
 def _ray_polyline_distances_and_tangents(profile: np.ndarray,
                                          directions: np.ndarray):
-    """For each ray, return (distance, unit tangent) of the first boundary hit.
+    """
+    For each ray, return (distance, unit tangent) of the first boundary hit.
 
     Rays originate at (0, 0). Segments are the closed polygon edges
     p_i -> p_(i+1 mod M). Returns NaN where no forward hit exists.
@@ -182,7 +180,8 @@ def _ray_polyline_distances_and_tangents(profile: np.ndarray,
 def _compute_radial_signature(profile, num_rays: int,
                               rest_align: bool = True,
                               num_rest_angles: int = _DEFAULT_REST_ANGLES):
-    """Compute distances & tangents for one polygon profile.
+    """
+    Compute distances & tangents for one polygon profile.
 
     Returns:
         distances: (N,) ndarray
@@ -213,7 +212,7 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260423
+    Version: 260609
     """
 
     def __init__(self):

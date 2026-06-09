@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -20,21 +15,22 @@ import Rhino  # NOQA
 import Grasshopper  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'ArrangeComponents'  # NOQA
-ghenv.Component.NickName = 'ArrangeComponents'  # NOQA
+ghenv.Component.Name = 'CreateArrangement'  # NOQA
+ghenv.Component.NickName = 'CreateArrangement'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
+ghenv.Component.SubCategory = '8 Visualization'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Arranges components in an even square grid based on their bounding '
-    'boxes. Calculates grid cell size from the largest component dimension.'
+    'Arranges components in an even square grid based on their snapshot '
+    'bounding boxes. Calculates grid cell size from the largest component '
+    'dimension.'
 )
 
 
-class CSC_ArrangeComponents(Grasshopper.Kernel.GH_ScriptInstance):
+class CSC_CreateArrangement(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260609
     """
 
     def __init__(self):
@@ -64,7 +60,7 @@ class CSC_ArrangeComponents(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Component data as JSON strings'
+            'Compose JSON strings ({identity, snapshot})'
         )
         self.InputParams[1].Description = (
             'Additional spacing between grid cells'
@@ -88,17 +84,18 @@ class CSC_ArrangeComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
     def extract_bounding_box_dimensions(self, component_data: str):
         """
-        Extract bounding box dimensions from component JSON.
+        Extract bounding box dimensions from compose JSON.
 
         Args:
-            component_data: Component data as JSON string
+            component_data: Compose JSON string ({identity, snapshot})
 
         Returns:
             Tuple of (xtx, xty, xtz) dimensions or None
         """
         try:
-            json_comp = json.loads(component_data)
-            bbx = json_comp.get('bbx', None)
+            compose = json.loads(component_data)
+            snapshot = compose.get('snapshot') or {}
+            bbx = snapshot.get('bbx', None)
             if bbx and len(bbx) >= 3:
                 return bbx[0], bbx[1], bbx[2]
             return None

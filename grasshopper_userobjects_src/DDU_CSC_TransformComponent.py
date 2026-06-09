@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -25,8 +20,8 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Applies a Rhino transformation to the iframe (insertion frame) of a '
-    'component\'s JSON data. Updates the component\'s coordinate system '
-    'based on the applied transformation.'
+    'component snapshot in compose JSON ({identity, snapshot}). Updates the '
+    'snapshot coordinate system based on the applied transformation.'
 )
 
 
@@ -34,7 +29,7 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251203
+    Version: 260609
     """
 
     def __init__(self):
@@ -64,17 +59,18 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Component data as JSON string from previous components.'
+            'Compose JSON string ({identity, snapshot}) from previous '
+            'components.'
         )
         self.InputParams[1].Description = (
-            'Rhino transform to apply to the component insertion frame.'
+            'Rhino transform to apply to the snapshot insertion frame.'
         )
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Transformed component data as JSON string!'
+            'Transformed compose JSON string ({identity, snapshot})!'
         )
 
     def PlaneToFrameDict(self, plane: Rhino.Geometry.Plane) -> dict:
@@ -101,7 +97,8 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
     def RunScript(self, ComponentData: str, XForm: Rhino.Geometry.Transform):
         # set up output trees and results tuple
         XComponentData = System.Collections.Generic.List[System.Object]()
-
+        # reset message
+        self.Component.Message = ''
         # Validate input parameters
         if not ComponentData:
             msg = 'Input ComponentData failed to collect data!'
@@ -116,22 +113,28 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
             return XComponentData
 
         try:
-            # Load and parse component JSON data
+            # Load and parse compose JSON ({identity, snapshot})
             jcomp = json.loads(ComponentData)
+            snapshot = jcomp.get('snapshot')
+            if not isinstance(snapshot, dict):
+                msg = 'Compose JSON has no snapshot to transform!'
+                self._addError(msg)
+                self.Component.Message = msg
+                return XComponentData
 
             # Process insertion frame
             try:
-                # Try to extract existing insertion frame from component
-                iframe = jcomp['iframe']
+                # Try to extract existing insertion frame from snapshot
+                iframe = snapshot['iframe']
                 iplane = Rhino.Geometry.Plane(
                     Rhino.Geometry.Point3d(*iframe['o']),
                     Rhino.Geometry.Vector3d(*iframe['x']),
                     Rhino.Geometry.Vector3d(*iframe['y']),
                 )
                 self._addRemark(
-                    'Using existing insertion frame from component'
+                    'Using existing insertion frame from snapshot'
                 )
-            except KeyError:
+            except (KeyError, TypeError):
                 # If there is no insertion frame,
                 # create world XY plane as default
                 iplane = Rhino.Geometry.Plane.WorldXY
@@ -142,9 +145,9 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
             # Apply the input transform to the insertion frame plane
             iplane.Transform(XForm)
 
-            # Replace the insertion frame in the component data
+            # Replace the insertion frame in the snapshot
             # with the transformed one
-            jcomp['iframe'] = self.PlaneToFrameDict(iplane)
+            snapshot['iframe'] = self.PlaneToFrameDict(iplane)
 
             # Convert back to JSON string for output
             XComponentData = json.dumps(jcomp)

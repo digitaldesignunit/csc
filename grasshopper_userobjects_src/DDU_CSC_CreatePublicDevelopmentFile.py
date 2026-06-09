@@ -4,11 +4,6 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os  # NOQA
@@ -27,8 +22,8 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '0 Development'  # NOQA
 ghenv.Component.Description = (  # NOQA
     """
-    This component can be used to create a sanitized Grasshopper development file
-    in a specified folder.
+    This component can be used to create a sanitized Grasshopper
+    development file in a specified folder.
 
     It creates a copy of the current Grasshopper document in
     memory, removes all components that belong to a specified group (i.e.
@@ -47,7 +42,7 @@ class CSC_CreatePublicDevelopmentFile(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260511
+    Version: 260609
     """
 
     def __init__(self):
@@ -316,7 +311,6 @@ class CSC_CreatePublicDevelopmentFile(Grasshopper.Kernel.GH_ScriptInstance):
 
         # Initialize output variables
         success = False
-        components_removed = 0
         saved_file_path = ''
         status_message = ''
 
@@ -379,7 +373,9 @@ class CSC_CreatePublicDevelopmentFile(Grasshopper.Kernel.GH_ScriptInstance):
                 os.path.abspath(saved_file_path)
             )
             success = True
-            status_message += f'\n Saved development file to: {saved_file_path}'
+            status_message += (
+                f'\n Saved development file to: {saved_file_path}'
+            )
             self.Component.Message = 'Operation completed successfully'
         else:
             status_message += '\n Failed to save document!'
