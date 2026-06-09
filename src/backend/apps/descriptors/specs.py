@@ -155,7 +155,8 @@ ALL_SPECS: List[DescriptorSpec] = [
     PLANESCORE,
     RADIAL_SIGNATURE,
 ]
-"""All descriptor specifications known to the runner.
+"""
+All descriptor specifications known to the runner.
 
 Order is not significant for correctness (each spec is computed
 independently), but the runner logs specs in registry order.
