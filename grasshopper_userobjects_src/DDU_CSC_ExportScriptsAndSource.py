@@ -96,10 +96,17 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             'paths based on the GH document.'
         )
         self.InputParams[6].Description = (
-            'Folder containing the 24x24 png icons to '
-            'set to the script components and UserObjects.\n'
-            'NOTE: Resolves environment variables and relative'
-            'paths based on the GH document.'
+            'Folder containing 24x24 PNG icons named {NickName}.png. '
+            'Supply the path to the 24x24 directory relative to the '
+            'GH document (e.g. ../resources/gh_icons/24x24).\n'
+            'NOTE: Resolves environment variables and relative paths '
+            'based on the GH document.'
+        )
+        self.InputParams[7].Description = (
+            'Path to a placeholder 24x24 PNG used when no matching '
+            '{NickName}.png is found in IconsFolder.\n'
+            'NOTE: Resolves environment variables and relative paths '
+            'based on the GH document.'
         )
         # Initialize output param descriptions
         i = 0
@@ -205,6 +212,65 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         if not path:
             return path
         return os.path.expandvars(path)
+
+    def _build_icon_dict(self, iconsfolder, gh_dir):
+        """
+        Map component NickName -> absolute path of a 24x24 PNG icon.
+
+        ``iconsfolder`` must be the path to the 24x24 directory (relative
+        to the GH document). Only regular ``.png`` files are indexed.
+        """
+        icon_dict = {}
+        if not iconsfolder:
+            return icon_dict
+
+        resolved = os.path.normpath(os.path.abspath(
+            os.path.join(gh_dir, self._expand_path(iconsfolder))))
+        if not os.path.isdir(resolved):
+            self._addWarning(f'Icons folder not found: {resolved}')
+            return icon_dict
+
+        for name in os.listdir(resolved):
+            if not name.lower().endswith('.png'):
+                continue
+            icon_file = os.path.join(resolved, name)
+            if not os.path.isfile(icon_file):
+                continue
+            icon_key = os.path.splitext(name)[0]
+            icon_dict[icon_key] = os.path.normpath(
+                os.path.abspath(icon_file))
+
+        if not icon_dict:
+            self._addWarning(f'No PNG icons found in {resolved}')
+        return icon_dict
+
+    def _read_png_bitmap(self, iconpath):
+        """Read one PNG file into a GDI+ bitmap (or None on failure)."""
+        with open(iconpath, 'rb') as icon_file:
+            data = icon_file.read()
+        if len(data) < 8 or data[:4] != b'\x89PNG':
+            return None
+        stream = System.IO.MemoryStream()
+        stream.Write(bytearray(data), 0, len(data))
+        stream.Position = 0
+        bitmap = System.Drawing.Bitmap(stream)
+        stream.Dispose()
+        return bitmap
+
+    def _load_icon_bitmap(self, iconpath):
+        """
+        Load a 24x24 PNG for Grasshopper.
+
+        Uses a memory stream instead of ``Bitmap.FromFile`` so GDI+ does not
+        lock the file and so cairosvg-exported PNGs load reliably on Windows.
+        """
+        if not iconpath or not os.path.isfile(iconpath):
+            return None
+        try:
+            return self._read_png_bitmap(iconpath)
+        except Exception as exc:
+            self._addWarning(f'Could not load icon {iconpath}: {exc}')
+            return None
 
     def process_document_objects(self, ghdocument, verbose=False):
         """
@@ -346,7 +412,8 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             self,
             script_components: dict,
             set_category: str,
-            iconsfolder: str):
+            icon_dict: dict,
+            placeholder_icon_path: str = ''):
         """
         Process found script components and get unique components.
         """
@@ -360,17 +427,6 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         versioned_script_components = {}
         unique_script_components = {}
 
-        # prepare icon paths and names
-        icon_dict = {}
-        icon_paths = [
-            os.path.normpath(os.path.abspath(fp))
-            for fp in os.listdir(iconsfolder)
-        ]
-        for i, ifp in enumerate(icon_paths):
-            icon_key = os.path.splitext(os.path.basename(ifp))[0]
-            icon_file = os.path.normpath(os.path.abspath(ifp))
-            icon_dict[icon_key] = icon_file
-        
         for iguid, values in script_components.items():
             # extract data from dict object
             script_type, nickname, name, obj, source = values
@@ -378,8 +434,9 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             version = self.get_source_version(source)
             category_match = category == set_category
             version_present = version is not None
-            # append icon path to values list
-            values.append(icon_dict.get(nickname, ''))
+            # append icon path to values list (placeholder when no match)
+            values.append(
+                icon_dict.get(nickname, '') or placeholder_icon_path)
             # script id will be used as key for the unique dict
             script_id = nickname + '_' + name + '_' + script_type
             # NOT SEEN YET SCRIPT COMPONENTS
@@ -500,9 +557,9 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         """
         # Make a user object
         uo = Grasshopper.Kernel.GH_UserObject()
-        # Process icons
-        if iconpath:
-            obj.SetIconOverride(System.Drawing.Bitmap.FromFile(iconpath))
+        bitmap = self._load_icon_bitmap(iconpath)
+        if bitmap is not None:
+            obj.SetIconOverride(bitmap)
         uo.Icon = obj.Icon_24x24
         # Set its properties based on the GHPython component properties
         uo.BaseGuid = obj.ComponentGuid
@@ -520,7 +577,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         """
         Automates the creation of a GHPython user object. Based on this thread:
         http://www.grasshopper3d.com/forum/topics/change-the-default-values-for-userobject-popup-menu
-        scriptcomp = [script_type, nickname, name, obj, source]
+        scriptcomp = [script_type, nickname, name, obj, source, iconpath]
         """
         try:
             # Make a user object
@@ -614,7 +671,8 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             UserObjFolders: System.Collections.Generic.List[str],
             XMLFolders: System.Collections.Generic.List[str],
             SourceFolders: System.Collections.Generic.List[str],
-            IconsFolder: str):
+            IconsFolder: str,
+            PlaceholderIconPath: str):
         # Init outputs
         OldScriptsDebug = Grasshopper.DataTree[str]()
         CategoryDebug = Grasshopper.DataTree[str]()
@@ -638,9 +696,11 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
             os.path.abspath(os.path.join(
                 gh_dir, self._expand_path(srcf))))
             for srcf in SourceFolders]
-        iconsfolder = os.path.normpath(
-            os.path.abspath(os.path.join(
-                gh_dir, self._expand_path(IconsFolder))))
+        icon_dict = self._build_icon_dict(IconsFolder, gh_dir)
+        placeholder_icon_path = ''
+        if PlaceholderIconPath:
+            placeholder_icon_path = os.path.normpath(os.path.abspath(
+                os.path.join(gh_dir, self._expand_path(PlaceholderIconPath))))
 
         if RunComponentAnalysis:
             # loop over all objects on the grasshopper canvas
@@ -657,15 +717,14 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
              VersionDebug,
              InfoMessages,
              UpdateMessages) = self.process_script_components(
-                script_components, Category, iconsfolder)
+                script_components, Category, icon_dict,
+                placeholder_icon_path)
 
         # HERE LOOP OVER UNIQUE COMPONENTS
         if ExportUserObjectsAndSource and RunComponentAnalysis:
             for script_id, scriptcomp in unique_script_components.items():
                 unionres = True
-                comp_nickname = scriptcomp[3].NickName
                 iconpath = scriptcomp[5]
-                print(iconpath)
                 # SAVE SOURCE IN ALL PATHS
                 for src_path in srcpaths:
                     res, loc = self.export_scriptcomp_source(
@@ -693,8 +752,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
                 if unionres:
                     print(f'Exported: {scriptcomp[1]} - {loc} Lines of Code')
                 else:
-                    pass
-                    #raise RuntimeError(f'Export failed for {scriptcomp[1]}!')
+                    raise RuntimeError(f'Export failed for {scriptcomp[1]}!')
         elif ExportUserObjectsAndSource and not RunComponentAnalysis:
             rml = ghenv.Component.RuntimeMessageLevel.Warning  # type: ignore[reportUnedfinedVariable] # NOQA
             ghenv.Component.AddRuntimeMessage(  # type: ignore[reportUnedfinedVariable] # NOQA
