@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-M4.8 prep — copy legacy component previews to snapshot_previews/
+M4.8 prep - copy legacy component previews to snapshot_previews/
 ==================================================================
 
 Copies ``{PREVIEW_DIR}/{identity_id}.webp`` to

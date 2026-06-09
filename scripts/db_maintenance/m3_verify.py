@@ -1,4 +1,4 @@
-"""M3 — verifier for the new identity / snapshot collections.
+"""M3 - verifier for the new identity / snapshot collections.
 
 Re-runnable read-only sanity check against live MongoDB. Verifies that
 `component_identities`, `component_snapshots`, and the `catalog_number`

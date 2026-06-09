@@ -878,7 +878,7 @@ def _render_kv_list(items: Iterable[Tuple[str, Any]]) -> List[str]:
 
 def render_markdown(report: Dict[str, Any]) -> str:
     lines: List[str] = []
-    lines.append("# M1 — legacy baseline audit report")
+    lines.append("# M1 - legacy baseline audit report")
     lines.append("")
     lines.append(
         "Read-only baseline of legacy `components` / `components_archive` "

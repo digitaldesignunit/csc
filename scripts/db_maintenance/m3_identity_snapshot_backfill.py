@@ -1,4 +1,4 @@
-"""M3 — identity / snapshot backfill against the live MongoDB.
+"""M3 - identity / snapshot backfill against the live MongoDB.
 
 Promotes every legacy row in ``components`` and ``components_archive`` into
 the new collections ``component_identities`` + ``component_snapshots`` per

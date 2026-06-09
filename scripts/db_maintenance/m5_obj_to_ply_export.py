@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-M5 prep — convert legacy OBJ folders to snapshot-keyed binary PLY layout
+M5 prep - convert legacy OBJ folders to snapshot-keyed binary PLY layout
 ========================================================================
 
 Coordinate contract
 -------------------
 
 * **CSC canonical = Rhino Z-up** for PLY bytes (same as ``geometry.meshes``).
-* Legacy OBJ is Y-up; converted once on read — see ``geometry_coords``.
+* Legacy OBJ is Y-up; converted once on read - see ``geometry_coords``.
 
 Path layout (file-level resolution, same primitive index)
 ---------------------------------------------------------

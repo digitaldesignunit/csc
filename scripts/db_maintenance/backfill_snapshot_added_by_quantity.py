@@ -2,10 +2,10 @@
 
 New snapshot fields (see ``ComponentSnapshot`` in ``models.py``):
 
-* ``added_by_user_id`` / ``added_by_username`` — who created the catalog
+* ``added_by_user_id`` / ``added_by_username`` - who created the catalog
   entry (set on initial add). Legacy rows migrated before this field existed
   have neither; they are attributed to the shared **ddu** service account.
-* ``quantity`` — count of identical physical items (default ``1``).
+* ``quantity`` - count of identical physical items (default ``1``).
 
 Rules
 -----
