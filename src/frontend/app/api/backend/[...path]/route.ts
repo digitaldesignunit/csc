@@ -12,6 +12,7 @@ const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 MB
 const BLOCKED_PATTERNS = [
   /^\/snapshots\/[^/]+\/meshes\/[^/]+\/reduced$/,
   /^\/snapshots\/[^/]+\/meshes\/[^/]+\/detailed$/,
+  /^\/snapshots\/[^/]+\/point_clouds\/\d+\.ply$/,
 ]
 
 function buildTargetUrl(pathParts: string[] | undefined, srcUrl: URL) {

@@ -12,14 +12,14 @@ Routes for the v0.5 `component_snapshots` collection.
     -> fetch one snapshot by id (ADR-014 #3)
 * `GET /snapshots/{snapshot_id}/preview`
     -> rendered catalog thumbnail
-* `GET|PUT /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}`
-    -> PLY file (GET also supports `?format=obj`)
+* `GET|PUT|DELETE /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}`
+    -> PLY file (GET also supports `?format=obj`; DELETE clears disk + manifest)
 * `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/primitive`
     -> inline mesh (`?format=ply|obj`)
 * `GET /snapshots/{snapshot_id}/extrusions/{index}`
     -> inline extrusion mesh (`?format=ply|obj`)
-* `GET /snapshots/{snapshot_id}/point_clouds/{index}.ply`
-    -> file or inline → PLY
+* `GET|PUT|DELETE /snapshots/{snapshot_id}/point_clouds/{index}.ply`
+    -> PLY file (GET falls back to inline points when no file on disk)
 * `GET /snapshots/{snapshot_id}/photos`
     -> list occupied photo slot indices (no per-slot probing)
 * `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}`
@@ -692,6 +692,52 @@ async def _register_mesh_ply_resolution(
     return resolutions_map
 
 
+async def _unregister_mesh_ply_resolution(
+    request: Request,
+    snapshot_id: str,
+    snapshot_doc: dict,
+    primitive_index: int,
+    resolution: str,
+) -> dict:
+    """
+    Remove one on-disk PLY resolution from the manifest and refresh etag.
+    """
+    key = str(primitive_index)
+    resolutions_map = dict(snapshot_doc.get('mesh_ply_resolutions') or {})
+    current = list(resolutions_map.get(key) or [])
+    if resolution in current:
+        current = [item for item in current if item != resolution]
+    if current:
+        resolutions_map[key] = current
+    else:
+        resolutions_map.pop(key, None)
+
+    modified = now_iso()
+    merged = dict(snapshot_doc)
+    merged['mesh_ply_resolutions'] = resolutions_map
+    merged['lastmodified'] = modified
+    etag = compute_snapshot_etag(merged)
+
+    snapshots = await get_snapshots_col(request)
+    try:
+        await snapshots.update_one(
+            {'_id': snapshot_id},
+            {'$set': {
+                'mesh_ply_resolutions': resolutions_map,
+                'lastmodified': modified,
+                'etag': etag,
+            }},
+        )
+    except PyMongoError as exc:
+        print(f'[ERROR] _unregister_mesh_ply_resolution DB error: {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail='Failed to update snapshot mesh manifest',
+        )
+
+    return resolutions_map
+
+
 @router.put(
     '/snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}',
     summary='Upload or replace mesh PLY for snapshot primitive',
@@ -787,6 +833,85 @@ async def put_snapshot_mesh_ply(
     )
 
 
+@router.delete(
+    '/snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}',
+    summary='Delete mesh PLY for snapshot primitive',
+)
+async def delete_snapshot_mesh_ply(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    snapshot_id: str,
+    primitive_index: int,
+    resolution: str,
+):
+    """
+    Remove ``meshes/<snapshot_id>/<primitive_index>/{reduced|detailed}.ply``
+    and drop the resolution from ``mesh_ply_resolutions`` when listed.
+    """
+    if primitive_index < 0:
+        raise HTTPException(
+            status_code=400,
+            detail='primitive_index must be >= 0',
+        )
+    if resolution not in _ALLOWED_RESOLUTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'resolution must be one of: {sorted(_ALLOWED_RESOLUTIONS)}'
+            ),
+        )
+
+    doc = await _load_snapshot(request, snapshot_id)
+    meshes = (doc.get('geometry') or {}).get('meshes') or []
+    if primitive_index >= len(meshes):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'primitive_index {primitive_index} out of range; '
+                f'snapshot has {len(meshes)} mesh primitive(s)'
+            ),
+        )
+
+    path = _mesh_path(request, snapshot_id, primitive_index, resolution)
+    resolutions_map: dict = doc.get('mesh_ply_resolutions') or {}
+    key = str(primitive_index)
+    in_manifest = resolution in (resolutions_map.get(key) or [])
+    on_disk = os.path.isfile(path)
+
+    if not in_manifest and not on_disk:
+        raise HTTPException(status_code=404, detail='Mesh PLY not found')
+
+    if on_disk:
+        try:
+            os.remove(path)
+        except OSError as exc:
+            print(f'[ERROR] delete_snapshot_mesh_ply: {exc}')
+            raise HTTPException(
+                status_code=500,
+                detail='Failed to delete mesh file',
+            )
+
+    if in_manifest:
+        resolutions_map = await _unregister_mesh_ply_resolution(
+            request,
+            snapshot_id,
+            doc,
+            primitive_index,
+            resolution,
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            'snapshot_id': snapshot_id,
+            'primitive_index': primitive_index,
+            'resolution': resolution,
+            'mesh_ply_resolutions': resolutions_map,
+            'ok': True,
+        },
+    )
+
+
 @router.get(
     '/snapshots/{snapshot_id}/extrusions/{index}',
     summary='Export inline extrusion primitive (PLY or OBJ mesh)',
@@ -878,6 +1003,135 @@ async def get_snapshot_point_cloud_ply(
         )
 
     return _mesh_export_attachment_response(ply_bytes, filename, 'ply')
+
+
+@router.put(
+    '/snapshots/{snapshot_id}/point_clouds/{index}.ply',
+    summary='Upload point cloud PLY for snapshot primitive',
+)
+async def put_snapshot_point_cloud_ply(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    snapshot_id: str,
+    index: int,
+    point_cloud_file: UploadFile = File(
+        ...,
+        description='Binary PLY point cloud file',
+    ),
+):
+    """
+    Store ``point_clouds/<snapshot_id>/<index>.ply``.
+
+    ``index`` must match an entry in ``geometry.point_clouds``.
+    """
+    if index < 0:
+        raise HTTPException(status_code=400, detail='index must be >= 0')
+
+    filename = (point_cloud_file.filename or '').lower()
+    if not filename.endswith('.ply'):
+        raise HTTPException(
+            status_code=400,
+            detail='Point cloud file must be a .ply file',
+        )
+
+    doc = await _load_snapshot(request, snapshot_id)
+    point_clouds = (doc.get('geometry') or {}).get('point_clouds') or []
+    if index >= len(point_clouds):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'index {index} out of range; snapshot has '
+                f'{len(point_clouds)} point cloud primitive(s)'
+            ),
+        )
+
+    raw = await read_upload_limited(
+        point_cloud_file,
+        request.app.geometry_upload_limit_bytes,
+    )
+    if len(raw) < 3 or raw[:3] != b'ply':
+        raise HTTPException(
+            status_code=400,
+            detail='Invalid PLY file (expected ASCII or binary PLY header)',
+        )
+
+    dest_dir = os.path.join(
+        request.app.snapshot_point_clouds_dir,
+        snapshot_id,
+    )
+    os.makedirs(dest_dir, exist_ok=True)
+    dest = _point_cloud_path(request, snapshot_id, index)
+
+    try:
+        with open(dest, 'wb') as handle:
+            handle.write(raw)
+    except OSError as exc:
+        print(f'[ERROR] put_snapshot_point_cloud_ply write: {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail='Failed to save point cloud file',
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            'snapshot_id': snapshot_id,
+            'index': index,
+            'size_bytes': len(raw),
+        },
+    )
+
+
+@router.delete(
+    '/snapshots/{snapshot_id}/point_clouds/{index}.ply',
+    summary='Delete on-disk point cloud PLY for snapshot primitive',
+)
+async def delete_snapshot_point_cloud_ply(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    snapshot_id: str,
+    index: int,
+):
+    """Remove ``point_clouds/<snapshot_id>/<index>.ply`` when present."""
+    if index < 0:
+        raise HTTPException(status_code=400, detail='index must be >= 0')
+
+    doc = await _load_snapshot(request, snapshot_id)
+    point_clouds = (doc.get('geometry') or {}).get('point_clouds') or []
+    if index >= len(point_clouds):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'index {index} out of range; snapshot has '
+                f'{len(point_clouds)} point cloud primitive(s)'
+            ),
+        )
+
+    path = _point_cloud_path(request, snapshot_id, index)
+
+    if not os.path.isfile(path):
+        raise HTTPException(
+            status_code=404,
+            detail='Point cloud file not found'
+        )
+
+    try:
+        os.remove(path)
+    except OSError as exc:
+        print(f'[ERROR] delete_snapshot_point_cloud_ply: {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail='Failed to delete point cloud file',
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            'snapshot_id': snapshot_id,
+            'index': index,
+            'ok': True,
+        },
+    )
 
 
 @router.get(
