@@ -29,9 +29,11 @@ framework
 
 ## Current Versions
 
-- **CSC FastAPI Backend**: 0.4.7.0
-- **CSC React Frontend**: 0.4.7.0
-- **CSC Grasshopper Interface**: 0.4.5.6
+- **CSC FastAPI Backend**: 0.5.0.0
+- **CSC React Frontend**: 0.5.0.0
+- **CSC Grasshopper Interface**: 0.5.0.0
+
+See `CHANGELOG.md` for release notes.
 
 ---
 
@@ -125,6 +127,8 @@ The CSC Grasshopper Interface consists of Python 3 components that can be used d
 - **Installation**: Copy `.ghuser` files from `grasshopper_userobjects/` to your Grasshopper UserObjects folder
 - **Requirements**: Python 3 with packages: requests, numpy, scipy, scikit-learn
 - **Authentication**: Use `CSC_SignIn` component first to authenticate with the backend
+- **Documentation**: Component reference, copy-to-clipboard XML, and release download on the frontend at `/gh-interface`
+- **Backend routes**: Release download, source/XML sync, and updater assets are served under `/ghinterface/` (e.g. `version`, `download`, `src/{name}`, `xml/{name}`, `userobject/{name}`). `CSC_Update` uses these paths.
 
 ## Configuring Uberspace
 
@@ -432,7 +436,7 @@ The script reads `GITHUB_REPO_URL`, `GITHUB_CSC_GH_TOKEN`, and
 To test the sync script manually, SSH into the server and run:
 
 ```bash
-[user@servername csc]$ /bin/bash /home/ddu/csc/src/backend/ghxml_sync.sh
+[user@servername csc]$ /bin/bash /home/ddu/csc/backend/ghxml_sync.sh
 ```
 
 This will clone (if needed) and sync only the `grasshopper_userobjects_xml/`
@@ -489,11 +493,13 @@ Ready-made crontab entries for all jobs are in `uberspaceconfig/crontab/`.
 
 ## Deployment
 
-Two deployment scripts are provided in `uberspaceconfig/deployment/`. Both
-require `GITHUB_DEPLOY_URL` to be set in `~/.bash_profile`.
+Deployment scripts are provided in `uberspaceconfig/deployment/`. All require
+`GITHUB_DEPLOY_URL` to be set in `~/.bash_profile`.
 
-- `csc_deploy.sh` - full deploy: pulls backend + frontend, restarts backend, rebuilds and restarts frontend
-- `csc_deploy_backend.sh` - backend only: pulls backend, restarts FastAPI
+- `csc_deploy.sh` - full deploy from `main`: pulls backend + frontend, restarts backend, rebuilds and restarts frontend
+- `csc_deploy_backend.sh` - backend only from `main`: pulls backend, restarts FastAPI
+
+
 
 ## OpenAPI Model Generation
 
@@ -517,7 +523,7 @@ npm run generate:models
 
 #### Development Workflow
 
-1. **Update Backend Model**: Modify Pydantic model in `src/backend/apps/Catalog/models.py`
+1. **Update Backend Model**: Modify Pydantic model in `src/backend/apps/catalog/models.py`
 2. **Restart Backend**: Restart FastAPI to regenerate OpenAPI schema
 3. **Generate Frontend Models**: Run `npm run generate:models`
 4. **Use Generated Models**: Import from `src/generated/ComponentModel`
@@ -591,8 +597,8 @@ Max Benjamin Eschenbach.
 - The `csc_sheetscan` python module was developed based on the scanning setup
 for sheets that was developed by Mirko Dutschke. The functional code has been
 written by Max Benjamin Eschenbach.
-- **NEW**: The CSC Grasshopper Interface components were developed and standardized by Max Benjamin Eschenbach, providing Python 3 components for direct integration with Rhino/Grasshopper workflows.
-
+- Idea and prototype code for `FindLargestFlatSide` Grsshopper component by Alessandro Garruto. The code has been refactored and integrated by Max Benjamin Eschenbach.
+Idea and prototype code for `MaxInscribedQuad` Grasshopper component by Alessandro Garruto. The code has been refactored and integrated by Max Benjamin Eschenbach.
 ## Licensing
 
 - Original code is licensed under the MIT License.

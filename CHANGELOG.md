@@ -4,6 +4,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-06-10
+
+### Individual Versions
+
+- CSC FastAPI Backend:  0.5.0.0
+- CSC React Frontend:   0.5.0.0
+- CSC Grasshopper Interface: 0.5.0.0
+
+### Added
+
+#### CSC FastAPI Backend
+
+- Identity/snapshot catalog: `component_identities` + versioned `component_snapshots`; compose and CRUD per identity/snapshot
+- Inline reinforcement bars: `geometry.reinforcements[]` (`{spec, diameter, points}`)
+- Snapshot point-cloud PLY upload routes and photo slot routes
+- `POST /utility/compute-snapshot-orientation` (PCA frame from box geometry)
+- Public components: `is_public` flag; optional-auth read for all snapshots when public (`migrate_add_is_public_field.py`)
+- Admin users API: `GET /users`, `PATCH /users/{user_id}`
+- `/ghinterface/` router: version, download, src, xml, userobject
+- Snapshot delete route; ETag on all-identities list
+
+#### CSC React Frontend
+
+- Add Component Wizard (identity + snapshot creation; orientation on submit)
+- Multi-snapshot detail/history UI; updated admin validation queue
+- Admin user management at `/admin/users`
+- Public component viewing without login; `is_public` toggle on edit page
+- Reinforcement visualization in component viewer
+- GH interface docs: `ListIdentitySnapshots`, `FetchComposeAllSnapshots`, `FetchComposeSnapshot`, `CreateReinforcement`
+
+#### CSC Grasshopper Interface
+
+- Identity/snapshot components: `CreateComponentIdentity`, `CreateComponentSnapshot`, `AddComponentIdentity`, `AddComponentSnapshot`
+- `CSC_ListIdentitySnapshots`, `CSC_FetchComposeAllSnapshots`, `CSC_FetchComposeSnapshot`
+- `CSC_CreateReinforcement`; reinforcement inputs on create/add; pipe baking in `CSC_BakeComponents`
+- Session identity/snapshot catalog cache (v0.5)
+
+### Changed
+
+#### CSC FastAPI Backend
+
+- Descriptors, previewgen, and geometry maintenance use snapshot model
+- Designs schema aligned with identity references
+
+#### CSC React Frontend
+
+- Catalog UI adapted to identity/snapshot compose spec
+- Design detail actions use client session; proxy allows anonymous public GETs
+- Sidebar layout compacter; Next.js/npm updated
+
+#### CSC Grasshopper Interface
+
+- Fetch/create components updated for identity/snapshot API
+- `CSC_Update` uses `/ghinterface/` paths
+
+#### Documentation & Deployment
+
+- README refreshed for 0.5; deploy scripts (`csc_deploy_*_v05.sh`); descriptor cron `--dry-run`
+
+### Removed
+
+#### CSC FastAPI Backend
+
+- Legacy monolithic component routes/models
+- `downloads` and `ghupdates` routers (→ `/ghinterface/`)
+
+#### CSC Grasshopper Interface
+
+- Legacy usrobject sources for dropped components
+
 ## [0.4.7.0] - 2026-04-30
 
 ### Versions
