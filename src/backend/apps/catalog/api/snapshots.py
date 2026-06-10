@@ -2,27 +2,38 @@
 """
 Routes for the v0.5 `component_snapshots` collection.
 
-* `GET /snapshots/pending-validation`
+* `GET
+    /snapshots/pending-validation`
     -> admin queue of unvalidated snapshots
-* `POST /snapshots/{snapshot_id}/validate`
+* `POST
+    /snapshots/{snapshot_id}/validate`
     -> admin validate + promote to live
-* `DELETE /snapshots/{snapshot_id}`
+* `DELETE
+    /snapshots/{snapshot_id}`
     -> admin reject / discard a pending (unvalidated) snapshot
-* `GET /snapshots/{snapshot_id}`
+* `GET
+    /snapshots/{snapshot_id}`
     -> fetch one snapshot by id (ADR-014 #3)
-* `GET /snapshots/{snapshot_id}/preview`
+* `GET
+    /snapshots/{snapshot_id}/preview`
     -> rendered catalog thumbnail
-* `GET|PUT|DELETE /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}`
-    -> PLY file (GET also supports `?format=obj`; DELETE clears disk + manifest)
-* `GET /snapshots/{snapshot_id}/meshes/{primitive_index}/primitive`
+* `GET|PUT|DELETE
+    /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}`
+    -> PLY file (GET supports `?format=obj`; DELETE clears disk + manifest)
+* `GET
+    /snapshots/{snapshot_id}/meshes/{primitive_index}/primitive`
     -> inline mesh (`?format=ply|obj`)
-* `GET /snapshots/{snapshot_id}/extrusions/{index}`
+* `GET
+    /snapshots/{snapshot_id}/extrusions/{index}`
     -> inline extrusion mesh (`?format=ply|obj`)
-* `GET|PUT|DELETE /snapshots/{snapshot_id}/point_clouds/{index}.ply`
+* `GET|PUT|DELETE
+    /snapshots/{snapshot_id}/point_clouds/{index}.ply`
     -> PLY file (GET falls back to inline points when no file on disk)
-* `GET /snapshots/{snapshot_id}/photos`
+* `GET
+    /snapshots/{snapshot_id}/photos`
     -> list occupied photo slot indices (no per-slot probing)
-* `GET|PUT|DELETE /snapshots/{snapshot_id}/photos/{index}`
+* `GET|PUT|DELETE
+    /snapshots/{snapshot_id}/photos/{index}`
     -> user photos (JPEG)
 """
 
