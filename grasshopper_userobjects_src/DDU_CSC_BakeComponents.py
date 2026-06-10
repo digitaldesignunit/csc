@@ -32,7 +32,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -228,7 +228,8 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 try:
                     compose = json.loads(cd)
                     identity = compose.get('identity')
-                    snapshot = compose.get('snapshot')
+                    snapshots = compose.get('snapshots') or []
+                    snapshot = snapshots[0] if snapshots else None
                     if (not isinstance(identity, dict) or
                             not isinstance(snapshot, dict)):
                         msg = (

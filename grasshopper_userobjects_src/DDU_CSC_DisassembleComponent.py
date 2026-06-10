@@ -29,7 +29,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -349,10 +349,13 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                     try:
                         compose = json.loads(comp)
                         identity = compose.get('identity') or {}
-                        snapshot = compose.get('snapshot') or {}
+                        snapshots = compose.get('snapshots') or []
+                        snapshot = (
+                            snapshots[0] if snapshots else {}
+                        )
                         if not identity or not snapshot:
                             self._addWarning(
-                                'Compose JSON missing identity/snapshot, '
+                                'Compose JSON missing identity/snapshots, '
                                 'skipping entry')
                             continue
 

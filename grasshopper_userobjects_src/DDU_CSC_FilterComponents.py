@@ -30,7 +30,7 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -117,7 +117,8 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
         fields (complexity, fragment, bbx) are evaluated separately.
         """
         identity = compose.get('identity') or {}
-        snapshot = compose.get('snapshot') or {}
+        snapshots = compose.get('snapshots') or []
+        snapshot = snapshots[0] if snapshots else {}
 
         # Type filter (identity)
         if filter_params.get('type') and filter_params['type'].strip():
@@ -313,7 +314,8 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
                         # Load compose JSON
                         compose = json.loads(comp)
                         identity = compose.get('identity')
-                        snapshot = compose.get('snapshot')
+                        snapshots = compose.get('snapshots') or []
+                        snapshot = snapshots[0] if snapshots else None
                         if not isinstance(identity, dict) or not isinstance(
                                 snapshot, dict):
                             self._addWarning(

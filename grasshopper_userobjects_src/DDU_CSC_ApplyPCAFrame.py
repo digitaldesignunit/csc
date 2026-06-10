@@ -30,7 +30,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -199,10 +199,16 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                                 'compose userdata')
 
             # Resolve the snapshot (holds pca_frame + iframe)
-            snapshot = (compose.get('snapshot')
-                        if isinstance(compose, dict) else None)
+            snapshots = (
+                compose.get('snapshots') if isinstance(compose, dict) else None
+            )
+            snapshot = (
+                snapshots[0]
+                if isinstance(snapshots, list) and snapshots
+                else None
+            )
             if not isinstance(snapshot, dict):
-                msg = 'Compose JSON has no snapshot!'
+                msg = 'Compose JSON has no snapshots!'
                 self._addError(msg)
                 self.Component.Message = msg
                 return Output

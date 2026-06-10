@@ -37,7 +37,7 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -415,7 +415,8 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
             if response.status_code == 201:
                 compose = response.json()
                 identity_doc = compose.get('identity') or {}
-                snapshot_doc = compose.get('snapshot') or {}
+                snapshots = compose.get('snapshots') or []
+                snapshot_doc = snapshots[0] if snapshots else {}
                 created_identity_id = identity_doc.get('_id', identity_id)
                 snapshot_id = snapshot_doc.get('_id', '')
 

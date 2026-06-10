@@ -31,7 +31,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -201,7 +201,8 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
             if not objects_list:
                 return compose
 
-            snapshot = compose.get('snapshot')
+            snapshots = compose.get('snapshots') or []
+            snapshot = snapshots[0] if snapshots else None
             if not isinstance(snapshot, dict):
                 return compose
 
@@ -224,7 +225,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                                   tagplane.ZAxis.Z]
                         }
                         snapshot['iframe'] = tagframe
-                        compose['snapshot'] = snapshot
+                        compose['snapshots'] = [snapshot]
                         return compose
                     except Exception as e:
                         self._addWarning(
@@ -258,7 +259,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                     'y': [y_axis.X, y_axis.Y, y_axis.Z],
                     'z': [z_axis.X, z_axis.Y, z_axis.Z]
                 }
-                compose['snapshot'] = snapshot
+                compose['snapshots'] = [snapshot]
                 return compose
         except Exception as e:
             self._addWarning(

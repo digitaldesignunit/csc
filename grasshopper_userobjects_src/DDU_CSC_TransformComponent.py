@@ -29,7 +29,7 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -115,9 +115,10 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
         try:
             # Load and parse compose JSON ({identity, snapshot})
             jcomp = json.loads(ComponentData)
-            snapshot = jcomp.get('snapshot')
+            snapshots = jcomp.get('snapshots') or []
+            snapshot = snapshots[0] if snapshots else None
             if not isinstance(snapshot, dict):
-                msg = 'Compose JSON has no snapshot to transform!'
+                msg = 'Compose JSON has no snapshots to transform!'
                 self._addError(msg)
                 self.Component.Message = msg
                 return XComponentData

@@ -28,7 +28,7 @@ ghenv.Component.Description = (  # NOQA
     'from the CSC API, with ETag caching.\n'
     'Input can be:\n'
     '- Geometry carrying the \'csc_component\' compose userstring\n'
-    '- A compose JSON string ({identity, snapshot})\n'
+    '- A compose JSON string ({identity, snapshots[]})\n'
     '- A raw identity_id (resolves the current snapshot)\n'
     '- A raw snapshot_id\n\n'
     'Falls back to the inline snapshot geometry (primitive meshes) when no '
@@ -40,7 +40,7 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     # Resolution preference chain (reduced only; inline fallback otherwise)
@@ -75,7 +75,7 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         self.InputParams[0].Description = (
             'Input can be:\n'
             '- Geometry with the \'csc_component\' compose userstring\n'
-            '- A compose JSON string ({identity, snapshot})\n'
+            '- A compose JSON string ({identity, snapshots[]})\n'
             '- A raw identity_id (resolves current snapshot)\n'
             '- A raw snapshot_id'
         )
@@ -114,49 +114,55 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
 
     def normalize_compose(self, obj):
         """
-        Classify a parsed JSON object into a compose dict
-        {identity, snapshot}, or None when it is neither a compose pair nor a
-        bare snapshot document.
+        Classify a parsed JSON object into canonical compose
+        {identity, snapshots[]}, or None.
         """
         if not isinstance(obj, dict):
             return None
+        identity = obj.get('identity') or {}
+        snaps = obj.get('snapshots') or []
+        if snaps and isinstance(snaps[0], dict):
+            return {'identity': identity, 'snapshots': snaps}
         snap = obj.get('snapshot')
         if isinstance(snap, dict):
-            return {'identity': obj.get('identity') or {}, 'snapshot': snap}
+            return {'identity': identity, 'snapshots': [snap]}
         # Bare snapshot document
         if 'geometry' in obj and 'identity_id' in obj:
-            return {'identity': {}, 'snapshot': obj}
+            return {'identity': {}, 'snapshots': [obj]}
+        return None
+
+    def primary_snapshot(self, compose):
+        """Return the snapshot row used for geometry fetch."""
+        if not isinstance(compose, dict):
+            return None
+        snaps = compose.get('snapshots') or []
+        if snaps and isinstance(snaps[0], dict):
+            return snaps[0]
         return None
 
     def fetch_compose_by_identity(self, auth_core, identity_id):
-        """Fetch {identity, snapshot} for an identity's current snapshot."""
+        """Fetch {identity, snapshots[]} for an identity's current snapshot."""
         try:
-            resp = auth_core.authorized_get(
-                f'/identities/{identity_id}/compose'
-            )
+            resp = auth_core.cached_get_compose(identity_id)
             if resp.status_code == 200:
-                data = resp.json()
-                return {
-                    'identity': data.get('identity') or {},
-                    'snapshot': data.get('snapshot') or {},
-                }
+                return auth_core.normalize_compose_output(resp.json())
         except Exception as e:
             self._addWarning(f'Identity compose fetch failed: {str(e)}')
         return None
 
     def fetch_compose_by_snapshot(self, auth_core, snapshot_id):
-        """Fetch a bare snapshot document by id."""
+        """Build minimal compose from a bare snapshot document."""
         try:
             resp = auth_core.authorized_get(f'/snapshots/{snapshot_id}')
             if resp.status_code == 200:
-                return {'identity': {}, 'snapshot': resp.json()}
+                return {'identity': {}, 'snapshots': [resp.json()]}
         except Exception as e:
             self._addWarning(f'Snapshot fetch failed: {str(e)}')
         return None
 
     def resolve_compose(self, auth_core, Input):
         """
-        Resolve the input into a compose dict {identity, snapshot}.
+        Resolve the input into canonical compose {identity, snapshots[]}.
         Returns (compose_or_None, input_is_geometry).
         """
         input_is_geometry = isinstance(Input, rg.GeometryBase)
@@ -308,13 +314,12 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
 
             compose, input_is_geometry = self.resolve_compose(
                 auth_core, Input)
-            if not compose or not compose.get('snapshot'):
+            snapshot = self.primary_snapshot(compose)
+            if not compose or not snapshot:
                 msg = 'Could not resolve a snapshot from input.'
                 self._addError(msg)
                 self.Component.Message = msg
                 return __Results
-
-            snapshot = compose['snapshot']
             snapshot_id = snapshot.get('_id')
             if not snapshot_id or not auth_core.validate_uuid(snapshot_id):
                 msg = f'Snapshot ID <{snapshot_id}> is not a valid UUID!'
@@ -339,8 +344,8 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                 for mesh, _source in results:
                     mesh.Transform(xform)
 
-            # Set compose userstring + mesh index on all geometry objects
-            compose_json = json.dumps(compose)
+            # Set canonical compose userstring + mesh index on all geometry
+            compose_json = auth_core.compose_json_string(compose)
             for i, (mesh, _source) in enumerate(results):
                 if hasattr(mesh, 'SetUserString'):
                     mesh.SetUserString('csc_component', compose_json)

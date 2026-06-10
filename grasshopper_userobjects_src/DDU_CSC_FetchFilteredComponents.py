@@ -26,7 +26,7 @@ ghenv.Component.Description = (  # NOQA
     'Fetches identities (with their current snapshot) from the remote '
     'Catalog based on filter criteria (type, material, dataset, complexity, '
     'fragment, bounding box dimensions). Mirrors the web catalog filter '
-    'menu and returns compose JSON ({identity, snapshot}) results.'
+    'menu and returns compose JSON ({identity, snapshots[]}) results.'
 )
 
 
@@ -34,7 +34,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -109,7 +109,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Human-readable description of the applied filters and query'
         )
         self.OutputParams[1+i].Description = (
-            'Compose JSON per entry ({identity, snapshot}) fetched from the '
+            'Compose JSON per entry ({identity, snapshots[]}) fetched from the '
             'server. Use \'DisassembleComponent\' to access the individual '
             'fields ready for Grasshopper')
 
@@ -317,7 +317,8 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                     # Create datatree path
                     ghp = Grasshopper.Kernel.Data.GH_Path(0, i)
                     # Add compose JSON to the datatree
-                    ComponentData.Add(json.dumps(json_comp), ghp)
+                    ComponentData.Add(
+                        auth_core.compose_json_string(json_comp), ghp)
 
                 # Add filter description to the filter query output
                 FilterDescription.Add(

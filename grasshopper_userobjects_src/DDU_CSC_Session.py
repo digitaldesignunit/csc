@@ -42,17 +42,71 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 260609
+Version: 260610
 """
 
 
-def _compute_compose_etag(identity_doc, snapshot_doc):
-    """Match backend ``_compute_compose_etag`` (identity + snapshot pair)."""
-    payload = (
-        f"{identity_doc.get('lastmodified', '')}::"
-        f"{snapshot_doc.get('etag', '')}"
-    )
-    return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+def _compute_compose_etag(identity_doc, snapshot_docs):
+    """Match backend ``_compute_compose_etag`` (identity + snapshot rows)."""
+    parts = [identity_doc.get('lastmodified', '')]
+    for doc in sorted(
+            snapshot_docs or [],
+            key=lambda row: str(row.get('_id', ''))):
+        parts.append(str(doc.get('etag', '')))
+    return hashlib.sha256('::'.join(parts).encode('utf-8')).hexdigest()
+
+
+def _compose_cache_key(identity_id, snapshots=None):
+    """Stable cache key for a compose GET variant."""
+    if not snapshots or snapshots == 'current':
+        return f'compose:{identity_id}:current'
+    if snapshots == 'all':
+        return f'compose:{identity_id}:all'
+    if isinstance(snapshots, (list, tuple)):
+        joined = ','.join(sorted(str(item) for item in snapshots))
+        digest = hashlib.md5(joined.encode('utf-8')).hexdigest()[:16]
+        return f'compose:{identity_id}:ids:{digest}'
+    return f'compose:{identity_id}:custom'
+
+
+def primary_snapshot_from_compose(compose):
+    """Return the first snapshot from a compose payload."""
+    if not isinstance(compose, dict):
+        return None
+    snapshots = compose.get('snapshots') or []
+    if snapshots and isinstance(snapshots[0], dict):
+        return snapshots[0]
+    legacy = compose.get('snapshot')
+    if isinstance(legacy, dict):
+        return legacy
+    return None
+
+
+def normalize_compose_payload(compose):
+    """
+    Ensure compose-shaped dicts use {identity, snapshots[]}.
+
+    Accepts legacy {identity, snapshot} list rows and normalizes them.
+    """
+    if not isinstance(compose, dict):
+        return compose
+    identity = compose.get('identity')
+    if not isinstance(identity, dict):
+        return compose
+
+    snapshots = compose.get('snapshots')
+    if isinstance(snapshots, list) and snapshots:
+        out = {'identity': identity, 'snapshots': snapshots}
+    else:
+        legacy = compose.get('snapshot')
+        if isinstance(legacy, dict):
+            out = {'identity': identity, 'snapshots': [legacy]}
+        else:
+            return compose
+
+    if 'reserved_by_username' in compose:
+        out['reserved_by_username'] = compose['reserved_by_username']
+    return out
 
 
 def _query_cache_key(params):
@@ -272,22 +326,43 @@ class _ComponentCache(object):
 
     def ingest_compose_row(self, row):
         """
-        Store identity + snapshot from one compose row.
+        Store identity + snapshot(s) from one compose row.
 
-        Returns the identity id when both parts were stored, else None.
+        Accepts {identity, snapshots[]} and list rows {identity, snapshot}.
+        Returns the identity id when stored, else None.
         """
         if not isinstance(row, dict):
             return None
         identity = row.get('identity')
-        snapshot = row.get('snapshot')
-        if not isinstance(identity, dict) or not isinstance(snapshot, dict):
+        if not isinstance(identity, dict):
             return None
         identity_id = identity.get('_id') or identity.get('id')
-        snapshot_id = snapshot.get('_id') or snapshot.get('id')
-        if not identity_id or not snapshot_id:
+        if not identity_id:
             return None
+
+        stored_any = False
+        snapshots = row.get('snapshots') or []
+        if isinstance(snapshots, list) and snapshots:
+            for snapshot in snapshots:
+                if not isinstance(snapshot, dict):
+                    continue
+                snapshot_id = snapshot.get('_id') or snapshot.get('id')
+                if not snapshot_id:
+                    continue
+                self.set_snapshot(snapshot_id, snapshot)
+                stored_any = True
+        else:
+            snapshot = row.get('snapshot')
+            if isinstance(snapshot, dict):
+                snapshot_id = snapshot.get('_id') or snapshot.get('id')
+                if snapshot_id:
+                    self.set_snapshot(snapshot_id, snapshot)
+                    stored_any = True
+
+        if not stored_any:
+            return None
+
         self.set_identity(identity_id, identity)
-        self.set_snapshot(snapshot_id, snapshot)
         return identity_id
 
     def ingest_compose_rows(self, rows):
@@ -301,7 +376,7 @@ class _ComponentCache(object):
 
     def assemble_compose(self, identity_id):
         """
-        Build {identity, snapshot} from independently cached documents.
+        Build {identity, snapshots:[current]} from cached documents.
 
         Uses identity.current_snapshot_id to pick the snapshot.
         """
@@ -314,7 +389,10 @@ class _ComponentCache(object):
         snapshot_doc, _, snapshot_ok = self.get_snapshot(snapshot_id)
         if not snapshot_ok or not snapshot_doc:
             return None
-        return {'identity': identity_doc, 'snapshot': snapshot_doc}
+        return {
+            'identity': identity_doc,
+            'snapshots': [snapshot_doc],
+        }
 
     def set_query(self, query_key, identity_ids, etag=None, params=None):
         """Store list-query metadata (identity id index + list ETag)."""
@@ -1028,6 +1106,43 @@ class _AuthCore(object):
             return False
         return str(uuid_obj) == uuid_to_test
 
+    def resolve_identity_id_from_input(self, value):
+        """
+        Resolve an identity UUID from a raw UUID string or compose JSON.
+        """
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if self.validate_uuid(text):
+            return text
+        try:
+            data = value if isinstance(value, dict) else json.loads(text)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        identity = data.get('identity')
+        if not isinstance(identity, dict):
+            return None
+        identity_id = identity.get('_id') or identity.get('id')
+        if identity_id and self.validate_uuid(str(identity_id)):
+            return str(identity_id)
+        return None
+
+    def primary_snapshot(self, compose):
+        """Return the first snapshot from a compose payload."""
+        return primary_snapshot_from_compose(compose)
+
+    def normalize_compose_output(self, compose):
+        """Return {identity, snapshots[]} for downstream GH components."""
+        return normalize_compose_payload(compose)
+
+    def compose_json_string(self, compose):
+        """Serialize one compose row in the canonical {identity, snapshots[]} shape."""
+        return json.dumps(self.normalize_compose_output(compose))
+
     # Cache Management Methods ------------------------------------------------
 
     def get_cache(self):
@@ -1174,7 +1289,7 @@ class _AuthCore(object):
                 rows = self._cache.assemble_compose_list(identity_ids)
                 if rows:
                     return _CachedResponse(rows, query_etag)
-            # Stale query index — refetch without conditional header
+            # Stale query index ? refetch without conditional header
             headers = self.auth_header()
             if extra_headers:
                 headers.update(extra_headers)
@@ -1201,61 +1316,96 @@ class _AuthCore(object):
     def cached_get_compose(
             self,
             identity_id,
+            snapshots=None,
             extra_headers=None,
             timeout=20):
         """
-        Fetch GET /identities/{id}/compose with identity/snapshot caching.
+        Fetch GET /identities/{id}/compose with caching.
 
-        Compose ETag is derived from cached identity.lastmodified and
-        snapshot.etag (same as the backend). A 304 returns the assembled
-        pair from cache.
+        ``snapshots``: None/'current' (default), 'all', or a list of snapshot
+        UUID strings. Compose ETag matches the backend; 304 returns cached
+        body when available.
         """
         if not self.is_valid():
             raise RuntimeError(
                 'Access token missing or expired. Please sign in again.'
             )
 
+        params = {}
+        if snapshots == 'all':
+            params['snapshots'] = 'all'
+        elif isinstance(snapshots, (list, tuple)) and snapshots:
+            params['snapshots'] = ','.join(str(item) for item in snapshots)
+
         path = f'/identities/{identity_id}/compose'
+        cache_key = _compose_cache_key(identity_id, snapshots)
+        use_current_assembly = (
+            not snapshots or snapshots == 'current'
+        )
+
+        cached_body = None
+        cached_etag = None
+        if self._cache:
+            if use_current_assembly:
+                cached_body = self._cache.assemble_compose(identity_id)
+            else:
+                cached_body, cached_etag, cached_ok = self._cache.get(
+                    cache_key,
+                )
+                if not cached_ok:
+                    cached_body = None
+                    cached_etag = None
+
+            if cached_body and isinstance(cached_body.get('identity'), dict):
+                snapshot_docs = cached_body.get('snapshots') or []
+                cached_etag = _compute_compose_etag(
+                    cached_body['identity'],
+                    snapshot_docs,
+                )
 
         if not self._cache:
             return self.authorized_get(
-                path, None, extra_headers, timeout)
-
-        compose = self._cache.assemble_compose(identity_id)
-        compose_etag = None
-        if compose:
-            compose_etag = _compute_compose_etag(
-                compose['identity'], compose['snapshot'])
+                path, params or None, extra_headers, timeout)
 
         headers = self.auth_header()
         if extra_headers:
             headers.update(extra_headers)
-        if compose_etag:
-            headers['If-None-Match'] = compose_etag
+        if cached_etag:
+            headers['If-None-Match'] = cached_etag
 
         response = requests.get(
             self.base_url + path,
             headers=headers,
-            timeout=timeout
+            params=params or None,
+            timeout=timeout,
         )
 
         if response.status_code == 304:
-            if compose:
-                return _CachedResponse(compose, compose_etag)
-            # Stale identity/snapshot pair — refetch without conditional
+            if cached_body:
+                return _CachedResponse(cached_body, cached_etag)
             headers = self.auth_header()
             if extra_headers:
                 headers.update(extra_headers)
             response = requests.get(
                 self.base_url + path,
                 headers=headers,
-                timeout=timeout
+                params=params or None,
+                timeout=timeout,
             )
 
         if response.status_code == 200:
             try:
                 data = response.json()
-                self._cache.ingest_compose_row(data)
+                if self._cache:
+                    etag = response.headers.get('ETag')
+                    if not etag and isinstance(data.get('identity'), dict):
+                        etag = _compute_compose_etag(
+                            data['identity'],
+                            data.get('snapshots') or [],
+                        )
+                    if not use_current_assembly:
+                        self._cache.set(cache_key, data, etag)
+                    self._cache.ingest_compose_row(data)
             except Exception:
                 pass
 

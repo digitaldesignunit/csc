@@ -34,7 +34,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -288,7 +288,8 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addWarning('Compose data must be a dictionary')
                 return False
 
-            snapshot = compose_data.get('snapshot')
+            snapshots = compose_data.get('snapshots') or []
+            snapshot = snapshots[0] if snapshots else None
             if not isinstance(snapshot, dict):
                 self._addWarning('Compose missing snapshot object')
                 return False

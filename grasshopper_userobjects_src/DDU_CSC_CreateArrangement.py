@@ -30,7 +30,7 @@ class CSC_CreateArrangement(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -60,7 +60,7 @@ class CSC_CreateArrangement(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Compose JSON strings ({identity, snapshot})'
+            'Compose JSON strings ({identity, snapshots[]})'
         )
         self.InputParams[1].Description = (
             'Additional spacing between grid cells'
@@ -82,25 +82,41 @@ class CSC_CreateArrangement(Grasshopper.Kernel.GH_ScriptInstance):
             'Transformations from world origin to grid cell planes'
         )
 
-    def extract_bounding_box_dimensions(self, component_data: str):
+    def _primary_snapshot(self, compose):
+        """Return the first snapshot from a compose payload."""
+        if not isinstance(compose, dict):
+            return {}
+        snapshots = compose.get('snapshots') or []
+        if snapshots and isinstance(snapshots[0], dict):
+            return snapshots[0]
+        legacy = compose.get('snapshot')
+        if isinstance(legacy, dict):
+            return legacy
+        return {}
+
+    def extract_bounding_box_dimensions(self, component_data):
         """
         Extract bounding box dimensions from compose JSON.
 
         Args:
-            component_data: Compose JSON string ({identity, snapshot})
+            component_data: Compose JSON string or dict ({identity, snapshots[]})
 
         Returns:
             Tuple of (xtx, xty, xtz) dimensions or None
         """
         try:
-            compose = json.loads(component_data)
-            snapshot = compose.get('snapshot') or {}
-            bbx = snapshot.get('bbx', None)
-            if bbx and len(bbx) >= 3:
-                return bbx[0], bbx[1], bbx[2]
+            if isinstance(component_data, dict):
+                compose = component_data
+            elif isinstance(component_data, str):
+                compose = json.loads(component_data.strip())
+            else:
+                compose = json.loads(str(component_data))
+            snapshot = self._primary_snapshot(compose)
+            bbx = snapshot.get('bbx')
+            if isinstance(bbx, (list, tuple)) and len(bbx) >= 3:
+                return float(bbx[0]), float(bbx[1]), float(bbx[2])
             return None
-        except (json.JSONDecodeError, KeyError,
-                TypeError):
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             return None
 
     def calculate_grid_size(self, count: int):

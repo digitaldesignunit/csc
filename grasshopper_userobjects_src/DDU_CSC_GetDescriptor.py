@@ -32,7 +32,7 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -110,11 +110,16 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
             Descriptor value or None if not found
         """
         try:
+            snapshots = (
+                compose.get('snapshots') if isinstance(compose, dict) else None
+            )
             snapshot = (
-                compose.get('snapshot') if isinstance(compose, dict) else None
+                snapshots[0]
+                if isinstance(snapshots, list) and snapshots
+                else None
             )
             if not isinstance(snapshot, dict):
-                self._addWarning('Compose JSON has no snapshot')
+                self._addWarning('Compose JSON has no snapshots')
                 return None
 
             descriptors = snapshot.get('descriptors')

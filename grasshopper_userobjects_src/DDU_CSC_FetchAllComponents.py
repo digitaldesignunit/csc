@@ -25,7 +25,7 @@ ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Fetches all catalog identities (joined with their current snapshot) '
     'from the remote Catalog API via GET /identities with caching support. '
-    'Returns each entry as a compose JSON string ({identity, snapshot}).'
+    'Returns each entry as a compose JSON string ({identity, snapshots[]}).'
 )
 
 
@@ -33,7 +33,7 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -66,7 +66,7 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Compose JSON per entry ({identity, snapshot}) fetched from '
+            'Compose JSON per entry ({identity, snapshots[]}) fetched from '
             'GET /identities. Use \'DisassembleComponent\' to access the '
             'individual fields ready for Grasshopper'
         )
@@ -125,8 +125,9 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 for i, json_comp in enumerate(json_comps):
                     # Create datatree path
                     ghp = Grasshopper.Kernel.Data.GH_Path(0, i)
-                    # Add compose data ({identity, snapshot}) to the datatree
-                    ComponentData.Add(json.dumps(json_comp), ghp)
+                    # Add canonical compose JSON to the datatree
+                    ComponentData.Add(
+                        auth_core.compose_json_string(json_comp), ghp)
 
                 return __Results
 

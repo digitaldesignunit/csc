@@ -367,7 +367,8 @@ class CSC_AddComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
 
             if response.status_code == 201:
                 compose = response.json()
-                snapshot_doc = compose.get('snapshot') or {}
+                snapshots = compose.get('snapshots') or []
+                snapshot_doc = snapshots[0] if snapshots else {}
                 created_snapshot_id = snapshot_doc.get('_id', snapshot_id)
 
                 ghp = Grasshopper.Kernel.Data.GH_Path(0)

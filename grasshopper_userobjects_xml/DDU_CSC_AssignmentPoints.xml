@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">47330714-8d60-43ba-9671-9ae30baeb612</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">370bc9ce-9c5e-4cbf-ae0b-d2b06bd3f083</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639166305930814060</item>
+            <item name="Date" type_name="gh_date" type_code="8">639166906315688706</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -107,7 +107,7 @@
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="393">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAEeSURBVEhLY2AYBYMOmJiYBBsZGT0HYRAbXR4dkKqewdjY+KmxsfF/EDY1NnmBLo8OkNWD2OjyGABZg5uZ7b/3/nOmvfWfJ4uuDgbsTC2/kGSBkZFRIEghyPWznHK3vPOf/f2d/5xf7wNmL/oQMEMZWe27gNkdm92r/kMteQrSiyxPFAC5/r3/nInoFoEMfx8w5/+7gNn96HrIAsgWvfWf/Rdi+Kx56OoIAkKp4q3/rGlQl/8G+Wi+c/4BU2OTV7jUYwB8qQg5WKA+mgZKCCRFMq5UhCvMQY4gyQJsqQhfmMPUU5CKUMMcW3IlG2AJc4zkiq6HIIClIhsTiy+b3KswwhzdIopSESiHosvDAFVSETEayE5FxKYKUtWPAvoDAEudJ6fG4jhYAAAAAElFTkSuQmCC</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">bf2d718f-b5e3-400c-9d97-1c553d87fec2</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">1546f271-81b4-4269-8edd-1ef5d4163f25</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -153,7 +153,7 @@
                             <item name="Access" type_name="gh_int32" type_code="3">2</item>
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of floating point numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">b686a34b-48ee-4b66-90a4-762f6f0decdb</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">9a82f703-d48a-446b-a1a4-362c924ea5af</item>
                             <item name="Name" type_name="gh_string" type_code="10">DesignPts</item>
                             <item name="NickName" type_name="gh_string" type_code="10">DesignPts</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -188,7 +188,7 @@
                             <item name="Access" type_name="gh_int32" type_code="3">2</item>
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of floating point numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">6de4ac10-b9ce-4060-8716-2dcf891266bf</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">1aa76ae4-80fc-4ef5-8e4c-8e2f4231cc8c</item>
                             <item name="Name" type_name="gh_string" type_code="10">LibraryPts</item>
                             <item name="NickName" type_name="gh_string" type_code="10">LibraryPts</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -223,7 +223,7 @@
                             <item name="Access" type_name="gh_int32" type_code="3">1</item>
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of floating point numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">cad9294b-e659-49b2-8910-c68bdf872155</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">ba46fb7a-51d7-42a6-962b-340f25f29304</item>
                             <item name="Name" type_name="gh_string" type_code="10">Weights</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Weights</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -257,7 +257,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of floating point numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">34e27419-37f9-449f-b72b-d014e23dacd8</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">f111300c-04ab-4ad3-9b19-8be7ccf8439a</item>
                             <item name="Name" type_name="gh_string" type_code="10">ScaleFactor</item>
                             <item name="NickName" type_name="gh_string" type_code="10">ScaleFactor</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -291,7 +291,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of text fragments</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">f111a00d-1b5b-4e0b-bd05-ac7b5fe8b9ab</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">e6c44563-eded-46e0-827f-4a8b5e14a90f</item>
                             <item name="Name" type_name="gh_string" type_code="10">Algorithm</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Algorithm</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -325,7 +325,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">3fce414a-2704-45c0-b198-657321abe479</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">eda00396-f8c3-4bd4-b064-3b2aed83ca0d</item>
                             <item name="Name" type_name="gh_string" type_code="10">Assignment</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Assignment</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -359,7 +359,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">43c24b16-1ff7-49f1-af31-770b7282871a</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">b66568fa-f1ad-44d2-9c16-13351f74779c</item>
                             <item name="Name" type_name="gh_string" type_code="10">Cost</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Cost</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -411,8 +411,8 @@
                     <chunk name="ScriptEditor">
                       <items count="1">
                         <item name="StartBounds" type_name="gh_drawing_rectangle" type_code="34">
-                          <X>983</X>
-                          <Y>-622</Y>
+                          <X>191</X>
+                          <Y>-1226</Y>
                           <W>1140</W>
                           <H>1032</H>
                         </item>

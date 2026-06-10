@@ -35,7 +35,7 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -189,7 +189,8 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
 
         compose = compose_response.json()
         identity = compose.get('identity')
-        snapshot = compose.get('snapshot')
+        snapshots = compose.get('snapshots') or []
+        snapshot = snapshots[0] if snapshots else None
         if not isinstance(identity, dict) or not isinstance(snapshot, dict):
             self._addWarning(
                 f'Invalid compose payload for snapshot {snapshot_id}')
