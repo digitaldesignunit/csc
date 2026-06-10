@@ -19,6 +19,7 @@ import {
   Send,
   Logs,
   BookMarked,
+  Users,
 } from 'lucide-react'
 
 export default function AppMenu() {
@@ -189,6 +190,13 @@ export default function AppMenu() {
             >
               <Archive className="h-4 w-4" />
               Consumed Components
+            </div>
+            <div
+              onClick={() => handleNavigation('/admin/users')}
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            >
+              <Users className="h-4 w-4" />
+              User Management
             </div>
             <div
               onClick={() => handleNavigation('/admin/logs')}
