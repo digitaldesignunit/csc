@@ -444,7 +444,9 @@ def _format_list_rows(
                 )
             row = {
                 'identity': identity_model.model_dump(by_alias=True),
-                'snapshot': snapshot_model.model_dump(by_alias=True),
+                'snapshots': [
+                    snapshot_model.model_dump(by_alias=True),
+                ],
             }
             if 'reserved_by_username' in doc:
                 row['reserved_by_username'] = doc['reserved_by_username']
@@ -1236,7 +1238,7 @@ async def get_identity(
         'shallow',
         description=(
             'shallow=legacy catalog row; '
-            'current_snapshot={identity,snapshot}; none=identity only'
+            'current_snapshot={identity,snapshots[]}; none=identity only'
         ),
     ),
 ):
