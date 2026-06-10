@@ -7,6 +7,7 @@ import { ArrowLeft, Loader2, Save, XCircle } from 'lucide-react'
 
 import { ComponentLocation } from '@/generated/CatalogSharedTypes'
 import type { CatalogComponent } from '@/generated/CatalogModels'
+import { primarySnapshot } from '@/generated/catalogExtras'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -119,7 +120,8 @@ function dateInputToIso(value: string): string {
 }
 
 function initialStateFromCatalog(catalog: CatalogComponent): FormState {
-  const { identity, snapshot } = catalog
+  const { identity } = catalog
+  const snapshot = primarySnapshot(catalog)
   const colorArr = Array.isArray(snapshot.color) ? (snapshot.color as number[]) : [110, 110, 110]
   const loc = (snapshot.location as ComponentLocation | undefined) ?? { lat: 0, lon: 0 }
   const rawCondition = snapshot.condition
@@ -169,6 +171,7 @@ export default function ComponentEditForm({
   catalog: CatalogComponent
 }) {
   const router = useRouter()
+  const snapshot = primarySnapshot(catalog)
   const identityId = catalog.identity._id ?? ''
   const initial = useMemo(() => initialStateFromCatalog(catalog), [catalog])
   const [form, setForm] = useState<FormState>(initial)
@@ -485,12 +488,12 @@ export default function ComponentEditForm({
             />
           </div>
 
-          {typeof catalog.snapshot.added_by_username === 'string' &&
-            catalog.snapshot.added_by_username.trim() !== '' && (
+          {typeof snapshot.added_by_username === 'string' &&
+            snapshot.added_by_username.trim() !== '' && (
               <div className="sm:col-span-2 text-sm text-muted-foreground">
                 Added to catalog by{' '}
                 <span className="font-medium text-foreground">
-                  {catalog.snapshot.added_by_username}
+                  {snapshot.added_by_username}
                 </span>
               </div>
             )}

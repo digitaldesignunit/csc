@@ -1,6 +1,7 @@
 'use client'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
+import { primarySnapshot } from '@/generated/catalogExtras'
 import { ComponentLocation } from '@/generated/CatalogSharedTypes'
 import { Card, CardContent } from '@/components/ui/card'
 import ComponentDetailActions from './ComponentDetailActions'
@@ -26,7 +27,8 @@ export default function ComponentDetailPageLayout({
   activeSnapshotId,
   liveSnapshotId,
 }: ComponentDetailPageLayoutProps) {
-  const { identity, snapshot } = catalog
+  const { identity } = catalog
+  const snapshot = primarySnapshot(catalog)
   const identityId = String(identity._id ?? '')
   const snapshotId = String(snapshot._id ?? identity.current_snapshot_id)
   const location = (snapshot.location as ComponentLocation) ?? { lat: 0, lon: 0 }

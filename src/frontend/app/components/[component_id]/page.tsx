@@ -3,6 +3,7 @@ import ComponentDetailPageLayout from '@/components/components/ComponentDetailPa
 import ComponentDetailSnapshotBanner from '@/components/components/ComponentDetailSnapshotBanner'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import type { CatalogComponent } from '@/generated/CatalogModels'
+import { primarySnapshot } from '@/generated/catalogExtras'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { formatTimestamp } from '@/lib/utils'
 import { Archive, Package } from 'lucide-react'
@@ -14,7 +15,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 type PageParams = { component_id: string }
-type PageSearchParams = { snapshot_id?: string }
+type PageSearchParams = { snapshots?: string }
 
 function isConsumedIdentity(consumedAt: unknown): boolean {
   return consumedAt !== undefined && consumedAt !== null && String(consumedAt).trim() !== ''
@@ -32,12 +33,12 @@ export default async function ComponentDetailPage({
   const base = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`
 
   const { component_id } = await params
-  const { snapshot_id: requestedSnapshotId } = await searchParams
+  const { snapshots: requestedSnapshotId } = await searchParams
 
   const fetchOpts = { cache: 'no-store' as const, headers: { cookie } }
 
   const composeUrl = requestedSnapshotId
-    ? `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose?${new URLSearchParams({ snapshot_id: requestedSnapshotId }).toString()}`
+    ? `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose?${new URLSearchParams({ snapshots: requestedSnapshotId }).toString()}`
     : `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose`
 
   const [composeRes, snapshotsRes] = await Promise.all([
@@ -52,7 +53,7 @@ export default async function ComponentDetailPage({
 
   if (res.status === 401) {
     const callback = requestedSnapshotId
-      ? `/components/${component_id}?snapshot_id=${encodeURIComponent(requestedSnapshotId)}`
+      ? `/components/${component_id}?snapshots=${encodeURIComponent(requestedSnapshotId)}`
       : `/components/${component_id}`
     redirect(`/auth/signin?callbackUrl=${encodeURIComponent(callback)}`)
   }
@@ -67,22 +68,23 @@ export default async function ComponentDetailPage({
   }
 
   const catalog = (await res.json()) as CatalogComponent
+  const snapshot = primarySnapshot(catalog)
   let snapshots: SnapshotSummaryItem[] = []
   if (snapshotsRes.ok) {
     snapshots = (await snapshotsRes.json()) as SnapshotSummaryItem[]
   }
 
   const liveSnapshotId = String(catalog.identity.current_snapshot_id ?? '')
-  const activeSnapshotId = String(catalog.snapshot._id ?? liveSnapshotId)
+  const activeSnapshotId = String(snapshot._id ?? liveSnapshotId)
   const isViewingLive = activeSnapshotId === liveSnapshotId
   const liveVersion =
     snapshots.find((row) => row._id === liveSnapshotId)?.version ??
-    (typeof catalog.snapshot.version === 'number' && isViewingLive
-      ? catalog.snapshot.version
+    (typeof snapshot.version === 'number' && isViewingLive
+      ? snapshot.version
       : snapshots.find((row) => row.is_current)?.version ?? 0)
   const viewingVersion =
-    typeof catalog.snapshot.version === 'number'
-      ? catalog.snapshot.version
+    typeof snapshot.version === 'number'
+      ? snapshot.version
       : snapshots.find((row) => row._id === activeSnapshotId)?.version ?? 0
 
   const isConsumed = isConsumedIdentity(catalog.identity.consumed_at)
@@ -132,7 +134,7 @@ export default async function ComponentDetailPage({
             identityId={component_id}
             viewingVersion={viewingVersion}
             liveVersion={liveVersion}
-            isPending={!catalog.snapshot.validated}
+            isPending={!snapshot.validated}
           />
         )}
         <ComponentViewer catalog={catalog} />

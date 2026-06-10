@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
+import { primarySnapshot } from '@/generated/catalogExtras'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import {
   componentBounds,
@@ -89,7 +90,8 @@ type MetadataPanelsProps = {
 }
 
 function CatalogMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
-  const { identity, snapshot } = catalog
+  const { identity } = catalog
+  const snapshot = primarySnapshot(catalog)
   const componentColorStr = componentColorString(
     Array.isArray(snapshot.color) ? snapshot.color : [],
   )
@@ -163,7 +165,8 @@ function CatalogMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
 }
 
 function TimelineMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
-  const { identity, snapshot } = catalog
+  const { identity } = catalog
+  const snapshot = primarySnapshot(catalog)
   const isConsumed = isConsumedShallowRow({
     consumed_at: identity.consumed_at as string | null | undefined,
   })
@@ -209,7 +212,8 @@ function ProvenanceMetadataPanel({
   parentComponentStatus,
   onOpenParent,
 }: MetadataPanelsProps) {
-  const { identity, snapshot } = catalog
+  const { identity } = catalog
+  const snapshot = primarySnapshot(catalog)
   const parentIdentityId = primaryParentIdentityId(identity)
 
   return (
@@ -293,7 +297,7 @@ function ProvenanceMetadataPanel({
 }
 
 function AdvancedMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
-  const { snapshot } = catalog
+  const snapshot = primarySnapshot(catalog)
 
   return (
     <Accordion type="single" collapsible className="w-full rounded-lg border border-border/60">

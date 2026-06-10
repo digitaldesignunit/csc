@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
+import { primarySnapshot } from '@/generated/catalogExtras'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -33,7 +34,8 @@ type ComponentDetailActionsProps = {
 }
 
 export default function ComponentDetailActions({ catalog }: ComponentDetailActionsProps) {
-  const { identity, snapshot } = catalog
+  const { identity } = catalog
+  const snapshot = primarySnapshot(catalog)
   const identityId = identity._id ?? ''
   const isConsumed = isConsumedShallowRow({
     consumed_at: identity.consumed_at as string | null | undefined,

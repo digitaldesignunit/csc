@@ -8,8 +8,9 @@ const FASTAPI_URL = process.env.FASTAPI_URL!
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET
 const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 MB
 
-// Geometry uploads must go directly to the FastAPI backend - not via this proxy.
-const BLOCKED_PATTERNS = [
+// Geometry uploads (PUT/POST) must go directly to FastAPI — not via this proxy.
+// GET downloads for the web viewer are proxied with the user's bearer token.
+const BLOCKED_UPLOAD_PATTERNS = [
   /^\/snapshots\/[^/]+\/meshes\/[^/]+\/reduced$/,
   /^\/snapshots\/[^/]+\/meshes\/[^/]+\/detailed$/,
   /^\/snapshots\/[^/]+\/point_clouds\/\d+\.ply$/,
@@ -50,9 +51,14 @@ async function handle(
   const { path } = await params
   const target = buildTargetUrl(path, url)
 
-  // 3) Block geometry upload routes - these must go directly to FastAPI
+  const method = req.method.toUpperCase()
+
+  // 3) Block geometry upload routes on write methods only
   const pathname = Array.isArray(path) ? `/${path.join('/')}` : ''
-  if (BLOCKED_PATTERNS.some(p => p.test(pathname))) {
+  if (
+    ['PUT', 'POST'].includes(method) &&
+    BLOCKED_UPLOAD_PATTERNS.some((p) => p.test(pathname))
+  ) {
     return NextResponse.json(
       { error: 'Geometry uploads must be sent directly to the backend API!' },
       { status: 403 }
@@ -66,7 +72,6 @@ async function handle(
   }
 
   // 5) Prepare method/body/headers
-  const method = req.method.toUpperCase()
   const hasBody = !['GET', 'HEAD'].includes(method)
   const body = hasBody ? await req.arrayBuffer() : undefined
 

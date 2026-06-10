@@ -60,7 +60,7 @@ export default function DesignPlacementList({ placements }: DesignPlacementListP
       {placements.map((placement, index) => {
         const meta = metaBySnapshot[placement.snapshot]
         const href = meta
-          ? `/components/${meta.identityId}?snapshot_id=${encodeURIComponent(placement.snapshot)}`
+          ? `/components/${meta.identityId}?snapshots=${encodeURIComponent(placement.snapshot)}`
           : undefined
 
         return (

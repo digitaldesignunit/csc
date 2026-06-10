@@ -7,7 +7,10 @@
  *   for PLY mesh URLs (not duplicated as a dedicated API model).
  */
 
-import type { ComponentSnapshot } from './CatalogModels'
+import type {
+  ComponentSnapshot,
+  ComposeIdentityResponse,
+} from './CatalogModels'
 
 /** Row shape from `GET /identities` with `expand=shallow` (not a full compose payload). */
 export type CatalogShallowRow = {
@@ -46,6 +49,17 @@ export type CatalogShallowRow = {
 export type SnapshotMeshRouting = {
   snapshot_id: string
   mesh_ply_resolutions?: Record<string, string[]> | null
+}
+
+/** First snapshot in a compose payload (the active row for detail views). */
+export function primarySnapshot(
+  catalog: Pick<ComposeIdentityResponse, 'snapshots'>,
+): ComponentSnapshot {
+  const snap = catalog.snapshots?.[0]
+  if (!snap) {
+    throw new Error('Compose payload has no snapshots')
+  }
+  return snap
 }
 
 export function snapshotMeshRoutingFromSnapshot(

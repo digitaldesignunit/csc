@@ -269,7 +269,7 @@ export default function GHInterfacePage() {
             <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1">
               <li>• <strong>Identity</strong> — stable catalog entry: type, material, dataset, provenance (manufactured/salvaged dates, parent identities), and attributes.</li>
               <li>• <strong>Snapshot</strong> — versioned state: geometry, descriptors, condition, placement frame (iframe), PCA frame, color, location, and notes.</li>
-              <li>• <strong>Compose JSON</strong> — most components pass data as <code className="text-xs">{`{identity, snapshot}`}</code> pairs. Use <strong>CSC_DisassembleComponent</strong> to unpack them in Grasshopper.</li>
+              <li>• <strong>Compose JSON</strong> — most components pass data as <code className="text-xs">{`{identity, snapshots[]}`}</code> pairs. Use <strong>CSC_DisassembleComponent</strong> to unpack them in Grasshopper.</li>
               <li>• <strong>Designs</strong> pin specific snapshot versions (not identity/current) and store placement iframes per snapshot.</li>
             </ul>
           </div>
@@ -432,13 +432,54 @@ export default function GHInterfacePage() {
         <div className="space-y-6 pt-2">
           <ComponentCard
             icon={Database}
+            name="CSC_ListIdentitySnapshots"
+            description="Lists all snapshot versions for one identity (id and name). Input can be an identity UUID or compose JSON."
+            inputs={[
+              { label: 'Input', description: 'Identity UUID or compose JSON ({identity, snapshots[]})' },
+            ]}
+            outputs={[
+              { label: 'SnapshotID', description: 'Snapshot UUIDs ordered by version' },
+              { label: 'SnapshotName', description: 'Snapshot names (parallel to SnapshotID)' },
+            ]}
+            tip="Uses GET /identities/{id}/snapshots. Pair with FetchComposeSnapshot to load a specific version."
+          />
+
+          <ComponentCard
+            icon={Database}
+            name="CSC_FetchComposeAllSnapshots"
+            description="Fetches compose JSON with every snapshot version for one identity ({identity, snapshots[]})."
+            inputs={[
+              { label: 'Input', description: 'Identity UUID or compose JSON ({identity, snapshots[]})' },
+            ]}
+            outputs={[
+              { label: 'ComposeJSON', description: 'Full multi-version compose from GET /identities/{id}/compose?snapshots=all' },
+            ]}
+            tip="Use with ComposeToD2P (SnapshotScope=all) to build D2P members for every version."
+          />
+
+          <ComponentCard
+            icon={Database}
+            name="CSC_FetchComposeSnapshot"
+            description="Fetches compose JSON for one identity and a specific snapshot ({identity, snapshots:[one]})."
+            inputs={[
+              { label: 'Input', description: 'Identity UUID or compose JSON ({identity, snapshots[]})' },
+              { label: 'SnapshotID', description: 'Snapshot UUID to fetch' },
+            ]}
+            outputs={[
+              { label: 'ComposeJSON', description: 'Compose with the requested snapshot only (snapshots length 1)' },
+            ]}
+            tip="Uses GET /identities/{id}/compose?snapshots=<uuid>. Current-snapshot-only fetch remains CSC_FetchComponents."
+          />
+
+          <ComponentCard
+            icon={Database}
             name="CSC_FetchComponents"
-            description="Fetches specific identities (with their current snapshot) from the remote Catalog by their identity IDs. Supports caching and returns compose JSON ({identity, snapshot}) with error handling for missing identities."
+            description="Fetches specific identities (with their current snapshot) from the remote Catalog by their identity IDs. Supports caching and returns compose JSON ({identity, snapshots:[current]}) with error handling for missing identities."
             inputs={[
               { label: 'ComponentID', description: 'One or many identity IDs (UUIDs) to fetch' }
             ]}
             outputs={[
-              { label: 'ComponentData', description: 'Compose JSON per entry ({identity, snapshot}) fetched from the server. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
+              { label: 'ComponentData', description: 'Compose JSON per entry ({identity, snapshots[]}) fetched from the server. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
             ]}
             tip="Supports ETag caching for faster subsequent access. Handles missing identities gracefully."
             imagePath={resolveStatic('/gh-interface/csc_fetchcomponents.jpg')}
@@ -461,7 +502,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Database}
             name="CSC_FilterComponents"
-            description="Filters a list of compose JSON entries ({identity, snapshot}) based on various criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Works with local compose data from fetch components."
+            description="Filters a list of compose JSON entries ({identity, snapshots[]}) based on various criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Works with local compose data from fetch components."
             inputs={[
               { label: 'Type', description: 'Component type filter (identity.type, e.g., "beam", "slab", "column")' },
               { label: 'Material', description: 'Material type filter (identity.material, e.g., "concrete", "steel", "wood")' },
@@ -474,11 +515,11 @@ export default function GHInterfacePage() {
               { label: "MaxDimensionY", description: "Maximum Y dimension filter (snapshot.bbx)" },
               { label: "MinDimensionZ", description: "Minimum Z dimension filter (snapshot.bbx)" },
               { label: "MaxDimensionZ", description: "Maximum Z dimension filter (snapshot.bbx)" },
-              { label: 'ComponentData', description: 'Compose JSON strings to filter ({identity, snapshot}), e.g. from FetchAllComponents, FetchComponents, or FetchFilteredComponents' },
+              { label: 'ComponentData', description: 'Compose JSON strings to filter ({identity, snapshots[]}), e.g. from FetchAllComponents, FetchComponents, or FetchFilteredComponents' },
             ]}
             outputs={[
               { label: 'FilterDescription', description: 'Human-readable description of the applied filters' },
-              { label: 'FilteredComponentData', description: 'Filtered compose JSON strings ({identity, snapshot}). Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
+              { label: 'FilteredComponentData', description: 'Filtered compose JSON strings ({identity, snapshots[]}). Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
             ]}
             tip="Local filter for compose data. Use after FetchAllComponents, FetchComponents, or FetchFilteredComponents to narrow results without another API call."
             imagePath={resolveStatic('/gh-interface/csc_filtercomponents.jpg')}
@@ -487,7 +528,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Database}
             name="CSC_FetchFilteredComponents"
-            description="Fetches identities (with their current snapshot) from the remote Catalog based on filter criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Mirrors the web catalog filter menu and returns compose JSON ({identity, snapshot}) results."
+            description="Fetches identities (with their current snapshot) from the remote Catalog based on filter criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Mirrors the web catalog filter menu and returns compose JSON ({identity, snapshots[]}) results."
             inputs={[
               { label: 'Type', description: 'Component type filter (e.g., "beam", "slab", "column")' },
               { label: 'Material', description: 'Material type filter (e.g., "concrete", "steel", "wood")' },
@@ -504,7 +545,7 @@ export default function GHInterfacePage() {
             ]}
             outputs={[
               { label: 'FilterDescription', description: 'Human-readable description of the applied filters and query' },
-              { label: 'ComponentData', description: 'Compose JSON per entry ({identity, snapshot}) fetched from the server. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
+              { label: 'ComponentData', description: 'Compose JSON per entry ({identity, snapshots[]}) fetched from the server. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
             ]}
             tip="Filters mirror the web catalog filter menu (plus a reservation-status filter) and run server-side on validated current snapshots. More efficient than fetching all components and filtering locally."
             imagePath={resolveStatic('/gh-interface/csc_fetchfilteredcomponents.jpg')}
@@ -515,7 +556,7 @@ export default function GHInterfacePage() {
             name="CSC_FetchReducedGeometry"
             description="Fetches the reduced (catalog default) snapshot geometry as binary PLY from the API or local cache, parses it to Rhino meshes, and applies the snapshot iframe transform."
             inputs={[
-              { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' compose userstring\nb) A compose JSON string ({identity, snapshot})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
+              { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' compose userstring\nb) A compose JSON string ({identity, snapshots[]})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
             ]}
             outputs={[
               { label: 'GeometryData', description: 'Fetched reduced geometry as Rhino.Geometry.Mesh objects (one per snapshot mesh primitive)' },
@@ -531,7 +572,7 @@ export default function GHInterfacePage() {
             name="CSC_FetchDetailedGeometry"
             description="Fetches the detailed (high fidelity) snapshot geometry as binary PLY from the API or local cache, parses it to Rhino meshes, and applies the snapshot iframe transform."
             inputs={[
-              { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' compose userstring\nb) A compose JSON string ({identity, snapshot})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
+              { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' compose userstring\nb) A compose JSON string ({identity, snapshots[]})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
             ]}
             outputs={[
               { label: 'GeometryData', description: 'Fetched detailed geometry as Rhino.Geometry.Mesh objects (one per snapshot mesh primitive)' },
@@ -545,7 +586,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Database}
             name="CSC_FetchDesign"
-            description="Fetches a design from the remote Catalog along with all pinned snapshot placements. Resolves each snapshot reference to compose JSON ({identity, snapshot}) and overwrites snapshot.iframe with the design insertion frame. Uses caching for optimal performance."
+            description="Fetches a design from the remote Catalog along with all pinned snapshot placements. Resolves each snapshot reference to compose JSON ({identity, snapshots[]}) and overwrites snapshot.iframe with the design insertion frame. Uses caching for optimal performance."
             inputs={[
               { label: 'DesignID', description: 'Design ID to fetch' }
             ]}
@@ -623,7 +664,7 @@ export default function GHInterfacePage() {
               { label: 'Run', description: 'Toggle to execute the create operation' }
             ]}
             outputs={[
-              { label: 'AddedComponentData', description: 'Compose response JSON ({identity, snapshot}) returned from POST /identities' }
+              { label: 'AddedComponentData', description: 'Compose response JSON ({identity, snapshots[]}) returned from POST /identities' }
             ]}
             tip="Validates the payload, posts the identity, uploads staged PLY files, and non-fatally consumes any pending transmitted ID. Requires authentication."
             imagePath={resolveStatic('/gh-interface/csc_addcomponent.jpg')}
@@ -666,7 +707,7 @@ export default function GHInterfacePage() {
               { label: 'Run', description: 'Toggle to execute the snapshot create operation' }
             ]}
             outputs={[
-              { label: 'AddedSnapshotData', description: 'Compose response JSON ({identity, snapshot}) after create' }
+              { label: 'AddedSnapshotData', description: 'Compose response JSON ({identity, snapshots[]}) after create' }
             ]}
             tip="Validates the snapshot payload, posts the new version, and uploads any staged PLY files. Requires authentication."
             imagePath={resolveStatic('/gh-interface/csc_addcomponent.jpg')}
@@ -675,9 +716,9 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Code}
             name="CSC_DisassembleComponent"
-            description="Parses compose JSON ({identity, snapshot}) back into Grasshopper-compatible geometry and metadata. Type, material, and provenance come from identity; geometry, condition, descriptors, and frames come from snapshot."
+            description="Parses compose JSON ({identity, snapshots[]}) back into Grasshopper-compatible geometry and metadata. Type, material, and provenance come from identity; geometry, condition, descriptors, and frames come from snapshot."
             inputs={[
-              { label: 'ComponentData', description: 'Compose JSON ({identity, snapshot}) fetched from the server.' }
+              { label: 'ComponentData', description: 'Compose JSON ({identity, snapshots[]}) fetched from the server.' }
             ]}
             outputs={[
               { label: 'ID', description: 'Identity ID (GUID)' },
@@ -708,11 +749,11 @@ export default function GHInterfacePage() {
             name="CSC_TransformComponent"
             description="Applies transformations to snapshot insertion frames for positioning and orientation."
             inputs={[
-              { label: 'ComponentData', description: 'Compose JSON string ({identity, snapshot})' },
+              { label: 'ComponentData', description: 'Compose JSON string ({identity, snapshots[]})' },
               { label: 'XForm', description: 'Rhino transform to apply to the snapshot insertion frame' }
             ]}
             outputs={[
-              { label: 'XComponentData', description: 'Transformed compose JSON string ({identity, snapshot})' }
+              { label: 'XComponentData', description: 'Transformed compose JSON string ({identity, snapshots[]})' }
             ]}
             tip="Updates the snapshot's insertion frame with the applied transformation while preserving all other compose data."
             imagePath={resolveStatic('/gh-interface/csc_transformcomponent.jpg')}
@@ -721,12 +762,12 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Code}
             name="CSC_GetComponentData"
-            description="Extracts the csc_component compose data ({identity, snapshot} JSON string) from Rhino geometry objects. Safely retrieves and parses the compose data stored as user strings."
+            description="Extracts the csc_component compose data ({identity, snapshots[]} JSON string) from Rhino geometry objects. Safely retrieves and parses the compose data stored as user strings."
             inputs={[
               { label: 'Geometry', description: 'Geometry objects with the \'csc_component\' compose userdata' }
             ]}
             outputs={[
-              { label: 'ComponentData', description: 'Compose JSON strings ({identity, snapshot}) extracted from geometry userdata' }
+              { label: 'ComponentData', description: 'Compose JSON strings ({identity, snapshots[]}) extracted from geometry userdata' }
             ]}
             tip="Useful for retrieving compose data from geometry that was previously processed by CSC components."
             imagePath={resolveStatic('/gh-interface/csc_getcomponentdata.jpg')}
@@ -735,9 +776,9 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Code}
             name="CSC_ApplyPCAFrame"
-            description="Applies an inverse PCA transformation to align geometry or compose data with the world coordinate system, using the snapshot pca_frame. Takes either compose JSON ({identity, snapshot}) or Rhino geometry and transforms it to align with the world XY plane."
+            description="Applies an inverse PCA transformation to align geometry or compose data with the world coordinate system, using the snapshot pca_frame. Takes either compose JSON ({identity, snapshots[]}) or Rhino geometry and transforms it to align with the world XY plane."
             inputs={[
-              { label: 'Input', description: 'Compose JSON string ({identity, snapshot}) or geometry objects with the \'csc_component\' compose userdata' }
+              { label: 'Input', description: 'Compose JSON string ({identity, snapshots[]}) or geometry objects with the \'csc_component\' compose userdata' }
             ]}
             outputs={[
               { label: 'Output', description: 'Transformed compose JSON (if input was JSON) or transformed geometry with updated compose userdata (if input was geometry)' }
@@ -749,7 +790,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Code}
             name="CSC_CreateDesign"
-            description="Creates a design JSON string from compose JSON ({identity, snapshot}), ready for posting to the Catalog. Pins each placement to a specific snapshot version and stores the design insertion iframe. Does NOT post the design - only generates the JSON string."
+            description="Creates a design JSON string from compose JSON ({identity, snapshots[]}), ready for posting to the Catalog. Pins each placement to a specific snapshot version and stores the design insertion iframe. Does NOT post the design - only generates the JSON string."
             inputs={[
               { label: 'DesignName', description: 'Design name (mandatory)' },
               { label: 'DesignDescription', description: 'Design description (optional)' },
@@ -802,7 +843,7 @@ export default function GHInterfacePage() {
           <ComponentCard
             icon={Settings}
             name="CSC_BakeComponents"
-            description="Bakes compose entries ({identity, snapshot}) into the Rhino document as meshes or primitive geometry."
+            description="Bakes compose entries ({identity, snapshots[]}) into the Rhino document as meshes or primitive geometry."
             inputs={[
               { label: 'Bake', description: 'Toggle to bake components to Rhino' },
               { label: 'ComponentData', description: 'Compose JSON strings from FetchComponents' }
@@ -972,7 +1013,7 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
             name="CSC_CreateArrangement"
             description="Arranges components in an even square grid based on their snapshot bounding boxes. Calculates grid cell size from the largest component dimension."
             inputs={[
-              { label: 'ComponentData', description: 'Compose JSON strings ({identity, snapshot})' },
+              { label: 'ComponentData', description: 'Compose JSON strings ({identity, snapshots[]})' },
               { label: 'Spacing', description: 'Additional spacing between grid cells (default: 100.0)' },
               { label: 'InsertionPoint', description: 'Insertion point (starting corner of grid, default: 0,0,0)' }
             ]}
@@ -1098,9 +1139,9 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
           <ComponentCard
             icon={HelpCircle}
             name="CSC_GetDescriptor"
-            description="Retrieves a specific descriptor from multiple compose inputs ({identity, snapshot}). Accepts compose JSON strings or geometries with the csc_component userdata. Returns descriptor values for the specified key from snapshot.descriptors. Handles single values, lists, and nested lists by mapping them to appropriate Grasshopper data structures with input indices as the first path level."
+            description="Retrieves a specific descriptor from multiple compose inputs ({identity, snapshots[]}). Accepts compose JSON strings or geometries with the csc_component userdata. Returns descriptor values for the specified key from snapshot.descriptors. Handles single values, lists, and nested lists by mapping them to appropriate Grasshopper data structures with input indices as the first path level."
             inputs={[
-              { label: 'Input', description: 'List of compose JSON strings ({identity, snapshot}) OR geometries with the \'csc_component\' compose userdata' },
+              { label: 'Input', description: 'List of compose JSON strings ({identity, snapshots[]}) OR geometries with the \'csc_component\' compose userdata' },
               { label: 'DescriptorKey', description: 'Key string to retrieve from snapshot.descriptors' }
             ]}
             outputs={[
@@ -1149,7 +1190,7 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
                 <li>Authenticate with <strong>CSC_Session</strong></li>
                 <li>Optionally fetch a transmitted tag ID with <strong>CSC_FetchTransmittedID</strong> (after scanning in the web UI)</li>
                 <li>Build the create payload with <strong>CSC_CreateComponentIdentity</strong> (wire the identity UUID from step 2 or CreateUUID)</li>
-                <li>Post to the catalog with <strong>CSC_AddComponentIdentity</strong> — returns compose JSON ({`{identity, snapshot}`})</li>
+                <li>Post to the catalog with <strong>CSC_AddComponentIdentity</strong> — returns compose JSON ({`{identity, snapshots[]}`})</li>
               </ol>
             </div>
           </div>

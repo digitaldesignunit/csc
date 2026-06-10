@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-06-09T18:24:15.734Z
+// Generated on: 2026-06-10T10:14:57.178Z
 // Source: https://api.ddu.uber.space/schema/catalog-compose
 
 import type {
@@ -83,7 +83,7 @@ export interface SnapshotPointCloud {
 
 export interface ComposeIdentityResponse {
   identity: ComponentIdentity;
-  snapshot: ComponentSnapshot;
+  snapshots: ComponentSnapshot[];
 }
 
 /** Canonical read model: `GET /identities/{id}/compose` (same JSON as the API). */

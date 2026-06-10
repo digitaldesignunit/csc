@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { Download, Loader2 } from 'lucide-react'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
+import { primarySnapshot } from '@/generated/catalogExtras'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -31,7 +32,8 @@ const GROUP_ORDER: GeometryDownloadItem['group'][] = [
 ]
 
 export default function ComponentSnapshotGeometryDownload({ catalog }: Props) {
-  const { identity, snapshot } = catalog
+  const { identity } = catalog
+  const snapshot = primarySnapshot(catalog)
   const snapshotId = String(snapshot._id ?? identity.current_snapshot_id ?? '')
 
   const items = useMemo(

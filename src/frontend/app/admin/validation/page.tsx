@@ -49,7 +49,7 @@ function isIdentityValidation(row: PendingValidationSnapshotItem): boolean {
 }
 
 function pendingSnapshotHref(identityId: string, snapshotId: string): string {
-  const params = new URLSearchParams({ snapshot_id: snapshotId })
+  const params = new URLSearchParams({ snapshots: snapshotId })
   return `/components/${encodeURIComponent(identityId)}?${params.toString()}`
 }
 
@@ -186,7 +186,7 @@ export default function ValidationPage() {
   const fetchComposePreview = async (identityId: string, snapshotId: string) => {
     setLoadingPreviews((prev) => new Set(prev).add(snapshotId))
     try {
-      const params = new URLSearchParams({ snapshot_id: snapshotId })
+      const params = new URLSearchParams({ snapshots: snapshotId })
       const response = await fetch(
         `/api/backend/identities/${encodeURIComponent(identityId)}/compose?${params.toString()}`,
         { credentials: 'include', cache: 'no-store' },

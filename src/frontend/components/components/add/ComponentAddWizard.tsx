@@ -304,9 +304,9 @@ export default function ComponentAddWizard() {
 
       const data = (await res.json()) as {
         identity?: { _id?: string }
-        snapshot?: { _id?: string }
+        snapshots?: Array<{ _id?: string }>
       }
-      const snapshotId = data.snapshot?._id
+      const snapshotId = data.snapshots?.[0]?._id
       if (!snapshotId) {
         throw new Error('Server did not return a snapshot id.')
       }

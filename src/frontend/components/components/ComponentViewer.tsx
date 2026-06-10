@@ -6,12 +6,16 @@ import * as THREE from 'three'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import type {
   CatalogComponent,
+  ComponentSnapshot,
   SnapshotExtrusion,
   SnapshotGeometry,
   SnapshotMesh,
 } from '@/generated/CatalogModels'
 import type { SnapshotMeshRouting } from '@/generated/catalogExtras'
-import { snapshotMeshRoutingFromSnapshot } from '@/generated/catalogExtras'
+import {
+  primarySnapshot,
+  snapshotMeshRoutingFromSnapshot,
+} from '@/generated/catalogExtras'
 import { Card } from '@/components/ui/card'
 import { Bounds, OrbitControls, Html } from '@react-three/drei'
 import { rgbToHex } from '@/lib/utils'
@@ -516,7 +520,7 @@ type VisualizeProps = {
   showEdges: boolean
 }
 
-function snapshotExtrusionRgb(snap: CatalogComponent['snapshot']): [number, number, number] {
+function snapshotExtrusionRgb(snap: ComponentSnapshot): [number, number, number] {
   const c = snap.color
   return [
     Array.isArray(c) ? (c[0] as number) : 110,
@@ -526,7 +530,8 @@ function snapshotExtrusionRgb(snap: CatalogComponent['snapshot']): [number, numb
 }
 
 function VisualizeComponent(props: VisualizeProps) {
-  const sg = props.catalog.snapshot.geometry
+  const snapshot = primarySnapshot(props.catalog)
+  const sg = snapshot.geometry
   const ext = snapshotExtrusionsFromGeometry(sg)[0]
   const primitiveDraws = snapshotMeshesToDrawBuffers(snapshotMeshesFromGeometry(sg))
 
@@ -539,7 +544,7 @@ function VisualizeComponent(props: VisualizeProps) {
       <ExtrusionVisualization
         profile={ext!.profile}
         height={ext!.height}
-        colorRgb={snapshotExtrusionRgb(props.catalog.snapshot)}
+        colorRgb={snapshotExtrusionRgb(snapshot)}
       />
     )
   }
@@ -561,7 +566,7 @@ function VisualizeComponent(props: VisualizeProps) {
       <ExtrusionVisualization
         profile={ext?.profile ?? []}
         height={typeof ext?.height === 'number' ? ext!.height : 0}
-        colorRgb={snapshotExtrusionRgb(props.catalog.snapshot)}
+        colorRgb={snapshotExtrusionRgb(snapshot)}
       />
     )
   }
@@ -579,21 +584,22 @@ function VisualizeComponent(props: VisualizeProps) {
 }
 
 /**
- * Catalog 3D viewer: **`GET /identities/{id}/compose`** payload (`identity` + `snapshot`).
+ * Catalog 3D viewer: **`GET /identities/{id}/compose`** payload (`identity` + `snapshots[]`).
  * Reduced/detailed modes load **`GET /snapshots/{snapshot_id}/meshes/...`** PLY only.
  */
 export type ComponentViewerProps = { catalog: CatalogComponent }
 
 export default function ComponentViewer({ catalog }: ComponentViewerProps) {
+  const snapshot = primarySnapshot(catalog)
   const identityId = catalog.identity._id
   const catalogType = catalog.identity.type
 
   const snapshotRouting = useMemo(
-    () => snapshotMeshRoutingFromSnapshot(catalog.snapshot),
-    [catalog.snapshot],
+    () => snapshotMeshRoutingFromSnapshot(snapshot),
+    [snapshot],
   )
 
-  const snapshotGeometry = catalog.snapshot.geometry
+  const snapshotGeometry = snapshot.geometry
   const snapshotMeshes = useMemo(
     () => snapshotMeshesFromGeometry(snapshotGeometry),
     [snapshotGeometry],
@@ -626,12 +632,12 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
   const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
 
   const markerPoints = useMemo(() => {
-    const points = catalog.snapshot.geometry.marker_points
+    const points = snapshot.geometry.marker_points
     if (Array.isArray(points) && points.length > 0) {
       return points.filter((point) => Array.isArray(point) && point.length >= 3)
     }
     return []
-  }, [catalog.snapshot.geometry.marker_points])
+  }, [snapshot.geometry.marker_points])
 
   const hasMarkerPoints = markerPoints.length > 0
 

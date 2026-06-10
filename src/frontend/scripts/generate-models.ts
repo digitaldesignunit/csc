@@ -8,7 +8,7 @@
  *
  * - `/schema/catalog-shared` → `CatalogSharedTypes.ts` (frames, location, design mesh types)
  * - `/schema/design` → `DesignModel`
- * - `/schema/catalog-compose` → `CatalogModels` (v0.5 `GET /identities/{id}/compose` body)
+ * - `/schema/catalog-compose` → `CatalogModels` (compose body with snapshots[])
  * - `/schema/snapshot-summary` → `SnapshotSummaryItem` in `SnapshotModels.ts`
  * - `/schema/pending-validation-snapshot` → `PendingValidationSnapshotItem` in `SnapshotModels.ts`
  */

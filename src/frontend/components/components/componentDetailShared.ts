@@ -1,4 +1,8 @@
-import type { CatalogComponent, ComponentIdentity } from '@/generated/CatalogModels'
+import type {
+  CatalogComponent,
+  ComponentIdentity,
+  ComponentSnapshot,
+} from '@/generated/CatalogModels'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 
 export function conditionLabel(c: number): string {
@@ -51,7 +55,7 @@ export function primaryParentIdentityId(identity: ComponentIdentity): string | u
   return undefined
 }
 
-export function snapshotDisplayName(snapshot: CatalogComponent['snapshot']): string {
+export function snapshotDisplayName(snapshot: ComponentSnapshot): string {
   return typeof snapshot.name === 'string' && snapshot.name.trim().length > 0
     ? snapshot.name
     : 'Unnamed component'
@@ -59,7 +63,7 @@ export function snapshotDisplayName(snapshot: CatalogComponent['snapshot']): str
 
 /** Display name for who added the snapshot (username only; never expose user ids). */
 export function snapshotAddedByDisplay(
-  snapshot: Pick<CatalogComponent['snapshot'], 'added_by_username'>,
+  snapshot: Pick<ComponentSnapshot, 'added_by_username'>,
 ): string | null {
   return isNonEmptyString(snapshot.added_by_username)
     ? snapshot.added_by_username.trim()

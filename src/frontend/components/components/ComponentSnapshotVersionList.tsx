@@ -24,7 +24,7 @@ function versionHref(identityId: string, row: SnapshotSummaryItem): string {
   if (row.is_current) {
     return base
   }
-  const params = new URLSearchParams({ snapshot_id: row._id })
+  const params = new URLSearchParams({ snapshots: row._id })
   return `${base}?${params.toString()}`
 }
 

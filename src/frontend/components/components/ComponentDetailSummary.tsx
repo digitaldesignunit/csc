@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Check, Copy, FileText } from 'lucide-react'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
+import { primarySnapshot } from '@/generated/catalogExtras'
 import { generateGrasshopperPanelXML } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -19,7 +20,8 @@ type ComponentDetailSummaryProps = {
 }
 
 export default function ComponentDetailSummary({ catalog }: ComponentDetailSummaryProps) {
-  const { identity, snapshot } = catalog
+  const { identity } = catalog
+  const snapshot = primarySnapshot(catalog)
   const identityId = identity._id ?? ''
   const componentName = snapshotDisplayName(snapshot)
   const isConsumed = isConsumedShallowRow({
