@@ -3,7 +3,6 @@ import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 import DesignViewer from '@/components/designs/DesignViewer'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getServerSession } from 'next-auth'
 import DesignDetailCard from '@/components/designs/DesignDetailCard'
 import DesignPlacementList from '@/components/designs/DesignPlacementList'
 import { Layers } from 'lucide-react'
@@ -45,10 +44,6 @@ export default async function DesignDetailPage({
 }) {
   const { design_id } = await params
   const design = await fetchDesign(design_id)
-  const session = await getServerSession()
-  
-  const isOwner = session?.user?.id === design.creator
-  const canEdit = isOwner || session?.user?.role === 'admin'
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-full">
@@ -66,7 +61,7 @@ export default async function DesignDetailPage({
         <DesignViewer design={design} />
 
         {/* Design Details - Second section like ComponentDetailCard */}
-        <DesignDetailCard design={design} canEdit={canEdit} />
+        <DesignDetailCard design={design} />
 
         {/* Snapshot placements */}
         <Card>

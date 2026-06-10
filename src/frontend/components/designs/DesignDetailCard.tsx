@@ -1,23 +1,37 @@
 'use client'
 
 import { useState } from 'react'
-import { DesignModel } from '@/generated/DesignModel'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { formatTimestamp, generateGrasshopperPanelXML } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Copy, Check, FileText, Edit, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 
-export default function DesignDetailCard({
-  design,
-  canEdit = false,
-}: {
-  design: DesignModel
-  canEdit?: boolean
-}) {
+import { DesignModel } from '@/generated/DesignModel'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { formatTimestamp, generateGrasshopperPanelXML } from '@/lib/utils'
+
+export default function DesignDetailCard({ design }: { design: DesignModel }) {
+  const router = useRouter()
+  const { data: session } = useSession()
   const [copied, setCopied] = useState(false)
   const [grasshopperCopied, setGrasshopperCopied] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+
+  const currentUserId = session?.user?.id
+  const canEdit =
+    currentUserId === design.creator || session?.user?.role === 'admin'
 
   const handleCopyToClipboard = async () => {
     try {
@@ -43,6 +57,31 @@ export default function DesignDetailCard({
   }
 
   const designId = design._id || ''
+
+  const handleDeleteDesign = async () => {
+    try {
+      setDeleting(true)
+      const response = await fetch(`/api/backend/designs/${encodeURIComponent(designId)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (response.ok) {
+        router.push('/designs')
+      } else {
+        const error = (await response.json().catch(() => null)) as { detail?: string } | null
+        toast.error(error?.detail || 'Failed to delete design. Please try again.')
+      }
+    } catch {
+      toast.error('Failed to delete design. Please try again.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    setDeleteConfirmOpen(false)
+    await handleDeleteDesign()
+  }
 
   return (
     <Card className="w-full overflow-x-auto">
@@ -173,30 +212,53 @@ export default function DesignDetailCard({
             </div>
           </div>
 
-          {/* Right side: Action buttons */}
-          <div className="w-full xl:w-auto xl:flex-shrink-0">
-            <h2 className="mb-3 text-base font-semibold text-foreground border-b border-border pb-2">Actions</h2>
-            
-            <div className="space-y-2">
-              {canEdit && (
-                <>
-                  <Link href={`/designs/${designId}/edit`} className="block">
-                    <Button variant="outline" className="w-full">
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit Design
-                    </Button>
-                  </Link>
-                  
-                  <Button variant="destructive" className="w-full">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Design
+          {canEdit && (
+            <div className="w-full xl:w-auto xl:flex-shrink-0">
+              <h2 className="mb-3 text-base font-semibold text-foreground border-b border-border pb-2">
+                Actions
+              </h2>
+
+              <div className="space-y-2">
+                <Link href={`/designs/${designId}/edit`} className="block">
+                  <Button variant="outline" className="w-full" disabled={deleting}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Design
                   </Button>
-                </>
-              )}
+                </Link>
+
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  disabled={deleting}
+                  onClick={() => setDeleteConfirmOpen(true)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Design
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </CardContent>
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete design?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the design assembly. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleting}>
+              Confirm delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

@@ -30,7 +30,7 @@ export default function GHInterfacePage() {
   useEffect(() => {
     const fetchVersion = async () => {
       try {
-        const response = await fetch('/api/backend/downloads/gh-interface/version')
+        const response = await fetch('/api/backend/ghinterface/version')
         if (response.ok) {
           const data = await response.json()
           setReleaseVersion(data.version || '')
@@ -46,7 +46,7 @@ export default function GHInterfacePage() {
   const handleDownload = async () => {
     setIsDownloading(true)
     try {
-      const response = await fetch('/api/backend/downloads/gh-interface')
+      const response = await fetch('/api/backend/ghinterface/download')
       if (response.ok) {
         // Get filename from Content-Disposition header
         const contentDisposition = response.headers.get('content-disposition')
@@ -98,7 +98,7 @@ export default function GHInterfacePage() {
       setIsCopying(true)
       try {
         const xmlName = `DDU_${name}`
-        const res = await fetch(`/api/backend/ghupdates/xml/${encodeURIComponent(xmlName)}`)
+        const res = await fetch(`/api/backend/ghinterface/xml/${encodeURIComponent(xmlName)}`)
         if (!res.ok) {
           console.error('Failed to fetch XML:', res.status)
           toast.error('XML not available for this component.')
@@ -332,7 +332,7 @@ export default function GHInterfacePage() {
                       onClick={async () => {
                         try {
                           const xmlName = 'DDU_CSC_Update'
-                          const res = await fetch(`/api/backend/ghupdates/xml/${encodeURIComponent(xmlName)}`)
+                          const res = await fetch(`/api/backend/ghinterface/xml/${encodeURIComponent(xmlName)}`)
                           if (!res.ok) {
                             console.error('Failed to fetch XML:', res.status)
                             return
