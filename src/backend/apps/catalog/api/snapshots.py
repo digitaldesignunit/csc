@@ -76,7 +76,8 @@ from apps.catalog.geometry_mesh_export import (
     normalize_mesh_format,
 )
 
-from .auth import get_current_active_user, require_admin
+from .auth import get_current_active_user, get_optional_current_user, require_admin
+from .public_access import ensure_snapshot_read_access
 from .catalog_common import (
     compute_snapshot_etag,
     get_identities_col,
@@ -95,6 +96,8 @@ from .snapshot_images import (
 )
 
 router = APIRouter()
+
+OptionalUser = Annotated[Optional[User], Depends(get_optional_current_user)]
 
 _ALLOWED_PHOTO_TYPES = frozenset({
     'image/jpeg',
@@ -427,11 +430,15 @@ async def delete_pending_snapshot(
 )
 async def get_snapshot_by_id(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: OptionalUser,
     snapshot_id: str,
 ):
     """Return a single snapshot document. ETag == stored `etag` field."""
-    doc = await _load_snapshot(request, snapshot_id)
+    doc = await ensure_snapshot_read_access(
+        request,
+        snapshot_id,
+        current_user,
+    )
 
     etag = doc.get('etag')
     if not etag:
@@ -524,7 +531,7 @@ def _http_mesh_format(format: str) -> str:
 )
 async def get_snapshot_mesh_primitive(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: OptionalUser,
     snapshot_id: str,
     primitive_index: int,
     format: str = Query('ply', description='ply (default) or obj'),
@@ -539,7 +546,11 @@ async def get_snapshot_mesh_primitive(
             status_code=400,
             detail='primitive_index must be >= 0',
         )
-    doc = await _load_snapshot(request, snapshot_id)
+    doc = await ensure_snapshot_read_access(
+        request,
+        snapshot_id,
+        current_user,
+    )
     try:
         mesh = get_inline_mesh_primitive(doc, primitive_index)
         body = export_inline_mesh(mesh, fmt)  # type: ignore[arg-type]
@@ -565,7 +576,7 @@ async def get_snapshot_mesh_primitive(
 )
 async def get_snapshot_mesh(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: OptionalUser,
     snapshot_id: str,
     primitive_index: int,
     resolution: str,
@@ -594,7 +605,11 @@ async def get_snapshot_mesh(
             )
         )
 
-    doc = await _load_snapshot(request, snapshot_id)
+    doc = await ensure_snapshot_read_access(
+        request,
+        snapshot_id,
+        current_user,
+    )
 
     resolutions_map: dict = doc.get('mesh_ply_resolutions') or {}
     key = str(primitive_index)
@@ -918,7 +933,7 @@ async def delete_snapshot_mesh_ply(
 )
 async def get_snapshot_extrusion(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: OptionalUser,
     snapshot_id: str,
     index: int,
     format: str = Query('ply', description='ply (default) or obj'),
@@ -930,7 +945,11 @@ async def get_snapshot_extrusion(
     fmt = _http_mesh_format(format)
     if index < 0:
         raise HTTPException(status_code=400, detail='index must be >= 0')
-    doc = await _load_snapshot(request, snapshot_id)
+    doc = await ensure_snapshot_read_access(
+        request,
+        snapshot_id,
+        current_user,
+    )
     try:
         ext = get_inline_extrusion_primitive(doc, index)
         body = export_extrusion(ext, fmt)  # type: ignore[arg-type]
@@ -962,7 +981,7 @@ async def get_snapshot_extrusion(
 )
 async def get_snapshot_point_cloud_ply(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: OptionalUser,
     snapshot_id: str,
     index: int,
 ):
@@ -973,7 +992,11 @@ async def get_snapshot_point_cloud_ply(
     if index < 0:
         raise HTTPException(status_code=400, detail='index must be >= 0')
 
-    doc = await _load_snapshot(request, snapshot_id)
+    doc = await ensure_snapshot_read_access(
+        request,
+        snapshot_id,
+        current_user,
+    )
     path = _point_cloud_path(request, snapshot_id, index)
     filename = f'{snapshot_id}_point_cloud_{index}.ply'
 
@@ -1140,11 +1163,11 @@ async def delete_snapshot_point_cloud_ply(
 )
 async def get_snapshot_preview(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: OptionalUser,
     snapshot_id: str,
 ):
     """Serve snapshot_previews/{snapshot_id}.webp only."""
-    await _load_snapshot(request, snapshot_id)
+    await ensure_snapshot_read_access(request, snapshot_id, current_user)
     path = _resolve_preview_path(request, snapshot_id)
     return FileResponse(
         ensure_file(path),
@@ -1159,11 +1182,11 @@ async def get_snapshot_preview(
 )
 async def list_snapshot_photos(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: OptionalUser,
     snapshot_id: str,
 ):
     """Return sorted slot indices and count from disk (one directory read)."""
-    await _load_snapshot(request, snapshot_id)
+    await ensure_snapshot_read_access(request, snapshot_id, current_user)
     indices = _list_photo_indices(request, snapshot_id)
     return JSONResponse(
         status_code=200,
@@ -1177,11 +1200,11 @@ async def list_snapshot_photos(
 )
 async def get_snapshot_photo(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: OptionalUser,
     snapshot_id: str,
     index: int,
 ):
-    await _load_snapshot(request, snapshot_id)
+    await ensure_snapshot_read_access(request, snapshot_id, current_user)
     path, media_type = _resolve_photo_path(request, snapshot_id, index)
     filename = os.path.basename(path)
     return FileResponse(

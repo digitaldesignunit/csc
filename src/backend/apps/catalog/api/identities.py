@@ -71,7 +71,12 @@ from apps.catalog.models import (
     UpdateComponentSnapshotModel,
     User,
 )
-from .auth import get_current_active_user, require_admin
+from .auth import get_current_active_user, get_optional_current_user, require_admin
+from .public_access import (
+    ensure_identity_read_access,
+    identity_allows_anonymous_read,
+    public_cache_control,
+)
 from .catalog_common import (
     allocate_catalog_number,
     compute_snapshot_etag,
@@ -342,6 +347,7 @@ def _compose_json_response(
     *,
     etag: Optional[str] = None,
     status_code: int = status.HTTP_200_OK,
+    anonymous_public: bool = False,
 ) -> JSONResponse:
     try:
         identity_model = ComponentIdentity.model_validate(identity_doc)
@@ -369,7 +375,11 @@ def _compose_json_response(
         content=response_body,
         headers={
             'ETag': resolved_etag,
-            'Cache-Control': 'private, max-age=3600',
+            'Cache-Control': (
+                public_cache_control()
+                if anonymous_public
+                else 'private, max-age=3600'
+            ),
         },
     )
 
@@ -1089,40 +1099,36 @@ async def create_snapshot(
 )
 async def list_identity_snapshots(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
     identity_id: str,
 ):
     """Return all snapshots for one identity, ordered by version ascending."""
     validate_uuid(identity_id, label='identity id')
 
-    identities = await get_identities_col(request)
-    snapshots = await get_snapshots_col(request)
-
-    identity_doc = await identities.find_one(
-        {'_id': identity_id},
-        {'_id': 1, 'current_snapshot_id': 1},
+    identity_doc = await ensure_identity_read_access(
+        request,
+        identity_id,
+        current_user,
+        projection={'_id': 1, 'current_snapshot_id': 1, 'is_public': 1},
     )
-    if identity_doc is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Identity {identity_id} not found',
-        )
 
+    snapshots = await get_snapshots_col(request)
     current_snapshot_id = identity_doc.get('current_snapshot_id')
+    projection = {
+        '_id': 1,
+        'identity_id': 1,
+        'version': 1,
+        'validated': 1,
+        'virtual': 1,
+        'name': 1,
+        'created': 1,
+        'lastmodified': 1,
+    }
 
     try:
         cursor = snapshots.find(
             {'identity_id': identity_id},
-            {
-                '_id': 1,
-                'identity_id': 1,
-                'version': 1,
-                'validated': 1,
-                'virtual': 1,
-                'name': 1,
-                'created': 1,
-                'lastmodified': 1,
-            },
+            projection,
         ).sort('version', 1)
         docs = await cursor.to_list(length=None)
     except PyMongoError as exc:
@@ -1232,7 +1238,7 @@ async def patch_identity(
 )
 async def get_identity(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
     identity_id: str,
     expand: ExpandMode = Query(
         'shallow',
@@ -1243,6 +1249,8 @@ async def get_identity(
     ),
 ):
     validate_uuid(identity_id, label='identity id')
+
+    await ensure_identity_read_access(request, identity_id, current_user)
 
     if expand == 'shallow':
         row = await shallow_row_for_identity(request, identity_id)
@@ -1256,6 +1264,10 @@ async def get_identity(
             detail=f'Identity {identity_id} not found',
         )
 
+    anonymous_public = (
+        current_user is None and identity_allows_anonymous_read(identity_doc)
+    )
+
     if expand == 'none':
         try:
             model = ComponentIdentity.model_validate(identity_doc)
@@ -1267,6 +1279,13 @@ async def get_identity(
         return JSONResponse(
             status_code=200,
             content=model.model_dump(by_alias=True),
+            headers={
+                'Cache-Control': (
+                    public_cache_control()
+                    if anonymous_public
+                    else 'private, max-age=3600'
+                ),
+            },
         )
 
     snapshots = await get_snapshots_col(request)
@@ -1285,7 +1304,11 @@ async def get_identity(
     await refresh_snapshot_photo_count(
         request, str(snapshot_doc['_id']), snapshot_doc
     )
-    return _compose_json_response(identity_doc, [snapshot_doc])
+    return _compose_json_response(
+        identity_doc,
+        [snapshot_doc],
+        anonymous_public=anonymous_public,
+    )
 
 
 @router.get(
@@ -1296,7 +1319,7 @@ async def get_identity(
 )
 async def compose_identity(
     request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
     identity_id: str,
     snapshots: Optional[str] = Query(
         default=None,
@@ -1316,17 +1339,19 @@ async def compose_identity(
     """
     validate_uuid(identity_id, label='identity id')
 
-    mode, snapshot_ids = _parse_snapshots_query(snapshots)
-
     identities = await get_identities_col(request)
     snapshots_col = await get_snapshots_col(request)
 
-    identity_doc = await identities.find_one({'_id': identity_id})
-    if identity_doc is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Identity {identity_id} not found',
-        )
+    identity_doc = await ensure_identity_read_access(
+        request,
+        identity_id,
+        current_user,
+    )
+    anonymous_public = (
+        current_user is None and identity_allows_anonymous_read(identity_doc)
+    )
+
+    mode, snapshot_ids = _parse_snapshots_query(snapshots)
 
     snapshot_docs = await _resolve_compose_snapshot_docs(
         request,
@@ -1346,6 +1371,7 @@ async def compose_identity(
         identity_doc,
         snapshot_docs,
         etag=etag,
+        anonymous_public=anonymous_public,
     )
 
 

@@ -573,6 +573,13 @@ class ComponentIdentity(BaseModel):
             "a discrete object (split, demolished, returned). `None` = active."
         )
     )
+    is_public: bool = Field(
+        False,
+        description=(
+            "When true, anonymous users may view all snapshots on "
+            "the public component detail page (viewer + read-only metadata)."
+        ),
+    )
     current_snapshot_id: str = Field(
         description=(
             "UUID of the snapshot in `component_snapshots` that represents "
@@ -932,6 +939,13 @@ class UpdateComponentIdentityModel(BaseModel):
         default=None,
         max_length=40,
         description='ISO timestamp when consumed; null clears for active',
+    )
+    is_public: Optional[bool] = Field(
+        default=None,
+        description=(
+            'When true, allow anonymous read of all snapshots on '
+            'the public component detail page'
+        ),
     )
 
     @field_validator('componenttype')

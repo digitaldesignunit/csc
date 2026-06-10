@@ -3,7 +3,7 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from datetime import datetime, timedelta, timezone
 import re
-from typing import Annotated
+from typing import Annotated, Optional
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -29,6 +29,10 @@ router = APIRouter()
 
 # OAuth2 uses this tokenUrl - keep in sync with the route below
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/auth/token')
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl='/auth/token',
+    auto_error=False,
+)
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 # Only allow @*.tu-darmstadt.de emails (at registration; optional at login)
@@ -85,6 +89,50 @@ def create_access_token(
 
 # AUTHENTICATION DEPENDENCIES -------------------------------------------------
 
+async def lookup_user_from_token(
+    request: Request,
+    token: str,
+) -> Optional[UserInDB]:
+    try:
+        payload = jwt.decode(
+            token,
+            request.app.state.jwt_secret,
+            algorithms=[request.app.state.jwt_algorithm],
+            options={'verify_aud': False},
+        )
+    except JWTError as e:
+        print(f'{ts()} [AUTH] JWT decode error:', str(e))
+        return None
+
+    sub = payload.get('sub')
+    uname = payload.get('username')
+    email = payload.get('email')
+
+    if not sub and not uname and not email:
+        return None
+
+    users = request.app.mongodb_users
+    doc = None
+
+    if sub:
+        doc = await users.find_one({'_id': sub})
+
+    if not doc and uname:
+        doc = await users.find_one({'username': uname})
+
+    if not doc and email:
+        doc = await users.find_one({'email': email})
+
+    if not doc or doc.get('disabled'):
+        return None
+
+    try:
+        return UserInDB(**doc)
+    except Exception as e:
+        print(f'{ts()} [AUTH] Failed to parse user doc into UserInDB:', e, doc)
+        return None
+
+
 async def get_current_user(
     request: Request,
     token: Annotated[str, Depends(oauth2_scheme)],
@@ -95,69 +143,19 @@ async def get_current_user(
         headers={'WWW-Authenticate': 'Bearer'},
     )
 
-    # 1) Decode the JWT.
-    # Algorithm is always taken from server config,
-    # never from the token header.
-    try:
-        payload = jwt.decode(
-            token,
-            request.app.state.jwt_secret,
-            algorithms=[request.app.state.jwt_algorithm],
-            options={'verify_aud': False},
-        )
-    except JWTError as e:
-        print(f'{ts()} [AUTH] JWT decode error:', str(e))
+    user = await lookup_user_from_token(request, token)
+    if user is None:
         raise cred_exc
+    return user
 
-    # 2) Extract identity claims
-    sub = payload.get('sub')
-    uname = payload.get('username')
-    email = payload.get('email')
 
-    if not sub and not uname and not email:
-        print(f'{ts()} [AUTH] No usable identity in token payload:', payload)
-        raise cred_exc
-
-    # 3) Look up the user: by _id (GUID), then username, then email
-    users = request.app.mongodb_users
-    doc = None
-
-    if sub:
-        doc = await users.find_one({'_id': sub})
-        if doc:
-            # print(f'{ts()} [AUTH] Matched user by _id (sub):', sub)
-            pass
-
-    if not doc and uname:
-        doc = await users.find_one({'username': uname})
-        if doc:
-            # print(f'{ts()} [AUTH] Matched user by username:', uname)
-            pass
-
-    if not doc and email:
-        doc = await users.find_one({'email': email})
-        if doc:
-            # print(f'{ts()} [AUTH] Matched user by email:', email)
-            pass
-
-    if not doc:
-        print(f'{ts()} [AUTH] No user found for sub/username/email:',
-              sub,
-              uname,
-              email)
-        raise cred_exc
-
-    if doc.get('disabled'):
-        print(f'{ts()} [AUTH] User is disabled:',
-              doc.get('_id') or doc.get('username') or doc.get('email'))
-        raise cred_exc
-
-    # 4) Return your Pydantic user model
-    try:
-        return UserInDB(**doc)
-    except Exception as e:
-        print(f'{ts()} [AUTH] Failed to parse user doc into UserInDB:', e, doc)
-        raise cred_exc
+async def get_optional_current_user(
+    request: Request,
+    token: Annotated[Optional[str], Depends(oauth2_scheme_optional)],
+) -> Optional[UserInDB]:
+    if not token:
+        return None
+    return await lookup_user_from_token(request, token)
 
 
 async def get_current_active_user(
