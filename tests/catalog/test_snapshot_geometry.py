@@ -100,6 +100,19 @@ def test_geometry_rejects_reinforcements_only():
         )
 
 
+def test_geometry_accepts_helper_style_reinforcement_payload():
+    """Shape produced by CreateReinforcement + CreateComponent* centering."""
+    geometry = SnapshotGeometry(
+        **_minimal_extrusion_geometry(),
+        reinforcements=[{
+            'spec': 'B500B',
+            'diameter': 12.0,
+            'points': [[0.0, 0.0, 0.0], [2400.0, 0.0, 0.0]],
+        }],
+    )
+    assert geometry.reinforcements[0].spec == 'B500B'
+
+
 def test_geometry_accepts_extrusion_with_multiple_reinforcements():
     geometry = SnapshotGeometry(
         **_minimal_extrusion_geometry(),

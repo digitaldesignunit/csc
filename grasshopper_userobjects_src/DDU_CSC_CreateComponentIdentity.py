@@ -26,7 +26,7 @@ import Grasshopper  # NOQA
 import Rhino  # NOQA
 import scriptcontext as sc  # NOQA
 
-# One PCA sample per this many mm² of triangle area (3D mesh path).
+# One PCA sample per this many mm of triangle area (3D mesh path).
 REFERENCE_FACE_AREA_MM2 = 100.0
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
@@ -45,7 +45,7 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -150,6 +150,11 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
         self.InputParams[20].Description = (
             'Count of identical physical items (integer >= 1, default 1)'
         )
+        if len(self.InputParams) > 21:
+            self.InputParams[21].Description = (
+                'Optional reinforcement JSON strings from CreateReinforcement '
+                '(one or many; merged into geometry.reinforcements)'
+            )
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
@@ -277,6 +282,119 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
         except Exception as e:
             self._addError(f'Validation error: {str(e)}')
             return False
+
+    def normalize_reinforcement_json_input(self, reinforcements_input):
+        """Flatten optional reinforcement JSON input to a list of strings."""
+        entries = []
+        if reinforcements_input is None:
+            return entries
+
+        if isinstance(reinforcements_input, str):
+            raw = reinforcements_input.strip()
+            if raw:
+                entries.append(raw)
+            return entries
+
+        if isinstance(reinforcements_input, Grasshopper.Kernel.Data.GH_Structure):
+            for obj in reinforcements_input.AllData(True):
+                if obj is None:
+                    continue
+                raw = str(obj).strip()
+                if raw:
+                    entries.append(raw)
+            return entries
+
+        try:
+            for item in reinforcements_input:
+                if item is None:
+                    continue
+                raw = str(item).strip()
+                if raw:
+                    entries.append(raw)
+        except TypeError:
+            raw = str(reinforcements_input).strip()
+            if raw:
+                entries.append(raw)
+        return entries
+
+    def build_centered_reinforcements(
+            self,
+            reinforcements_input,
+            translation_vector):
+        """Parse reinforcement JSON strings and apply centering translation."""
+        json_entries = self.normalize_reinforcement_json_input(
+            reinforcements_input)
+        if not json_entries:
+            return []
+
+        tx = float(translation_vector[0])
+        ty = float(translation_vector[1])
+        tz = float(translation_vector[2])
+        centered = []
+
+        for idx, raw in enumerate(json_entries):
+            try:
+                data = json.loads(raw)
+            except (TypeError, ValueError) as exc:
+                self._addWarning(
+                    f'Reinforcement {idx}: invalid JSON ({exc})'
+                )
+                continue
+            if not isinstance(data, dict):
+                self._addWarning(
+                    f'Reinforcement {idx}: expected JSON object'
+                )
+                continue
+
+            spec = str(data.get('spec', '')).strip()
+            diameter = data.get('diameter')
+            points = data.get('points')
+            if not spec:
+                self._addWarning(f'Reinforcement {idx}: spec is required')
+                continue
+            try:
+                diameter = float(diameter)
+            except (TypeError, ValueError):
+                self._addWarning(
+                    f'Reinforcement {idx}: diameter must be a number'
+                )
+                continue
+            if diameter <= 0:
+                self._addWarning(
+                    f'Reinforcement {idx}: diameter must be > 0'
+                )
+                continue
+            if not isinstance(points, list) or len(points) < 2:
+                self._addWarning(
+                    f'Reinforcement {idx}: at least 2 points required'
+                )
+                continue
+
+            centered_points = []
+            valid = True
+            for pt in points:
+                if (not isinstance(pt, (list, tuple))
+                        or len(pt) != 3):
+                    self._addWarning(
+                        f'Reinforcement {idx}: invalid point {pt}'
+                    )
+                    valid = False
+                    break
+                centered_points.append([
+                    float(pt[0]) + tx,
+                    float(pt[1]) + ty,
+                    float(pt[2]) + tz,
+                ])
+            if not valid:
+                continue
+
+            centered.append({
+                'spec': spec,
+                'diameter': diameter,
+                'points': centered_points,
+            })
+
+        return centered
 
     def build_create_payload(
             self,
@@ -1059,7 +1177,8 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
             SalvagedAt,
             ParentIdentity,
             Quantity,
-            Notes):
+            Notes,
+            Reinforcements: System.Collections.Generic.List[object]):
 
         # MESH REDUCTION SETTINGS
         # If mesh has tc above this but below reduced threshold,
@@ -1450,6 +1569,13 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
                             primitive_mesh, default_rgb)
                     )
                 payload['geometry'] = {'meshes': meshes_data}
+
+            centered_reinforcements = self.build_centered_reinforcements(
+                Reinforcements,
+                translation_vector,
+            )
+            if centered_reinforcements:
+                payload['geometry']['reinforcements'] = centered_reinforcements
 
             if mesh_primitives:
                 self.write_staging_manifest(IdentityID, mesh_primitives)

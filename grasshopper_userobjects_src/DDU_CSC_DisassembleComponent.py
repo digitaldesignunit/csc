@@ -29,7 +29,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260610.1
     """
 
     def __init__(self):
@@ -121,6 +121,11 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         self.OutputParams[17+i].Description = (
             'Parent identity IDs (GUIDs) this identity was derived from'
         )
+        if len(self.OutputParams) > 18 + i:
+            self.OutputParams[18+i].Description = (
+                'Reinforcement JSON strings ({spec, diameter, points}) in '
+                'iframe space; one per bar, same format as CreateReinforcement'
+            )
 
     def ComponentExtrusions(
             self,
@@ -223,6 +228,77 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             clouds.append(cloud)
         return clouds
 
+    def ComponentReinforcementJson(
+            self,
+            geometry: dict,
+            identity_id: str,
+            xform: Rhino.Geometry.Transform) -> list[str]:
+        """Parse geometry.reinforcements into CreateReinforcement JSON strings."""
+        json_strings = []
+        for idx, bar in enumerate(geometry.get('reinforcements', []) or []):
+            if not isinstance(bar, dict):
+                self._addWarning(
+                    f'Reinforcement {idx} in identity {identity_id}: '
+                    'expected object'
+                )
+                continue
+
+            spec = str(bar.get('spec', '')).strip()
+            if not spec:
+                self._addWarning(
+                    f'Reinforcement {idx} in identity {identity_id}: '
+                    'missing spec'
+                )
+                continue
+
+            try:
+                diameter = float(bar.get('diameter', 0))
+            except (TypeError, ValueError):
+                self._addWarning(
+                    f'Reinforcement {idx} in identity {identity_id}: '
+                    'invalid diameter'
+                )
+                continue
+            if diameter <= 0:
+                self._addWarning(
+                    f'Reinforcement {idx} in identity {identity_id}: '
+                    'diameter must be > 0'
+                )
+                continue
+
+            points = bar.get('points') or []
+            if not isinstance(points, list) or len(points) < 2:
+                self._addWarning(
+                    f'Reinforcement {idx} in identity {identity_id}: '
+                    'needs at least 2 points'
+                )
+                continue
+
+            iframe_points = []
+            valid = True
+            for pt in points:
+                if (not isinstance(pt, (list, tuple))
+                        or len(pt) != 3):
+                    self._addWarning(
+                        f'Reinforcement {idx} in identity {identity_id}: '
+                        f'invalid point {pt}'
+                    )
+                    valid = False
+                    break
+                point = Rhino.Geometry.Point3d(
+                    float(pt[0]), float(pt[1]), float(pt[2]))
+                point.Transform(xform)
+                iframe_points.append([point.X, point.Y, point.Z])
+            if not valid or len(iframe_points) < 2:
+                continue
+
+            json_strings.append(json.dumps({
+                'spec': spec,
+                'diameter': diameter,
+                'points': iframe_points,
+            }))
+        return json_strings
+
     def ComponentColor(self, snapshot: dict) -> System.Drawing.Color:
         color = snapshot.get('color') or [110, 110, 110]
         return System.Drawing.Color.FromArgb(255, *color)
@@ -313,6 +389,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         SalvageSource = Grasshopper.DataTree[System.Object]()
         SalvagedAt = Grasshopper.DataTree[System.Object]()
         ParentComponent = Grasshopper.DataTree[System.Object]()
+        ReinforcementJson = Grasshopper.DataTree[System.Object]()
         __Results = (
             ID,
             Name,
@@ -331,7 +408,8 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             ManufacturedPrecision,
             SalvageSource,
             SalvagedAt,
-            ParentComponent)
+            ParentComponent,
+            ReinforcementJson)
         try:
             # Validate input
             if not ComponentData or ComponentData.DataCount == 0:
@@ -441,7 +519,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                                     cloud.SetUserString('csc_component', comp)
                                     # add to datatree
                                     PrimitiveGeometry.Add(cloud, ghp)
-                            elif key == 'marker_points':
+                            elif key in ('marker_points', 'reinforcements'):
                                 # handled separately below
                                 continue
                             else:
@@ -488,6 +566,10 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                             marker_points_list = []
                         if marker_points_list:
                             MarkerPoints.AddRange(marker_points_list, ghp)
+
+                        for bar_json in self.ComponentReinforcementJson(
+                                geometry, identity_id, xform):
+                            ReinforcementJson.Add(bar_json, ghp)
 
                         # process attributes (identity-level)
                         attributes = identity.get('attributes', {}) or {}
