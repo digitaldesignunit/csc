@@ -76,6 +76,14 @@ class ChangePasswordPayload(BaseModel):
     new_password: str = Field(min_length=8, max_length=72)
 
 
+class AdminUserUpdate(BaseModel):
+    """Fields an admin may change on another user account."""
+
+    role: Optional[Role] = None
+    disabled: Optional[bool] = None
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+
+
 class UserInDB(User):
     hashed_password: str
 
