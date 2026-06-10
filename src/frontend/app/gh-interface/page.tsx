@@ -646,12 +646,13 @@ export default function GHInterfacePage() {
               { label: 'SalvagedAt', description: 'Optional ISO-8601 UTC salvage timestamp' },
               { label: 'ParentIdentity', description: 'Optional parent identity UUID (lineage after split/merge)' },
               { label: 'Notes', description: 'Optional free-text notes for the initial snapshot (max 5000)' },
-              { label: 'Quantity', description: 'Count of identical physical items (integer ≥ 1, default 1)' }
+              { label: 'Quantity', description: 'Count of identical physical items (integer ≥ 1, default 1)' },
+              { label: 'Reinforcements', description: 'Optional reinforcement JSON strings from CreateReinforcement (one or many; merged into geometry.reinforcements)' }
             ]}
             outputs={[
               { label: 'ComponentData', description: 'CreateComponentRequest JSON for POST /identities (inline geometry + staged PLY manifest)' }
             ]}
-            tip="Pair with CSC_AddComponentIdentity to post. Use CSC_FetchTransmittedID to obtain the identity UUID after a web tag scan."
+            tip="Pair with CSC_AddComponentIdentity to post. Wire CreateReinforcement → Reinforcements for inline rebar centerlines. Use CSC_FetchTransmittedID to obtain the identity UUID after a web tag scan."
             imagePath={resolveStatic('/gh-interface/csc_createcomponent.jpg')}
           />
 
@@ -689,12 +690,13 @@ export default function GHInterfacePage() {
               { label: 'Condition', description: 'Optional condition grade (0–3). Leave unconnected for unknown.' },
               { label: 'Notes', description: 'Optional free-text notes for the new snapshot (max 5000)' },
               { label: 'Quantity', description: 'Count of identical physical items (integer ≥ 1, default 1)' },
-              { label: 'Virtual', description: 'Virtual snapshot flag (True = proposal/hypothetical state, not yet validated)' }
+              { label: 'Virtual', description: 'Virtual snapshot flag (True = proposal/hypothetical state, not yet validated)' },
+              { label: 'Reinforcements', description: 'Optional reinforcement JSON strings from CreateReinforcement (one or many; merged into geometry.reinforcements)' }
             ]}
             outputs={[
               { label: 'SnapshotData', description: 'CreateSnapshotRequest JSON (includes identity_id) for POST /identities/{id}/snapshots' }
             ]}
-            tip="Use when an identity already exists and you need a new version — e.g. after re-scanning, condition change, or geometry update."
+            tip="Use when an identity already exists and you need a new version — e.g. after re-scanning, condition change, or geometry update. Wire CreateReinforcement → Reinforcements for inline rebar centerlines."
             imagePath={resolveStatic('/gh-interface/csc_createcomponent.jpg')}
           />
 
@@ -738,9 +740,10 @@ export default function GHInterfacePage() {
               { label: 'ManufacturedPrecision', description: 'Identity precision qualifier for ManufacturedAt (exact, month, year, unknown)' },
               { label: 'SalvageSource', description: 'Identity salvage source (e.g. building name, site)' },
               { label: 'SalvagedAt', description: 'Identity salvage date as ISO-8601 UTC timestamp' },
-              { label: 'ParentComponent', description: 'Parent identity IDs (GUIDs) from identity.parent_identities' }
+              { label: 'ParentComponent', description: 'Parent identity IDs (GUIDs) from identity.parent_identities' },
+              { label: 'ReinforcementJson', description: 'Reinforcement JSON strings ({spec, diameter, points}) in iframe space; one per bar, same format as CreateReinforcement' }
             ]}
-            tip="Parses compose JSON into individual Grasshopper-compatible outputs for further processing."
+            tip="Parses compose JSON into individual Grasshopper-compatible outputs for further processing. ReinforcementJson can be fed back into CreateComponentIdentity / CreateComponentSnapshot or reconstructed in Grasshopper."
             imagePath={resolveStatic('/gh-interface/csc_disassemblecomponent.jpg')}
           />
 
@@ -851,7 +854,7 @@ export default function GHInterfacePage() {
             outputs={[
               { label: 'None', description: 'This component has no outputs' }
             ]}
-            tip="Uses cached PLY meshes when available, falls back to snapshot extrusions/meshes. Stores full compose JSON on csc_component user text."
+            tip="Uses cached PLY meshes when available, falls back to snapshot extrusions/meshes. Bakes reinforcement bars as pipe Breps on CSC_COMPONENTS::{identity_id}::Reinforcement (on by default). Stores full compose JSON on csc_component user text."
             imagePath={resolveStatic('/gh-interface/csc_bakecomponents.jpg')}
           />
 
@@ -904,6 +907,21 @@ export default function GHInterfacePage() {
       icon: Box,
       content: (
         <div className="space-y-6 pt-2">
+          <ComponentCard
+            icon={Box}
+            name="CSC_CreateReinforcement"
+            description="Builds one inline reinforcement bar JSON object ({spec, diameter, points}) for CreateComponentIdentity / CreateComponentSnapshot."
+            inputs={[
+              { label: 'Polyline', description: 'Open centerline as Polyline or PolylineCurve (no curve conversion)' },
+              { label: 'Spec', description: 'Reinforcement steel specification (e.g. B500B)' },
+              { label: 'Diameter', description: 'Bar diameter in millimeters' }
+            ]}
+            outputs={[
+              { label: 'ReinforcementJson', description: 'SnapshotReinforcement JSON string for geometry.reinforcements[]' }
+            ]}
+            tip="Merge one or many JSON strings into the Reinforcements input on CreateComponentIdentity or CreateComponentSnapshot. DisassembleComponent outputs the same JSON format in iframe space."
+          />
+
           <ComponentCard
             icon={Box}
             name="CSC_ComputePCAOrientation"

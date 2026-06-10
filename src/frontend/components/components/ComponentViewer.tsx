@@ -10,6 +10,7 @@ import type {
   SnapshotExtrusion,
   SnapshotGeometry,
   SnapshotMesh,
+  SnapshotReinforcement,
 } from '@/generated/CatalogModels'
 import type { SnapshotMeshRouting } from '@/generated/catalogExtras'
 import {
@@ -19,6 +20,12 @@ import {
 import { Card } from '@/components/ui/card'
 import { Bounds, OrbitControls, Html } from '@react-three/drei'
 import { rgbToHex } from '@/lib/utils'
+import {
+  REINFORCEMENT_RADIAL_SEGMENTS,
+  buildReinforcementBarMeshes,
+  reinforcementSteelMaterial,
+  snapshotReinforcementsFromGeometry,
+} from '@/lib/reinforcementGeometry'
 import ComponentViewerSkeleton from './ComponentViewerSkeleton'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ViewerMenu, MenuSection, SelectControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
@@ -401,6 +408,74 @@ const MarkerPoints = React.memo(({
 })
 MarkerPoints.displayName = 'MarkerPoints'
 
+const ReinforcementBar = React.memo(({
+  bar,
+}: {
+  bar: SnapshotReinforcement
+}) => {
+  const { segments, cornerJoints } = useMemo(
+    () => buildReinforcementBarMeshes(bar.points),
+    [bar.points, bar.diameter],
+  )
+  const radius = bar.diameter / 2
+
+  if (segments.length === 0) return null
+
+  return (
+    <group>
+      {segments.map((segment, index) => (
+        <mesh
+          key={`segment-${index}`}
+          position={segment.position}
+          quaternion={segment.quaternion}
+          material={reinforcementSteelMaterial}
+        >
+          <cylinderGeometry
+            args={[
+              radius,
+              radius,
+              segment.height,
+              REINFORCEMENT_RADIAL_SEGMENTS,
+            ]}
+          />
+        </mesh>
+      ))}
+      {cornerJoints.map((joint, index) => (
+        <mesh
+          key={`joint-${index}`}
+          position={joint}
+          material={reinforcementSteelMaterial}
+        >
+          <sphereGeometry args={[radius, REINFORCEMENT_RADIAL_SEGMENTS, 12]} />
+        </mesh>
+      ))}
+    </group>
+  )
+})
+ReinforcementBar.displayName = 'ReinforcementBar'
+
+const ReinforcementBars = React.memo(({
+  reinforcements,
+  visible,
+}: {
+  reinforcements: SnapshotReinforcement[]
+  visible: boolean
+}) => {
+  if (!visible || reinforcements.length === 0) return null
+
+  return (
+    <group scale={[scale, scale, scale]} rotation={[-Math.PI / 2, 0, 0]}>
+      {reinforcements.map((bar, index) => (
+        <ReinforcementBar
+          key={`${bar.spec}-${bar.diameter}-${index}`}
+          bar={bar}
+        />
+      ))}
+    </group>
+  )
+})
+ReinforcementBars.displayName = 'ReinforcementBars'
+
 const VisualizeMultipleMeshes = React.memo(({
   primitiveDraws,
   geometryMode,
@@ -618,6 +693,7 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
   const [isLoadingExternal, setIsLoadingExternal] = useState(false)
   const [geometryError, setGeometryError] = useState<string | null>(null)
   const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
+  const [showReinforcements, setShowReinforcements] = useState<boolean>(true)
   const [showEdges, setShowEdges] = useState<boolean>(true)
 
   const primitiveMeshCount = snapshotMeshes.length
@@ -640,6 +716,12 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
   }, [snapshot.geometry.marker_points])
 
   const hasMarkerPoints = markerPoints.length > 0
+
+  const reinforcements = useMemo(
+    () => snapshotReinforcementsFromGeometry(snapshot.geometry),
+    [snapshot.geometry],
+  )
+  const hasReinforcements = reinforcements.length > 0
 
   useEffect(() => {
     let isMounted = true
@@ -820,6 +902,21 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
     })
   }
 
+  if (hasReinforcements) {
+    menuSections.push({
+      id: 'reinforcements',
+      title: 'Reinforcement:',
+      content: (
+        <CheckboxControl
+          id="toggle-reinforcements"
+          label={`Show bars (${reinforcements.length})`}
+          checked={showReinforcements}
+          onChange={(checked) => setShowReinforcements(checked)}
+        />
+      ),
+    })
+  }
+
   return (
     <div className="flex flex-col md:flex-row gap-2 w-full">
       <div className="w-full md:w-64 md:flex-shrink-0 order-2 md:order-1 md:h-[50dvh]">
@@ -844,6 +941,10 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
               showEdges={showEdges}
             />
             <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
+            <ReinforcementBars
+              reinforcements={reinforcements}
+              visible={showReinforcements}
+            />
           </Bounds>
 
           <axesHelper args={[0.1]} />

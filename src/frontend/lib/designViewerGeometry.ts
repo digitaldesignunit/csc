@@ -1,6 +1,10 @@
 import * as THREE from 'three'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import type { ComponentSnapshot, SnapshotExtrusion, SnapshotGeometry, SnapshotMesh } from '@/generated/CatalogModels'
+import {
+  buildReinforcementBarThreeGroup,
+  snapshotReinforcementsFromGeometry,
+} from '@/lib/reinforcementGeometry'
 import type { SnapshotMeshRouting } from '@/generated/catalogExtras'
 import { snapshotMeshRoutingFromSnapshot } from '@/generated/catalogExtras'
 
@@ -12,7 +16,7 @@ import { snapshotMeshRoutingFromSnapshot } from '@/generated/catalogExtras'
  */
 
 export type GeometryLoadResult =
-  | { success: true; meshes: THREE.Group[] }
+  | { success: true; meshes: THREE.Group[]; reinforcements: THREE.Group[] }
   | {
       success: false
       error: 'not_found' | 'network_error' | 'parse_error'
@@ -21,6 +25,7 @@ export type GeometryLoadResult =
 
 interface CachedGeometry {
   meshes: THREE.Group[] | null
+  reinforcements: THREE.Group[]
   etag?: string
   timestamp: number
 }
@@ -248,6 +253,16 @@ function buildPrimitiveGroupsFromSnapshot(snapshot: ComponentSnapshot): THREE.Gr
   return groups
 }
 
+function buildReinforcementGroupsFromSnapshot(snapshot: ComponentSnapshot): THREE.Group[] {
+  const snapshotId = String(snapshot._id ?? 'snapshot')
+  return snapshotReinforcementsFromGeometry(snapshot.geometry)
+    .map((bar, index) => buildReinforcementBarThreeGroup(
+      bar,
+      `reinforcement_${snapshotId}_${index}`,
+    ))
+    .filter((group): group is THREE.Group => group !== null)
+}
+
 export async function fetchSnapshot(snapshotId: string): Promise<ComponentSnapshot | null> {
   const response = await fetch(`/api/backend/snapshots/${encodeURIComponent(snapshotId)}`, {
     credentials: 'include',
@@ -264,8 +279,12 @@ export async function loadDesignSnapshotGeometry(
   const cacheKey = `${snapshotId}_${mode}`
   const cached = geometryCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
-    if (cached.meshes) {
-      return { success: true, meshes: cached.meshes }
+    if (cached.meshes || cached.reinforcements.length > 0) {
+      return {
+        success: true,
+        meshes: cached.meshes ?? [],
+        reinforcements: cached.reinforcements,
+      }
     }
     return {
       success: false,
@@ -286,9 +305,11 @@ export async function loadDesignSnapshotGeometry(
 
     const routing: SnapshotMeshRouting = snapshotMeshRoutingFromSnapshot(snapshot)
 
+    const reinforcements = buildReinforcementGroupsFromSnapshot(snapshot)
+
     if (mode === 'primitive') {
       const meshes = buildPrimitiveGroupsFromSnapshot(snapshot)
-      if (meshes.length === 0) {
+      if (meshes.length === 0 && reinforcements.length === 0) {
         return {
           success: false,
           error: 'not_found',
@@ -297,10 +318,11 @@ export async function loadDesignSnapshotGeometry(
       }
       geometryCache.set(cacheKey, {
         meshes,
+        reinforcements,
         etag: typeof snapshot.etag === 'string' ? snapshot.etag : undefined,
         timestamp: Date.now(),
       })
-      return { success: true, meshes }
+      return { success: true, meshes, reinforcements }
     }
 
     const plyResult = await loadSnapshotPlyMeshes(
@@ -311,13 +333,27 @@ export async function loadDesignSnapshotGeometry(
     if (plyResult.ok && plyResult.meshes.length > 0) {
       geometryCache.set(cacheKey, {
         meshes: plyResult.meshes,
+        reinforcements,
         etag: plyResult.etag,
         timestamp: Date.now(),
       })
-      return { success: true, meshes: plyResult.meshes }
+      return { success: true, meshes: plyResult.meshes, reinforcements }
     }
 
-    geometryCache.set(cacheKey, { meshes: null, timestamp: Date.now() })
+    if (reinforcements.length > 0) {
+      geometryCache.set(cacheKey, {
+        meshes: [],
+        reinforcements,
+        timestamp: Date.now(),
+      })
+      return { success: true, meshes: [], reinforcements }
+    }
+
+    geometryCache.set(cacheKey, {
+      meshes: null,
+      reinforcements: [],
+      timestamp: Date.now(),
+    })
     return {
       success: false,
       error: 'not_found',

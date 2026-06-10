@@ -254,11 +254,13 @@ export default function DesignViewer({
 }: DesignViewerProps) {
   const [geometryMode, setGeometryMode] = useState<'primitive' | 'reduced' | 'detailed'>('primitive')
   const [loadedSnapshots, setLoadedSnapshots] = useState<Map<string, THREE.Group[]>>(new Map())
+  const [loadedReinforcements, setLoadedReinforcements] = useState<Map<string, THREE.Group[]>>(new Map())
   const [loadingStates, setLoadingStates] = useState<Map<string, boolean>>(new Map())
   const [errorStates, setErrorStates] = useState<Map<string, string>>(new Map())
   const [visibleSnapshots, setVisibleSnapshots] = useState<Map<string, boolean>>(new Map())
   const [visibleAdditionalGeometry, setVisibleAdditionalGeometry] = useState<Map<string, boolean>>(new Map())
   const [showEdges, setShowEdges] = useState<boolean>(true)
+  const [showReinforcements, setShowReinforcements] = useState<boolean>(true)
 
   // Initialize visibility states
   useEffect(() => {
@@ -282,8 +284,10 @@ export default function DesignViewer({
   useEffect(() => {
     const loadAllGeometries = async () => {
       setLoadedSnapshots(new Map())
+      setLoadedReinforcements(new Map())
       setErrorStates(new Map())
       const newLoadedSnapshots = new Map<string, THREE.Group[]>()
+      const newLoadedReinforcements = new Map<string, THREE.Group[]>()
       const newErrorStates = new Map<string, string>()
 
       // Set default edge visibility based on geometry mode
@@ -308,8 +312,13 @@ export default function DesignViewer({
           
           if (result.success) {
             newLoadedSnapshots.set(comp.snapshot, result.meshes)
+            newLoadedReinforcements.set(comp.snapshot, result.reinforcements)
             newErrorStates.delete(comp.snapshot)
-            debugLog(`Successfully loaded ${result.meshes.length} meshes for snapshot ${comp.snapshot}`)
+            debugLog(
+              `Successfully loaded ${result.meshes.length} meshes and `
+              + `${result.reinforcements.length} reinforcement group(s) `
+              + `for snapshot ${comp.snapshot}`,
+            )
           } else {
             newErrorStates.set(comp.snapshot, result.message)
             debugLog(`Failed to load geometry for snapshot ${comp.snapshot}: ${result.message}`)
@@ -328,6 +337,7 @@ export default function DesignViewer({
         })
         
         setLoadedSnapshots(new Map(newLoadedSnapshots))
+        setLoadedReinforcements(new Map(newLoadedReinforcements))
         setErrorStates(new Map(newErrorStates))
         
         // Small delay to prevent overwhelming the system
@@ -361,6 +371,16 @@ export default function DesignViewer({
   const allAdditionalGeometryVisible = useMemo(() => {
     return Array.from(visibleAdditionalGeometry.values()).every(visible => visible)
   }, [visibleAdditionalGeometry])
+
+  const reinforcementCount = useMemo(() => {
+    let count = 0
+    loadedReinforcements.forEach((groups) => {
+      count += groups.length
+    })
+    return count
+  }, [loadedReinforcements])
+
+  const hasReinforcements = reinforcementCount > 0
 
   const toggleAllSnapshots = () => {
     const newVisibility = !allSnapshotsVisible
@@ -446,6 +466,14 @@ export default function DesignViewer({
               onChange={toggleAllAdditionalGeometry}
             />
           )}
+          {hasReinforcements && (
+            <CheckboxControl
+              id="toggle-reinforcements"
+              label={`Show Reinforcement (${reinforcementCount})`}
+              checked={showReinforcements}
+              onChange={(checked) => setShowReinforcements(checked)}
+            />
+          )}
         </div>
       )
     },
@@ -521,6 +549,7 @@ export default function DesignViewer({
           <Bounds fit clip observe margin={1.2} maxDuration={1}>
             {design.components.map((comp) => {
               const meshes = loadedSnapshots.get(comp.snapshot) || []
+              const reinforcements = loadedReinforcements.get(comp.snapshot) || []
               const isVisible = visibleSnapshots.get(comp.snapshot) ?? true
               const isLoading = loadingStates.get(comp.snapshot) ?? false
               const error = errorStates.get(comp.snapshot)
@@ -581,12 +610,15 @@ export default function DesignViewer({
                 )
               }
 
-              if (meshes.length === 0) {
-                debugLog(`Component ${comp.snapshot} has no meshes:`, { meshCount: meshes.length })
+              if (meshes.length === 0 && reinforcements.length === 0) {
+                debugLog(`Component ${comp.snapshot} has no renderable geometry`)
                 return null
               }
 
-              debugLog(`Rendering component ${comp.snapshot} with ${meshes.length} meshes`)
+              debugLog(
+                `Rendering component ${comp.snapshot} with ${meshes.length} meshes `
+                + `and ${reinforcements.length} reinforcement group(s)`,
+              )
               debugLog(`Geometry mode: ${geometryMode}, Component iframe:`, comp.iframe)
 
               return (
@@ -606,6 +638,12 @@ export default function DesignViewer({
                         <primitive key={`${comp.snapshot}_${index}`} object={meshGroup} />
                       )
                     })}
+                    {showReinforcements && reinforcements.map((reinforcementGroup, index) => (
+                      <primitive
+                        key={`${comp.snapshot}_reinforcement_${index}`}
+                        object={reinforcementGroup}
+                      />
+                    ))}
                   </group>
                 </group>
               )
