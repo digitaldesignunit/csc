@@ -17,8 +17,6 @@ echo "-----------------------------------------------------------------"
 echo "------------------------ INITIALIZATION -------------------------"
 echo "-----------------------------------------------------------------"
 
-echo $GITHUB_DEPLOY_URL
-
 # Check if the directory does not exist
 if [ ! -d "$DEPLOY_DIR" ]; then
   # Create the directory
