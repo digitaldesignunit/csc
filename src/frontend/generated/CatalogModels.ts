@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-06-10T10:14:57.178Z
+// Generated on: 2026-06-10T12:31:17.106Z
 // Source: https://api.ddu.uber.space/schema/catalog-compose
 
 import type {
@@ -33,7 +33,7 @@ export interface ComponentSnapshot {
   version: number; // Per-identity monotonic version, zero-based. First snapshot for an identity is `0`. Unique on (identity_id, version). Server-assigned: never accept this field from client payloads; the backend computes it (`0` on initial create, `max(existing)+1` on snapshot evolution).
   virtual?: boolean; // True when this snapshot represents a hypothetical / proposal (not yet realized on the physical piece). Migrated snapshots from legacy are `False`.
   name?: string | unknown; // Human readable name for this state (can change across snapshots, e.g. on remanufacturing).
-  geometry: SnapshotGeometry; // Multi-representation geometry block for this snapshot (meshes, point clouds, extrusions, marker_points). At least one of meshes / point_clouds / extrusions must be non-empty.
+  geometry: SnapshotGeometry; // Multi-representation geometry block for this snapshot (meshes, point clouds, extrusions, marker_points, reinforcements). At least one of meshes / point_clouds / extrusions must be non-empty.
   descriptors?: Record<string, unknown> | unknown; // Descriptors computed from this snapshot's geometry
   bbx: ComponentBoundingBox; // Bounding box [X, Y, Z] for this snapshot's geometry
   bbx_origin: number[]; // Bounding box origin [X, Y, Z] in PCA space
@@ -68,6 +68,7 @@ export interface SnapshotGeometry {
   point_clouds?: SnapshotPointCloud[] | unknown; // Array of point cloud primitives (each backed by a PLY file)
   extrusions?: SnapshotExtrusion[] | unknown; // Array of extrusion primitives (profile + height; fully inline)
   marker_points?: number[][] | unknown; // Shared marker points as array of [x, y, z] coordinate triplets; same coordinate frame as the meshes/point_clouds/extrusions
+  reinforcements?: SnapshotReinforcement[] | unknown; // Inline reinforcement bar centerlines (spec + diameter + open polyline); ancillary to primary mesh/point_cloud/extrusion representations
 }
 
 export interface SnapshotMesh {
@@ -79,6 +80,12 @@ export interface SnapshotMesh {
 export interface SnapshotPointCloud {
   points: number[][]; // Point cloud points as array of [x, y, z] coordinates
   colors?: number[][] | unknown; // Optional per-point RGB colors as [r, g, b] integers (0-255); parallel to points when present
+}
+
+export interface SnapshotReinforcement {
+  spec: string; // Reinforcement steel specification (e.g. B500B)
+  diameter: number; // Bar diameter in mm
+  points: number[][]; // Open centerline polyline as [x, y, z] coordinate triplets; same coordinate frame as meshes/extrusions/marker_points
 }
 
 export interface ComposeIdentityResponse {
