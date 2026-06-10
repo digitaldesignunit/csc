@@ -790,13 +790,15 @@ class CatalogSharedTypesEnvelope(BaseModel):
 
 
 class ComposeIdentityResponse(BaseModel):
-    """Compose response: an identity plus its current snapshot.
+    """
+    Compose response: an identity plus one or more snapshot versions.
 
     Returned by `GET /identities/{identity_id}/compose` - the primary read
-    path for the new data model.
+    path for the new data model. A single-snapshot response uses
+    ``snapshots`` with length 1 (default: current live snapshot).
     """
     identity: ComponentIdentity
-    snapshot: ComponentSnapshot
+    snapshots: List[ComponentSnapshot] = Field(min_length=1)
 
 
 class SnapshotSummaryItem(BaseModel):

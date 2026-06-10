@@ -45,7 +45,6 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pymongo.errors import PyMongoError
 
 from apps.catalog.models import (
-    ComponentIdentity,
     ComponentSnapshot,
     ComposeIdentityResponse,
     PendingValidationSnapshotItem,
@@ -322,21 +321,11 @@ async def validate_snapshot_route(
         snapshot_id,
     )
 
-    try:
-        identity_model = ComponentIdentity.model_validate(identity_doc)
-        snapshot_model = ComponentSnapshot.model_validate(snapshot_doc)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f'Stored document failed Pydantic validation: {exc}',
-        )
+    from .identities import _compose_json_response
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            'identity': identity_model.model_dump(by_alias=True),
-            'snapshot': snapshot_model.model_dump(by_alias=True),
-        },
+    return _compose_json_response(
+        identity_doc,
+        [snapshot_doc],
     )
 
 
