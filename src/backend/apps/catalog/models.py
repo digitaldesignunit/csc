@@ -1014,6 +1014,21 @@ class UpdateComponentIdentityModel(BaseModel):
         populate_by_name = True
 
 
+class ComputeSnapshotOrientationRequest(BaseModel):
+    """Request body for wizard PCA / OBB computation."""
+
+    geometry: SnapshotGeometry
+    assembly: bool = False
+
+
+class ComputeSnapshotOrientationResponse(BaseModel):
+    """Orientation metadata derived from inline snapshot geometry."""
+
+    bbx: ComponentBoundingBox
+    bbx_origin: List[float]
+    pca_frame: ComponentFrame
+
+
 class CreateComponentRequest(BaseModel):
     """Create a new identity plus its version-0 snapshot (ADR-014 #2)."""
 
