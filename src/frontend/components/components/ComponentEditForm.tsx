@@ -72,6 +72,7 @@ type FormState = {
   parent_component: string
   notes: string
   quantity: number
+  is_public: boolean
 }
 
 function coerceNumber(value: string, fallback: number): number {
@@ -162,6 +163,7 @@ function initialStateFromCatalog(catalog: CatalogComponent): FormState {
       typeof snapshot.quantity === 'number' && snapshot.quantity >= 1
         ? Math.floor(snapshot.quantity)
         : 1,
+    is_public: (identity as unknown as { is_public?: boolean }).is_public === true,
   }
 }
 
@@ -317,6 +319,9 @@ export default function ComponentEditForm({
         identityPatch.parent_identities = [next.toLowerCase()]
       }
     }
+    if (form.is_public !== initial.is_public) {
+      identityPatch.is_public = form.is_public
+    }
 
     if (
       Object.keys(snapshotPatch).length === 0 &&
@@ -461,6 +466,21 @@ export default function ComponentEditForm({
             customPlaceholder="Custom dataset"
             required
           />
+
+          <div className="sm:col-span-2 flex items-start gap-3 rounded-lg border border-border/60 p-3">
+            <Checkbox
+              id="edit-is-public"
+              checked={form.is_public}
+              onCheckedChange={checked => setField('is_public', checked === true)}
+            />
+            <div className="space-y-1">
+              <Label htmlFor="edit-is-public">Public demo page</Label>
+              <p className="text-xs text-muted-foreground">
+                Allow viewing this component and all its snapshots without signing in
+                (viewer and read-only metadata only).
+              </p>
+            </div>
+          </div>
 
           <div>
             <Label htmlFor="quantity">Quantity</Label>

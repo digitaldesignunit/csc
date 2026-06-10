@@ -1,12 +1,20 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { allowsAnonymousCatalogRead } from '@/lib/publicAccess'
 
 export async function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl
+
+  // Public component demos: detail page + read-only backend GETs (auth enforced by FastAPI).
+  if (allowsAnonymousCatalogRead(pathname, req.method)) {
+    return NextResponse.next()
+  }
+
   // Use the SAME secret as in NextAuth config
   const secret = process.env.NEXTAUTH_SECRET
   const token = await getToken({ req, secret })
-  
+
   if (!token) {
     const url = new URL('/auth/signin', req.url)
     url.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search)

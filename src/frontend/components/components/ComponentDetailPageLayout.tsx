@@ -3,6 +3,8 @@
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
 import { ComponentLocation } from '@/generated/CatalogSharedTypes'
+import { useSession } from 'next-auth/react'
+import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import ComponentDetailActions from './ComponentDetailActions'
 import ComponentDetailLocationPanel from './ComponentDetailLocationPanel'
@@ -27,16 +29,35 @@ export default function ComponentDetailPageLayout({
   activeSnapshotId,
   liveSnapshotId,
 }: ComponentDetailPageLayoutProps) {
+  const { data: session } = useSession()
   const { identity } = catalog
   const snapshot = primarySnapshot(catalog)
   const identityId = String(identity._id ?? '')
   const snapshotId = String(snapshot._id ?? identity.current_snapshot_id)
   const location = (snapshot.location as ComponentLocation) ?? { lat: 0, lon: 0 }
+  const isPublicIdentity =
+    (identity as unknown as { is_public?: boolean }).is_public === true
+  const isPublicDemoView = isPublicIdentity && !session?.user
 
   return (
     <div
       className="grid items-start gap-6 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,28rem)_minmax(0,30rem)_minmax(0,1fr)]"
     >
+      {isPublicDemoView && (
+        <div
+          role="status"
+          className="lg:col-span-2 2xl:col-span-3 rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 text-sky-950 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-100"
+        >
+          <p className="font-medium">Public demo view</p>
+          <p className="mt-1 text-sm text-sky-900/90 dark:text-sky-100/90">
+            This component is shared without login.{' '}
+            <Link href="/auth/signin" className="font-medium underline underline-offset-4 hover:no-underline">
+              Sign in
+            </Link>{' '}
+            for catalog actions and reservation workflows.
+          </p>
+        </div>
+      )}
       <Card className="min-w-0 w-full shadow-sm lg:max-w-md 2xl:max-w-none">
         <CardContent className="space-y-4 pt-6">
           <ComponentDetailSummary catalog={catalog} />

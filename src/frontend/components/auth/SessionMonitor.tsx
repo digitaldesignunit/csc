@@ -2,6 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useEffect, useRef } from 'react'
+import { isPublicComponentDetailPath } from '@/lib/publicAccess'
 
 export default function SessionMonitor() {
   const { data: session, status } = useSession()
@@ -10,6 +11,10 @@ export default function SessionMonitor() {
   useEffect(() => {
     // Only process if session is loaded and we haven't already logged out
     if (status === 'loading' || hasLoggedOut.current) return
+
+    if (isPublicComponentDetailPath(window.location.pathname)) {
+      return
+    }
 
     // Check if session has expired API token
     if (session?.error === 'ApiTokenExpired') {
@@ -26,6 +31,10 @@ export default function SessionMonitor() {
   // Also check session expiry periodically for edge cases
   useEffect(() => {
     if (status === 'loading' || !session || hasLoggedOut.current) return
+
+    if (isPublicComponentDetailPath(window.location.pathname)) {
+      return
+    }
 
     const checkSessionExpiry = () => {
       // Check if we have an API expiry time and it's passed

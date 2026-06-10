@@ -38,11 +38,14 @@ async function handle(
   req: NextRequest,
   { params }: { params: Promise<{ path?: string[] }> }
 ) {
-  // 1) Get FastAPI token from NextAuth JWT
+  // 1) Get FastAPI token from NextAuth JWT (optional for public read GETs)
   const jwt = await getToken({ req, secret: NEXTAUTH_SECRET })
   const apiToken = jwt?.apiToken
 
-  if (!apiToken) {
+  const method = req.method.toUpperCase()
+  const isReadMethod = method === 'GET' || method === 'HEAD'
+
+  if (!apiToken && !isReadMethod) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
@@ -50,8 +53,6 @@ async function handle(
   const url = new URL(req.url)
   const { path } = await params
   const target = buildTargetUrl(path, url)
-
-  const method = req.method.toUpperCase()
 
   // 3) Block geometry upload routes on write methods only
   const pathname = Array.isArray(path) ? `/${path.join('/')}` : ''
@@ -75,9 +76,10 @@ async function handle(
   const hasBody = !['GET', 'HEAD'].includes(method)
   const body = hasBody ? await req.arrayBuffer() : undefined
 
-  const headers = forwardableHeaders(req, {
-    Authorization: `Bearer ${apiToken}`,
-  })
+  const headers = forwardableHeaders(
+    req,
+    apiToken ? { Authorization: `Bearer ${apiToken}` } : {},
+  )
 
   // 6) Call FastAPI
   const upstream = await fetch(target, {

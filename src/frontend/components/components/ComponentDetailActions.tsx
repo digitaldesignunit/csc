@@ -204,6 +204,10 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
 
   const currentUserId = (session?.user as ExtendedUser)?.id
 
+  if (!session?.user) {
+    return null
+  }
+
   return (
     <div className="w-full space-y-3 border-t border-border pt-4">
       <div className="flex flex-wrap gap-2">
