@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">3ca5ddc7-bf24-4181-8738-4bcd41ae8591</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">9501ab78-c043-4d2c-a162-31910faf0301</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639167030219851974</item>
+            <item name="Date" type_name="gh_date" type_code="8">639167103053094033</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -105,9 +105,9 @@
                     <item name="Description" type_name="gh_string" type_code="10">Builds one inline reinforcement bar JSON object ({spec, diameter, points}) for CreateComponentIdentity / CreateComponentSnapshot.</item>
                     <item name="GraftStandardOutputLines" type_name="gh_bool" type_code="1">true</item>
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
-                      <bitmap length="834">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAALXSURBVEhLtZVNSFRRGIZd5Kog2oVgJbZv0yaiQOncc+d/7r2zCcM0qDaCQWSZ7SJQwSjKRUHhIoK0qDTyzk86GhbuaumqcqdoqxY5zswT58xoM3dG06wLLxzOz/ucc77vfLemxvMRF+xUXs/1zztxJ/J6/1PzNW3LPB8X5NyCVNs7vpH+aJ53BdlxAQkBqaIShT415p3v1aaAnGtAUsCUYNU1+DZiMv/cJKv6p4QeUyfyrtsSQJtPCBZHJR1dYeoth32Bgg5YDh1XwyyMmjBhbAqpClgz//TUR13YodGxudcX5OOQnw9DPu70BmmwHT2m5hQgRoVPVYC613xSsDwmqYs4RC9GWU1KmFbQoqYFK0lJ4LzF/rDD8phJJl79JBWA1XGD/JRBd09YL/4ZNyElybyV5NyCVJukAZOSBsfh2vUwzBYTwQMpA+j0SxQWHo7ZDNwKw4wyNEGB4lIr70qyCcmrBwGaz1kcOW1zty/El2G1mfLsKgOoe8y9k/TfDFF7Kob/gsXCqJ9cwiTvrkFMsuOm3kTPjQg1zTEd+L1+h7lnJvlUeWatA3TnhGB2KMAeM0Z91GaXiHGlOwJpyaoyLQI0RAHTJh1dUXZLh89PfJCuTNvyGCQEP95Ivr40Odpi0XYpynfXR8Y1yZeYK62oa3svudwd4VirpZNAP8hSvwpAMYuYEQz2hvRJFl/79U5VHNQplHRM0pL5Fz5qRYyH/SFyaZUgWwHEBdm4IJM0ON5q02g7zI34YVrCVFHTkrlhH422zYmzFpmEJBc3qtaoCoCGqFOkBEtjJk3tlo5FS2eU+30hBvuCnOmM6L6mdpulMR+kjA3rUlXAb4ih9WggyMk2i0O2zUHL1u3Ht4P6faj3sJH5poB1iGqrwjZZSGNd6CaLfaVzNtCmAG2gYjJeTD/1UhOFti7XVeZ79UdAqZThVkxLteU/2t9qW7/N7Wrd/H9A1jx/Aa9cJ2v5UTM8AAAAAElFTkSuQmCC</bitmap>
+                      <bitmap length="360">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAD9SURBVEhLY2AYBaNgaIHPvrPF7/hMvHnVu/dRmLlLsZGRURoyDjdzK7nq3fv4ts+Em58Dp4mh6ycI3gbMinwfMOc/CJfYhv83NjZGwSAxmDxILbp+ggDkqiOeLb+OeLX8DsHiA5Cvjni2/D7s2fzrU8hcUXT9RAFjY+OnIIwuDgOE5AkCQgYQkicICBlASJ4gwGcAKJUd82z9ddSz5TdyKgOlrts+E+489p16nmDqwmcBrlRGUurCZwHIdbd9Jt647N3zEDmVgXxzy3fircd+U88STF34LKAYgML4uGfbz2OerT8JhiU5ADmMCYYlOQDk6se+U88RFZajYMgAAKxDuauHpzFaAAAAAElFTkSuQmCC</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">53f9b386-34f0-46e6-979f-10a0e62c3437</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">cf3f3cd2-c574-4c11-bd24-3c022bcbe49c</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -150,7 +150,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">f1d9cb2c-745f-49ea-9c35-a6cb554707ff</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">e928a23f-b9f8-4095-b814-b6a69ff5b949</item>
                             <item name="Name" type_name="gh_string" type_code="10">Polyline</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Polyline</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -184,7 +184,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of text fragments</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">2b43405a-ff6a-4a26-a8f6-40c0533dbe22</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">e67a9c59-ac34-4d0c-b209-78c323371398</item>
                             <item name="Name" type_name="gh_string" type_code="10">Spec</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Spec</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -218,7 +218,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of floating point numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">8f5d3530-cd71-42a7-98c5-e9ace40d2b35</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">ee9c204f-0bb3-4be1-97fd-247363e7f2b7</item>
                             <item name="Name" type_name="gh_string" type_code="10">Diameter</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Diameter</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -251,7 +251,7 @@
                         <chunk name="OutputParam" index="0">
                           <items count="6">
                             <item name="Description" type_name="gh_string" type_code="10">Standard output and error contents collected during script run</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">a5e0ef8d-ba15-490e-8360-63cd265ae59d</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">f11f9b83-1ec5-48ad-83b0-eb60cfee8c55</item>
                             <item name="Name" type_name="gh_string" type_code="10">out</item>
                             <item name="NickName" type_name="gh_string" type_code="10">out</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -274,7 +274,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">19b29f7d-2b97-486c-8f42-5482fad92208</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">411290eb-8963-49de-91ac-a52f3f8f7e06</item>
                             <item name="Name" type_name="gh_string" type_code="10">ReinforcementJson</item>
                             <item name="NickName" type_name="gh_string" type_code="10">ReinforcementJson</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
