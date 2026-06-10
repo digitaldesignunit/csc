@@ -19,7 +19,11 @@ from apps.catalog.models import (  # NOQA
     User,
 )
 from .auth import get_current_active_user
-from .catalog_common import get_snapshots_col, validate_uuid
+from .catalog_common import (
+    get_snapshots_col,
+    not_modified_response,
+    validate_uuid
+)
 from utility import (
     generate_design_etag,
     generate_etag_for_designs,
@@ -135,11 +139,7 @@ async def get_designs(
 
         # Check for conditional request
         if check_conditional_request(request, etag):
-            return JSONResponse(
-                status_code=304,
-                content=None,
-                headers={'ETag': etag}
-            )
+            return not_modified_response(etag)
 
         # Return designs with ETag header
         return JSONResponse(
@@ -198,11 +198,7 @@ async def get_user_designs(
 
         # Check for conditional request
         if check_conditional_request(request, etag):
-            return JSONResponse(
-                status_code=304,
-                content=None,
-                headers={'ETag': etag}
-            )
+            return not_modified_response(etag)
 
         # Return designs with ETag header
         return JSONResponse(
@@ -254,11 +250,7 @@ async def get_design(
 
         # Check for conditional request
         if check_conditional_request(request, etag):
-            return JSONResponse(
-                status_code=304,
-                content=None,
-                headers={'ETag': etag}
-            )
+            return not_modified_response(etag)
 
         # Return design with ETag header
         return JSONResponse(
@@ -574,11 +566,7 @@ async def get_design_schema(request: Request):
 
     # Check for conditional request
     if check_conditional_request(request, etag):
-        return JSONResponse(
-            status_code=304,
-            content=None,
-            headers={'ETag': etag}
-        )
+        return not_modified_response(etag)
 
     # Return schema with ETag header
     return JSONResponse(

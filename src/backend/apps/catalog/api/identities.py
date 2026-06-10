@@ -74,6 +74,7 @@ from .auth import get_current_active_user, require_admin
 from .catalog_common import (
     allocate_catalog_number,
     compute_snapshot_etag,
+    not_modified_response,
     resolve_new_component_name,
     get_identities_col,
     get_snapshots_col,
@@ -120,7 +121,8 @@ async def get_catalog_compose_json_schema():
 )
 async def get_catalog_shared_json_schema():
     """
-    Used by the frontend `generate:models` script (see `CatalogSharedTypes.ts`).
+    Used by the frontend `generate:models` script
+    (see `CatalogSharedTypes.ts`).
     """
     schema = CatalogSharedTypesEnvelope.model_json_schema(by_alias=True)
     return JSONResponse(status_code=200, content=schema)
@@ -178,10 +180,7 @@ async def get_create_snapshot_json_schema(request: Request):
     schema = CreateSnapshotRequest.model_json_schema(by_alias=True)
     etag = _schema_etag(schema)
     if _check_schema_conditional_request(request, etag):
-        return JSONResponse(
-            status_code=304,
-            content=None,
-            headers={'ETag': etag})
+        return not_modified_response(etag)
     return JSONResponse(
         status_code=200,
         content=schema,
@@ -201,10 +200,7 @@ async def get_create_identity_json_schema(request: Request):
     schema = CreateComponentRequest.model_json_schema(by_alias=True)
     etag = _schema_etag(schema)
     if _check_schema_conditional_request(request, etag):
-        return JSONResponse(
-            status_code=304,
-            content=None,
-            headers={'ETag': etag})
+        return not_modified_response(etag)
     return JSONResponse(
         status_code=200,
         content=schema,
@@ -610,11 +606,7 @@ async def list_identities_route(
     content = _format_list_rows(docs, expand)
     etag = _list_etag(content)
     if _check_schema_conditional_request(request, etag):
-        return JSONResponse(
-            status_code=304,
-            content=None,
-            headers={'ETag': etag},
-        )
+        return not_modified_response(etag)
     return JSONResponse(
         status_code=200,
         content=content,
@@ -1290,11 +1282,7 @@ async def compose_identity(
 
     if_none_match = request.headers.get('if-none-match')
     if if_none_match and if_none_match == etag:
-        return JSONResponse(
-            status_code=304,
-            content=None,
-            headers={'ETag': etag},
-        )
+        return not_modified_response(etag)
 
     return _compose_json_response(
         identity_doc,

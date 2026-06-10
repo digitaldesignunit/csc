@@ -71,6 +71,7 @@ from .catalog_common import (
     compute_snapshot_etag,
     get_identities_col,
     get_snapshots_col,
+    not_modified_response,
     now_iso,
     validate_snapshot_and_promote,
     validate_uuid,
@@ -441,11 +442,7 @@ async def get_snapshot_by_id(
 
     if_none_match = request.headers.get('if-none-match')
     if if_none_match and if_none_match == etag:
-        return JSONResponse(
-            status_code=304,
-            content=None,
-            headers={'ETag': etag},
-        )
+        return not_modified_response(etag)
 
     try:
         model = ComponentSnapshot.model_validate(doc)
@@ -625,11 +622,7 @@ async def get_snapshot_mesh(
         etag = _mesh_etag(path)
         if_none_match = request.headers.get('if-none-match')
         if if_none_match and if_none_match == etag:
-            from fastapi.responses import Response
-            return Response(
-                status_code=304,
-                headers={'ETag': etag},
-            )
+            return not_modified_response(etag)
         return FileResponse(
             path,
             media_type='model/ply',

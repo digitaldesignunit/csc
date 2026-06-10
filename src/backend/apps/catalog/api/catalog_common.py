@@ -8,8 +8,21 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, status
+from fastapi.responses import Response
 from pymongo import ReturnDocument
+
+
+def not_modified_response(etag: str, **extra_headers: str) -> Response:
+    """
+    Return an empty 304 Not Modified response.
+
+    Do not use JSONResponse for 304: it serialises ``content=None`` as the
+    JSON literal ``null``, which violates HTTP and triggers uvicorn
+    ``Response content longer than Content-Length``.
+    """
+    headers = {'ETag': etag, **extra_headers}
+    return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
 
 
 def now_iso() -> str:
