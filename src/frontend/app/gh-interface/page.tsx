@@ -261,6 +261,19 @@ export default function GHInterfacePage() {
             The DDU CSC Grasshopper Interface provides components for working with the Catalog of Second Chances. This tutorial covers each component and their usage.
           </p>
 
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+            <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">Identity &amp; Snapshot Model</h4>
+            <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
+              Catalog entries are split into a stable <strong>identity</strong> and one or more versioned <strong>snapshots</strong>.
+            </p>
+            <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1">
+              <li>• <strong>Identity</strong> — stable catalog entry: type, material, dataset, provenance (manufactured/salvaged dates, parent identities), and attributes.</li>
+              <li>• <strong>Snapshot</strong> — versioned state: geometry, descriptors, condition, placement frame (iframe), PCA frame, color, location, and notes.</li>
+              <li>• <strong>Compose JSON</strong> — most components pass data as <code className="text-xs">{`{identity, snapshot}`}</code> pairs. Use <strong>CSC_DisassembleComponent</strong> to unpack them in Grasshopper.</li>
+              <li>• <strong>Designs</strong> pin specific snapshot versions (not identity/current) and store placement iframes per snapshot.</li>
+            </ul>
+          </div>
+
           <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
             <h4 className="font-semibold text-purple-900 dark:text-purple-100 mb-2 flex items-center gap-2">
               <FileText className="h-4 w-4" />
@@ -545,6 +558,19 @@ export default function GHInterfacePage() {
             tip="Designs pin specific snapshot versions, not identity/current. Use DisassembleComponent on ComponentData outputs."
             imagePath={resolveStatic('/gh-interface/csc_fetchdesign.jpg')}
           />
+
+          <ComponentCard
+            icon={Database}
+            name="CSC_FetchTransmittedID"
+            description="Fetches the currently pending transmitted identity ID for the signed-in user. Used with the web Scan & Identify / Transmit ID workflow: after scanning a physical tag in the browser, the pending ID can be picked up here and fed into CreateComponentIdentity."
+            inputs={[
+              { label: 'Refresh', description: 'Toggle to fetch the latest pending transmitted ID from the server' }
+            ]}
+            outputs={[
+              { label: 'ComponentID', description: 'Pending identity UUID transmitted from the web interface. Empty when none is pending.' }
+            ]}
+            tip="AddComponentIdentity automatically consumes the pending transmitted ID after a successful create. FetchTransmittedID is useful for previewing or wiring the ID into CreateComponentIdentity before posting."
+          />
         </div>
       )
     },
@@ -556,48 +582,100 @@ export default function GHInterfacePage() {
         <div className="space-y-6 pt-2">
           <ComponentCard
             icon={Code}
-            name="CSC_CreateComponent"
-            description="Creates a complete component JSON string from input geometry. Computes PCA orientation, handles mesh reduction, saves geometry files locally, and builds component data according to the schema."
+            name="CSC_CreateComponentIdentity"
+            description="Builds a CreateComponentRequest JSON payload from Rhino geometry for POST /identities. Creates the initial identity together with its version-0 snapshot. Computes PCA orientation, mesh reduction, and stages binary PLY files under pending_identity_assets/{identity_id}/."
             inputs={[
-              { label: 'ClearLocalStorage', description: 'If set to True, clears all stored locally saved geometry files for component creation' },
-              { label: 'ComponentID', description: 'Component ID (must be a valid UUID)' },
-              { label: 'Type', description: 'Component type (e.g., "panel", "rubble"). Must be one of the values exposed by the backend component type enum.' },
+              { label: 'ClearLocalStorage', description: 'If True, clears pending_identity_assets staging (does not affect Session API cache)' },
+              { label: 'IdentityID', description: 'Identity UUID from physical tag or FetchTransmittedID (must be a valid UUID)' },
+              { label: 'Name', description: 'Display name for the initial snapshot (e.g. My Beam 01)' },
+              { label: 'Type', description: 'Component type (e.g., "panel", "rubble"). Must match the backend component type enum.' },
               { label: 'Material', description: 'Material type (e.g., "steel", "concrete", "wood")' },
-              { label: 'Dataset', description: 'Dataset that this component belongs to (i.e. my_rubble_dataset)' },
+              { label: 'Dataset', description: 'Dataset this identity belongs to (e.g. my_rubble_dataset)' },
               { label: 'Complexity', description: 'Complexity level (0=simple, 1=normal, 2=complex, 3=very complex)' },
               { label: 'Fragment', description: 'Fragment status (True for fragments, False for complete)' },
               { label: 'Assembly', description: 'Assembly status (True for assemblies, False for individual)' },
+              { label: 'Color', description: 'Snapshot color (System.Drawing.Color)' },
               { label: 'Location', description: 'Location as Vector3d (X=latitude, Y=longitude, Z ignored)' },
-              { label: 'Color', description: 'Component color (System.Drawing.Color)' },
-              { label: 'Geometry', description: 'Rhino geometry object(s) - single object or list of objects. For single: Mesh or Extrusion for panels, Mesh for rubble. For multiple: list of Meshes' },
-              { label: 'MarkerPoints', description: 'Marker points as list of Point3d objects for component identification and positioning' }
+              { label: 'Geometry', description: 'Rhino geometry — single Mesh or Extrusion, or a list of Meshes' },
+              { label: 'MarkerPoints', description: 'Marker points as list of Point3d for identification and positioning' },
+              { label: 'Condition', description: 'Optional condition grade (0=destroyed/retired, 1=poor, 2=average, 3=good). Leave unconnected for unknown.' },
+              { label: 'ManufacturedAt', description: 'Optional ISO-8601 UTC manufacturing timestamp' },
+              { label: 'ManufacturedPrecision', description: 'Optional precision qualifier: exact, month, year, or unknown' },
+              { label: 'SalvageSource', description: 'Optional salvage source text (e.g. building name)' },
+              { label: 'SalvagedAt', description: 'Optional ISO-8601 UTC salvage timestamp' },
+              { label: 'ParentIdentity', description: 'Optional parent identity UUID (lineage after split/merge)' },
+              { label: 'Notes', description: 'Optional free-text notes for the initial snapshot (max 5000)' },
+              { label: 'Quantity', description: 'Count of identical physical items (integer ≥ 1, default 1)' }
             ]}
             outputs={[
-              { label: 'ComponentData', description: 'Component data as JSON string adhering to ComponentModel structure. Contains geometry, PCA frame, bounding box, and metadata.' }
+              { label: 'ComponentData', description: 'CreateComponentRequest JSON for POST /identities (inline geometry + staged PLY manifest)' }
             ]}
-            tip="Automatically centers geometry at origin, computes PCA frames, handles mesh reduction, and saves geometry files locally for complex meshes."
+            tip="Pair with CSC_AddComponentIdentity to post. Use CSC_FetchTransmittedID to obtain the identity UUID after a web tag scan."
             imagePath={resolveStatic('/gh-interface/csc_createcomponent.jpg')}
           />
 
           <ComponentCard
             icon={Code}
-            name="CSC_AddComponent"
-            description="Adds a created component to the Catalog of Second Chances database."
+            name="CSC_AddComponentIdentity"
+            description="Creates a new catalog identity and its version-0 snapshot via POST /identities. Accepts CreateComponentRequest JSON from CreateComponentIdentity, uploads staged binary PLY mesh files, and optionally consumes a pending transmitted ID after success."
             inputs={[
-              { label: 'ComponentData', description: 'Component data as JSON string to add to the database' },
-              { label: 'Run', description: 'Toggle to execute the add operation' }
+              { label: 'ComponentData', description: 'CreateComponentRequest JSON from CreateComponentIdentity' },
+              { label: 'Run', description: 'Toggle to execute the create operation' }
             ]}
             outputs={[
-              { label: 'AddedComponentData', description: 'The added component data returned from the server as JSON' }
+              { label: 'AddedComponentData', description: 'Compose response JSON ({identity, snapshot}) returned from POST /identities' }
             ]}
-            tip="Validates component data before posting to the database. Requires authentication."
+            tip="Validates the payload, posts the identity, uploads staged PLY files, and non-fatally consumes any pending transmitted ID. Requires authentication."
+            imagePath={resolveStatic('/gh-interface/csc_addcomponent.jpg')}
+          />
+
+          <ComponentCard
+            icon={Code}
+            name="CSC_CreateComponentSnapshot"
+            description="Builds a CreateSnapshotRequest JSON payload from Rhino geometry for an existing identity (POST /identities/{id}/snapshots). Computes PCA orientation, mesh reduction, and stages binary PLY files under pending_snapshot_assets/{snapshot_id}/."
+            inputs={[
+              { label: 'ClearLocalStorage', description: 'If True, clears pending_snapshot_assets staging (does not affect Session API cache)' },
+              { label: 'IdentityID', description: 'Existing identity UUID to attach the new snapshot to' },
+              { label: 'SnapshotID', description: 'New snapshot UUID (optional; auto-generated when empty)' },
+              { label: 'Name', description: 'Snapshot display name (optional; inherits current name when empty)' },
+              { label: 'Complexity', description: 'Complexity level (0=simple, 1=normal, 2=complex, 3=very complex)' },
+              { label: 'Fragment', description: 'Fragment status (True for fragments, False for complete)' },
+              { label: 'Assembly', description: 'Assembly status (True for assemblies, False for individual)' },
+              { label: 'Color', description: 'Snapshot color (System.Drawing.Color)' },
+              { label: 'Location', description: 'Location as Vector3d (X=latitude, Y=longitude, Z ignored)' },
+              { label: 'Geometry', description: 'Rhino geometry — single Mesh or Extrusion, or a list of Meshes' },
+              { label: 'MarkerPoints', description: 'Marker points as list of Point3d' },
+              { label: 'Condition', description: 'Optional condition grade (0–3). Leave unconnected for unknown.' },
+              { label: 'Notes', description: 'Optional free-text notes for the new snapshot (max 5000)' },
+              { label: 'Quantity', description: 'Count of identical physical items (integer ≥ 1, default 1)' },
+              { label: 'Virtual', description: 'Virtual snapshot flag (True = proposal/hypothetical state, not yet validated)' }
+            ]}
+            outputs={[
+              { label: 'SnapshotData', description: 'CreateSnapshotRequest JSON (includes identity_id) for POST /identities/{id}/snapshots' }
+            ]}
+            tip="Use when an identity already exists and you need a new version — e.g. after re-scanning, condition change, or geometry update."
+            imagePath={resolveStatic('/gh-interface/csc_createcomponent.jpg')}
+          />
+
+          <ComponentCard
+            icon={Code}
+            name="CSC_AddComponentSnapshot"
+            description="Creates a new snapshot for an existing identity via POST /identities/{id}/snapshots. Accepts CreateSnapshotRequest JSON from CreateComponentSnapshot and uploads staged PLY files from pending_snapshot_assets/{snapshot_id}/."
+            inputs={[
+              { label: 'SnapshotData', description: 'CreateSnapshotRequest JSON from CreateComponentSnapshot' },
+              { label: 'Run', description: 'Toggle to execute the snapshot create operation' }
+            ]}
+            outputs={[
+              { label: 'AddedSnapshotData', description: 'Compose response JSON ({identity, snapshot}) after create' }
+            ]}
+            tip="Validates the snapshot payload, posts the new version, and uploads any staged PLY files. Requires authentication."
             imagePath={resolveStatic('/gh-interface/csc_addcomponent.jpg')}
           />
 
           <ComponentCard
             icon={Code}
             name="CSC_DisassembleComponent"
-            description="Parses compose JSON ({identity, snapshot}) back into Grasshopper-compatible geometry and metadata."
+            description="Parses compose JSON ({identity, snapshot}) back into Grasshopper-compatible geometry and metadata. Type, material, and provenance come from identity; geometry, condition, descriptors, and frames come from snapshot."
             inputs={[
               { label: 'ComponentData', description: 'Compose JSON ({identity, snapshot}) fetched from the server.' }
             ]}
@@ -615,11 +693,11 @@ export default function GHInterfacePage() {
               { label: 'MarkerPoints', description: 'Marker points as list of Point3d objects' },
               { label: 'Attributes', description: 'Identity attributes as JSON string' },
               { label: 'Condition', description: 'Snapshot condition grade (0=destroyed/retired, 1=poor, 2=average, 3=good)' },
-              { label: 'ManufacturedAt', description: 'Component manufacturing date as ISO-8601 UTC timestamp' },
-              { label: 'ManufacturedPrecision', description: 'Precision qualifier for ManufacturedAt (exact, month, year, unknown)' },
-              { label: 'SalvageSource', description: 'Component salvage source (e.g. building name, site)' },
-              { label: 'SalvagedAt', description: 'Component salvage date as ISO-8601 UTC timestamp' },
-              { label: 'ParentComponent', description: 'Parent identity IDs (GUIDs) this identity was derived from' }
+              { label: 'ManufacturedAt', description: 'Identity manufacturing date as ISO-8601 UTC timestamp' },
+              { label: 'ManufacturedPrecision', description: 'Identity precision qualifier for ManufacturedAt (exact, month, year, unknown)' },
+              { label: 'SalvageSource', description: 'Identity salvage source (e.g. building name, site)' },
+              { label: 'SalvagedAt', description: 'Identity salvage date as ISO-8601 UTC timestamp' },
+              { label: 'ParentComponent', description: 'Parent identity IDs (GUIDs) from identity.parent_identities' }
             ]}
             tip="Parses compose JSON into individual Grasshopper-compatible outputs for further processing."
             imagePath={resolveStatic('/gh-interface/csc_disassemblecomponent.jpg')}
@@ -754,6 +832,32 @@ export default function GHInterfacePage() {
       )
     },
     {
+      id: 'matchmaking-tools',
+      title: 'Matchmaking Tools',
+      icon: WandSparkles,
+      content: (
+        <div className="space-y-6 pt-2">
+          <ComponentCard
+            icon={WandSparkles}
+            name="CSC_AssignmentPoints"
+            description="Solves point-to-point assignment between design points and library points. Supports greedy assignment (default, FullCircle-compatible) and Hungarian assignment via SciPy for optimal matching."
+            inputs={[
+              { label: 'DesignPts', description: 'Design points as DataTree of numbers. Each branch is one point.' },
+              { label: 'LibraryPts', description: 'Library points as DataTree of numbers. Each branch is one point.' },
+              { label: 'Weights', description: 'Weights for weighted Euclidean distance. Optional; defaults to 1.0 in each dimension.' },
+              { label: 'Scale', description: 'Scale factor used by Hungarian mode before optimization. Optional; default 1e3. Ignored by greedy mode.' },
+              { label: 'Algorithm', description: "Algorithm selector. Optional; defaults to 'greedy'. Accepted values: 'greedy', 'hungarian'." }
+            ]}
+            outputs={[
+              { label: 'Assignment', description: 'Assignment tree. Branch i contains the selected library index for design point i.' },
+              { label: 'Cost', description: 'Assignment cost tree. Branch i contains the cost value for design point i.' }
+            ]}
+            tip="Use after embedding or descriptor-based feature extraction to match design requirements to catalog candidates."
+          />
+        </div>
+      )
+    },
+    {
       id: 'geometry-tools',
       title: 'Geometry Tools',
       icon: Box,
@@ -816,6 +920,44 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
 Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max Benjamin Eschenbach."
             imagePath={resolveStatic('/gh-interface/csc_maxinscribedquad.jpg')}
           />
+
+          <ComponentCard
+            icon={Box}
+            name="CSC_ExtrusionProfile"
+            description="Extracts a profile curve from a Rhino Extrusion at a given profile index and relative height parameter."
+            inputs={[
+              { label: 'ExtrusionGeometry', description: 'Rhino.Geometry.Extrusion to extract the profile curve from' },
+              { label: 'ProfileIndex', description: 'Index of the profile curve to extract. The outer profile has index 0.' },
+              { label: 'ProfileParameter', description: 'Relative parameter along the extrusion height: 0 = bottom profile, 1 = top profile (default 0.5)' }
+            ]}
+            outputs={[
+              { label: 'ProfileCurve', description: 'The extracted profile curve' }
+            ]}
+            tip="Useful when working with panel extrusions before creating catalog snapshots or computing 2D shape descriptors."
+          />
+
+          <ComponentCard
+            icon={Box}
+            name="CSC_RadialSignature"
+            description="Computes a radial shape signature for planar boundary curves. Rotates each curve into its canonical rest position, casts evenly spaced rays from the centroid, and returns distances and boundary tangents at intersections. Mirrors the backend radial_signature module."
+            inputs={[
+              { label: 'Curves', description: 'Closed planar boundary curve(s). Polylines are used verbatim; other curves are approximated to polylines using document tolerance.' },
+              { label: 'Resolution', description: 'Number of rays cast from the centroid (default 64, must be ≥ 3)' },
+              { label: 'RestPositionAlign', description: 'If True (default), rotate each profile into canonical rest position before ray casting. If False, use the curve as-is (still centered).' },
+              { label: 'NumAngles', description: 'Rotation samples for rest-position search over [0, π) (default 180, 1° steps)' }
+            ]}
+            outputs={[
+              { label: 'Distances', description: 'Tree of centroid-to-boundary distances per ray, one branch per input curve' },
+              { label: 'Tangents', description: 'Tree of unit boundary tangent vectors at each ray hit' },
+              { label: 'HitPoints', description: 'Tree of intersection points in world coordinates (useful for visualisation)' },
+              { label: 'Rays', description: 'Tree of ray lines in world coordinates (useful for visualisation)' },
+              { label: 'RestCurves', description: 'Input curves in rest position (centroid at origin, canonical axes aligned with World XY)' },
+              { label: 'RestPlanes', description: 'Rest-position plane per input curve (centroid origin, canonical X/Y alignment)' },
+              { label: 'RestAngles', description: 'Rotation angle in degrees applied to reach rest position, per input curve' },
+              { label: 'RestXForm', description: 'Transform mapping world coordinates into the rest frame' }
+            ]}
+            tip="Produces descriptor-compatible shape signatures for matching and classification workflows."
+          />
         </div>
       )
     },
@@ -842,6 +984,24 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
             tip="Automatically determines optimal grid size based on component bounding boxes."
             imagePath={resolveStatic('/gh-interface/csc_arrangecomponents.jpg')}
           />
+
+          <ComponentCard
+            icon={Sparkles}
+            name="CSC_VisualizeEmbedding"
+            description="Visualizes a low-dimensional embedding (e.g. from ComputePCA or ComputeTSNE) by placing associated geometry at embedding coordinates. Supports 1D, 2D, and 3D layouts; dimensions beyond the third are mapped to RGB colour channels."
+            inputs={[
+              { label: 'EmbeddedData', description: 'Embedded coordinates as a DataTree (one branch per datapoint). Output of ComputePCA or ComputeTSNE.' },
+              { label: 'Geometry', description: 'Geometry to place in the layout as a DataTree. One branch per datapoint; branch order must match EmbeddedData.' },
+              { label: 'ScaleFactor', description: 'Total layout extent in world units. Each dimension is min-max normalised to [0, ScaleFactor] (default 1000.0)' }
+            ]}
+            outputs={[
+              { label: 'LayoutGeometry', description: 'Input geometry translated from its bounding-box centre to the corresponding embedding point' },
+              { label: 'LayoutPoints', description: 'Embedding points in world coordinates (1D: Y=Z=0; 2D: Z=0)' },
+              { label: 'Colors', description: 'Per-datapoint RGB from embedding dims 4–6 (missing channels default to mid-grey)' },
+              { label: 'XForm', description: 'Translation transform applied to each input geometry' }
+            ]}
+            tip="Pair with ComputePCA or ComputeTSNE and descriptor/feature trees to explore catalog similarity clusters spatially."
+          />
         </div>
       )
     },
@@ -851,6 +1011,21 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
       icon: HelpCircle,
       content: (
         <div className="space-y-6 pt-2">
+          <ComponentCard
+            icon={HelpCircle}
+            name="CSC_ConvertGeoLocation"
+            description="Converts a latitude/longitude string (e.g. copied from Google Maps) into numeric components and a Rhino vector for use with CreateComponentIdentity or CreateComponentSnapshot."
+            inputs={[
+              { label: 'LatLonString', description: 'Latitude, longitude string, e.g. "52.1231321, 9.1231231312"' }
+            ]}
+            outputs={[
+              { label: 'Lat', description: 'Latitude as float' },
+              { label: 'Lon', description: 'Longitude as float' },
+              { label: 'Vec', description: 'Vector3d with lat/lon as X/Y (Z = 0)' }
+            ]}
+            tip="Wire Vec directly into the Location input of CreateComponentIdentity or CreateComponentSnapshot."
+          />
+
           <ComponentCard
             icon={HelpCircle}
             name="CSC_JSONKeys"
@@ -968,12 +1143,25 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
           </div>
 
           <div className="border rounded-lg p-4">
-            <h4 className="font-semibold text-lg mb-3">Creating Components</h4>
+            <h4 className="font-semibold text-lg mb-3">Creating a New Identity</h4>
             <div className="space-y-3">
               <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
                 <li>Authenticate with <strong>CSC_Session</strong></li>
-                <li>Process your own geometry with <strong>CSC_CreateComponent</strong></li>
-                <li>Save to database with <strong>CSC_AddComponent</strong></li>
+                <li>Optionally fetch a transmitted tag ID with <strong>CSC_FetchTransmittedID</strong> (after scanning in the web UI)</li>
+                <li>Build the create payload with <strong>CSC_CreateComponentIdentity</strong> (wire the identity UUID from step 2 or CreateUUID)</li>
+                <li>Post to the catalog with <strong>CSC_AddComponentIdentity</strong> — returns compose JSON ({`{identity, snapshot}`})</li>
+              </ol>
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-4">
+            <h4 className="font-semibold text-lg mb-3">Adding a New Snapshot Version</h4>
+            <div className="space-y-3">
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                <li>Authenticate with <strong>CSC_Session</strong></li>
+                <li>Know the existing identity UUID (from fetch, disassemble, or physical tag)</li>
+                <li>Build the snapshot payload with <strong>CSC_CreateComponentSnapshot</strong></li>
+                <li>Post the new version with <strong>CSC_AddComponentSnapshot</strong></li>
               </ol>
             </div>
           </div>
@@ -1061,7 +1249,7 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
         </p>
         <ul className="text-sm text-muted-foreground space-y-2">
           <li>• Check the component runtime messages for error details</li>
-          <li>• Ensure you&apos;re properly authenticated with CSC_SignIn</li>
+          <li>• Ensure you&apos;re properly authenticated with <strong>CSC_Session</strong></li>
           <li>• Verify your internet connection for API access</li>
           <li>• Contact <a href={`mailto:eschenbach@dg.tu-darmstadt.de?subject=[CSC]%20Support%20Request%20by%20user&body=Please%20describe%20the%20issue%20you%20are%20facing%20in%20detail.%20Include%20any%20error%20messages%20or%20logs%20you%20have%20received.`} className='text-blue-500 underline'>Max</a> via e-mail or various messenger apps</li>
         </ul>
