@@ -185,33 +185,59 @@ export function buildBoxExtrusionFromDimensions(
         },
       ],
     },
-    bbx: [xMm, yMm, zMm] as [number, number, number],
-    bbx_origin: [0, 0, 0] as [number, number, number],
     iframe: axisAlignedFrame(),
-    pca_frame: axisAlignedFrame(),
   }
 }
 
-function dateInputToIso(value: string): string | null {
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return `${trimmed}T00:00:00Z`
+export type SnapshotOrientation = {
+  bbx: [number, number, number]
+  bbx_origin: [number, number, number]
+  pca_frame: {
+    o: number[]
+    x: number[]
+    y: number[]
+    z: number[]
   }
-  return trimmed
+}
+
+export async function fetchSnapshotOrientation(
+  geometry: Record<string, unknown>,
+  assembly: boolean,
+): Promise<SnapshotOrientation> {
+  const res = await fetch('/api/backend/utility/compute-snapshot-orientation', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ geometry, assembly }),
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(
+      body.trim() || `Failed to compute orientation (${res.status})`,
+    )
+  }
+
+  const data = (await res.json()) as SnapshotOrientation
+  return data
 }
 
 export type CreateIdentityPayload = Record<string, unknown>
 
-export function buildCreateIdentityPayload(
+export async function buildCreateIdentityPayload(
   identityId: string,
   form: AddComponentFormState,
-): CreateIdentityPayload {
+): Promise<CreateIdentityPayload> {
   const box = buildBoxExtrusionFromDimensions(
     parseDimensionMm(form.lengthMm),
     parseDimensionMm(form.widthMm),
     parseDimensionMm(form.heightMm),
     form.type,
+  )
+
+  const orientation = await fetchSnapshotOrientation(
+    box.geometry as Record<string, unknown>,
+    form.assembly,
   )
 
   const location: ComponentLocation = {
@@ -236,7 +262,11 @@ export function buildCreateIdentityPayload(
     validated: false,
     reserved: '',
     attributes: {},
-    ...box,
+    geometry: box.geometry,
+    iframe: box.iframe,
+    bbx: orientation.bbx,
+    bbx_origin: orientation.bbx_origin,
+    pca_frame: orientation.pca_frame,
   }
 
   if (trimmedName) {
@@ -272,6 +302,15 @@ export function buildCreateIdentityPayload(
   }
 
   return payload
+}
+
+function dateInputToIso(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return `${trimmed}T00:00:00Z`
+  }
+  return trimmed
 }
 
 export function normalizeScannedIdentityId(raw: string): string {

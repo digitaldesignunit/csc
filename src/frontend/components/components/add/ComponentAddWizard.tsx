@@ -289,7 +289,7 @@ export default function ComponentAddWizard() {
     setSubmitError(null)
 
     try {
-      const payload = buildCreateIdentityPayload(effectiveId, form)
+      const payload = await buildCreateIdentityPayload(effectiveId, form)
       const res = await fetch('/api/backend/identities', {
         method: 'POST',
         credentials: 'include',
