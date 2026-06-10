@@ -81,7 +81,11 @@ class AdminUserUpdate(BaseModel):
 
     role: Optional[Role] = None
     disabled: Optional[bool] = None
-    full_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    full_name: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=100
+    )
 
 
 class UserInDB(User):
