@@ -39,7 +39,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260610
     """
 
     def __init__(self):
@@ -340,7 +340,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     def get_api_source_versions(self, auth_core):
         """Get source versions from API."""
         api_src_versions = {}
-        response = auth_core.authorized_get('/ghupdates/src_names')
+        response = auth_core.authorized_get('/ghinterface/src_names')
         if response.status_code == 200:
             api_src_files_json = response.json()
             for file_tuple in api_src_files_json:
@@ -373,7 +373,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     def get_api_userobject_names(self, auth_core):
         """Get userobject names from API."""
         api_uo_names = []
-        response = auth_core.authorized_get('/ghupdates/userobject_names')
+        response = auth_core.authorized_get('/ghinterface/userobject_names')
         if response.status_code == 200:
             api_uo_names = list(response.json())
         elif response.status_code == 401:
@@ -401,7 +401,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
 
     def get_api_source_file_text(self, auth_core, full_name):
         """Get source file from API."""
-        response = auth_core.authorized_get(f'/ghupdates/src/{full_name}')
+        response = auth_core.authorized_get(f'/ghinterface/src/{full_name}')
         if response.status_code == 200:
             return response.text
         elif response.status_code == 404:
@@ -433,7 +433,9 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
 
     def get_api_userobject_bytes(self, auth_core, uo_name):
         """Get userobject bytes from API."""
-        response = auth_core.authorized_get(f'/ghupdates/userobject/{uo_name}')
+        response = auth_core.authorized_get(
+            f'/ghinterface/userobject/{uo_name}'
+        )
         if response.status_code == 200:
             return response.content
         elif response.status_code == 404:
@@ -686,8 +688,9 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 # different subfolders due to the recursive glob)
                 deleted_stale = 0
                 for uo_name in stale_uo_names:
-                    stale_file = installed_uo_paths.get(uo_name) or os.path.join(
-                        uo_install_dir, uo_name + '.ghuser'
+                    stale_file = (
+                        installed_uo_paths.get(uo_name) or
+                        os.path.join(uo_install_dir, uo_name + '.ghuser')
                     )
                     try:
                         os.remove(stale_file)
