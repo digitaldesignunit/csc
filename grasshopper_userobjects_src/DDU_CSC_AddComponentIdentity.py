@@ -28,8 +28,9 @@ ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Creates a catalog identity and version-0 snapshot via POST /identities. '
     'Accepts CreateComponentRequest JSON from CreateComponentIdentity, '
-    'uploads staged binary PLY mesh files from pending_identity_assets/, '
-    'and optionally consumes a pending transmitted component ID.'
+    'uploads staged mesh and point-cloud PLY files from '
+    'pending_identity_assets/, and optionally consumes a pending '
+    'transmitted component ID.'
 )
 
 
@@ -37,7 +38,7 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260611
     """
 
     def __init__(self):
@@ -146,6 +147,35 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
                     pending.append(entry)
                 else:
                     missing.append(entry)
+
+        return {
+            'assets_dir': assets_dir,
+            'pending': pending,
+            'missing': missing,
+        }
+
+    def check_staged_point_cloud_ply_files(
+            self,
+            identity_id: str,
+            manifest: dict) -> dict:
+        assets_dir = self.get_identity_assets_dir(identity_id)
+        point_cloud_primitives = manifest.get('point_cloud_primitives') or {}
+        pending = []
+        missing = []
+
+        for index_str, markers in point_cloud_primitives.items():
+            if not markers:
+                continue
+            rel_path = os.path.join('point_clouds', f'{index_str}.ply')
+            full_path = os.path.join(assets_dir, rel_path)
+            entry = {
+                'primitive_index': str(index_str),
+                'path': full_path,
+            }
+            if os.path.isfile(full_path):
+                pending.append(entry)
+            else:
+                missing.append(entry)
 
         return {
             'assets_dir': assets_dir,
@@ -299,7 +329,92 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
 
         if upload_success:
             self._addRemark(
-                f'All staged PLY files uploaded for identity {identity_id}'
+                'All staged mesh PLY files uploaded '
+                f'for identity {identity_id}'
+            )
+        return upload_success
+
+    def upload_staged_point_cloud_ply_files(
+            self,
+            auth_core,
+            snapshot_id: str,
+            identity_id: str,
+            staged_files: list) -> bool:
+        if not staged_files:
+            return True
+
+        upload_success = True
+        headers = auth_core.auth_header()
+
+        for entry in staged_files:
+            primitive_index = entry['primitive_index']
+            file_path = entry['path']
+            self.Component.Message = (
+                f'Uploading point cloud PLY primitive {primitive_index}...'
+            )
+            self._addRemark(
+                f'Uploading point cloud {os.path.basename(file_path)} for '
+                f'snapshot {snapshot_id}'
+            )
+
+            try:
+                with open(file_path, 'rb') as handle:
+                    response = requests.put(
+                        auth_core.base_url + (
+                            f'/snapshots/{snapshot_id}/point_clouds/'
+                            f'{primitive_index}.ply'
+                        ),
+                        files={
+                            'point_cloud_file': (
+                                os.path.basename(file_path),
+                                handle,
+                                'application/octet-stream',
+                            ),
+                        },
+                        headers=headers,
+                        timeout=300,
+                    )
+            except requests.exceptions.Timeout:
+                self._addWarning(
+                    f'Point cloud upload timed out for primitive '
+                    f'{primitive_index}.'
+                )
+                upload_success = False
+                continue
+            except requests.exceptions.ConnectionError:
+                self._addWarning(
+                    f'Connection lost uploading point cloud primitive '
+                    f'{primitive_index}.'
+                )
+                upload_success = False
+                continue
+            except OSError as exc:
+                self._addWarning(
+                    f'Could not read staged point cloud PLY {file_path}: {exc}'
+                )
+                upload_success = False
+                continue
+
+            if response.status_code == 200:
+                self._addRemark(
+                    f'Uploaded point cloud PLY for primitive {primitive_index}'
+                )
+            else:
+                detail = response.text
+                try:
+                    detail = response.json().get('detail', detail)
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+                self._addWarning(
+                    f'Failed to upload point cloud PLY for primitive '
+                    f'{primitive_index} ({response.status_code}): {detail}'
+                )
+                upload_success = False
+
+        if upload_success:
+            self._addRemark(
+                f'All staged point cloud PLY files uploaded for identity '
+                f'{identity_id}'
             )
         return upload_success
 
@@ -367,39 +482,64 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
         identity_id = payload['_id']
         geometry = payload.get('geometry') or {}
         has_meshes = bool(geometry.get('meshes'))
+        has_point_clouds = bool(geometry.get('point_clouds'))
 
         manifest = self.load_staging_manifest(identity_id)
-        staged_status = None
-        if has_meshes and manifest:
-            staged_status = self.check_staged_ply_files(identity_id, manifest)
-            if staged_status['pending']:
-                self._addRemark(
-                    f'Found {len(staged_status["pending"])}'
-                    ' staged PLY file(s) '
-                    f'for identity {identity_id}'
-                )
-            if staged_status['missing']:
-                missing_names = [
-                    f'{item["primitive_index"]}/{item["resolution"]}.ply'
-                    for item in staged_status['missing']
-                ]
-                self._addWarning(
-                    'Manifest lists PLY files that are missing on disk: '
-                    + ', '.join(missing_names)
-                )
-        elif has_meshes:
+        staged_mesh_status = None
+        staged_point_cloud_status = None
+        if manifest:
+            if has_meshes:
+                staged_mesh_status = self.check_staged_ply_files(
+                    identity_id, manifest)
+                if staged_mesh_status['pending']:
+                    self._addRemark(
+                        f'Found {len(staged_mesh_status["pending"])} staged '
+                        f'mesh PLY file(s) for identity {identity_id}'
+                    )
+                if staged_mesh_status['missing']:
+                    missing_names = [
+                        f'{item["primitive_index"]}/{item["resolution"]}.ply'
+                        for item in staged_mesh_status['missing']
+                    ]
+                    self._addWarning(
+                        'Manifest lists missing mesh PLY files: '
+                        + ', '.join(missing_names)
+                    )
+            if has_point_clouds:
+                staged_point_cloud_status = (
+                    self.check_staged_point_cloud_ply_files(
+                        identity_id, manifest))
+                if staged_point_cloud_status['pending']:
+                    self._addRemark(
+                        f'Found {len(staged_point_cloud_status["pending"])} '
+                        f'staged point cloud PLY file(s) for identity '
+                        f'{identity_id}'
+                    )
+                if staged_point_cloud_status['missing']:
+                    missing_names = [
+                        f'point_clouds/{item["primitive_index"]}.ply'
+                        for item in staged_point_cloud_status['missing']
+                    ]
+                    self._addWarning(
+                        'Manifest lists missing point cloud PLY files: '
+                        + ', '.join(missing_names)
+                    )
+        elif has_meshes or has_point_clouds:
             self._addRemark(
                 f'No staging manifest for identity {identity_id}; '
-                'inline mesh primitives only'
+                'inline geometry primitives only'
             )
+
+        pending_asset_count = 0
+        if staged_mesh_status:
+            pending_asset_count += len(staged_mesh_status['pending'])
+        if staged_point_cloud_status:
+            pending_asset_count += len(staged_point_cloud_status['pending'])
 
         if not Run:
             status_msg = f'Ready to create identity {identity_id}'
-            if staged_status and staged_status['pending']:
-                status_msg += (
-                    f' with {len(staged_status["pending"])} '
-                    'PLY file(s)'
-                )
+            if pending_asset_count:
+                status_msg += f' with {pending_asset_count} staged PLY file(s)'
             status_msg += ' (toggle Run to execute)'
             self.Component.Message = status_msg
             return AddedComponentData
@@ -462,30 +602,49 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
                         f'{str(exc)}'
                     )
 
+                upload_issues = False
                 if (
                     snapshot_id
-                    and staged_status
-                    and staged_status['pending']
+                    and staged_mesh_status
+                    and staged_mesh_status['pending']
                 ):
-                    self.Component.Message = 'Uploading staged PLY files...'
-                    upload_success = self.upload_staged_ply_files(
-                        auth_core,
-                        snapshot_id,
-                        created_identity_id,
-                        staged_status['pending'],
+                    self.Component.Message = (
+                        'Uploading staged mesh PLY files...'
                     )
-                    if upload_success:
-                        self.Component.Message = (
-                            f'Created identity {created_identity_id} with PLY'
-                        )
-                    else:
-                        self._addWarning(
-                            'Identity created but some PLY uploads failed'
-                        )
-                        self.Component.Message = (
-                            f'Created identity {created_identity_id} '
-                            '(PLY upload issues)'
-                        )
+                    if not self.upload_staged_ply_files(
+                            auth_core,
+                            snapshot_id,
+                            created_identity_id,
+                            staged_mesh_status['pending'],
+                    ):
+                        upload_issues = True
+                if (
+                    snapshot_id
+                    and staged_point_cloud_status
+                    and staged_point_cloud_status['pending']
+                ):
+                    self.Component.Message = (
+                        'Uploading staged point cloud PLY files...'
+                    )
+                    if not self.upload_staged_point_cloud_ply_files(
+                            auth_core,
+                            snapshot_id,
+                            created_identity_id,
+                            staged_point_cloud_status['pending'],
+                    ):
+                        upload_issues = True
+                if upload_issues:
+                    self._addWarning(
+                        'Identity created but some staged PLY uploads failed'
+                    )
+                    self.Component.Message = (
+                        f'Created identity {created_identity_id} '
+                        '(PLY upload issues)'
+                    )
+                elif pending_asset_count:
+                    self.Component.Message = (
+                        f'Created identity {created_identity_id} with PLY'
+                    )
 
                 return AddedComponentData
 

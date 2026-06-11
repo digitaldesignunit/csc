@@ -29,6 +29,10 @@ import scriptcontext as sc  # NOQA
 # One PCA sample per this many mm of triangle area (3D mesh path).
 REFERENCE_FACE_AREA_MM2 = 100.0
 
+# Inline JSON preview cap; full cloud staged as PLY above this count.
+POINT_CLOUD_INLINE_MAX = 5000
+POINT_CLOUD_STAGING_THRESHOLD = 5000
+
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
 ghenv.Component.Name = 'CreateComponentSnapshot'  # NOQA
 ghenv.Component.NickName = 'CreateComponentSnapshot'  # NOQA
@@ -37,8 +41,9 @@ ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Builds a POST /identities/{id}/snapshots payload (CreateSnapshotRequest) '
     'from Rhino geometry for an existing identity. Computes PCA orientation, '
-    'mesh reduction, stages binary PLY under '
-    'pending_snapshot_assets/{snapshot_id}/meshes/<i>/.'
+    'mesh reduction, stages mesh PLY under '
+    'pending_snapshot_assets/{snapshot_id}/meshes/<i>/ and point cloud PLY '
+    'under .../point_clouds/<i>.ply.'
 )
 
 
@@ -46,7 +51,7 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260611
     """
 
     def __init__(self):
@@ -271,7 +276,10 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
                 entries.append(raw)
             return entries
 
-        if isinstance(reinforcements_input, Grasshopper.Kernel.Data.GH_Structure):
+        if isinstance(
+            reinforcements_input,
+            Grasshopper.Kernel.Data.GH_Structure
+        ):
             for obj in reinforcements_input.AllData(True):
                 if obj is None:
                     continue
@@ -513,18 +521,94 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
             for tri in faces:
                 handle.write(struct.pack('<Biii', 3, tri[0], tri[1], tri[2]))
 
+    def point_cloud_to_inline_primitive(
+            self,
+            cloud,
+            max_points: int = POINT_CLOUD_INLINE_MAX):
+        """Build inline point_cloud primitive with optional subsampling."""
+        count = cloud.Count
+        if count == 0:
+            raise RuntimeError('Point cloud is empty')
+
+        if count > max_points:
+            step = count / float(max_points)
+            indices = [
+                min(int(round(i * step)), count - 1)
+                for i in range(max_points)
+            ]
+        else:
+            indices = list(range(count))
+
+        points = []
+        colors = []
+        has_colors = False
+        for i in indices:
+            item = cloud[i]
+            loc = item.Location
+            points.append([loc.X, loc.Y, loc.Z])
+            color = item.Color
+            if color.IsEmpty:
+                colors.append([128, 128, 128])
+            else:
+                has_colors = True
+                colors.append([color.R, color.G, color.B])
+
+        result = {'points': points}
+        if has_colors:
+            result['colors'] = colors
+        return result
+
+    def save_rhino_point_cloud_as_ply_binary(self, cloud, file_path):
+        """Write binary little-endian PLY (vertices only) from a PointCloud."""
+        vertices = []
+        colors = []
+        for i in range(cloud.Count):
+            item = cloud[i]
+            loc = item.Location
+            vertices.append((loc.X, loc.Y, loc.Z))
+            color = item.Color
+            if color.IsEmpty:
+                colors.append((128, 128, 128))
+            else:
+                colors.append((color.R, color.G, color.B))
+
+        header = (
+            'ply\n'
+            'format binary_little_endian 1.0\n'
+            f'element vertex {len(vertices)}\n'
+            'property float x\n'
+            'property float y\n'
+            'property float z\n'
+            'property uchar red\n'
+            'property uchar green\n'
+            'property uchar blue\n'
+            'end_header\n'
+        )
+
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'wb') as handle:
+            handle.write(header.encode('ascii'))
+            for (x, y, z), (r, g, b) in zip(vertices, colors):
+                handle.write(struct.pack('<fffBBB', x, y, z, r, g, b))
+
     def center_geometry_at_origin(self, geometry):
         """
-        Center extrusion at its volume centroid.
+        Center geometry at its centroid.
         Returns centered geometry and translation vector.
         """
-        # Get the volume centroid of the geometry
-        vmp = Rhino.Geometry.VolumeMassProperties.Compute(geometry)
-        volume_centroid = vmp.Centroid
-        if volume_centroid is None:
-            # Fallback to bounding box centroid if volume centroid fails
+        if isinstance(geometry, Rhino.Geometry.PointCloud):
+            if geometry.Count == 0:
+                raise RuntimeError('Point cloud is empty')
             bbox = geometry.GetBoundingBox(True)
             volume_centroid = bbox.Center
+        else:
+            # Get the volume centroid of the geometry
+            vmp = Rhino.Geometry.VolumeMassProperties.Compute(geometry)
+            volume_centroid = vmp.Centroid
+            if volume_centroid is None:
+                # Fallback to bounding box centroid if volume centroid fails
+                bbox = geometry.GetBoundingBox(True)
+                volume_centroid = bbox.Center
         # Create translation vector to center
         translation_vector = -np.array([
             volume_centroid.X, volume_centroid.Y, volume_centroid.Z
@@ -823,6 +907,15 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
         elif isinstance(geometry, Rhino.Geometry.Mesh):
             points = np.array([[p.X, p.Y, p.Z] for p in geometry.Vertices])
             compute_3d = True
+        # HANDLE POINT CLOUD
+        elif isinstance(geometry, Rhino.Geometry.PointCloud):
+            points = np.array([
+                [geometry[i].Location.X,
+                 geometry[i].Location.Y,
+                 geometry[i].Location.Z]
+                for i in range(geometry.Count)
+            ])
+            compute_3d = True
         # IF NOT ONE OF THESE GEOMETRY TYPES
         else:
             raise RuntimeError('Geometry processing not implemented '
@@ -870,18 +963,32 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
             str(primitive_index),
         )
 
+    def get_point_cloud_staged_path(
+            self,
+            snapshot_id: str,
+            primitive_index: int) -> str:
+        return os.path.join(
+            self.get_snapshot_assets_dir(snapshot_id),
+            'point_clouds',
+            f'{primitive_index}.ply',
+        )
+
     def write_staging_manifest(
             self,
             identity_id: str,
             snapshot_id: str,
-            mesh_primitives: dict):
+            mesh_primitives: dict = None,
+            point_cloud_primitives: dict = None):
         """Write manifest.json for AddComponentSnapshot upload handoff."""
         manifest = {
             'identity_id': identity_id,
             'snapshot_id': snapshot_id,
             'coordinate_frame': 'rhino_z_up',
-            'mesh_primitives': mesh_primitives,
         }
+        if mesh_primitives:
+            manifest['mesh_primitives'] = mesh_primitives
+        if point_cloud_primitives:
+            manifest['point_cloud_primitives'] = point_cloud_primitives
         assets_dir = self.get_snapshot_assets_dir(snapshot_id)
         os.makedirs(assets_dir, exist_ok=True)
         manifest_path = os.path.join(assets_dir, 'manifest.json')
@@ -1060,6 +1167,96 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
 
         return primitive_meshes, mesh_primitives
 
+    def _stage_point_cloud_ply(
+            self,
+            snapshot_id: str,
+            primitive_index: int,
+            cloud,
+            staging_threshold: int = POINT_CLOUD_STAGING_THRESHOLD):
+        """Stage full PLY when point count exceeds inline preview cap."""
+        if cloud is None or cloud.Count == 0:
+            return {}
+
+        if cloud.Count <= staging_threshold:
+            return {}
+
+        ply_path = self.get_point_cloud_staged_path(
+            snapshot_id, primitive_index)
+        if os.path.exists(ply_path):
+            self._addWarning(
+                f'Point cloud PLY already exists for snapshot {snapshot_id} '
+                f'primitive {primitive_index}; skipping overwrite.'
+            )
+            return {}
+
+        try:
+            self.save_rhino_point_cloud_as_ply_binary(cloud, ply_path)
+            self._addRemark(
+                f'Staged point cloud PLY for primitive {primitive_index}'
+            )
+            return {str(primitive_index): ['ply']}
+        except Exception as e:
+            self._addWarning(f'Failed to stage point cloud PLY: {str(e)}')
+            return {}
+
+    def process_point_cloud_geometry(
+            self,
+            cloud: Rhino.Geometry.PointCloud,
+            snapshot_id: str,
+            staging_threshold: int = POINT_CLOUD_STAGING_THRESHOLD):
+        """Returns (original, inline_cloud, point_cloud_primitives dict)."""
+        staged = self._stage_point_cloud_ply(
+            snapshot_id, 0, cloud, staging_threshold)
+        return cloud, cloud, staged
+
+    def process_multiple_point_clouds_geometry(
+            self,
+            clouds,
+            snapshot_id: str,
+            staging_threshold: int = POINT_CLOUD_STAGING_THRESHOLD):
+        """Returns (clouds, point_cloud_primitives dict)."""
+        if not clouds:
+            return [], {}
+
+        point_cloud_primitives = {}
+        for index, cloud in enumerate(clouds):
+            if cloud is None:
+                continue
+            staged = self._stage_point_cloud_ply(
+                snapshot_id, index, cloud, staging_threshold)
+            point_cloud_primitives.update(staged)
+
+        return clouds, point_cloud_primitives
+
+    def compute_pca_for_multiple_point_clouds(self, clouds):
+        """
+        Compute PCA for multiple point clouds as a whole assembly.
+        Returns dimensions, principal components, translation vector,
+        and bbx_origin.
+        """
+        if not clouds or len(clouds) == 0:
+            return None, None, None, None
+
+        all_points = []
+        for cloud in clouds:
+            if cloud is None:
+                continue
+            for i in range(cloud.Count):
+                loc = cloud[i].Location
+                all_points.append([loc.X, loc.Y, loc.Z])
+
+        if not all_points:
+            return None, None, None, None
+
+        points_array = np.array(all_points)
+        centroid = np.mean(points_array, axis=0)
+        translation_vector = -centroid
+        centered_points = points_array + translation_vector
+        dimensions, principal_components, bbx_origin = (
+            self.compute_obb_3d(centered_points)
+        )
+        return dimensions, principal_components, translation_vector, bbx_origin
+
     def compute_pca_for_multiple_meshes(self, meshes):
         """
         Compute PCA for multiple meshes as a whole assembly.
@@ -1097,27 +1294,138 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
 
         return dimensions, principal_components, translation_vector, bbx_origin
 
-    def compute_pca_for_first_mesh_only(self, meshes):
+    def compute_pca_for_first_geometry_only(self, geometries):
         """
-        Compute PCA for only the first mesh, but apply transformations to all
-        meshes.
-        Centers only the first mesh at origin before computing PCA.
-        Returns dimensions, principal components, translation vector,
-        and bbx_origin.
+        Compute PCA from geometry at index 0 (Mesh or PointCloud).
+        The same translation is applied to every item in the list.
         """
-        # Retrieve the first mesh
-        mesh = meshes[0]
-        # Use the same centering approach as single mesh case
-        # Center the first mesh at origin using volume centroid
-        (centered_mesh, translation_vector) = (
-            self.center_geometry_at_origin(mesh)
+        first_geom = geometries[0]
+        if first_geom is None:
+            raise ValueError(
+                'Geometry at index 0 must be set for multiple inputs '
+                'when Assembly=False.'
+            )
+        centered_geom, translation_vector = (
+            self.center_geometry_at_origin(first_geom)
         )
-        # Area-weighted samples from the centered first mesh
-        centered_points, _ = self.process_geometry(centered_mesh)
+        centered_points, _ = self.process_geometry(centered_geom)
         dimensions, principal_components, bbx_origin = (
             self.compute_obb_3d(centered_points)
         )
         return dimensions, principal_components, translation_vector, bbx_origin
+
+    def compute_pca_for_mixed_geometry(self, geometries):
+        """
+        Compute PCA from combined mesh vertices and point-cloud points.
+        Used when Assembly=True and the geometry list mixes types.
+        """
+        all_points = []
+        for geom in geometries:
+            if geom is None:
+                continue
+            if isinstance(geom, Rhino.Geometry.Mesh):
+                for vertex in geom.Vertices:
+                    all_points.append([vertex.X, vertex.Y, vertex.Z])
+            elif isinstance(geom, Rhino.Geometry.PointCloud):
+                for i in range(geom.Count):
+                    loc = geom[i].Location
+                    all_points.append([loc.X, loc.Y, loc.Z])
+
+        if not all_points:
+            return None, None, None, None
+
+        points_array = np.array(all_points)
+        centroid = np.mean(points_array, axis=0)
+        translation_vector = -centroid
+        centered_points = points_array + translation_vector
+        dimensions, principal_components, bbx_origin = (
+            self.compute_obb_3d(centered_points)
+        )
+        return dimensions, principal_components, translation_vector, bbx_origin
+
+    def process_mixed_geometry_list(
+            self,
+            geometries,
+            snapshot_id: str,
+            default_rgb,
+            translation_vector,
+            mesh_primitive_threshold: int,
+            mesh_reduced_threshold: int,
+            mesh_reduced_target: int,
+            mesh_primitive_target: int,
+            point_cloud_staging_threshold: int = POINT_CLOUD_STAGING_THRESHOLD):  # NOQA
+        """
+        Center, stage, and build inline primitives for a multi-item geometry
+        list that may contain Meshes and/or PointClouds.
+        """
+        mesh_primitives = {}
+        point_cloud_primitives = {}
+        meshes_data = []
+        point_clouds_data = []
+        mesh_index = 0
+        point_cloud_index = 0
+
+        translation_xform = Rhino.Geometry.Transform.Translation(
+            translation_vector[0],
+            translation_vector[1],
+            translation_vector[2],
+        )
+
+        for geom in geometries:
+            if geom is None:
+                continue
+
+            centered = geom.Duplicate()
+            centered.Transform(translation_xform)
+
+            if isinstance(geom, Rhino.Geometry.Mesh):
+                primitive_mesh, resolutions = self._stage_mesh_ply_files(
+                    snapshot_id,
+                    mesh_index,
+                    centered,
+                    None,
+                    default_rgb,
+                    mesh_primitive_threshold,
+                    mesh_reduced_threshold,
+                    mesh_reduced_target,
+                    mesh_primitive_target,
+                )
+                if resolutions:
+                    mesh_primitives[str(mesh_index)] = resolutions
+                meshes_data.append(
+                    self.mesh_to_inline_primitive(
+                        primitive_mesh or centered,
+                        default_rgb,
+                    )
+                )
+                mesh_index += 1
+            elif isinstance(geom, Rhino.Geometry.PointCloud):
+                staged = self._stage_point_cloud_ply(
+                    snapshot_id,
+                    point_cloud_index,
+                    centered,
+                    point_cloud_staging_threshold,
+                )
+                point_cloud_primitives.update(staged)
+                point_clouds_data.append(
+                    self.point_cloud_to_inline_primitive(
+                        centered,
+                        max_points=POINT_CLOUD_INLINE_MAX,
+                    )
+                )
+                point_cloud_index += 1
+            else:
+                raise RuntimeError(
+                    'Mixed geometry lists support Mesh and PointCloud only; '
+                    f'got {type(geom).__name__}'
+                )
+
+        geometry = {}
+        if meshes_data:
+            geometry['meshes'] = meshes_data
+        if point_clouds_data:
+            geometry['point_clouds'] = point_clouds_data
+        return geometry, mesh_primitives, point_cloud_primitives
 
     def RunScript(self,
             ClearLocalStorage: bool,
@@ -1259,30 +1567,45 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addError(msg)
                 return SnapshotData
 
+            is_mixed_geometry = False
+            is_point_cloud_assembly = False
+
             # Check if single or multiple objects
             if len(Geometry) == 1:
                 # Single object validation
                 single_geometry = Geometry[0]
                 if not isinstance(
                     single_geometry,
-                    (Rhino.Geometry.Mesh, Rhino.Geometry.Extrusion)
+                    (Rhino.Geometry.Mesh,
+                     Rhino.Geometry.Extrusion,
+                     Rhino.Geometry.PointCloud)
                 ):
                     msg = (
-                        'Expected a Mesh or Extrusion '
-                        'as geometry input! Please ensure and try '
-                        'again.'
+                        'Expected a Mesh, Extrusion, or PointCloud '
+                        'as geometry input! Please ensure and try again.'
                     )
                     raise ValueError(msg)
             else:
-                # Multiple objects - all must be meshes
+                non_null = [g for g in Geometry if g is not None]
+                if not non_null:
+                    msg = 'Input Geometry contains only null entries!'
+                    raise ValueError(msg)
                 for i, geom in enumerate(Geometry):
-                    if (geom is not None and
-                            not isinstance(geom, Rhino.Geometry.Mesh)):
+                    if geom is not None and not isinstance(
+                            geom,
+                            (Rhino.Geometry.Mesh,
+                             Rhino.Geometry.PointCloud)):
                         msg = (
-                            f'The geometry input at index {i} is not a Mesh! '
-                            'For multiple objects, all must be '
-                            'Rhino.Geometry.Mesh objects.')
+                            f'Geometry at index {i} must be Mesh or '
+                            f'PointCloud; got {type(geom).__name__}.'
+                        )
                         raise ValueError(msg)
+                has_mesh = any(
+                    isinstance(g, Rhino.Geometry.Mesh) for g in non_null)
+                has_point_cloud = any(
+                    isinstance(g, Rhino.Geometry.PointCloud) for g in non_null)
+                is_mixed_geometry = has_mesh and has_point_cloud
+                is_point_cloud_assembly = has_point_cloud and not has_mesh
 
             self.Component.Message = 'Processing snapshot...'
             default_rgb = (Color.R, Color.G, Color.B)
@@ -1314,21 +1637,26 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
                             centered_points, height)
                     )
             else:
-                # Handle multiple meshes - choose PCA computation based on
-                # Assembly parameter
                 if Assembly:
-                    # Assembly=True: compute PCA for whole assembly
-                    (dimensions, principal_components, translation_vector,
-                     bbx_origin) = self.compute_pca_for_multiple_meshes(
-                         Geometry)
+                    if is_mixed_geometry:
+                        (dimensions, principal_components,
+                         translation_vector, bbx_origin) = (
+                            self.compute_pca_for_mixed_geometry(Geometry))
+                    elif is_point_cloud_assembly:
+                        (dimensions, principal_components,
+                         translation_vector, bbx_origin) = (
+                            self.compute_pca_for_multiple_point_clouds(
+                                Geometry))
+                    else:
+                        (dimensions, principal_components,
+                         translation_vector, bbx_origin) = (
+                            self.compute_pca_for_multiple_meshes(Geometry))
                 else:
-                    # Assembly=False: compute PCA only for first mesh, but
-                    # apply to all meshes
                     (dimensions, principal_components, translation_vector,
-                     bbx_origin) = self.compute_pca_for_first_mesh_only(
-                         Geometry)
-                centered_geometry = None  # Not used for multiple meshes
-                compute_3d = True  # Always 3D for multiple meshes
+                     bbx_origin) = (
+                        self.compute_pca_for_first_geometry_only(Geometry))
+                centered_geometry = None
+                compute_3d = True
 
             schema = self.get_snapshot_payload_schema()
 
@@ -1356,6 +1684,7 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
                 payload['marker_points'] = marker_points_data
 
             mesh_primitives = {}
+            point_cloud_primitives = {}
 
             # Process geometry input based on type
             if len(Geometry) == 1:
@@ -1415,49 +1744,43 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
                             'height': height,
                         }],
                     }
-            else:
-                # HANDLE MULTIPLE MESHES
-                # Center all meshes using the translation
-                # vector from PCA computation
-                centered_meshes = []
-                for mesh in Geometry:
-                    if mesh is not None:
-                        # Create a copy of the mesh
-                        centered_mesh = mesh.Duplicate()
-                        # Apply the translation to center the mesh
-                        translation_xform = (
-                            Rhino.Geometry.Transform.Translation(
-                                translation_vector[0],
-                                translation_vector[1],
-                                translation_vector[2]
-                            )
-                        )
-                        centered_mesh.Transform(translation_xform)
-                        centered_meshes.append(centered_mesh)
-                    else:
-                        centered_meshes.append(None)
 
-                primitive_meshes, staged = (
-                    self.process_multiple_meshes_geometry(
-                        centered_meshes,
+                elif isinstance(single_geometry, Rhino.Geometry.PointCloud):
+                    (_original_cloud,
+                     _inline_cloud,
+                     staged) = self.process_point_cloud_geometry(
+                        centered_geometry,
+                        SnapshotID,
+                        staging_threshold=POINT_CLOUD_STAGING_THRESHOLD,
+                    )
+                    point_cloud_primitives.update(staged)
+                    payload['geometry'] = {
+                        'point_clouds': [
+                            self.point_cloud_to_inline_primitive(
+                                centered_geometry,
+                                max_points=POINT_CLOUD_INLINE_MAX,
+                            )
+                        ],
+                    }
+            else:
+                geometry_data, staged_meshes, staged_point_clouds = (
+                    self.process_mixed_geometry_list(
+                        Geometry,
                         SnapshotID,
                         default_rgb,
+                        translation_vector,
                         mesh_primitive_threshold=MESH_PRIMITIVE_THRESHOLD,
                         mesh_reduced_threshold=MESH_REDUCED_THRESHOLD,
                         mesh_reduced_target=MESH_REDUCED_TARGET,
                         mesh_primitive_target=MESH_PRIMITIVE_TARGET,
+                        point_cloud_staging_threshold=(
+                            POINT_CLOUD_STAGING_THRESHOLD
+                        ),
                     )
                 )
-                mesh_primitives.update(staged)
-                meshes_data = []
-                for primitive_mesh in primitive_meshes:
-                    if primitive_mesh is None:
-                        continue
-                    meshes_data.append(
-                        self.mesh_to_inline_primitive(
-                            primitive_mesh, default_rgb)
-                    )
-                payload['geometry'] = {'meshes': meshes_data}
+                payload['geometry'] = geometry_data
+                mesh_primitives.update(staged_meshes)
+                point_cloud_primitives.update(staged_point_clouds)
 
             centered_reinforcements = self.build_centered_reinforcements(
                 Reinforcements,
@@ -1466,9 +1789,13 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
             if centered_reinforcements:
                 payload['geometry']['reinforcements'] = centered_reinforcements
 
-            if mesh_primitives:
+            if mesh_primitives or point_cloud_primitives:
                 self.write_staging_manifest(
-                    IdentityID, SnapshotID, mesh_primitives)
+                    IdentityID,
+                    SnapshotID,
+                    mesh_primitives=mesh_primitives or None,
+                    point_cloud_primitives=point_cloud_primitives or None,
+                )
 
             if not self.validate_snapshot_payload(payload, schema):
                 self._addWarning(
