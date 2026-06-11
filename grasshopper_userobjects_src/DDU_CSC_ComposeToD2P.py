@@ -4,6 +4,7 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
+# r: git+https://github.com/fstwn/D2P-Components.git@d2p-core-py#subdirectory=D2P.CorePy
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -112,7 +113,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260611
 
     D2P member layer taxonomy (ParentMember tree)
     --------------------------------------------
@@ -615,12 +616,11 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
 
         return component
 
-    def RunScript(
-            self,
+    def RunScript(self,
             ComponentData: Grasshopper.DataTree[str],
-            MeshMode: str = 'best',
-            SnapshotScope: str = 'current',
-            Parent=None):
+            MeshMode,
+            SnapshotScope,
+            Parent):
         Component = Grasshopper.DataTree[System.Object]()
         self.Component.Message = ''
 
