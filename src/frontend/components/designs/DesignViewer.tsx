@@ -254,6 +254,7 @@ export default function DesignViewer({
 }: DesignViewerProps) {
   const [geometryMode, setGeometryMode] = useState<'primitive' | 'reduced' | 'detailed'>('primitive')
   const [loadedSnapshots, setLoadedSnapshots] = useState<Map<string, THREE.Group[]>>(new Map())
+  const [loadedPointClouds, setLoadedPointClouds] = useState<Map<string, THREE.Group[]>>(new Map())
   const [loadedReinforcements, setLoadedReinforcements] = useState<Map<string, THREE.Group[]>>(new Map())
   const [loadingStates, setLoadingStates] = useState<Map<string, boolean>>(new Map())
   const [errorStates, setErrorStates] = useState<Map<string, string>>(new Map())
@@ -284,9 +285,11 @@ export default function DesignViewer({
   useEffect(() => {
     const loadAllGeometries = async () => {
       setLoadedSnapshots(new Map())
+      setLoadedPointClouds(new Map())
       setLoadedReinforcements(new Map())
       setErrorStates(new Map())
       const newLoadedSnapshots = new Map<string, THREE.Group[]>()
+      const newLoadedPointClouds = new Map<string, THREE.Group[]>()
       const newLoadedReinforcements = new Map<string, THREE.Group[]>()
       const newErrorStates = new Map<string, string>()
 
@@ -312,10 +315,12 @@ export default function DesignViewer({
           
           if (result.success) {
             newLoadedSnapshots.set(comp.snapshot, result.meshes)
+            newLoadedPointClouds.set(comp.snapshot, result.pointClouds)
             newLoadedReinforcements.set(comp.snapshot, result.reinforcements)
             newErrorStates.delete(comp.snapshot)
             debugLog(
-              `Successfully loaded ${result.meshes.length} meshes and `
+              `Successfully loaded ${result.meshes.length} meshes, `
+              + `${result.pointClouds.length} point cloud(s), and `
               + `${result.reinforcements.length} reinforcement group(s) `
               + `for snapshot ${comp.snapshot}`,
             )
@@ -337,6 +342,7 @@ export default function DesignViewer({
         })
         
         setLoadedSnapshots(new Map(newLoadedSnapshots))
+        setLoadedPointClouds(new Map(newLoadedPointClouds))
         setLoadedReinforcements(new Map(newLoadedReinforcements))
         setErrorStates(new Map(newErrorStates))
         
@@ -549,6 +555,7 @@ export default function DesignViewer({
           <Bounds fit clip observe margin={1.2} maxDuration={1}>
             {design.components.map((comp) => {
               const meshes = loadedSnapshots.get(comp.snapshot) || []
+              const pointClouds = loadedPointClouds.get(comp.snapshot) || []
               const reinforcements = loadedReinforcements.get(comp.snapshot) || []
               const isVisible = visibleSnapshots.get(comp.snapshot) ?? true
               const isLoading = loadingStates.get(comp.snapshot) ?? false
@@ -610,14 +617,19 @@ export default function DesignViewer({
                 )
               }
 
-              if (meshes.length === 0 && reinforcements.length === 0) {
+              if (
+                meshes.length === 0
+                && pointClouds.length === 0
+                && reinforcements.length === 0
+              ) {
                 debugLog(`Component ${comp.snapshot} has no renderable geometry`)
                 return null
               }
 
               debugLog(
-                `Rendering component ${comp.snapshot} with ${meshes.length} meshes `
-                + `and ${reinforcements.length} reinforcement group(s)`,
+                `Rendering component ${comp.snapshot} with ${meshes.length} meshes, `
+                + `${pointClouds.length} point cloud(s), and `
+                + `${reinforcements.length} reinforcement group(s)`,
               )
               debugLog(`Geometry mode: ${geometryMode}, Component iframe:`, comp.iframe)
 
@@ -638,6 +650,12 @@ export default function DesignViewer({
                         <primitive key={`${comp.snapshot}_${index}`} object={meshGroup} />
                       )
                     })}
+                    {pointClouds.map((pointCloudGroup, index) => (
+                      <primitive
+                        key={`${comp.snapshot}_point_cloud_${index}`}
+                        object={pointCloudGroup}
+                      />
+                    ))}
                     {showReinforcements && reinforcements.map((reinforcementGroup, index) => (
                       <primitive
                         key={`${comp.snapshot}_reinforcement_${index}`}

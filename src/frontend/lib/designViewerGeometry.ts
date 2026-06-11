@@ -2,6 +2,11 @@ import * as THREE from 'three'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import type { ComponentSnapshot, SnapshotExtrusion, SnapshotGeometry, SnapshotMesh } from '@/generated/CatalogModels'
 import {
+  buildPointCloudGroupsFromSnapshot,
+  loadSnapshotPointCloudPlyGroups,
+  snapshotPointCloudsFromGeometry,
+} from '@/lib/pointCloudGeometry'
+import {
   buildReinforcementBarThreeGroup,
   snapshotReinforcementsFromGeometry,
 } from '@/lib/reinforcementGeometry'
@@ -16,7 +21,12 @@ import { snapshotMeshRoutingFromSnapshot } from '@/generated/catalogExtras'
  */
 
 export type GeometryLoadResult =
-  | { success: true; meshes: THREE.Group[]; reinforcements: THREE.Group[] }
+  | {
+      success: true
+      meshes: THREE.Group[]
+      pointClouds: THREE.Group[]
+      reinforcements: THREE.Group[]
+    }
   | {
       success: false
       error: 'not_found' | 'network_error' | 'parse_error'
@@ -25,6 +35,7 @@ export type GeometryLoadResult =
 
 interface CachedGeometry {
   meshes: THREE.Group[] | null
+  pointClouds: THREE.Group[]
   reinforcements: THREE.Group[]
   etag?: string
   timestamp: number
@@ -253,6 +264,15 @@ function buildPrimitiveGroupsFromSnapshot(snapshot: ComponentSnapshot): THREE.Gr
   return groups
 }
 
+function buildPrimitivePointCloudGroupsFromSnapshot(
+  snapshot: ComponentSnapshot,
+): THREE.Group[] {
+  return buildPointCloudGroupsFromSnapshot(
+    String(snapshot._id ?? 'snapshot'),
+    snapshot.geometry,
+  )
+}
+
 function buildReinforcementGroupsFromSnapshot(snapshot: ComponentSnapshot): THREE.Group[] {
   const snapshotId = String(snapshot._id ?? 'snapshot')
   return snapshotReinforcementsFromGeometry(snapshot.geometry)
@@ -279,10 +299,15 @@ export async function loadDesignSnapshotGeometry(
   const cacheKey = `${snapshotId}_${mode}`
   const cached = geometryCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
-    if (cached.meshes || cached.reinforcements.length > 0) {
+    if (
+      cached.meshes
+      || cached.pointClouds.length > 0
+      || cached.reinforcements.length > 0
+    ) {
       return {
         success: true,
         meshes: cached.meshes ?? [],
+        pointClouds: cached.pointClouds,
         reinforcements: cached.reinforcements,
       }
     }
@@ -306,10 +331,16 @@ export async function loadDesignSnapshotGeometry(
     const routing: SnapshotMeshRouting = snapshotMeshRoutingFromSnapshot(snapshot)
 
     const reinforcements = buildReinforcementGroupsFromSnapshot(snapshot)
+    const pointCloudCount = snapshotPointCloudsFromGeometry(snapshot.geometry).length
 
     if (mode === 'primitive') {
       const meshes = buildPrimitiveGroupsFromSnapshot(snapshot)
-      if (meshes.length === 0 && reinforcements.length === 0) {
+      const pointClouds = buildPrimitivePointCloudGroupsFromSnapshot(snapshot)
+      if (
+        meshes.length === 0
+        && pointClouds.length === 0
+        && reinforcements.length === 0
+      ) {
         return {
           success: false,
           error: 'not_found',
@@ -318,11 +349,12 @@ export async function loadDesignSnapshotGeometry(
       }
       geometryCache.set(cacheKey, {
         meshes,
+        pointClouds,
         reinforcements,
         etag: typeof snapshot.etag === 'string' ? snapshot.etag : undefined,
         timestamp: Date.now(),
       })
-      return { success: true, meshes, reinforcements }
+      return { success: true, meshes, pointClouds, reinforcements }
     }
 
     const plyResult = await loadSnapshotPlyMeshes(
@@ -330,27 +362,30 @@ export async function loadDesignSnapshotGeometry(
       mode,
       routing.mesh_ply_resolutions as Record<string, string[]> | null | undefined,
     )
-    if (plyResult.ok && plyResult.meshes.length > 0) {
-      geometryCache.set(cacheKey, {
-        meshes: plyResult.meshes,
-        reinforcements,
-        etag: plyResult.etag,
-        timestamp: Date.now(),
-      })
-      return { success: true, meshes: plyResult.meshes, reinforcements }
-    }
+    const pointCloudPlyResult = await loadSnapshotPointCloudPlyGroups(
+      snapshotId,
+      pointCloudCount,
+    )
 
-    if (reinforcements.length > 0) {
+    const meshes = plyResult.ok ? plyResult.meshes : []
+    const pointClouds = pointCloudPlyResult.ok ? pointCloudPlyResult.groups : []
+
+    if (meshes.length > 0 || pointClouds.length > 0 || reinforcements.length > 0) {
       geometryCache.set(cacheKey, {
-        meshes: [],
+        meshes,
+        pointClouds,
         reinforcements,
+        etag: plyResult.ok ? plyResult.etag : pointCloudPlyResult.ok
+          ? pointCloudPlyResult.etag
+          : undefined,
         timestamp: Date.now(),
       })
-      return { success: true, meshes: [], reinforcements }
+      return { success: true, meshes, pointClouds, reinforcements }
     }
 
     geometryCache.set(cacheKey, {
       meshes: null,
+      pointClouds: [],
       reinforcements: [],
       timestamp: Date.now(),
     })
