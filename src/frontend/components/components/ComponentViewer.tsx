@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
-import { Canvas } from '@react-three/fiber'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import type {
@@ -19,7 +19,10 @@ import {
   snapshotMeshRoutingFromSnapshot,
 } from '@/generated/catalogExtras'
 import { Card } from '@/components/ui/card'
-import { Bounds, OrbitControls, Html } from '@react-three/drei'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Scan, Grid3x3 } from 'lucide-react'
+import { Bounds, OrbitControls, Html, useBounds } from '@react-three/drei'
 import { rgbToHex } from '@/lib/utils'
 import {
   buildPointCloudThreeGroup,
@@ -34,24 +37,61 @@ import {
 } from '@/lib/reinforcementGeometry'
 import ComponentViewerSkeleton from './ComponentViewerSkeleton'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { ViewerMenu, MenuSection, SelectControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
+import { ViewerMenu, MenuSection, MenuSubsection, MenuDivider, SegmentedControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
 
 // Scale factor for converting units to meters in THREE
 const scale = 0.001
 
+/** Fit camera to scene bounds; registers ref for manual zoom-extents. */
+function FitCameraController({
+  fitRef,
+}: {
+  fitRef: React.MutableRefObject<(() => void) | null>
+}) {
+  const bounds = useBounds()
+  const controls = useThree((state) => state.controls)
+  const hasFit = useRef(false)
+
+  const fitToScene = useCallback(() => {
+    bounds.refresh().clip().fit()
+  }, [bounds])
+
+  useEffect(() => {
+    fitRef.current = fitToScene
+    return () => {
+      fitRef.current = null
+    }
+  }, [fitRef, fitToScene])
+
+  useLayoutEffect(() => {
+    if (hasFit.current || !controls) return
+    fitToScene()
+    hasFit.current = true
+  })
+
+  return null
+}
+
 // Simple in-memory cache for external geometry with ETag support
-interface CachedGeometry {
+interface CachedMeshGeometry {
   meshes: THREE.Group[] | null
+  etag?: string
+  timestamp: number
+}
+
+interface CachedPointCloudGeometry {
   pointClouds: THREE.Group[] | null
   etag?: string
   timestamp: number
 }
 
-const externalGeometryCache = new Map<string, CachedGeometry>()
+const externalMeshCache = new Map<string, CachedMeshGeometry>()
+const externalPointCloudCache = new Map<string, CachedPointCloudGeometry>()
 
 // Helpers
 
 type GeometryMode = 'primitive' | 'reduced' | 'detailed'
+type PointCloudGeometryMode = 'primitive' | 'detailed'
 
 // External geometry/mtl loading
 
@@ -90,9 +130,17 @@ function normalizeColors(colors: number[]): number[] {
   return colors.map(color => Math.max(0, Math.min(1, color)))
 }
 
-type GeometryLoadResult = {
+type MeshLoadResult = {
   success: true
   meshes: THREE.Group[]
+} | {
+  success: false
+  error: 'not_found' | 'network_error' | 'parse_error'
+  message: string
+}
+
+type PointCloudLoadResult = {
+  success: true
   pointClouds: THREE.Group[]
 } | {
   success: false
@@ -270,32 +318,23 @@ async function loadSnapshotPlyMeshes(
   }
 }
 
-async function loadExternalGeometry(
+async function loadExternalMeshes(
   identityId: string,
   mode: Exclude<GeometryMode, 'primitive'>,
   snapshotRouting: SnapshotMeshRouting | null,
-  pointCloudCount: number,
-): Promise<GeometryLoadResult> {
-  debugLog(`Loading ${mode} PLY geometry for identity ${identityId}`)
+): Promise<MeshLoadResult> {
+  debugLog(`Loading ${mode} PLY meshes for identity ${identityId}`)
 
   const hint = meshHintForCache(snapshotRouting)
-  const cacheKey = `${identityId}:${mode}:${hint}:pc${pointCloudCount}`
-  const cached = externalGeometryCache.get(cacheKey)
+  const cacheKey = `${identityId}:mesh:${mode}:${hint}`
+  const cached = externalMeshCache.get(cacheKey)
 
-  if (cached && (cached.meshes || cached.pointClouds)) {
-    debugLog(
-      `Using cached geometry for ${identityId}: `
-      + `${cached.meshes?.length ?? 0} meshes, `
-      + `${cached.pointClouds?.length ?? 0} point clouds`,
-    )
-    return {
-      success: true,
-      meshes: cached.meshes ?? [],
-      pointClouds: cached.pointClouds ?? [],
-    }
+  if (cached?.meshes) {
+    debugLog(`Using cached meshes for ${identityId}: ${cached.meshes.length} mesh(es)`)
+    return { success: true, meshes: cached.meshes }
   }
 
-  if (cached && cached.meshes === null && cached.pointClouds === null) {
+  if (cached && cached.meshes === null) {
     return {
       success: false,
       error: 'not_found',
@@ -305,8 +344,76 @@ async function loadExternalGeometry(
 
   if (!snapshotRouting?.snapshot_id) {
     const msg = `No snapshot routing for ${mode} mode (compose payload missing current snapshot _id)`
-    externalGeometryCache.set(cacheKey, {
+    externalMeshCache.set(cacheKey, {
       meshes: null,
+      etag: undefined,
+      timestamp: Date.now(),
+    })
+    return { success: false, error: 'not_found', message: msg }
+  }
+
+  try {
+    const plyResult = await loadSnapshotPlyMeshes(
+      snapshotRouting.snapshot_id,
+      mode,
+      snapshotRouting.mesh_ply_resolutions ?? null,
+    )
+
+    if (plyResult.ok && plyResult.meshes.length > 0) {
+      externalMeshCache.set(cacheKey, {
+        meshes: plyResult.meshes,
+        etag: plyResult.etag,
+        timestamp: Date.now(),
+      })
+      debugLog(`Loaded ${plyResult.meshes.length} mesh(es) from PLY`)
+      return { success: true, meshes: plyResult.meshes }
+    }
+  } catch (err) {
+    debugLog('Mesh PLY pipeline failed:', err)
+  }
+
+  externalMeshCache.set(cacheKey, {
+    meshes: null,
+    etag: undefined,
+    timestamp: Date.now(),
+  })
+  return {
+    success: false,
+    error: 'not_found',
+    message: `No ${mode} PLY geometry available for this snapshot`,
+  }
+}
+
+async function loadExternalPointClouds(
+  identityId: string,
+  snapshotRouting: SnapshotMeshRouting | null,
+  pointCloudCount: number,
+): Promise<PointCloudLoadResult> {
+  debugLog(`Loading PLY point clouds for identity ${identityId}`)
+
+  const hint = meshHintForCache(snapshotRouting)
+  const cacheKey = `${identityId}:pc:${hint}:count${pointCloudCount}`
+  const cached = externalPointCloudCache.get(cacheKey)
+
+  if (cached?.pointClouds) {
+    debugLog(
+      `Using cached point clouds for ${identityId}: `
+      + `${cached.pointClouds.length} point cloud(s)`,
+    )
+    return { success: true, pointClouds: cached.pointClouds }
+  }
+
+  if (cached && cached.pointClouds === null) {
+    return {
+      success: false,
+      error: 'not_found',
+      message: 'No PLY point cloud geometry available for this snapshot',
+    }
+  }
+
+  if (!snapshotRouting?.snapshot_id) {
+    const msg = 'No snapshot routing for point cloud PLY (compose payload missing current snapshot _id)'
+    externalPointCloudCache.set(cacheKey, {
       pointClouds: null,
       etag: undefined,
       timestamp: Date.now(),
@@ -315,42 +422,26 @@ async function loadExternalGeometry(
   }
 
   try {
-    const snapshotId = snapshotRouting.snapshot_id
-    const plyResult = await loadSnapshotPlyMeshes(
-      snapshotId,
-      mode,
-      snapshotRouting.mesh_ply_resolutions ?? null,
-    )
     const pointCloudResult = await loadSnapshotPointCloudPlyGroups(
-      snapshotId,
+      snapshotRouting.snapshot_id,
       pointCloudCount,
       { applyComponentViewerFrame: true, scale },
     )
 
-    const meshes = plyResult.ok ? plyResult.meshes : []
-    const pointClouds = pointCloudResult.ok ? pointCloudResult.groups : []
-
-    if (meshes.length > 0 || pointClouds.length > 0) {
-      externalGeometryCache.set(cacheKey, {
-        meshes,
-        pointClouds,
-        etag: plyResult.ok ? plyResult.etag : pointCloudResult.ok
-          ? pointCloudResult.etag
-          : undefined,
+    if (pointCloudResult.ok && pointCloudResult.groups.length > 0) {
+      externalPointCloudCache.set(cacheKey, {
+        pointClouds: pointCloudResult.groups,
+        etag: pointCloudResult.etag,
         timestamp: Date.now(),
       })
-      debugLog(
-        `Loaded ${meshes.length} mesh(es) and ${pointClouds.length} `
-        + 'point cloud(s) from PLY',
-      )
-      return { success: true, meshes, pointClouds }
+      debugLog(`Loaded ${pointCloudResult.groups.length} point cloud(s) from PLY`)
+      return { success: true, pointClouds: pointCloudResult.groups }
     }
   } catch (err) {
-    debugLog('PLY pipeline failed:', err)
+    debugLog('Point cloud PLY pipeline failed:', err)
   }
 
-  externalGeometryCache.set(cacheKey, {
-    meshes: null,
+  externalPointCloudCache.set(cacheKey, {
     pointClouds: null,
     etag: undefined,
     timestamp: Date.now(),
@@ -358,7 +449,7 @@ async function loadExternalGeometry(
   return {
     success: false,
     error: 'not_found',
-    message: `No ${mode} PLY geometry available for this snapshot`,
+    message: 'No PLY point cloud geometry available for this snapshot',
   }
 }
 
@@ -515,16 +606,16 @@ const PointCloudVisualization = React.memo(({
   pointClouds,
   visiblePointClouds,
   externalPointClouds,
-  geometryMode,
+  pointCloudGeometryMode,
   isLoadingExternal,
 }: {
   pointClouds: SnapshotPointCloud[]
   visiblePointClouds: boolean[]
   externalPointClouds: THREE.Group[]
-  geometryMode: GeometryMode
+  pointCloudGeometryMode: PointCloudGeometryMode
   isLoadingExternal: boolean
 }) => {
-  const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
+  const isExternalMode = pointCloudGeometryMode === 'detailed'
 
   const inlineGroups = useMemo(
     () => pointClouds
@@ -563,7 +654,7 @@ PointCloudVisualization.displayName = 'PointCloudVisualization'
 
 const VisualizeMultipleMeshes = React.memo(({
   primitiveDraws,
-  geometryMode,
+  meshGeometryMode,
   visibleMeshes = [],
   externalMeshes = [],
   isLoadingExternal = false,
@@ -571,14 +662,14 @@ const VisualizeMultipleMeshes = React.memo(({
   showEdges
 }: {
   primitiveDraws: PrimitiveDrawBuffers[]
-  geometryMode: GeometryMode
+  meshGeometryMode: GeometryMode
   visibleMeshes?: boolean[]
   externalMeshes?: THREE.Group[]
   isLoadingExternal?: boolean
   geometryError?: string | null
   showEdges: boolean
 }) => {
-  const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
+  const isExternalMode = meshGeometryMode === 'reduced' || meshGeometryMode === 'detailed'
 
   if (isLoadingExternal) {
     return (
@@ -672,13 +763,15 @@ VisualizeMultipleMeshes.displayName = 'VisualizeMultipleMeshes'
 
 type VisualizeProps = {
   catalog: CatalogComponent
-  geometryMode: GeometryMode
+  meshGeometryMode: GeometryMode
+  pointCloudGeometryMode: PointCloudGeometryMode
   visibleMeshes?: boolean[]
   visiblePointClouds?: boolean[]
   externalMeshes?: THREE.Group[]
   externalPointClouds?: THREE.Group[]
-  isLoadingExternal?: boolean
-  geometryError?: string | null
+  isLoadingExternalMeshes?: boolean
+  isLoadingExternalPointClouds?: boolean
+  meshGeometryError?: string | null
   showEdges: boolean
 }
 
@@ -715,8 +808,8 @@ function VisualizeComponent(props: VisualizeProps) {
           pointClouds={pointClouds}
           visiblePointClouds={props.visiblePointClouds ?? []}
           externalPointClouds={props.externalPointClouds ?? []}
-          geometryMode={props.geometryMode}
-          isLoadingExternal={props.isLoadingExternal ?? false}
+          pointCloudGeometryMode={props.pointCloudGeometryMode}
+          isLoadingExternal={props.isLoadingExternalPointClouds ?? false}
         />
       </>
     )
@@ -726,19 +819,19 @@ function VisualizeComponent(props: VisualizeProps) {
       <>
         <VisualizeMultipleMeshes
           primitiveDraws={primitiveDraws}
-          geometryMode={props.geometryMode}
+          meshGeometryMode={props.meshGeometryMode}
           visibleMeshes={props.visibleMeshes}
           externalMeshes={props.externalMeshes}
-          isLoadingExternal={props.isLoadingExternal}
-          geometryError={props.geometryError}
+          isLoadingExternal={props.isLoadingExternalMeshes}
+          geometryError={props.meshGeometryError}
           showEdges={props.showEdges}
         />
         <PointCloudVisualization
           pointClouds={pointClouds}
           visiblePointClouds={props.visiblePointClouds ?? []}
           externalPointClouds={props.externalPointClouds ?? []}
-          geometryMode={props.geometryMode}
-          isLoadingExternal={props.isLoadingExternal ?? false}
+          pointCloudGeometryMode={props.pointCloudGeometryMode}
+          isLoadingExternal={props.isLoadingExternalPointClouds ?? false}
         />
       </>
     )
@@ -747,19 +840,19 @@ function VisualizeComponent(props: VisualizeProps) {
     <>
       <VisualizeMultipleMeshes
         primitiveDraws={primitiveDraws}
-        geometryMode={props.geometryMode}
+        meshGeometryMode={props.meshGeometryMode}
         visibleMeshes={props.visibleMeshes}
         externalMeshes={props.externalMeshes}
-        isLoadingExternal={props.isLoadingExternal}
-        geometryError={props.geometryError}
+        isLoadingExternal={props.isLoadingExternalMeshes}
+        geometryError={props.meshGeometryError}
         showEdges={props.showEdges}
       />
       <PointCloudVisualization
         pointClouds={pointClouds}
         visiblePointClouds={props.visiblePointClouds ?? []}
         externalPointClouds={props.externalPointClouds ?? []}
-        geometryMode={props.geometryMode}
-        isLoadingExternal={props.isLoadingExternal ?? false}
+        pointCloudGeometryMode={props.pointCloudGeometryMode}
+        isLoadingExternal={props.isLoadingExternalPointClouds ?? false}
       />
     </>
   )
@@ -767,7 +860,8 @@ function VisualizeComponent(props: VisualizeProps) {
 
 /**
  * Catalog 3D viewer: **`GET /identities/{id}/compose`** payload (`identity` + `snapshots[]`).
- * Reduced/detailed modes load **`GET /snapshots/{snapshot_id}/meshes/...`** PLY only.
+ * Reduced/detailed mesh modes load **`GET /snapshots/{snapshot_id}/meshes/...`** PLY.
+ * Detailed point cloud mode loads **`GET /snapshots/{snapshot_id}/point_clouds/...`** PLY.
  */
 export type ComponentViewerProps = { catalog: CatalogComponent }
 
@@ -800,16 +894,20 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
     || snapshotExtrusions.length > 0
     || snapshotPointClouds.length > 0
 
-  const [geometryMode, setGeometryMode] = useState<GeometryMode>('primitive')
+  const [meshGeometryMode, setMeshGeometryMode] = useState<GeometryMode>('primitive')
+  const [pointCloudGeometryMode, setPointCloudGeometryMode] = useState<PointCloudGeometryMode>('primitive')
   const [visibleMeshes, setVisibleMeshes] = useState<boolean[]>([])
   const [visiblePointClouds, setVisiblePointClouds] = useState<boolean[]>([])
   const [externalMeshes, setExternalMeshes] = useState<THREE.Group[]>([])
   const [externalPointClouds, setExternalPointClouds] = useState<THREE.Group[]>([])
-  const [isLoadingExternal, setIsLoadingExternal] = useState(false)
-  const [geometryError, setGeometryError] = useState<string | null>(null)
+  const [isLoadingExternalMeshes, setIsLoadingExternalMeshes] = useState(false)
+  const [isLoadingExternalPointClouds, setIsLoadingExternalPointClouds] = useState(false)
+  const [meshGeometryError, setMeshGeometryError] = useState<string | null>(null)
   const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
   const [showReinforcements, setShowReinforcements] = useState<boolean>(true)
   const [showEdges, setShowEdges] = useState<boolean>(true)
+  const [showGrid, setShowGrid] = useState<boolean>(true)
+  const fitCameraRef = useRef<(() => void) | null>(null)
 
   const primitiveMeshCount = snapshotMeshes.length
   const primitivePointCloudCount = snapshotPointClouds.length
@@ -822,7 +920,9 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
 
   const isPanel = catalogType === 'panel'
   const hasMultipleMeshes = primitiveMeshCount > 0
-  const isExternalMode = geometryMode === 'reduced' || geometryMode === 'detailed'
+  const pointCloudVisibleByDefault = !hasMultipleMeshes
+  const isMeshExternalMode = meshGeometryMode === 'reduced' || meshGeometryMode === 'detailed'
+  const isPointCloudExternalMode = pointCloudGeometryMode === 'detailed'
 
   const markerPoints = useMemo(() => {
     const points = snapshot.geometry.marker_points
@@ -842,59 +942,99 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
 
   useEffect(() => {
     let isMounted = true
-    if (isExternalMode && catalogType !== 'panel' && identityId) {
-      setIsLoadingExternal(true)
-      setGeometryError(null)
+    if (isMeshExternalMode && catalogType !== 'panel' && identityId) {
+      setIsLoadingExternalMeshes(true)
+      setMeshGeometryError(null)
       setShowEdges(false)
-      loadExternalGeometry(
+      loadExternalMeshes(
         identityId.toString(),
-        geometryMode,
+        meshGeometryMode,
         snapshotRouting,
-        primitivePointCloudCount,
       )
         .then((result) => {
           if (isMounted) {
             if (result.success) {
               setExternalMeshes(result.meshes)
-              setExternalPointClouds(result.pointClouds)
-              setGeometryError(null)
+              setMeshGeometryError(null)
               setVisibleMeshes(new Array(result.meshes.length).fill(true))
-              setVisiblePointClouds(
-                new Array(result.pointClouds.length).fill(true),
-              )
             } else {
               setExternalMeshes([])
-              setExternalPointClouds([])
-              setGeometryError(result.message)
+              setMeshGeometryError(result.message)
               setVisibleMeshes([])
-              setVisiblePointClouds([])
             }
-            setIsLoadingExternal(false)
+            setIsLoadingExternalMeshes(false)
           }
         })
         .catch(() => {
           if (isMounted) {
             setExternalMeshes([])
-            setExternalPointClouds([])
-            setGeometryError(`Failed to load ${geometryMode} geometry`)
+            setMeshGeometryError(`Failed to load ${meshGeometryMode} geometry`)
             setVisibleMeshes([])
-            setVisiblePointClouds([])
-            setIsLoadingExternal(false)
+            setIsLoadingExternalMeshes(false)
           }
         })
     } else {
       setExternalMeshes([])
-      setExternalPointClouds([])
-      setIsLoadingExternal(false)
-      setGeometryError(null)
+      setIsLoadingExternalMeshes(false)
+      setMeshGeometryError(null)
       setShowEdges(true)
       if (hasMultipleMeshes) {
         setVisibleMeshes(new Array(primitiveMeshCount).fill(true))
       } else {
         setVisibleMeshes([])
       }
+    }
+    return () => {
+      isMounted = false
+    }
+  }, [
+    meshGeometryMode,
+    catalogType,
+    identityId,
+    isMeshExternalMode,
+    primitiveMeshCount,
+    hasMultipleMeshes,
+    snapshotRouting,
+    snapshotMeshCacheKey,
+  ])
+
+  useEffect(() => {
+    let isMounted = true
+    if (isPointCloudExternalMode && catalogType !== 'panel' && identityId) {
+      setIsLoadingExternalPointClouds(true)
+      loadExternalPointClouds(
+        identityId.toString(),
+        snapshotRouting,
+        primitivePointCloudCount,
+      )
+        .then((result) => {
+          if (isMounted) {
+            if (result.success) {
+              setExternalPointClouds(result.pointClouds)
+              setVisiblePointClouds(
+                new Array(result.pointClouds.length).fill(pointCloudVisibleByDefault),
+              )
+            } else {
+              setExternalPointClouds([])
+              setVisiblePointClouds([])
+            }
+            setIsLoadingExternalPointClouds(false)
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setExternalPointClouds([])
+            setVisiblePointClouds([])
+            setIsLoadingExternalPointClouds(false)
+          }
+        })
+    } else {
+      setExternalPointClouds([])
+      setIsLoadingExternalPointClouds(false)
       if (hasPointClouds) {
-        setVisiblePointClouds(new Array(primitivePointCloudCount).fill(true))
+        setVisiblePointClouds(
+          new Array(primitivePointCloudCount).fill(pointCloudVisibleByDefault),
+        )
       } else {
         setVisiblePointClouds([])
       }
@@ -903,21 +1043,24 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
       isMounted = false
     }
   }, [
-    geometryMode,
+    pointCloudGeometryMode,
     catalogType,
     identityId,
-    isExternalMode,
-    primitiveMeshCount,
+    isPointCloudExternalMode,
     primitivePointCloudCount,
-    hasMultipleMeshes,
     hasPointClouds,
+    hasMultipleMeshes,
+    pointCloudVisibleByDefault,
     snapshotRouting,
     snapshotMeshCacheKey,
   ])
 
-  const onModeChange: React.ChangeEventHandler<HTMLSelectElement> = (e) => {
-    const v = e.target.value as GeometryMode
-    setGeometryMode(v)
+  const onMeshModeChange = (value: string) => {
+    setMeshGeometryMode(value as GeometryMode)
+  }
+
+  const onPointCloudModeChange = (value: string) => {
+    setPointCloudGeometryMode(value as PointCloudGeometryMode)
   }
 
   const toggleMeshVisibility = (index: number) => {
@@ -956,12 +1099,16 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
     [visiblePointClouds],
   )
 
-  const activePointCloudCount = isExternalMode
+  const activePointCloudCount = isPointCloudExternalMode
     ? externalPointClouds.length
     : primitivePointCloudCount
 
+  const activeMeshCount = isMeshExternalMode
+    ? externalMeshes.length
+    : primitiveMeshCount
+
   useEffect(() => {
-    if (!isExternalMode) return
+    if (!isMeshExternalMode) return
     externalMeshes.forEach((group) => {
       group.traverse((obj) => {
         if ((obj as THREE.LineSegments).isLineSegments && obj.name.endsWith('_edges')) {
@@ -969,169 +1116,252 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
         }
       })
     })
-  }, [showEdges, isExternalMode, externalMeshes])
+  }, [showEdges, isMeshExternalMode, externalMeshes])
 
   if (!canRenderViewport) {
     return <ComponentViewerSkeleton message="No Geometry Available" />
   }
 
-  const menuSections: MenuSection[] = [
-    {
-      id: 'geometry-mode',
-      content: (
-        <SelectControl
-          id="geometryModeSelect"
-          label="Geometry Resolution:"
-          value={geometryMode}
-          onChange={onModeChange}
-          disabled={isPanel}
-          options={[
-            { value: 'primitive', label: 'Primitive' },
-            { value: 'reduced', label: 'Reduced' },
-            { value: 'detailed', label: 'Detailed' },
-          ]}
-        />
-      ),
-    },
+  const meshResolutionOptions = [
+    { value: 'primitive', label: 'Primitive' },
+    { value: 'reduced', label: 'Reduced' },
+    { value: 'detailed', label: 'Detailed' },
   ]
 
-  if ((hasMultipleMeshes && geometryMode === 'primitive') || (isExternalMode && externalMeshes.length > 0)) {
-    const meshCount = isExternalMode ? externalMeshes.length : primitiveMeshCount
-    menuSections.push({
-      id: 'global-toggles',
-      content: (
-        <div className="flex flex-col gap-1">
+  const pointCloudResolutionOptions = [
+    { value: 'primitive', label: 'Primitive' },
+    { value: 'detailed', label: 'Detailed' },
+  ]
+
+  const meshCount = activeMeshCount || primitiveMeshCount
+  const pointCloudCount = activePointCloudCount || primitivePointCloudCount
+  const hasOverlays = hasMarkerPoints || hasReinforcements
+
+  const meshLabel = (index: number) => (
+    isMeshExternalMode && externalMeshes[index]
+      ? (
+          externalMeshes[index]?.children[0]?.name ||
+          `External Mesh ${index + 1}`
+        )
+      : `Mesh ${index + 1}`
+  )
+
+  const pointCloudLabel = (index: number) => (
+    isPointCloudExternalMode
+      ? (
+          externalPointClouds[index]?.name ||
+          `Point Cloud ${index + 1}`
+        )
+      : `Point Cloud ${index + 1}`
+  )
+
+  const displayBlocks: React.ReactNode[] = []
+
+  if (hasMultipleMeshes) {
+    displayBlocks.push(
+      <MenuSubsection key="meshes" title={`Meshes (${meshCount})`}>
+        <SegmentedControl
+          id="meshGeometryModeSelect"
+          label="Resolution"
+          value={meshGeometryMode}
+          onValueChange={onMeshModeChange}
+          disabled={isPanel}
+          options={meshResolutionOptions}
+        />
+        <CheckboxControl
+          id="toggle-edges"
+          label="Show edges"
+          checked={showEdges}
+          onChange={(checked) => setShowEdges(checked)}
+        />
+        {meshCount > 1 ? (
+          <>
+            <CheckboxControl
+              id="toggle-all-meshes"
+              label="Show all"
+              checked={allMeshesVisible}
+              onChange={toggleAllMeshes}
+            />
+            <ScrollableCheckboxList
+              items={Array.from({ length: meshCount }, (_, i) => i).map((index: number) => ({
+                id: String(index),
+                label: meshLabel(index),
+                checked: visibleMeshes[index] || false,
+              }))}
+              onToggle={(id) => toggleMeshVisibility(Number(id))}
+            />
+          </>
+        ) : (
           <CheckboxControl
-            id="toggle-all-meshes"
-            label="Show All Meshes"
-            checked={allMeshesVisible}
-            onChange={toggleAllMeshes}
+            id="toggle-mesh-0"
+            label={meshLabel(0)}
+            checked={visibleMeshes[0] ?? false}
+            onChange={(checked) => {
+              setVisibleMeshes((prev) => {
+                const next = [...prev]
+                next[0] = checked
+                return next
+              })
+            }}
           />
+        )}
+      </MenuSubsection>,
+    )
+  }
+
+  if (hasPointClouds) {
+    if (displayBlocks.length > 0) {
+      displayBlocks.push(<MenuDivider key="divider-pc" />)
+    }
+    displayBlocks.push(
+      <MenuSubsection key="point-clouds" title={`Point clouds (${pointCloudCount})`}>
+        <SegmentedControl
+          id="pointCloudGeometryModeSelect"
+          label="Resolution"
+          value={pointCloudGeometryMode}
+          onValueChange={onPointCloudModeChange}
+          disabled={isPanel}
+          options={pointCloudResolutionOptions}
+        />
+        {pointCloudCount > 1 ? (
+          <>
+            <CheckboxControl
+              id="toggle-all-point-clouds"
+              label="Show all"
+              checked={allPointCloudsVisible}
+              onChange={toggleAllPointClouds}
+            />
+            <ScrollableCheckboxList
+              items={Array.from({ length: pointCloudCount }, (_, index) => ({
+                id: String(index),
+                label: pointCloudLabel(index),
+                checked: visiblePointClouds[index] || false,
+              }))}
+              onToggle={(id) => togglePointCloudVisibility(Number(id))}
+            />
+          </>
+        ) : (
           <CheckboxControl
-            id="toggle-edges"
-            label="Show Edges"
-            checked={showEdges}
-            onChange={(checked) => setShowEdges(checked)}
+            id="toggle-point-cloud-0"
+            label={pointCloudLabel(0)}
+            checked={visiblePointClouds[0] ?? false}
+            onChange={(checked) => {
+              setVisiblePointClouds((prev) => {
+                const next = [...prev]
+                next[0] = checked
+                return next
+              })
+            }}
           />
-        </div>
-      ),
-    })
-    menuSections.push({
-      id: 'mesh-visibility',
-      title: 'Mesh Visibility',
-      collapsible: true,
-      defaultExpanded: true,
-      itemCount: meshCount,
-      content: (
-        <ScrollableCheckboxList
-          items={(isExternalMode
-            ? Array.from({ length: externalMeshes.length }, (_, i) => i)
-            : Array.from({ length: primitiveMeshCount }, (_, i) => i)
-          ).map((index: number) => ({
-            id: String(index),
-            label: isExternalMode
-              ? (
-                  externalMeshes[index]?.children[0]?.name ||
-                  `External Mesh ${index + 1}`
-                )
-              : `Mesh ${index + 1}`,
-            checked: visibleMeshes[index] || false,
-          }))}
-          onToggle={(id) => toggleMeshVisibility(Number(id))}
-        />
-      ),
-    })
+        )}
+      </MenuSubsection>,
+    )
   }
 
-  if (hasMarkerPoints) {
-    menuSections.push({
-      id: 'marker-points',
-      title: 'Marker Points:',
-      content: (
-        <CheckboxControl
-          id="toggle-marker-points"
-          label={`Show (${markerPoints.length})`}
-          checked={showMarkerPoints}
-          onChange={(checked) => setShowMarkerPoints(checked)}
-        />
-      ),
-    })
+  if (hasOverlays) {
+    if (displayBlocks.length > 0) {
+      displayBlocks.push(<MenuDivider key="divider-overlays" />)
+    }
+    displayBlocks.push(
+      <MenuSubsection key="overlays" title="Overlays">
+        {hasMarkerPoints && (
+          <CheckboxControl
+            id="toggle-marker-points"
+            label={`Marker points (${markerPoints.length})`}
+            checked={showMarkerPoints}
+            onChange={(checked) => setShowMarkerPoints(checked)}
+          />
+        )}
+        {hasReinforcements && (
+          <CheckboxControl
+            id="toggle-reinforcements"
+            label={`Reinforcement (${reinforcements.length})`}
+            checked={showReinforcements}
+            onChange={(checked) => setShowReinforcements(checked)}
+          />
+        )}
+      </MenuSubsection>,
+    )
   }
 
-  if (activePointCloudCount > 0) {
-    menuSections.push({
-      id: 'point-cloud-toggles',
-      content: (
-        <CheckboxControl
-          id="toggle-all-point-clouds"
-          label="Show All Point Clouds"
-          checked={allPointCloudsVisible}
-          onChange={toggleAllPointClouds}
-        />
-      ),
-    })
-    menuSections.push({
-      id: 'point-cloud-visibility',
-      title: 'Point Cloud Visibility',
-      collapsible: true,
-      defaultExpanded: true,
-      itemCount: activePointCloudCount,
-      content: (
-        <ScrollableCheckboxList
-          items={Array.from({ length: activePointCloudCount }, (_, index) => ({
-            id: String(index),
-            label: isExternalMode
-              ? (
-                  externalPointClouds[index]?.name
-                  || `Point Cloud ${index + 1}`
-                )
-              : `Point Cloud ${index + 1}`,
-            checked: visiblePointClouds[index] || false,
-          }))}
-          onToggle={(id) => togglePointCloudVisibility(Number(id))}
-        />
-      ),
-    })
-  }
+  const hasDisplayOptions = displayBlocks.length > 0
 
-  if (hasReinforcements) {
-    menuSections.push({
-      id: 'reinforcements',
-      title: 'Reinforcement:',
-      content: (
-        <CheckboxControl
-          id="toggle-reinforcements"
-          label={`Show bars (${reinforcements.length})`}
-          checked={showReinforcements}
-          onChange={(checked) => setShowReinforcements(checked)}
-        />
-      ),
-    })
-  }
+  const menuSections: MenuSection[] = hasDisplayOptions
+    ? [{
+        id: 'display',
+        title: 'Display',
+        content: <div className="flex flex-col gap-3">{displayBlocks}</div>,
+      }]
+    : []
 
   return (
     <div className="flex flex-col md:flex-row gap-2 w-full">
-      <div className="w-full md:w-64 md:flex-shrink-0 order-2 md:order-1 md:h-[50dvh]">
-        <ViewerMenu sections={menuSections} className="h-full" />
-      </div>
+      {hasDisplayOptions && (
+        <div className="w-full md:w-64 md:flex-shrink-0 order-2 md:order-1 md:h-[50dvh]">
+          <ViewerMenu sections={menuSections} className="h-full" />
+        </div>
+      )}
 
       <Card className="flex-1 overflow-hidden order-1 md:order-2 h-[30dvh] sm:h-[40dvh] md:h-[50dvh] p-0">
         <div className="relative w-full h-full">
+          <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon-xs"
+                  className="h-7 w-7 bg-background/85 shadow-sm backdrop-blur-sm"
+                  onClick={() => fitCameraRef.current?.()}
+                  aria-label="Zoom extents"
+                >
+                  <Scan className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">Zoom extents</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={showGrid ? 'secondary' : 'ghost'}
+                  size="icon-xs"
+                  className={`h-7 w-7 shadow-sm backdrop-blur-sm ${
+                    showGrid ? 'bg-background/85' : 'bg-background/60'
+                  }`}
+                  onClick={() => setShowGrid((prev) => !prev)}
+                  aria-label={showGrid ? 'Hide grid' : 'Show grid'}
+                  aria-pressed={showGrid}
+                >
+                  <Grid3x3 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">{showGrid ? 'Hide grid' : 'Show grid'}</TooltipContent>
+            </Tooltip>
+          </div>
           <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
           <ambientLight intensity={Math.PI / 2} />
           <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI * 0.75} />
           <pointLight position={[-10, 10, -10]} decay={0} intensity={Math.PI * 0.75} />
 
-          <Bounds fit clip observe margin={1.2} maxDuration={1}>
+          <Bounds
+            key={identityId?.toString() ?? 'component-viewer'}
+            clip
+            margin={1.2}
+            maxDuration={1}
+          >
+            <FitCameraController fitRef={fitCameraRef} />
             <VisualizeComponent
               catalog={catalog}
-              geometryMode={geometryMode}
+              meshGeometryMode={meshGeometryMode}
+              pointCloudGeometryMode={pointCloudGeometryMode}
               visibleMeshes={visibleMeshes}
               visiblePointClouds={visiblePointClouds}
-              externalMeshes={isExternalMode ? externalMeshes : []}
-              externalPointClouds={isExternalMode ? externalPointClouds : []}
-              isLoadingExternal={isLoadingExternal}
-              geometryError={geometryError}
+              externalMeshes={isMeshExternalMode ? externalMeshes : []}
+              externalPointClouds={isPointCloudExternalMode ? externalPointClouds : []}
+              isLoadingExternalMeshes={isLoadingExternalMeshes}
+              isLoadingExternalPointClouds={isLoadingExternalPointClouds}
+              meshGeometryError={meshGeometryError}
               showEdges={showEdges}
             />
             <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
@@ -1142,7 +1372,7 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
           </Bounds>
 
           <axesHelper args={[0.1]} />
-          <gridHelper args={[2, 20, 'Gray', 'Gainsboro']} />
+          {showGrid && <gridHelper args={[2, 20, 'Gray', 'Gainsboro']} />}
           <OrbitControls makeDefault />
         </Canvas>
       </div>

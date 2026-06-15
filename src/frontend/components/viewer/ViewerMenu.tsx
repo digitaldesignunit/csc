@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
 /**
@@ -102,6 +103,32 @@ export function ViewerMenu({ sections, className = '' }: ViewerMenuProps) {
 }
 
 /**
+ * Visual grouping inside a menu section
+ */
+export function MenuSubsection({
+  title,
+  children,
+  className = '',
+}: {
+  title?: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={`flex flex-col gap-1.5 ${className}`}>
+      {title && (
+        <div className="text-sm font-medium">{title}</div>
+      )}
+      {children}
+    </div>
+  )
+}
+
+export function MenuDivider() {
+  return <div className="border-t border-border my-0.5" />
+}
+
+/**
  * Helper component for checkbox controls
  */
 export interface CheckboxControlProps {
@@ -190,6 +217,62 @@ export function SelectControl({ id, label, value, onChange, options, disabled = 
           </option>
         ))}
       </select>
+    </div>
+  )
+}
+
+/**
+ * Segmented button group for single-choice options (e.g. resolution presets)
+ */
+export interface SegmentedControlProps {
+  id: string
+  label?: string
+  value: string
+  onValueChange: (value: string) => void
+  options: { value: string; label: string }[]
+  disabled?: boolean
+}
+
+export function SegmentedControl({
+  id,
+  label,
+  value,
+  onValueChange,
+  options,
+  disabled = false,
+}: SegmentedControlProps) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      {label && (
+        <span id={`${id}-label`} className="text-[11px] leading-none text-muted-foreground">
+          {label}
+        </span>
+      )}
+      <ToggleGroup
+        id={id}
+        type="single"
+        variant="outline"
+        size="sm"
+        spacing={0}
+        value={value}
+        onValueChange={(next) => {
+          if (next) onValueChange(next)
+        }}
+        disabled={disabled}
+        aria-labelledby={label ? `${id}-label` : undefined}
+        className="h-6 w-full"
+      >
+        {options.map((option) => (
+          <ToggleGroupItem
+            key={option.value}
+            value={option.value}
+            className="h-6 min-h-6 min-w-0 flex-1 px-1 py-0 text-[11px] leading-none"
+            aria-label={option.label}
+          >
+            {option.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
     </div>
   )
 }
