@@ -93,6 +93,23 @@ const externalPointCloudCache = new Map<string, CachedPointCloudGeometry>()
 type GeometryMode = 'primitive' | 'reduced' | 'detailed'
 type PointCloudGeometryMode = 'primitive' | 'detailed'
 
+function nextPointCloudVisibility(
+  count: number,
+  previous: boolean[],
+  defaultVisible: boolean,
+  resetToDefault: boolean,
+): boolean[] {
+  if (count <= 0) return []
+  if (resetToDefault || previous.length === 0) {
+    return new Array(count).fill(defaultVisible)
+  }
+  const allVisible = previous.every((v) => v)
+  return Array.from({ length: count }, (_, i) => {
+    if (i < previous.length) return previous[i]
+    return allVisible
+  })
+}
+
 // External geometry/mtl loading
 
 // Simple debug logging for dev mode only
@@ -912,6 +929,9 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
   const primitiveMeshCount = snapshotMeshes.length
   const primitivePointCloudCount = snapshotPointClouds.length
   const hasPointClouds = primitivePointCloudCount > 0
+  const pointCloudVisibilitySeedRef = useRef(
+    `${identityId?.toString() ?? ''}:${primitivePointCloudCount}`,
+  )
 
   const snapshotMeshCacheKey = useMemo(() => {
     if (!snapshotRouting?.snapshot_id) return ''
@@ -1000,6 +1020,11 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
 
   useEffect(() => {
     let isMounted = true
+    const visibilitySeed = `${identityId?.toString() ?? ''}:${primitivePointCloudCount}`
+    const resetVisibilityToDefault =
+      pointCloudVisibilitySeedRef.current !== visibilitySeed
+    pointCloudVisibilitySeedRef.current = visibilitySeed
+
     if (isPointCloudExternalMode && catalogType !== 'panel' && identityId) {
       setIsLoadingExternalPointClouds(true)
       loadExternalPointClouds(
@@ -1011,9 +1036,12 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
           if (isMounted) {
             if (result.success) {
               setExternalPointClouds(result.pointClouds)
-              setVisiblePointClouds(
-                new Array(result.pointClouds.length).fill(pointCloudVisibleByDefault),
-              )
+              setVisiblePointClouds((prev) => nextPointCloudVisibility(
+                result.pointClouds.length,
+                prev,
+                pointCloudVisibleByDefault,
+                resetVisibilityToDefault,
+              ))
             } else {
               setExternalPointClouds([])
               setVisiblePointClouds([])
@@ -1032,9 +1060,12 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
       setExternalPointClouds([])
       setIsLoadingExternalPointClouds(false)
       if (hasPointClouds) {
-        setVisiblePointClouds(
-          new Array(primitivePointCloudCount).fill(pointCloudVisibleByDefault),
-        )
+        setVisiblePointClouds((prev) => nextPointCloudVisibility(
+          primitivePointCloudCount,
+          prev,
+          pointCloudVisibleByDefault,
+          resetVisibilityToDefault,
+        ))
       } else {
         setVisiblePointClouds([])
       }
@@ -1049,7 +1080,6 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
     isPointCloudExternalMode,
     primitivePointCloudCount,
     hasPointClouds,
-    hasMultipleMeshes,
     pointCloudVisibleByDefault,
     snapshotRouting,
     snapshotMeshCacheKey,
