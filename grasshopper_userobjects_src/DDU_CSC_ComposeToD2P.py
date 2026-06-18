@@ -22,7 +22,7 @@ import scriptcontext as sc  # NOQA
 ghenv.Component.Name = 'ComposeToD2P'  # NOQA
 ghenv.Component.NickName = 'ComposeToD2P'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
-ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
+ghenv.Component.SubCategory = '9 D2P Components Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Converts CSC compose JSON into an in-memory D2P GHComponent. Geometry '
     'is registered as a nested MemberGeo tree (D2P ParentMember + : layer '
@@ -113,7 +113,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260611
+    Version: 260612
 
     D2P member layer taxonomy (ParentMember tree)
     --------------------------------------------

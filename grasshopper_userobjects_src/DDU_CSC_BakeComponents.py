@@ -21,10 +21,10 @@ ghenv.Component.NickName = 'BakeComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Bakes compose entries ({identity, snapshot}) into the Rhino document '
+    'Bakes compose entries ({identity, snapshots[]}) into the Rhino document '
     'as actual geometry. Creates layers, groups, and attaches the full '
-    'compose JSON as user text. Prioritizes cached PLY meshes over inline '
-    'snapshot primitives.'
+    'compose JSON as user text. Prioritizes cached PLY meshes and point '
+    'clouds over inline snapshot primitives.'
 )
 
 
@@ -32,7 +32,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260617
     """
 
     def __init__(self):
@@ -65,7 +65,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Toggle to bake components to Rhino'
         )
         self.InputParams[1].Description = (
-            'Compose JSON strings ({identity, snapshot}) from fetch '
+            'Compose JSON strings ({identity, snapshots[]}) from fetch '
             'components'
         )
 
@@ -202,6 +202,69 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
         return meshes if meshes else None
 
+    def build_inline_point_cloud(self, pc_data):
+        """Build a Rhino point cloud from one inline SnapshotPointCloud."""
+        if not isinstance(pc_data, dict):
+            return None
+        cloud = Rhino.Geometry.PointCloud()
+        pts = pc_data.get('points', []) or []
+        cl = pc_data.get('colors')
+        if not pts:
+            return None
+        if cl and len(cl) == len(pts):
+            for p, c in zip(pts, cl):
+                cloud.Add(
+                    Rhino.Geometry.Point3d(p[0], p[1], p[2]),
+                    System.Drawing.Color.FromArgb(*c))
+        else:
+            for p in pts:
+                cloud.Add(Rhino.Geometry.Point3d(p[0], p[1], p[2]))
+        return cloud if cloud.Count > 0 else None
+
+    def ComponentPointClouds(
+            self,
+            geometry: dict) -> list[Rhino.Geometry.PointCloud]:
+        """Create point clouds from geometry.point_clouds inline primitives."""
+        clouds = []
+        for idx, pc_data in enumerate(geometry.get('point_clouds', []) or []):
+            cloud = self.build_inline_point_cloud(pc_data)
+            if cloud is None:
+                self._addWarning(
+                    f'Inline point cloud {idx} is invalid or empty')
+                continue
+            clouds.append(cloud)
+        return clouds
+
+    def fetch_snapshot_point_clouds(self, auth_core, snapshot):
+        """
+        Fetch snapshot point clouds via PLY when available, falling back to
+        inline snapshot.geometry.point_clouds primitives.
+        """
+        geometry = snapshot.get('geometry', {}) or {}
+        inline_pcs = geometry.get('point_clouds', []) or []
+        if not inline_pcs:
+            return None
+
+        snapshot_id = snapshot.get('_id')
+        clouds = []
+
+        for i in range(len(inline_pcs)):
+            cloud = None
+            if auth_core and snapshot_id:
+                try:
+                    cloud = auth_core.cached_get_snapshot_point_cloud(
+                        snapshot_id, i)
+                except Exception as e:
+                    self._addWarning(
+                        'Point cloud PLY fetch failed '
+                        f'for index {i}: {str(e)}')
+            if cloud is None:
+                cloud = self.build_inline_point_cloud(inline_pcs[i])
+            if cloud is not None:
+                clouds.append(cloud)
+
+        return clouds if clouds else None
+
     def RunScript(self,
             Bake: bool,
             ComponentData: System.Collections.Generic.List[str]):
@@ -280,68 +343,84 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
                     cached_meshes = self.fetch_snapshot_meshes(
                         auth_core, snapshot)
+                    geometry = snapshot.get('geometry', {}) or {}
 
                     # create component geometry
                     geo_ids = []
-                    if cached_meshes:
-                        # Use cached geometry
-                        for j, mesh in enumerate(cached_meshes):
-                            try:
-                                # Create a copy to avoid modifying
-                                # the cached mesh
-                                mesh_copy = mesh.Duplicate()
-                                if mesh_copy and mesh_copy.IsValid:
-                                    mesh_copy.Transform(xform)
-                                    geo_id = sc.doc.Objects.Add(mesh_copy)
-                                    if geo_id != System.Guid.Empty:
-                                        geo_ids.append(geo_id)
-                                        # Add mesh index as user text
-                                        rs.SetUserText(
-                                            geo_id,
-                                            'csc_mesh_index',
-                                            str(j))
-                                    else:
-                                        self._addWarning(
-                                            f'Failed to add mesh '
-                                            f'{j} to document'
-                                        )
+
+                    for xtr in self.ComponentExtrusions(geometry):
+                        try:
+                            xtr.Transform(xform)
+                            geo_id = sc.doc.Objects.Add(xtr)
+                            if geo_id != System.Guid.Empty:
+                                geo_ids.append(geo_id)
+                        except Exception as e:
+                            self._addWarning(
+                                f'Error baking extrusion: {str(e)}')
+
+                    meshes = cached_meshes or self.ComponentMeshes(
+                        geometry,
+                        snapshot.get('color'),
+                        identity_id)
+                    for j, mesh in enumerate(meshes):
+                        try:
+                            mesh_copy = mesh.Duplicate() if cached_meshes else mesh  # NOQA
+                            if mesh_copy and mesh_copy.IsValid:
+                                mesh_copy.Transform(xform)
+                                geo_id = sc.doc.Objects.Add(mesh_copy)
+                                if geo_id != System.Guid.Empty:
+                                    geo_ids.append(geo_id)
+                                    rs.SetUserText(
+                                        geo_id,
+                                        'csc_mesh_index',
+                                        str(j))
                                 else:
                                     self._addWarning(
-                                        f'Invalid mesh {j} in cached geometry'
-                                    )
-                            except Exception as e:
-                                self._addWarning(
-                                    'Error processing cached '
-                                    f'mesh {j}: {str(e)}'
-                                )
-                                continue
-                    else:
-                        geometry = snapshot.get('geometry', {}) or {}
-                        for key in sorted(geometry.keys()):
-                            if key == 'extrusions':
-                                for xtr in self.ComponentExtrusions(geometry):
-                                    xtr.Transform(xform)
-                                    geo_id = sc.doc.Objects.Add(xtr)
-                                    if geo_id != System.Guid.Empty:
-                                        geo_ids.append(geo_id)
-                            elif key == 'meshes':
-                                meshes = self.ComponentMeshes(
-                                    geometry,
-                                    snapshot.get('color'),
-                                    identity_id)
-                                for j, mesh in enumerate(meshes):
-                                    mesh.Transform(xform)
-                                    geo_id = sc.doc.Objects.Add(mesh)
-                                    if geo_id != System.Guid.Empty:
-                                        geo_ids.append(geo_id)
-                                        rs.SetUserText(
-                                            geo_id, 'csc_mesh_index', str(j))
-                            elif key in ('marker_points', 'point_clouds'):
-                                continue
+                                        f'Failed to add mesh {j} to document')
                             else:
-                                msg = (f'Missing implementation for geometry '
-                                       f'of type \'{key}\'!')
-                                self._addWarning(msg)
+                                self._addWarning(
+                                    f'Invalid mesh {j} for '
+                                    f'identity {identity_id}')
+                        except Exception as e:
+                            self._addWarning(
+                                f'Error processing mesh {j}: {str(e)}')
+
+                    point_clouds = self.fetch_snapshot_point_clouds(
+                        auth_core, snapshot)
+                    if point_clouds is None:
+                        point_clouds = self.ComponentPointClouds(geometry)
+                    for j, cloud in enumerate(point_clouds):
+                        try:
+                            cloud_copy = cloud.Duplicate()
+                            if cloud_copy and cloud_copy.Count > 0:
+                                cloud_copy.Transform(xform)
+                                geo_id = sc.doc.Objects.Add(cloud_copy)
+                                if geo_id != System.Guid.Empty:
+                                    geo_ids.append(geo_id)
+                                    rs.SetUserText(
+                                        geo_id,
+                                        'csc_point_cloud_index',
+                                        str(j))
+                                else:
+                                    self._addWarning(
+                                        f'Failed to add point cloud '
+                                        f'{j} to document')
+                            else:
+                                self._addWarning(
+                                    f'Invalid point cloud {j} for identity '
+                                    f'{identity_id}')
+                        except Exception as e:
+                            self._addWarning(
+                                f'Error processing point cloud {j}: {str(e)}')
+
+                    for key in sorted(geometry.keys()):
+                        if key in (
+                                'meshes', 'extrusions', 'point_clouds',
+                                'marker_points', 'reinforcements'):
+                            continue
+                        msg = (f'Missing implementation for geometry '
+                               f'of type \'{key}\'!')
+                        self._addWarning(msg)
 
                     if not geo_ids:
                         self._addWarning(
@@ -394,14 +473,14 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                             geo_ids)
 
                     baked_count += 1
-                    mesh_count = len(geo_ids)
-                    if mesh_count == 1:
+                    object_count = len(geo_ids)
+                    if object_count == 1:
                         self._addRemark(
                             f'Successfully baked component {comp_id}')
                     else:
                         self._addRemark(
                             f'Successfully baked component {comp_id} '
-                            f'({mesh_count} meshes)')
+                            f'({object_count} objects)')
 
                 except json.JSONDecodeError as e:
                     msg = (

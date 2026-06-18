@@ -42,7 +42,7 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 260610
+Version: 260617
 """
 
 
@@ -967,6 +967,96 @@ def _parse_ply_binary_to_mesh(ply_bytes):
         return None
 
 
+def _parse_ply_binary_to_point_cloud(ply_bytes):
+    """
+    Parse a binary_little_endian point-cloud PLY (vertices only, optional
+    uchar rgb) into a Rhino.Geometry.PointCloud.
+    """
+    try:
+        if not ply_bytes:
+            return None
+
+        marker = b'end_header\n'
+        header_end = ply_bytes.find(marker)
+        if header_end == -1:
+            print('PLY point cloud: missing end_header')
+            return None
+        header_text = ply_bytes[:header_end].decode('ascii', 'ignore')
+        body = ply_bytes[header_end + len(marker):]
+
+        if 'binary_little_endian' not in header_text:
+            print('PLY point cloud: only binary_little_endian supported')
+            return None
+
+        _type_fmt = {
+            'char': 'b', 'int8': 'b',
+            'uchar': 'B', 'uint8': 'B',
+            'short': 'h', 'int16': 'h',
+            'ushort': 'H', 'uint16': 'H',
+            'int': 'i', 'int32': 'i',
+            'uint': 'I', 'uint32': 'I',
+            'float': 'f', 'float32': 'f',
+            'double': 'd', 'float64': 'd',
+        }
+
+        vertex_count = 0
+        vertex_props = []
+        current = None
+        for raw_line in header_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            tok = line.split()
+            if tok[0] == 'element':
+                current = tok[1]
+                if current == 'vertex':
+                    vertex_count = int(tok[2])
+            elif tok[0] == 'property' and current == 'vertex':
+                if tok[1] != 'list':
+                    fmt = _type_fmt.get(tok[1])
+                    if fmt:
+                        vertex_props.append((fmt, tok[2]))
+
+        if vertex_count <= 0 or not vertex_props:
+            return None
+
+        vertex_struct = struct.Struct(
+            '<' + ''.join(f for f, _ in vertex_props)
+        )
+        names = [n for _, n in vertex_props]
+        ix = names.index('x') if 'x' in names else 0
+        iy = names.index('y') if 'y' in names else 1
+        iz = names.index('z') if 'z' in names else 2
+        has_color = ('red' in names and 'green' in names and
+                     'blue' in names)
+        if has_color:
+            ir = names.index('red')
+            ig = names.index('green')
+            ib = names.index('blue')
+
+        cloud = Rhino.Geometry.PointCloud()
+        offset = 0
+        vsize = vertex_struct.size
+        for _ in range(vertex_count):
+            vals = vertex_struct.unpack_from(body, offset)
+            offset += vsize
+            point = Rhino.Geometry.Point3d(
+                float(vals[ix]), float(vals[iy]), float(vals[iz]))
+            if has_color:
+                cloud.Add(
+                    point,
+                    System.Drawing.Color.FromArgb(
+                        int(vals[ir]), int(vals[ig]), int(vals[ib])))
+            else:
+                cloud.Add(point)
+
+        return cloud if cloud.Count > 0 else None
+
+    except Exception as e:
+        print(f'Error parsing point cloud PLY: {str(e)}')
+        return None
+
+
 # AuthCore - Embedded ---------------------------------------------------------
 
 class _AuthCore(object):
@@ -1140,7 +1230,10 @@ class _AuthCore(object):
         return normalize_compose_payload(compose)
 
     def compose_json_string(self, compose):
-        """Serialize one compose row in the canonical {identity, snapshots[]} shape."""
+        """
+        Serialize one compose row in the canonical
+        {identity, snapshots[]} shape.
+        """
         return json.dumps(self.normalize_compose_output(compose))
 
     # Cache Management Methods ------------------------------------------------
@@ -1481,6 +1574,27 @@ class _AuthCore(object):
 
         # 404 / other -> unavailable; caller falls back to inline geometry
         return None, None, False
+
+    def cached_get_snapshot_point_cloud(self, snapshot_id, primitive_index,
+                                        timeout=60):
+        """
+        Fetch one snapshot point-cloud PLY.
+
+        Returns a Rhino PointCloud or None when unavailable.
+        """
+        if not self.is_valid():
+            raise RuntimeError(
+                'Access token missing or expired. Please sign in again.'
+            )
+
+        path = (
+            f'/snapshots/{snapshot_id}/point_clouds/'
+            f'{primitive_index}.ply'
+        )
+        response = self.authorized_get(path, timeout=timeout)
+        if response.status_code == 200:
+            return _parse_ply_binary_to_point_cloud(response.content)
+        return None
 
     def get_create_identity_schema(self, force_refresh=False):
         """

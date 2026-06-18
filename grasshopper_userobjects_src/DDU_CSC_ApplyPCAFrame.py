@@ -21,7 +21,7 @@ ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Applies an inverse PCA transformation to align geometry or compose data '
     'with the world coordinate system. Takes either compose JSON '
-    '({identity, snapshot}) or Rhino geometry and transforms it to align '
+    '({identity, snapshots[]}) or Rhino geometry and transforms it to align '
     'with the world XY plane using the snapshot pca_frame.'
 )
 
@@ -30,7 +30,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260617
     """
 
     def __init__(self):
@@ -60,8 +60,8 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Compose JSON string ({identity, snapshot}) or geometry objects '
-            'with the \'csc_component\' compose userdata'
+            'Compose JSON string ({identity, snapshots[]}) '
+            'or geometry objects with the \'csc_component\' compose userdata'
         )
         # Set "No type hint"
         self.InputParams[0].TypeHints.Select(System.Object)
@@ -109,9 +109,26 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         y_axis = Rhino.Geometry.Vector3d(*frame_dict.get('y', [0, 1, 0]))
         return Rhino.Geometry.Plane(origin, x_axis, y_axis)
 
+    def normalize_compose(self, compose):
+        """
+        Normalize compose input to canonical {identity, snapshots[]}.
+
+        Accepts legacy {identity, snapshot} payloads.
+        """
+        if not isinstance(compose, dict):
+            return None
+        identity = compose.get('identity') or {}
+        snapshots = compose.get('snapshots') or []
+        if snapshots and isinstance(snapshots[0], dict):
+            return {'identity': identity, 'snapshots': list(snapshots)}
+        legacy = compose.get('snapshot')
+        if isinstance(legacy, dict):
+            return {'identity': identity, 'snapshots': [legacy]}
+        return None
+
     def extract_component_data_from_geometry(self, geometry):
         """
-        Extract compose data ({identity, snapshot}) from geometry userdata.
+        Extract compose data ({identity, snapshots[]}) from geometry userdata.
 
         Args:
             geometry: Rhino geometry object with userdata
@@ -195,18 +212,27 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                     self.Component.Message = msg
                     return Output
 
+                compose = self.extract_component_data_from_geometry(
+                    geometry_objects[0])
+                if not compose:
+                    msg = ('Could not extract compose data from '
+                           'geometry userdata!')
+                    self._addError(msg)
+                    self.Component.Message = msg
+                    return Output
+
                 self._addRemark('Input detected as geometry with '
                                 'compose userdata')
 
-            # Resolve the snapshot (holds pca_frame + iframe)
-            snapshots = (
-                compose.get('snapshots') if isinstance(compose, dict) else None
-            )
-            snapshot = (
-                snapshots[0]
-                if isinstance(snapshots, list) and snapshots
-                else None
-            )
+            compose = self.normalize_compose(compose)
+            if not compose:
+                msg = 'Compose JSON is missing identity/snapshots!'
+                self._addError(msg)
+                self.Component.Message = msg
+                return Output
+
+            snapshots = compose.get('snapshots') or []
+            snapshot = snapshots[0] if snapshots else None
             if not isinstance(snapshot, dict):
                 msg = 'Compose JSON has no snapshots!'
                 self._addError(msg)
@@ -237,13 +263,14 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                 'z': [0.0, 0.0, 1.0]
             }
 
-            # Build a transformed compose (copy identity + snapshot shallowly;
-            # the iframe key is replaced wholesale, never mutated in place)
+            # Build transformed compose; update primary snapshot only
+            transformed_snapshot = dict(snapshot)
+            snapshots_out = list(snapshots)
+            snapshots_out[0] = transformed_snapshot
             transformed_compose = {
                 'identity': compose.get('identity'),
-                'snapshot': dict(snapshot),
+                'snapshots': snapshots_out,
             }
-            transformed_snapshot = transformed_compose['snapshot']
 
             # Update iframe to preserve translation but update orientation
             try:

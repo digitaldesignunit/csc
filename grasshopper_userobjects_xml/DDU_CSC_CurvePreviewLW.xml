@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">e6480101-a899-4115-bff0-70e49d60f27a</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">531d80cc-ce1a-4011-b366-5203ec7f0b3b</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639167944727491896</item>
+            <item name="Date" type_name="gh_date" type_code="8">639173673846996887</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -107,7 +107,7 @@
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="508">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGRSURBVEhL7ZLPSgJRFMZdtmjVv2VBUdBOGFIjUqhpGfdqulFIKFzkonVhkD2DEeW5Fr2AGv15ER/ARYsIcu6MES7EjKNeHU9ZWrvwBwfunO/7zty5dxyOIUMUr/6zKcnEluQQwDXV/4RkmV3JxZvkot4qXO9Q36+QXMQMDu+24Y1q9WLUPxBW4HLeYFBpD2WQxrI9V9BDc30jGTy0d81EqtMXKdvX3Hen+sTk4LINf3wOnY4qDdfYU7rpv1jqTveBwSGrBpQ47H3SmYjb7iNL9W+xeHrBYKLW3D08FaNXI9SDPdSadyFqA92FwUHYdpegugK1jk8A1b/khcOiwUW1GQTLDMIY9Sgsfj0uOZRbL6hilnraOJ3OSb9Hzx96w6XiZkrt6pj6KJJBEr2YOVgNl3AGzqI+B3Ot3WiaVsc68UXx7Av2P6cXzT8KCknfdiOLxdx6nvoc2FSGI2+kbAYys9TTC5OfzyW8kbLK+916jnraRxR067f7K6Fpqv9EfDkwE/Rs3HH3ek7TtAmqD/nHfACr6hrg0TfAHwAAAABJRU5ErkJggg==</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">46f9a12c-97df-4e47-bc7a-78c25315b28a</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">c5606419-dc74-4f28-868b-5d7376482f33</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">false</item>
@@ -149,7 +149,7 @@
                             <item name="Access" type_name="gh_int32" type_code="3">1</item>
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of generic curves</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">661086cc-0e04-4c2e-8508-00edd926a00c</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">b0d05348-483f-4e7f-a004-8c3501ba2f4d</item>
                             <item name="Mapping" type_name="gh_int32" type_code="3">1</item>
                             <item name="Name" type_name="gh_string" type_code="10">Curves</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Curves</item>
@@ -185,7 +185,7 @@
                             <item name="Access" type_name="gh_int32" type_code="3">1</item>
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of RGB colours</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">31b82470-f45f-428a-89c0-f7c1baf64f0c</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">3c0fcbbf-5793-4961-a1ce-a1b319f0d69b</item>
                             <item name="Name" type_name="gh_string" type_code="10">Colors</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Colors</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -220,7 +220,7 @@
                             <item name="Access" type_name="gh_int32" type_code="3">1</item>
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of integer numbers</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">fba2b264-eaf3-471a-a1be-790581ca045f</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">b21b1846-6cb6-4d8a-8285-1f9be5beaaa5</item>
                             <item name="Name" type_name="gh_string" type_code="10">Thickness</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Thickness</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
