@@ -118,6 +118,9 @@ jobs:
             exit 1
           fi
 
+          # Env-loading entrypoint (supervisord → node start-standalone.cjs)
+          cp -a scripts/start-standalone.cjs "$staging/start-standalone.cjs"
+
           zip -r "${{ steps.meta.outputs.zip_name }}" "$staging"
           rm -rf "$staging"
           ls -lh "${{ steps.meta.outputs.zip_name }}"
