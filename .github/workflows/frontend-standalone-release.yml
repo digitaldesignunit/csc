@@ -1,0 +1,144 @@
+name: Frontend Standalone Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without prefix (e.g. 0.5.0.1). Defaults to package.json version + short SHA."
+        required: false
+        type: string
+      static_base_url:
+        description: "Optional NEXT_PUBLIC_STATIC_BASE_URL override (otherwise uses repo variable)."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: src/frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve version and static base URL
+        id: meta
+        run: |
+          pkg_version=$(node -p "require('./package.json').version")
+          short_sha=$(echo "${GITHUB_SHA}" | cut -c1-7)
+
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          else
+            # Prefer hyphen over '+' — safer in git tags and download URLs
+            version="${pkg_version}-${short_sha}"
+          fi
+
+          tag="frontend-${version}"
+          zip_name="csc-frontend-standalone-${version}.zip"
+          release_name="DDU CSC Frontend ${tag}"
+
+          if [ -n "${{ inputs.static_base_url }}" ]; then
+            static_base_url="${{ inputs.static_base_url }}"
+          else
+            static_base_url="${{ vars.NEXT_PUBLIC_STATIC_BASE_URL }}"
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "zip_name=${zip_name}" >> "$GITHUB_OUTPUT"
+          echo "release_name=${release_name}" >> "$GITHUB_OUTPUT"
+          echo "static_base_url=${static_base_url}" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag=${tag}"
+          echo "Static base URL set: $([ -n "$static_base_url" ] && echo yes || echo no)"
+
+      - name: Build Next.js standalone
+        env:
+          NEXT_PUBLIC_STATIC_BASE_URL: ${{ steps.meta.outputs.static_base_url }}
+        run: npm run build
+
+      - name: Package standalone bundle
+        run: |
+          set -euo pipefail
+          staging="csc-frontend-standalone"
+          rm -rf "$staging" "${{ steps.meta.outputs.zip_name }}"
+          mkdir -p "$staging"
+
+          standalone=".next/standalone"
+          if [ ! -d "$standalone" ]; then
+            echo "ERROR: ${standalone} missing — is output: 'standalone' set in next.config?"
+            exit 1
+          fi
+
+          # With outputFileTracingRoot at the repo root, Next nests the app at
+          # src/frontend and keeps traced node_modules at the standalone root.
+          if [ -f "$standalone/src/frontend/server.js" ]; then
+            echo "Detected nested standalone layout (src/frontend)"
+            app_dir="$standalone/src/frontend"
+            mkdir -p "$app_dir/.next"
+            cp -a .next/static "$app_dir/.next/static"
+            if [ -d public ]; then
+              cp -a public "$app_dir/public"
+            fi
+            # Merge root traced deps + app files into a flat deploy tree
+            rsync -a --exclude='src' "$standalone/" "$staging/"
+            rsync -a "$app_dir/" "$staging/"
+          elif [ -f "$standalone/server.js" ]; then
+            echo "Detected flat standalone layout"
+            cp -a "$standalone/." "$staging/"
+            mkdir -p "$staging/.next"
+            cp -a .next/static "$staging/.next/static"
+            if [ -d public ]; then
+              cp -a public "$staging/public"
+            fi
+          else
+            echo "ERROR: could not find server.js under ${standalone}"
+            find "$standalone" -maxdepth 4 -type f -name 'server.js' -o -name 'package.json' | head -n 50
+            exit 1
+          fi
+
+          if [ ! -f "$staging/server.js" ]; then
+            echo "ERROR: staging bundle missing server.js"
+            exit 1
+          fi
+
+          zip -r "${{ steps.meta.outputs.zip_name }}" "$staging"
+          rm -rf "$staging"
+          ls -lh "${{ steps.meta.outputs.zip_name }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.release_name }}
+          files: src/frontend/${{ steps.meta.outputs.zip_name }}
+          body: |
+            ### Frontend standalone build
+
+            Prebuilt Next.js standalone bundle for Uberspace deploy (no `next build` on the host).
+
+            Deploy on the server with:
+
+            ```bash
+            bash csc_deploy_frontend_ci.sh ${{ steps.meta.outputs.tag }}
+            ```
+
+            Or omit the tag to install the latest `frontend-*` release.
+        env:
+          GITHUB_TOKEN: ${{ secrets.DDU_CSC_GH_RELEASE }}
