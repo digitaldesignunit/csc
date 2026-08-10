@@ -5,14 +5,13 @@
 #   .github/workflows/frontend-standalone-release.yml
 #   + uberspaceconfig/deployment/csc_deploy_frontend_ci.sh
 #
-# Keep secrets in ~/csc/frontend/.env (Next loads this at startup).
-# Required for auth: NEXTAUTH_SECRET, NEXTAUTH_URL, MONGODB_URI, MONGODB_DB,
-# MONGODB_USERCOLLECTION, FASTAPI_URL — otherwise /api/auth/* returns 500 HTML
-# and the client shows CLIENT_FETCH_ERROR.
+# Keep secrets in ~/csc/frontend/.env and/or .env.local
+# Required: NEXTAUTH_SECRET, NEXTAUTH_URL, MONGODB_URI, MONGODB_DB,
+# MONGODB_USERCOLLECTION, FASTAPI_URL
 
 [program:frontend]
 directory=%(ENV_HOME)s/csc/frontend
-command=node server.js
+command=node start-standalone.cjs
 autostart=true
 autorestart=true
 environment=NODE_ENV=production,PORT=3000,HOSTNAME=0.0.0.0
