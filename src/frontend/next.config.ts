@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
+  // Produce a self-contained server tree for CI → Uberspace deploys
+  // (avoids running `next build` on hosts with an older glibc).
+  output: "standalone",
+  // Repo root is two levels up from src/frontend (silences multi-lockfile warning).
+  outputFileTracingRoot: path.join(__dirname, "../.."),
   images: {
     remotePatterns: [
       {
