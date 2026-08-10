@@ -1,4 +1,4 @@
-[program:react-frontend]
+[program:frontend]
 directory=%(ENV_HOME)s/csc/frontend
 command=npm run start
 autostart=true

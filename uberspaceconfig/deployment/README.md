@@ -17,8 +17,13 @@ Build happens on GitHub Actions; the server only downloads and runs the bundle.
 1. **One-time server setup**
    - Copy `../etc/services.d/frontend_ci.ini.example` to `~/etc/services.d/frontend.ini`
    - `supervisorctl reread && supervisorctl update`
-   - Keep `~/csc/frontend/.env` with runtime secrets (`MONGODB_URI`, `NEXTAUTH_SECRET`, etc.)
+   - Keep `~/csc/frontend/.env` with runtime secrets (`MONGODB_URI`, `NEXTAUTH_SECRET`,
+     `NEXTAUTH_URL=https://ddu.uber.space`, `MONGODB_DB`, `MONGODB_USERCOLLECTION`,
+     `FASTAPI_URL`, etc.). Without these, `/api/auth/session` returns 500 and the
+     browser logs `CLIENT_FETCH_ERROR` / “Unexpected token '<'”.
    - Ensure `GITHUB_REPO_URL` and `GITHUB_CSC_DEPLOY_TOKEN` (or `GITHUB_CSC_GH_TOKEN`) are set
+   - Sanity-check after deploy:
+     `curl -s http://127.0.0.1:3000/api/auth/session` should return JSON, not HTML
 
 2. **CI**
    - Set repo variable `NEXT_PUBLIC_STATIC_BASE_URL` (e.g. `https://public.ddu.uber.space`)

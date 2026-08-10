@@ -1,9 +1,8 @@
 'use client'
 
-import React, { useRef, useMemo, useState, useEffect, Suspense } from 'react'
+import React, { Component, useRef, useMemo, useState, useEffect, Suspense, type ReactNode } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
-import { resolveStatic } from '@/lib/utils'
 import { useTheme } from 'next-themes'
 import * as THREE from 'three'
 
@@ -17,7 +16,11 @@ interface BackgroundMeshProps {
   fixed?: boolean
 }
 
-// Available mesh files
+// Served from Next `public/backgroundmeshes` (same origin). Do not route these
+// through NEXT_PUBLIC_STATIC_BASE_URL — cross-origin GLB fetches need CORS and
+// a failed useGLTF throws hard enough to tear down the whole page.
+const MESH_BASE_PATH = '/backgroundmeshes/'
+
 const MESH_FILES = [
   '0aad9436-ead8-4651-81a1-8b435012d799_reduced.glb',
   '0dd38d21-87ea-4c1d-a0b8-7245b45cd633_reduced.glb',
@@ -28,9 +31,28 @@ const MESH_FILES = [
   '6dc08bb0-4ae3-42e6-8cd9-23b49f624706_reduced.glb'
 ]
 
-// Rotating mesh component that loads random GLTF files
-const RotatingMesh = ({ 
-  color = '#3b82f6', 
+class MeshErrorBoundary extends Component<
+  { children: ReactNode; onError?: () => void },
+  { hasError: boolean }
+> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch() {
+    this.props.onError?.()
+  }
+
+  render() {
+    if (this.state.hasError) return null
+    return this.props.children
+  }
+}
+
+const RotatingMesh = ({
+  color = '#3b82f6',
   opacity = 0.1,
   rotationSpeed = 0.5,
   scale = 1.0,
@@ -44,40 +66,29 @@ const RotatingMesh = ({
 }) => {
   const meshRef = useRef<THREE.Group>(null)
   const [selectedMesh, setSelectedMesh] = useState<string>('')
-  
-  // Resolve mesh base URL: use env for remote, local public when on localhost
-  const meshBaseUrl = useMemo(() => {
-    const basePath = '/backgroundmeshes/'
-    const resolved = resolveStatic(basePath)
-    return resolved.endsWith('/') ? resolved : resolved + '/'
-  }, [])
 
-  // Select a random mesh file on component mount
   useEffect(() => {
     const randomMesh = MESH_FILES[Math.floor(Math.random() * MESH_FILES.length)]
     setSelectedMesh(randomMesh)
   }, [])
-  
-  // Preload selected GLTF into cache
+
   useEffect(() => {
     if (!selectedMesh) return
     try {
       const anyUseGltf = useGLTF as unknown as { preload?: (path: string) => void }
-      anyUseGltf.preload?.(`${meshBaseUrl}${selectedMesh}`)
+      anyUseGltf.preload?.(`${MESH_BASE_PATH}${selectedMesh}`)
     } catch {
-      // ignore
+      // ignore preload failures
     }
-  }, [selectedMesh, meshBaseUrl])
-  
-  // Load the GLB file - useGLTF handles errors internally
+  }, [selectedMesh])
+
   const gltf = useGLTF(
     selectedMesh
-      ? `${meshBaseUrl}${selectedMesh}`
-      : `${meshBaseUrl}0aad9436-ead8-4651-81a1-8b435012d799_reduced.glb`
+      ? `${MESH_BASE_PATH}${selectedMesh}`
+      : `${MESH_BASE_PATH}${MESH_FILES[0]}`
   )
   const scene = gltf?.scene
-  
-  // Generate random rotation axis
+
   const rotationAxis = useMemo(() => {
     return new THREE.Vector3(
       Math.random() * 2 - 1,
@@ -86,31 +97,24 @@ const RotatingMesh = ({
     ).normalize()
   }, [])
 
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     if (meshRef.current) {
-      // Rotate around the random axis
       meshRef.current.rotateOnAxis(rotationAxis, rotationSpeed * delta)
     }
   })
 
-
-  // Set up materials when scene is available
   useEffect(() => {
     if (!scene) return
-    
+
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
-        // Ensure vertex normals are present and up to date
         const geom = child.geometry as THREE.BufferGeometry
-        if (geom) {
-          if (geom.getAttribute('position')) {
-            // Drop stale normals and recompute
-            if (geom.getAttribute('normal')) {
-              geom.deleteAttribute('normal')
-            }
-            geom.computeVertexNormals()
-            geom.normalizeNormals()
+        if (geom?.getAttribute('position')) {
+          if (geom.getAttribute('normal')) {
+            geom.deleteAttribute('normal')
           }
+          geom.computeVertexNormals()
+          geom.normalizeNormals()
         }
         child.material = new THREE.MeshBasicMaterial({
           color: new THREE.Color(color),
@@ -122,17 +126,13 @@ const RotatingMesh = ({
     })
   }, [scene, color, opacity])
 
-  // When scene becomes available, trigger CSS fade-in
   useEffect(() => {
     if (scene) {
-      // Small delay to ensure scene is ready
-      setTimeout(() => {
-        onVisibilityChange(true)
-      }, 100)
+      const t = setTimeout(() => onVisibilityChange(true), 100)
+      return () => clearTimeout(t)
     }
   }, [scene, onVisibilityChange])
 
-  // If not loaded, render nothing (no fallback). We'll fade in when ready
   if (!scene) {
     return null
   }
@@ -155,21 +155,17 @@ export default function BackgroundMesh({
 }: BackgroundMeshProps) {
   const { theme, systemTheme } = useTheme()
   const [isVisible, setIsVisible] = useState<boolean>(false)
-  
-  // Theme-aware color selection that handles system theme
+
   const getMeshColor = () => {
     if (color) return color
-    
-    // If theme is system, use systemTheme to determine color
     const effectiveTheme = theme === 'system' ? systemTheme : theme
-    
     return effectiveTheme === 'dark' ? '#4080ff' : '#ef509c'
   }
-  
+
   const meshColor = getMeshColor()
-  
+
   return (
-    <div 
+    <div
       className={`${fixed ? 'fixed' : 'absolute'} inset-0 pointer-events-none ${className}`}
       style={{
         opacity: isVisible ? 1 : 0,
@@ -182,15 +178,17 @@ export default function BackgroundMesh({
         gl={{ alpha: true, antialias: true }}
       >
         <ambientLight intensity={intensity} />
-        <Suspense fallback={null}>
-          <RotatingMesh 
-            color={meshColor}
-            opacity={opacity}
-            rotationSpeed={rotationSpeed}
-            scale={scale}
-            onVisibilityChange={setIsVisible}
-          />
-        </Suspense>
+        <MeshErrorBoundary onError={() => setIsVisible(false)}>
+          <Suspense fallback={null}>
+            <RotatingMesh
+              color={meshColor}
+              opacity={opacity}
+              rotationSpeed={rotationSpeed}
+              scale={scale}
+              onVisibilityChange={setIsVisible}
+            />
+          </Suspense>
+        </MeshErrorBoundary>
       </Canvas>
     </div>
   )
