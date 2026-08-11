@@ -18,6 +18,10 @@ export const metadata: Metadata = {
   description: 'A components and materials database.',
 }
 
+// Beta/gh-interface flags come from the server's .env at request time. Without
+// this, prerendering bakes in whatever the CI build machine saw (i.e. nothing).
+export const dynamic = 'force-dynamic'
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {

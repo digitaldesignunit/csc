@@ -32,6 +32,24 @@ Build happens on GitHub Actions; the server only downloads and runs the bundle.
    - Ensure secret `DDU_CSC_GH_RELEASE` can create releases
    - Run workflow **Frontend Standalone Release** (Actions → workflow_dispatch)
 
+### Build-time vs runtime configuration
+
+Since the build moved to CI, this distinction matters:
+
+| Kind | Where it must be set | Examples |
+| --- | --- | --- |
+| Build time (compiled into the client bundle) | GitHub repo variable / workflow input | `NEXT_PUBLIC_*` |
+| Runtime (read per request on the server) | `~/csc/frontend/.env` | `NEXTAUTH_SECRET`, `MONGODB_*`, `FASTAPI_URL`, `BETA_PHASE`, `BETA_BANNER_TEXT`, `BETA_LOGIN_MESSAGE`, `GH_INTERFACE_DEACTIVATED` |
+
+Setting a `NEXT_PUBLIC_*` value in the server `.env` has no effect — it is baked in
+during `next build`. Conversely, the beta/gh-interface flags stay editable on the
+server: the root layout is `force-dynamic`, so changing `.env` plus
+`supervisorctl restart frontend` is enough, no rebuild needed.
+
+Note that `NEXT_PUBLIC_STATIC_BASE_URL` only applies to Apache-hosted catalog assets.
+Assets bundled in `public/` (`/logo/`, `/gh-interface/`, `/backgroundmeshes/`) are
+deliberately kept on the app origin by `resolveStatic()`.
+
 3. **Deploy on Uberspace** (from `~/csc` or wherever the script lives)
 
    ```bash
