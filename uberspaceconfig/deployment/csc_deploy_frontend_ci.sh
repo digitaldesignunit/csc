@@ -154,16 +154,20 @@ echo "------------------------ UPDATE FILES ---------------------------"
 echo "-----------------------------------------------------------------"
 mkdir -p "${TARGET1}"
 echo "I/O: Syncing standalone tree to ${TARGET1}/ (preserving .env*)..."
+# `.env*` is never overwritten or deleted: runtime secrets live only on the server.
 rsync -a --delete \
-  --exclude='.env' \
-  --exclude='.env.local' \
-  --exclude='.env.*.local' \
+  --exclude='.env*' \
   --exclude='node_modules/.cache' \
   "${BUNDLE_DIR}/" "${TARGET1}/"
 
 if [ ! -f "${TARGET1}/server.js" ]; then
   echo "ERROR: ${TARGET1}/server.js missing after sync"
   exit 1
+fi
+
+if ! ls "${TARGET1}"/.env* >/dev/null 2>&1; then
+  echo "WARNING: no .env file in ${TARGET1}/ — /api/auth/* will return 500."
+  echo "WARNING: create ${TARGET1}/.env with NEXTAUTH_SECRET, NEXTAUTH_URL, MONGODB_*, FASTAPI_URL."
 fi
 echo "-----------------------------------------------------------------"
 

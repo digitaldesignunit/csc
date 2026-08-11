@@ -185,6 +185,11 @@ export function componentBounds(component_bbx: ComponentBoundingBox): Array<numb
   return [bnds_x, bnds_y, bnds_z]
 }
 
+// Assets shipped inside the Next `public/` folder. The Apache static host only
+// serves uploaded catalog assets, so these must stay on the app origin —
+// otherwise they 404 (and cross-origin GLB fetches additionally fail CORS).
+const BUNDLED_ASSET_PREFIXES = ['/logo/', '/gh-interface/', '/backgroundmeshes/']
+
 // Resolve a static asset URL: use NEXT_STATIC_BASE_URL in production, fallback to Next public path locally
 export function resolveStatic(path: string): string {
   // Prefer client-exposed var; fall back to legacy server var
@@ -193,6 +198,10 @@ export function resolveStatic(path: string): string {
   // If already an absolute URL or data URI, return as-is
   const lower = path.toLowerCase()
   if (lower.startsWith('http://') || lower.startsWith('https://') || lower.startsWith('data:')) {
+    return path
+  }
+
+  if (BUNDLED_ASSET_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
     return path
   }
 
