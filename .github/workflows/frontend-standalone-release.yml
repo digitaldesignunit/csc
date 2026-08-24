@@ -126,5 +126,3 @@ jobs:
             ```
 
             Or omit the tag to install the latest `frontend-*` release.
-        env:
-          GITHUB_TOKEN: ${{ secrets.DDU_CSC_GH_RELEASE }}

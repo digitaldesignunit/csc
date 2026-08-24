@@ -173,5 +173,3 @@ jobs:
           body: |
             ### Release Notes
             New Release of the DDU CSC GrasshopperInterface
-        env:
-          GITHUB_TOKEN: ${{ secrets.DDU_CSC_GH_RELEASE }}
