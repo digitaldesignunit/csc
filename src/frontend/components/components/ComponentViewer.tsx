@@ -1341,7 +1341,7 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
                   type="button"
                   variant="secondary"
                   size="icon-xs"
-                  className="h-7 w-7 bg-background/85 shadow-sm backdrop-blur-sm"
+                  className="h-7 w-7 bg-background/85 text-black shadow-sm backdrop-blur-sm dark:text-white"
                   onClick={() => fitCameraRef.current?.()}
                   aria-label="Zoom extents"
                 >
@@ -1356,7 +1356,7 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
                   type="button"
                   variant={showGrid ? 'secondary' : 'ghost'}
                   size="icon-xs"
-                  className={`h-7 w-7 shadow-sm backdrop-blur-sm ${
+                  className={`h-7 w-7 text-black shadow-sm backdrop-blur-sm dark:text-white ${
                     showGrid ? 'bg-background/85' : 'bg-background/60'
                   }`}
                   onClick={() => setShowGrid((prev) => !prev)}
