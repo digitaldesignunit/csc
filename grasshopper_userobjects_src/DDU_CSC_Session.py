@@ -42,7 +42,7 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 260617
+Version: 260825
 """
 
 
@@ -1069,7 +1069,7 @@ class _AuthCore(object):
     """
 
     def __init__(self, base_url, leeway=30, disable_cache=False):
-        self.base_url = (base_url or 'https://api.ddu.uber.space').rstrip('/')
+        self.base_url = (base_url or 'https://api.2ndchances.build').rstrip('/')
         self.leeway = int(leeway) if leeway is not None else 30
         self.disable_cache = disable_cache
         self._lock = RLock()
@@ -1801,7 +1801,7 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
         if auth_core is None:
             # Create new AuthCore instance with default settings
             auth_core = _AuthCore(
-                base_url='https://api.ddu.uber.space'
+                base_url='https://api.2ndchances.build'
             )
             sc.sticky['CSC_AuthCore'] = auth_core
         return auth_core
