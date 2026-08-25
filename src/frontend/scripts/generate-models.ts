@@ -16,7 +16,7 @@
 import fs from 'fs'
 import path from 'path'
 
-const BACKEND_URL = process.env.FASTAPI_URL || 'https://api.ddu.uber.space'
+const BACKEND_URL = process.env.FASTAPI_URL || 'https://api.2ndchances.build'
 const OUTPUT_DIR = path.join(process.cwd(), 'generated')
 
 /** Reuse shared defs from `CatalogSharedTypes.ts` in compose/design outputs. */

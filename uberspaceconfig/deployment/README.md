@@ -28,7 +28,7 @@ Build happens on GitHub Actions; the server only downloads and runs the bundle.
      If the service exits immediately, `supervisorctl tail frontend` will list missing env keys.
 
 2. **CI**
-   - Set repo variable `NEXT_PUBLIC_STATIC_BASE_URL` (e.g. `https://public.ddu.uber.space`)
+   - Set repo variable `NEXT_PUBLIC_STATIC_BASE_URL` (e.g. `https://public.2ndchances.build`)
    - No release secret needed: the workflow's built-in `GITHUB_TOKEN` creates the
      release via its `permissions: contents: write` grant
    - Run workflow **Frontend Standalone Release** (Actions → workflow_dispatch)

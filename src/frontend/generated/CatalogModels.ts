@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
 // Generated on: 2026-06-10T12:31:17.106Z
-// Source: https://api.ddu.uber.space/schema/catalog-compose
+// Source: https://api.2ndchances.build/schema/catalog-compose
 
 import type {
   ComponentBoundingBox,

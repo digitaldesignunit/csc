@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'public.ddu.uber.space',
+        hostname: 'public.2ndchances.build',
         pathname: '/csc_assets/**',
       },
     ],

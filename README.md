@@ -88,17 +88,17 @@ export GITHUB_REPO_URL="https://github.com/your-org/your-repo"
 export GITHUB_CSC_GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
 export SMTP_HOST="yourhost.uberspace.de"
 export SMTP_PORT="587"
-export SMTP_USER="noreply@ddu.uber.space"
+export SMTP_USER="noreply@yourdomain.com"
 export SMTP_PASSWORD="your-mailbox-password"
-export SMTP_FROM_EMAIL="noreply@ddu.uber.space"
+export SMTP_FROM_EMAIL="noreply@yourdomain.com"
 export SMTP_FROM_NAME="Catalog of Second Chances"
 export SMTP_DEV_MODE="false"
-export FRONTEND_URL="https://2ndchances.build"
+export FRONTEND_URL="https://yourdomain.com"
 export PREVIEW_DIR="/home/ddu/csc/backend/static/previews"
 export GEOMETRY_DIR="/home/ddu/csc/backend/static/geometry"
 export GEOMETRY_ARCHIVE_DIR="/home/ddu/csc/backend/static/geometry_archive"
 export GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml"
-export FASTAPI_CORS_ORIGINS="https://2ndchances.build,https://www.2ndchances.build,https://ddu.uber.space,http://localhost:3000"
+export FASTAPI_CORS_ORIGINS="https://yourdomain.com,http://localhost:3000"
 ```
 
 Apply immediately by running: `source ~/.bash_profile`
@@ -373,9 +373,9 @@ Uberlab guides:
 
 ### Custom domain (`2ndchances.build`)
 
-`2ndchances.build` is the canonical frontend origin; `ddu.uber.space` stays
-registered and redirects to it. The app cannot be served on both origins at
-once: NextAuth v4 resolves every absolute auth URL from the single
+`2ndchances.build` is the canonical frontend origin; The old address `ddu.uber.space`
+stays registered and redirects to it. The app cannot be served on both origins
+at once: NextAuth v4 resolves every absolute auth URL from the single
 `NEXTAUTH_URL`, and its session cookie is host-only, so a login on the
 non-canonical host would set a cookie there and then be redirected away from
 it. The redirect lives in `src/frontend/next.config.ts` and matches on the

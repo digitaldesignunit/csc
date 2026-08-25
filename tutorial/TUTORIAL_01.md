@@ -80,4 +80,4 @@ All Grasshopper Components that interact with the web database use this REST API
 
 If you want to explore the routes in the Web documentation linked below, you can login with your usual username and password.
 
-- https://api.ddu.uber.space/docs
+- https://api.2ndchances.build/docs

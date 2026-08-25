@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
 // Generated on: 2026-06-10T12:31:16.964Z
-// Source: https://api.ddu.uber.space/schema/catalog-shared
+// Source: https://api.2ndchances.build/schema/catalog-shared
 
 export type ComponentBoundingBox = number[];
 

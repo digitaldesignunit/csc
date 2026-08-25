@@ -17,7 +17,7 @@ cp csc_credentials.json.example csc_credentials.json
 
 ```json
 {
-  "server": "https://api.ddu.uber.space",
+  "server": "https://api.2ndchances.build",
   "user": "your-username", 
   "pwd": "your-password"
 }

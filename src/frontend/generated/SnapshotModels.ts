@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
 // Generated on: 2026-06-10T12:31:17.123Z
-// Source: https://api.ddu.uber.space/schema/snapshot-summary
+// Source: https://api.2ndchances.build/schema/snapshot-summary
 
 export interface SnapshotSummaryItem {
   _id: string;

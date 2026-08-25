@@ -30,7 +30,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Default API configuration
-DEFAULT_API_BASE_URL = "https://api.ddu.uber.space"
+DEFAULT_API_BASE_URL = "https://api.2ndchances.build"
 DEFAULT_TIMEOUT = 30
 CREDENTIALS_FILE = "csc_credentials.json"
 
@@ -366,7 +366,7 @@ def upload_scan_by_path(scan_folder_path: str, credentials: Dict[str, str],
 
     Example:
         credentials = {
-            'server': 'https://api.ddu.uber.space',
+            'server': 'https://api.2ndchances.build',
             'user': 'your-username',
             'pwd': 'your-password'
         }

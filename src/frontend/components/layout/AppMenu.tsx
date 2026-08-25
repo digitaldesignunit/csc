@@ -230,7 +230,7 @@ export default function AppMenu() {
             Imprint
           </div>
           <div
-            onClick={() => handleExternalNavigation('https://api.ddu.uber.space/docs#/')}
+            onClick={() => handleExternalNavigation('https://api.2ndchances.build/docs#/')}
             className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
           >
             <BookMarked className="h-4 w-4" />
