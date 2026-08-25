@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">30858ea9-739e-48df-a2e3-074672a3d482</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">7a2f16bd-5297-4db4-9179-94b248999cdd</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639173673853948416</item>
+            <item name="Date" type_name="gh_date" type_code="8">639232737037159081</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -84,7 +84,7 @@
                 <item name="Author" type_name="gh_string" type_code="10">Robert McNeel &amp; Associates</item>
                 <item name="Id" type_name="gh_guid" type_code="9">00000000-0000-0000-0000-000000000000</item>
                 <item name="Name" type_name="gh_string" type_code="10">Grasshopper</item>
-                <item name="Version" type_name="gh_string" type_code="10">8.32.26160.13001</item>
+                <item name="Version" type_name="gh_string" type_code="10">8.34.26223.11001</item>
               </items>
             </chunk>
           </chunks>
@@ -101,13 +101,14 @@
               </items>
               <chunks count="1">
                 <chunk name="Container">
-                  <items count="15">
+                  <items count="16">
                     <item name="Description" type_name="gh_string" type_code="10">Converts CSC compose JSON into an in-memory D2P GHComponent. Geometry is registered as a nested MemberGeo tree (D2P ParentMember + : layer paths). Optional Parent prefixes ShortName for D2P child naming. CSC identity/snapshot metadata is stored on the component label user text. MeshMode: best | inline | reduced | detailed | all. SnapshotScope: current | all.</item>
                     <item name="GraftStandardOutputLines" type_name="gh_bool" type_code="1">true</item>
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="405">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAEqSURBVEhLY2AYBZQAPT097tDQUGZ0cYqAvb09i5GRUYGRkdE9Y2Pj/0ZGRt+NjIzWGxkZGcHUWFhYcJqYmHiC1KLqJgIYGhp6QA1+bmRktMzIyOiAsbHxPxAGsaFiz0FqQGrR9RMEIFeBXAdyJUwM5HqoL75DLb8H8iVZPsAHQPEBihdkMZiDqGrZ//p6pvvx8zlAbCMjo0CorwLR1ZEFHoWs5HzrP3v3a/9Znzf4dfIaGRlFgSwwMTGJpdgnIMPfBcze8z5gzv89Hg3/zU1MgmAWGBkZ9ZHlk3f+s+e+8599F4p/gww/6NHy09LEHGTYCyMjo/1Qgz9C6RJ0M/ACbBYc8mimngXIgCZBhA5oGskwQLNkSpWMRvOigi6FHU2La2RAkwpnFKADAHnr16mJuG2hAAAAAElFTkSuQmCC</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">f336fd4a-1676-454b-9957-9a48381e83a5</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">0da8cc53-c0eb-4ad5-844e-ef4ac09afd9e</item>
+                    <item name="Locked" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -148,11 +149,12 @@
                       </items>
                       <chunks count="6">
                         <chunk name="InputParam" index="0">
-                          <items count="13">
+                          <items count="14">
                             <item name="Access" type_name="gh_int32" type_code="3">2</item>
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of text fragments</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">e000e7b2-9c4e-47ee-bdf8-5bff4b209358</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">3a135ddc-bf9b-492b-89fd-9995b008e5b6</item>
+                            <item name="Locked" type_name="gh_bool" type_code="1">true</item>
                             <item name="Name" type_name="gh_string" type_code="10">ComponentData</item>
                             <item name="NickName" type_name="gh_string" type_code="10">ComponentData</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -183,10 +185,11 @@
                           </chunks>
                         </chunk>
                         <chunk name="InputParam" index="1">
-                          <items count="12">
+                          <items count="13">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">fda749ef-72ee-4955-a1f6-d152cfbe1100</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">bc5d224c-08eb-4dc2-8a49-17c3c62c57c6</item>
+                            <item name="Locked" type_name="gh_bool" type_code="1">true</item>
                             <item name="Name" type_name="gh_string" type_code="10">MeshMode</item>
                             <item name="NickName" type_name="gh_string" type_code="10">MeshMode</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -217,10 +220,11 @@
                           </chunks>
                         </chunk>
                         <chunk name="InputParam" index="2">
-                          <items count="12">
+                          <items count="13">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">d517539b-804c-428a-a92b-70f2da1c4870</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">bc3d6558-db59-403e-84a3-f3e412c17cda</item>
+                            <item name="Locked" type_name="gh_bool" type_code="1">true</item>
                             <item name="Name" type_name="gh_string" type_code="10">SnapshotScope</item>
                             <item name="NickName" type_name="gh_string" type_code="10">SnapshotScope</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -251,10 +255,11 @@
                           </chunks>
                         </chunk>
                         <chunk name="InputParam" index="3">
-                          <items count="12">
+                          <items count="13">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">3fcdfb64-6d52-48e1-ba21-9e29a721d6e4</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">5e9d5645-8d07-4848-83c6-80ecd29e64cd</item>
+                            <item name="Locked" type_name="gh_bool" type_code="1">true</item>
                             <item name="Name" type_name="gh_string" type_code="10">Parent</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Parent</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -285,9 +290,10 @@
                           </chunks>
                         </chunk>
                         <chunk name="OutputParam" index="0">
-                          <items count="6">
+                          <items count="7">
                             <item name="Description" type_name="gh_string" type_code="10">Standard output and error contents collected during script run</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">6b68a0db-beeb-4b77-a429-b1ae47df5169</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">294c0677-6e0b-49c2-974b-5ca03e86d868</item>
+                            <item name="Locked" type_name="gh_bool" type_code="1">true</item>
                             <item name="Name" type_name="gh_string" type_code="10">out</item>
                             <item name="NickName" type_name="gh_string" type_code="10">out</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -307,10 +313,11 @@
                           </chunks>
                         </chunk>
                         <chunk name="OutputParam" index="1">
-                          <items count="12">
+                          <items count="13">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">52673ad6-4dc7-4b11-9a28-56b78cfc94b4</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">620b46e1-3528-4f85-8cb8-18e2dc0fe7a5</item>
+                            <item name="Locked" type_name="gh_bool" type_code="1">true</item>
                             <item name="Name" type_name="gh_string" type_code="10">D2PComponent</item>
                             <item name="NickName" type_name="gh_string" type_code="10">D2PComponent</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
