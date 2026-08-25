@@ -93,12 +93,12 @@ export SMTP_PASSWORD="your-mailbox-password"
 export SMTP_FROM_EMAIL="noreply@ddu.uber.space"
 export SMTP_FROM_NAME="Catalog of Second Chances"
 export SMTP_DEV_MODE="false"
-export FRONTEND_URL="https://ddu.uber.space"
+export FRONTEND_URL="https://2ndchances.build"
 export PREVIEW_DIR="/home/ddu/csc/backend/static/previews"
 export GEOMETRY_DIR="/home/ddu/csc/backend/static/geometry"
 export GEOMETRY_ARCHIVE_DIR="/home/ddu/csc/backend/static/geometry_archive"
 export GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml"
-export FASTAPI_CORS_ORIGINS="https://ddu.uber.space,http://localhost:3000"
+export FASTAPI_CORS_ORIGINS="https://2ndchances.build,https://www.2ndchances.build,https://ddu.uber.space,http://localhost:3000"
 ```
 
 Apply immediately by running: `source ~/.bash_profile`
@@ -371,6 +371,41 @@ Uberlab guides:
 - [Uberspace Web Backends](https://manual.uberspace.de/web-backends/)
 - [Uberspace Web Domains](https://manual.uberspace.de/web-domains/)
 
+### Custom domain (`2ndchances.build`)
+
+`2ndchances.build` is the canonical frontend origin; `ddu.uber.space` stays
+registered and redirects to it. The app cannot be served on both origins at
+once: NextAuth v4 resolves every absolute auth URL from the single
+`NEXTAUTH_URL`, and its session cookie is host-only, so a login on the
+non-canonical host would set a cookie there and then be redirected away from
+it. The redirect lives in `src/frontend/next.config.ts` and matches on the
+request host.
+
+Register the domain and point it at the frontend port:
+
+```
+[user@servername ~]$ uberspace web domain add 2ndchances.build
+[user@servername ~]$ uberspace web backend set 2ndchances.build/ --http --port 3000
+```
+
+Then update these values and restart both services:
+
+| Value | Location |
+| --- | --- |
+| `NEXTAUTH_URL=https://2ndchances.build` | `~/csc/frontend/.env` |
+| `FRONTEND_URL="https://2ndchances.build"` (verification email links) | `~/etc/services.d/fastapi.ini` and `~/.bash_profile` |
+| `FASTAPI_CORS_ORIGINS` (add the new origin) | `~/etc/services.d/fastapi.ini` and `~/.bash_profile` |
+| `Access-Control-Allow-Origin` allowlist | `~/html/.htaccess` |
+
+`NEXT_PUBLIC_STATIC_BASE_URL` and the `images.remotePatterns` entry in
+`next.config.ts` describe where assets are *fetched from*, not where the app is
+served, so they only change if the Apache asset host itself moves.
+
+Adding the domain to `FASTAPI_CORS_ORIGINS` is a safety net rather than a
+requirement: the browser only ever calls the API through the same-origin proxy
+at `/api/backend/[...path]`, which is a server-to-server request and therefore
+not subject to CORS.
+
 ### Deploying .htaccess
 
 The repo contains `uberspaceconfig/html/.htaccess` which must be placed at
@@ -383,8 +418,10 @@ correctly.
 [user@servername ~]$ cp ~/csc/uberspaceconfig/html/.htaccess ~/html/.htaccess
 ```
 
-Before deploying, update the `Access-Control-Allow-Origin` header in the file
-to match your actual frontend domain.
+Before deploying, update the origin allowlist in the `SetEnvIf Origin` line to
+match your actual frontend domains. A plain `Header set Access-Control-Allow-Origin`
+can only name a single origin, which is why the file reflects a matched origin
+instead.
 
 ## Preview Generation CronJob
 

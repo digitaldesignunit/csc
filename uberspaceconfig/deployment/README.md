@@ -18,7 +18,7 @@ Build happens on GitHub Actions; the server only downloads and runs the bundle.
    - Copy `../etc/services.d/frontend_ci.ini.example` to `~/etc/services.d/frontend.ini`
    - `supervisorctl reread && supervisorctl update`
    - Keep `~/csc/frontend/.env` and/or `.env.local` with runtime secrets
-     (`MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL=https://ddu.uber.space`,
+     (`MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL=https://2ndchances.build`,
      `MONGODB_DB`, `MONGODB_USERCOLLECTION`, `FASTAPI_URL`, etc.).
      The process must start with `node start-standalone.cjs` (see
      `frontend_ci.ini.example`) so those files are loaded under supervisord.

@@ -23,7 +23,11 @@ RewriteBase /
 Header set X-Content-Type-Options "nosniff"
 
 <IfModule mod_headers.c>
-  Header set Access-Control-Allow-Origin "https://ddu.uber.space"
+  # `Header set` can only name one origin, so reflect a matched origin instead.
+  # Keep the legacy host listed while it still redirects to the canonical one.
+  SetEnvIf Origin "^(https://(?:2ndchances\.build|www\.2ndchances\.build|ddu\.uber\.space))$" CSC_ALLOWED_ORIGIN=$1
+  Header set Access-Control-Allow-Origin "%{CSC_ALLOWED_ORIGIN}e" env=CSC_ALLOWED_ORIGIN
+  Header append Vary Origin
   Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
   Header set Access-Control-Allow-Headers "Content-Type"
 </IfModule>

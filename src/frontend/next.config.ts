@@ -18,6 +18,21 @@ const nextConfig: NextConfig = {
     // Disable image optimization for local development and problematic images
     unoptimized: process.env.NODE_ENV === 'development',
   },
+  // `2ndchances.build` is the canonical origin. NextAuth v4 anchors every
+  // absolute auth URL to the single `NEXTAUTH_URL`, so the legacy host cannot
+  // serve the app itself — signing in there would set a host-only cookie and
+  // then redirect to the canonical origin without it. Kept temporary (307)
+  // until the switch has settled; browsers cache a 308 very aggressively.
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'ddu.uber.space' }],
+        destination: 'https://2ndchances.build/:path*',
+        permanent: false,
+      },
+    ]
+  },
 };
 
 export default nextConfig;

@@ -33,11 +33,11 @@ export GITHUB_DEPLOY_URL="https://{$GITHUB_USERNAME}:{$GITHUB_CSC_DEPLOY_TOKEN}@
 # SMTP / Email
 export SMTP_HOST="yourhost.uberspace.de"
 export SMTP_PORT="587"
-export SMTP_USER="noreply@ddu.uber.space"
+export SMTP_USER="noreply@2ndchances.build"
 export SMTP_PASSWORD="your-mailbox-password"
-export SMTP_FROM_EMAIL="noreply@ddu.uber.space"
+export SMTP_FROM_EMAIL="noreply@2ndchances.build"
 export SMTP_FROM_NAME="Catalog of Second Chances"
-export FRONTEND_URL="https://ddu.uber.space"
+export FRONTEND_URL="https://2ndchances.build"
 
 # Filesystem paths
 export GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml"
@@ -52,7 +52,7 @@ export SNAPSHOT_PHOTO_MAX_OUTPUT_MB=2
 export SNAPSHOT_PHOTO_MAX_LONG_EDGE_PX=4096
 
 # FastAPI 
-export FASTAPI_CORS_ORIGINS="https://ddu.uber.space,http://localhost:3000"
+export FASTAPI_CORS_ORIGINS="https://2ndchances.build,https://www.2ndchances.build,https://ddu.uber.space,http://localhost:3000"
 
 # Geometry Upload File Size Limit
 export GEOMETRY_UPLOAD_LIMIT_MB="250"

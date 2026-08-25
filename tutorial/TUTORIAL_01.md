@@ -21,7 +21,7 @@
 
 - The first thing we are going to look at is the so-called "web frontend"
 - This enables you to browse the database
-- It is available using the url https://ddu.uber.space
+- It is available using the url https://2ndchances.build
 
 - If you open the site, you will not find a lot at first
 - This is because to view the database, you need to log-in
@@ -71,7 +71,7 @@
 
 ## Resources
 
-- https://ddu.uber.space --> The web frontend of our component database
+- https://2ndchances.build --> The web frontend of our component database
 
 ### For Nerds and Deep Divers (Optional!)
 
