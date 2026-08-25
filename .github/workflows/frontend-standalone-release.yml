@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
 
@@ -126,5 +126,3 @@ jobs:
             ```
 
             Or omit the tag to install the latest `frontend-*` release.
-        env:
-          GITHUB_TOKEN: ${{ secrets.DDU_CSC_GH_RELEASE }}
