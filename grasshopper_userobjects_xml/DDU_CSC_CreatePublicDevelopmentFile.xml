@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">6b0423d1-12e4-4079-b776-78c9c60ff06c</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">627b7f39-61cb-4d7f-9a02-7d67f7e3aa92</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639233566129465360</item>
+            <item name="Date" type_name="gh_date" type_code="8">639233578506362222</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -121,7 +121,7 @@
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="518">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGbSURBVEhL3ZW9SgNBEMdjIZbqO6QTRWZ8CzE7V/ga8QkULRSbtILOJL6Blb0gouAHBFEh8aNXyayHsTGRyMYLhjXnXc7OPwwcu//Z383McpfL/UsBQAkA7gcFIlpErCLiqJ+XWgBQA4B3//AoWojYQcS9zJAIUPPXnQCgDgCvDgIA+/l8fsz3JCoB4PbqUQXZICkANdeezJAUgN58HhCxGc2k6ntjlQDwb9hDNHj1vbH6DTBIw/p/JLzMb01aI2tq+E5Jbq3hVbcW509Uf8JLQeaU5FmJm5akE0VTDT/ZoAK+P5V6CZ1cZ8QauVEjp5bkREkOLMmhJTlS4jNLcuU8mQG6wDPujTUoF9XwR0i8rgXeVMPtMOCi22uYynR2AMlSX1sGRlgoF7MDogrCYNdV0G4Y2fiqQFohbXfhjYWdqcyA7gyIr5Xk3AZ83O2/kaPuDAxfWOLLP83APbubokYelfjtuzX85tas2Zn1/ankJ1izO6HEK5a4ri4ML+vi9nicP1HDJgzr7yXE/XAGhfMOBfA/aGmi5J/zP/QJDd+BaZpwyd4AAAAASUVORK5CYII=</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">d384a03e-edd9-4cef-8058-5a56b7d1c922</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">71a37310-c135-44a1-834f-bc4ee2b0a97d</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -167,7 +167,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of boolean values</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">88c8b6d5-0110-4928-a5b6-9cd0d2435b22</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">cce3307c-5170-4d5b-8d6c-6178befe9508</item>
                             <item name="Name" type_name="gh_string" type_code="10">Run</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Run</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -202,7 +202,7 @@
                             <item name="Access" type_name="gh_int32" type_code="3">1</item>
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of text fragments</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">7f429110-57a0-4211-bdde-eb5ef0461298</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">882fdd71-ed78-4b74-9a8d-52e320dfd6c3</item>
                             <item name="Name" type_name="gh_string" type_code="10">ClearPanelNames</item>
                             <item name="NickName" type_name="gh_string" type_code="10">ClearPanelNames</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -236,7 +236,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of text fragments</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">5c13fd28-751f-4736-b693-40d82e273301</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">61ef2003-adad-4829-9a20-e973bf718759</item>
                             <item name="Name" type_name="gh_string" type_code="10">DevelopmentPath</item>
                             <item name="NickName" type_name="gh_string" type_code="10">DevelopmentPath</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -270,7 +270,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of text fragments</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">7dc2fb74-20de-41de-bd34-823cfc09b517</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">84dc1f68-335d-4aa1-9e18-2b9ad468060b</item>
                             <item name="Name" type_name="gh_string" type_code="10">Filename</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Filename</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -303,7 +303,7 @@
                         <chunk name="OutputParam" index="0">
                           <items count="6">
                             <item name="Description" type_name="gh_string" type_code="10">Success status of the operation (True/False)</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">2a7c5079-27a3-4a91-aff2-d9aeebac5a9a</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">55a1ec42-6509-4d90-80fb-da69bd43bfb1</item>
                             <item name="Name" type_name="gh_string" type_code="10">out</item>
                             <item name="NickName" type_name="gh_string" type_code="10">out</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -326,7 +326,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">2a0012be-4d8f-4cbd-93c7-c3ed2e27a69a</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">f1c1ed52-1971-4e7b-a8c1-fa8157e61032</item>
                             <item name="Name" type_name="gh_string" type_code="10">Success</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Success</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -360,7 +360,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">229fd953-784a-48af-9455-e0a728b9ada4</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">62cff2b1-f193-4725-9e8f-67d931fb7ff0</item>
                             <item name="Name" type_name="gh_string" type_code="10">SavedFilePath</item>
                             <item name="NickName" type_name="gh_string" type_code="10">SavedFilePath</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -394,7 +394,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">8c631433-e1bb-45b8-854d-19ad3d2ac184</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">f2a62656-6c8c-4646-a752-8df7cb24133b</item>
                             <item name="Name" type_name="gh_string" type_code="10">Status</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Status</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
