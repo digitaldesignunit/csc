@@ -20,7 +20,7 @@ import System  # NOQA
 import Grasshopper  # NOQA
 import Rhino  # NOQA
 
-# One PCA sample per this many mm² of triangle area (3D mesh path).
+# One PCA sample per this many mm of triangle area (3D mesh path).
 REFERENCE_FACE_AREA_MM2 = 100.0
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
@@ -30,9 +30,9 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '7 Geometry Tools'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Computes PCA orientation for input geometry. 3D meshes and breps use '
-    'face-area-weighted sampling before PCA; extrusions use a 2D minimum '
-    'bounding rectangle. Returns OBB, aligned geometry, translation vector, '
-    'and PCA transformation matrix.'
+    'face-area-weighted sampling before PCA; point clouds use their sample '
+    'points; extrusions use a 2D minimum bounding rectangle. Returns OBB, '
+    'aligned geometry, translation vector, and PCA transformation matrix.'
 )
 
 
@@ -40,7 +40,7 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260826
     """
 
     def __init__(self):
@@ -70,7 +70,7 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Input Rhino Geometry'
+            'Input Rhino Geometry (Mesh, Brep, Extrusion, or PointCloud)'
         )
         # Initialize output param descriptions
         i = 0
@@ -99,21 +99,23 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
 
     def center_geometry_at_origin(self, geometry):
         """
-        Center geometry at its volume centroid.
+        Center geometry at its centroid.
         Returns centered geometry and translation vector.
         """
-        # Get the volume centroid of the geometry
-        vmp = Rhino.Geometry.VolumeMassProperties.Compute(geometry)
-        volume_centroid = vmp.Centroid
-        if volume_centroid is None:
-            # Fallback to bounding box centroid if volume centroid fails
+        if isinstance(geometry, Rhino.Geometry.PointCloud):
+            if geometry.Count == 0:
+                raise RuntimeError('Point cloud is empty')
             bbox = geometry.GetBoundingBox(True)
             volume_centroid = bbox.Center
-        # Create translation vector to center
+        else:
+            vmp = Rhino.Geometry.VolumeMassProperties.Compute(geometry)
+            volume_centroid = vmp.Centroid
+            if volume_centroid is None:
+                bbox = geometry.GetBoundingBox(True)
+                volume_centroid = bbox.Center
         translation_vector = -np.array([
             volume_centroid.X, volume_centroid.Y, volume_centroid.Z
         ])
-        # Create centered geometry
         centered_geometry = geometry.Duplicate()
         translation_xform = Rhino.Geometry.Transform.Translation(
             translation_vector[0], translation_vector[1], translation_vector[2]
@@ -356,7 +358,16 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         elif isinstance(geometry, Rhino.Geometry.Mesh):
             points = np.array([[p.X, p.Y, p.Z] for p in geometry.Vertices])
             compute_3d = True
-        # IF NOT ONE OF THESE GEOMETRY TYPES
+        elif isinstance(geometry, Rhino.Geometry.PointCloud):
+            if geometry.Count == 0:
+                raise RuntimeError('Point cloud is empty')
+            points = np.array([
+                [geometry[i].Location.X,
+                 geometry[i].Location.Y,
+                 geometry[i].Location.Z]
+                for i in range(geometry.Count)
+            ])
+            compute_3d = True
         else:
             raise RuntimeError('Geometry processing not implemented '
                                f'for geometry of type {type(geometry)}!')
