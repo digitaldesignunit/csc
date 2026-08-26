@@ -639,7 +639,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Code}
             name="CSC_CreateComponentIdentity"
-            description="Builds a CreateComponentRequest JSON payload from Rhino geometry for POST /identities. Creates the initial identity together with its version-0 snapshot. Computes PCA orientation, mesh reduction, and stages binary PLY files under pending_identity_assets/{identity_id}/."
+            description="Builds a CreateComponentRequest JSON payload from Rhino geometry for POST /identities. Creates the initial identity together with its version-0 snapshot. Computes PCA orientation, mesh reduction, and stages mesh and point-cloud PLY files under pending_identity_assets/{identity_id}/."
             inputs={[
               { label: 'ClearLocalStorage', description: 'If True, clears pending_identity_assets staging (does not affect Session API cache)' },
               { label: 'IdentityID', description: 'Identity UUID from physical tag or FetchTransmittedID (must be a valid UUID)' },
@@ -652,7 +652,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: 'Assembly', description: 'Assembly status (True for assemblies, False for individual)' },
               { label: 'Color', description: 'Snapshot color (System.Drawing.Color)' },
               { label: 'Location', description: 'Location as Vector3d (X=latitude, Y=longitude, Z ignored)' },
-              { label: 'Geometry', description: 'Rhino geometry — single Mesh or Extrusion, or a list of Meshes' },
+              { label: 'Geometry', description: 'Rhino geometry — Mesh, Extrusion, or PointCloud. Lists may mix Meshes and PointClouds. Extrusion is single-object only. Panel type: Mesh or Extrusion; rubble: Mesh or PointCloud.' },
               { label: 'MarkerPoints', description: 'Marker points as list of Point3d for identification and positioning' },
               { label: 'Condition', description: 'Optional condition grade (0=destroyed/retired, 1=poor, 2=average, 3=good). Leave unconnected for unknown.' },
               { label: 'ManufacturedAt', description: 'Optional ISO-8601 UTC manufacturing timestamp' },
@@ -665,16 +665,16 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: 'Reinforcements', description: 'Optional reinforcement JSON strings from CreateReinforcement (one or many; merged into geometry.reinforcements)' }
             ]}
             outputs={[
-              { label: 'ComponentData', description: 'CreateComponentRequest JSON for POST /identities (inline geometry + staged PLY manifest)' }
+              { label: 'ComponentData', description: 'CreateComponentRequest JSON for POST /identities (inline geometry + staged mesh and point-cloud PLY manifest)' }
             ]}
-            tip="Pair with CSC_AddComponentIdentity to post. Wire CreateReinforcement → Reinforcements for inline rebar centerlines. Use CSC_FetchTransmittedID to obtain the identity UUID after a web tag scan."
+            tip="Pair with CSC_AddComponentIdentity to post. Point clouds over 5000 points are staged as PLY; smaller clouds stay as an inline preview. Wire CreateReinforcement → Reinforcements for inline rebar centerlines. Use CSC_FetchTransmittedID to obtain the identity UUID after a web tag scan."
             imagePath={resolveStatic('/gh-interface/csc_createcomponent.jpg')}
           />
 
           <ComponentCard
             icon={Code}
             name="CSC_AddComponentIdentity"
-            description="Creates a new catalog identity and its version-0 snapshot via POST /identities. Accepts CreateComponentRequest JSON from CreateComponentIdentity, uploads staged binary PLY mesh files, and optionally consumes a pending transmitted ID after success."
+            description="Creates a new catalog identity and its version-0 snapshot via POST /identities. Accepts CreateComponentRequest JSON from CreateComponentIdentity, uploads staged mesh and point-cloud PLY files from pending_identity_assets/, and optionally consumes a pending transmitted ID after success."
             inputs={[
               { label: 'ComponentData', description: 'CreateComponentRequest JSON from CreateComponentIdentity' },
               { label: 'Run', description: 'Toggle to execute the create operation' }
@@ -682,14 +682,14 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             outputs={[
               { label: 'AddedComponentData', description: 'Compose response JSON ({identity, snapshots[]}) returned from POST /identities' }
             ]}
-            tip="Validates the payload, posts the identity, uploads staged PLY files, and non-fatally consumes any pending transmitted ID. Requires authentication."
+            tip="Validates the payload, posts the identity, uploads staged mesh and point-cloud PLY files, and non-fatally consumes any pending transmitted ID. Requires authentication."
             imagePath={resolveStatic('/gh-interface/csc_addcomponent.jpg')}
           />
 
           <ComponentCard
             icon={Code}
             name="CSC_CreateComponentSnapshot"
-            description="Builds a CreateSnapshotRequest JSON payload from Rhino geometry for an existing identity (POST /identities/{id}/snapshots). Computes PCA orientation, mesh reduction, and stages binary PLY files under pending_snapshot_assets/{snapshot_id}/."
+            description="Builds a CreateSnapshotRequest JSON payload from Rhino geometry for an existing identity (POST /identities/{id}/snapshots). Computes PCA orientation, mesh reduction, and stages mesh and point-cloud PLY files under pending_snapshot_assets/{snapshot_id}/."
             inputs={[
               { label: 'ClearLocalStorage', description: 'If True, clears pending_snapshot_assets staging (does not affect Session API cache)' },
               { label: 'IdentityID', description: 'Existing identity UUID to attach the new snapshot to' },
@@ -700,7 +700,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: 'Assembly', description: 'Assembly status (True for assemblies, False for individual)' },
               { label: 'Color', description: 'Snapshot color (System.Drawing.Color)' },
               { label: 'Location', description: 'Location as Vector3d (X=latitude, Y=longitude, Z ignored)' },
-              { label: 'Geometry', description: 'Rhino geometry — single Mesh or Extrusion, or a list of Meshes' },
+              { label: 'Geometry', description: 'Rhino geometry — single Mesh, Extrusion, or PointCloud, or a list of Meshes and/or PointClouds. Extrusion is single-object only.' },
               { label: 'MarkerPoints', description: 'Marker points as list of Point3d' },
               { label: 'Condition', description: 'Optional condition grade (0–3). Leave unconnected for unknown.' },
               { label: 'Notes', description: 'Optional free-text notes for the new snapshot (max 5000)' },
@@ -711,14 +711,14 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             outputs={[
               { label: 'SnapshotData', description: 'CreateSnapshotRequest JSON (includes identity_id) for POST /identities/{id}/snapshots' }
             ]}
-            tip="Use when an identity already exists and you need a new version — e.g. after re-scanning, condition change, or geometry update. Wire CreateReinforcement → Reinforcements for inline rebar centerlines."
+            tip="Use when an identity already exists and you need a new version — e.g. after re-scanning, condition change, or geometry update. Point clouds over 5000 points are staged as PLY; smaller clouds stay as an inline preview. Wire CreateReinforcement → Reinforcements for inline rebar centerlines."
             imagePath={resolveStatic('/gh-interface/csc_createcomponent.jpg')}
           />
 
           <ComponentCard
             icon={Code}
             name="CSC_AddComponentSnapshot"
-            description="Creates a new snapshot for an existing identity via POST /identities/{id}/snapshots. Accepts CreateSnapshotRequest JSON from CreateComponentSnapshot and uploads staged PLY files from pending_snapshot_assets/{snapshot_id}/."
+            description="Creates a new snapshot for an existing identity via POST /identities/{id}/snapshots. Accepts CreateSnapshotRequest JSON from CreateComponentSnapshot and uploads staged mesh and point-cloud PLY files from pending_snapshot_assets/{snapshot_id}/."
             inputs={[
               { label: 'SnapshotData', description: 'CreateSnapshotRequest JSON from CreateComponentSnapshot' },
               { label: 'Run', description: 'Toggle to execute the snapshot create operation' }
@@ -726,7 +726,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             outputs={[
               { label: 'AddedSnapshotData', description: 'Compose response JSON ({identity, snapshots[]}) after create' }
             ]}
-            tip="Validates the snapshot payload, posts the new version, and uploads any staged PLY files. Requires authentication."
+            tip="Validates the snapshot payload, posts the new version, and uploads any staged mesh and point-cloud PLY files. Requires authentication."
             imagePath={resolveStatic('/gh-interface/csc_addcomponent.jpg')}
           />
 
@@ -861,7 +861,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Settings}
             name="CSC_BakeComponents"
-            description="Bakes compose entries ({identity, snapshots[]}) into the Rhino document as meshes or primitive geometry."
+            description="Bakes compose entries ({identity, snapshots[]}) into the Rhino document as meshes, extrusions, or point clouds."
             inputs={[
               { label: 'Bake', description: 'Toggle to bake components to Rhino' },
               { label: 'ComponentData', description: 'Compose JSON strings from FetchComponents' }
@@ -869,7 +869,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             outputs={[
               { label: 'None', description: 'This component has no outputs' }
             ]}
-            tip="Uses cached PLY meshes when available, falls back to snapshot extrusions/meshes. Bakes reinforcement bars as pipe Breps on CSC_COMPONENTS::{identity_id}::Reinforcement (on by default). Stores full compose JSON on csc_component user text."
+            tip="Prefers cached PLY meshes and point-cloud PLYs when available, then inline snapshot primitives (extrusions, meshes, point-cloud previews). Bakes reinforcement bars as pipe Breps on CSC_COMPONENTS::{identity_id}::Reinforcement (on by default). Stores full compose JSON on csc_component user text."
             imagePath={resolveStatic('/gh-interface/csc_bakecomponents.jpg')}
           />
 
