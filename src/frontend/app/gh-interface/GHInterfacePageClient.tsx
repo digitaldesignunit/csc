@@ -747,7 +747,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: 'BoundingBox', description: 'Snapshot bounding box as Rhino.Geometry.BoundingBox' },
               { label: 'PCAFrame', description: 'Snapshot PCA frame at world origin as Rhino.Geometry.Plane' },
               { label: 'Descriptors', description: 'Snapshot descriptors/metadata as JSON string' },
-              { label: 'PrimitiveGeometry', description: 'Rhino geometry objects (extrusions, meshes, point clouds)' },
+              { label: 'PrimitiveGeometry', description: 'Rhino geometry objects (extrusions, meshes, point clouds). Point clouds prefer the full PLY when Session is signed in, else the inline preview (at most 5000 points).' },
               { label: 'MarkerPoints', description: 'Marker points as list of Point3d objects' },
               { label: 'Attributes', description: 'Identity attributes as JSON string' },
               { label: 'Condition', description: 'Snapshot condition grade (0=destroyed/retired, 1=poor, 2=average, 3=good)' },
@@ -758,7 +758,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: 'ParentComponent', description: 'Parent identity IDs (GUIDs) from identity.parent_identities' },
               { label: 'ReinforcementJson', description: 'Reinforcement JSON strings ({spec, diameter, points}) in iframe space; one per bar, same format as CreateReinforcement' }
             ]}
-            tip="Parses compose JSON into individual Grasshopper-compatible outputs for further processing. ReinforcementJson can be fed back into CreateComponentIdentity / CreateComponentSnapshot or reconstructed in Grasshopper."
+            tip="Parses compose JSON into individual Grasshopper-compatible outputs for further processing. Point clouds prefer the cached full PLY (same path as Bake / FetchDetailed); without Session, the inline preview is used. ReinforcementJson can be fed back into CreateComponentIdentity / CreateComponentSnapshot or reconstructed in Grasshopper."
             imagePath={resolveStatic('/gh-interface/csc_disassemblecomponent.jpg')}
           />
 
