@@ -999,13 +999,18 @@ async def get_snapshot_point_cloud_ply(
     )
     path = _point_cloud_path(request, snapshot_id, index)
     filename = f'{snapshot_id}_point_cloud_{index}.ply'
+    if_none_match = request.headers.get('if-none-match')
 
     if os.path.isfile(path):
+        etag = _mesh_etag(path)
+        if if_none_match and if_none_match == etag:
+            return not_modified_response(etag)
         return FileResponse(
             path,
             media_type='model/ply',
             filename=filename,
             headers={
+                'ETag': etag,
                 'Cache-Control': 'private, max-age=86400',
                 'Content-Disposition': f'attachment; filename="{filename}"',
             },
@@ -1025,7 +1030,18 @@ async def get_snapshot_point_cloud_ply(
             detail='Failed to export point cloud as PLY',
         )
 
-    return _mesh_export_attachment_response(ply_bytes, filename, 'ply')
+    etag = doc.get('etag') or hashlib.sha256(ply_bytes).hexdigest()[:32]
+    if if_none_match and if_none_match == etag:
+        return not_modified_response(etag)
+    return Response(
+        content=ply_bytes,
+        media_type='model/ply',
+        headers={
+            'ETag': etag,
+            'Content-Disposition': f'attachment; filename="{filename}"',
+            'Cache-Control': 'private, max-age=3600',
+        },
+    )
 
 
 @router.put(
