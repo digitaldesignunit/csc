@@ -51,7 +51,7 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260611
+    Version: 260826
     """
 
     def __init__(self):
@@ -111,9 +111,9 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
             'Location as Vector3d (X=latitude, Y=longitude, Z ignored)'
         )
         self.InputParams[9].Description = (
-            'Rhino geometry object(s) - single object or list of objects. '
-            'For single: Mesh or Extrusion.'
-            'For multiple: all must be Meshes.'
+            'Rhino geometry — single Mesh, Extrusion, or PointCloud, or a '
+            'list of Meshes and/or PointClouds. Extrusion is single-object '
+            'only.'
         )
         self.InputParams[10].Description = (
             'Marker points as list of Point3d objects'
