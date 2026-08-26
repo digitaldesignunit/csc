@@ -14,8 +14,11 @@ Geometry contract (matches legacy ingest):
       describe the oriented bounding box in PCA space.
     * ``iframe`` remains identity at create time.
 
-3D meshes use mesh **vertices** for PCA (same as GH create). Extrusions use
-the 2D minimum-bounding-rectangle path, not 3D vertex PCA.
+3D meshes use mesh **vertices** for PCA (same as GH create). Point clouds
+use their sample points (3D PCA, same as GH ``compute_pca_for_multiple_point_clouds``).
+Extrusions use the 2D minimum-bounding-rectangle path, not 3D vertex PCA.
+When meshes and point clouds are both present, meshes win (two
+representations of the same physical state, not an assembly mix).
 """
 
 from __future__ import annotations
@@ -305,6 +308,29 @@ def _normalize_meshes(geometry: GeometryDict) -> List[Dict[str, Any]]:
     return list(geometry.get('meshes') or [])
 
 
+def _normalize_point_clouds(geometry: GeometryDict) -> List[Dict[str, Any]]:
+    return list(geometry.get('point_clouds') or [])
+
+
+def _point_cloud_points(cloud: Dict[str, Any]) -> np.ndarray:
+    points_raw = cloud.get('points')
+    if not points_raw:
+        raise ValueError('Point cloud primitive requires points')
+    arr = np.asarray(points_raw, dtype=np.float64)
+    if arr.ndim != 2 or arr.shape[1] != 3:
+        raise ValueError(
+            'Point cloud points must be [x, y, z] triplets, '
+            f'got shape {arr.shape}'
+        )
+    return arr
+
+
+def _collect_point_cloud_points(
+    clouds: Sequence[Dict[str, Any]],
+) -> np.ndarray:
+    return np.vstack([_point_cloud_points(cloud) for cloud in clouds])
+
+
 def compute_snapshot_orientation(
     geometry: GeometryDict,
     *,
@@ -316,18 +342,29 @@ def compute_snapshot_orientation(
     Routing (matches GH create-component behaviour):
         * **Meshes present** - 3D PCA on mesh vertices.
           Multiple meshes: all meshes when ``assembly=True``, else first only.
+        * **Point clouds only** - 3D PCA on cloud points.
+          Multiple clouds: all clouds when ``assembly=True``, else first only.
         * **Extrusions only, single primitive** - 2D MBR / ``compute_obb_2d``.
         * **Extrusions only, multiple** - 3D PCA on combined profile corners.
+
+    Meshes take precedence over point clouds when both are present
+    (dual representations of one physical state).
 
     Raises:
         ValueError: when no supported geometry representation is present.
     """
     meshes = _normalize_meshes(geometry)
+    point_clouds = _normalize_point_clouds(geometry)
     extrusions = _normalize_extrusions(geometry)
 
     if meshes:
         selected = meshes if assembly else [meshes[0]]
         points = _collect_mesh_vertices(selected)
+        centered, _ = center_points(points)
+        dimensions, principal_components, bbx_origin = compute_obb_3d(centered)
+    elif point_clouds:
+        selected = point_clouds if assembly else [point_clouds[0]]
+        points = _collect_point_cloud_points(selected)
         centered, _ = center_points(points)
         dimensions, principal_components, bbx_origin = compute_obb_3d(centered)
     elif len(extrusions) == 1:
@@ -354,8 +391,8 @@ def compute_snapshot_orientation(
     else:
         keys = list(geometry.keys())
         raise ValueError(
-            'geometry must include meshes or extrusions for orientation, '
-            f'got keys: {keys}'
+            'geometry must include meshes, point_clouds, or extrusions '
+            f'for orientation, got keys: {keys}'
         )
 
     return OrientationResult(
