@@ -32,11 +32,15 @@ public class Script_Instance : GH_ScriptInstance
 
     Author: Giulio Piacentino (updated by Anders Holden Deleuran , updated 2025 by Max Benjamin Eschenbach)
     License: Apache License 2.0
-    Version: 251010
+    Version: 260826
     */
     #endregion
 
-    private void RunScript(bool Toggle, ref object Core, ref object AddOns)
+    private void RunScript(
+		bool Toggle,
+		ref object Core,
+		ref object AddOns,
+		ref object Libraries)
     {   
         // set component params
         this.Component.Name = "DefinitionDependencies";
@@ -50,12 +54,20 @@ public class Script_Instance : GH_ScriptInstance
 
         List<string> coreLibs = new List<string>();
         List<string> addLibs = new List<string>();
+        List<string> serverLibs = new List<string>();
         if (Toggle)
         {
             Dictionary<string, GH_AssemblyInfo> coreLibraries = new Dictionary<string, GH_AssemblyInfo>();
             Dictionary<string, GH_AssemblyInfo> addonLibraries = new Dictionary<string, GH_AssemblyInfo>();
             Dictionary<string, string> objids = new Dictionary<string, string>();
             GH_ComponentServer server = Grasshopper.Instances.ComponentServer;
+
+            foreach (System.Reflection.Assembly lib in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                string[] subs = lib.FullName.Split(',');
+                serverLibs.Add($"{subs[0].Trim()} {subs[1].Trim()}");
+            }
+
             foreach (GH_DocumentObject obj in this.Component.OnPingDocument().Objects)
             {
                 if (obj == (GH_DocumentObject) this.Component)
@@ -81,5 +93,6 @@ public class Script_Instance : GH_ScriptInstance
         }
         Core = coreLibs;
         AddOns = addLibs;
+        Libraries = serverLibs;
     }
 }
