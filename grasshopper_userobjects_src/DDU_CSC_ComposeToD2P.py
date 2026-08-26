@@ -4,13 +4,13 @@
 print('ENV OK!')
 # r: charset_normalizer
 # r: requests
-# r: git+https://github.com/fstwn/D2P-Components.git@d2p-core-py#subdirectory=D2P.CorePy
+# r: d2p-core-py
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
 
 # D2P WRAPPER IMPORTS ---------------------------------------------------------
-from d2p_core import ComponentType, GHComponent, MemberGeo, Settings  # NOQA
+from d2p_core import ComponentType, GHComponent, Member, Settings  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
 import System  # NOQA
@@ -25,8 +25,11 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '9 D2P Components Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Converts CSC compose JSON into an in-memory D2P GHComponent. Geometry '
-    'is registered as a nested MemberGeo tree (D2P ParentMember + : layer '
-    'paths). Optional Parent prefixes ShortName for D2P child naming. CSC '
+    'is registered as a nested Member tree via SetMember (D2P ParentMember '
+    '+ : layer paths). Every baked component gets id_<identity> and '
+    'snap_<snapshot> shells so layer paths stay consistent for single- and '
+    'multi-snapshot compose and distinct across catalog identities. '
+    'Optional Parent prefixes ShortName for D2P child naming. CSC '
     'identity/snapshot metadata is stored on the component label user text. '
     'MeshMode: best | inline | reduced | detailed | all. '
     'SnapshotScope: current | all.'
@@ -53,32 +56,32 @@ _MESH_BEST_CHAIN = ('detailed', 'reduced', 'inline')
 class _MemberTree:
     """
     Builds a D2P-native member hierarchy (shell parents + geometry leaves).
+
+    Children are attached with SetMember so the wrapper can unwrap Python
+    Member objects and so ParentMember / nested DynamicMembers stay in
+    sync (same pattern as D2P.Core.Utility.Members.FindMembers).
     """
 
-    def __init__(self, component, layer_color, members_out):
+    def __init__(self, component, layer_color):
         self._component = component
         self._color = layer_color
-        self._members = members_out
         self._shells = {}
+        self.has_members = False
 
-    def _unwrap_parent(self, parent):
-        if parent is None:
-            return None
-        return parent.NetObj if hasattr(parent, 'NetObj') else parent
-
-    def _register(self, member):
-        self._members.append(member)
+    def _attach(self, member, parent=None):
+        if parent is not None:
+            parent.SetMember(member)
+        else:
+            self._component.SetMember(member)
+        self.has_members = True
         return member
 
     def _shell(self, key, layer_name, parent=None):
         if key in self._shells:
             return self._shells[key]
-        member = MemberGeo(self._component, layer_name, self._color)
-        if parent is not None:
-            member.ParentMember = self._unwrap_parent(parent)
+        member = Member(self._component, layer_name, self._color)
         self._shells[key] = member
-        self._register(member)
-        return member
+        return self._attach(member, parent)
 
     def add_leaf(self, path_segments, geometry):
         if geometry is None or not path_segments:
@@ -87,12 +90,10 @@ class _MemberTree:
         for i, segment in enumerate(path_segments[:-1]):
             key = tuple(path_segments[:i + 1])
             parent = self._shell(key, segment, parent)
-        leaf = MemberGeo(
+        leaf = Member(
             self._component, path_segments[-1], self._color)
-        if parent is not None:
-            leaf.ParentMember = self._unwrap_parent(parent)
         leaf.SetObject(geometry)
-        self._register(leaf)
+        self._attach(leaf, parent)
 
     def add_leaf_many(self, path_segments, geometries):
         if not geometries or not path_segments:
@@ -101,29 +102,31 @@ class _MemberTree:
         for i, segment in enumerate(path_segments[:-1]):
             key = tuple(path_segments[:i + 1])
             parent = self._shell(key, segment, parent)
-        leaf = MemberGeo(
+        leaf = Member(
             self._component, path_segments[-1], self._color)
-        if parent is not None:
-            leaf.ParentMember = self._unwrap_parent(parent)
         leaf.SetObjects(geometries)
-        self._register(leaf)
+        self._attach(leaf, parent)
 
 
 class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260612
+    Version: 260826
 
-    D2P member layer taxonomy (ParentMember tree)
-    --------------------------------------------
+    D2P member layer taxonomy (SetMember tree)
+    -----------------------------------------
     Shell members group geometry; leaves hold Rhino geometry.
+    Nested members are attached with SetMember (sets ParentMember).
 
-        [snap_<8>] -> Mesh -> 00 -> detailed
-        [snap_<8>] -> Extrusion -> 00
-        Mesh -> 00 -> inline
+    Every member path always starts with catalog identity, then snapshot:
 
-    snap_* shell only when SnapshotScope=all with multiple snapshots.
+        id_<8> -> snap_<8> -> Mesh -> 00 -> detailed
+        id_<8> -> snap_<8> -> Extrusion -> 00
+
+    id_* distinguishes catalog identities when baking (D2P shares type
+    root layers across instances). snap_* is always present so single- and
+    multi-snapshot compose share the same depth.
 
     D2P component naming (optional Parent input)
     --------------------------------------------
@@ -164,8 +167,8 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         if self.InputParams.Count > 2:
             self.InputParams[2].Description = (
                 "Snapshot scope: 'current' (default) uses snapshots[0] "
-                "only; 'all' includes every compose.snapshots[] entry under "
-                'snap_* member shells.'
+                "only; 'all' includes every compose.snapshots[] entry. "
+                'Each snapshot is always under a snap_* member shell.'
             )
         if self.InputParams.Count > 3:
             delim = Settings.NameDelimiter
@@ -180,8 +183,8 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             i += 1
         self.OutputParams[0 + i].Description = (
             'In-memory D2P GHComponent (.NET IComponentBase) per compose '
-            'entry. RetrieveGeometry accepts layer segments such as Mesh, '
-            '00, or detailed (recursive).'
+            'entry. RetrieveGeometry accepts layer segments such as id_, '
+            'snap_, Mesh, 00, or detailed (recursive).'
         )
 
     def _normalize_mode(self, value: str, allowed: tuple, default: str) -> str:
@@ -233,13 +236,15 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             iplane,
         )
 
-    def _snapshot_scope_label(
-        self,
-        snapshot: dict,
-        multi_snapshot: bool
-    ) -> str:
-        if not multi_snapshot:
-            return ''
+    def _identity_scope_label(self, identity: dict) -> str:
+        iid = str(
+            identity.get('_id') or identity.get('id') or ''
+        ).replace('-', '')
+        if not iid:
+            return 'id_unknown'
+        return f'id_{iid[:8]}'
+
+    def _snapshot_scope_label(self, snapshot: dict) -> str:
         sid = self._snapshot_id(snapshot).replace('-', '')
         if not sid:
             return 'snap_unknown'
@@ -247,15 +252,12 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
 
     def _geometry_path(
             self,
-            scope_label: str,
+            identity_label: str,
+            snapshot_label: str,
             kind: str,
             index: int,
             source: str = None) -> list:
-        path = []
-        if scope_label:
-            path.append(scope_label)
-        path.append(kind)
-        path.append(f'{index:02d}')
+        path = [identity_label, snapshot_label, kind, f'{index:02d}']
         if source:
             path.append(source)
         return path
@@ -482,9 +484,10 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             self,
             tree: _MemberTree,
             snapshot: dict,
+            identity_label: str,
+            snapshot_label: str,
             identity_id: str,
             mesh_mode: str,
-            scope_label: str,
             auth_core):
         geometry = snapshot.get('geometry', {}) or {}
         if not geometry:
@@ -502,7 +505,8 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 continue
             xtr.Transform(xform)
             tree.add_leaf(
-                self._geometry_path(scope_label, 'Extrusion', idx),
+                self._geometry_path(
+                    identity_label, snapshot_label, 'Extrusion', idx),
                 xtr,
             )
 
@@ -527,7 +531,8 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 mesh.Transform(xform)
                 tree.add_leaf(
                     self._geometry_path(
-                        scope_label, 'Mesh', idx, source),
+                        identity_label, snapshot_label,
+                        'Mesh', idx, source),
                     mesh,
                 )
 
@@ -538,7 +543,8 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             cloud.Transform(xform)
             tree.add_leaf(
                 self._geometry_path(
-                    scope_label, 'PointCloud', idx, 'inline'),
+                    identity_label, snapshot_label,
+                    'PointCloud', idx, 'inline'),
                 cloud,
             )
 
@@ -547,7 +553,8 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             for pt in markers:
                 pt.Transform(xform)
             tree.add_leaf_many(
-                self._geometry_path(scope_label, 'Marker', 0),
+                self._geometry_path(
+                    identity_label, snapshot_label, 'Marker', 0),
                 markers,
             )
 
@@ -585,7 +592,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         self._attach_csc_metadata(
             component, identity, primary, compose_json)
 
-        multi_snapshot = len(snapshots) > 1
+        identity_label = self._identity_scope_label(identity)
         auth_core = self._get_auth_core()
         if (mesh_mode in ('best', 'reduced', 'detailed', 'all')
                 and not auth_core):
@@ -593,22 +600,19 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 'No CSC_AuthCore in sticky; PLY resolutions unavailable'
             )
 
-        members = []
-        tree = _MemberTree(component, layer_color, members)
+        tree = _MemberTree(component, layer_color)
         for snapshot in snapshots:
-            scope_label = self._snapshot_scope_label(snapshot, multi_snapshot)
             self._build_members_for_snapshot(
                 tree,
                 snapshot,
+                identity_label,
+                self._snapshot_scope_label(snapshot),
                 identity.get('_id') or 'unknown',
                 mesh_mode,
-                scope_label,
                 auth_core,
             )
 
-        if members:
-            component.SetMembers([m.NetObj for m in members])
-        else:
+        if not tree.has_members:
             self._addWarning(
                 f'No geometry members created for {short_name} '
                 f'({identity.get("_id")})'
