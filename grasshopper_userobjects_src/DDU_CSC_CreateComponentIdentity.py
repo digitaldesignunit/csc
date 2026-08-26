@@ -50,7 +50,7 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260611
+    Version: 260826
     """
 
     def __init__(self):
@@ -117,9 +117,9 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
             'Location as Vector3d (X=latitude, Y=longitude, Z ignored)'
         )
         self.InputParams[11].Description = (
-            'Rhino geometry object(s) - single object or list of objects. '
-            'For single: Mesh or Extrusion for panels, Mesh for rubble. '
-            'For multiple: all must be Meshes.'
+            'Rhino geometry — Mesh, Extrusion, or PointCloud. Lists may '
+            'mix Meshes and PointClouds. Extrusion is single-object only. '
+            'Panel type: Mesh or Extrusion; rubble: Mesh or PointCloud.'
         )
         self.InputParams[12].Description = (
             'Marker points as list of Point3d objects for component '
@@ -166,7 +166,7 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
             i += 1
         self.OutputParams[0+i].Description = (
             'CreateComponentRequest JSON for POST /identities '
-            '(SnapshotMesh vertices/faces/colors, extrusions[], PCA frames)'
+            '(inline geometry + staged mesh and point-cloud PLY manifest)'
         )
 
     def get_auth_core_from_sticky(self):
