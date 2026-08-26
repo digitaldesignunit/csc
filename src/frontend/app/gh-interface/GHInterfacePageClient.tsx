@@ -569,32 +569,32 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Database}
             name="CSC_FetchReducedGeometry"
-            description="Fetches the reduced (catalog default) snapshot geometry as binary PLY from the API or local cache, parses it to Rhino meshes, and applies the snapshot iframe transform."
+            description="Fetches the reduced (catalog default) snapshot geometry as binary PLY from the API or local cache, parses it to Rhino meshes and point clouds, and applies the snapshot iframe transform."
             inputs={[
               { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' compose userstring\nb) A compose JSON string ({identity, snapshots[]})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
             ]}
             outputs={[
-              { label: 'GeometryData', description: 'Fetched reduced geometry as Rhino.Geometry.Mesh objects (one per snapshot mesh primitive)' },
-              { label: 'GeometrySource', description: 'Per-mesh source: reduced (PLY) or primitive (inline fallback)' },
+              { label: 'GeometryData', description: 'Fetched reduced geometry as Rhino meshes and point clouds (one object per snapshot primitive)' },
+              { label: 'GeometrySource', description: 'Per-primitive source: reduced (mesh PLY) or primitive (inline fallback, including point-cloud previews)' },
               { label: 'SnapshotID', description: 'Snapshot ID that was processed' }
             ]}
-            tip="Falls back to the inline snapshot geometry (primitive meshes) when no reduced PLY is available."
+            tip="Meshes fall back to the inline primitive when no reduced PLY is available. Point clouds have no reduced PLY — the inline preview (at most 5000 points) is returned instead."
             imagePath={resolveStatic('/gh-interface/csc_fetchgeometry.jpg')}
           />
 
           <ComponentCard
             icon={Database}
             name="CSC_FetchDetailedGeometry"
-            description="Fetches the detailed (high fidelity) snapshot geometry as binary PLY from the API or local cache, parses it to Rhino meshes, and applies the snapshot iframe transform."
+            description="Fetches the detailed (high fidelity) snapshot geometry as binary PLY from the API or local cache, parses it to Rhino meshes and point clouds, and applies the snapshot iframe transform."
             inputs={[
               { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' compose userstring\nb) A compose JSON string ({identity, snapshots[]})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
             ]}
             outputs={[
-              { label: 'GeometryData', description: 'Fetched detailed geometry as Rhino.Geometry.Mesh objects (one per snapshot mesh primitive)' },
-              { label: 'GeometrySource', description: 'Per-mesh source: detailed/reduced (PLY) or primitive (inline fallback)' },
+              { label: 'GeometryData', description: 'Fetched detailed geometry as Rhino meshes and point clouds (one object per snapshot primitive)' },
+              { label: 'GeometrySource', description: 'Per-primitive source: detailed/reduced (mesh PLY), detailed (point-cloud PLY), or primitive (inline fallback)' },
               { label: 'SnapshotID', description: 'Snapshot ID that was processed' }
             ]}
-            tip="Falls back to reduced PLY, then inline snapshot geometry, when no detailed PLY is available."
+            tip="Meshes fall back to reduced PLY, then inline primitives, when no detailed PLY is available. Point clouds prefer the full PLY, then the inline preview."
             imagePath={resolveStatic('/gh-interface/csc_fetchgeometry.jpg')}
           />
 
