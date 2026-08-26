@@ -32,6 +32,8 @@ ghenv.Component.Description = (  # NOQA
     'Optional Parent prefixes ShortName for D2P child naming. CSC '
     'identity/snapshot metadata is stored on the component label user text. '
     'MeshMode: best | inline | reduced | detailed | all. '
+    'CloudMode: best | inline | detailed | all (optional; defaults to '
+    'MeshMode, with reduced mapped to inline). '
     'SnapshotScope: current | all.'
 )
 
@@ -51,6 +53,8 @@ _TYPE_ID_MAP = {
 
 # Mesh resolution preference for MeshMode=best (highest fidelity first)
 _MESH_BEST_CHAIN = ('detailed', 'reduced', 'inline')
+# Point clouds have no reduced PLY; best prefers the full cloud then inline.
+_CLOUD_BEST_CHAIN = ('detailed', 'inline')
 
 
 class _MemberTree:
@@ -122,6 +126,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
     Every member path always starts with catalog identity, then snapshot:
 
         id_<8> -> snap_<8> -> Mesh -> 00 -> detailed
+        id_<8> -> snap_<8> -> PointCloud -> 00 -> detailed
         id_<8> -> snap_<8> -> Extrusion -> 00
 
     id_* distinguishes catalog identities when baking (D2P shares type
@@ -165,12 +170,19 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 'as separate leaf members).'
             )
         if self.InputParams.Count > 2:
+            self.InputParams[4].Description = (
+                "Point-cloud resolution: 'best' (default), 'inline', "
+                "'detailed', or 'all'. 'reduced' is accepted as an alias "
+                'for inline (no reduced point-cloud PLY exists). Empty '
+                'inherits MeshMode (reduced maps to inline).'
+            )
+        if self.InputParams.Count > 3:
             self.InputParams[2].Description = (
                 "Snapshot scope: 'current' (default) uses snapshots[0] "
                 "only; 'all' includes every compose.snapshots[] entry. "
                 'Each snapshot is always under a snap_* member shell.'
             )
-        if self.InputParams.Count > 3:
+        if self.InputParams.Count > 4:
             delim = Settings.NameDelimiter
             self.InputParams[3].Description = (
                 'Optional D2P parent component (Generic) or parent ShortName '
@@ -417,6 +429,51 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 return [res]
         return ['inline'] if inline_available else []
 
+    def _resolve_cloud_mode(self, cloud_mode, mesh_mode: str) -> str:
+        """
+        CloudMode when set; otherwise inherit MeshMode (reduced -> inline).
+        """
+        if cloud_mode is None or (
+                isinstance(cloud_mode, str) and not cloud_mode.strip()):
+            if mesh_mode == 'reduced':
+                return 'inline'
+            return mesh_mode
+        return self._normalize_mode(
+            str(cloud_mode),
+            ('best', 'inline', 'reduced', 'detailed', 'all'),
+            'best',
+        )
+
+    def _fetch_ply_point_cloud(self, auth_core, snapshot_id: str, index: int):
+        if not auth_core:
+            return None
+        return auth_core.cached_get_snapshot_point_cloud(
+            snapshot_id, index)
+
+    def _cloud_sources_for_index(
+            self,
+            cloud_mode: str,
+            inline_available: bool) -> list:
+        if cloud_mode == 'all':
+            sources = []
+            if inline_available:
+                sources.append('inline')
+            sources.append('detailed')
+            return sources
+        if cloud_mode in ('inline', 'reduced'):
+            return ['inline'] if inline_available else []
+        if cloud_mode == 'detailed':
+            return ['detailed']
+        sources = []
+        for res in _CLOUD_BEST_CHAIN:
+            if res == 'inline' and inline_available:
+                sources.append('inline')
+            elif res == 'detailed':
+                sources.append('detailed')
+        if not sources and inline_available:
+            return ['inline']
+        return sources
+
     def _build_extrusion(self, extr: dict):
         tol = Rhino.RhinoMath.SqrtEpsilon
         profile = extr.get('profile') or []
@@ -488,6 +545,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             snapshot_label: str,
             identity_id: str,
             mesh_mode: str,
+            cloud_mode: str,
             auth_core):
         geometry = snapshot.get('geometry', {}) or {}
         if not geometry:
@@ -537,16 +595,40 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 )
 
         for idx, pc_data in enumerate(geometry.get('point_clouds', []) or []):
-            cloud = self._build_point_cloud(pc_data)
-            if cloud is None:
-                continue
-            cloud.Transform(xform)
-            tree.add_leaf(
-                self._geometry_path(
-                    identity_label, snapshot_label,
-                    'PointCloud', idx, 'inline'),
-                cloud,
+            inline_ok = bool(
+                isinstance(pc_data, dict)
+                and (pc_data.get('points') or [])
             )
+            placed = False
+            for source in self._cloud_sources_for_index(
+                    cloud_mode, inline_ok):
+                if cloud_mode == 'best' and placed:
+                    break
+                cloud = None
+                if source == 'inline':
+                    cloud = self._build_point_cloud(pc_data)
+                elif snapshot_id and auth_core:
+                    try:
+                        cloud = self._fetch_ply_point_cloud(
+                            auth_core, snapshot_id, idx)
+                    except Exception as e:
+                        self._addWarning(
+                            'Point cloud PLY fetch failed '
+                            f'for index {idx}: {str(e)}')
+                if cloud is None:
+                    if source != 'inline':
+                        self._addRemark(
+                            f'PLY detailed unavailable for point cloud '
+                            f'{idx} ({snapshot_id or identity_id})')
+                    continue
+                cloud.Transform(xform)
+                tree.add_leaf(
+                    self._geometry_path(
+                        identity_label, snapshot_label,
+                        'PointCloud', idx, source),
+                    cloud,
+                )
+                placed = True
 
         markers = self._build_marker_points(geometry)
         if markers:
@@ -564,7 +646,8 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             mesh_mode: str,
             snapshot_scope: str,
             parent=None,
-            compose_json: str = None):
+            compose_json: str = None,
+            cloud_mode: str = 'best'):
         identity = compose.get('identity') or {}
         snapshots = list(self._iter_snapshot_blocks(compose, snapshot_scope))
         if not identity or not snapshots:
@@ -594,8 +677,11 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
 
         identity_label = self._identity_scope_label(identity)
         auth_core = self._get_auth_core()
-        if (mesh_mode in ('best', 'reduced', 'detailed', 'all')
-                and not auth_core):
+        ply_needed = (
+            mesh_mode in ('best', 'reduced', 'detailed', 'all')
+            or cloud_mode in ('best', 'detailed', 'all')
+        )
+        if ply_needed and not auth_core:
             self._addRemark(
                 'No CSC_AuthCore in sticky; PLY resolutions unavailable'
             )
@@ -609,6 +695,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 self._snapshot_scope_label(snapshot),
                 identity.get('_id') or 'unknown',
                 mesh_mode,
+                cloud_mode,
                 auth_core,
             )
 
@@ -623,6 +710,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
     def RunScript(self,
             ComponentData: Grasshopper.DataTree[str],
             MeshMode,
+            CloudMode,
             SnapshotScope,
             Parent):
         Component = Grasshopper.DataTree[System.Object]()
@@ -633,6 +721,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             ('best', 'inline', 'reduced', 'detailed', 'all'),
             'best',
         )
+        cloud_mode = self._resolve_cloud_mode(CloudMode, mesh_mode)
         snapshot_scope = self._normalize_mode(
             SnapshotScope,
             ('current', 'all'),
@@ -663,6 +752,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                             snapshot_scope,
                             Parent,
                             comp_json,
+                            cloud_mode,
                         )
                         Component.Add(d2p_component.NetObj, ghp)
                         converted += 1
@@ -680,7 +770,8 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             if converted:
                 self._addRemark(
                     f'Successfully converted {converted} component(s) '
-                    f'(mesh={mesh_mode}, snapshots={snapshot_scope})'
+                    f'(mesh={mesh_mode}, cloud={cloud_mode}, '
+                    f'snapshots={snapshot_scope})'
                 )
             return Component
 
