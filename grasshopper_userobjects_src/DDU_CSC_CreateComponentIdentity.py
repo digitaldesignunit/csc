@@ -117,7 +117,7 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
             'Location as Vector3d (X=latitude, Y=longitude, Z ignored)'
         )
         self.InputParams[11].Description = (
-            'Rhino geometry â€” Mesh, Extrusion, or PointCloud. Lists may '
+            'Rhino geometry — Mesh, Extrusion, or PointCloud. Lists may '
             'mix Meshes and PointClouds. Extrusion is single-object only. '
             'Panel type: Mesh or Extrusion; rubble: Mesh or PointCloud.'
         )

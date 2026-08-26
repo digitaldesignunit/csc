@@ -111,7 +111,7 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
             'Location as Vector3d (X=latitude, Y=longitude, Z ignored)'
         )
         self.InputParams[9].Description = (
-            'Rhino geometry â€” single Mesh, Extrusion, or PointCloud, or a '
+            'Rhino geometry — single Mesh, Extrusion, or PointCloud, or a '
             'list of Meshes and/or PointClouds. Extrusion is single-object '
             'only.'
         )
