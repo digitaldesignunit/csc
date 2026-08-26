@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import type {
@@ -21,7 +21,7 @@ import {
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Scan, Grid3x3 } from 'lucide-react'
+import { Scan, Grid3x3, Rotate3d } from 'lucide-react'
 import { Bounds, OrbitControls, Html, useBounds } from '@react-three/drei'
 import { rgbToHex } from '@/lib/utils'
 import {
@@ -41,6 +41,8 @@ import { ViewerMenu, MenuSection, MenuSubsection, MenuDivider, SegmentedControl,
 
 // Scale factor for converting units to meters in THREE
 const scale = 0.001
+/** Slow Y-axis spin for turntable mode (~25s per revolution). */
+const TURNTABLE_RADIANS_PER_SECOND = 0.35
 
 /** Fit camera to scene bounds; registers ref for manual zoom-extents. */
 function FitCameraController({
@@ -70,6 +72,29 @@ function FitCameraController({
   })
 
   return null
+}
+
+/**
+ * Rotates the component around world Y. Angle is kept on the Three.js group
+ * so mesh/point-cloud visibility toggles (React re-renders) do not reset it.
+ */
+function Turntable({
+  enabled,
+  children,
+}: {
+  enabled: boolean
+  children: React.ReactNode
+}) {
+  const groupRef = useRef<THREE.Group>(null)
+  const enabledRef = useRef(enabled)
+  enabledRef.current = enabled
+
+  useFrame((_, delta) => {
+    if (!enabledRef.current || !groupRef.current) return
+    groupRef.current.rotation.y += delta * TURNTABLE_RADIANS_PER_SECOND
+  })
+
+  return <group ref={groupRef}>{children}</group>
 }
 
 // Simple in-memory cache for external geometry with ETag support
@@ -924,6 +949,7 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
   const [showReinforcements, setShowReinforcements] = useState<boolean>(true)
   const [showEdges, setShowEdges] = useState<boolean>(true)
   const [showGrid, setShowGrid] = useState<boolean>(true)
+  const [turntableEnabled, setTurntableEnabled] = useState<boolean>(false)
   const fitCameraRef = useRef<(() => void) | null>(null)
 
   const primitiveMeshCount = snapshotMeshes.length
@@ -1368,6 +1394,26 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
               </TooltipTrigger>
               <TooltipContent side="left">{showGrid ? 'Hide grid' : 'Show grid'}</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={turntableEnabled ? 'secondary' : 'ghost'}
+                  size="icon-xs"
+                  className={`h-7 w-7 text-black shadow-sm backdrop-blur-sm dark:text-white ${
+                    turntableEnabled ? 'bg-background/85' : 'bg-background/60'
+                  }`}
+                  onClick={() => setTurntableEnabled((prev) => !prev)}
+                  aria-label={turntableEnabled ? 'Stop turntable' : 'Start turntable'}
+                  aria-pressed={turntableEnabled}
+                >
+                  <Rotate3d className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                {turntableEnabled ? 'Stop turntable' : 'Start turntable'}
+              </TooltipContent>
+            </Tooltip>
           </div>
           <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
           <ambientLight intensity={Math.PI / 2} />
@@ -1381,24 +1427,26 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
             maxDuration={1}
           >
             <FitCameraController fitRef={fitCameraRef} />
-            <VisualizeComponent
-              catalog={catalog}
-              meshGeometryMode={meshGeometryMode}
-              pointCloudGeometryMode={pointCloudGeometryMode}
-              visibleMeshes={visibleMeshes}
-              visiblePointClouds={visiblePointClouds}
-              externalMeshes={isMeshExternalMode ? externalMeshes : []}
-              externalPointClouds={isPointCloudExternalMode ? externalPointClouds : []}
-              isLoadingExternalMeshes={isLoadingExternalMeshes}
-              isLoadingExternalPointClouds={isLoadingExternalPointClouds}
-              meshGeometryError={meshGeometryError}
-              showEdges={showEdges}
-            />
-            <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
-            <ReinforcementBars
-              reinforcements={reinforcements}
-              visible={showReinforcements}
-            />
+            <Turntable enabled={turntableEnabled}>
+              <VisualizeComponent
+                catalog={catalog}
+                meshGeometryMode={meshGeometryMode}
+                pointCloudGeometryMode={pointCloudGeometryMode}
+                visibleMeshes={visibleMeshes}
+                visiblePointClouds={visiblePointClouds}
+                externalMeshes={isMeshExternalMode ? externalMeshes : []}
+                externalPointClouds={isPointCloudExternalMode ? externalPointClouds : []}
+                isLoadingExternalMeshes={isLoadingExternalMeshes}
+                isLoadingExternalPointClouds={isLoadingExternalPointClouds}
+                meshGeometryError={meshGeometryError}
+                showEdges={showEdges}
+              />
+              <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
+              <ReinforcementBars
+                reinforcements={reinforcements}
+                visible={showReinforcements}
+              />
+            </Turntable>
           </Bounds>
 
           <axesHelper args={[0.1]} />
