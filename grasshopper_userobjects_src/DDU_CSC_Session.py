@@ -42,7 +42,7 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 260825
+Version: 260826
 """
 
 
@@ -830,6 +830,98 @@ class _ComponentCache(object):
                 # Silently fail cache writes to not break main functionality
                 pass
 
+    def get_point_cloud_binary(self, snapshot_id, primitive_index):
+        """
+        Get one cached snapshot point cloud from binary cache.
+
+        Returns:
+            Tuple of (point_cloud, etag, is_from_cache) or
+            (None, None, False)
+        """
+        with self._lock:
+            try:
+                cache_key = (
+                    f'point_cloud:{snapshot_id}:{primitive_index}'
+                )
+                metadata_file = os.path.join(
+                    self.metadata_dir,
+                    f"{self._get_cache_key_hash(cache_key)}.json"
+                )
+
+                if not os.path.exists(metadata_file):
+                    return None, None, False
+
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+
+                if self._is_expired(metadata.get('cached_at', '')):
+                    return None, None, False
+
+                cloud_file = os.path.join(
+                    self.geometry_dir,
+                    'point_cloud',
+                    f"{snapshot_id}_{primitive_index}.pkl"
+                )
+
+                if os.path.exists(cloud_file):
+                    with open(cloud_file, 'rb') as f:
+                        cloud_json = pickle.load(f)
+                    loaded = Rhino.Runtime.CommonObject.FromJSON(cloud_json)
+                    if isinstance(loaded, Rhino.Geometry.PointCloud):
+                        return loaded, metadata.get('etag'), True
+
+                return None, None, False
+
+            except (IOError, pickle.PickleError, KeyError, TypeError):
+                return None, None, False
+
+    def set_point_cloud_binary(
+            self, snapshot_id, primitive_index, cloud, etag):
+        """
+        Cache one snapshot point cloud as binary (ToJSON pickle).
+        """
+        with self._lock:
+            try:
+                current_time = datetime.now().isoformat()
+                cache_key = (
+                    f'point_cloud:{snapshot_id}:{primitive_index}'
+                )
+
+                geometry_subdir = os.path.join(
+                    self.geometry_dir, 'point_cloud'
+                )
+                os.makedirs(geometry_subdir, exist_ok=True)
+
+                options = Rhino.FileIO.SerializationOptions()
+                options.WriteUserData = True
+                cloud_json = cloud.ToJSON(options)
+
+                cloud_file = os.path.join(
+                    geometry_subdir,
+                    f"{snapshot_id}_{primitive_index}.pkl"
+                )
+                with open(cloud_file, 'wb') as f:
+                    pickle.dump(cloud_json, f)
+
+                metadata = {
+                    'cache_key': cache_key,
+                    'cached_at': current_time,
+                    'etag': etag,
+                    'type': 'point_cloud',
+                    'snapshot_id': snapshot_id,
+                    'primitive_index': primitive_index
+                }
+
+                metadata_file = os.path.join(
+                    self.metadata_dir,
+                    f"{self._get_cache_key_hash(cache_key)}.json"
+                )
+                with open(metadata_file, 'w', encoding='utf-8') as f:
+                    json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+            except (IOError, pickle.PickleError, KeyError):
+                pass
+
 
 def _parse_ply_binary_to_mesh(ply_bytes):
     """
@@ -1578,9 +1670,11 @@ class _AuthCore(object):
     def cached_get_snapshot_point_cloud(self, snapshot_id, primitive_index,
                                         timeout=60):
         """
-        Fetch one snapshot point-cloud PLY.
+        Fetch one snapshot point-cloud PLY with ETag caching.
 
-        Returns a Rhino PointCloud or None when unavailable.
+        Returns a Rhino PointCloud or None when unavailable. Callers keep
+        the object return (unlike cached_get_snapshot_mesh) so Bake /
+        Fetch / ComposeToD2P stay unchanged.
         """
         if not self.is_valid():
             raise RuntimeError(
@@ -1591,9 +1685,43 @@ class _AuthCore(object):
             f'/snapshots/{snapshot_id}/point_clouds/'
             f'{primitive_index}.ply'
         )
-        response = self.authorized_get(path, timeout=timeout)
+
+        if not self._cache:
+            response = self.authorized_get(path, timeout=timeout)
+            if response.status_code == 200:
+                return _parse_ply_binary_to_point_cloud(response.content)
+            return None
+
+        (cached_cloud,
+         cached_etag,
+         is_from_cache) = self._cache.get_point_cloud_binary(
+            snapshot_id, primitive_index)
+
+        headers = self.auth_header()
+        if is_from_cache and cached_etag:
+            headers['If-None-Match'] = cached_etag
+
+        response = requests.get(
+            self.base_url + path,
+            headers=headers,
+            timeout=timeout
+        )
+
+        if response.status_code == 304 and is_from_cache:
+            return cached_cloud
+
         if response.status_code == 200:
-            return _parse_ply_binary_to_point_cloud(response.content)
+            cloud = _parse_ply_binary_to_point_cloud(response.content)
+            etag = response.headers.get('ETag')
+            if cloud is not None:
+                try:
+                    self._cache.set_point_cloud_binary(
+                        snapshot_id, primitive_index, cloud, etag
+                    )
+                except (ValueError, KeyError):
+                    pass
+            return cloud
+
         return None
 
     def get_create_identity_schema(self, force_refresh=False):
