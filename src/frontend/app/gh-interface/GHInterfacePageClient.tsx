@@ -940,9 +940,9 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Box}
             name="CSC_ComputePCAOrientation"
-            description="Computes Principal Component Analysis orientation for geometry alignment."
+            description="Computes Principal Component Analysis orientation for Mesh, Brep, Extrusion, or PointCloud geometry."
             inputs={[
-              { label: 'Geometry', description: 'Input Rhino Geometry' }
+              { label: 'Geometry', description: 'Input Rhino Geometry (Mesh, Brep, Extrusion, or PointCloud)' }
             ]}
             outputs={[
               { label: 'ObjectOrientedBBX', description: 'Object oriented bounding box, obtained using PCA, at the location of the input geometry' },
@@ -951,7 +951,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: 'TranslationVector', description: 'Translation vector that was used to move the geometry to the world origin' },
               { label: 'PCAXForm', description: 'PCA frame that was used to transform the geometry converted to a Rhino XForm.' }
             ]}
-            tip="Computes PCA-based orientation for geometry alignment and provides transformation data for positioning."
+            tip="Point clouds use their sample points (3D PCA), same as CreateComponentIdentity. Extrusions still use the 2D minimum-bounding-rectangle path."
             imagePath={resolveStatic('/gh-interface/csc_computepcaorientation.jpg')}
           />
 
