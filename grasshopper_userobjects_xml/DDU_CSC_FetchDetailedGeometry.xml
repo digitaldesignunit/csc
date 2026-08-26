@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">7318b215-5b39-4aac-a452-d2727feda549</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">3843d047-2767-4d99-9cc5-d6ed66dc944d</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639232737035165997</item>
+            <item name="Date" type_name="gh_date" type_code="8">639233370738753452</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -115,7 +115,7 @@ Falls back to reduced PLY, then to the inline snapshot geometry (primitive meshe
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="487">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAF8SURBVEhL7ZSxSgNBEIbPxl7BF1AQCQRv/383xCD4BOYugo1ob+cr+BpyJwTBRizEB1AC2onPkMLKJJdgISokkZFbCKsm0Vy6fDDM7MzsDMzcrefN8DyvsXOy1g7iO9FuLBNaQbTXDuO+aDeWCVNrkATRdhJGN81yfCQNRMtZ/G7uv2iXTytJGPWSIG5IA9FyFr+bO4o5rfW5iNiDgVYYH34VlQZh1JPzYHwkuVxuHsAZyb6I2OIbzGlVouMkiLuiB/0jKRaLiwBuSb4BeCT5AOAVwL3v+0tu/p8wxvgkO0qpjtZ6i+S1iFJqA0ATwIsxRrv3xiIt0gDwQbJNctM2SG3xvQNIpLl7fygkd+0YjDGrJGsyIpJPqYhd01ov2/FprQ/cOj9Cspousw7gkuQFgCuSXbtksVOfxCSnnvqrbr1vTL2BMO6ISqXSih2RUmrfrTMUWTLJ56ks2VIoFNaHfKatiT5TSz6fX7BjIJntj2YZ56nIgl8fuxkT8wmJivpYobXfvwAAAABJRU5ErkJggg==</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">f4c70220-0152-4808-8d3a-aef8ef6fe0e2</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">b4b9fe19-a7a7-4040-bed1-08d43f131e5d</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -157,7 +157,7 @@ Falls back to reduced PLY, then to the inline snapshot geometry (primitive meshe
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">e24ebac2-9fc7-49a1-bfaa-db7f06c1d6f1</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">a883482e-f729-4032-a723-74fda5fcb55a</item>
                             <item name="Name" type_name="gh_string" type_code="10">Input</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Input</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -191,7 +191,7 @@ Falls back to reduced PLY, then to the inline snapshot geometry (primitive meshe
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of generic geometry</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">0ad40371-7163-4fdd-af75-7ab4f5254c30</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">eb736e3b-c981-4583-b145-c225777a4337</item>
                             <item name="Name" type_name="gh_string" type_code="10">Geometry</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Geometry</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -225,7 +225,7 @@ Falls back to reduced PLY, then to the inline snapshot geometry (primitive meshe
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">rhinoscriptsyntax geometry</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">2ab37200-fe9e-4659-abc8-41619e03b36a</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">47f9c2c6-7833-4aea-a204-c2813c733298</item>
                             <item name="Name" type_name="gh_string" type_code="10">GeometryType</item>
                             <item name="NickName" type_name="gh_string" type_code="10">GeometryType</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -259,7 +259,7 @@ Falls back to reduced PLY, then to the inline snapshot geometry (primitive meshe
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">rhinoscriptsyntax geometry</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">322426bd-4987-41e8-91f1-5f2f89c06604</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">dd975f5f-2395-4522-8273-5bc5eb5323e6</item>
                             <item name="Name" type_name="gh_string" type_code="10">SnapshotID</item>
                             <item name="NickName" type_name="gh_string" type_code="10">SnapshotID</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
