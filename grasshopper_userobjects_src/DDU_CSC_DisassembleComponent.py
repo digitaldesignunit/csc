@@ -12,6 +12,7 @@ import json  # NOQA
 import System  # NOQA
 import Rhino  # NOQA
 import Grasshopper  # NOQA
+import scriptcontext as sc  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
 ghenv.Component.Name = 'DisassembleComponent'  # NOQA
@@ -19,9 +20,11 @@ ghenv.Component.NickName = 'DisassembleComponent'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Parses compose JSON ({identity, snapshot}) and outputs individual '
+    'Parses compose JSON ({identity, snapshots[]}) and outputs individual '
     'fields as Grasshopper-native types. Reconstructs geometry, bounding '
-    'boxes, PCA frames, and metadata from the identity/snapshot pair.'
+    'boxes, PCA frames, and metadata from the identity/snapshot pair. '
+    'Point clouds prefer the full PLY via Session cache, then the inline '
+    'preview.'
 )
 
 
@@ -29,7 +32,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610.1
+    Version: 260826
     """
 
     def __init__(self):
@@ -59,7 +62,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Compose JSON ({identity, snapshot}) fetched from the server.'
+            'Compose JSON ({identity, snapshots[]}) fetched from the server.'
         )
         # Initialize output param descriptions
         i = 0
@@ -93,7 +96,9 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             'Snapshot descriptors/metadata as JSON string'
         )
         self.OutputParams[9+i].Description = (
-            'Rhino geometry objects (extrusions, meshes, point clouds)'
+            'Rhino geometry objects (extrusions, meshes, point clouds). '
+            'Point clouds prefer full PLY when Session is signed in, '
+            'else the inline preview.'
         )
         self.OutputParams[10+i].Description = (
             'Marker points as list of Point3d objects'
@@ -208,25 +213,58 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
             meshes.append(mesh)
         return meshes
 
-    def ComponentPointClouds(
-            self,
-            geometry: dict) -> list[Rhino.Geometry.PointCloud]:
-        """Create point clouds from geometry.point_clouds field."""
-        clouds = []
-        for pc_data in geometry.get('point_clouds', []) or []:
-            cloud = Rhino.Geometry.PointCloud()
-            pts = pc_data.get('points', [])
-            cl = pc_data.get('colors')
-            if cl and len(cl) == len(pts):
-                for p, c in zip(pts, cl):
-                    cloud.Add(
-                        Rhino.Geometry.Point3d(p[0], p[1], p[2]),
-                        System.Drawing.Color.FromArgb(*c))
+    def get_auth_core_from_sticky(self):
+        """Return Session AuthCore when signed in; None otherwise."""
+        return sc.sticky.get('CSC_AuthCore')
+
+    def build_inline_point_cloud(self, pc_data):
+        """Build a Rhino point cloud from one inline SnapshotPointCloud."""
+        if not isinstance(pc_data, dict):
+            return None
+        pts = pc_data.get('points', []) or []
+        if not pts:
+            return None
+        cloud = Rhino.Geometry.PointCloud()
+        colors = pc_data.get('colors')
+        if colors and len(colors) == len(pts):
+            for p, c in zip(pts, colors):
+                cloud.Add(
+                    Rhino.Geometry.Point3d(p[0], p[1], p[2]),
+                    System.Drawing.Color.FromArgb(*c))
+        else:
+            for p in pts:
+                cloud.Add(Rhino.Geometry.Point3d(p[0], p[1], p[2]))
+        return cloud if cloud.Count > 0 else None
+
+    def fetch_snapshot_point_clouds(self, auth_core, snapshot):
+        """
+        Prefer full point-cloud PLY via Session cache, then inline preview.
+
+        Returns a list of (cloud, primitive_index) tuples so
+        csc_point_cloud_index stays aligned with snapshot.geometry.
+        """
+        geometry = snapshot.get('geometry', {}) or {}
+        inline_pcs = geometry.get('point_clouds', []) or []
+        snapshot_id = snapshot.get('_id')
+        results = []
+        for i in range(len(inline_pcs)):
+            cloud = None
+            if auth_core and snapshot_id:
+                try:
+                    cloud = auth_core.cached_get_snapshot_point_cloud(
+                        snapshot_id, i)
+                except Exception as e:
+                    self._addWarning(
+                        'Point cloud PLY fetch failed '
+                        f'for index {i}: {str(e)}')
+            if cloud is None:
+                cloud = self.build_inline_point_cloud(inline_pcs[i])
+            if cloud is not None:
+                results.append((cloud, i))
             else:
-                for p in pts:
-                    cloud.Add(Rhino.Geometry.Point3d(p[0], p[1], p[2]))
-            clouds.append(cloud)
-        return clouds
+                self._addWarning(
+                    f'Point cloud {i} is invalid or empty')
+        return results
 
     def ComponentReinforcementJson(
             self,
@@ -419,6 +457,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 return __Results
 
             self.Component.Message = 'Disassembling components...'
+            auth_core = self.get_auth_core_from_sticky()
 
             # loop over all branches
             for i in range(ComponentData.BranchCount):
@@ -511,13 +550,15 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                                     # add to datatree
                                     PrimitiveGeometry.Add(mesh, ghp)
                             elif key == 'point_clouds':
-                                clouds = self.ComponentPointClouds(geometry)
-                                for cloud in clouds:
-                                    # transform to iframe
+                                clouds = self.fetch_snapshot_point_clouds(
+                                    auth_core, snapshot)
+                                for cloud, cloud_idx in clouds:
                                     cloud.Transform(xform)
-                                    # set user string
-                                    cloud.SetUserString('csc_component', comp)
-                                    # add to datatree
+                                    cloud.SetUserString(
+                                        'csc_component', comp)
+                                    cloud.SetUserString(
+                                        'csc_point_cloud_index',
+                                        str(cloud_idx))
                                     PrimitiveGeometry.Add(cloud, ghp)
                             elif key in ('marker_points', 'reinforcements'):
                                 # handled separately below
