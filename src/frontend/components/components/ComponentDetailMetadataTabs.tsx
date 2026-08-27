@@ -32,11 +32,11 @@ import {
 } from './componentDetailShared'
 
 const tabsListClass = cn(
-  'inline-flex h-10 w-max min-w-0 flex-nowrap items-center justify-center gap-1.5 rounded-lg',
-  'border border-border bg-background p-1 shadow-sm',
+  'grid h-8 w-full min-w-0 grid-cols-4 items-center gap-0.5 overflow-hidden rounded-lg',
+  'border border-border bg-background p-0.5 shadow-sm',
 )
 const tabTriggerClass = cn(
-  'flex-none shrink-0 rounded-md px-3.5 py-1.5 text-sm',
+  'min-w-0 rounded-md px-1 py-1 text-[11px] font-medium leading-tight',
   'cursor-pointer text-foreground/80 transition-colors',
   'hover:bg-accent hover:text-foreground',
   'data-[state=active]:bg-primary/15 data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-sm',
@@ -44,7 +44,7 @@ const tabTriggerClass = cn(
 )
 
 function MetadataTabNav({ children }: { children: ReactNode }) {
-  return <div className="flex w-full justify-center overflow-x-auto pb-1">{children}</div>
+  return <div className="w-full min-w-0">{children}</div>
 }
 
 function MetadataRow({ label, children }: { label: string; children: ReactNode }) {

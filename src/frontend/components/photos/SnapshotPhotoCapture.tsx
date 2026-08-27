@@ -217,11 +217,11 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
   }
 
   const gridClass = compact
-    ? 'flex flex-wrap gap-2'
+    ? 'flex h-[200px] lg:h-[140px] gap-1.5 overflow-hidden'
     : 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'
 
   const thumbClass = compact
-    ? 'group relative size-16 shrink-0 overflow-hidden rounded-md border border-border bg-muted sm:size-[4.5rem]'
+    ? 'group relative h-full min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-muted'
     : 'group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted'
 
   const liveTiles = useMemo(() => {
@@ -259,19 +259,20 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
   }, [lightboxItems.length, lightboxPosition])
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+    <div className={compact ? 'space-y-2' : 'space-y-3'}>
+      <div className="flex flex-wrap gap-1.5">
         <Button
           type="button"
           variant="default"
           size="sm"
+          className={compact ? 'h-7 text-xs' : undefined}
           disabled={disabled || busy || atLimit}
           onClick={() => cameraInputRef.current?.click()}
         >
           {busy ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className={`mr-2 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} animate-spin`} />
           ) : (
-            <Camera className="mr-2 h-4 w-4" />
+            <Camera className={`mr-2 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
           )}
           Take photo
         </Button>
@@ -279,10 +280,11 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
           type="button"
           variant="outline"
           size="sm"
+          className={compact ? 'h-7 text-xs' : undefined}
           disabled={disabled || busy || atLimit}
           onClick={() => galleryInputRef.current?.click()}
         >
-          <ImagePlus className="mr-2 h-4 w-4" />
+          <ImagePlus className={`mr-2 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
           Add from gallery
         </Button>
       </div>
@@ -308,10 +310,12 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
         aria-hidden
       />
 
-      <p className="text-xs text-muted-foreground">
-        On mobile, &quot;Take photo&quot; opens the camera. Up to {maxPhotos} images (JPEG, PNG, or
-        WebP).
-      </p>
+      {!compact && (
+        <p className="text-xs text-muted-foreground">
+          On mobile, &quot;Take photo&quot; opens the camera. Up to {maxPhotos} images (JPEG, PNG, or
+          WebP).
+        </p>
+      )}
 
       {error && (
         <p className="text-sm text-destructive" role="alert">
@@ -324,7 +328,9 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
       )}
 
       {props.mode === 'live' && liveTiles.length === 0 && !busy && (
-        <p className="py-6 text-center text-sm text-muted-foreground">No photos for this snapshot yet.</p>
+        <p className={`${compact ? 'flex h-[200px] lg:h-[140px] items-center justify-center' : 'py-6'} text-center text-sm text-muted-foreground`}>
+          No photos for this snapshot yet.
+        </p>
       )}
 
       {(props.mode === 'staged' ? stagedItems.length > 0 : liveTiles.length > 0) && (
@@ -372,7 +378,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
                       fill
                       className="object-cover"
                       unoptimized
-                      sizes={compact ? '72px' : '20vw'}
+                      sizes={compact ? '140px' : '20vw'}
                     />
                     <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
                       #{index}
@@ -397,7 +403,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
         </div>
       )}
 
-      {count > 0 && (
+      {count > 0 && !compact && (
         <p className="text-xs text-muted-foreground">
           {count} photo{count === 1 ? '' : 's'}
           {props.mode === 'staged' ? ' ready to upload' : ' on this snapshot'}

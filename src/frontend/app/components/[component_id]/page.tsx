@@ -137,13 +137,14 @@ export default async function ComponentDetailPage({
             isPending={!snapshot.validated}
           />
         )}
-        <ComponentViewer catalog={catalog} />
         <ComponentDetailPageLayout
           catalog={catalog}
           snapshots={snapshots}
           activeSnapshotId={activeSnapshotId}
           liveSnapshotId={liveSnapshotId}
-        />
+        >
+          <ComponentViewer catalog={catalog} compactDesktop />
+        </ComponentDetailPageLayout>
       </div>
     </div>
   )

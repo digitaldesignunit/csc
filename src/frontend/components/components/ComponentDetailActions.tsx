@@ -219,7 +219,7 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
           <Tooltip>
             <TooltipTrigger asChild>
               <Link href={`/locate-by-id?reference_id=${identityId}`} className="flex-1 min-w-[8rem]">
-                <Button variant="outline" className="w-full" size="sm">
+                <Button variant="outline" className="h-8 w-full text-xs" size="sm">
                   Locate by ID
                 </Button>
               </Link>
@@ -236,19 +236,19 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
                   currentUserId === reservedBy ? (
                     <Button
                       variant="destructive"
-                      className="w-full"
+                      className="h-8 w-full text-xs"
                       size="sm"
                       onClick={handleReleaseComponent}
                     >
                       Release
                     </Button>
                   ) : (
-                    <Button variant="destructive" className="w-full" size="sm" disabled>
+                    <Button variant="destructive" className="h-8 w-full text-xs" size="sm" disabled>
                       Reserved
                     </Button>
                   )
                 ) : (
-                  <Button variant="default" className="w-full" size="sm" onClick={handleReserveComponent}>
+                  <Button variant="default" className="h-8 w-full text-xs" size="sm" onClick={handleReserveComponent}>
                     Reserve
                   </Button>
                 )}
@@ -269,8 +269,8 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
         <div className="space-y-2">
           {!isConsumed && (
             <Link href={`/components/${identityId}/edit`} className="block">
-              <Button variant="outline" className="w-full" size="sm" disabled={busy}>
-                <Pencil className="h-4 w-4 mr-2" />
+              <Button variant="outline" className="h-8 w-full text-xs" size="sm" disabled={busy}>
+                <Pencil className="h-3.5 w-3.5 mr-1.5" />
                 Edit metadata
               </Button>
             </Link>
@@ -282,7 +282,7 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
               disabled={busy || Boolean(snapshot.validated)}
               variant="default"
               size="sm"
-              className="flex-1 bg-green-600 hover:bg-green-700"
+              className="h-8 flex-1 bg-green-600 text-xs hover:bg-green-700"
             >
               <CheckCircle className="h-4 w-4 mr-2" />
               {snapshot.validated ? 'Validated' : 'Validate'}
@@ -292,7 +292,7 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
               disabled={busy}
               variant={isConsumed ? 'default' : 'outline'}
               size="sm"
-              className="flex-1"
+              className="h-8 flex-1 text-xs"
             >
               {isConsumed ? (
                 <>
@@ -312,7 +312,7 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
             <button
               type="button"
               onClick={() => setShowDestructiveActions(!showDestructiveActions)}
-              className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
             >
               <span>Destructive actions</span>
               <ChevronDown
@@ -329,7 +329,7 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
                   disabled={busy}
                   variant="destructive"
                   size="sm"
-                  className="w-full"
+                  className="h-8 w-full text-xs"
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Permanently delete

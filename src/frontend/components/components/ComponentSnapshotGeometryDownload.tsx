@@ -77,13 +77,13 @@ export default function ComponentSnapshotGeometryDownload({ catalog }: Props) {
         type="button"
         variant="outline"
         size="sm"
-        className="w-full"
+        className="h-8 w-full text-xs"
         onClick={() => {
           setError(null)
           setOpen(true)
         }}
       >
-        <Download className="mr-2 h-4 w-4" />
+        <Download className="mr-1.5 h-3.5 w-3.5" />
         Download geometry
       </Button>
 

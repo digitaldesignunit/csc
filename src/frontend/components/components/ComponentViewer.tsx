@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Scan, Grid3x3, Rotate3d } from 'lucide-react'
 import { Bounds, OrbitControls, Html, useBounds } from '@react-three/drei'
-import { rgbToHex } from '@/lib/utils'
+import { cn, rgbToHex } from '@/lib/utils'
 import {
   buildPointCloudThreeGroup,
   loadSnapshotPointCloudPlyGroups,
@@ -905,9 +905,13 @@ function VisualizeComponent(props: VisualizeProps) {
  * Reduced/detailed mesh modes load **`GET /snapshots/{snapshot_id}/meshes/...`** PLY.
  * Detailed point cloud mode loads **`GET /snapshots/{snapshot_id}/point_clouds/...`** PLY.
  */
-export type ComponentViewerProps = { catalog: CatalogComponent }
+export type ComponentViewerProps = {
+  catalog: CatalogComponent
+  /** Shorter laptop+ viewport for the component detail L-layout. Other pages keep 50dvh. */
+  compactDesktop?: boolean
+}
 
-export default function ComponentViewer({ catalog }: ComponentViewerProps) {
+export default function ComponentViewer({ catalog, compactDesktop = false }: ComponentViewerProps) {
   const snapshot = primarySnapshot(catalog)
   const identityId = catalog.identity._id
   const catalogType = catalog.identity.type
@@ -1363,20 +1367,29 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
   const menuSections: MenuSection[] = hasDisplayOptions
     ? [{
         id: 'display',
-        title: 'Display',
+        title: 'Display Settings',
         content: <div className="flex flex-col gap-3">{displayBlocks}</div>,
       }]
     : []
 
+  const desktopViewportClass = compactDesktop
+    ? 'h-[30dvh] sm:h-[40dvh] md:h-[50dvh] 2xl:h-[56vh]'
+    : 'h-[30dvh] sm:h-[40dvh] md:h-[50dvh]'
+
   return (
     <div className="flex flex-col md:flex-row gap-2 w-full">
       {hasDisplayOptions && (
-        <div className="w-full md:w-64 md:flex-shrink-0 order-2 md:order-1 md:h-[50dvh]">
+        <div
+          className={cn(
+            'w-full md:w-64 md:flex-shrink-0 order-2 md:order-1 md:h-[50dvh]',
+            compactDesktop && '2xl:h-[56vh]',
+          )}
+        >
           <ViewerMenu sections={menuSections} className="h-full" />
         </div>
       )}
 
-      <Card className="flex-1 overflow-hidden order-1 md:order-2 h-[30dvh] sm:h-[40dvh] md:h-[50dvh] p-0">
+      <Card className={cn('flex-1 overflow-hidden order-1 md:order-2 p-0', desktopViewportClass)}>
         <div className="relative w-full h-full">
           <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
             <Tooltip>

@@ -1,16 +1,16 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
 import { ComponentLocation } from '@/generated/CatalogSharedTypes'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import ComponentDetailActions from './ComponentDetailActions'
 import ComponentDetailLocationPanel from './ComponentDetailLocationPanel'
-import ComponentDetailMetadataTabs, {
-  ComponentDetailCatalogMetadata,
-} from './ComponentDetailMetadataTabs'
+import ComponentDetailMetadataTabs from './ComponentDetailMetadataTabs'
 import ComponentDetailSummary from './ComponentDetailSummary'
 import ComponentSnapshotPhotoGallery from './ComponentSnapshotPhotoGallery'
 import ComponentSnapshotVersionList from './ComponentSnapshotVersionList'
@@ -21,6 +21,7 @@ type ComponentDetailPageLayoutProps = {
   snapshots?: SnapshotSummaryItem[]
   activeSnapshotId: string
   liveSnapshotId: string
+  children: ReactNode
 }
 
 export default function ComponentDetailPageLayout({
@@ -28,6 +29,7 @@ export default function ComponentDetailPageLayout({
   snapshots = [],
   activeSnapshotId,
   liveSnapshotId,
+  children,
 }: ComponentDetailPageLayoutProps) {
   const { data: session } = useSession()
   const { identity } = catalog
@@ -41,12 +43,18 @@ export default function ComponentDetailPageLayout({
 
   return (
     <div
-      className="grid items-start gap-6 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,28rem)_minmax(0,30rem)_minmax(0,1fr)]"
+      className={cn(
+        'grid items-start content-start gap-6 2xl:gap-x-6 2xl:gap-y-4',
+        isPublicDemoView
+          ? '[grid-template-areas:"banner"_"viewer"_"identity"_"media"] lg:[grid-template-areas:"banner_banner"_"viewer_viewer"_"identity_media"] 2xl:[grid-template-areas:"banner_banner"_"identity_stage"]'
+          : '[grid-template-areas:"viewer"_"identity"_"media"] lg:[grid-template-areas:"viewer_viewer"_"identity_media"] 2xl:[grid-template-areas:"identity_stage"]',
+        'lg:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]',
+      )}
     >
       {isPublicDemoView && (
         <div
           role="status"
-          className="lg:col-span-2 2xl:col-span-3 rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 text-sky-950 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-100"
+          className="[grid-area:banner] rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 text-sky-950 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-100"
         >
           <p className="font-medium">Public demo view</p>
           <p className="mt-1 text-sm text-sky-900/90 dark:text-sky-100/90">
@@ -58,8 +66,22 @@ export default function ComponentDetailPageLayout({
           </p>
         </div>
       )}
-      <Card className="min-w-0 w-full shadow-sm lg:max-w-md 2xl:max-w-none">
-        <CardContent className="space-y-4 pt-6">
+
+      <div className="contents 2xl:flex 2xl:min-w-0 2xl:flex-col 2xl:gap-4 2xl:[grid-area:stage]">
+        <div className="min-w-0 [grid-area:viewer]">{children}</div>
+
+        <div className="min-w-0 space-y-4 [grid-area:media] 2xl:grid 2xl:grid-cols-2 2xl:gap-4 2xl:space-y-0">
+          <ComponentSnapshotPhotoGallery
+            snapshotId={snapshotId}
+            photoCount={snapshot.photo_count}
+            compact
+          />
+          <ComponentDetailLocationPanel location={location} />
+        </div>
+      </div>
+
+      <Card className="min-w-0 w-full shadow-sm [grid-area:identity]">
+        <CardContent className="space-y-3 pt-5">
           <ComponentDetailSummary catalog={catalog} />
           <ComponentDetailActions catalog={catalog} />
           <ComponentSnapshotVersionList
@@ -68,34 +90,9 @@ export default function ComponentDetailPageLayout({
             activeSnapshotId={activeSnapshotId}
             liveSnapshotId={liveSnapshotId}
           />
-
-          <section className="hidden border-t border-border pt-4 2xl:block">
-            <h3 className="mb-3 border-b border-border pb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Catalog
-            </h3>
-            <ComponentDetailCatalogMetadata catalog={catalog} />
-          </section>
-
-          <div className="2xl:hidden">
-            <ComponentDetailMetadataTabs catalog={catalog} mode="all" />
-          </div>
+          <ComponentDetailMetadataTabs catalog={catalog} mode="all" />
         </CardContent>
       </Card>
-
-      <Card className="hidden min-w-0 shadow-sm 2xl:block">
-        <CardContent className="pt-6">
-          <ComponentDetailMetadataTabs catalog={catalog} mode="secondary" />
-        </CardContent>
-      </Card>
-
-      <div className="min-w-0 space-y-4 lg:sticky lg:top-6">
-        <ComponentSnapshotPhotoGallery
-          snapshotId={snapshotId}
-          photoCount={snapshot.photo_count}
-          compact
-        />
-        <ComponentDetailLocationPanel location={location} />
-      </div>
     </div>
   )
 }

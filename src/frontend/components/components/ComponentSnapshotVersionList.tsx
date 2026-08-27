@@ -82,10 +82,10 @@ export default function ComponentSnapshotVersionList({
   }
 
   return (
-    <section className="border-t border-border pt-4">
-      <div className="mb-3 flex items-center gap-2">
-        <History className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+    <section className="border-t border-border pt-3">
+      <div className="mb-2 flex items-center gap-2">
+        <History className="h-3.5 w-3.5 text-muted-foreground" />
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Snapshot versions
         </h3>
       </div>
@@ -109,7 +109,7 @@ export default function ComponentSnapshotVersionList({
           return (
             <li key={row._id}>
               <div
-                className={`flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                className={`flex flex-wrap items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
                   isActive
                     ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
                     : 'border-border bg-muted/20 hover:bg-muted/40'

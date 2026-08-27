@@ -32,7 +32,7 @@ export default function ComponentDetailLocationPanel({
       >
         {label}
       </a>
-      <div className="mt-3 h-[200px] lg:h-[260px] w-full overflow-hidden rounded-md">
+      <div className="mt-3 h-[200px] lg:h-[140px] w-full overflow-hidden rounded-md">
         <ComponentDetailMap lat={lat} lon={lon} />
       </div>
     </section>
