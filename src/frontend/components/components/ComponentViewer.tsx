@@ -118,7 +118,7 @@ const externalPointCloudCache = new Map<string, CachedPointCloudGeometry>()
 type GeometryMode = 'primitive' | 'reduced' | 'detailed'
 type PointCloudGeometryMode = 'primitive' | 'detailed'
 
-function nextPointCloudVisibility(
+function nextObjectVisibility(
   count: number,
   previous: boolean[],
   defaultVisible: boolean,
@@ -955,6 +955,9 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
   const primitiveMeshCount = snapshotMeshes.length
   const primitivePointCloudCount = snapshotPointClouds.length
   const hasPointClouds = primitivePointCloudCount > 0
+  const meshVisibilitySeedRef = useRef(
+    `${identityId?.toString() ?? ''}:${primitiveMeshCount}`,
+  )
   const pointCloudVisibilitySeedRef = useRef(
     `${identityId?.toString() ?? ''}:${primitivePointCloudCount}`,
   )
@@ -988,6 +991,11 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
 
   useEffect(() => {
     let isMounted = true
+    const visibilitySeed = `${identityId?.toString() ?? ''}:${primitiveMeshCount}`
+    const resetVisibilityToDefault =
+      meshVisibilitySeedRef.current !== visibilitySeed
+    meshVisibilitySeedRef.current = visibilitySeed
+
     if (isMeshExternalMode && catalogType !== 'panel' && identityId) {
       setIsLoadingExternalMeshes(true)
       setMeshGeometryError(null)
@@ -1002,7 +1010,12 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
             if (result.success) {
               setExternalMeshes(result.meshes)
               setMeshGeometryError(null)
-              setVisibleMeshes(new Array(result.meshes.length).fill(true))
+              setVisibleMeshes((prev) => nextObjectVisibility(
+                result.meshes.length,
+                prev,
+                true,
+                resetVisibilityToDefault,
+              ))
             } else {
               setExternalMeshes([])
               setMeshGeometryError(result.message)
@@ -1025,7 +1038,12 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
       setMeshGeometryError(null)
       setShowEdges(true)
       if (hasMultipleMeshes) {
-        setVisibleMeshes(new Array(primitiveMeshCount).fill(true))
+        setVisibleMeshes((prev) => nextObjectVisibility(
+          primitiveMeshCount,
+          prev,
+          true,
+          resetVisibilityToDefault,
+        ))
       } else {
         setVisibleMeshes([])
       }
@@ -1062,7 +1080,7 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
           if (isMounted) {
             if (result.success) {
               setExternalPointClouds(result.pointClouds)
-              setVisiblePointClouds((prev) => nextPointCloudVisibility(
+              setVisiblePointClouds((prev) => nextObjectVisibility(
                 result.pointClouds.length,
                 prev,
                 pointCloudVisibleByDefault,
@@ -1086,7 +1104,7 @@ export default function ComponentViewer({ catalog }: ComponentViewerProps) {
       setExternalPointClouds([])
       setIsLoadingExternalPointClouds(false)
       if (hasPointClouds) {
-        setVisiblePointClouds((prev) => nextPointCloudVisibility(
+        setVisiblePointClouds((prev) => nextObjectVisibility(
           primitivePointCloudCount,
           prev,
           pointCloudVisibleByDefault,
