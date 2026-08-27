@@ -2,7 +2,10 @@
 """
 Robot Scan Upload Module
 
-Uploads processed scan data to the CSC backend API.
+Uploads a processed scan as a new catalog identity plus version-0 snapshot:
+
+* POST /identities  (CreateComponentRequest JSON)
+* PUT  /snapshots/{snapshot_id}/meshes/{i}/{reduced|detailed}  (PLY)
 
 Programmatic Usage:
     from upload_robot_scan import upload_scan_by_path
@@ -13,7 +16,7 @@ import sys
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -29,9 +32,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Default API configuration
-DEFAULT_API_BASE_URL = "https://api.2ndchances.build"
 DEFAULT_TIMEOUT = 30
+PLY_UPLOAD_TIMEOUT = 300
 CREDENTIALS_FILE = "csc_credentials.json"
 
 
@@ -53,30 +55,30 @@ def load_credentials(credentials_path: Optional[str] = None) -> Dict[str, str]:
         sys.exit(1)
 
     try:
-        with open(cred_path, 'r') as f:
-            credentials = json.load(f)
+        with open(cred_path, 'r', encoding='utf-8') as handle:
+            credentials = json.load(handle)
 
-        # Validate required fields
         required_fields = ['server', 'user', 'pwd']
         missing_fields = [field for field in required_fields
                           if field not in credentials]
 
         if missing_fields:
-            logger.error(f"[ERROR] Missing required fields in credentials "
-                         f"file: {missing_fields}")
+            logger.error(
+                f"[ERROR] Missing required fields in credentials "
+                f"file: {missing_fields}"
+            )
             sys.exit(1)
 
         logger.info(f"[OK] Loaded credentials from: {cred_path}")
         logger.info(f"[SERVER] Server: {credentials['server']}")
         logger.info(f"[USER] User: {credentials['user']}")
-
         return credentials
 
-    except json.JSONDecodeError as e:
-        logger.error(f"[ERROR] Invalid JSON in credentials file: {e}")
+    except json.JSONDecodeError as exc:
+        logger.error(f"[ERROR] Invalid JSON in credentials file: {exc}")
         sys.exit(1)
-    except Exception as e:
-        logger.error(f"[ERROR] Error loading credentials: {e}")
+    except Exception as exc:
+        logger.error(f"[ERROR] Error loading credentials: {exc}")
         sys.exit(1)
 
 
@@ -94,198 +96,228 @@ class ScanUploader:
         self.session = self._create_session()
 
     def _create_session(self) -> requests.Session:
-        """
-        Create a requests session with retry strategy and JWT authentication
-        """
+        """Create a requests session with retry strategy and JWT auth."""
         session = requests.Session()
 
-        # Authenticate and get JWT token
         self.jwt_token = self._authenticate()
         if not self.jwt_token:
             raise Exception("Failed to authenticate with API")
 
-        # Set up JWT authentication
         session.headers.update({
             'Authorization': f'Bearer {self.jwt_token}'
         })
 
-        # Configure retry strategy
         retry_strategy = Retry(
             total=3,
             backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
         )
-
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
-
         return session
 
     def _authenticate(self) -> Optional[str]:
         """Authenticate with the API and return JWT token"""
         try:
             logger.info("[AUTH] Authenticating with API...")
-
-            # Prepare authentication data
             auth_data = {
                 'username': self.username,
                 'password': self.password
             }
-
-            # Authenticate
             response = requests.post(
                 f"{self.api_base_url}/auth/token",
-                data=auth_data,  # Use form data for OAuth2PasswordRequestForm
+                data=auth_data,
                 timeout=self.timeout
             )
-
             if response.status_code == 200:
                 token_data = response.json()
                 access_token = token_data.get('access_token')
                 if access_token:
                     logger.info("[OK] Authentication successful")
                     return access_token
-                else:
-                    logger.error("[ERROR] No access token in response")
-                    return None
-            else:
-                logger.error(
-                    f"[ERROR] Authentication failed: {response.status_code}"
-                )
-                logger.error(f"   Response: {response.text}")
+                logger.error("[ERROR] No access token in response")
                 return None
-
-        except Exception as e:
-            logger.error(f"[ERROR] Authentication error: {e}")
+            logger.error(
+                f"[ERROR] Authentication failed: {response.status_code}"
+            )
+            logger.error(f"   Response: {response.text}")
+            return None
+        except Exception as exc:
+            logger.error(f"[ERROR] Authentication error: {exc}")
             return None
 
     def test_connection(self) -> bool:
-        """Test connection to the API"""
+        """Test connection to the identities API"""
         try:
             response = self.session.get(
-                f"{self.api_base_url}/components",
+                f"{self.api_base_url}/identities",
+                params={'page': 1, 'size': 1},
                 timeout=self.timeout
             )
             if response.status_code == 200:
                 logger.info("[OK] API connection successful")
                 return True
-            else:
-                logger.error(
-                    f"[ERROR] API connection failed: {response.status_code}"
-                )
-                return False
-        except Exception as e:
-            logger.error(f"[ERROR] API connection error: {e}")
+            logger.error(
+                f"[ERROR] API connection failed: {response.status_code}"
+            )
+            return False
+        except Exception as exc:
+            logger.error(f"[ERROR] API connection error: {exc}")
             return False
 
-    def upload_component_json(
+    def upload_identity_json(
         self, component_path: Path
-    ) -> Tuple[bool, Optional[str]]:
-        """Upload component JSON file"""
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        POST CreateComponentRequest to /identities.
+
+        Returns (success, identity_id, snapshot_id).
+        """
         try:
             logger.info(
-                f"[FILE] Uploading component JSON: {component_path.name}"
+                f"[FILE] Creating identity from: {component_path.name}"
             )
-            # Read component data
-            with open(component_path, 'r') as f:
-                component_data = json.load(f)
-            # Upload component
+            with open(component_path, 'r', encoding='utf-8') as handle:
+                payload = json.load(handle)
+
             response = self.session.post(
-                f"{self.api_base_url}/components/add/",
-                json=component_data,
+                f"{self.api_base_url}/identities",
+                json=payload,
                 timeout=self.timeout
             )
             if response.status_code == 201:
-                result = response.json()
-                component_id = result.get('_id')
+                compose = response.json()
+                identity_doc = compose.get('identity') or {}
+                snapshots = compose.get('snapshots') or []
+                snapshot_doc = snapshots[0] if snapshots else {}
+                identity_id = identity_doc.get('_id') or payload.get('_id')
+                snapshot_id = snapshot_doc.get('_id')
                 logger.info(
-                    f"[OK] Component uploaded successfully: {component_id}"
+                    f"[OK] Identity created: {identity_id} "
+                    f"(v0 snapshot {snapshot_id})"
                 )
-                return True, component_id
-            elif response.status_code == 409:
-                # Component already exists, extract ID from the path
-                component_id = component_path.stem
-                logger.info(
-                    "[OK] Component already exists, using existing "
-                    f"ID: {component_id}"
-                )
-                return True, component_id
-            else:
+                return True, identity_id, snapshot_id
+
+            if response.status_code == 409:
                 logger.error(
-                    "[ERROR] Failed to upload component: "
-                    f"{response.status_code}"
+                    "[ERROR] Identity already exists "
+                    f"({component_path.stem}); not uploading a second v0"
                 )
                 logger.error(f"   Response: {response.text}")
-                return False, None
+                return False, None, None
 
-        except Exception as e:
-            logger.error(f"[ERROR] Error uploading component JSON: {e}")
-            return False, None
+            logger.error(
+                "[ERROR] Failed to create identity: "
+                f"{response.status_code}"
+            )
+            logger.error(f"   Response: {response.text}")
+            return False, None, None
 
-    def upload_geometry_file(
+        except Exception as exc:
+            logger.error(f"[ERROR] Error uploading identity JSON: {exc}")
+            return False, None, None
+
+    def upload_mesh_ply(
             self,
-            component_id: str,
-            geometry_path: Path,
-            geometry_type: str
+            snapshot_id: str,
+            primitive_index: int,
+            resolution: str,
+            ply_path: Path
     ) -> bool:
-        """Upload geometry file (OBJ)"""
+        """PUT a mesh PLY onto a snapshot primitive."""
         try:
             logger.info(
-                f"[UPLOAD] Uploading {geometry_type} geometry: "
-                f"{geometry_path.name}"
+                f"[UPLOAD] Uploading {resolution} PLY for primitive "
+                f"{primitive_index}: {ply_path.name}"
             )
-            # Determine the correct endpoint
-            if geometry_type == "detailed":
-                endpoint = (
-                    f"{self.api_base_url}/components/"
-                    f"{component_id}/geometry/add_detailed"
-                )
-            elif geometry_type == "reduced":
-                endpoint = (
-                    f"{self.api_base_url}/components/"
-                    f"{component_id}/geometry/add_reduced"
-                )
-            else:
-                logger.error(f"[ERROR] Unknown geometry type: {geometry_type}")
-                return False
-            # Upload geometry file
-            with open(geometry_path, 'rb') as f:
-                files = {'mesh_file': (geometry_path.name,
-                                       f,
-                                       'application/octet-stream')}
-                response = self.session.post(
+            endpoint = (
+                f"{self.api_base_url}/snapshots/{snapshot_id}/meshes/"
+                f"{primitive_index}/{resolution}"
+            )
+            with open(ply_path, 'rb') as handle:
+                files = {
+                    'mesh_file': (
+                        ply_path.name,
+                        handle,
+                        'application/octet-stream',
+                    )
+                }
+                response = self.session.put(
                     endpoint,
                     files=files,
-                    timeout=self.timeout * 3  # Longer timeout for large files
+                    timeout=PLY_UPLOAD_TIMEOUT,
                 )
 
             if response.status_code == 200:
                 logger.info(
-                    f"[OK] {geometry_type.title()} geometry uploaded "
-                    "successfully"
+                    f"[OK] Uploaded {resolution} PLY "
+                    f"for primitive {primitive_index}"
                 )
                 return True
-            else:
-                logger.error(
-                    f"[ERROR] Failed to upload {geometry_type} "
-                    f"geometry: {response.status_code}"
-                )
-                logger.error(f"   Response: {response.text}")
-                return False
-
-        except Exception as e:
             logger.error(
-                f"[ERROR] Error uploading {geometry_type} geometry: {e}"
+                f"[ERROR] Failed to upload {resolution} PLY for "
+                f"primitive {primitive_index}: {response.status_code}"
+            )
+            logger.error(f"   Response: {response.text}")
+            return False
+        except Exception as exc:
+            logger.error(
+                f"[ERROR] Error uploading {resolution} PLY for "
+                f"primitive {primitive_index}: {exc}"
             )
             return False
 
+    def _collect_staged_ply_files(self, transcode_folder: Path) -> List[Dict]:
+        """Read ply_manifest.json, falling back to meshes/*/*.ply on disk."""
+        manifest_path = transcode_folder / 'ply_manifest.json'
+        if manifest_path.exists():
+            with open(manifest_path, 'r', encoding='utf-8') as handle:
+                manifest = json.load(handle)
+            files = manifest.get('files') or []
+            staged = []
+            for entry in files:
+                rel = entry.get('path')
+                if not rel:
+                    continue
+                path = transcode_folder / rel
+                if path.exists():
+                    staged.append({
+                        'primitive_index': int(entry['primitive_index']),
+                        'resolution': entry['resolution'],
+                        'path': path,
+                    })
+                else:
+                    logger.warning(f"[WARNING] Staged PLY missing: {rel}")
+            if staged:
+                return staged
+
+        staged = []
+        meshes_root = transcode_folder / 'meshes'
+        if not meshes_root.exists():
+            return staged
+        for primitive_dir in sorted(meshes_root.iterdir()):
+            if not primitive_dir.is_dir():
+                continue
+            try:
+                primitive_index = int(primitive_dir.name)
+            except ValueError:
+                continue
+            for resolution in ('reduced', 'detailed'):
+                path = primitive_dir / f'{resolution}.ply'
+                if path.exists():
+                    staged.append({
+                        'primitive_index': primitive_index,
+                        'resolution': resolution,
+                        'path': path,
+                    })
+        return staged
+
     def upload_scan_folder(self, scan_folder: Path) -> bool:
-        """Upload all files from a processed scan folder"""
+        """Upload identity JSON and staged mesh PLY files."""
         component_id = scan_folder.name
         logger.info(f"[START] Starting upload for scan: {component_id}")
 
-        # Check if folder contains required files
         transcode_folder = scan_folder / "transcode"
         component_json = transcode_folder / f"{component_id}.json"
 
@@ -299,79 +331,54 @@ class ScanUploader:
             logger.error(f"[ERROR] Component JSON not found: {component_json}")
             return False
 
-        # Upload component JSON
-        success, uploaded_component_id = self.upload_component_json(
+        success, identity_id, snapshot_id = self.upload_identity_json(
             component_json
         )
-        if not success:
+        if not success or not snapshot_id:
             return False
 
-        # Upload geometry files
-        geometry_files = [
-            ("detailed", "mesh.obj"),
-            ("reduced", "mesh_reduced.obj")
-        ]
+        staged = self._collect_staged_ply_files(transcode_folder)
+        if not staged:
+            logger.info(
+                "[WARNING] No staged mesh PLY files; "
+                "identity uses inline primitives only"
+            )
+            logger.info(f"[OK] Successfully uploaded scan: {component_id}")
+            return True
 
         upload_success = True
-        for geometry_type, filename in geometry_files:
-            geometry_path = transcode_folder / filename
-            if geometry_path.exists():
-                if not self.upload_geometry_file(
-                        uploaded_component_id,
-                        geometry_path,
-                        geometry_type
-                ):
-                    upload_success = False
-            else:
-                logger.info(
-                    f"[WARNING] {geometry_type.title()} geometry not found: "
-                    f"{filename}"
-                )
+        for entry in staged:
+            if not self.upload_mesh_ply(
+                    snapshot_id,
+                    entry['primitive_index'],
+                    entry['resolution'],
+                    entry['path']
+            ):
+                upload_success = False
 
         if upload_success:
-            logger.info(f"[OK] Successfully uploaded scan: {component_id}")
+            logger.info(
+                f"[OK] Successfully uploaded identity {identity_id} "
+                f"and {len(staged)} PLY file(s)"
+            )
         else:
             logger.error(
-                f"[ERROR] Some files failed to upload for scan: {component_id}"
+                f"[ERROR] Some PLY files failed to upload for scan: "
+                f"{component_id}"
             )
-
         return upload_success
-
-    def _is_valid_uuid(self, folder_name: str) -> bool:
-        """Check if folder name is a valid UUID"""
-        import uuid
-        try:
-            uuid.UUID(folder_name)
-            return True
-        except ValueError:
-            return False
 
 
 def upload_scan_by_path(scan_folder_path: str, credentials: Dict[str, str],
                         timeout: int = DEFAULT_TIMEOUT) -> bool:
     """
-    Upload a single scan folder by its path (programmatic interface).
-
-    This function provides a programmatic interface for uploading scan data
-    without requiring command-line arguments or folder watching.
+    Upload a single processed scan folder by its path.
 
     Args:
-        scan_folder_path (str): Path to the UUID-named scan folder to upload
-        credentials (Dict[str, str]): API credentials containing 'server',
+        scan_folder_path (str): Path to the UUID-named scan folder
+        credentials (Dict[str, str]): API credentials with 'server',
             'user', 'pwd'
         timeout (int): Request timeout in seconds (default: 30)
-
-    Returns:
-        bool: True if upload was successful, False otherwise
-
-    Example:
-        credentials = {
-            'server': 'https://api.2ndchances.build',
-            'user': 'your-username',
-            'pwd': 'your-password'
-        }
-        success = upload_scan_by_path('/path/to/scan/folder/uuid-12345',
-                                      credentials)
     """
     scan_path = Path(scan_folder_path)
 
@@ -379,10 +386,7 @@ def upload_scan_by_path(scan_folder_path: str, credentials: Dict[str, str],
         logger.error(f"[ERROR] Scan folder does not exist: {scan_folder_path}")
         return False
 
-    # Extract component ID from folder name
     component_id = scan_path.name
-
-    # Validate UUID
     import uuid
     try:
         uuid.UUID(component_id)
@@ -392,26 +396,18 @@ def upload_scan_by_path(scan_folder_path: str, credentials: Dict[str, str],
 
     logger.info(f"[UPLOAD] Uploading scan folder: {component_id}")
 
-    # Create uploader and upload
     try:
         uploader = ScanUploader(credentials, timeout)
-
-        # Test connection
         if not uploader.test_connection():
             logger.error("[ERROR] Cannot connect to API")
             return False
-
-        # Upload the scan folder
         return uploader.upload_scan_folder(scan_path)
-
-    except Exception as e:
-        logger.error(f"[ERROR] Upload error: {e}")
+    except Exception as exc:
+        logger.error(f"[ERROR] Upload error: {exc}")
         return False
 
 
 if __name__ == "__main__":
-    # Simple CLI for testing
-    import sys
     if len(sys.argv) < 2:
         print("Usage: python upload_robot_scan.py <scan_folder_path> "
               "[credentials_file]")

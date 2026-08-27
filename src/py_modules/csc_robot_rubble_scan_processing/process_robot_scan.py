@@ -2,7 +2,10 @@
 """
 Robot Scan Data Processing Module
 
-Processes 3D scan data and creates CSC components.
+Processes aligned 3D scan meshes into a CSC CreateComponentRequest:
+
+* Identity ``_id`` is the UUID folder name
+* Geometry becomes the version-0 snapshot (inline primitives + staged PLY)
 
 Programmatic Usage:
     from process_robot_scan import process_scan_by_path
@@ -14,13 +17,25 @@ import sys
 import json
 import uuid
 import logging
-from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import Dict, List, Optional, Tuple
+
+# Limit native thread pools before importing numpy/scipy/trimesh.
+# Unbounded OpenMP/MKL workers can crash this script in constrained shells.
+for _thread_env in (
+    'OMP_NUM_THREADS',
+    'MKL_NUM_THREADS',
+    'OPENBLAS_NUM_THREADS',
+    'NUMEXPR_NUM_THREADS',
+    'VECLIB_MAXIMUM_THREADS',
+    'BLIS_NUM_THREADS',
+):
+    os.environ.setdefault(_thread_env, '1')
+
 import numpy as np
 import trimesh
 from scipy.spatial import cKDTree
-from sklearn.decomposition import PCA
+from PIL import Image
 
 # MESH REDUCTION SETTINGS
 # If mesh has face count above this but below reduced threshold,
@@ -31,11 +46,21 @@ MESH_PRIMITIVE_THRESHOLD = 8000
 MESH_REDUCED_THRESHOLD = 15000
 # Target face count for reduced mesh
 MESH_REDUCED_TARGET = 10000
-# Target face count for primitive mesh
+# Target face count for primitive mesh (inline snapshot geometry)
 MESH_PRIMITIVE_TARGET = 500
 
-# DATASET NAME
+# DATASET / IDENTITY DEFAULTS
 DATASET_NAME = "ddu_build_with_debris"
+COMPONENT_TYPE = "rubble"
+COMPONENT_MATERIAL = "concrete"
+COMPONENT_COLOR = [110, 110, 110]
+COMPONENT_LOCATION = {"lat": 49.861444, "lon": 8.676556}
+
+# OBJ object names written by scan postprocess
+MESH_OBJECT_STONE = "object"
+MESH_OBJECT_EFFECTOR = "end_effector"
+LEGACY_MARKER_OBJECT = "marker_points"
+MARKER_OBJECT_PREFIX = "marker_"
 
 # Configure logging
 logging.basicConfig(
@@ -47,98 +72,380 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
 
 
 def validate_uuid(uuid_string: str) -> bool:
     """Validate if string is a valid UUID"""
     try:
         uuid_obj = uuid.UUID(uuid_string)
-        return str(uuid_obj) == uuid_string
+        return str(uuid_obj) == uuid_string.lower()
     except ValueError:
         return False
 
 
+def identity_frame() -> Dict[str, List[float]]:
+    """World-aligned frame at the origin (create-time iframe default)."""
+    return {
+        'o': [0.0, 0.0, 0.0],
+        'x': [1.0, 0.0, 0.0],
+        'y': [0.0, 1.0, 0.0],
+        'z': [0.0, 0.0, 1.0],
+    }
+
+
+def obj_yup_to_rhino_zup(vertex: List[float]) -> List[float]:
+    """Map a legacy Y-up OBJ vertex to Rhino Z-up (CSC canonical)."""
+    x, y, z = vertex
+    return [x, -z, y]
+
+
 def normalize_colors_to_integers(colors: np.ndarray) -> np.ndarray:
-    """Convert normalized color values (0.0-1.0) to integer values (0-255)"""
-    # Check if colors are already in 0-255 range
+    """Convert color values to integer RGB (0-255)."""
+    if colors.size == 0:
+        return colors.astype(int)
     if colors.max() > 1.0:
-        # Already in 0-255 range, just convert to int
         return np.clip(colors, 0, 255).astype(int)
+    return np.clip(colors * 255, 0, 255).astype(int)
+
+
+def _is_marker_object(name: str) -> bool:
+    if not name:
+        return False
+    if name == LEGACY_MARKER_OBJECT:
+        return True
+    return name.startswith(MARKER_OBJECT_PREFIX)
+
+
+def _obj_index(raw: int, count: int) -> int:
+    """Convert a 1-based (or negative relative) OBJ index to 0-based."""
+    if raw < 0:
+        return count + raw
+    return raw - 1
+
+
+def _parse_map_kd(mtl_path: str) -> Optional[str]:
+    """Return the first map_Kd texture filename from an MTL file."""
+    if not os.path.isfile(mtl_path):
+        return None
+    with open(mtl_path, 'r', encoding='utf-8', errors='replace') as handle:
+        for raw in handle:
+            stripped = raw.strip()
+            if stripped.lower().startswith('map_kd '):
+                value = stripped.split(None, 1)[1].strip().strip('"')
+                return value or None
+    return None
+
+
+def resolve_diffuse_texture_path(
+    obj_path: str,
+    mtllib_files: List[str],
+) -> Optional[str]:
+    """Find the diffuse texture next to the OBJ / referenced MTL."""
+    obj_dir = os.path.dirname(os.path.abspath(obj_path))
+    candidates: List[str] = []
+    for mtl_name in mtllib_files:
+        mtl_path = (
+            mtl_name if os.path.isabs(mtl_name)
+            else os.path.join(obj_dir, mtl_name)
+        )
+        map_kd = _parse_map_kd(mtl_path)
+        if map_kd:
+            tex_path = (
+                map_kd if os.path.isabs(map_kd)
+                else os.path.join(os.path.dirname(mtl_path), map_kd)
+            )
+            candidates.append(tex_path)
+    for name in ('mesh.jpg', 'mesh.jpeg', 'mesh.png'):
+        candidates.append(os.path.join(obj_dir, name))
+    seen = set()
+    for path in candidates:
+        normalized = os.path.normpath(path)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        if os.path.isfile(normalized):
+            return normalized
+    return None
+
+
+def bake_vertex_colors_from_uv(
+    vertex_count: int,
+    texcoords: List[List[float]],
+    faces: List[List[int]],
+    face_uvs: List[List[Optional[int]]],
+    texture: np.ndarray,
+    base_colors: Optional[np.ndarray] = None,
+    skip_mask: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, int]:
+    """Average MTL texture samples onto vertices (OBJ UV, V=0 at bottom).
+
+    Returns (N, 3) RGB in 0-255 and the number of vertices that received
+    at least one texture sample.
+    """
+    height, width = texture.shape[0], texture.shape[1]
+    if base_colors is not None and len(base_colors) == vertex_count:
+        colors = np.asarray(base_colors, dtype=np.float64).copy()
     else:
-        # Normalize from 0-1 to 0-255
-        return np.clip(colors * 255, 0, 255).astype(int)
+        colors = np.tile(
+            np.asarray(COMPONENT_COLOR, dtype=np.float64),
+            (vertex_count, 1),
+        )
+    sums = np.zeros((vertex_count, 3), dtype=np.float64)
+    counts = np.zeros(vertex_count, dtype=np.int32)
+    n_uv = len(texcoords)
+    for face, uvs in zip(faces, face_uvs):
+        for vi, ti in zip(face, uvs):
+            if ti is None or vi < 0 or vi >= vertex_count:
+                continue
+            if skip_mask is not None and skip_mask[vi]:
+                continue
+            if ti < 0 or ti >= n_uv:
+                continue
+            u = texcoords[ti][0]
+            v = texcoords[ti][1]
+            u = u - np.floor(u)
+            v = v - np.floor(v)
+            x = int(u * width)
+            y = int((1.0 - v) * height)
+            x = 0 if x < 0 else (width - 1 if x >= width else x)
+            y = 0 if y < 0 else (height - 1 if y >= height else y)
+            sums[vi] += texture[y, x, :3]
+            counts[vi] += 1
+    sampled = counts > 0
+    n_sampled = int(np.count_nonzero(sampled))
+    if n_sampled:
+        colors[sampled] = sums[sampled] / counts[sampled][:, None]
+    return colors, n_sampled
 
 
-def parse_obj_with_objects(obj_path: str) -> Dict[str, Dict]:
-    """Parse OBJ file and extract separate objects and marker points"""
-    objects = {}
-    marker_points = []
-    current_object = None
-    global_vertices = []
+def parse_obj_with_objects(
+    obj_path: str,
+    convert_yup_to_zup: bool = False,
+) -> Dict:
+    """
+    Parse an aligned scan OBJ into mesh objects and marker points.
 
-    with open(obj_path, 'r') as f:
-        for line in f:
-            line = line.strip()
+    Current Metashape/postprocess export (``output/mesh.obj``):
+      * ``o end_effector`` / ``o object`` triangle meshes
+      * Alignment markers as ``v`` + ``o marker_blue_N`` / ``o marker_green_x``
+        + ``p <index>`` (vertex may be declared *before* the ``o`` line)
+      * Vertex colors come from ``map_Kd`` (mesh.jpg / mesh.jpeg) via ``vt``
 
-            if line.startswith('o '):
-                # Object declaration
+    Legacy files used a single ``o marker_points`` object and Y-up vertices.
+    """
+    objects: Dict[str, Dict] = {}
+    marker_points: List[List[float]] = []
+    marker_labels: List[str] = []
+    current_object: Optional[str] = None
+    pending_vertex_indices: List[int] = []
+    global_vertices: List[List[float]] = []
+    global_colors: List[List[float]] = []
+    explicit_color: List[bool] = []
+    texcoords: List[List[float]] = []
+    mtllib_files: List[str] = []
+
+    def _ensure_object(name: str) -> Dict:
+        if name not in objects:
+            objects[name] = {
+                'faces': [],
+                'face_uvs': [],
+                'point_indices': [],
+                'pending_vertices': [],
+            }
+        return objects[name]
+
+    with open(obj_path, 'r', encoding='utf-8', errors='replace') as handle:
+        for raw in handle:
+            line = raw.strip()
+            if not line or line.startswith('#'):
+                continue
+
+            if line.startswith('mtllib '):
+                name = line[7:].strip().strip('"')
+                if name:
+                    mtllib_files.append(name)
+                continue
+
+            if line.startswith('o ') or line.startswith('g '):
                 object_name = line[2:].strip()
                 current_object = object_name
-                if current_object not in objects:
-                    objects[current_object] = {
-                        'vertices': [],
-                        'colors': [],
-                        'faces': [],
-                        'vertex_offset': len(global_vertices)
-                    }
+                obj = _ensure_object(current_object)
+                if (_is_marker_object(current_object)
+                        and pending_vertex_indices):
+                    obj['pending_vertices'].extend(
+                        pending_vertex_indices
+                    )
+                pending_vertex_indices = []
+                continue
 
-            elif line.startswith('v '):
-                # Vertex with possible color
+            if line.startswith('vt '):
+                parts = line[3:].split()
+                if len(parts) >= 2:
+                    texcoords.append([float(parts[0]), float(parts[1])])
+                continue
+
+            if line.startswith('v '):
                 parts = line[2:].split()
-                if len(parts) >= 3:
-                    # Position - swap Y and Z and negate Z to
-                    # match coordinate system
-                    x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
-                    vertex = [x, -z, y]  # Swap Y and Z, negate Z
-                    global_vertices.append(vertex)
+                if len(parts) < 3:
+                    continue
+                vertex = [
+                    float(parts[0]),
+                    float(parts[1]),
+                    float(parts[2]),
+                ]
+                if convert_yup_to_zup:
+                    vertex = obj_yup_to_rhino_zup(vertex)
+                has_rgb = len(parts) >= 6
+                if has_rgb:
+                    color = [
+                        float(parts[3]),
+                        float(parts[4]),
+                        float(parts[5]),
+                    ]
+                else:
+                    color = [
+                        COMPONENT_COLOR[0] / 255.0,
+                        COMPONENT_COLOR[1] / 255.0,
+                        COMPONENT_COLOR[2] / 255.0,
+                    ]
+                vertex_idx = len(global_vertices)
+                global_vertices.append(vertex)
+                global_colors.append(color)
+                explicit_color.append(has_rgb)
+                pending_vertex_indices.append(vertex_idx)
+                continue
 
-                    # Color (if present)
-                    if len(parts) >= 6:
-                        r = float(parts[3])
-                        g = float(parts[4])
-                        b = float(parts[5])
-                        color = [r, g, b]
+            if line.startswith('f '):
+                pending_vertex_indices = []
+                if not current_object or _is_marker_object(current_object):
+                    continue
+                obj = _ensure_object(current_object)
+                face = []
+                face_uv: List[Optional[int]] = []
+                for part in line[2:].split():
+                    bits = part.split('/')
+                    vertex_idx = _obj_index(
+                        int(bits[0]), len(global_vertices)
+                    )
+                    face.append(vertex_idx)
+                    if len(bits) >= 2 and bits[1]:
+                        face_uv.append(
+                            _obj_index(int(bits[1]), len(texcoords))
+                        )
                     else:
-                        color = [1.0, 1.0, 1.0]  # Default white
+                        face_uv.append(None)
+                if len(face) >= 3:
+                    obj['faces'].append(face)
+                    obj['face_uvs'].append(face_uv)
+                continue
 
-                    # Add to current object if one is active
-                    if current_object and current_object in objects:
-                        if current_object == 'marker_points':
-                            marker_points.append(vertex)
-                        else:
-                            objects[current_object]['vertices'].append(vertex)
-                            objects[current_object]['colors'].append(color)
+            if line.startswith('p '):
+                pending_vertex_indices = []
+                label = current_object or LEGACY_MARKER_OBJECT
+                for part in line[2:].split():
+                    vertex_idx = _obj_index(
+                        int(part.split('/')[0]), len(global_vertices)
+                    )
+                    if 0 <= vertex_idx < len(global_vertices):
+                        marker_points.append(global_vertices[vertex_idx])
+                        marker_labels.append(label)
+                        if current_object:
+                            _ensure_object(current_object)[
+                                'point_indices'
+                            ].append(vertex_idx)
 
-            elif line.startswith('f '):
-                # Face
-                if (current_object and current_object in objects and
-                        current_object != 'marker_points'):
-                    face_parts = line[2:].split()
-                    face = []
-                    for part in face_parts:
-                        # Handle face format (vertex/texture/normal or vertex)
-                        vertex_idx = int(part.split('/')[0]) - 1  # 0-based
-                        # Adjust for object's vertex offset
-                        offset = objects[current_object]['vertex_offset']
-                        local_idx = vertex_idx - offset
-                        face.append(local_idx)
+    if not marker_points:
+        for name, obj in objects.items():
+            if not _is_marker_object(name):
+                continue
+            source_indices = obj['point_indices'] or obj['pending_vertices']
+            for vertex_idx in source_indices:
+                if 0 <= vertex_idx < len(global_vertices):
+                    marker_points.append(global_vertices[vertex_idx])
+                    marker_labels.append(name)
 
-                    if len(face) >= 3:
-                        objects[current_object]['faces'].append(face)
+    texture_path = resolve_diffuse_texture_path(obj_path, mtllib_files)
+    if texture_path and texcoords:
+        logger.info(
+            f"[COLOR] Baking vertex colors from texture: "
+            f"{os.path.basename(texture_path)}"
+        )
+        texture = np.asarray(Image.open(texture_path).convert('RGB'))
+        all_faces: List[List[int]] = []
+        all_uvs: List[List[Optional[int]]] = []
+        for name, obj in objects.items():
+            if _is_marker_object(name):
+                continue
+            all_faces.extend(obj['faces'])
+            all_uvs.extend(obj.get('face_uvs') or [])
+        skip = np.asarray(explicit_color, dtype=bool)
+        base = np.asarray(global_colors, dtype=np.float64)
+        if base.size and base.max() <= 1.0:
+            base = base * 255.0
+        baked, n_sampled = bake_vertex_colors_from_uv(
+            len(global_vertices),
+            texcoords,
+            all_faces,
+            all_uvs,
+            texture,
+            base_colors=base,
+            skip_mask=skip,
+        )
+        logger.info(
+            f"[COLOR] Textured vertices: {n_sampled}/{len(global_vertices)}"
+        )
+        global_colors = baked.tolist()
+    elif not any(explicit_color):
+        logger.warning(
+            "[COLOR] No vertex colors or diffuse texture found; "
+            "using default gray"
+        )
+
+    meshes = {}
+    for name, obj in objects.items():
+        if _is_marker_object(name) or not obj['faces']:
+            continue
+        extracted = _extract_indexed_mesh(
+            global_vertices, global_colors, obj['faces']
+        )
+        if extracted is not None:
+            meshes[name] = extracted
 
     return {
-        'objects': objects,
-        'marker_points': marker_points
+        'objects': meshes,
+        'marker_points': marker_points,
+        'marker_labels': marker_labels,
+    }
+
+
+def _extract_indexed_mesh(
+    vertices: List[List[float]],
+    colors: List[List[float]],
+    faces: List[List[int]],
+) -> Optional[Dict]:
+    """Compact a mesh to the vertices actually referenced by faces."""
+    used = []
+    seen = set()
+    for face in faces:
+        for idx in face:
+            if idx not in seen and 0 <= idx < len(vertices):
+                seen.add(idx)
+                used.append(idx)
+    if not used:
+        return None
+    remap = {old: new for new, old in enumerate(used)}
+    return {
+        'vertices': [vertices[i] for i in used],
+        'colors': [colors[i] for i in used],
+        'faces': [
+            [remap[idx] for idx in face if idx in remap]
+            for face in faces
+            if sum(1 for idx in face if idx in remap) >= 3
+        ],
     }
 
 
@@ -146,516 +453,653 @@ def triangulate_face(face: List[int]) -> List[List[int]]:
     """Convert n-gon face to triangles"""
     if len(face) == 3:
         return [face]
-    elif len(face) == 4:
-        # Quad to two triangles
+    if len(face) == 4:
         return [[face[0], face[1], face[2]], [face[0], face[2], face[3]]]
-    else:
-        # N-gon to triangle fan
-        triangles = []
-        for i in range(1, len(face) - 1):
-            triangles.append([face[0], face[i], face[i + 1]])
-        return triangles
+    triangles = []
+    for i in range(1, len(face) - 1):
+        triangles.append([face[0], face[i], face[i + 1]])
+    return triangles
 
 
-def reduce_mesh_trimesh(vertices: np.ndarray, faces: np.ndarray,
-                        target_faces: int, colors: np.ndarray = None) -> \
-        Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Reduce mesh using trimesh library with color preservation"""
+def triangulate_faces(faces: List[List[int]]) -> List[List[int]]:
+    """Triangulate a list of polygon faces."""
+    triangles = []
+    for face in faces:
+        if len(face) >= 3:
+            triangles.extend(triangulate_face(face))
+    return triangles
+
+
+def _subsample_mesh(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    colors: np.ndarray,
+    target_faces: int,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Deterministic face stride fallback when quadric decimation fails."""
+    if len(faces) <= target_faces:
+        return vertices, faces, colors
+    stride = max(1, len(faces) // target_faces)
+    sample = np.asarray(faces[::stride][:target_faces], dtype=np.int64)
+    used = np.unique(sample)
+    remap = {int(old): new for new, old in enumerate(used)}
+    remapped = np.array(
+        [[remap[int(idx)] for idx in face] for face in sample],
+        dtype=np.int64,
+    )
+    sampled_colors = colors
+    if colors is not None and len(colors) > 0:
+        sampled_colors = colors[used]
+    return vertices[used], remapped, sampled_colors
+
+
+def reduce_mesh_trimesh(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    target_faces: int,
+    colors: np.ndarray = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Reduce mesh using trimesh, with stride-sample fallback."""
+    empty_colors = colors if colors is not None else np.array([])
+    current_faces = len(faces)
+    if current_faces <= target_faces:
+        return vertices, faces, empty_colors
     try:
-        # Create trimesh object
-        mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
-
-        # Calculate reduction ratio
-        current_faces = len(faces)
-        if current_faces <= target_faces:
-            return (vertices, faces,
-                    colors if colors is not None else np.array([]))
-
-        # Simplify mesh
-        simplified = mesh.simplify_quadric_decimation(
-            face_count=target_faces
-        )
-
-        # Map colors to new vertices if colors were provided
+        mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+        simplified = mesh.simplify_quadric_decimation(face_count=target_faces)
         if colors is not None and len(colors) > 0:
-            # Find which original vertices are closest to each new vertex
             tree = cKDTree(vertices)
             _, indices = tree.query(simplified.vertices)
             mapped_colors = colors[indices]
-            return (simplified.vertices, simplified.faces, mapped_colors)
-        else:
-            return simplified.vertices, simplified.faces, np.array([])
+            return simplified.vertices, simplified.faces, mapped_colors
+        return simplified.vertices, simplified.faces, np.array([])
+    except Exception as exc:
+        logger.warning(
+            f"Mesh reduction failed: {exc}; stride-sampling to "
+            f"{target_faces} faces"
+        )
+        return _subsample_mesh(vertices, faces, empty_colors, target_faces)
 
-    except Exception as e:
-        logger.warning(f"Mesh reduction failed: {e}, using original mesh")
-        return (vertices, faces,
-                colors if colors is not None else np.array([]))
+
+def _gram_matrix_3x3(points: np.ndarray) -> List[List[float]]:
+    """3x3 Gram matrix via scalar sums (no BLAS)."""
+    xx = xy = xz = yy = yz = zz = 0.0
+    for x, y, z in points:
+        xx += x * x
+        xy += x * y
+        xz += x * z
+        yy += y * y
+        yz += y * z
+        zz += z * z
+    return [
+        [xx, xy, xz],
+        [xy, yy, yz],
+        [xz, yz, zz],
+    ]
+
+
+def _jacobi_eigh_3x3(matrix: List[List[float]]):
+    """
+    Eigen-decomposition of a 3x3 symmetric matrix (Jacobi rotations).
+
+    Returns eigenvalues (desc) and eigenvectors as row vectors.
+    Avoids LAPACK so the scan workstation does not depend on MKL/OpenBLAS.
+    """
+    a = [row[:] for row in matrix]
+    v = [
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ]
+    for _ in range(50):
+        p, q = 0, 1
+        max_off = abs(a[0][1])
+        for i, j in ((0, 2), (1, 2)):
+            if abs(a[i][j]) > max_off:
+                max_off = abs(a[i][j])
+                p, q = i, j
+        if max_off < 1e-12:
+            break
+        app = a[p][p]
+        aqq = a[q][q]
+        apq = a[p][q]
+        tau = (aqq - app) / (2.0 * apq)
+        sign = 1.0 if tau >= 0.0 else -1.0
+        t = sign / (abs(tau) + (1.0 + tau * tau) ** 0.5)
+        c = 1.0 / (1.0 + t * t) ** 0.5
+        s = t * c
+        a[p][p] = app - t * apq
+        a[q][q] = aqq + t * apq
+        a[p][q] = 0.0
+        a[q][p] = 0.0
+        for r in range(3):
+            if r == p or r == q:
+                continue
+            arp = a[r][p]
+            arq = a[r][q]
+            a[r][p] = a[p][r] = c * arp - s * arq
+            a[r][q] = a[q][r] = s * arp + c * arq
+        for r in range(3):
+            vrp = v[r][p]
+            vrq = v[r][q]
+            v[r][p] = c * vrp - s * vrq
+            v[r][q] = s * vrp + c * vrq
+
+    evals = [a[0][0], a[1][1], a[2][2]]
+    order = sorted(range(3), key=lambda i: evals[i], reverse=True)
+    components = np.array(
+        [[v[0][i], v[1][i], v[2][i]] for i in order],
+        dtype=np.float64,
+    )
+    return components
 
 
 def compute_obb_3d(
     points: np.ndarray
 ) -> Tuple[List[float], np.ndarray, List[float]]:
     """
-    Compute object oriented bounding box for 3D points using PCA.
-    Returns unsorted dimensions and bounding box origin.
+    Compute object oriented bounding box for 3D points using SVD/PCA.
+
+    Matches the catalog orientation contract: unsorted PCA-axis dimensions
+    and bounding-box origin in PCA space. Sign of the third axis is flipped
+    when needed so the frame is right-handed.
     """
-    # Apply PCA to find principal axes
-    pca = PCA(n_components=3)
-    pca.fit(points)
-    # Get principal components (eigenvectors)
-    principal_components = pca.components_
-    # Ensure right-handed coordinate system
-    # Check if determinant is positive (right-handed)
-    det = np.linalg.det(principal_components)
+    centered = np.asarray(points, dtype=np.float64)
+    if centered.ndim != 2 or centered.shape[1] != 3:
+        raise ValueError('points must be an (N, 3) array')
+    if centered.shape[0] < 3:
+        raise ValueError(
+            f'Need at least 3 points for 3D OBB/PCA, got {centered.shape[0]}'
+        )
+
+    principal_components = _jacobi_eigh_3x3(_gram_matrix_3x3(centered))
+    det = (
+        principal_components[0, 0] * (
+            principal_components[1, 1] * principal_components[2, 2]
+            - principal_components[1, 2] * principal_components[2, 1]
+        )
+        - principal_components[0, 1] * (
+            principal_components[1, 0] * principal_components[2, 2]
+            - principal_components[1, 2] * principal_components[2, 0]
+        )
+        + principal_components[0, 2] * (
+            principal_components[1, 0] * principal_components[2, 1]
+            - principal_components[1, 1] * principal_components[2, 0]
+        )
+    )
     if det < 0:
-        # Flip the third component to ensure right-handedness
         principal_components[2] = -principal_components[2]
-    # Transform points to PCA space using original component order
-    pca_points = np.dot(points, principal_components.T)
-    # Find bounds in PCA space
-    min_bounds = np.min(pca_points, axis=0)
-    max_bounds = np.max(pca_points, axis=0)
-    # Compute unsorted dimensions (keep original PCA axis order)
-    dimensions = max_bounds - min_bounds
-    # Find bounding box center in PCA space
-    # Since component is centered at origin, bbx_origin is just the
-    # bounding box center in PCA space
-    bbx_origin = (min_bounds + max_bounds) / 2.0
-    # return results
-    return dimensions.tolist(), principal_components, bbx_origin.tolist()
+
+    min_bounds = [float('inf')] * 3
+    max_bounds = [float('-inf')] * 3
+    for x, y, z in centered:
+        px = (principal_components[0, 0] * x
+              + principal_components[0, 1] * y
+              + principal_components[0, 2] * z)
+        py = (principal_components[1, 0] * x
+              + principal_components[1, 1] * y
+              + principal_components[1, 2] * z)
+        pz = (principal_components[2, 0] * x
+              + principal_components[2, 1] * y
+              + principal_components[2, 2] * z)
+        if px < min_bounds[0]:
+            min_bounds[0] = px
+        if py < min_bounds[1]:
+            min_bounds[1] = py
+        if pz < min_bounds[2]:
+            min_bounds[2] = pz
+        if px > max_bounds[0]:
+            max_bounds[0] = px
+        if py > max_bounds[1]:
+            max_bounds[1] = py
+        if pz > max_bounds[2]:
+            max_bounds[2] = pz
+    dimensions = [
+        max_bounds[0] - min_bounds[0],
+        max_bounds[1] - min_bounds[1],
+        max_bounds[2] - min_bounds[2],
+    ]
+    bbx_origin = [
+        (min_bounds[0] + max_bounds[0]) / 2.0,
+        (min_bounds[1] + max_bounds[1]) / 2.0,
+        (min_bounds[2] + max_bounds[2]) / 2.0,
+    ]
+    return (
+        [float(v) for v in dimensions],
+        principal_components,
+        [float(v) for v in bbx_origin],
+    )
 
 
-def calculate_bounding_box(meshes_data: List[Dict]) -> List[float]:
-    """Calculate bounding box from multiple meshes"""
-    if not meshes_data:
-        return [1.0, 1.0, 1.0]
-
-    all_vertices = []
-    for mesh in meshes_data:
-        all_vertices.extend(mesh['v'])
-
-    if not all_vertices:
-        return [1.0, 1.0, 1.0]
-
-    vertices_array = np.array(all_vertices)
-    min_coords = vertices_array.min(axis=0)
-    max_coords = vertices_array.max(axis=0)
-    dimensions = max_coords - min_coords
-
-    # Ensure no dimension is zero
-    dimensions = np.maximum(dimensions, 0.001)
-
-    return dimensions.tolist()
+def _as_int_colors(colors: np.ndarray, vertex_count: int) -> np.ndarray:
+    """Return (N, 3) uint8 RGB, falling back to COMPONENT_COLOR."""
+    if colors is None or colors.size == 0:
+        return np.tile(
+            np.asarray(COMPONENT_COLOR, dtype=np.uint8),
+            (vertex_count, 1),
+        )
+    return normalize_colors_to_integers(colors).astype(np.uint8)
 
 
-def create_mesh_data(vertices: List, colors: List, faces: List) -> Dict:
-    """Create mesh data structure for component JSON"""
-    # Convert colors to integers (0-255)
-    colors_array = np.array(colors)
-    int_colors = normalize_colors_to_integers(colors_array)
-
-    # Triangulate faces
-    triangulated_faces = []
-    for face in faces:
-        triangles = triangulate_face(face)
-        triangulated_faces.extend(triangles)
-
+def create_snapshot_mesh(
+    vertices: np.ndarray,
+    colors: np.ndarray,
+    faces: np.ndarray,
+) -> Dict:
+    """Create a SnapshotMesh dict (vertices/faces/colors, Rhino Z-up)."""
+    vertices = np.asarray(vertices, dtype=np.float64)
+    faces = np.asarray(faces, dtype=np.int64)
+    int_colors = _as_int_colors(
+        np.asarray(colors, dtype=np.float64) if colors is not None else None,
+        len(vertices),
+    )
     return {
-        'v': vertices,
-        'f': triangulated_faces,
-        'c': int_colors.tolist()
+        'vertices': vertices.astype(float).tolist(),
+        'faces': faces.astype(int).tolist(),
+        'colors': int_colors.tolist(),
     }
 
 
-def save_combined_obj_file(meshes_data: List[Dict], filepath: str):
-    """Save multiple meshes as combined OBJ file"""
-    with open(filepath, 'w') as f:
-        vertex_offset = 0
+def save_mesh_ply_binary(
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    colors: np.ndarray,
+    filepath: str,
+) -> None:
+    """Write binary little-endian PLY (Rhino Z-up) with per-vertex RGB."""
+    vertices = np.asarray(vertices, dtype=np.float32)
+    faces = np.asarray(faces, dtype=np.int32)
+    colors = _as_int_colors(
+        np.asarray(colors, dtype=np.float64) if colors is not None else None,
+        len(vertices),
+    )
+    if faces.ndim != 2 or faces.shape[1] < 3:
+        raise ValueError('faces must be an (N, 3+) index array')
+    tris = faces[:, :3]
 
-        for i, mesh_data in enumerate(meshes_data):
-            object_name = f"object_{i}"
-            f.write(f"o {object_name}\n")
+    header = (
+        'ply\n'
+        'format binary_little_endian 1.0\n'
+        f'element vertex {len(vertices)}\n'
+        'property float x\n'
+        'property float y\n'
+        'property float z\n'
+        'property uchar red\n'
+        'property uchar green\n'
+        'property uchar blue\n'
+        f'element face {len(tris)}\n'
+        'property list uchar int vertex_indices\n'
+        'end_header\n'
+    )
 
-            # Write vertices with colors
-            vertices = mesh_data['v']
-            colors = mesh_data['c']
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    vertex_dtype = np.dtype([
+        ('x', '<f4'),
+        ('y', '<f4'),
+        ('z', '<f4'),
+        ('red', 'u1'),
+        ('green', 'u1'),
+        ('blue', 'u1'),
+    ])
+    vertex_out = np.empty(len(vertices), dtype=vertex_dtype)
+    vertex_out['x'] = vertices[:, 0]
+    vertex_out['y'] = vertices[:, 1]
+    vertex_out['z'] = vertices[:, 2]
+    vertex_out['red'] = colors[:, 0]
+    vertex_out['green'] = colors[:, 1]
+    vertex_out['blue'] = colors[:, 2]
 
-            for j, vertex in enumerate(vertices):
-                if j < len(colors):
-                    color = colors[j]
-                    # negate Z again to make coordinate system match
-                    f.write(f"v {vertex[0]} {-vertex[1]} {-vertex[2]} "
-                            f"{color[0]} {color[1]} {color[2]}\n")
-                else:
-                    f.write(f"v {vertex[0]} {-vertex[1]} {-vertex[2]} "
-                            f"255 255 255\n")
+    face_dtype = np.dtype([
+        ('n', 'u1'),
+        ('i0', '<i4'),
+        ('i1', '<i4'),
+        ('i2', '<i4'),
+    ])
+    face_out = np.empty(len(tris), dtype=face_dtype)
+    face_out['n'] = 3
+    face_out['i0'] = tris[:, 0]
+    face_out['i1'] = tris[:, 1]
+    face_out['i2'] = tris[:, 2]
 
-            # Write faces (adjust for global vertex offset)
-            for face in mesh_data['f']:
-                face_str = " ".join(str(idx + 1 + vertex_offset)
-                                    for idx in face)
-                f.write(f"f {face_str}\n")
+    with open(filepath, 'wb') as handle:
+        handle.write(header.encode('ascii'))
+        vertex_out.tofile(handle)
+        face_out.tofile(handle)
 
-            vertex_offset += len(vertices)
+
+def mesh_arrays(mesh: Dict) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return vertices, colors, triangulated faces as numpy arrays."""
+    vertices = np.asarray(mesh['vertices'], dtype=np.float64)
+    colors = np.asarray(mesh['colors'], dtype=np.float64)
+    raw_faces = mesh['faces']
+    if raw_faces and all(len(face) == 3 for face in raw_faces):
+        faces = np.asarray(raw_faces, dtype=np.int64)
+    else:
+        faces = np.asarray(triangulate_faces(raw_faces), dtype=np.int64)
+    return vertices, colors, faces
+
+
+def resolve_aligned_mesh_path(scan_folder: str) -> Tuple[Optional[str], bool]:
+    """
+    Prefer ``output/mesh.obj`` (aligned, Rhino Z-up).
+
+    Fall back to legacy ``output/aligned_mesh.obj`` (Y-up, needs conversion).
+    """
+    output_folder = os.path.join(scan_folder, 'output')
+    mesh_path = os.path.join(output_folder, 'mesh.obj')
+    if os.path.exists(mesh_path):
+        return mesh_path, False
+    legacy_path = os.path.join(output_folder, 'aligned_mesh.obj')
+    if os.path.exists(legacy_path):
+        return legacy_path, True
+    return None, False
+
+
+def prepare_mesh_versions(
+    vertices: np.ndarray,
+    colors: np.ndarray,
+    faces: np.ndarray,
+    primitive_index: int,
+    transcode_folder: str,
+) -> Tuple[Dict, List[Dict]]:
+    """
+    Build the inline primitive and stage detailed/reduced PLY files.
+
+    Returns (primitive SnapshotMesh, list of staged file descriptors).
+    """
+    vertices = np.asarray(vertices, dtype=np.float64)
+    colors = np.asarray(colors, dtype=np.float64)
+    faces = np.asarray(faces, dtype=np.int64)
+    face_count = len(faces)
+    logger.info(
+        f"   [OBJ] Primitive {primitive_index}: {len(vertices)} "
+        f"vertices, {face_count} faces"
+    )
+
+    primitive_vertices = vertices
+    primitive_colors = colors
+    primitive_faces = faces
+    reduced_vertices = None
+    reduced_colors = None
+    reduced_faces = None
+
+    if face_count > MESH_REDUCED_THRESHOLD:
+        logger.info(
+            f"   [PROCESSING] Reducing from {face_count} to "
+            f"{MESH_REDUCED_TARGET} (reduced) and "
+            f"{MESH_PRIMITIVE_TARGET} (primitive) faces..."
+        )
+        reduced_vertices, reduced_faces, reduced_colors = reduce_mesh_trimesh(
+            vertices, faces, MESH_REDUCED_TARGET, colors
+        )
+        primitive_vertices, primitive_faces, primitive_colors = (
+            reduce_mesh_trimesh(
+                vertices, faces, MESH_PRIMITIVE_TARGET, colors
+            )
+        )
+        logger.info(
+            f"   [OK] Reduced={len(reduced_faces)} "
+            f"primitive={len(primitive_faces)}"
+        )
+    elif face_count > MESH_PRIMITIVE_THRESHOLD:
+        logger.info(
+            f"   [PROCESSING] Reducing from {face_count} to "
+            f"{MESH_PRIMITIVE_TARGET} faces (primitive)..."
+        )
+        primitive_vertices, primitive_faces, primitive_colors = (
+            reduce_mesh_trimesh(
+                vertices, faces, MESH_PRIMITIVE_TARGET, colors
+            )
+        )
+        logger.info(f"   [OK] Primitive={len(primitive_faces)} faces")
+    else:
+        logger.info(
+            f"   [OK] Mesh already small enough ({face_count} faces, "
+            f"<{MESH_PRIMITIVE_THRESHOLD})"
+        )
+
+    primitive_mesh = create_snapshot_mesh(
+        primitive_vertices, primitive_colors, primitive_faces
+    )
+
+    staged = []
+    primitive_dir = os.path.join(
+        transcode_folder, 'meshes', str(primitive_index)
+    )
+    save_detailed = face_count > MESH_PRIMITIVE_TARGET
+    save_reduced = (
+        face_count > MESH_REDUCED_THRESHOLD and reduced_faces is not None
+    )
+    if save_detailed:
+        path = os.path.join(primitive_dir, 'detailed.ply')
+        logger.info(f"   [FILE] detailed.ply primitive {primitive_index}")
+        save_mesh_ply_binary(vertices, faces, colors, path)
+        staged.append({
+            'primitive_index': primitive_index,
+            'resolution': 'detailed',
+            'path': Path(
+                os.path.relpath(path, transcode_folder)
+            ).as_posix(),
+        })
+    if save_reduced:
+        path = os.path.join(primitive_dir, 'reduced.ply')
+        logger.info(f"   [FILE] reduced.ply primitive {primitive_index}")
+        save_mesh_ply_binary(
+            reduced_vertices, reduced_faces, reduced_colors, path
+        )
+        staged.append({
+            'primitive_index': primitive_index,
+            'resolution': 'reduced',
+            'path': Path(
+                os.path.relpath(path, transcode_folder)
+            ).as_posix(),
+        })
+    return primitive_mesh, staged
 
 
 def process_scan_folder(scan_folder: str, component_id: str) -> bool:
-    """Process a single scan folder"""
+    """Process a single scan folder into identity + v0 snapshot payload."""
     logger.info(f"[PROCESSING] Processing scan folder: {component_id}")
 
-    # Paths
     metadata_path = os.path.join(scan_folder, 'metadata.json')
-    output_folder = os.path.join(scan_folder, 'output')
-    aligned_mesh_path = os.path.join(output_folder, 'aligned_mesh.obj')
     transcode_folder = os.path.join(scan_folder, 'transcode')
+    aligned_mesh_path, convert_yup_to_zup = resolve_aligned_mesh_path(
+        scan_folder
+    )
 
     logger.info("[FOLDER] Folder structure:")
     logger.info(f"   [FILE] Metadata: {os.path.basename(metadata_path)}")
-    logger.info(f"   [FOLDER] Output: {os.path.basename(output_folder)}")
+    if aligned_mesh_path:
+        logger.info(
+            f"   [FILE] Mesh: {os.path.relpath(aligned_mesh_path, scan_folder)}"
+            f"{' (legacy Y-up)' if convert_yup_to_zup else ' (Rhino Z-up)'}"
+        )
     logger.info("   [TARGET] Target: transcode/")
 
-    # Create transcode folder
     logger.info("[FOLDER] Creating transcode folder...")
     os.makedirs(transcode_folder, exist_ok=True)
 
-    # Check required files
     logger.info("[SEARCH] Checking required files...")
     if not os.path.exists(metadata_path):
         logger.error(f"[ERROR] Missing metadata.json in {component_id}")
         return False
     logger.info("[OK] Found metadata.json")
 
-    if not os.path.exists(aligned_mesh_path):
-        logger.error(f"[ERROR] Missing aligned_mesh.obj in {component_id}")
+    if not aligned_mesh_path:
+        logger.error(
+            f"[ERROR] Missing output/mesh.obj (or aligned_mesh.obj) "
+            f"in {component_id}"
+        )
         return False
-    logger.info("[OK] Found aligned_mesh.obj")
+    logger.info(f"[OK] Found {os.path.basename(aligned_mesh_path)}")
 
     try:
-        # Load metadata
         logger.info("[PROCESSING] Loading metadata.json...")
-        with open(metadata_path, 'r') as f:
-            metadata = json.load(f)
+        with open(metadata_path, 'r', encoding='utf-8') as handle:
+            metadata = json.load(handle)
         logger.info(f"[OK] Metadata loaded: {len(metadata)} keys")
 
-        # Parse OBJ file
-        logger.info("[SEARCH] Parsing aligned_mesh.obj...")
-        obj_data = parse_obj_with_objects(aligned_mesh_path)
+        logger.info("[SEARCH] Parsing aligned mesh OBJ...")
+        obj_data = parse_obj_with_objects(
+            aligned_mesh_path,
+            convert_yup_to_zup=convert_yup_to_zup,
+        )
         objects = obj_data['objects']
         marker_points = obj_data['marker_points']
+        marker_labels = obj_data.get('marker_labels') or []
+        del obj_data
 
         logger.info("[OBJ] OBJ parsing results:")
-        logger.info(f"   [TARGET] Objects found: {list(objects.keys())}")
+        logger.info(f"   [TARGET] Mesh objects: {list(objects.keys())}")
         logger.info(f"   [MARKER POINTS] Marker points: {len(marker_points)}")
+        if marker_labels:
+            logger.info(f"   [MARKER POINTS] Labels: {marker_labels}")
 
-        # Check for required objects
-        if 'object' not in objects:
+        if MESH_OBJECT_STONE not in objects:
             logger.error(
-                f"[ERROR] Missing 'object' in OBJ file for {component_id}"
+                f"[ERROR] Missing '{MESH_OBJECT_STONE}' in OBJ file "
+                f"for {component_id}"
             )
             return False
-        obj_verts = len(objects['object']['vertices'])
-        obj_faces = len(objects['object']['faces'])
-        logger.info(f"[OK] Main object found: {obj_verts} vertices, "
-                    f"{obj_faces} faces")
+        stone = objects[MESH_OBJECT_STONE]
+        logger.info(
+            f"[OK] Main object found: {len(stone['vertices'])} vertices, "
+            f"{len(stone['faces'])} faces"
+        )
 
-        if 'end_effector' not in objects:
-            logger.warning(f"[WARNING] Missing 'end_effector' in OBJ "
-                           f"for {component_id}")
-        else:
-            ee_verts = len(objects['end_effector']['vertices'])
-            ee_faces = len(objects['end_effector']['faces'])
-            logger.info(f"[OK] End effector found: {ee_verts} vertices, "
-                        f"{ee_faces} faces")
-
-        # Prepare meshes (object first, end_effector second)
-        logger.info("[PROCESSING] Processing meshes...")
-        meshes_data = []
-        primitive_meshes = []
-
-        # Process 'object' mesh (first)
-        logger.info("[TARGET] Processing main object mesh...")
-        obj_mesh = objects['object']
-        if obj_mesh['vertices'] and obj_mesh['faces']:
-            orig_verts = len(obj_mesh['vertices'])
-            orig_faces = len(obj_mesh['faces'])
-            logger.info(f"   [OBJ] Original: {orig_verts} vertices, "
-                        f"{orig_faces} faces")
-            mesh_data = create_mesh_data(
-                obj_mesh['vertices'],
-                obj_mesh['colors'],
-                obj_mesh['faces']
+        effector = objects.get(MESH_OBJECT_EFFECTOR)
+        if effector is None:
+            logger.warning(
+                f"[WARNING] Missing '{MESH_OBJECT_EFFECTOR}' in OBJ "
+                f"for {component_id}"
             )
-            meshes_data.append(mesh_data)
-            # Create primitive version
-            logger.info("[PROCESSING] Creating primitive version...")
-            vertices_array = np.array(obj_mesh['vertices'])
-            triangulated = [triangulate_face(f)[0] for f in obj_mesh['faces']
-                            if len(f) >= 3]
-            faces_array = np.array(triangulated)
+        else:
+            logger.info(
+                f"[OK] End effector found: {len(effector['vertices'])} "
+                f"vertices, {len(effector['faces'])} faces"
+            )
 
-            if len(faces_array) > MESH_PRIMITIVE_THRESHOLD:
-                logger.info(
-                    f"   [PROCESSING] Reducing from {len(faces_array)} "
-                    f"to {MESH_PRIMITIVE_TARGET} faces..."
-                )
-                prim_vertices, prim_faces, prim_colors = reduce_mesh_trimesh(
-                    vertices_array, faces_array, MESH_PRIMITIVE_TARGET,
-                    np.array(obj_mesh['colors'])
-                )
-                # Swap Y and Z axes for coordinate system consistency
-                prim_vertices = np.array(prim_vertices)
-                prim_vertices[:, [1, 2]] = prim_vertices[:, [2, 1]]
-                prim_vertices[:, 2] = -prim_vertices[:, 2]
-                # Create Mesh Data
-                primitive_mesh = create_mesh_data(
-                    prim_vertices.tolist(),
-                    prim_colors.tolist(),
-                    prim_faces.tolist()
-                )
-                logger.info(f"   [OK] Reduced to {len(prim_faces)} faces")
-            else:
-                logger.info(f"   [OK] Mesh already small "
-                            f"enough ({len(faces_array)} faces, "
-                            f"<{MESH_PRIMITIVE_THRESHOLD})")
-                primitive_mesh = mesh_data.copy()
+        stone_vertices, stone_colors, stone_faces = mesh_arrays(stone)
+        del stone
+        objects.pop(MESH_OBJECT_STONE, None)
 
-            primitive_meshes.append(primitive_mesh)
+        mesh_payloads = [(
+            MESH_OBJECT_STONE, stone_vertices, stone_colors, stone_faces
+        )]
+        if effector is not None:
+            ee_vertices, ee_colors, ee_faces = mesh_arrays(effector)
+            del effector
+            objects.pop(MESH_OBJECT_EFFECTOR, None)
+            mesh_payloads.append((
+                MESH_OBJECT_EFFECTOR, ee_vertices, ee_colors, ee_faces
+            ))
+        del objects
 
-        # Process 'end_effector' mesh (second)
-        if 'end_effector' in objects:
-            logger.info("[PROCESSING] Processing end_effector mesh...")
-            ee_mesh = objects['end_effector']
-            if ee_mesh['vertices'] and ee_mesh['faces']:
-                logger.info(f"   [OBJ] Original: {len(ee_mesh['vertices'])} "
-                            f"vertices, {len(ee_mesh['faces'])} faces")
-                mesh_data = create_mesh_data(
-                    ee_mesh['vertices'],
-                    ee_mesh['colors'],
-                    ee_mesh['faces']
-                )
-                meshes_data.append(mesh_data)
-                # Create primitive version
-                logger.info("   [PROCESSING] Creating primitive version...")
-                vertices_array = np.array(ee_mesh['vertices'])
-                triangulated = [triangulate_face(f)[0]
-                                for f in ee_mesh['faces'] if len(f) >= 3]
-                faces_array = np.array(triangulated)
-                # Reduce mesh
-                if len(faces_array) > MESH_PRIMITIVE_THRESHOLD:
-                    logger.info(
-                        f"   [PROCESSING] Reducing from {len(faces_array)} "
-                        f"to {MESH_PRIMITIVE_TARGET} faces...")
-                    prim_vertices, prim_faces, prim_colors = \
-                        reduce_mesh_trimesh(
-                            vertices_array, faces_array, MESH_PRIMITIVE_TARGET,
-                            np.array(ee_mesh['colors'])
-                        )
-                    # Swap Y and Z axes for coordinate system consistency
-                    prim_vertices = np.array(prim_vertices)
-                    prim_vertices[:, [1, 2]] = prim_vertices[:, [2, 1]]
-                    prim_vertices[:, 2] = -prim_vertices[:, 2]
-                    # Create Mesh Data
-                    primitive_mesh = create_mesh_data(
-                        prim_vertices.tolist(),
-                        prim_colors.tolist(),
-                        prim_faces.tolist()
-                    )
-                    logger.info(f"   [OK] Reduced to {len(prim_faces)} faces")
-                else:
-                    logger.info(f"   [OK] Mesh already small enough "
-                                f"({len(faces_array)} faces, "
-                                f"<{MESH_PRIMITIVE_THRESHOLD})")
-                    primitive_mesh = mesh_data.copy()
+        logger.info(
+            "[ORIGIN] Keeping marker-plane alignment "
+            "(no additional centering)"
+        )
+        centroid = np.mean(stone_vertices, axis=0)
+        logger.info("[PCA] Computing PCA for rubble mesh only...")
+        pca_dimensions, principal_components, bbx_origin = compute_obb_3d(
+            stone_vertices - centroid
+        )
+        logger.info(
+            f"[PCA] PCA dimensions: [{pca_dimensions[0]:.3f}, "
+            f"{pca_dimensions[1]:.3f}, {pca_dimensions[2]:.3f}]"
+        )
+        logger.info(
+            f"[PCA] Frame origin (rubble centroid): "
+            f"[{centroid[0]:.3f}, {centroid[1]:.3f}, {centroid[2]:.3f}]"
+        )
 
-                primitive_meshes.append(primitive_mesh)
-            else:
-                logger.info("   [WARNING] End effector has no geometry")
+        logger.info("[PROCESSING] Processing meshes...")
+        primitive_meshes = []
+        staged_files = []
+        for index, (_name, vertices, colors, faces) in enumerate(
+                mesh_payloads):
+            primitive, staged = prepare_mesh_versions(
+                vertices, colors, faces, index, transcode_folder
+            )
+            primitive_meshes.append(primitive)
+            staged_files.extend(staged)
 
-        if not meshes_data:
+        if not primitive_meshes:
             logger.error(f"[ERROR] No valid meshes found for {component_id}")
             return False
-        logger.info(f"[OK] Processed {len(meshes_data)} meshes total")
-        # Save OBJ files
-        logger.info("[FILE] Saving OBJ files...")
-        mesh_obj_path = os.path.join(transcode_folder, 'mesh.obj')
-        logger.info("   [FILE] Detailed mesh: mesh.obj")
-        save_combined_obj_file(meshes_data, mesh_obj_path)
-        # Create reduced OBJ if needed (check if any mesh has > threshold)
-        face_counts = [len(mesh['f']) for mesh in meshes_data]
-        needs_reduced = any(count > MESH_REDUCED_THRESHOLD
-                            for count in face_counts)
-        logger.info(f"[SEARCH] Face counts: {face_counts}")
+        logger.info(f"[OK] Processed {len(primitive_meshes)} meshes total")
 
-        if needs_reduced:
-            logger.info("[PROCESSING] Creating reduced mesh version "
-                        f"(>{MESH_REDUCED_THRESHOLD} faces detected)...")
-            reduced_meshes = []
-            for i, mesh_data in enumerate(meshes_data):
-                mesh_faces = len(mesh_data['f'])
-                if mesh_faces > MESH_REDUCED_THRESHOLD:
-                    logger.info(
-                        f"   [PROCESSING] Reducing mesh {i+1}: {mesh_faces} "
-                        f"-> {MESH_REDUCED_TARGET} faces")
-                    # Create reduced version
-                    vertices_array = np.array(mesh_data['v'])
-                    faces_array = np.array(mesh_data['f'])
-                    reduced_vertices, reduced_faces, reduced_colors = \
-                        reduce_mesh_trimesh(
-                            vertices_array, faces_array, MESH_REDUCED_TARGET,
-                            np.array(mesh_data['c'])
-                        )
-                    reduced_mesh = create_mesh_data(
-                        reduced_vertices.tolist(),
-                        reduced_colors.tolist(),
-                        reduced_faces.tolist()
-                    )
-                    reduced_meshes.append(reduced_mesh)
-                    logger.info(f"   [OK] Mesh {i+1} reduced "
-                                f"to {len(reduced_faces)} faces")
-                else:
-                    logger.info(f"   [OK] Mesh {i+1} kept "
-                                f"original ({mesh_faces} faces)")
-                    reduced_meshes.append(mesh_data)
+        geometry = {'meshes': primitive_meshes}
+        if marker_points:
+            geometry['marker_points'] = [
+                [float(c) for c in point] for point in marker_points
+            ]
 
-            mesh_reduced_path = os.path.join(transcode_folder,
-                                             'mesh_reduced.obj')
-            logger.info("   [FILE] Reduced mesh: mesh_reduced.obj")
-            save_combined_obj_file(reduced_meshes, mesh_reduced_path)
-        else:
-            logger.info(f"[OK] No reduction needed (all meshes "
-                        f"< {MESH_REDUCED_THRESHOLD} faces)")
-
-        # Compute PCA for the 'object' mesh only
-        logger.info("[PCA] Computing PCA for 'object' mesh...")
-        if 'object' in objects and objects['object']['vertices']:
-            # Get vertices directly from the parsed object mesh
-            object_mesh_vertices = np.array(objects['object']['vertices'])
-            logger.info(f"[PCA] Object mesh vertices: "
-                        f"{len(object_mesh_vertices)}")
-
-            # Apply coordinate system transformation (swap Y/Z axes) for PCA
-            # computation
-            # This matches the coordinate system used for primitive geometry
-            pca_vertices = object_mesh_vertices.copy()
-            pca_vertices[:, [1, 2]] = pca_vertices[:, [2, 1]]  # Swap Y and Z
-            pca_vertices[:, 2] = -pca_vertices[:, 2]  # Negate Z
-            logger.info("[PCA] Applied Y/Z axis swap for Rhino coordinate "
-                        "system")
-
-            # Center the transformed object mesh at origin
-            centroid = np.mean(pca_vertices, axis=0)
-            translation_vector = centroid
-            centered_vertices = pca_vertices - centroid
-
-            # Compute PCA for the centered and transformed object mesh
-            pca_dimensions, principal_components, bbx_origin = \
-                compute_obb_3d(centered_vertices)
-            logger.info(f"[PCA] PCA dimensions: "
-                        f"[{pca_dimensions[0]:.3f}, {pca_dimensions[1]:.3f}, "
-                        f"{pca_dimensions[2]:.3f}]")
-            logger.info(f"[PCA] Bounding box origin: "
-                        f"[{bbx_origin[0]:.3f}, {bbx_origin[1]:.3f}, "
-                        f"{bbx_origin[2]:.3f}]")
-        else:
-            # Fallback values if no meshes
-            pca_dimensions = [1.0, 1.0, 1.0]
-            principal_components = np.eye(3)
-            bbx_origin = [0.0, 0.0, 0.0]
-            translation_vector = np.array([0.0, 0.0, 0.0])
-            logger.warning("[PCA] No meshes found, using default PCA values")
-
-        # Create component JSON
-        logger.info("[FILE] Creating component JSON...")
-        current_time = datetime.utcnow().isoformat() + 'Z'
-
-        # Use PCA dimensions as bounding box
-        bounding_box = pca_dimensions
-        logger.info(f"[BOUNDING BOX] PCA bounding box: "
-                    f"[{bounding_box[0]:.3f}, {bounding_box[1]:.3f}, "
-                    f"{bounding_box[2]:.3f}]")
-
-        # Transform marker points to compensate for rotateX(-Math.PI/2) in
-        # ComponentViewer. To get final result [x, -y, -z] after rotation
-        # [x, y, z] -> [x, z, -y], we need [x, y, z] -> [x, z, -y]
-        marker_points = [[point[0], point[2], -point[1]]
-                         for point in marker_points]
+        pca_frame = {
+            'o': [float(v) for v in centroid],
+            'x': principal_components[0].astype(float).tolist(),
+            'y': principal_components[1].astype(float).tolist(),
+            'z': principal_components[2].astype(float).tolist(),
+        }
 
         component_data = {
             "_id": component_id,
             "name": f"Scanned Rubble Component {component_id[:8]}",
-            "type": "rubble",
-            "material": "concrete",
-            "created": current_time,
-            "lastmodified": current_time,
+            "type": COMPONENT_TYPE,
+            "material": COMPONENT_MATERIAL,
+            "dataset": DATASET_NAME,
             "complexity": 2,
             "fragment": True,
             "assembly": False,
-            "geometry": {
-                "meshes": primitive_meshes
-            },
-            "color": [110, 110, 110],
-            "bbx": bounding_box,
-            "bbx_origin": bbx_origin,
-            "location": {
-                "lat": 49.861444,
-                "lon": 8.676556
-            },
+            "geometry": geometry,
+            "color": list(COMPONENT_COLOR),
+            "bbx": [float(v) for v in pca_dimensions],
+            "bbx_origin": [float(v) for v in bbx_origin],
+            "location": dict(COMPONENT_LOCATION),
             "descriptors": {},
             "processes": {},
-            "iframe": {
-                "o": [0.0, 0.0, 0.0],
-                "x": [1.0, 0.0, 0.0],
-                "y": [0.0, 1.0, 0.0],
-                "z": [0.0, 0.0, 1.0]
-            },
-            "pca_frame": {
-                "o": translation_vector.tolist(),
-                "x": principal_components[0].tolist(),
-                "y": principal_components[1].tolist(),
-                "z": principal_components[2].tolist()
-            },
+            "iframe": identity_frame(),
+            "pca_frame": pca_frame,
+            "validated": False,
             "reserved": "",
             "attributes": {
                 "3d_scan_metadata": metadata
             },
-            "marker_points": marker_points,
-            "dataset": DATASET_NAME,
-            "validated": False
         }
 
-        # Save component JSON
-        component_json_path = os.path.join(transcode_folder,
-                                           f"{component_id}.json")
-        logger.info(f"[FILE] Saving component JSON: {component_id}.json")
-        with open(component_json_path, 'w') as f:
-            json.dump(component_data, f, indent=2)
+        component_json_path = os.path.join(
+            transcode_folder, f"{component_id}.json"
+        )
+        logger.info(
+            f"[FILE] Saving CreateComponentRequest: {component_id}.json"
+        )
+        with open(component_json_path, 'w', encoding='utf-8') as handle:
+            json.dump(component_data, handle, indent=2)
 
-        # Summary
+        manifest = {}
+        for entry in staged_files:
+            key = str(entry['primitive_index'])
+            manifest.setdefault(key, []).append(entry['resolution'])
+        manifest_path = os.path.join(transcode_folder, 'ply_manifest.json')
+        with open(manifest_path, 'w', encoding='utf-8') as handle:
+            json.dump({'meshes': manifest, 'files': staged_files}, handle,
+                      indent=2)
+
         logger.info(f"[OK] Successfully processed component: {component_id}")
         logger.info("[SUMMARY] Summary:")
-        logger.info(f"   [TARGET] Meshes processed: {len(meshes_data)}")
-        logger.info(
-            f"   [PROCESSING] Primitive meshes: {len(primitive_meshes)}"
-        )
+        logger.info(f"   [TARGET] Mesh primitives: {len(primitive_meshes)}")
         logger.info(f"   [MARKER POINTS] Marker points: {len(marker_points)}")
-        logger.info(f"   [BOUNDING BOX] PCA bounding box: {bounding_box}")
-        logger.info(f"   [PCA] PCA frame origin: "
-                    f"{translation_vector.tolist()}")
-        logger.info(f"   [PCA] Bounding box origin: {bbx_origin}")
-        reduced_status = (f'Created (>{MESH_REDUCED_THRESHOLD} faces)'
-                          if needs_reduced
-                          else f'Not needed (<{MESH_REDUCED_THRESHOLD} faces)')
-        logger.info(f"[PROCESSING] Reduced OBJ: {reduced_status}")
+        logger.info(f"   [BOUNDING BOX] PCA bounding box: {pca_dimensions}")
         logger.info("   [FOLDER] Output files:")
-        logger.info("      [FILE] mesh.obj")
-        if needs_reduced:
-            logger.info("      [FILE] mesh_reduced.obj")
         logger.info(f"      [FILE] {component_id}.json")
+        logger.info("      [FILE] ply_manifest.json")
+        for entry in staged_files:
+            logger.info(f"      [FILE] {entry['path']}")
 
         return True
 
-    except Exception as e:
-        logger.error(f"Error processing {component_id}: {e}")
+    except Exception as exc:
+        logger.exception(f"Error processing {component_id}: {exc}")
         return False
 
 
@@ -663,17 +1107,11 @@ def process_scan_by_path(scan_folder_path: str) -> bool:
     """
     Process a single scan folder by its path (programmatic interface).
 
-    This function provides a programmatic interface for processing scan data
-    without requiring command-line arguments or folder watching.
-
     Args:
         scan_folder_path (str): Path to the UUID-named scan folder to process
 
     Returns:
         bool: True if processing was successful, False otherwise
-
-    Example:
-        success = process_scan_by_path('/path/to/scan/folder/uuid-12345')
     """
     scan_path = Path(scan_folder_path)
 
@@ -681,22 +1119,16 @@ def process_scan_by_path(scan_folder_path: str) -> bool:
         logger.error(f"[ERROR] Scan folder does not exist: {scan_folder_path}")
         return False
 
-    # Extract component ID from folder name
     component_id = scan_path.name
-
     if not validate_uuid(component_id):
         logger.error(f"[ERROR] Invalid UUID folder name: {component_id}")
         return False
 
     logger.info(f"[PROCESSING] Processing scan folder: {component_id}")
-
-    # Process the folder (without moving it)
     return process_scan_folder(str(scan_path), component_id)
 
 
 if __name__ == "__main__":
-    # Simple CLI for testing
-    import sys
     if len(sys.argv) != 2:
         print("Usage: python process_robot_scan.py <scan_folder_path>")
         sys.exit(1)

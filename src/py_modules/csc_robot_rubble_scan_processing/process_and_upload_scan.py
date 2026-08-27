@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Process and upload robot scan data to CSC backend.
+Processes aligned 3D scan data and uploads a catalog identity with its
+version-0 snapshot.
 """
 
 import sys
