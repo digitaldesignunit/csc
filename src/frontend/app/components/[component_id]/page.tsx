@@ -3,7 +3,7 @@ import ComponentDetailPageLayout from '@/components/components/ComponentDetailPa
 import ComponentDetailSnapshotBanner from '@/components/components/ComponentDetailSnapshotBanner'
 import ComponentViewer from '@/components/components/ComponentViewer'
 import type { CatalogComponent } from '@/generated/CatalogModels'
-import { primarySnapshot } from '@/generated/catalogExtras'
+import { primarySnapshot, type CatalogShallowRow } from '@/generated/catalogExtras'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { formatTimestamp } from '@/lib/utils'
 import { Archive, Package } from 'lucide-react'
@@ -41,10 +41,14 @@ export default async function ComponentDetailPage({
     ? `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose?${new URLSearchParams({ snapshots: requestedSnapshotId }).toString()}`
     : `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose`
 
-  const [composeRes, snapshotsRes] = await Promise.all([
+  const [composeRes, snapshotsRes, childrenRes] = await Promise.all([
     fetch(composeUrl, fetchOpts),
     fetch(
       `${base}/api/backend/identities/${encodeURIComponent(component_id)}/snapshots`,
+      fetchOpts,
+    ),
+    fetch(
+      `${base}/api/backend/identities/${encodeURIComponent(component_id)}/children`,
       fetchOpts,
     ),
   ])
@@ -72,6 +76,13 @@ export default async function ComponentDetailPage({
   let snapshots: SnapshotSummaryItem[] = []
   if (snapshotsRes.ok) {
     snapshots = (await snapshotsRes.json()) as SnapshotSummaryItem[]
+  }
+  let childIdentities: CatalogShallowRow[] = []
+  if (childrenRes.ok) {
+    const body = (await childrenRes.json()) as CatalogShallowRow[]
+    if (Array.isArray(body)) {
+      childIdentities = body
+    }
   }
 
   const liveSnapshotId = String(catalog.identity.current_snapshot_id ?? '')
@@ -142,6 +153,7 @@ export default async function ComponentDetailPage({
           snapshots={snapshots}
           activeSnapshotId={activeSnapshotId}
           liveSnapshotId={liveSnapshotId}
+          childIdentities={childIdentities}
         >
           <ComponentViewer catalog={catalog} compactDesktop />
         </ComponentDetailPageLayout>

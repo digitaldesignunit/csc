@@ -1,9 +1,6 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
@@ -22,12 +19,13 @@ import {
 } from '@/components/ui/accordion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import ComponentLineageIdentityBadges from './ComponentLineageIdentityBadges'
 import {
   conditionBadgeClass,
   conditionLabel,
   isConsumedShallowRow,
   isNonEmptyString,
-  primaryParentIdentityId,
+  parentIdentityIds,
   snapshotAddedByDisplay,
 } from './componentDetailShared'
 
@@ -82,11 +80,12 @@ function ValueChip({
   )
 }
 
+type LineageStatus = 'active' | 'consumed'
+
 type MetadataPanelsProps = {
   catalog: CatalogComponent
-  openingParentComponent: boolean
-  parentComponentStatus: 'active' | 'consumed' | null
-  onOpenParent: (parentId: string) => void
+  parentStatuses: Record<string, LineageStatus>
+  childIdentities: CatalogShallowRow[]
 }
 
 function CatalogMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
@@ -208,13 +207,24 @@ function TimelineMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
 
 function ProvenanceMetadataPanel({
   catalog,
-  openingParentComponent,
-  parentComponentStatus,
-  onOpenParent,
+  parentStatuses,
+  childIdentities,
 }: MetadataPanelsProps) {
   const { identity } = catalog
   const snapshot = primarySnapshot(catalog)
-  const parentIdentityId = primaryParentIdentityId(identity)
+  const parentIds = parentIdentityIds(identity)
+  const childBadges = childIdentities.flatMap((row) => {
+    const id = String(row._id ?? '').trim()
+    if (!id) {
+      return []
+    }
+    return [
+      {
+        id,
+        status: isConsumedShallowRow(row) ? ('consumed' as const) : ('active' as const),
+      },
+    ]
+  })
 
   return (
     <>
@@ -262,35 +272,16 @@ function ProvenanceMetadataPanel({
         )}
       </MetadataRow>
       <MetadataRow label="Parent">
-        {isNonEmptyString(parentIdentityId) ? (
-          <span className="inline-flex max-w-full flex-wrap items-center justify-end gap-1">
-            <button
-              type="button"
-              onClick={() => onOpenParent(String(parentIdentityId))}
-              disabled={openingParentComponent}
-              className="font-mono text-[11px] text-primary hover:underline disabled:opacity-70"
-              title={`Open parent ${parentIdentityId}`}
-            >
-              {openingParentComponent ? (
-                <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
-              ) : null}
-              <span className="break-all">{parentIdentityId}</span>
-            </button>
-            {parentComponentStatus && (
-              <span
-                className={`rounded border px-1 py-0 text-[10px] ${
-                  parentComponentStatus === 'consumed'
-                    ? 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200'
-                    : 'border-green-300 bg-green-100 text-green-800 dark:border-green-700 dark:bg-green-950/40 dark:text-green-200'
-                }`}
-              >
-                {parentComponentStatus === 'consumed' ? 'Consumed' : 'Active'}
-              </span>
-            )}
-          </span>
-        ) : (
-          <span className="text-xs italic text-muted-foreground">None</span>
-        )}
+        <ComponentLineageIdentityBadges
+          kind="parent"
+          identities={parentIds.map((id) => ({
+            id,
+            status: parentStatuses[id] ?? null,
+          }))}
+        />
+      </MetadataRow>
+      <MetadataRow label="Children">
+        <ComponentLineageIdentityBadges kind="child" identities={childBadges} />
       </MetadataRow>
     </>
   )
@@ -333,83 +324,65 @@ export function ComponentDetailCatalogMetadata({ catalog }: { catalog: CatalogCo
   return <CatalogMetadataPanel catalog={catalog} />
 }
 
-function useParentComponentStatus(catalog: CatalogComponent) {
-  const parentIdentityId = primaryParentIdentityId(catalog.identity)
-  const router = useRouter()
-  const [openingParentComponent, setOpeningParentComponent] = useState(false)
-  const [parentComponentStatus, setParentComponentStatus] = useState<'active' | 'consumed' | null>(
-    null,
-  )
+function useParentComponentStatus(
+  catalog: CatalogComponent,
+  childIdentities: CatalogShallowRow[],
+) {
+  const parentIds = parentIdentityIds(catalog.identity)
+  const [parentStatuses, setParentStatuses] = useState<Record<string, LineageStatus>>({})
 
   useEffect(() => {
-    const parentId = isNonEmptyString(parentIdentityId) ? parentIdentityId : null
-    if (!parentId) {
-      setParentComponentStatus(null)
+    if (parentIds.length === 0) {
+      setParentStatuses({})
       return
     }
 
     let cancelled = false
-    const resolveParentStatus = async () => {
-      try {
-        setParentComponentStatus(null)
-        const res = await fetch(
-          `/api/backend/identities/${encodeURIComponent(parentId)}?expand=shallow`,
-          { credentials: 'include' },
-        )
-        if (res.ok) {
-          const row = (await res.json()) as CatalogShallowRow
-          if (!cancelled) {
-            setParentComponentStatus(isConsumedShallowRow(row) ? 'consumed' : 'active')
+    const resolveParentStatuses = async () => {
+      const entries = await Promise.all(
+        parentIds.map(async (parentId) => {
+          try {
+            const res = await fetch(
+              `/api/backend/identities/${encodeURIComponent(parentId)}?expand=shallow`,
+              { credentials: 'include' },
+            )
+            if (!res.ok) {
+              return null
+            }
+            const row = (await res.json()) as CatalogShallowRow
+            return [
+              parentId,
+              isConsumedShallowRow(row) ? 'consumed' : 'active',
+            ] as const
+          } catch (error) {
+            console.error('Failed to resolve parent component status:', error)
+            return null
           }
-        }
-      } catch (error) {
-        console.error('Failed to resolve parent component status:', error)
+        }),
+      )
+      if (cancelled) {
+        return
       }
+      const next: Record<string, LineageStatus> = {}
+      for (const entry of entries) {
+        if (entry) {
+          next[entry[0]] = entry[1]
+        }
+      }
+      setParentStatuses(next)
     }
 
-    resolveParentStatus()
+    resolveParentStatuses()
     return () => {
       cancelled = true
     }
-  }, [parentIdentityId])
-
-  const handleOpenParentComponent = async (parentId: string) => {
-    try {
-      setOpeningParentComponent(true)
-      if (parentComponentStatus === 'active' || parentComponentStatus === 'consumed') {
-        router.push(`/components/${parentId}`)
-        return
-      }
-      const res = await fetch(
-        `/api/backend/identities/${encodeURIComponent(parentId)}?expand=shallow`,
-        { credentials: 'include' },
-      )
-      if (res.ok) {
-        router.push(`/components/${parentId}`)
-        return
-      }
-      if (res.status === 404) {
-        toast.error('Parent component could not be found.')
-        return
-      }
-      toast.error('Failed to open parent component. Please try again.')
-    } catch (error) {
-      console.error('Failed to resolve parent component:', error)
-      toast.error('Failed to open parent component. Please try again.')
-    } finally {
-      setOpeningParentComponent(false)
-    }
-  }
+  }, [parentIds.join('|')])
 
   return {
-    openingParentComponent,
-    parentComponentStatus,
-    handleOpenParentComponent,
     panelProps: {
       catalog,
-      openingParentComponent,
-      parentComponentStatus,
-      onOpenParent: handleOpenParentComponent,
+      parentStatuses,
+      childIdentities,
     } satisfies MetadataPanelsProps,
   }
 }
@@ -418,14 +391,16 @@ type ComponentDetailMetadataTabsProps = {
   catalog: CatalogComponent
   mode?: 'all' | 'secondary'
   className?: string
+  childIdentities?: CatalogShallowRow[]
 }
 
 export default function ComponentDetailMetadataTabs({
   catalog,
   mode = 'all',
   className,
+  childIdentities = [],
 }: ComponentDetailMetadataTabsProps) {
-  const { panelProps } = useParentComponentStatus(catalog)
+  const { panelProps } = useParentComponentStatus(catalog, childIdentities)
 
   if (mode === 'secondary') {
     return (

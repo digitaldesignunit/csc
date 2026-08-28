@@ -47,12 +47,12 @@ export function isConsumedShallowRow(row: Pick<CatalogShallowRow, 'consumed_at'>
   )
 }
 
-export function primaryParentIdentityId(identity: ComponentIdentity): string | undefined {
+export function parentIdentityIds(identity: ComponentIdentity): string[] {
   const ids = identity.parent_identities
-  if (Array.isArray(ids) && ids.length > 0) {
-    return String(ids[0])
+  if (!Array.isArray(ids)) {
+    return []
   }
-  return undefined
+  return ids.map((id) => String(id).trim()).filter((id) => id.length > 0)
 }
 
 export function snapshotDisplayName(snapshot: ComponentSnapshot): string {

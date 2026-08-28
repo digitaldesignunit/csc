@@ -15,12 +15,14 @@ import ComponentDetailSummary from './ComponentDetailSummary'
 import ComponentSnapshotPhotoGallery from './ComponentSnapshotPhotoGallery'
 import ComponentSnapshotVersionList from './ComponentSnapshotVersionList'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
 
 type ComponentDetailPageLayoutProps = {
   catalog: CatalogComponent
   snapshots?: SnapshotSummaryItem[]
   activeSnapshotId: string
   liveSnapshotId: string
+  childIdentities?: CatalogShallowRow[]
   children: ReactNode
 }
 
@@ -29,6 +31,7 @@ export default function ComponentDetailPageLayout({
   snapshots = [],
   activeSnapshotId,
   liveSnapshotId,
+  childIdentities = [],
   children,
 }: ComponentDetailPageLayoutProps) {
   const { data: session } = useSession()
@@ -90,7 +93,11 @@ export default function ComponentDetailPageLayout({
             activeSnapshotId={activeSnapshotId}
             liveSnapshotId={liveSnapshotId}
           />
-          <ComponentDetailMetadataTabs catalog={catalog} mode="all" />
+          <ComponentDetailMetadataTabs
+            catalog={catalog}
+            mode="all"
+            childIdentities={childIdentities}
+          />
         </CardContent>
       </Card>
     </div>
