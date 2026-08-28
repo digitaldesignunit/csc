@@ -45,6 +45,45 @@ export type CatalogShallowRow = {
   reserved_by_username?: string | null
 }
 
+export type ProvenanceIdentityNode = {
+  id: string
+  kind: 'identity'
+  identity_id: string
+  catalog_number?: number | null
+  name?: string | null
+  type?: string | null
+  consumed_at?: string | null
+  is_root: boolean
+}
+
+export type ProvenanceSnapshotNode = {
+  id: string
+  kind: 'snapshot'
+  snapshot_id: string
+  identity_id: string
+  version: number
+  virtual?: boolean
+  validated: boolean
+  is_current: boolean
+  name?: string | null
+}
+
+export type ProvenanceGraphNode = ProvenanceIdentityNode | ProvenanceSnapshotNode
+
+export type ProvenanceGraphEdge = {
+  id: string
+  source: string
+  target: string
+  kind: 'parent' | 'has_snapshot' | 'version'
+}
+
+/** Payload from `GET /identities/{id}/provenance`. */
+export type ProvenanceGraph = {
+  root_identity_id: string
+  nodes: ProvenanceGraphNode[]
+  edges: ProvenanceGraphEdge[]
+}
+
 /** For `GET /snapshots/{id}/meshes/…` PLY routing. */
 export type SnapshotMeshRouting = {
   snapshot_id: string

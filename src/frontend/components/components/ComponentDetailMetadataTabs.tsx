@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
-import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import {
   componentBounds,
   componentColorString,
@@ -19,18 +18,16 @@ import {
 } from '@/components/ui/accordion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
-import ComponentLineageIdentityBadges from './ComponentLineageIdentityBadges'
 import {
   conditionBadgeClass,
   conditionLabel,
   isConsumedShallowRow,
   isNonEmptyString,
-  parentIdentityIds,
   snapshotAddedByDisplay,
 } from './componentDetailShared'
 
 const tabsListClass = cn(
-  'grid h-8 w-full min-w-0 grid-cols-4 items-center gap-0.5 overflow-hidden rounded-lg',
+  'grid h-8 w-full min-w-0 grid-cols-3 items-center gap-0.5 overflow-hidden rounded-lg',
   'border border-border bg-background p-0.5 shadow-sm',
 )
 const tabTriggerClass = cn(
@@ -80,14 +77,6 @@ function ValueChip({
   )
 }
 
-type LineageStatus = 'active' | 'consumed'
-
-type MetadataPanelsProps = {
-  catalog: CatalogComponent
-  parentStatuses: Record<string, LineageStatus>
-  childIdentities: CatalogShallowRow[]
-}
-
 function CatalogMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
   const { identity } = catalog
   const snapshot = primarySnapshot(catalog)
@@ -105,6 +94,17 @@ function CatalogMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
       </MetadataRow>
       <MetadataRow label="Material">
         <ValueChip tone="secondary">{identity.material}</ValueChip>
+      </MetadataRow>
+      <MetadataRow label="Condition">
+        {typeof snapshot.condition === 'number' ? (
+          <span
+            className={`inline-block rounded-md px-1.5 py-0.5 text-xs font-medium ${conditionBadgeClass(snapshot.condition)}`}
+          >
+            {conditionLabel(snapshot.condition)}
+          </span>
+        ) : (
+          <span className="text-xs italic text-muted-foreground">Unknown</span>
+        )}
       </MetadataRow>
       <MetadataRow label="Color">
         <span className="inline-flex items-center justify-end gap-2">
@@ -205,88 +205,6 @@ function TimelineMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
   )
 }
 
-function ProvenanceMetadataPanel({
-  catalog,
-  parentStatuses,
-  childIdentities,
-}: MetadataPanelsProps) {
-  const { identity } = catalog
-  const snapshot = primarySnapshot(catalog)
-  const parentIds = parentIdentityIds(identity)
-  const childBadges = childIdentities.flatMap((row) => {
-    const id = String(row._id ?? '').trim()
-    if (!id) {
-      return []
-    }
-    return [
-      {
-        id,
-        status: isConsumedShallowRow(row) ? ('consumed' as const) : ('active' as const),
-      },
-    ]
-  })
-
-  return (
-    <>
-      <MetadataRow label="Condition">
-        {typeof snapshot.condition === 'number' ? (
-          <span
-            className={`inline-block rounded-md px-1.5 py-0.5 text-xs font-medium ${conditionBadgeClass(snapshot.condition)}`}
-          >
-            {conditionLabel(snapshot.condition)}
-          </span>
-        ) : (
-          <span className="text-xs italic text-muted-foreground">Unknown</span>
-        )}
-      </MetadataRow>
-      <MetadataRow label="Manufactured">
-        {isNonEmptyString(identity.manufactured_at) ? (
-          <ValueChip tone="secondary">
-            {formatTimestamp(identity.manufactured_at)}
-            {isNonEmptyString(identity.manufactured_precision)
-              ? ` (${identity.manufactured_precision})`
-              : ''}
-          </ValueChip>
-        ) : (
-          <span className="rounded-md bg-muted/30 px-2 py-0.5 text-xs italic text-muted-foreground">
-            Unknown
-          </span>
-        )}
-      </MetadataRow>
-      <MetadataRow label="Salvaged">
-        {isNonEmptyString(identity.salvaged_at) ? (
-          <ValueChip tone="secondary">{formatTimestamp(identity.salvaged_at)}</ValueChip>
-        ) : (
-          <span className="rounded-md bg-muted/30 px-2 py-0.5 text-xs italic text-muted-foreground">
-            Unknown
-          </span>
-        )}
-      </MetadataRow>
-      <MetadataRow label="Salvage source">
-        {isNonEmptyString(identity.salvage_source) ? (
-          <ValueChip tone="secondary" className="max-w-[12rem] whitespace-normal break-words">
-            {identity.salvage_source}
-          </ValueChip>
-        ) : (
-          <span className="text-xs italic text-muted-foreground">Unknown</span>
-        )}
-      </MetadataRow>
-      <MetadataRow label="Parent">
-        <ComponentLineageIdentityBadges
-          kind="parent"
-          identities={parentIds.map((id) => ({
-            id,
-            status: parentStatuses[id] ?? null,
-          }))}
-        />
-      </MetadataRow>
-      <MetadataRow label="Children">
-        <ComponentLineageIdentityBadges kind="child" identities={childBadges} />
-      </MetadataRow>
-    </>
-  )
-}
-
 function AdvancedMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
   const snapshot = primarySnapshot(catalog)
 
@@ -324,94 +242,24 @@ export function ComponentDetailCatalogMetadata({ catalog }: { catalog: CatalogCo
   return <CatalogMetadataPanel catalog={catalog} />
 }
 
-function useParentComponentStatus(
-  catalog: CatalogComponent,
-  childIdentities: CatalogShallowRow[],
-) {
-  const parentIds = parentIdentityIds(catalog.identity)
-  const [parentStatuses, setParentStatuses] = useState<Record<string, LineageStatus>>({})
-
-  useEffect(() => {
-    if (parentIds.length === 0) {
-      setParentStatuses({})
-      return
-    }
-
-    let cancelled = false
-    const resolveParentStatuses = async () => {
-      const entries = await Promise.all(
-        parentIds.map(async (parentId) => {
-          try {
-            const res = await fetch(
-              `/api/backend/identities/${encodeURIComponent(parentId)}?expand=shallow`,
-              { credentials: 'include' },
-            )
-            if (!res.ok) {
-              return null
-            }
-            const row = (await res.json()) as CatalogShallowRow
-            return [
-              parentId,
-              isConsumedShallowRow(row) ? 'consumed' : 'active',
-            ] as const
-          } catch (error) {
-            console.error('Failed to resolve parent component status:', error)
-            return null
-          }
-        }),
-      )
-      if (cancelled) {
-        return
-      }
-      const next: Record<string, LineageStatus> = {}
-      for (const entry of entries) {
-        if (entry) {
-          next[entry[0]] = entry[1]
-        }
-      }
-      setParentStatuses(next)
-    }
-
-    resolveParentStatuses()
-    return () => {
-      cancelled = true
-    }
-  }, [parentIds.join('|')])
-
-  return {
-    panelProps: {
-      catalog,
-      parentStatuses,
-      childIdentities,
-    } satisfies MetadataPanelsProps,
-  }
-}
-
 type ComponentDetailMetadataTabsProps = {
   catalog: CatalogComponent
   mode?: 'all' | 'secondary'
   className?: string
-  childIdentities?: CatalogShallowRow[]
 }
 
 export default function ComponentDetailMetadataTabs({
   catalog,
   mode = 'all',
   className,
-  childIdentities = [],
 }: ComponentDetailMetadataTabsProps) {
-  const { panelProps } = useParentComponentStatus(catalog, childIdentities)
-
   if (mode === 'secondary') {
     return (
       <Tabs defaultValue="timeline" className={cn('w-full', className)}>
         <MetadataTabNav>
-          <TabsList className={tabsListClass}>
+          <TabsList className={cn(tabsListClass, 'grid-cols-2')}>
             <TabsTrigger value="timeline" className={tabTriggerClass}>
               Timeline
-            </TabsTrigger>
-            <TabsTrigger value="provenance" className={tabTriggerClass}>
-              Provenance
             </TabsTrigger>
             <TabsTrigger value="advanced" className={tabTriggerClass}>
               Advanced
@@ -420,9 +268,6 @@ export default function ComponentDetailMetadataTabs({
         </MetadataTabNav>
         <TabsContent value="timeline" className="mt-3">
           <TimelineMetadataPanel catalog={catalog} />
-        </TabsContent>
-        <TabsContent value="provenance" className="mt-3">
-          <ProvenanceMetadataPanel {...panelProps} />
         </TabsContent>
         <TabsContent value="advanced" className="mt-3">
           <AdvancedMetadataPanel catalog={catalog} />
@@ -441,9 +286,6 @@ export default function ComponentDetailMetadataTabs({
           <TabsTrigger value="timeline" className={tabTriggerClass}>
             Timeline
           </TabsTrigger>
-          <TabsTrigger value="provenance" className={tabTriggerClass}>
-            Provenance
-          </TabsTrigger>
           <TabsTrigger value="advanced" className={tabTriggerClass}>
             Advanced
           </TabsTrigger>
@@ -454,9 +296,6 @@ export default function ComponentDetailMetadataTabs({
       </TabsContent>
       <TabsContent value="timeline" className="mt-3">
         <TimelineMetadataPanel catalog={catalog} />
-      </TabsContent>
-      <TabsContent value="provenance" className="mt-3">
-        <ProvenanceMetadataPanel {...panelProps} />
       </TabsContent>
       <TabsContent value="advanced" className="mt-3">
         <AdvancedMetadataPanel catalog={catalog} />

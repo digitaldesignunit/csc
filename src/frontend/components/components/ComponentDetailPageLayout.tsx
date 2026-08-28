@@ -12,6 +12,7 @@ import ComponentDetailActions from './ComponentDetailActions'
 import ComponentDetailLocationPanel from './ComponentDetailLocationPanel'
 import ComponentDetailMetadataTabs from './ComponentDetailMetadataTabs'
 import ComponentDetailSummary from './ComponentDetailSummary'
+import ComponentProvenanceCard from './ComponentProvenanceCard'
 import ComponentSnapshotPhotoGallery from './ComponentSnapshotPhotoGallery'
 import ComponentSnapshotVersionList from './ComponentSnapshotVersionList'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
@@ -73,7 +74,8 @@ export default function ComponentDetailPageLayout({
       <div className="contents 2xl:flex 2xl:min-w-0 2xl:flex-col 2xl:gap-4 2xl:[grid-area:stage]">
         <div className="min-w-0 [grid-area:viewer]">{children}</div>
 
-        <div className="min-w-0 space-y-4 [grid-area:media] 2xl:grid 2xl:grid-cols-2 2xl:gap-4 2xl:space-y-0">
+        <div className="min-w-0 space-y-4 [grid-area:media] 2xl:grid 2xl:grid-cols-3 2xl:gap-4 2xl:space-y-0">
+          <ComponentProvenanceCard catalog={catalog} childIdentities={childIdentities} />
           <ComponentSnapshotPhotoGallery
             snapshotId={snapshotId}
             photoCount={snapshot.photo_count}
@@ -93,11 +95,7 @@ export default function ComponentDetailPageLayout({
             activeSnapshotId={activeSnapshotId}
             liveSnapshotId={liveSnapshotId}
           />
-          <ComponentDetailMetadataTabs
-            catalog={catalog}
-            mode="all"
-            childIdentities={childIdentities}
-          />
+          <ComponentDetailMetadataTabs catalog={catalog} mode="all" />
         </CardContent>
       </Card>
     </div>
