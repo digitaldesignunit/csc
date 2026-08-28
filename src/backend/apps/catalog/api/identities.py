@@ -17,6 +17,9 @@ Owns the primary read path of the new data model:
 * `GET /identities/{identity_id}/snapshots`
     -> summary list of all snapshot versions for one identity
 
+* `GET /identities/{identity_id}/children`
+    -> shallow rows for identities that list this identity as a parent
+
 * `GET /schema/catalog-compose`
     -> JSON Schema for the compose body (frontend codegen)
 
@@ -91,6 +94,7 @@ from .catalog_common import (
 from .identity_filters import (
     ConsumedFilter,
     ExpandMode,
+    build_children_identity_match,
     build_identity_match_stage,
     build_snapshot_match_stage,
     merge_shallow_catalog_row,
@@ -1088,6 +1092,83 @@ async def create_snapshot(
         identity_insert,
         [snapshot_insert],
         status_code=status.HTTP_201_CREATED,
+    )
+
+
+@router.get(
+    '/identities/{identity_id}/children',
+    summary='List identities that list this identity as a parent',
+)
+async def list_identity_children(
+    request: Request,
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
+    identity_id: str,
+):
+    """
+    Reverse lookup of ``parent_identities``.
+
+    Returns shallow catalog rows (same shape as
+    ``GET /identities?expand=shallow``), including consumed and unvalidated
+    children. Anonymous callers who can read a public parent only see
+    public children.
+    """
+    validate_uuid(identity_id, label='identity id')
+    identity_doc = await ensure_identity_read_access(
+        request,
+        identity_id,
+        current_user,
+        projection={'_id': 1, 'is_public': 1},
+    )
+
+    identity_match = build_children_identity_match(
+        identity_id,
+        public_only=current_user is None,
+    )
+    try:
+        pipeline = build_list_pipeline(
+            snapshots_collection=request.app.mongodb_component_snapshots.name,
+            identity_match=identity_match,
+            snapshot_match={},
+            sortkey='_id',
+            sort_order=1,
+            page=0,
+            size=0,
+            include_username=True,
+            current_user_id=current_user.id if current_user else None,
+            reserved_filter=None,
+        )
+        docs = await aggregate_identities(request, pipeline)
+    except PyMongoError as exc:
+        print(f'[ERROR] list_identity_children DB error: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    docs.sort(
+        key=lambda doc: (
+            doc.get('catalog_number') is None,
+            doc.get('catalog_number')
+            if isinstance(doc.get('catalog_number'), (int, float))
+            else 0,
+            str(doc.get('_id') or ''),
+        )
+    )
+
+    content = [merge_shallow_catalog_row(doc) for doc in docs]
+    anonymous_public = (
+        current_user is None and identity_allows_anonymous_read(identity_doc)
+    )
+    return JSONResponse(
+        status_code=200,
+        content=content,
+        headers={
+            'Cache-Control': (
+                public_cache_control()
+                if anonymous_public
+                else 'private, max-age=3600'
+            ),
+        },
     )
 
 

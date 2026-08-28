@@ -49,6 +49,23 @@ def build_identity_match_stage(
     return match
 
 
+def build_children_identity_match(
+    parent_identity_id: str,
+    *,
+    public_only: bool = False,
+) -> Dict[str, Any]:
+    """
+    Match identities that list ``parent_identity_id`` in ``parent_identities``.
+
+    Does not filter by ``consumed_at``: children of a consumed parent are
+    typically still active, and a child may itself be consumed.
+    """
+    match: Dict[str, Any] = {'parent_identities': parent_identity_id}
+    if public_only:
+        match['is_public'] = True
+    return match
+
+
 def build_snapshot_match_stage(
     *,
     validated: int = 1,
