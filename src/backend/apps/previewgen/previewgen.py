@@ -3,7 +3,7 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from io import BytesIO
 import os
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import matplotlib.pyplot as plt
@@ -102,94 +102,57 @@ def combine_extrusion_meshes(
     return combined_vertices, all_faces
 
 
-def create_snapshot_preview_image(
-        snapshot_data: dict,
-        size: int = 800,
-        dpi: int = 300) -> Image:
+def combine_snapshot_point_clouds(
+        point_clouds: List[dict],
+        default_color: List[int],
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """Merge inline point-cloud primitives into points and RGB colors."""
+    default = np.asarray(default_color, dtype=float)
+    if default.shape != (3,):
+        default = np.array([110.0, 110.0, 110.0])
 
-    geometry = snapshot_data.get('geometry', {})
-    meshes = geometry.get('meshes') or []
-    extrusions = geometry.get('extrusions') or []
+    all_points = []
+    all_colors = []
+    for cloud in point_clouds:
+        if not isinstance(cloud, dict):
+            continue
+        pts = cloud.get('points') or []
+        if not pts:
+            continue
+        points = np.asarray(pts, dtype=float)
+        if points.ndim != 2 or points.shape[1] < 3:
+            continue
+        points = points[:, :3]
+        colors = cloud.get('colors')
+        if colors and len(colors) == len(points):
+            color_arr = np.asarray(colors, dtype=float)
+            if color_arr.ndim != 2 or color_arr.shape[1] < 3:
+                color_arr = np.tile(default, (len(points), 1))
+            else:
+                color_arr = color_arr[:, :3]
+        else:
+            color_arr = np.tile(default, (len(points), 1))
+        all_points.append(points)
+        all_colors.append(color_arr)
 
-    if meshes:
-        (vertices, faces,
-         vertex_colors,
-         faces_idx) = combine_snapshot_meshes(meshes)
-    elif extrusions:
-        vertices, faces = combine_extrusion_meshes(extrusions)
-        vertex_colors = None
-        faces_idx = None
-    else:
-        raise ValueError(
-            f'Snapshot {snapshot_data.get("_id")!r} has no supported '
-            f'geometry for preview (expected meshes or extrusions, got keys: '
-            f'{list(geometry.keys())})'
-        )
+    if not all_points:
+        return None, None
+    return np.vstack(all_points), np.vstack(all_colors) / 255.0
 
-    # If vertex colors are present, compute face colors by
-    # averaging vertex colors per face
-    if vertex_colors is not None and faces_idx is not None:
-        face_colors = []
-        for face in faces_idx:
-            # Extract the vertex colors for this face
-            fc = vertex_colors[face]
-            # Average the vertex colors to get a single face color
-            avg_color = np.mean(fc, axis=0)
-            face_colors.append(avg_color)
-        face_colors = np.array(face_colors) / 255.0
-    else:
-        # No vertex colors, use snapshot rendering color
-        color = snapshot_data.get('color') or [110, 110, 110]
-        face_colors = np.array(color) / 255.0
 
-    # Calculate figsize based on image_size and dpi
-    figsize = size / dpi
-    # Create figure and 3D axis
-    fig = plt.figure(
-        figsize=(figsize, figsize),
-        dpi=dpi,
-        constrained_layout=True)
-    ax = fig.add_subplot(111, projection='3d')
-
-    # Create Poly3DCollection from faces
-    # If we have multiple face colors, pass them as facecolors
-    # Otherwise, it's just a single color for all faces
-    if vertex_colors is not None and faces_idx is not None:
-        # Multiple face colors
-        poly3d = Poly3DCollection(faces, facecolors=face_colors,
-                                  edgecolor='k', linewidths=0.2)
-    else:
-        # Single color for all faces
-        poly3d = Poly3DCollection(
-            faces,
-            alpha=1.0,
-            facecolor=face_colors,
-            edgecolor='k',
-            linewidths=0.2
-        )
-    ax.add_collection3d(poly3d)
-
-    # Auto scale to the mesh size
-    scale = vertices.flatten()
-    ax.auto_scale_xyz(scale, scale, scale)
+def _finalize_preview_axes(ax, scale_xyz: np.ndarray) -> None:
+    ax.auto_scale_xyz(scale_xyz, scale_xyz, scale_xyz)
     ax.autoscale_view(tight=True)
-
-    # Set plot parameters
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-
-    # Set the camera view
     ax.view_init(elev=30., azim=45)
-
-    # Adjust camera zoom
     ax.set_box_aspect(None, zoom=1)
-
-    # Render the plot
     plt.axis('off')
     plt.grid(b=None)
 
-    # Save to a BytesIO object
+
+def _figure_to_image(fig) -> Image:
     buf = BytesIO()
     plt.savefig(
         buf,
@@ -198,8 +161,86 @@ def create_snapshot_preview_image(
         pad_inches=0)
     plt.close(fig)
     buf.seek(0)
-    image = Image.open(buf)
-    return image
+    return Image.open(buf)
+
+
+def create_snapshot_preview_image(
+        snapshot_data: dict,
+        size: int = 800,
+        dpi: int = 300) -> Image:
+
+    geometry = snapshot_data.get('geometry', {}) or {}
+    meshes = geometry.get('meshes') or []
+    extrusions = geometry.get('extrusions') or []
+    point_clouds = geometry.get('point_clouds') or []
+    snapshot_color = snapshot_data.get('color') or [110, 110, 110]
+
+    point_vertices = None
+    point_colors = None
+    vertices = None
+    faces = None
+    vertex_colors = None
+    faces_idx = None
+
+    if meshes:
+        (vertices, faces,
+         vertex_colors,
+         faces_idx) = combine_snapshot_meshes(meshes)
+    elif extrusions:
+        vertices, faces = combine_extrusion_meshes(extrusions)
+    else:
+        point_vertices, point_colors = combine_snapshot_point_clouds(
+            point_clouds, snapshot_color)
+        if point_vertices is None:
+            raise ValueError(
+                f'Snapshot {snapshot_data.get("_id")!r} has no supported '
+                f'geometry for preview (expected meshes, extrusions, or '
+                f'point_clouds, got keys: {list(geometry.keys())})'
+            )
+
+    figsize = size / dpi
+    fig = plt.figure(
+        figsize=(figsize, figsize),
+        dpi=dpi,
+        constrained_layout=True)
+    ax = fig.add_subplot(111, projection='3d')
+
+    if point_vertices is not None:
+        ax.scatter(
+            point_vertices[:, 0],
+            point_vertices[:, 1],
+            point_vertices[:, 2],
+            c=point_colors,
+            s=2,
+            depthshade=False,
+            linewidths=0,
+        )
+        scale = point_vertices.flatten()
+    else:
+        if vertex_colors is not None and faces_idx is not None:
+            face_colors = []
+            for face in faces_idx:
+                fc = vertex_colors[face]
+                avg_color = np.mean(fc, axis=0)
+                face_colors.append(avg_color)
+            face_colors = np.array(face_colors) / 255.0
+            poly3d = Poly3DCollection(
+                faces, facecolors=face_colors,
+                edgecolor='k', linewidths=0.2)
+        else:
+            face_colors = np.array(snapshot_color) / 255.0
+            poly3d = Poly3DCollection(
+                faces,
+                alpha=1.0,
+                facecolor=face_colors,
+                edgecolor='k',
+                linewidths=0.2
+            )
+        ax.add_collection3d(poly3d)
+        scale = vertices.flatten()
+
+    _finalize_preview_axes(ax, scale)
+    return _figure_to_image(fig)
 
 
 def crop_preview_whitespace(image: Image, padding: int = 10) -> Image:
@@ -305,6 +346,29 @@ __example_snapshot_mesh = {
     },
 }
 
+__example_snapshot_point_cloud = {
+    '_id': 'd99b2619-0d97-495f-98c4-a6b02db206a5',
+    'color': [80, 120, 200],
+    'geometry': {
+        'point_clouds': [{
+            'points': [
+                [0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0],
+                [0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 10, 10],
+            ],
+            'colors': [
+                [80, 120, 200],
+                [80, 120, 200],
+                [200, 80, 80],
+                [80, 120, 200],
+                [80, 120, 200],
+                [80, 120, 200],
+                [80, 120, 200],
+                [80, 120, 200],
+            ],
+        }],
+    },
+}
+
 __example_snapshot_assembly = {
     '_id': 'c99b2619-0d97-495f-98c4-a6b02db206a4',
     'color': [100, 100, 100],
@@ -345,6 +409,7 @@ if __name__ == '__main__':
         __example_snapshot_extrusion,
         __example_snapshot_mesh,
         __example_snapshot_assembly,
+        __example_snapshot_point_cloud,
     ):
         save_preview_image(
             crop_preview_whitespace(
