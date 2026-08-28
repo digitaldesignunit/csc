@@ -20,6 +20,9 @@ Owns the primary read path of the new data model:
 * `GET /identities/{identity_id}/children`
     -> shallow rows for identities that list this identity as a parent
 
+* `GET /identities/{identity_id}/provenance`
+    -> identity + snapshot lineage graph (ancestors, descendants, versions)
+
 * `GET /schema/catalog-compose`
     -> JSON Schema for the compose body (frontend codegen)
 
@@ -73,6 +76,11 @@ from apps.catalog.models import (
     UpdateComponentIdentityModel,
     UpdateComponentSnapshotModel,
     User,
+)
+from apps.catalog.provenance import (
+    DEFAULT_PROVENANCE_DEPTH,
+    MAX_PROVENANCE_DEPTH,
+    build_provenance_graph,
 )
 from .auth import get_current_active_user, get_optional_current_user, require_admin
 from .public_access import (
@@ -1162,6 +1170,163 @@ async def list_identity_children(
     return JSONResponse(
         status_code=200,
         content=content,
+        headers={
+            'Cache-Control': (
+                public_cache_control()
+                if anonymous_public
+                else 'private, max-age=3600'
+            ),
+        },
+    )
+
+
+_IDENTITY_LINEAGE_PROJECTION = {
+    '_id': 1,
+    'parent_identities': 1,
+    'catalog_number': 1,
+    'type': 1,
+    'consumed_at': 1,
+    'is_public': 1,
+    'current_snapshot_id': 1,
+}
+
+_SNAPSHOT_LINEAGE_PROJECTION = {
+    '_id': 1,
+    'identity_id': 1,
+    'version': 1,
+    'virtual': 1,
+    'validated': 1,
+    'name': 1,
+}
+
+
+async def _collect_lineage_identity_docs(
+    identities_col,
+    *,
+    root_doc: Dict[str, Any],
+    max_depth: int,
+    public_only: bool,
+) -> Dict[str, Dict[str, Any]]:
+    collected: Dict[str, Dict[str, Any]] = {str(root_doc['_id']): root_doc}
+
+    frontier = {
+        str(pid)
+        for pid in (root_doc.get('parent_identities') or [])
+        if pid and str(pid) not in collected
+    }
+    for _ in range(max_depth):
+        pending = [pid for pid in frontier if pid not in collected]
+        if not pending:
+            break
+        query: Dict[str, Any] = {'_id': {'$in': pending}}
+        if public_only:
+            query['is_public'] = True
+        docs = await identities_col.find(
+            query,
+            _IDENTITY_LINEAGE_PROJECTION,
+        ).to_list(length=None)
+        frontier = set()
+        for doc in docs:
+            ident_id = str(doc['_id'])
+            collected[ident_id] = doc
+            for pid in doc.get('parent_identities') or []:
+                if pid and str(pid) not in collected:
+                    frontier.add(str(pid))
+
+    frontier = {str(root_doc['_id'])}
+    for _ in range(max_depth):
+        query = {'parent_identities': {'$in': list(frontier)}}
+        if public_only:
+            query['is_public'] = True
+        docs = await identities_col.find(
+            query,
+            _IDENTITY_LINEAGE_PROJECTION,
+        ).to_list(length=None)
+        next_frontier: set = set()
+        for doc in docs:
+            ident_id = str(doc['_id'])
+            if ident_id in collected:
+                continue
+            collected[ident_id] = doc
+            next_frontier.add(ident_id)
+        if not next_frontier:
+            break
+        frontier = next_frontier
+
+    return collected
+
+
+@router.get(
+    '/identities/{identity_id}/provenance',
+    summary='Lineage graph of related identities and snapshots',
+)
+async def get_identity_provenance(
+    request: Request,
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
+    identity_id: str,
+    depth: int = Query(
+        DEFAULT_PROVENANCE_DEPTH,
+        ge=1,
+        le=MAX_PROVENANCE_DEPTH,
+        description='Max ancestor/descendant hops',
+    ),
+):
+    """
+    Walk ``parent_identities`` up and down from this identity, then attach
+    each identity's snapshot versions. Anonymous callers who can read a
+    public root only see public relatives.
+    """
+    validate_uuid(identity_id, label='identity id')
+    identity_doc = await ensure_identity_read_access(
+        request,
+        identity_id,
+        current_user,
+        projection=_IDENTITY_LINEAGE_PROJECTION,
+    )
+    public_only = current_user is None
+    identities_col = await get_identities_col(request)
+    snapshots_col = await get_snapshots_col(request)
+
+    try:
+        lineage = await _collect_lineage_identity_docs(
+            identities_col,
+            root_doc=identity_doc,
+            max_depth=depth,
+            public_only=public_only,
+        )
+        identity_ids = list(lineage.keys())
+        snapshot_docs: List[Dict[str, Any]] = []
+        if identity_ids:
+            cursor = snapshots_col.find(
+                {'identity_id': {'$in': identity_ids}},
+                _SNAPSHOT_LINEAGE_PROJECTION,
+            )
+            snapshot_docs = await cursor.to_list(length=None)
+    except PyMongoError as exc:
+        print(f'[ERROR] get_identity_provenance DB error: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    snapshots_by_identity: Dict[str, List[Dict[str, Any]]] = {}
+    for snap in snapshot_docs:
+        ident_id = str(snap.get('identity_id') or '')
+        if not ident_id:
+            continue
+        snapshots_by_identity.setdefault(ident_id, []).append(snap)
+
+    graph = build_provenance_graph(
+        root_identity_id=identity_id,
+        identities=lineage,
+        snapshots_by_identity=snapshots_by_identity,
+    )
+    anonymous_public = (
+        current_user is None and identity_allows_anonymous_read(identity_doc)
+    )
+    return JSONResponse(
+        status_code=200,
+        content=graph,
         headers={
             'Cache-Control': (
                 public_cache_control()
