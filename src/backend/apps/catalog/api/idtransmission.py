@@ -6,9 +6,11 @@ Stores one pending **identity** UUID per user in ``component_id_transmission``
 (document ``_id`` = user_id, field ``identity_id``).
 
 Lifecycle:
-    - User scans a QR code and POSTs an identity id to queue for AddComponent.
-    - Rejected if the UUID is already ``component_identities._id`` or
-      ``component_snapshots._id`` (tags must be unused identity ids).
+    - User scans a QR code and POSTs an identity id to queue for CAD/Grasshopper.
+    - Existing identity ids are allowed (transmit is not only for creating a
+      new catalog entry). Add Component checks uniqueness independently.
+    - Rejected if the UUID is already ``component_snapshots._id`` (tags must
+      be identity ids, not snapshot ids).
     - Grasshopper fetches pending via GET; consume after successful create.
 """
 
@@ -110,22 +112,7 @@ def _serialize_item(doc: dict) -> dict:
     }
 
 
-def _conflict_response(
-    conflict: CatalogIdConflict,
-    identity_id: str,
-) -> JSONResponse:
-    if conflict == 'identity':
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={
-                'status': 'identity_id_exists',
-                'message': (
-                    'This identity id already exists in the catalog and '
-                    'cannot be transmitted as a new id.'
-                ),
-                'identity_id': identity_id,
-            },
-        )
+def _snapshot_conflict_response(identity_id: str) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
         content={
@@ -141,7 +128,7 @@ def _conflict_response(
 
 @router.get(
     '/component_id_transmission/availability/{identity_id}',
-    summary='Check whether a UUID is free to transmit as a new identity id',
+    summary='Check whether a UUID is already an identity or snapshot id',
 )
 async def check_identity_availability(
     identity_id: str,
@@ -204,9 +191,8 @@ async def transmit_identity_id(
     now = _now_iso()
 
     try:
-        conflict = await _catalog_id_conflict(request, identity_id)
-        if conflict is not None:
-            return _conflict_response(conflict, identity_id)
+        if await _snapshot_exists(request, identity_id):
+            return _snapshot_conflict_response(identity_id)
 
         existing = await coll.find_one({'_id': current_user.id})
         pending_id = _pending_identity_id(existing)
