@@ -79,7 +79,7 @@ const ComponentIdTransmitter: React.FC = () => {
   const [status, setStatus] = useState<TransmitStatus>('idle')
   const [statusMessage, setStatusMessage] = useState<string>('')
   const [isCheckingId, setIsCheckingId] = useState(false)
-  const [idAlreadyExists, setIdAlreadyExists] = useState(false)
+  const [idBlocked, setIdBlocked] = useState(false)
   const [idCheckMessage, setIdCheckMessage] = useState('')
 
   const [confirmOverwriteOpen, setConfirmOverwriteOpen] = useState(false)
@@ -117,7 +117,7 @@ const ComponentIdTransmitter: React.FC = () => {
   useEffect(() => {
     if (!effectiveId) {
       setIsCheckingId(false)
-      setIdAlreadyExists(false)
+      setIdBlocked(false)
       setIdCheckMessage('')
       return
     }
@@ -133,36 +133,33 @@ const ComponentIdTransmitter: React.FC = () => {
 
         if (res.ok) {
           const data = (await res.json()) as AvailabilityResponse
-          if (data.available) {
-            setIdAlreadyExists(false)
-            setIdCheckMessage('Identity id is available for transmission.')
-          } else if (data.conflict === 'snapshot') {
-            setIdAlreadyExists(true)
+          if (data.conflict === 'snapshot') {
+            setIdBlocked(true)
             setIdCheckMessage(
               'This UUID is already a snapshot id. Use the physical identity id from the tag.',
             )
           } else {
-            setIdAlreadyExists(true)
-            setIdCheckMessage(
-              'This identity id already exists in the catalog and cannot be transmitted.',
-            )
+            // Existing catalog identities are allowed; uniqueness is
+            // enforced by Add Component, not by transmit.
+            setIdBlocked(false)
+            setIdCheckMessage('')
           }
           return
         }
 
         if (res.status === 400) {
-          setIdAlreadyExists(true)
+          setIdBlocked(true)
           setIdCheckMessage('Enter a valid identity UUID.')
           return
         }
 
         // Auth/network edge cases: let POST validate on submit.
-        setIdAlreadyExists(false)
+        setIdBlocked(false)
         setIdCheckMessage('')
       } catch (err) {
         if ((err as { name?: string })?.name !== 'AbortError') {
           console.error('Error checking ID availability:', err)
-          setIdAlreadyExists(false)
+          setIdBlocked(false)
           setIdCheckMessage('')
         }
       } finally {
@@ -291,15 +288,13 @@ const ComponentIdTransmitter: React.FC = () => {
   const handleTransmitClick = useCallback(async () => {
     const id = (scannedId || inputId).trim()
     if (!id) return
-    if (idAlreadyExists) {
+    if (idBlocked) {
       setStatus('error')
-      setStatusMessage(
-        'This identity id already exists in the catalog and cannot be transmitted.',
-      )
+      setStatusMessage(idCheckMessage || 'This UUID cannot be transmitted.')
       return
     }
     await performTransmit(id, false)
-  }, [scannedId, inputId, idAlreadyExists, performTransmit])
+  }, [scannedId, inputId, idBlocked, idCheckMessage, performTransmit])
 
   const handleConfirmOverwrite = useCallback(async () => {
     if (!confirmPayload) return
@@ -339,7 +334,7 @@ const ComponentIdTransmitter: React.FC = () => {
   // --- Derived UI state ------------------------------------------------------
   const canTransmit =
     !!effectiveId &&
-    !idAlreadyExists &&
+    !idBlocked &&
     !isCheckingId &&
     status !== 'transmitting' &&
     !isScanning
@@ -483,7 +478,7 @@ const ComponentIdTransmitter: React.FC = () => {
         {idCheckMessage && status !== 'transmitting' && (
           <div
             className={`mt-2 text-xs ${
-              idAlreadyExists
+              idBlocked
                 ? 'text-destructive'
                 : 'text-green-600 dark:text-green-400'
             }`}

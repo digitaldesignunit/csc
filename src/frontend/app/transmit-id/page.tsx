@@ -29,7 +29,7 @@ export default function TransmitIdPage() {
             </li>
             <li>
               <b>Result:</b>{' '}The id is queued and can be consumed in
-              CAD (i.e. Grasshopper) when creating a new catalog entry.
+              CAD (i.e. Grasshopper), including for existing catalog identities.
             </li>
           </ul>
         </div>

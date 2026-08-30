@@ -618,14 +618,14 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Database}
             name="CSC_FetchTransmittedID"
-            description="Fetches the currently pending transmitted identity ID for the signed-in user. Used with the web Scan & Identify / Transmit ID workflow: after scanning a physical tag in the browser, the pending ID can be picked up here and fed into CreateComponentIdentity."
+            description="Fetches the currently pending transmitted identity ID for the signed-in user. Used with the web Transmit ID workflow: after scanning a physical tag in the browser, the pending ID can be picked up here — including ids that already exist in the catalog."
             inputs={[
               { label: 'Refresh', description: 'Toggle to fetch the latest pending transmitted ID from the server' }
             ]}
             outputs={[
               { label: 'ComponentID', description: 'Pending identity UUID transmitted from the web interface. Empty when none is pending.' }
             ]}
-            tip="AddComponentIdentity automatically consumes the pending transmitted ID after a successful create. FetchTransmittedID is useful for previewing or wiring the ID into CreateComponentIdentity before posting."
+            tip="AddComponentIdentity automatically consumes the pending transmitted ID after a successful create. FetchTransmittedID is useful for previewing or wiring the ID into CreateComponentIdentity or other Grasshopper workflows."
           />
         </div>
       )
