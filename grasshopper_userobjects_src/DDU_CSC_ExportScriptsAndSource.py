@@ -31,12 +31,20 @@ ghenv.Component.Description = (  # NOQA
     'Objects (.ghuser) and raw source files (.py, .c'
 )
 
+# Matches an actual version declaration - the word "version", a ":" or "=",
+# then the number. The separator is required so prose such as 'creates a
+# version-0 snapshot' in a component description cannot be mistaken for a
+# version declaration. Keep this comment free of literal declarations, they
+# would be picked up before the real one below.
+VERSION_DECLARATION_RE = re.compile(
+    r'version\s*[:=]\s*(\d+(?:\.\d+)?[a-zA-Z]?)')
+
 
 class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 260609
+    Version: 260908
     """
 
     def __init__(self):
@@ -131,25 +139,19 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
 
     def get_source_version(self, source):
         """
-        Attempts to get the first instance of the word "version"
-        (or, "Version") in a multi line string. Then attempts to extract a
-        version string from this line where the word "version" exists.
+        Attempts to find the first version declaration in a multi line string,
+        i.e. the word "version" (or, "Version") followed by ":" or "=" and a
+        version number. Lines that merely mention the word "version" are
+        ignored.
         Supports formats like:
             Version: 160121
             Version: 251009.1
             Version: 251009a
         """
-        # Get first line with version in it
-        src_lower = source.lower()
-        version_str = [ln for ln in src_lower.split('\n') if "version" in ln]
-        if version_str:
-            # Extract version string using regex to handle complex formats
-            # Look for patterns like: 251009, 251009.1, 251009a, etc.
-            version_match = re.search(
-                r'(\d+(?:\.\d+)?[a-zA-Z]?)', version_str[0])
+        for line in source.lower().split('\n'):
+            version_match = VERSION_DECLARATION_RE.search(line)
             if version_match:
-                version_text = version_match.group(1)
-                return self._parse_version_string(version_text)
+                return self._parse_version_string(version_match.group(1))
         return None
 
     def _parse_version_string(self, version_str):
