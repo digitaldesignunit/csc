@@ -46,6 +46,7 @@ from utility import (
     get_current_timestamp_z,
     get_db_connectionstring,
     get_snapshot_meshes_directory,
+    get_snapshot_point_clouds_directory,
 )
 from apps.descriptors.geometry import load_snapshot_mesh
 from apps.descriptors.registry import (
@@ -186,6 +187,7 @@ def run_missing_specs_on_snapshot(
     compute_doc: Dict[str, Any],
     meshes_dir: Optional[str],
     specs: List[DescriptorSpec],
+    point_clouds_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute every applicable+missing spec against a snapshot."""
     missing = missing_specs_for(compute_doc, specs)
@@ -203,6 +205,7 @@ def run_missing_specs_on_snapshot(
         mesh = load_snapshot_mesh(
             compute_doc,
             meshes_dir=meshes_dir,
+            point_clouds_dir=point_clouds_dir,
             logger=lambda msg: log(f'    [geometry] {msg}'),
         )
         if mesh is None:
@@ -229,6 +232,7 @@ async def _process_one(
     specs: List[DescriptorSpec],
     seen_ids: Set[str],
     dry_run: bool,
+    point_clouds_dir: Optional[str] = None,
 ) -> Optional[bool]:
     """Process a single snapshot missing descriptors.
 
@@ -264,6 +268,7 @@ async def _process_one(
     descriptors = run_missing_specs_on_snapshot(
         compute_doc=compute_doc,
         meshes_dir=meshes_dir,
+        point_clouds_dir=point_clouds_dir,
         specs=specs,
     )
     if not descriptors:
@@ -319,6 +324,12 @@ async def compute_descriptors(
         mongodb_snapshots = db['component_snapshots']
         mongodb_identities = db['component_identities']
         meshes_dir = get_snapshot_meshes_directory()
+        try:
+            point_clouds_dir = get_snapshot_point_clouds_directory()
+        except KeyError:
+            point_clouds_dir = None
+            log('SNAPSHOT_POINT_CLOUDS_DIR is unset; point clouds fall back '
+                'to the inline preview', prefix='WARNING')
 
         registered_keys = collect_output_keys(ALL_SPECS)
         log(f'Registered descriptor keys: {", ".join(registered_keys)}')
@@ -330,6 +341,7 @@ async def compute_descriptors(
                 mongodb_snapshots=mongodb_snapshots,
                 mongodb_identities=mongodb_identities,
                 meshes_dir=meshes_dir,
+                point_clouds_dir=point_clouds_dir,
                 specs=ALL_SPECS,
                 seen_ids=seen_ids,
                 dry_run=dry_run,

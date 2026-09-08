@@ -17,7 +17,7 @@ Coordinate Systems:
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import numpy as np
@@ -189,6 +189,89 @@ def create_mesh_from_extrusion(
     return mesh
 
 
+def convex_hull_from_points(
+    points: Union[List[List[float]], np.ndarray],
+) -> trimesh.Trimesh:
+    """
+    Build the convex hull of a 3D point set as a closed mesh.
+
+    Point clouds carry no faces, but the shape-abstraction scores
+    (box / sphere / line / plane) only ever read the convex hull, the
+    oriented bounding box, and the vertices. Hulling a cloud therefore
+    produces a mesh those descriptors consume unchanged, and the resulting
+    scores are directly comparable to mesh-derived ones.
+
+    Args:
+        points: [x, y, z] triplets; needs at least 4 non-coplanar points
+
+    Returns:
+        trimesh.Trimesh convex hull of the input points
+
+    Raises:
+        ValueError: if the points are malformed, or degenerate (fewer than
+            4 finite points, or all points on one plane or line)
+    """
+    pts = np.asarray(points, dtype=np.float64)
+    if pts.ndim != 2 or pts.shape[1] != 3:
+        raise ValueError(
+            f'Points must be a sequence of [x, y, z] triplets, '
+            f'got shape {pts.shape}'
+        )
+
+    pts = pts[np.isfinite(pts).all(axis=1)]
+    if len(pts) < 4:
+        raise ValueError(
+            f'Convex hull needs at least 4 finite points, got {len(pts)}'
+        )
+
+    try:
+        hull = trimesh.PointCloud(pts).convex_hull
+    except Exception as e:
+        raise ValueError(f'Failed to compute convex hull: {e}')
+
+    # Qhull returns a flat, zero-volume hull for coplanar or collinear
+    # input instead of failing. Such a hull has no usable oriented
+    # bounding box, so reject it here rather than letting the scores fail
+    # one by one deeper down.
+    if hull is None or len(hull.faces) == 0 or hull.volume <= 0.0:
+        raise ValueError(
+            'Convex hull is degenerate; points are collinear or coplanar'
+        )
+
+    return hull
+
+
+def load_points_from_ply_file(path: str) -> np.ndarray:
+    """
+    Read vertex positions from a PLY file (vertex-only or full mesh).
+
+    Args:
+        path: path to a .ply file
+
+    Returns:
+        (N, 3) float array of point positions
+
+    Raises:
+        ValueError: if the file holds no vertices
+    """
+    loaded = trimesh.load(path, process=False)
+
+    if isinstance(loaded, trimesh.Scene):
+        parts = [
+            np.asarray(geom.vertices, dtype=np.float64)
+            for geom in loaded.geometry.values()
+            if getattr(geom, 'vertices', None) is not None
+        ]
+        if not parts:
+            raise ValueError('PLY file contains no vertices')
+        return np.vstack(parts)
+
+    vertices = getattr(loaded, 'vertices', None)
+    if vertices is None or len(vertices) == 0:
+        raise ValueError('PLY file contains no vertices')
+    return np.asarray(vertices, dtype=np.float64)
+
+
 def load_mesh_from_obj(
     filepath: str,
     use_first_only: bool = False
@@ -266,30 +349,28 @@ def load_mesh_from_obj(
     return mesh_rhino
 
 
-def apply_pca_frame_transform(
-    mesh: trimesh.Trimesh,
+def pca_frame_transform_matrix(
     pca_frame: Dict[str, List[float]]
-) -> trimesh.Trimesh:
+) -> np.ndarray:
     """
-    Apply PCA frame transformation to align mesh with principal axes.
+    Build the 4x4 matrix that aligns a PCA frame with the world axes.
 
     This replicates Rhino's Transform.PlaneToPlane(pca_plane, WorldXY)
     which transforms FROM pca_plane TO WorldXY.
 
     The transformation works as follows:
-    1. Start with mesh in PCA-oriented space (where it was created)
+    1. Start with geometry in PCA-oriented space (where it was created)
     2. Transform it to world XYZ axes (aligning PCA axes with world axes)
 
-    Result: A centered mesh where PCA principal axes align with world XYZ,
+    Result: geometry where PCA principal axes align with world XYZ,
     making the longest dimension align with X, second with Y, shortest with Z.
 
     Args:
-        mesh: trimesh.Trimesh object (should be centered at origin)
         pca_frame: dictionary with keys 'o', 'x', 'y', 'z' containing
                    origin point and axis vectors as [x, y, z] lists
 
     Returns:
-        trimesh.Trimesh object aligned with world axes via PCA orientation
+        (4, 4) numpy array, a rigid world -> PCA-frame transform
 
     Raises:
         ValueError: if pca_frame is invalid
@@ -342,10 +423,61 @@ def apply_pca_frame_transform(
     pca_transform = np.eye(4)
     pca_transform[:3, :3] = pca_rotation.T  # Transpose for world->PCA
     pca_transform[:3, 3] = -pca_rotation.T @ origin  # Transform origin
-    # Apply transformation to mesh
+    return pca_transform
+
+
+def apply_pca_frame_transform(
+    mesh: trimesh.Trimesh,
+    pca_frame: Dict[str, List[float]]
+) -> trimesh.Trimesh:
+    """
+    Apply PCA frame transformation to align mesh with principal axes.
+
+    Args:
+        mesh: trimesh.Trimesh object (should be centered at origin)
+        pca_frame: dictionary with keys 'o', 'x', 'y', 'z' containing
+                   origin point and axis vectors as [x, y, z] lists
+
+    Returns:
+        trimesh.Trimesh object aligned with world axes via PCA orientation
+
+    Raises:
+        ValueError: if pca_frame is invalid
+    """
     mesh_transformed = mesh.copy()
-    mesh_transformed.apply_transform(pca_transform)
+    mesh_transformed.apply_transform(pca_frame_transform_matrix(pca_frame))
     return mesh_transformed
+
+
+def apply_pca_frame_to_points(
+    points: Union[List[List[float]], np.ndarray],
+    pca_frame: Dict[str, List[float]],
+) -> np.ndarray:
+    """
+    Apply PCA frame transformation to a raw point set.
+
+    The mesh-free counterpart of `apply_pca_frame_transform`, used when a
+    point cloud has to stay a cloud (outline sectioning) rather than being
+    collapsed into its convex hull.
+
+    Args:
+        points: [x, y, z] triplets
+        pca_frame: dictionary with keys 'o', 'x', 'y', 'z'
+
+    Returns:
+        (N, 3) numpy array of transformed points
+
+    Raises:
+        ValueError: if pca_frame is invalid or points are malformed
+    """
+    pts = np.asarray(points, dtype=np.float64)
+    if pts.ndim != 2 or pts.shape[1] != 3:
+        raise ValueError(
+            f'Points must be a sequence of [x, y, z] triplets, '
+            f'got shape {pts.shape}'
+        )
+    transform = pca_frame_transform_matrix(pca_frame)
+    return pts @ transform[:3, :3].T + transform[:3, 3]
 
 
 def center_mesh(mesh: trimesh.Trimesh) -> Tuple[trimesh.Trimesh, np.ndarray]:
@@ -481,6 +613,30 @@ def load_extrusion_mesh_for_descriptor(
     return mesh
 
 
+def load_point_cloud_mesh_for_descriptor(
+    points: Union[List[List[float]], np.ndarray],
+    pca_frame: Optional[Dict[str, List[float]]] = None,
+) -> trimesh.Trimesh:
+    """
+    Hull a point cloud and prepare it for descriptor computation.
+
+    Point clouds are stored centered, so this function:
+    1. Builds the convex hull of the points
+    2. Applies PCA frame transformation (if provided)
+
+    Args:
+        points: [x, y, z] triplets of the cloud
+        pca_frame: optional PCA frame dictionary to align the hull
+
+    Returns:
+        trimesh.Trimesh convex hull ready for descriptor computation
+    """
+    mesh = convex_hull_from_points(points)
+    if pca_frame is not None:
+        mesh = apply_pca_frame_transform(mesh, pca_frame)
+    return mesh
+
+
 # DESCRIPTOR MESH LOADING ----------------------------------------------------
 
 LoggerFn = Callable[[str], None]
@@ -492,7 +648,7 @@ def _noop_logger(_message: str) -> None:
 
 # SNAPSHOT-LEVEL LOADING -----------------------------------------------------
 
-def _first_extrusion(geometry: Dict) -> Optional[Dict]:
+def first_extrusion(geometry: Dict) -> Optional[Dict]:
     """Return the first extrusion primitive from snapshot or legacy geometry."""
     extrusions = geometry.get('extrusions') or []
     if extrusions:
@@ -510,6 +666,54 @@ def _inline_mesh_vertices_faces(
     if vertices and faces:
         return vertices, faces
     return None, None
+
+
+def get_snapshot_point_cloud_path(
+    point_clouds_dir: str,
+    snapshot_id: str,
+    primitive_index: int = 0,
+) -> Optional[str]:
+    """Resolve the on-disk PLY path for one snapshot point cloud, if any."""
+    path = os.path.join(
+        point_clouds_dir,
+        snapshot_id,
+        f'{primitive_index}.ply',
+    )
+    return path if os.path.isfile(path) else None
+
+
+def _first_point_cloud_points(
+    geometry: Dict,
+    snapshot_id: str,
+    point_clouds_dir: Optional[str],
+    logger: LoggerFn,
+) -> Tuple[Optional[np.ndarray], Optional[str]]:
+    """Points of the snapshot's first cloud: full PLY, else inline preview.
+
+    The inline preview is a subsample capped at a few thousand points, so
+    the on-disk PLY is preferred whenever it is available; a subsampled
+    hull can miss the extreme points that drive the scores.
+    """
+    point_clouds = geometry.get('point_clouds') or []
+    if not point_clouds:
+        return None, None
+
+    if point_clouds_dir is not None:
+        ply_path = get_snapshot_point_cloud_path(
+            point_clouds_dir, snapshot_id, 0)
+        if ply_path:
+            try:
+                return (
+                    load_points_from_ply_file(ply_path),
+                    'point_clouds/0.ply',
+                )
+            except Exception as exc:
+                logger(f'Failed to load point cloud PLY: {exc}')
+
+    inline = point_clouds[0].get('points') or []
+    if not inline:
+        return None, None
+    return np.asarray(inline, dtype=np.float64), 'geometry.point_clouds[0]'
 
 
 def get_snapshot_mesh_paths(
@@ -531,6 +735,7 @@ def load_snapshot_mesh(
     snapshot: Dict,
     meshes_dir: Optional[str] = None,
     *,
+    point_clouds_dir: Optional[str] = None,
     logger: LoggerFn = _noop_logger,
 ) -> Optional[trimesh.Trimesh]:
     """Load the best available mesh for a component snapshot.
@@ -540,6 +745,12 @@ def load_snapshot_mesh(
         2. ``reduced.ply`` on disk
         3. inline ``geometry.meshes[0]`` (``vertices``/``faces`` or ``v``/``f``)
         4. ``geometry.extrusions[0]`` or legacy ``geometry.extrusion``
+        5. convex hull of ``geometry.point_clouds[0]``
+           (``point_clouds/<snapshot_id>/0.ply`` when available)
+
+    Meshes and extrusions outrank point clouds: when a snapshot carries
+    both, they are two representations of one object and the mesh is the
+    higher-fidelity one.
 
     The snapshot's ``pca_frame`` is applied when present.
     """
@@ -594,7 +805,7 @@ def load_snapshot_mesh(
                 )
             primitive_loader = _load_from_meshes
 
-    extrusion = _first_extrusion(geometry)
+    extrusion = first_extrusion(geometry)
     if primitive_loader is None and extrusion:
         primitive_source = 'geometry.extrusions[0]'
 
@@ -605,6 +816,19 @@ def load_snapshot_mesh(
                 pca_frame=pca_frame,
             )
         primitive_loader = _load_from_extrusion
+
+    if primitive_loader is None:
+        cloud_points, cloud_source = _first_point_cloud_points(
+            geometry, snapshot_id, point_clouds_dir, logger)
+        if cloud_points is not None:
+            primitive_source = f'{cloud_source} (convex hull)'
+
+            def _load_from_point_cloud() -> trimesh.Trimesh:
+                return load_point_cloud_mesh_for_descriptor(
+                    points=cloud_points,
+                    pca_frame=pca_frame,
+                )
+            primitive_loader = _load_from_point_cloud
 
     if primitive_loader is None:
         logger(f'No geometry source available for snapshot {snapshot_id}')

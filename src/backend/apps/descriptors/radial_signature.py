@@ -17,9 +17,14 @@ The resulting descriptors are known in the shape-analysis literature as the
 position), translation-invariant (centered at the centroid), and easy to
 compare at a fixed resolution.
 
-The module is intentionally restricted to planar component types because
-the signature is only meaningful when a single closed planar polyline
-describes the component's outline.
+Any component that can be reduced to one closed planar boundary can carry
+the signature; `apps.descriptors.outline` performs that reduction.
+
+Step 2 is applied only to the planar types in `REST_ALIGNED_COMPONENT_TYPES`.
+A panel's outline is its silhouette, and the PCA frame leaves its in-plane
+rotation ambiguous, so it needs a canonical one. Every other component is
+described by the section through its PCA mid-plane, where the PCA frame has
+already fixed the orientation and a second in-plane rotation would fight it.
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
@@ -31,8 +36,13 @@ import numpy as np
 
 # MODULE CONSTANTS ------------------------------------------------------------
 
-APPLICABLE_COMPONENT_TYPES: Tuple[str, ...] = ("panel",)
-"""Component types this descriptor is valid for."""
+REST_ALIGNED_COMPONENT_TYPES: Tuple[str, ...] = ("panel",)
+"""Component types whose outline is rotated into a canonical rest position.
+
+Only genuinely planar types belong here. For everything else the PCA frame
+already determines the orientation of the section plane, so rest alignment
+would discard that and re-derive a rotation from the 2D outline alone.
+"""
 
 SUPPORTED_RESOLUTIONS: Tuple[int, ...] = (16, 32, 64, 128)
 """Canonical ray counts exposed by the module."""
@@ -77,17 +87,25 @@ def get_profile_from_component(
     return profile, None
 
 
+def is_rest_aligned(component: Dict) -> bool:
+    """Return True if `component`'s outline should be rest-position aligned."""
+    ctype = component.get("type") or component.get("componenttype")
+    return ctype in REST_ALIGNED_COMPONENT_TYPES
+
+
 def is_applicable(component: Dict) -> bool:
     """Return True if the radial signature can be computed for `component`.
 
-    The component must be of an applicable planar type and carry an
-    extrusion profile (the canonical boundary polyline for sheets/panels).
+    Applies to every component type; it only needs geometry an outline can
+    be recovered from: an extrusion, a mesh, or a point cloud. Whether the
+    recovery actually succeeds is decided by
+    `apps.descriptors.outline.outline_from_component`; this is only the
+    cheap gate.
     """
-    ctype = component.get("type") or component.get("componenttype")
-    if ctype not in APPLICABLE_COMPONENT_TYPES:
-        return False
-    profile, _ = get_profile_from_component(component)
-    return profile is not None
+    geometry = component.get("geometry") or {}
+    if geometry.get("meshes") or geometry.get("point_clouds"):
+        return True
+    return get_profile_from_component(component)[0] is not None
 
 
 # GEOMETRY PRIMITIVES --------------------------------------------------------
@@ -353,6 +371,7 @@ def compute_radial_signatures(
     profile: Sequence[Sequence[float]],
     resolutions: Iterable[int] = SUPPORTED_RESOLUTIONS,
     num_rest_angles: int = DEFAULT_REST_ANGLES,
+    rest_align: bool = True,
 ) -> Dict[int, Dict[str, object]]:
     """Compute the radial signature at several resolutions in one pass.
 
@@ -365,6 +384,9 @@ def compute_radial_signatures(
         resolutions: Iterable of ray counts. Defaults to
             `SUPPORTED_RESOLUTIONS` (16, 32, 64).
         num_rest_angles: Sample count for rest-position search.
+        rest_align: If True (default), rotate into rest position first. If
+            False, use the outline as-is, still centered at its centroid,
+            which keeps the orientation the PCA frame established.
 
     Returns:
         Dict keyed by ray count, each value as in `compute_radial_signature`.
@@ -376,9 +398,14 @@ def compute_radial_signatures(
         if n < 3:
             raise ValueError(f"ray count must be >= 3, got {n}")
 
-    P_rest, _centroid, rest_angle_deg = rest_position(
-        profile, num_angles=num_rest_angles
-    )
+    if rest_align:
+        P_rest, _centroid, rest_angle_deg = rest_position(
+            profile, num_angles=num_rest_angles
+        )
+    else:
+        P = _as_profile_array(profile)
+        P_rest = P - polygon_centroid_2d(P)
+        rest_angle_deg = 0.0
 
     results: Dict[int, Dict[str, object]] = {}
     for n in resolutions:

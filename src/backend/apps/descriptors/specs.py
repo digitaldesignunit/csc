@@ -26,6 +26,11 @@ from apps.descriptors.spherescore import compute_spherescore_with_metadata
 from apps.descriptors.linescore import compute_linescore_with_metadata
 from apps.descriptors.planescore import compute_planescore_with_metadata
 from apps.descriptors import radial_signature as rs
+from apps.descriptors.outline import (
+    DEFAULT_CONCAVITY,
+    outline_from_component,
+    policy_for,
+)
 
 
 # SCALAR SCORE DESCRIPTORS ---------------------------------------------------
@@ -97,18 +102,20 @@ PLANESCORE = DescriptorSpec(
 
 # RADIAL SIGNATURE (planar components only) ----------------------------------
 
-_RADIAL_APPLICABILITY: Dict[str, Any] = {
-    'type': {'$in': list(rs.APPLICABLE_COMPONENT_TYPES)},
-    'geometry.extrusion.profile': {'$exists': True, '$ne': []},
-}
-
-
 def _radial_signature(ctx: DescriptorContext) -> Dict[str, Any]:
-    profile, reason = rs.get_profile_from_component(ctx.component)
-    if profile is None:
-        # Should not happen given the applicability filter, but we keep
-        # a defensive path so an inconsistent document fails loudly rather
-        # than crashing with an opaque IndexError deeper down.
+    # The component type selects the policy rather than gating the spec:
+    # every type can carry the signature, but a panel is reduced to its
+    # silhouette in a canonical rotation while everything else is cut
+    # through its PCA centre plane and left in the frame's orientation.
+    policy = policy_for(ctx.component)
+    outline, source, reason = outline_from_component(
+        ctx.component,
+        mesh=ctx.mesh,
+        concavity=float(ctx.params.get('concavity', DEFAULT_CONCAVITY)),
+        policy=policy,
+        logger=lambda m: ctx.log(f'radial_signature: {m}'),
+    )
+    if outline is None:
         ctx.log(f'radial_signature: cannot compute ({reason})')
         return {}
 
@@ -119,13 +126,17 @@ def _radial_signature(ctx: DescriptorContext) -> Dict[str, Any]:
         ctx.params.get('num_rest_angles', rs.DEFAULT_REST_ANGLES)
     )
     sigs = rs.compute_radial_signatures(
-        profile=profile,
+        profile=outline,
         resolutions=resolutions,
         num_rest_angles=num_rest_angles,
+        rest_align=policy.rest_align,
     )
     any_sig = next(iter(sigs.values()))
     ctx.log(
-        f'radial_signature: resolutions={list(resolutions)}, '
+        f'radial_signature: source={source}, '
+        f'outline_points={len(outline)}, '
+        f'resolutions={list(resolutions)}, '
+        f'rest_align={policy.rest_align}, '
         f'rest_angle_deg={any_sig["rest_angle_deg"]:.3f}'
     )
     return rs.flatten_signatures_to_descriptors(sigs)
@@ -140,8 +151,15 @@ RADIAL_SIGNATURE = DescriptorSpec(
     params={
         'resolutions': list(rs.SUPPORTED_RESOLUTIONS),
         'num_rest_angles': rs.DEFAULT_REST_ANGLES,
+        'concavity': DEFAULT_CONCAVITY,
     },
-    applicability_filter=_RADIAL_APPLICABILITY,
+    # No filter: like the scores, this applies to every component type, and
+    # the compute function reports why when the geometry cannot yield an
+    # outline.
+    applicability_filter=None,
+    # False, not True: a mesh is only one of three outline sources, and an
+    # extrusion-only or cloud-only component must still be computable when
+    # the runner had no reason to load one.
     requires_mesh=False,
 )
 

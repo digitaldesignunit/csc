@@ -27,5 +27,8 @@ Pillow
 # --- Descriptor computation ---
 trimesh>=3.15.0
 scipy
+# shapely.concave_hull (2.0+) wraps projected point-cloud sections into an
+# outline for the radial signature; it also ships as a trimesh extra.
+shapely>=2.0
 scikit-learn
 robust-laplacian>=1.0.0
