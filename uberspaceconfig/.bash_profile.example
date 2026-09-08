@@ -22,11 +22,12 @@ export JWT_ALGORITHM="HS256"
 export JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60"
 
 # GitHub
-#     GH_TOKEN is used to download the gh files
 #     DEPLOY_TOKEN is used by deploy shell script
+#     GH_TOKEN is optional: increases GitHub API rate limits for CSC_Update.
+#     Public repo file fetch (GH XML sync, /ghinterface/) works without it.
 export GITHUB_REPO_URL="https://github.com/your-org/your-repo"
 export GITHUB_USERNAME="your-github-username"
-export GITHUB_CSC_GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
+# export GITHUB_CSC_GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
 export GITHUB_CSC_DEPLOY_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
 export GITHUB_DEPLOY_URL="https://{$GITHUB_USERNAME}:{$GITHUB_CSC_DEPLOY_TOKEN}@github.com/your-org/your-repo.git"
 
