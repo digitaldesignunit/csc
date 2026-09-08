@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-06-10T12:31:17.123Z
+// Generated on: 2026-09-08T12:50:22.135Z
 // Source: https://api.2ndchances.build/schema/snapshot-summary
 
 export interface SnapshotSummaryItem {

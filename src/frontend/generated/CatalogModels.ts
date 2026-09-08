@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-06-10T12:31:17.106Z
+// Generated on: 2026-09-08T12:50:22.121Z
 // Source: https://api.2ndchances.build/schema/catalog-compose
 
 import type {
@@ -22,6 +22,7 @@ export interface ComponentIdentity {
   attributes?: Record<string, unknown> | unknown; // Additional static metadata about the physical piece
   parent_identities?: string[] | unknown; // UUIDs of immediate parent identities. Single-element for 1:1 splits; multi-element for N:1 merges. `None` if no known parent.
   consumed_at?: string | unknown; // ISO-8601 timestamp when the physical piece ceased to exist as a discrete object (split, demolished, returned). `None` = active.
+  is_public?: boolean; // When true, anonymous users may view all snapshots on the public component detail page (viewer + read-only metadata).
   current_snapshot_id: string; // UUID of the snapshot in `component_snapshots` that represents the current state of this identity.
   created: string; // ISO timestamp when this identity was first recorded
   lastmodified: string; // ISO timestamp when this identity was last modified

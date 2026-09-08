@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-06-10T12:31:17.044Z
+// Generated on: 2026-09-08T12:50:22.078Z
 // Source: https://api.2ndchances.build/schema/design
 
 import { ComponentGeometry } from './CatalogSharedTypes';
