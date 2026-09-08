@@ -38,7 +38,7 @@ ghenv.Component.Description = (  # NOQA
 
 # GitHub branch to pull sources and UserObjects from. Must match the remote
 # branch name exactly (e.g. 'main', 'develop', 'feature/foo').
-UPDATE_CHANNEL = 'main'
+UPDATE_CHANNEL = 'v-0.5.0.0'
 
 # Matches an actual version declaration - the word "version", a ":" or "=",
 # then the number. The separator is required so prose such as 'creates a
@@ -62,7 +62,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260908.1
+    Version: 260908.2
     """
 
     def __init__(self):
@@ -403,6 +403,12 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         else:
             msg = (f'Request failed with status code: '
                    f'{response.status_code}')
+            try:
+                detail = response.json().get('detail')
+                if detail:
+                    msg = f'{msg}: {detail}'
+            except Exception:
+                pass
             self._addError(msg)
             self.Component.Message = msg
             return None
