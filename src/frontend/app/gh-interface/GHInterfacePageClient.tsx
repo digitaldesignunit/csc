@@ -456,34 +456,37 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: 'SnapshotID', description: 'Snapshot UUIDs ordered by version' },
               { label: 'SnapshotName', description: 'Snapshot names (parallel to SnapshotID)' },
             ]}
-            tip="Uses GET /identities/{id}/snapshots. Pair with FetchComposeSnapshot to load a specific version."
+            tip="Uses GET /identities/{id}/snapshots. Pair with FetchSnapshot to load a specific version."
+            imagePath={resolveStatic('/gh-interface/csc_listidentitysnapshots.png')}
           />
 
           <ComponentCard
             icon={Database}
-            name="CSC_FetchComposeAllSnapshots"
+            name="CSC_FetchAllSnapshots"
             description="Fetches compose JSON with every snapshot version for one identity ({identity, snapshots[]})."
             inputs={[
               { label: 'Input', description: 'Identity UUID or compose JSON ({identity, snapshots[]})' },
             ]}
             outputs={[
-              { label: 'ComposeJSON', description: 'Full multi-version compose from GET /identities/{id}/compose?snapshots=all' },
+              { label: 'ComposeData', description: 'Full multi-version compose from GET /identities/{id}/compose?snapshots=all' },
             ]}
             tip="Use with ComposeToD2P (SnapshotScope=all) to build D2P members for every version."
+            imagePath={resolveStatic('/gh-interface/csc_fetchallsnapshots.png')}
           />
 
           <ComponentCard
             icon={Database}
-            name="CSC_FetchComposeSnapshot"
+            name="CSC_FetchSnapshot"
             description="Fetches compose JSON for one identity and a specific snapshot ({identity, snapshots:[one]})."
             inputs={[
               { label: 'Input', description: 'Identity UUID or compose JSON ({identity, snapshots[]})' },
               { label: 'SnapshotID', description: 'Snapshot UUID to fetch' },
             ]}
             outputs={[
-              { label: 'ComposeJSON', description: 'Compose with the requested snapshot only (snapshots length 1)' },
+              { label: 'ComposeData', description: 'Compose with the requested snapshot only (snapshots length 1)' },
             ]}
             tip="Uses GET /identities/{id}/compose?snapshots=<uuid>. Current-snapshot-only fetch remains CSC_FetchComponents."
+            imagePath={resolveStatic('/gh-interface/csc_fetchsnapshot.png')}
           />
 
           <ComponentCard
