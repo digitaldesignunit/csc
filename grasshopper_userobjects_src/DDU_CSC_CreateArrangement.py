@@ -30,7 +30,7 @@ class CSC_CreateArrangement(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -60,7 +60,7 @@ class CSC_CreateArrangement(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Compose JSON strings ({identity, snapshots[]})'
+            'Passport JSON strings ({identity, snapshots[]})'
         )
         self.InputParams[1].Description = (
             'Additional spacing between grid cells'
@@ -82,36 +82,37 @@ class CSC_CreateArrangement(Grasshopper.Kernel.GH_ScriptInstance):
             'Transformations from world origin to grid cell planes'
         )
 
-    def _primary_snapshot(self, compose):
-        """Return the first snapshot from a compose payload."""
-        if not isinstance(compose, dict):
+    def _primary_snapshot(self, passport):
+        """Return the first snapshot from a passport payload."""
+        if not isinstance(passport, dict):
             return {}
-        snapshots = compose.get('snapshots') or []
+        snapshots = passport.get('snapshots') or []
         if snapshots and isinstance(snapshots[0], dict):
             return snapshots[0]
-        legacy = compose.get('snapshot')
+        legacy = passport.get('snapshot')
         if isinstance(legacy, dict):
             return legacy
         return {}
 
     def extract_bounding_box_dimensions(self, component_data):
         """
-        Extract bounding box dimensions from compose JSON.
+        Extract bounding box dimensions from passport JSON.
 
         Args:
-            component_data: Compose JSON string or dict ({identity, snapshots[]})
+            component_data: Passport JSON string or dict
+                ({identity, snapshots[]})
 
         Returns:
             Tuple of (xtx, xty, xtz) dimensions or None
         """
         try:
             if isinstance(component_data, dict):
-                compose = component_data
+                passport = component_data
             elif isinstance(component_data, str):
-                compose = json.loads(component_data.strip())
+                passport = json.loads(component_data.strip())
             else:
-                compose = json.loads(str(component_data))
-            snapshot = self._primary_snapshot(compose)
+                passport = json.loads(str(component_data))
+            snapshot = self._primary_snapshot(passport)
             bbx = snapshot.get('bbx')
             if isinstance(bbx, (list, tuple)) and len(bbx) >= 3:
                 return float(bbx[0]), float(bbx[1]), float(bbx[2])

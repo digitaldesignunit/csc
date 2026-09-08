@@ -19,8 +19,8 @@ ghenv.Component.NickName = 'GetDescriptor'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '6 Data Tools'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Retrieves a specific descriptor from multiple compose inputs '
-    '({identity, snapshot}). Accepts compose JSON strings or geometries '
+    'Retrieves a specific descriptor from multiple passport inputs '
+    '({identity, snapshot}). Accepts passport JSON strings or geometries '
     'with the csc_component userdata. Returns descriptor values for the '
     'specified key from snapshot.descriptors. Handles single values, lists, '
     'and nested lists by mapping them to appropriate Grasshopper data '
@@ -32,7 +32,7 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -65,8 +65,8 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
         self.Component.VariableParameterMaintenance()
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'List of compose JSON strings ({identity, snapshot}) OR '
-            'geometries with the \'csc_component\' compose userdata'
+            'List of passport JSON strings ({identity, snapshot}) OR '
+            'geometries with the \'csc_component\' passport userdata'
         )
         self.InputParams[1].Description = (
             'Key string to retrieve from snapshot.descriptors'
@@ -79,15 +79,15 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
             'Descriptor value for the specified key, or empty if not found'
         )
 
-    def extract_compose_from_geometry(self, geometry):
+    def extract_passport_from_geometry(self, geometry):
         """
-        Extract compose data ({identity, snapshot}) from geometry userdata.
+        Extract passport data ({identity, snapshot}) from geometry userdata.
 
         Args:
             geometry: Rhino geometry object with userdata
 
         Returns:
-            Compose dictionary or None
+            Passport dictionary or None
         """
         try:
             if hasattr(geometry, 'GetUserString'):
@@ -95,15 +95,15 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
                 if userdata:
                     return json.loads(userdata)
         except Exception as e:
-            self._addWarning(f'Could not extract compose data: {str(e)}')
+            self._addWarning(f'Could not extract passport data: {str(e)}')
         return None
 
-    def get_descriptor_value(self, compose, descriptor_key):
+    def get_descriptor_value(self, passport, descriptor_key):
         """
         Extract descriptor value from snapshot.descriptors using the key.
 
         Args:
-            compose: Compose dictionary ({identity, snapshot})
+            passport: Passport dictionary ({identity, snapshot})
             descriptor_key: String key to look for in descriptors
 
         Returns:
@@ -111,7 +111,9 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
         """
         try:
             snapshots = (
-                compose.get('snapshots') if isinstance(compose, dict) else None
+                passport.get('snapshots')
+                if isinstance(passport, dict)
+                else None
             )
             snapshot = (
                 snapshots[0]
@@ -119,7 +121,7 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
                 else None
             )
             if not isinstance(snapshot, dict):
-                self._addWarning('Compose JSON has no snapshots')
+                self._addWarning('Passport JSON has no snapshots')
                 return None
 
             descriptors = snapshot.get('descriptors')
@@ -215,37 +217,37 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
             # Process each input item
             input_list = list(Input)
             for input_index, input_item in enumerate(input_list):
-                # Determine input type and extract compose data
-                compose = None
+                # Determine input type and extract passport data
+                passport = None
 
-                # Check if input is a compose JSON string
+                # Check if input is a passport JSON string
                 if isinstance(input_item, str):
                     try:
-                        compose = json.loads(input_item)
+                        passport = json.loads(input_item)
                         self._addRemark(
-                            f'Input {input_index} detected as compose JSON')
+                            f'Input {input_index} detected as passport JSON')
                     except json.JSONDecodeError:
-                        msg = (f'Input {input_index} is not valid compose '
+                        msg = (f'Input {input_index} is not valid passport '
                                'JSON!')
                         self._addError(msg)
                         continue
                 else:
-                    # Input is geometry - extract compose from userdata
-                    compose = self.extract_compose_from_geometry(input_item)
-                    if not compose:
-                        msg = (f'Could not extract compose data from '
+                    # Input is geometry - extract passport from userdata
+                    passport = self.extract_passport_from_geometry(input_item)
+                    if not passport:
+                        msg = (f'Could not extract passport data from '
                                f'input {input_index}!')
                         self._addError(msg)
                         continue
 
                     self._addRemark(
                         f'Input {input_index} detected as geometry with '
-                        'compose userdata')
+                        'passport userdata')
 
                 # Extract descriptor value
                 try:
                     descriptor_value = self.get_descriptor_value(
-                        compose, DescriptorKey)
+                        passport, DescriptorKey)
 
                     if descriptor_value is not None:
                         # Convert descriptor to appropriate Grasshopper data

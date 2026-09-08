@@ -19,16 +19,16 @@ import Grasshopper  # NOQA
 import scriptcontext as sc  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
-ghenv.Component.Name = 'ComposeToD2P'  # NOQA
-ghenv.Component.NickName = 'ComposeToD2P'  # NOQA
+ghenv.Component.Name = 'PassportToD2P'  # NOQA
+ghenv.Component.NickName = 'PassportToD2P'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '9 D2P Components Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Converts CSC compose JSON into an in-memory D2P GHComponent. Geometry '
+    'Converts CSC passport JSON into an in-memory D2P GHComponent. Geometry '
     'is registered as a nested Member tree via SetMember (D2P ParentMember '
     '+ : layer paths). Every baked component gets id_<identity> and '
     'snap_<snapshot> shells so layer paths stay consistent for single- and '
-    'multi-snapshot compose and distinct across catalog identities. '
+    'multi-snapshot passport and distinct across catalog identities. '
     'Optional Parent prefixes ShortName for D2P child naming. CSC '
     'identity/snapshot metadata is stored on the component label user text. '
     'MeshMode: best | inline | reduced | detailed | all. '
@@ -112,11 +112,11 @@ class _MemberTree:
         self._attach(leaf, parent)
 
 
-class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
+class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260826
+    Version: 260908
 
     D2P member layer taxonomy (SetMember tree)
     -----------------------------------------
@@ -131,7 +131,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
 
     id_* distinguishes catalog identities when baking (D2P shares type
     root layers across instances). snap_* is always present so single- and
-    multi-snapshot compose share the same depth.
+    multi-snapshot passport share the same depth.
 
     D2P component naming (optional Parent input)
     --------------------------------------------
@@ -160,7 +160,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
 
     def BeforeRunScript(self):
         self.InputParams[0].Description = (
-            'Compose JSON ({identity, snapshot} or future {snapshots[]}) '
+            'Passport JSON ({identity, snapshot} or future {snapshots[]}) '
             'from CSC catalog components.'
         )
         if self.InputParams.Count > 1:
@@ -179,7 +179,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         if self.InputParams.Count > 3:
             self.InputParams[2].Description = (
                 "Snapshot scope: 'current' (default) uses snapshots[0] "
-                "only; 'all' includes every compose.snapshots[] entry. "
+                "only; 'all' includes every passport.snapshots[] entry. "
                 'Each snapshot is always under a snap_* member shell.'
             )
         if self.InputParams.Count > 4:
@@ -194,7 +194,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0 + i].Description = (
-            'In-memory D2P GHComponent (.NET IComponentBase) per compose '
+            'In-memory D2P GHComponent (.NET IComponentBase) per passport '
             'entry. RetrieveGeometry accepts layer segments such as id_, '
             'snap_, Mesh, 00, or detailed (recursive).'
         )
@@ -307,7 +307,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             component,
             identity: dict,
             snapshot: dict,
-            compose_json: str = None):
+            passport_json: str = None):
         try:
             label = component.Label
             base_objects = list(label.BaseObjects)
@@ -337,14 +337,14 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             if snapshot.get('fragment') is not None:
                 attrs.SetUserString(
                     'csc_fragment', str(bool(snapshot['fragment'])))
-            if compose_json:
-                attrs.SetUserString('csc_component', compose_json)
+            if passport_json:
+                attrs.SetUserString('csc_component', passport_json)
         except Exception as e:
             self._addWarning(f'Could not attach CSC metadata to label: {e}')
 
-    def _iter_snapshot_blocks(self, compose: dict, snapshot_scope: str):
-        """Yield snapshot dicts from compose.snapshots[]."""
-        snapshots = compose.get('snapshots') or []
+    def _iter_snapshot_blocks(self, passport: dict, snapshot_scope: str):
+        """Yield snapshot dicts from passport.snapshots[]."""
+        snapshots = passport.get('snapshots') or []
         if not isinstance(snapshots, list):
             snapshots = []
 
@@ -640,19 +640,19 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 markers,
             )
 
-    def _compose_to_d2p(
+    def _passport_to_d2p(
             self,
-            compose: dict,
+            passport: dict,
             mesh_mode: str,
             snapshot_scope: str,
             parent=None,
-            compose_json: str = None,
+            passport_json: str = None,
             cloud_mode: str = 'best'):
-        identity = compose.get('identity') or {}
-        snapshots = list(self._iter_snapshot_blocks(compose, snapshot_scope))
+        identity = passport.get('identity') or {}
+        snapshots = list(self._iter_snapshot_blocks(passport, snapshot_scope))
         if not identity or not snapshots:
             raise ValueError(
-                'Compose JSON missing identity or snapshot data')
+                'Passport JSON missing identity or snapshot data')
 
         primary = snapshots[0]
         identity_type = identity.get('type') or 'other'
@@ -673,7 +673,7 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         component = GHComponent(component_type, short_name, plane)
 
         self._attach_csc_metadata(
-            component, identity, primary, compose_json)
+            component, identity, primary, passport_json)
 
         identity_label = self._identity_scope_label(identity)
         auth_core = self._get_auth_core()
@@ -736,18 +736,18 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
 
         converted = 0
         try:
-            self.Component.Message = 'Converting compose to D2P...'
+            self.Component.Message = 'Converting passport to D2P...'
 
             for i in range(ComponentData.BranchCount):
                 ghp = ComponentData.Paths[i]
                 for comp_json in ComponentData.Branches[i]:
                     if not comp_json:
-                        self._addWarning('Empty compose entry, skipping')
+                        self._addWarning('Empty passport entry, skipping')
                         continue
                     try:
-                        compose = json.loads(comp_json)
-                        d2p_component = self._compose_to_d2p(
-                            compose,
+                        passport = json.loads(comp_json)
+                        d2p_component = self._passport_to_d2p(
+                            passport,
                             mesh_mode,
                             snapshot_scope,
                             Parent,
@@ -757,14 +757,14 @@ class CSC_ComposeToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                         Component.Add(d2p_component.NetObj, ghp)
                         converted += 1
                     except json.JSONDecodeError as e:
-                        self._addError(f'Failed to parse compose JSON: {e}')
+                        self._addError(f'Failed to parse passport JSON: {e}')
                     except Exception as e:
                         self._addError(
-                            f'Failed to convert compose entry: {e}'
+                            f'Failed to convert passport entry: {e}'
                         )
 
             self.Component.Message = (
-                f'Converted {converted} compose entr'
+                f'Converted {converted} passport entr'
                 f'{"y" if converted == 1 else "ies"} to D2P'
             )
             if converted:

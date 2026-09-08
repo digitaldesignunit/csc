@@ -37,7 +37,7 @@ class CSC_AddComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260611
+    Version: 260908
     """
 
     def __init__(self):
@@ -69,7 +69,7 @@ class CSC_AddComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Compose response JSON ({identity, snapshot}) after create'
+            'Passport response JSON ({identity, snapshot}) after create'
         )
 
     def get_auth_core_from_sticky(self):
@@ -499,13 +499,13 @@ class CSC_AddComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
             )
 
             if response.status_code == 201:
-                compose = response.json()
-                snapshots = compose.get('snapshots') or []
+                passport = response.json()
+                snapshots = passport.get('snapshots') or []
                 snapshot_doc = snapshots[0] if snapshots else {}
                 created_snapshot_id = snapshot_doc.get('_id', snapshot_id)
 
                 ghp = Grasshopper.Kernel.Data.GH_Path(0)
-                AddedSnapshotData.Add(json.dumps(compose), ghp)
+                AddedSnapshotData.Add(json.dumps(passport), ghp)
 
                 self._addRemark(
                     f'Created snapshot {created_snapshot_id} '

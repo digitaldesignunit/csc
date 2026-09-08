@@ -23,7 +23,7 @@ ghenv.Component.NickName = 'CreateDesign'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Creates a design JSON string from compose JSON ({identity, snapshot}), '
+    'Creates a design JSON string from passport JSON ({identity, snapshot}), '
     'ready for posting to the Catalog. Pins each placement to a specific '
     'snapshot and stores the design insertion iframe. Does NOT post '
     'the design - only generates the JSON string.'
@@ -34,7 +34,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -70,7 +70,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
             'Design description (optional)'
         )
         self.InputParams[2].Description = (
-            'List of compose JSON strings ({identity, snapshot}) with '
+            'List of passport JSON strings ({identity, snapshot}) with '
             'snapshot.iframe set to the design placement frame'
         )
         self.InputParams[3].Description = (
@@ -281,32 +281,32 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 return False
         return True
 
-    def validate_compose_data(self, compose_data: Dict[str, Any]) -> bool:
-        """Validate compose JSON for design placement."""
+    def validate_passport_data(self, passport_data: Dict[str, Any]) -> bool:
+        """Validate passport JSON for design placement."""
         try:
-            if not isinstance(compose_data, dict):
-                self._addWarning('Compose data must be a dictionary')
+            if not isinstance(passport_data, dict):
+                self._addWarning('Passport data must be a dictionary')
                 return False
 
-            snapshots = compose_data.get('snapshots') or []
+            snapshots = passport_data.get('snapshots') or []
             snapshot = snapshots[0] if snapshots else None
             if not isinstance(snapshot, dict):
-                self._addWarning('Compose missing snapshot object')
+                self._addWarning('Passport missing snapshot object')
                 return False
 
             snapshot_id = snapshot.get('_id') or snapshot.get('id')
             if not snapshot_id:
-                self._addWarning('Compose snapshot missing _id field')
+                self._addWarning('Passport snapshot missing _id field')
                 return False
 
             iframe = snapshot.get('iframe')
             if iframe is None:
-                self._addWarning('Compose snapshot missing iframe field')
+                self._addWarning('Passport snapshot missing iframe field')
                 return False
 
-            return self._validate_iframe(iframe, 'Compose snapshot iframe')
+            return self._validate_iframe(iframe, 'Passport snapshot iframe')
         except Exception as e:
-            self._addWarning(f'Error validating compose: {str(e)}')
+            self._addWarning(f'Error validating passport: {str(e)}')
             return False
 
     def create_design_payload(self, design_name: str, design_description: str,
@@ -318,15 +318,15 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
             # Warm design schema cache (fallback used when offline)
             self.get_design_schema()
 
-            # Parse and validate compose JSON
+            # Parse and validate passport JSON
             components = []
-            for i, compose_json in enumerate(component_data_list):
+            for i, passport_json in enumerate(component_data_list):
                 try:
-                    compose_data = json.loads(compose_json)
-                    if not self.validate_compose_data(compose_data):
-                        self._addWarning(f'Invalid compose at index {i}')
+                    passport_data = json.loads(passport_json)
+                    if not self.validate_passport_data(passport_data):
+                        self._addWarning(f'Invalid passport at index {i}')
                         continue
-                    snapshot = compose_data['snapshot']
+                    snapshot = passport_data['snapshot']
                     snapshot_id = snapshot.get('_id') or snapshot.get('id')
                     iframe = snapshot['iframe']
                     components.append(
@@ -334,7 +334,7 @@ class CSC_CreateDesign(Grasshopper.Kernel.GH_ScriptInstance):
                     )
                 except Exception as e:
                     self._addWarning(
-                        f'Error processing compose {i}: {str(e)}'
+                        f'Error processing passport {i}: {str(e)}'
                     )
                     continue
 

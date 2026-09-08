@@ -19,8 +19,8 @@ ghenv.Component.NickName = 'ApplyPCAFrame'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Applies an inverse PCA transformation to align geometry or compose data '
-    'with the world coordinate system. Takes either compose JSON '
+    'Applies an inverse PCA transformation to align geometry or passport data '
+    'with the world coordinate system. Takes either passport JSON '
     '({identity, snapshots[]}) or Rhino geometry and transforms it to align '
     'with the world XY plane using the snapshot pca_frame.'
 )
@@ -30,7 +30,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260617
+    Version: 260908
     """
 
     def __init__(self):
@@ -60,8 +60,8 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Compose JSON string ({identity, snapshots[]}) '
-            'or geometry objects with the \'csc_component\' compose userdata'
+            'Passport JSON string ({identity, snapshots[]}) '
+            'or geometry objects with the \'csc_component\' passport userdata'
         )
         # Set "No type hint"
         self.InputParams[0].TypeHints.Select(System.Object)
@@ -71,8 +71,8 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Transformed compose JSON (if input was JSON) or '
-            'transformed geometry with updated compose userdata '
+            'Transformed passport JSON (if input was JSON) or '
+            'transformed geometry with updated passport userdata '
             '(if input was geometry)'
         )
 
@@ -109,39 +109,39 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         y_axis = Rhino.Geometry.Vector3d(*frame_dict.get('y', [0, 1, 0]))
         return Rhino.Geometry.Plane(origin, x_axis, y_axis)
 
-    def normalize_compose(self, compose):
+    def normalize_passport(self, passport):
         """
-        Normalize compose input to canonical {identity, snapshots[]}.
+        Normalize passport input to canonical {identity, snapshots[]}.
 
         Accepts legacy {identity, snapshot} payloads.
         """
-        if not isinstance(compose, dict):
+        if not isinstance(passport, dict):
             return None
-        identity = compose.get('identity') or {}
-        snapshots = compose.get('snapshots') or []
+        identity = passport.get('identity') or {}
+        snapshots = passport.get('snapshots') or []
         if snapshots and isinstance(snapshots[0], dict):
             return {'identity': identity, 'snapshots': list(snapshots)}
-        legacy = compose.get('snapshot')
+        legacy = passport.get('snapshot')
         if isinstance(legacy, dict):
             return {'identity': identity, 'snapshots': [legacy]}
         return None
 
     def extract_component_data_from_geometry(self, geometry):
         """
-        Extract compose data ({identity, snapshots[]}) from geometry userdata.
+        Extract passport data ({identity, snapshots[]}) from geometry userdata.
 
         Args:
             geometry: Rhino geometry object with userdata
 
         Returns:
-            Compose dictionary or None
+            Passport dictionary or None
         """
         try:
             userdata = geometry.GetUserString('csc_component')
             if userdata:
                 return json.loads(userdata)
         except Exception as e:
-            self._addWarning(f'Could not extract compose data: {str(e)}')
+            self._addWarning(f'Could not extract passport data: {str(e)}')
         return None
 
     def apply_pca_transform_to_geometry(self, geometry, pca_transform):
@@ -181,60 +181,60 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
         try:
             self.Component.Message = 'Processing input...'
 
-            # Determine input type and extract compose data
-            compose = None
+            # Determine input type and extract passport data
+            passport = None
             geometry_objects = []
             input_is_geometry = False
 
-            # Check if input is a compose JSON string
+            # Check if input is a passport JSON string
             if isinstance(Input, str):
                 try:
-                    compose = json.loads(Input)
-                    self._addRemark('Input detected as compose JSON')
+                    passport = json.loads(Input)
+                    self._addRemark('Input detected as passport JSON')
                 except json.JSONDecodeError:
-                    msg = 'Input is not valid compose JSON!'
+                    msg = 'Input is not valid passport JSON!'
                     self._addError(msg)
                     self.Component.Message = msg
                     return Output
             else:
-                # Input is geometry - extract compose data from userdata
+                # Input is geometry - extract passport data from userdata
                 input_is_geometry = True
                 geometry_objects = (Input if isinstance(Input, list)
                                     else [Input])
 
-                # Try to extract compose data from first geometry object
-                compose = self.extract_component_data_from_geometry(
+                # Try to extract passport data from first geometry object
+                passport = self.extract_component_data_from_geometry(
                     geometry_objects[0])
-                if not compose:
-                    msg = ('Could not extract compose data from '
+                if not passport:
+                    msg = ('Could not extract passport data from '
                            'geometry userdata!')
                     self._addError(msg)
                     self.Component.Message = msg
                     return Output
 
-                compose = self.extract_component_data_from_geometry(
+                passport = self.extract_component_data_from_geometry(
                     geometry_objects[0])
-                if not compose:
-                    msg = ('Could not extract compose data from '
+                if not passport:
+                    msg = ('Could not extract passport data from '
                            'geometry userdata!')
                     self._addError(msg)
                     self.Component.Message = msg
                     return Output
 
                 self._addRemark('Input detected as geometry with '
-                                'compose userdata')
+                                'passport userdata')
 
-            compose = self.normalize_compose(compose)
-            if not compose:
-                msg = 'Compose JSON is missing identity/snapshots!'
+            passport = self.normalize_passport(passport)
+            if not passport:
+                msg = 'Passport JSON is missing identity/snapshots!'
                 self._addError(msg)
                 self.Component.Message = msg
                 return Output
 
-            snapshots = compose.get('snapshots') or []
+            snapshots = passport.get('snapshots') or []
             snapshot = snapshots[0] if snapshots else None
             if not isinstance(snapshot, dict):
-                msg = 'Compose JSON has no snapshots!'
+                msg = 'Passport JSON has no snapshots!'
                 self._addError(msg)
                 self.Component.Message = msg
                 return Output
@@ -263,12 +263,12 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                 'z': [0.0, 0.0, 1.0]
             }
 
-            # Build transformed compose; update primary snapshot only
+            # Build transformed passport; update primary snapshot only
             transformed_snapshot = dict(snapshot)
             snapshots_out = list(snapshots)
             snapshots_out[0] = transformed_snapshot
-            transformed_compose = {
-                'identity': compose.get('identity'),
+            transformed_passport = {
+                'identity': passport.get('identity'),
                 'snapshots': snapshots_out,
             }
 
@@ -343,11 +343,11 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                         # Step 3: Apply iframe transformation again
                         transformed_geometry.Transform(iframe_transform)
 
-                        # Update userdata with transformed compose data
+                        # Update userdata with transformed passport data
                         if hasattr(transformed_geometry, 'SetUserString'):
                             transformed_geometry.SetUserString(
                                 'csc_component',
-                                json.dumps(transformed_compose))
+                                json.dumps(transformed_passport))
                         Output = transformed_geometry
 
                     self._addRemark(f'Transformed {len(geometry_objects)} '
@@ -364,15 +364,15 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                         if hasattr(transformed_geometry, 'SetUserString'):
                             transformed_geometry.SetUserString(
                                 'csc_component',
-                                json.dumps(transformed_compose))
+                                json.dumps(transformed_passport))
 
                         Output = transformed_geometry
                     self._addRemark(f'Transformed {len(geometry_objects)} '
                                     'geometry objects with PCA only')
             else:
-                # Output transformed compose data as JSON
-                Output = json.dumps(transformed_compose)
-                self._addRemark('Output transformed compose JSON')
+                # Output transformed passport data as JSON
+                Output = json.dumps(transformed_passport)
+                self._addRemark('Output transformed passport JSON')
 
             # Update success message
             if input_is_geometry:
@@ -382,7 +382,7 @@ class CSC_ApplyPCAFrame(Grasshopper.Kernel.GH_ScriptInstance):
                 )
             else:
                 self.Component.Message = ('Successfully applied PCA frame '
-                                          'to compose JSON')
+                                          'to passport JSON')
 
             return Output
 

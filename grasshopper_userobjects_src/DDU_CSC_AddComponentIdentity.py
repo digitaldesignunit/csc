@@ -38,7 +38,7 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260611
+    Version: 260908
     """
 
     def __init__(self):
@@ -78,7 +78,7 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Compose response JSON ({identity, snapshot}) '
+            'Passport response JSON ({identity, snapshot}) '
             'from POST /identities'
         )
 
@@ -553,16 +553,16 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
             )
 
             if response.status_code == 201:
-                compose = response.json()
-                identity_doc = compose.get('identity') or {}
-                snapshots = compose.get('snapshots') or []
+                passport = response.json()
+                identity_doc = passport.get('identity') or {}
+                snapshots = passport.get('snapshots') or []
                 snapshot_doc = snapshots[0] if snapshots else {}
                 created_identity_id = identity_doc.get('_id', identity_id)
                 snapshot_id = snapshot_doc.get('_id', '')
 
                 # Create datatree path and add component to tree
                 ghp = Grasshopper.Kernel.Data.GH_Path(0)
-                AddedComponentData.Add(json.dumps(compose), ghp)
+                AddedComponentData.Add(json.dumps(passport), ghp)
 
                 self._addRemark(
                     f'Created identity {created_identity_id} '

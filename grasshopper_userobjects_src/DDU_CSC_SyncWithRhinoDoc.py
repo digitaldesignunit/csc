@@ -22,7 +22,7 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Scans the active Rhino document for objects with csc_component user '
-    'data (compose JSON) and updates snapshot.iframe based on text tag '
+    'data (passport JSON) and updates snapshot.iframe based on text tag '
     'planes or combined geometry bounds.'
 )
 
@@ -31,7 +31,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -68,7 +68,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'DataTree of compose JSON ({identity, snapshot}) found in the '
+            'DataTree of passport JSON ({identity, snapshot}) found in the '
             'document, with snapshot.iframe updated from object positions'
         )
 
@@ -77,7 +77,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
         Find all objects in the document that have the 'csc_component' userkey.
         Also find text tags that are grouped with these components.
         Groups objects by identity._id to handle multiple meshes correctly.
-        Returns a list of tuples: (identity_id, compose, objects_list,
+        Returns a list of tuples: (identity_id, passport, objects_list,
                                    combined_path)
         """
         components_dict = {}
@@ -106,18 +106,18 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                                 obj, 'csc_component', True)
                     if component_data:
                         try:
-                            compose = json.loads(component_data)
-                            identity = compose.get('identity')
+                            passport = json.loads(component_data)
+                            identity = passport.get('identity')
                             if not isinstance(identity, dict):
                                 self._addWarning(
-                                    f'Invalid compose JSON for object '
+                                    f'Invalid passport JSON for object '
                                     f'{obj.Id}: missing identity'
                                 )
                                 continue
                             identity_id = identity.get('_id', 'unknown')
                             if identity_id not in components_dict:
                                 components_dict[identity_id] = {
-                                    'compose': compose,
+                                    'passport': passport,
                                     'objects': [],
                                     'paths': []
                                 }
@@ -163,7 +163,7 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
             combined_path = ' | '.join(data['paths'])
             components_list.append((
                 identity_id,
-                data['compose'],
+                data['passport'],
                 data['objects'],
                 combined_path
             ))
@@ -191,20 +191,20 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
             pass
         return f"Object_{obj}"
 
-    def update_component_frame(self, objects_list, compose):
+    def update_component_frame(self, objects_list, passport):
         """
         Update snapshot.iframe from a text tag plane when available,
         otherwise from the combined bounding box of all objects.
-        Returns updated compose JSON.
+        Returns updated passport JSON.
         """
         try:
             if not objects_list:
-                return compose
+                return passport
 
-            snapshots = compose.get('snapshots') or []
+            snapshots = passport.get('snapshots') or []
             snapshot = snapshots[0] if snapshots else None
             if not isinstance(snapshot, dict):
-                return compose
+                return passport
 
             for obj in objects_list:
                 if rs.IsText(obj):
@@ -225,8 +225,8 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                                   tagplane.ZAxis.Z]
                         }
                         snapshot['iframe'] = tagframe
-                        compose['snapshots'] = [snapshot]
-                        return compose
+                        passport['snapshots'] = [snapshot]
+                        return passport
                     except Exception as e:
                         self._addWarning(
                             f'Error extracting plane from text tag: {str(e)}'
@@ -259,13 +259,13 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                     'y': [y_axis.X, y_axis.Y, y_axis.Z],
                     'z': [z_axis.X, z_axis.Y, z_axis.Z]
                 }
-                compose['snapshots'] = [snapshot]
-                return compose
+                passport['snapshots'] = [snapshot]
+                return passport
         except Exception as e:
             self._addWarning(
                 f'Error updating frame for component: {str(e)}'
             )
-        return compose
+        return passport
 
     def RunScript(self, Sync: bool):
         # init outputs
@@ -291,13 +291,13 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
                 return DocumentComponents
             # Create output datatree
             # Process each component (now grouped by component ID)
-            for i, (identity_id, compose, objects_list,
+            for i, (identity_id, passport, objects_list,
                     combined_path) in enumerate(objects_with_component):
                 try:
-                    updated_compose = self.update_component_frame(
-                        objects_list, compose)
+                    updated_passport = self.update_component_frame(
+                        objects_list, passport)
                     ghp = Grasshopper.Kernel.Data.GH_Path(i)
-                    DocumentComponents.Add(json.dumps(updated_compose), ghp)
+                    DocumentComponents.Add(json.dumps(updated_passport), ghp)
 
                     object_count = len(objects_list)
                     if object_count == 1:

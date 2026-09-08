@@ -19,9 +19,9 @@ ghenv.Component.NickName = 'GetComponentData'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Extracts the csc_component compose data ({identity, snapshot} JSON '
+    'Extracts the csc_component passport data ({identity, snapshot} JSON '
     'string) from Rhino geometry objects. Safely retrieves and parses the '
-    'compose data stored as user strings.'
+    'passport data stored as user strings.'
 )
 
 
@@ -29,7 +29,7 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 260908
     """
 
     def __init__(self):
@@ -59,26 +59,26 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Geometry objects with the \'csc_component\' compose userdata'
+            'Geometry objects with the \'csc_component\' passport userdata'
         )
         # Initialize output param descriptions
         i = 0
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Compose JSON strings ({identity, snapshot}) extracted from '
+            'Passport JSON strings ({identity, snapshot}) extracted from '
             'geometry userdata'
         )
 
     def extract_component_data_from_geometry(self, geometry):
         """
-        Extract compose data ({identity, snapshot}) from geometry userdata.
+        Extract passport data ({identity, snapshot}) from geometry userdata.
 
         Args:
             geometry: Rhino geometry object with userdata
 
         Returns:
-            Compose dictionary or None
+            Passport dictionary or None
         """
         try:
             if hasattr(geometry, 'GetUserString'):
@@ -117,16 +117,16 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
                                      f'skipping')
                     continue
 
-                # Extract compose data
-                compose = self.extract_component_data_from_geometry(geo)
-                if compose:
+                # Extract passport data
+                passport = self.extract_component_data_from_geometry(geo)
+                if passport:
                     # Add to output
                     ComponentData.Add(
-                        json.dumps(compose),
+                        json.dumps(passport),
                         Grasshopper.Kernel.Data.GH_Path(i)
                     )
                     successful_extractions += 1
-                    self._addRemark(f'Successfully extracted compose data '
+                    self._addRemark(f'Successfully extracted passport data '
                                     f'from geometry {i}')
                 else:
                     # Add empty string to maintain data tree structure
@@ -134,21 +134,21 @@ class CSC_GetComponentData(Grasshopper.Kernel.GH_ScriptInstance):
                         '',
                         Grasshopper.Kernel.Data.GH_Path(i)
                     )
-                    self._addWarning(f'Failed to extract compose data '
+                    self._addWarning(f'Failed to extract passport data '
                                      f'from geometry {i}')
 
             # Update success message
             if successful_extractions == 0:
-                msg = 'No compose data found in any geometry objects'
+                msg = 'No passport data found in any geometry objects'
                 self._addError(msg)
                 self.Component.Message = msg
             elif successful_extractions == len(Geometry):
-                self._addRemark(f'Extracted compose data from '
+                self._addRemark(f'Extracted passport data from '
                                 f'{successful_extractions} out of '
                                 f'{len(Geometry)} geometry objects')
             else:
                 self._addWarning('Some geometry objects did not contain '
-                                 'valid compose data')
+                                 'valid passport data')
 
             return ComponentData
 

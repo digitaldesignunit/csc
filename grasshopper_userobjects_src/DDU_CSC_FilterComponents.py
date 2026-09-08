@@ -19,9 +19,9 @@ ghenv.Component.NickName = 'FilterComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Filters a list of compose JSON entries ({identity, snapshot}) based on '
+    'Filters a list of passport JSON entries ({identity, snapshot}) based on '
     'various criteria (type, material, dataset, complexity, fragment, '
-    'bounding box dimensions). Works with local compose data from fetch '
+    'bounding box dimensions). Works with local passport data from fetch '
     'components.'
 )
 
@@ -30,7 +30,7 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -94,8 +94,9 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Maximum Z dimension filter (bounding box)'
         )
         self.InputParams[11].Description = (
-            'Compose JSON strings to filter ({identity, snapshot}), e.g. from '
-            'FetchAllComponents, FetchComponents, or FetchFilteredComponents'
+            'Passport JSON strings to filter ({identity, snapshot}), e.g. '
+            'from FetchAllComponents, FetchComponents, or '
+            'FetchFilteredComponents'
         )
         # Initialize output param descriptions
         i = 0
@@ -105,19 +106,19 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Human-readable description of the applied filters'
         )
         self.OutputParams[1+i].Description = (
-            'Filtered compose JSON strings ({identity, snapshot}). Use '
+            'Filtered passport JSON strings ({identity, snapshot}). Use '
             '\'DisassembleComponent\' to access the individual fields '
             'ready for Grasshopper'
         )
 
-    def apply_filters(self, compose: dict, filter_params: dict) -> bool:
+    def apply_filters(self, passport: dict, filter_params: dict) -> bool:
         """
-        Apply all filters to a single compose entry and return True if it
+        Apply all filters to a single passport entry and return True if it
         passes. Identity fields (type, material, dataset) and snapshot
         fields (complexity, fragment, bbx) are evaluated separately.
         """
-        identity = compose.get('identity') or {}
-        snapshots = compose.get('snapshots') or []
+        identity = passport.get('identity') or {}
+        snapshots = passport.get('snapshots') or []
         snapshot = snapshots[0] if snapshots else {}
 
         # Type filter (identity)
@@ -231,7 +232,7 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
             ComponentData: Grasshopper.DataTree[str]):
         # Validate input data
         if not ComponentData or ComponentData.DataCount == 0:
-            msg = ('No compose data provided. '
+            msg = ('No passport data provided. '
                    'Please connect ComponentData input.')
             self._addWarning(msg)
             self.Component.Message = msg
@@ -311,26 +312,26 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 for j, comp in enumerate(ComponentData.Branches[i]):
                     total_count += 1
                     try:
-                        # Load compose JSON
-                        compose = json.loads(comp)
-                        identity = compose.get('identity')
-                        snapshots = compose.get('snapshots') or []
+                        # Load passport JSON
+                        passport = json.loads(comp)
+                        identity = passport.get('identity')
+                        snapshots = passport.get('snapshots') or []
                         snapshot = snapshots[0] if snapshots else None
                         if not isinstance(identity, dict) or not isinstance(
                                 snapshot, dict):
                             self._addWarning(
-                                'Skipping entry: not compose JSON '
+                                'Skipping entry: not passport JSON '
                                 '({identity, snapshot})')
                             continue
 
                         # Apply filters
-                        if self.apply_filters(compose, filter_params):
+                        if self.apply_filters(passport, filter_params):
                             # Entry passes all filters, add to output
                             FilteredComponentData.Add(comp, ghp)
                             filtered_count += 1
 
                     except json.JSONDecodeError as e:
-                        msg = f'Failed to parse compose JSON: {str(e)}'
+                        msg = f'Failed to parse passport JSON: {str(e)}'
                         self._addWarning(msg)
                         continue
                     except Exception as e:

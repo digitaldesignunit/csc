@@ -26,7 +26,7 @@ ghenv.Component.Description = (  # NOQA
     'Fetches identities (with their current snapshot) from the remote '
     'Catalog based on filter criteria (type, material, dataset, complexity, '
     'fragment, bounding box dimensions). Mirrors the web catalog filter '
-    'menu and returns compose JSON ({identity, snapshots[]}) results.'
+    'menu and returns passport JSON ({identity, snapshots[]}) results.'
 )
 
 
@@ -34,7 +34,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -109,8 +109,8 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Human-readable description of the applied filters and query'
         )
         self.OutputParams[1+i].Description = (
-            'Compose JSON per entry ({identity, snapshots[]}) fetched from the '
-            'server. Use \'DisassembleComponent\' to access the individual '
+            'Passport JSON per entry ({identity, snapshots[]}) fetched from '
+            'the server. Use \'DisassembleComponent\' to access the individual '
             'fields ready for Grasshopper')
 
     def get_auth_core_from_sticky(self):
@@ -276,7 +276,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 ReservedStatus
             )
 
-            # Request params: filters + compose expansion (identity+snapshot)
+            # Request params: filters + passport expansion (identity+snapshot)
             request_params = dict(filter_params)
             request_params['expand'] = 'current_snapshot'
 
@@ -294,7 +294,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             response = auth_core.cached_list_identities(request_params)
 
             if response.status_code == 200:
-                # Successfully fetched compose entries
+                # Successfully fetched passport entries
                 json_comps = response.json()
                 component_count = len(json_comps)
 
@@ -312,13 +312,13 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 ComponentData = Grasshopper.DataTree[System.Object]()
                 __Results = (FilterDescription, ComponentData)
 
-                # Loop over all compose entries and add them to the data tree
+                # Loop over all passport entries and add them to the data tree
                 for i, json_comp in enumerate(json_comps):
                     # Create datatree path
                     ghp = Grasshopper.Kernel.Data.GH_Path(0, i)
-                    # Add compose JSON to the datatree
+                    # Add passport JSON to the datatree
                     ComponentData.Add(
-                        auth_core.compose_json_string(json_comp), ghp)
+                        auth_core.passport_json_string(json_comp), ghp)
 
                 # Add filter description to the filter query output
                 FilterDescription.Add(

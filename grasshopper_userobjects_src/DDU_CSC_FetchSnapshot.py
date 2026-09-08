@@ -23,8 +23,8 @@ ghenv.Component.NickName = 'FetchSnapshot'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Fetches compose JSON for one identity and a specific snapshot '
-    '({identity, snapshots:[one]}). Identity input can be a UUID or compose '
+    'Fetches passport JSON for one identity and a specific snapshot '
+    '({identity, snapshots:[one]}). Identity input can be a UUID or passport '
     'JSON.'
 )
 
@@ -33,7 +33,7 @@ class CSC_FetchSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -56,14 +56,14 @@ class CSC_FetchSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
 
     def BeforeRunScript(self):
         self.InputParams[0].Description = (
-            'Identity UUID or compose JSON ({identity, snapshots[]})'
+            'Identity UUID or passport JSON ({identity, snapshots[]})'
         )
         self.InputParams[1].Description = 'Snapshot UUID to fetch'
         i = 0
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0 + i].Description = (
-            'Compose JSON string: {identity, snapshots:[requested snapshot]}'
+            'Passport JSON string: {identity, snapshots:[requested snapshot]}'
         )
 
     def get_auth_core_from_sticky(self):
@@ -77,53 +77,53 @@ class CSC_FetchSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
         return auth_core
 
     def RunScript(self, Input, SnapshotID):
-        ComposeJSON = ''
+        Passport = ''
 
         auth_core = self.get_auth_core_from_sticky()
         if auth_core is None:
-            return ComposeJSON
+            return Passport
 
         if not auth_core.is_valid():
             msg = ('Authentication expired. Please use CSC_Session '
                    'component to refresh.')
             self._addError(msg)
             self.Component.Message = msg
-            return ComposeJSON
+            return Passport
 
         if Input is None or (isinstance(Input, str) and not str(Input).strip()):
-            msg = 'Please provide an identity UUID or compose JSON.'
+            msg = 'Please provide an identity UUID or passport JSON.'
             self._addWarning(msg)
             self.Component.Message = msg
-            return ComposeJSON
+            return Passport
 
         snapshot_id = str(SnapshotID or '').strip()
         if not snapshot_id or not auth_core.validate_uuid(snapshot_id):
             msg = 'Please provide a valid snapshot UUID.'
             self._addError(msg)
             self.Component.Message = msg
-            return ComposeJSON
+            return Passport
 
         identity_id = auth_core.resolve_identity_id_from_input(Input)
         if not identity_id:
-            msg = 'Input is not a valid identity UUID or compose JSON.'
+            msg = 'Input is not a valid identity UUID or passport JSON.'
             self._addError(msg)
             self.Component.Message = msg
-            return ComposeJSON
+            return Passport
 
         try:
             self.Component.Message = (
                 f'Fetching snapshot {snapshot_id} for identity {identity_id}...'
             )
-            response = auth_core.cached_get_compose(
+            response = auth_core.cached_get_passport(
                 identity_id,
                 snapshots=[snapshot_id],
             )
 
             if response.status_code == 200:
                 data = response.json()
-                ComposeJSON = auth_core.compose_json_string(data)
-                self.Component.Message = 'Fetched compose for snapshot'
-                return ComposeJSON
+                Passport = auth_core.passport_json_string(data)
+                self.Component.Message = 'Fetched passport for snapshot'
+                return Passport
 
             if response.status_code == 401:
                 msg = 'Authentication failed. Please sign in again.'
@@ -150,4 +150,4 @@ class CSC_FetchSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
             self._addError(msg)
             self.Component.Message = msg
 
-        return ComposeJSON
+        return Passport

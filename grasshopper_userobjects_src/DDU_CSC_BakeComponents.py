@@ -21,9 +21,9 @@ ghenv.Component.NickName = 'BakeComponents'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Bakes compose entries ({identity, snapshots[]}) into the Rhino document '
+    'Bakes passport entries ({identity, snapshots[]}) into the Rhino document '
     'as actual geometry. Creates layers, groups, and attaches the full '
-    'compose JSON as user text. Prioritizes cached PLY meshes and point '
+    'passport JSON as user text. Prioritizes cached PLY meshes and point '
     'clouds over inline snapshot primitives.'
 )
 
@@ -32,7 +32,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260617
+    Version: 260908
     """
 
     def __init__(self):
@@ -65,7 +65,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Toggle to bake components to Rhino'
         )
         self.InputParams[1].Description = (
-            'Compose JSON strings ({identity, snapshots[]}) from fetch '
+            'Passport JSON strings ({identity, snapshots[]}) from fetch '
             'components'
         )
 
@@ -289,14 +289,14 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
             for i, cd in enumerate(ComponentData):
                 comp_id = f'item {i}'
                 try:
-                    compose = json.loads(cd)
-                    identity = compose.get('identity')
-                    snapshots = compose.get('snapshots') or []
+                    passport = json.loads(cd)
+                    identity = passport.get('identity')
+                    snapshots = passport.get('snapshots') or []
                     snapshot = snapshots[0] if snapshots else None
                     if (not isinstance(identity, dict) or
                             not isinstance(snapshot, dict)):
                         msg = (
-                            f'Invalid compose JSON at index {i}: '
+                            f'Invalid passport JSON at index {i}: '
                             'expected {{identity, snapshot}}'
                         )
                         self._addWarning(msg)
@@ -305,7 +305,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
                     identity_id = identity.get('_id')
                     if not identity_id:
                         self._addWarning(
-                            f'Missing identity._id in compose at index {i}')
+                            f'Missing identity._id in passport at index {i}')
                         continue
                     comp_id = identity_id
 

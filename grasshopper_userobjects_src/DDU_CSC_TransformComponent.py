@@ -20,7 +20,7 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Applies a Rhino transformation to the iframe (insertion frame) of a '
-    'component snapshot in compose JSON ({identity, snapshot}). Updates the '
+    'component snapshot in passport JSON ({identity, snapshot}). Updates the '
     'snapshot coordinate system based on the applied transformation.'
 )
 
@@ -29,7 +29,7 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -59,7 +59,7 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Compose JSON string ({identity, snapshot}) from previous '
+            'Passport JSON string ({identity, snapshot}) from previous '
             'components.'
         )
         self.InputParams[1].Description = (
@@ -70,7 +70,7 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Transformed compose JSON string ({identity, snapshot})!'
+            'Transformed passport JSON string ({identity, snapshot})!'
         )
 
     def PlaneToFrameDict(self, plane: Rhino.Geometry.Plane) -> dict:
@@ -113,12 +113,12 @@ class CSC_TransformComponent(Grasshopper.Kernel.GH_ScriptInstance):
             return XComponentData
 
         try:
-            # Load and parse compose JSON ({identity, snapshot})
+            # Load and parse passport JSON ({identity, snapshot})
             jcomp = json.loads(ComponentData)
             snapshots = jcomp.get('snapshots') or []
             snapshot = snapshots[0] if snapshots else None
             if not isinstance(snapshot, dict):
-                msg = 'Compose JSON has no snapshots to transform!'
+                msg = 'Passport JSON has no snapshots to transform!'
                 self._addError(msg)
                 self.Component.Message = msg
                 return XComponentData

@@ -25,7 +25,7 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Fetches a design from the remote Catalog along with all pinned snapshot '
-    'placements. Resolves each snapshot reference to compose JSON '
+    'placements. Resolves each snapshot reference to passport JSON '
     '({identity, snapshot}) and overwrites snapshot.iframe with the design '
     'insertion frame. Uses caching for optimal performance.'
 )
@@ -35,7 +35,7 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -75,7 +75,7 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
             'Design JSON string'
         )
         self.OutputParams[1+i].Description = (
-            'Compose JSON per placement ({identity, snapshot}) with '
+            'Passport JSON per placement ({identity, snapshot}) with '
             'snapshot.iframe set from the design'
         )
         self.OutputParams[2+i].Description = (
@@ -154,9 +154,9 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
 
         return meshes
 
-    def fetch_compose_for_snapshot(self, auth_core, snapshot_id, iframe):
+    def fetch_passport_for_snapshot(self, auth_core, snapshot_id, iframe):
         """
-        Resolve a design snapshot reference to compose JSON with the design
+        Resolve a design snapshot reference to passport JSON with the design
         insertion frame applied to snapshot.iframe.
         """
         snap_response = auth_core.cached_get(
@@ -176,24 +176,24 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 f'Snapshot {snapshot_id} missing identity_id')
             return None
 
-        compose_response = auth_core.cached_get(
+        passport_response = auth_core.cached_get(
             f'/identities/{identity_id}/compose',
-            f'compose:{identity_id}:{snapshot_id}',
+            f'passport:{identity_id}:{snapshot_id}',
             params={'snapshot_id': snapshot_id})
 
-        if compose_response.status_code != 200:
+        if passport_response.status_code != 200:
             self._addWarning(
-                f'Failed to fetch compose for snapshot {snapshot_id}: '
-                f'{compose_response.status_code}')
+                f'Failed to fetch passport for snapshot {snapshot_id}: '
+                f'{passport_response.status_code}')
             return None
 
-        compose = compose_response.json()
-        identity = compose.get('identity')
-        snapshots = compose.get('snapshots') or []
+        passport = passport_response.json()
+        identity = passport.get('identity')
+        snapshots = passport.get('snapshots') or []
         snapshot = snapshots[0] if snapshots else None
         if not isinstance(identity, dict) or not isinstance(snapshot, dict):
             self._addWarning(
-                f'Invalid compose payload for snapshot {snapshot_id}')
+                f'Invalid passport payload for snapshot {snapshot_id}')
             return None
 
         updated_snapshot = dict(snapshot)
@@ -253,7 +253,7 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
                 design_data = response.json()
                 self._addRemark(f'Successfully fetched design: {design_id}')
 
-                # Resolve pinned snapshot placements to compose JSON
+                # Resolve pinned snapshot placements to passport JSON
                 components_data = []
                 if 'components' in design_data:
                     for comp_ref in design_data['components']:
@@ -261,10 +261,10 @@ class CSC_FetchDesign(Grasshopper.Kernel.GH_ScriptInstance):
                         iframe = comp_ref.get('iframe')
 
                         if snapshot_id and iframe:
-                            compose = self.fetch_compose_for_snapshot(
+                            passport = self.fetch_passport_for_snapshot(
                                 auth_core, snapshot_id, iframe)
-                            if compose:
-                                components_data.append(compose)
+                            if passport:
+                                components_data.append(passport)
                         else:
                             self._addWarning(
                                 'Invalid snapshot reference in design')

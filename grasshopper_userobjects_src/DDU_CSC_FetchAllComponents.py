@@ -25,7 +25,7 @@ ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Fetches all catalog identities (joined with their current snapshot) '
     'from the remote Catalog API via GET /identities with caching support. '
-    'Returns each entry as a compose JSON string ({identity, snapshots[]}).'
+    'Returns each entry as a passport JSON string ({identity, snapshots[]}).'
 )
 
 
@@ -33,7 +33,7 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -66,7 +66,7 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Compose JSON per entry ({identity, snapshots[]}) fetched from '
+            'Passport JSON per entry ({identity, snapshots[]}) fetched from '
             'GET /identities. Use \'DisassembleComponent\' to access the '
             'individual fields ready for Grasshopper'
         )
@@ -100,7 +100,7 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = 'Fetching identities (with cache)...'
 
             # Unified catalog cache: stores identity + snapshot independently
-            # and reassembles compose rows (no separate all_identities blob).
+            # and reassembles passport rows (no separate all_identities blob).
             response = auth_core.cached_list_identities(
                 {'expand': 'current_snapshot'},
             )
@@ -121,13 +121,13 @@ class CSC_FetchAllComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 ComponentData = Grasshopper.DataTree[System.Object]()
                 __Results = (ComponentData,)
 
-                # Loop over all compose entries and add them to the data tree
+                # Loop over all passport entries and add them to the data tree
                 for i, json_comp in enumerate(json_comps):
                     # Create datatree path
                     ghp = Grasshopper.Kernel.Data.GH_Path(0, i)
-                    # Add canonical compose JSON to the datatree
+                    # Add canonical passport JSON to the datatree
                     ComponentData.Add(
-                        auth_core.compose_json_string(json_comp), ghp)
+                        auth_core.passport_json_string(json_comp), ghp)
 
                 return __Results
 

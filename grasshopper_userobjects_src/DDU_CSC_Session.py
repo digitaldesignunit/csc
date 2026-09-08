@@ -42,12 +42,12 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 260826
+Version: 260908
 """
 
 
-def _compute_compose_etag(identity_doc, snapshot_docs):
-    """Match backend ``_compute_compose_etag`` (identity + snapshot rows)."""
+def _compute_passport_etag(identity_doc, snapshot_docs):
+    """Match backend ``_compute_passport_etag`` (identity + snapshot rows)."""
     parts = [identity_doc.get('lastmodified', '')]
     for doc in sorted(
             snapshot_docs or [],
@@ -56,56 +56,56 @@ def _compute_compose_etag(identity_doc, snapshot_docs):
     return hashlib.sha256('::'.join(parts).encode('utf-8')).hexdigest()
 
 
-def _compose_cache_key(identity_id, snapshots=None):
-    """Stable cache key for a compose GET variant."""
+def _passport_cache_key(identity_id, snapshots=None):
+    """Stable cache key for a passport GET variant."""
     if not snapshots or snapshots == 'current':
-        return f'compose:{identity_id}:current'
+        return f'passport:{identity_id}:current'
     if snapshots == 'all':
-        return f'compose:{identity_id}:all'
+        return f'passport:{identity_id}:all'
     if isinstance(snapshots, (list, tuple)):
         joined = ','.join(sorted(str(item) for item in snapshots))
         digest = hashlib.md5(joined.encode('utf-8')).hexdigest()[:16]
-        return f'compose:{identity_id}:ids:{digest}'
-    return f'compose:{identity_id}:custom'
+        return f'passport:{identity_id}:ids:{digest}'
+    return f'passport:{identity_id}:custom'
 
 
-def primary_snapshot_from_compose(compose):
-    """Return the first snapshot from a compose payload."""
-    if not isinstance(compose, dict):
+def primary_snapshot_from_passport(passport):
+    """Return the first snapshot from a passport payload."""
+    if not isinstance(passport, dict):
         return None
-    snapshots = compose.get('snapshots') or []
+    snapshots = passport.get('snapshots') or []
     if snapshots and isinstance(snapshots[0], dict):
         return snapshots[0]
-    legacy = compose.get('snapshot')
+    legacy = passport.get('snapshot')
     if isinstance(legacy, dict):
         return legacy
     return None
 
 
-def normalize_compose_payload(compose):
+def normalize_passport_payload(passport):
     """
-    Ensure compose-shaped dicts use {identity, snapshots[]}.
+    Ensure passport-shaped dicts use {identity, snapshots[]}.
 
     Accepts legacy {identity, snapshot} list rows and normalizes them.
     """
-    if not isinstance(compose, dict):
-        return compose
-    identity = compose.get('identity')
+    if not isinstance(passport, dict):
+        return passport
+    identity = passport.get('identity')
     if not isinstance(identity, dict):
-        return compose
+        return passport
 
-    snapshots = compose.get('snapshots')
+    snapshots = passport.get('snapshots')
     if isinstance(snapshots, list) and snapshots:
         out = {'identity': identity, 'snapshots': snapshots}
     else:
-        legacy = compose.get('snapshot')
+        legacy = passport.get('snapshot')
         if isinstance(legacy, dict):
             out = {'identity': identity, 'snapshots': [legacy]}
         else:
-            return compose
+            return passport
 
-    if 'reserved_by_username' in compose:
-        out['reserved_by_username'] = compose['reserved_by_username']
+    if 'reserved_by_username' in passport:
+        out['reserved_by_username'] = passport['reserved_by_username']
     return out
 
 
@@ -324,9 +324,9 @@ class _ComponentCache(object):
             except (IOError, pickle.PickleError, KeyError):
                 return None, None, False
 
-    def ingest_compose_row(self, row):
+    def ingest_passport_row(self, row):
         """
-        Store identity + snapshot(s) from one compose row.
+        Store identity + snapshot(s) from one passport row.
 
         Accepts {identity, snapshots[]} and list rows {identity, snapshot}.
         Returns the identity id when stored, else None.
@@ -365,16 +365,16 @@ class _ComponentCache(object):
         self.set_identity(identity_id, identity)
         return identity_id
 
-    def ingest_compose_rows(self, rows):
-        """Store many compose rows; return ordered identity ids."""
+    def ingest_passport_rows(self, rows):
+        """Store many passport rows; return ordered identity ids."""
         identity_ids = []
         for row in rows or []:
-            identity_id = self.ingest_compose_row(row)
+            identity_id = self.ingest_passport_row(row)
             if identity_id:
                 identity_ids.append(identity_id)
         return identity_ids
 
-    def assemble_compose(self, identity_id):
+    def assemble_passport(self, identity_id):
         """
         Build {identity, snapshots:[current]} from cached documents.
 
@@ -424,13 +424,13 @@ class _ComponentCache(object):
             except (IOError, KeyError):
                 return None, None, False
 
-    def assemble_compose_list(self, identity_ids):
-        """Build compose rows from cached identity/snapshot documents."""
+    def assemble_passport_list(self, identity_ids):
+        """Build passport rows from cached identity/snapshot documents."""
         rows = []
         for identity_id in identity_ids or []:
-            compose = self.assemble_compose(identity_id)
-            if compose:
-                rows.append(compose)
+            passport = self.assemble_passport(identity_id)
+            if passport:
+                rows.append(passport)
         return rows
 
     def invalidate(self, pattern=None):
@@ -1290,7 +1290,7 @@ class _AuthCore(object):
 
     def resolve_identity_id_from_input(self, value):
         """
-        Resolve an identity UUID from a raw UUID string or compose JSON.
+        Resolve an identity UUID from a raw UUID string or passport JSON.
         """
         if value is None:
             return None
@@ -1313,20 +1313,20 @@ class _AuthCore(object):
             return str(identity_id)
         return None
 
-    def primary_snapshot(self, compose):
-        """Return the first snapshot from a compose payload."""
-        return primary_snapshot_from_compose(compose)
+    def primary_snapshot(self, passport):
+        """Return the first snapshot from a passport payload."""
+        return primary_snapshot_from_passport(passport)
 
-    def normalize_compose_output(self, compose):
+    def normalize_passport_output(self, passport):
         """Return {identity, snapshots[]} for downstream GH components."""
-        return normalize_compose_payload(compose)
+        return normalize_passport_payload(passport)
 
-    def compose_json_string(self, compose):
+    def passport_json_string(self, passport):
         """
-        Serialize one compose row in the canonical
+        Serialize one passport row in the canonical
         {identity, snapshots[]} shape.
         """
-        return json.dumps(self.normalize_compose_output(compose))
+        return json.dumps(self.normalize_passport_output(passport))
 
     # Cache Management Methods ------------------------------------------------
 
@@ -1439,7 +1439,7 @@ class _AuthCore(object):
 
         List responses store per-identity and per-snapshot documents plus a
         lightweight query index (identity ids + list ETag). A 304 reassembles
-        compose rows from the individual caches.
+        passport rows from the individual caches.
         """
         if not self.is_valid():
             raise RuntimeError(
@@ -1471,7 +1471,7 @@ class _AuthCore(object):
 
         if response.status_code == 304:
             if has_query and identity_ids:
-                rows = self._cache.assemble_compose_list(identity_ids)
+                rows = self._cache.assemble_passport_list(identity_ids)
                 if rows:
                     return _CachedResponse(rows, query_etag)
             # Stale query index ? refetch without conditional header
@@ -1489,7 +1489,7 @@ class _AuthCore(object):
             try:
                 data = response.json()
                 if isinstance(data, list):
-                    stored_ids = self._cache.ingest_compose_rows(data)
+                    stored_ids = self._cache.ingest_passport_rows(data)
                     list_etag = response.headers.get('ETag')
                     self._cache.set_query(
                         query_key, stored_ids, list_etag, params)
@@ -1498,7 +1498,7 @@ class _AuthCore(object):
 
         return response
 
-    def cached_get_compose(
+    def cached_get_passport(
             self,
             identity_id,
             snapshots=None,
@@ -1508,7 +1508,7 @@ class _AuthCore(object):
         Fetch GET /identities/{id}/compose with caching.
 
         ``snapshots``: None/'current' (default), 'all', or a list of snapshot
-        UUID strings. Compose ETag matches the backend; 304 returns cached
+        UUID strings. Passport ETag matches the backend; 304 returns cached
         body when available.
         """
         if not self.is_valid():
@@ -1523,7 +1523,7 @@ class _AuthCore(object):
             params['snapshots'] = ','.join(str(item) for item in snapshots)
 
         path = f'/identities/{identity_id}/compose'
-        cache_key = _compose_cache_key(identity_id, snapshots)
+        cache_key = _passport_cache_key(identity_id, snapshots)
         use_current_assembly = (
             not snapshots or snapshots == 'current'
         )
@@ -1532,7 +1532,7 @@ class _AuthCore(object):
         cached_etag = None
         if self._cache:
             if use_current_assembly:
-                cached_body = self._cache.assemble_compose(identity_id)
+                cached_body = self._cache.assemble_passport(identity_id)
             else:
                 cached_body, cached_etag, cached_ok = self._cache.get(
                     cache_key,
@@ -1543,7 +1543,7 @@ class _AuthCore(object):
 
             if cached_body and isinstance(cached_body.get('identity'), dict):
                 snapshot_docs = cached_body.get('snapshots') or []
-                cached_etag = _compute_compose_etag(
+                cached_etag = _compute_passport_etag(
                     cached_body['identity'],
                     snapshot_docs,
                 )
@@ -1584,13 +1584,13 @@ class _AuthCore(object):
                 if self._cache:
                     etag = response.headers.get('ETag')
                     if not etag and isinstance(data.get('identity'), dict):
-                        etag = _compute_compose_etag(
+                        etag = _compute_passport_etag(
                             data['identity'],
                             data.get('snapshots') or [],
                         )
                     if not use_current_assembly:
                         self._cache.set(cache_key, data, etag)
-                    self._cache.ingest_compose_row(data)
+                    self._cache.ingest_passport_row(data)
             except Exception:
                 pass
 
@@ -1674,7 +1674,7 @@ class _AuthCore(object):
 
         Returns a Rhino PointCloud or None when unavailable. Callers keep
         the object return (unlike cached_get_snapshot_mesh) so Bake /
-        Fetch / ComposeToD2P stay unchanged.
+        Fetch / PassportToD2P stay unchanged.
         """
         if not self.is_valid():
             raise RuntimeError(

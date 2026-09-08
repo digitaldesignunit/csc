@@ -24,7 +24,7 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Lists all snapshots for one identity (id and name). Input can '
-    'be an identity UUID or compose JSON ({identity, snapshots[]}).'
+    'be an identity UUID or passport JSON ({identity, snapshots[]}).'
 )
 
 
@@ -32,7 +32,7 @@ class CSC_ListIdentitySnapshots(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -56,7 +56,7 @@ class CSC_ListIdentitySnapshots(Grasshopper.Kernel.GH_ScriptInstance):
 
     def BeforeRunScript(self):
         self.InputParams[0].Description = (
-            'Identity UUID or compose JSON ({identity, snapshots[]})'
+            'Identity UUID or passport JSON ({identity, snapshots[]})'
         )
         i = 0
         if self.OutputParams[0].Name == 'out':
@@ -90,14 +90,14 @@ class CSC_ListIdentitySnapshots(Grasshopper.Kernel.GH_ScriptInstance):
             return SnapshotID, SnapshotName
 
         if Input is None or (isinstance(Input, str) and not str(Input).strip()):
-            msg = 'Please provide an identity UUID or compose JSON.'
+            msg = 'Please provide an identity UUID or passport JSON.'
             self._addWarning(msg)
             self.Component.Message = msg
             return SnapshotID, SnapshotName
 
         identity_id = auth_core.resolve_identity_id_from_input(Input)
         if not identity_id:
-            msg = 'Input is not a valid identity UUID or compose JSON.'
+            msg = 'Input is not a valid identity UUID or passport JSON.'
             self._addError(msg)
             self.Component.Message = msg
             return SnapshotID, SnapshotName

@@ -25,7 +25,7 @@ ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Fetches specific identities (with their current snapshot) from the '
     'remote Catalog by their identity IDs. Supports caching and returns '
-    'compose JSON ({identity, snapshots[]}) with error handling for missing '
+    'passport JSON ({identity, snapshots[]}) with error handling for missing '
     'identities.'
 )
 
@@ -34,7 +34,7 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -71,8 +71,8 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'Compose JSON per entry ({identity, snapshots[]}) fetched from the '
-            'server. Use \'DisassembleComponent\' to access the individual '
+            'Passport JSON per entry ({identity, snapshots[]}) fetched from '
+            'the server. Use \'DisassembleComponent\' to access the individual '
             'fields ready for Grasshopper'
         )
 
@@ -126,22 +126,22 @@ class CSC_FetchComponents(Grasshopper.Kernel.GH_ScriptInstance):
             ComponentData = Grasshopper.DataTree[System.Object]()
             __Results = (ComponentData,)
 
-            # Fetch each identity's current-snapshot compose
+            # Fetch each identity's current-snapshot passport
             for i, _id in enumerate(component_ids):
                 try:
                     # Unified catalog cache (identity + snapshot stored
-                    # independently, compose assembled on read).
-                    response = auth_core.cached_get_compose(_id)
+                    # independently, passport assembled on read).
+                    response = auth_core.cached_get_passport(_id)
 
                     if response.status_code == 200:
-                        # Successfully fetched compose (from server or cache)
+                        # Successfully fetched passport (from server or cache)
                         json_comp = response.json()
 
                         # Create datatree path
                         ghp = Grasshopper.Kernel.Data.GH_Path(i)
-                        # Add canonical compose JSON to the datatree
+                        # Add canonical passport JSON to the datatree
                         ComponentData.Add(
-                            auth_core.compose_json_string(json_comp), ghp)
+                            auth_core.passport_json_string(json_comp), ghp)
 
                         self._addRemark(
                             f'Successfully fetched component {_id}'

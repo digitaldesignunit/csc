@@ -20,7 +20,7 @@ ghenv.Component.NickName = 'DisassembleComponent'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Parses compose JSON ({identity, snapshots[]}) and outputs individual '
+    'Parses passport JSON ({identity, snapshots[]}) and outputs individual '
     'fields as Grasshopper-native types. Reconstructs geometry, bounding '
     'boxes, PCA frames, and metadata from the identity/snapshot pair. '
     'Point clouds prefer the full PLY via Session cache, then the inline '
@@ -32,7 +32,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260826
+    Version: 260908
     """
 
     def __init__(self):
@@ -62,7 +62,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Compose JSON ({identity, snapshots[]}) fetched from the server.'
+            'Passport JSON ({identity, snapshots[]}) fetched from the server.'
         )
         # Initialize output param descriptions
         i = 0
@@ -464,15 +464,15 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                 ghp = ComponentData.Paths[i]
                 for j, comp in enumerate(ComponentData.Branches[i]):
                     try:
-                        compose = json.loads(comp)
-                        identity = compose.get('identity') or {}
-                        snapshots = compose.get('snapshots') or []
+                        passport = json.loads(comp)
+                        identity = passport.get('identity') or {}
+                        snapshots = passport.get('snapshots') or []
                         snapshot = (
                             snapshots[0] if snapshots else {}
                         )
                         if not identity or not snapshot:
                             self._addWarning(
-                                'Compose JSON missing identity/snapshots, '
+                                'Passport JSON missing identity/snapshots, '
                                 'skipping entry')
                             continue
 
@@ -636,7 +636,7 @@ class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
                             ParentComponent.AddRange(parent_identities, ghp)
 
                     except json.JSONDecodeError as e:
-                        msg = f'Failed to parse compose data: {str(e)}'
+                        msg = f'Failed to parse passport data: {str(e)}'
                         self._addError(msg)
                     except Exception as e:
                         msg = f'Error processing component: {str(e)}'

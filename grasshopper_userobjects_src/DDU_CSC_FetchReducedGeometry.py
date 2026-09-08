@@ -27,8 +27,8 @@ ghenv.Component.Description = (  # NOQA
     'Fetches the reduced (catalog default) snapshot geometry as binary PLY '
     'from the CSC API, with ETag caching.\n'
     'Input can be:\n'
-    '- Geometry carrying the \'csc_component\' compose userstring\n'
-    '- A compose JSON string ({identity, snapshots[]})\n'
+    '- Geometry carrying the \'csc_component\' passport userstring\n'
+    '- A passport JSON string ({identity, snapshots[]})\n'
     '- A raw identity_id (resolves the current snapshot)\n'
     '- A raw snapshot_id\n\n'
     'Falls back to the inline snapshot geometry (primitive meshes) when no '
@@ -41,7 +41,7 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260826
+    Version: 260908
     """
 
     # Resolution preference chain (reduced only; inline fallback otherwise)
@@ -77,8 +77,8 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         # Initialize input param descriptions
         self.InputParams[0].Description = (
             'Input can be:\n'
-            '- Geometry with the \'csc_component\' compose userstring\n'
-            '- A compose JSON string ({identity, snapshots[]})\n'
+            '- Geometry with the \'csc_component\' passport userstring\n'
+            '- A passport JSON string ({identity, snapshots[]})\n'
             '- A raw identity_id (resolves current snapshot)\n'
             '- A raw snapshot_id'
         )
@@ -116,9 +116,9 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         except (json.JSONDecodeError, TypeError):
             return None
 
-    def normalize_compose(self, obj):
+    def normalize_passport(self, obj):
         """
-        Classify a parsed JSON object into canonical compose
+        Classify a parsed JSON object into canonical passport
         {identity, snapshots[]}, or None.
         """
         if not isinstance(obj, dict):
@@ -135,27 +135,27 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             return {'identity': {}, 'snapshots': [obj]}
         return None
 
-    def primary_snapshot(self, compose):
+    def primary_snapshot(self, passport):
         """Return the snapshot row used for geometry fetch."""
-        if not isinstance(compose, dict):
+        if not isinstance(passport, dict):
             return None
-        snaps = compose.get('snapshots') or []
+        snaps = passport.get('snapshots') or []
         if snaps and isinstance(snaps[0], dict):
             return snaps[0]
         return None
 
-    def fetch_compose_by_identity(self, auth_core, identity_id):
+    def fetch_passport_by_identity(self, auth_core, identity_id):
         """Fetch {identity, snapshots[]} for an identity's current snapshot."""
         try:
-            resp = auth_core.cached_get_compose(identity_id)
+            resp = auth_core.cached_get_passport(identity_id)
             if resp.status_code == 200:
-                return auth_core.normalize_compose_output(resp.json())
+                return auth_core.normalize_passport_output(resp.json())
         except Exception as e:
-            self._addWarning(f'Identity compose fetch failed: {str(e)}')
+            self._addWarning(f'Identity passport fetch failed: {str(e)}')
         return None
 
-    def fetch_compose_by_snapshot(self, auth_core, snapshot_id):
-        """Build minimal compose from a bare snapshot document."""
+    def fetch_passport_by_snapshot(self, auth_core, snapshot_id):
+        """Build minimal passport from a bare snapshot document."""
         try:
             resp = auth_core.authorized_get(f'/snapshots/{snapshot_id}')
             if resp.status_code == 200:
@@ -164,47 +164,47 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             self._addWarning(f'Snapshot fetch failed: {str(e)}')
         return None
 
-    def resolve_compose(self, auth_core, Input):
+    def resolve_passport(self, auth_core, Input):
         """
-        Resolve the input into canonical compose {identity, snapshots[]}.
-        Returns (compose_or_None, input_is_geometry).
+        Resolve the input into canonical passport {identity, snapshots[]}.
+        Returns (passport_or_None, input_is_geometry).
         """
         input_is_geometry = isinstance(Input, rg.GeometryBase)
 
-        # Geometry carrying the compose userstring
+        # Geometry carrying the passport userstring
         if (hasattr(Input, 'UserStringCount') and
                 Input.UserStringCount > 0):
             value = Input.GetUserString('csc_component')
             if value:
-                compose = self.normalize_compose(
+                passport = self.normalize_passport(
                     self.parse_json_safe(value))
-                if compose:
-                    return compose, input_is_geometry
+                if passport:
+                    return passport, input_is_geometry
 
-        # String input: compose JSON, identity doc, or raw UUID
+        # String input: passport JSON, identity doc, or raw UUID
         if isinstance(Input, str):
             s = Input.strip()
             obj = self.parse_json_safe(s)
             if obj is not None:
-                compose = self.normalize_compose(obj)
-                if compose:
-                    return compose, input_is_geometry
+                passport = self.normalize_passport(obj)
+                if passport:
+                    return passport, input_is_geometry
                 # Identity document with a current snapshot pointer
                 if (isinstance(obj, dict) and obj.get('_id') and
                         obj.get('current_snapshot_id')):
-                    compose = self.fetch_compose_by_identity(
+                    passport = self.fetch_passport_by_identity(
                         auth_core, obj['_id'])
-                    if compose:
-                        return compose, input_is_geometry
+                    if passport:
+                        return passport, input_is_geometry
                 return None, input_is_geometry
             # Not JSON: treat as a raw UUID (identity first, then snapshot)
             if auth_core.validate_uuid(s):
-                compose = self.fetch_compose_by_identity(auth_core, s)
-                if compose:
-                    return compose, input_is_geometry
-                compose = self.fetch_compose_by_snapshot(auth_core, s)
-                if compose:
-                    return compose, input_is_geometry
+                passport = self.fetch_passport_by_identity(auth_core, s)
+                if passport:
+                    return passport, input_is_geometry
+                passport = self.fetch_passport_by_snapshot(auth_core, s)
+                if passport:
+                    return passport, input_is_geometry
 
         return None, input_is_geometry
 
@@ -415,10 +415,10 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         try:
             self.Component.Message = 'Processing input...'
 
-            compose, input_is_geometry = self.resolve_compose(
+            passport, input_is_geometry = self.resolve_passport(
                 auth_core, Input)
-            snapshot = self.primary_snapshot(compose)
-            if not compose or not snapshot:
+            snapshot = self.primary_snapshot(passport)
+            if not passport or not snapshot:
                 msg = 'Could not resolve a snapshot from input.'
                 self._addError(msg)
                 self.Component.Message = msg
@@ -447,10 +447,10 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                 for geom, _source, _kind, _idx in items:
                     geom.Transform(xform)
 
-            compose_json = auth_core.compose_json_string(compose)
+            passport_json = auth_core.passport_json_string(passport)
             for geom, _source, kind, idx in items:
                 if hasattr(geom, 'SetUserString'):
-                    geom.SetUserString('csc_component', compose_json)
+                    geom.SetUserString('csc_component', passport_json)
                     if kind == 'mesh':
                         geom.SetUserString('csc_mesh_index', str(idx))
                     else:
