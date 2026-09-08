@@ -31,18 +31,14 @@ fail() {
   exit 1
 }
 
-# Read GitHub repo URL and token from environment variables
+# Read GitHub repo URL from the environment. The repo is public, so no token.
 GH_REPO_URL="${GITHUB_REPO_URL:-}"
-GH_REPO_TOKEN="${GITHUB_CSC_GH_TOKEN:-}"
 
-if [ -z "${GH_REPO_URL}" ] || [ -z "${GH_REPO_TOKEN}" ]; then
-  fail "GITHUB_REPO_URL or GITHUB_CSC_GH_TOKEN environment variable is not set"
+if [ -z "${GH_REPO_URL}" ]; then
+  fail "GITHUB_REPO_URL environment variable is not set"
 fi
 
 log "Starting GH XML sync"
-
-# Prepare authenticated URL
-AUTH_URL=$(echo "${GH_REPO_URL}" | sed "s|https://github.com/|https://${GH_REPO_TOKEN}@github.com/|")
 
 # Clone repo if it doesn't exist (with sparse checkout for XML folder only)
 if [ ! -d "${GH_REPO_PATH}/.git" ]; then
@@ -51,7 +47,7 @@ if [ ! -d "${GH_REPO_PATH}/.git" ]; then
   mkdir -p "${REPO_DIR}" || fail "Failed to create repo directory: ${REPO_DIR}"
   
   # Clone with minimal depth and no checkout
-  git clone --depth=1 --branch "${GH_REPO_BRANCH}" --no-checkout "${AUTH_URL}" "${GH_REPO_PATH}" || fail "git clone failed"
+  git clone --depth=1 --branch "${GH_REPO_BRANCH}" --no-checkout "${GH_REPO_URL}" "${GH_REPO_PATH}" || fail "git clone failed"
   
   # Enable sparse checkout
   git -C "${GH_REPO_PATH}" sparse-checkout init --cone || fail "sparse-checkout init failed"
@@ -64,8 +60,8 @@ if [ ! -d "${GH_REPO_PATH}/.git" ]; then
   
   log "Repository cloned successfully (XML folder only)"
 else
-  # Update existing sparse checkout if needed
-  git -C "${GH_REPO_PATH}" remote set-url origin "${AUTH_URL}" || true
+  # Drop any leftover credentials from when the repo was private
+  git -C "${GH_REPO_PATH}" remote set-url origin "${GH_REPO_URL}" || true
   
   # Ensure sparse checkout is configured
   if ! git -C "${GH_REPO_PATH}" sparse-checkout list >/dev/null 2>&1; then
