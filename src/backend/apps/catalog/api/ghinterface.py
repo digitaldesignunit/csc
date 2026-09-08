@@ -1,12 +1,14 @@
 #!/usr/bin/env python3.9
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
+import asyncio
 import base64
 import hashlib
 import json
 import os
 import re
-from typing import Annotated, List, Optional
+import time
+from typing import Annotated, Dict, List, Optional, Tuple
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -20,6 +22,16 @@ from services.github_service import GitHubService
 
 # INIT ROUTER -----------------------------------------------------------------
 router = APIRouter()
+
+# GITHUB LOOKUP CACHES --------------------------------------------------------
+# Directory listings are re-read constantly during a single CSC_Update run
+# (once per source file and once per UserObject), so they are cached briefly.
+REPO_DIR_CACHE_TTL_SECONDS = 120.0
+# Blob shas are content addressed, so a version parsed from one never changes.
+SRC_FETCH_CONCURRENCY = 8
+
+_repo_dir_cache: Dict[str, Tuple[float, List[dict]]] = {}
+_blob_version_cache: Dict[str, Optional[tuple]] = {}
 
 
 # INTERNAL HELPERS ------------------------------------------------------------
@@ -55,6 +67,40 @@ async def _list_repo_dir(
             detail='Unexpected response from GitHub contents API',
         )
     return data
+
+
+async def _list_repo_dir_cached(
+    client: httpx.AsyncClient,
+    api_base: str,
+    token: str,
+    path: str,
+) -> List[dict]:
+    now = time.monotonic()
+    cached = _repo_dir_cache.get(path)
+    if cached and (now - cached[0]) < REPO_DIR_CACHE_TTL_SECONDS:
+        return cached[1]
+    entries = await _list_repo_dir(client, api_base, token, path)
+    _repo_dir_cache[path] = (now, entries)
+    return entries
+
+
+async def _get_repo_blob(
+    client: httpx.AsyncClient,
+    api_base: str,
+    token: str,
+    sha: str,
+) -> bytes:
+    resp = await client.get(
+        f'{api_base}/git/blobs/{sha}',
+        headers={
+            'Authorization': f'token {token}',
+            'Accept': 'application/vnd.github.v3.raw',
+            'User-Agent': 'CSC-Backend/1.0',
+        },
+        timeout=30.0,
+    )
+    resp.raise_for_status()
+    return resp.content
 
 
 async def _get_repo_file(
@@ -99,16 +145,33 @@ async def _get_repo_file(
         )
 
 
+async def _get_repo_entry_content(
+    client: httpx.AsyncClient,
+    api_base: str,
+    token: str,
+    entry: dict,
+) -> bytes:
+    """Read one file from a contents listing entry, by sha when available."""
+    sha = entry.get('sha')
+    if sha:
+        return await _get_repo_blob(client, api_base, token, sha)
+    return await _get_repo_file(client, api_base, token, entry['path'])
+
+
+# Matches an actual version declaration - the word "version", a ":" or "=",
+# then the number. The separator is required so prose such as 'creates a
+# version-0 snapshot' in a component description cannot be mistaken for a
+# version declaration.
+VERSION_DECLARATION_RE = re.compile(
+    r'version\s*[:=]\s*(\d+(?:\.\d+)?[a-zA-Z]?)')
+
+
 def get_source_version(source):
     """Extract a comparable version tuple from Grasshopper component source."""
-    src_lower = source.lower()
-    version_str = [ln for ln in src_lower.split('\n') if "version" in ln]
-    if version_str:
-        version_match = re.search(
-            r'(\d+(?:\.\d+)?[a-zA-Z]?)', version_str[0])
+    for line in source.lower().split('\n'):
+        version_match = VERSION_DECLARATION_RE.search(line)
         if version_match:
-            version_text = version_match.group(1)
-            return _parse_version_string(version_text)
+            return _parse_version_string(version_match.group(1))
     return None
 
 
@@ -303,28 +366,41 @@ async def list_src_names(
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
-            entries = await _list_repo_dir(
+            entries = await _list_repo_dir_cached(
                 client, api_base, token, 'grasshopper_userobjects_src'
             )
-            result: List[List[object]] = []
-            for item in entries:
-                if item.get('type') == 'file':
-                    name = item.get('name', '')
-                    if '.' in name:
-                        name_no_ext = name.rsplit('.', 1)[0]
-                        path = item.get('path', '')
-                        if path:
-                            content_bytes = await _get_repo_file(
-                                client, api_base, token, path
-                            )
-                            try:
-                                text = content_bytes.decode('utf-8', 'replace')
-                            except Exception:
-                                text = ''
-                            version_tuple = get_source_version(text)
-                        else:
-                            version_tuple = None
-                        result.append([name_no_ext, version_tuple])
+            files = [
+                item for item in entries
+                if item.get('type') == 'file'
+                and '.' in item.get('name', '')
+                and item.get('sha')
+            ]
+
+            semaphore = asyncio.Semaphore(SRC_FETCH_CONCURRENCY)
+
+            async def cache_version(item: dict) -> None:
+                async with semaphore:
+                    content_bytes = await _get_repo_blob(
+                        client, api_base, token, item['sha']
+                    )
+                text = content_bytes.decode('utf-8', 'replace')
+                _blob_version_cache[item['sha']] = get_source_version(text)
+
+            # Only files that were never read at this sha hit GitHub, and
+            # they are read concurrently. In the steady state this route
+            # costs a single (cached) directory listing.
+            await asyncio.gather(*(
+                cache_version(item) for item in files
+                if item['sha'] not in _blob_version_cache
+            ))
+
+            result: List[List[object]] = [
+                [
+                    item['name'].rsplit('.', 1)[0],
+                    _blob_version_cache.get(item['sha']),
+                ]
+                for item in files
+            ]
         return Response(
             json.dumps(result),
             media_type='application/json'
@@ -354,7 +430,7 @@ async def get_src_code(
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
-            entries = await _list_repo_dir(
+            entries = await _list_repo_dir_cached(
                 client, api_base, token, 'grasshopper_userobjects_src'
             )
             matches = [
@@ -372,8 +448,9 @@ async def get_src_code(
                     status_code=status.HTTP_409_CONFLICT,
                     detail='Multiple source files share this name',
                 )
-            path = matches[0]['path']
-            content = await _get_repo_file(client, api_base, token, path)
+            content = await _get_repo_entry_content(
+                client, api_base, token, matches[0]
+            )
 
         return Response(content, media_type='text/plain; charset=utf-8')
     except httpx.HTTPError as e:
@@ -476,7 +553,7 @@ async def list_userobject_names(
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
-            entries = await _list_repo_dir(
+            entries = await _list_repo_dir_cached(
                 client, api_base, token, 'grasshopper_userobjects'
             )
         names: List[str] = []
@@ -511,7 +588,7 @@ async def get_userobject(
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
-            entries = await _list_repo_dir(
+            entries = await _list_repo_dir_cached(
                 client, api_base, token, 'grasshopper_userobjects'
             )
             target_name = f'{name}.ghuser'
@@ -524,8 +601,9 @@ async def get_userobject(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail='UserObject (.ghuser) not found',
                 )
-            path = matches[0]['path']
-            content = await _get_repo_file(client, api_base, token, path)
+            content = await _get_repo_entry_content(
+                client, api_base, token, matches[0]
+            )
 
         headers = {
             'Content-Disposition': f'attachment; filename="{name}.ghuser"'
