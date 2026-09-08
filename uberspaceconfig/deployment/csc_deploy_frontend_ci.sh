@@ -185,6 +185,24 @@ rm -rf "$DEPLOY_DIR"
 echo "DEPLOY: Removed ${DEPLOY_DIR}"
 echo "-----------------------------------------------------------------"
 
+# ---- copy GH interface images to Apache static assets ------------------------
+echo "------------------- STATIC GH INTERFACE IMAGES ------------------"
+echo "-----------------------------------------------------------------"
+GH_IMG_SRC="${HOME}/csc/frontend/public/gh-interface"
+GH_IMG_DEST="${HOME}/html/csc_assets/static/gh-interface"
+
+if [ ! -d "$GH_IMG_SRC" ]; then
+  echo "ERROR: ${GH_IMG_SRC} not found after deploy"
+  exit 1
+fi
+
+mkdir -p "$GH_IMG_DEST"
+echo "I/O: Copying images from ${GH_IMG_SRC}"
+echo "I/O:                  to ${GH_IMG_DEST} (overwrite existing)"
+rsync -a "${GH_IMG_SRC}/" "${GH_IMG_DEST}/"
+echo "I/O: Copied $(find "$GH_IMG_SRC" -maxdepth 1 -type f | wc -l) file(s)"
+echo "-----------------------------------------------------------------"
+
 echo "--------- CSC - FRONTEND CI DEPLOYMENT COMPLETE -----------------"
 echo "-----------------------------------------------------------------"
 echo "Tag:   ${TAG_NAME}"
