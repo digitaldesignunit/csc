@@ -208,6 +208,20 @@ async def _get_repo_file(
         )
 
 
+async def _download_raw(
+    client: httpx.AsyncClient,
+    download_url: str,
+) -> bytes:
+    resp = await client.get(
+        download_url,
+        headers={'User-Agent': 'CSC-Backend/1.0'},
+        timeout=30.0,
+        follow_redirects=True,
+    )
+    resp.raise_for_status()
+    return resp.content
+
+
 async def _get_repo_entry_content(
     client: httpx.AsyncClient,
     api_base: str,
@@ -217,26 +231,37 @@ async def _get_repo_entry_content(
 ) -> bytes:
     """Read one file from a contents listing entry.
 
-    Prefer GitHub's public download_url (raw.githubusercontent.com) so a
-    CSC_Update run does not burn the unauthenticated REST quota (60/hour)
-    by fetching every blob through /git/blobs.
+    With a token, prefer /git/blobs on api.github.com (5000 req/hour).
+    Without a token, prefer download_url (raw.githubusercontent.com) so
+    CSC_Update does not burn the unauthenticated 60 req/hour REST quota.
+    Fall back to the other method if the first fails.
     """
     download_url = entry.get('download_url')
-    if download_url:
-        resp = await client.get(
-            download_url,
-            headers={'User-Agent': 'CSC-Backend/1.0'},
-            timeout=30.0,
-            follow_redirects=True,
-        )
-        resp.raise_for_status()
-        return resp.content
     sha = entry.get('sha')
-    if sha:
+
+    async def via_raw() -> bytes:
+        return await _download_raw(client, download_url)
+
+    async def via_blob() -> bytes:
+        if not sha:
+            return await _get_repo_file(
+                client, api_base, token, entry['path'], ref
+            )
         return await _get_repo_blob(client, api_base, token, sha)
-    return await _get_repo_file(
-        client, api_base, token, entry['path'], ref
-    )
+
+    if token:
+        try:
+            return await via_blob()
+        except httpx.HTTPError:
+            if download_url:
+                return await via_raw()
+            raise
+    if download_url:
+        try:
+            return await via_raw()
+        except httpx.HTTPError:
+            return await via_blob()
+    return await via_blob()
 
 
 def _http_exception_from_github(e: httpx.HTTPError) -> HTTPException:
@@ -244,6 +269,7 @@ def _http_exception_from_github(e: httpx.HTTPError) -> HTTPException:
     if isinstance(e, httpx.HTTPStatusError):
         code = e.response.status_code
         remaining = e.response.headers.get('X-RateLimit-Remaining')
+        url = str(e.request.url) if e.request is not None else ''
         if code == 401:
             return HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -260,9 +286,23 @@ def _http_exception_from_github(e: httpx.HTTPError) -> HTTPException:
                     'reset, or set GITHUB_CSC_GH_TOKEN for a higher limit.'
                 ),
             )
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f'GitHub HTTP {code} for {url}',
+        )
+    if isinstance(e, httpx.TimeoutException):
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f'GitHub request timed out: {e}',
+        )
+    if isinstance(e, httpx.ConnectError):
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f'Cannot connect to GitHub: {e}',
+        )
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail='GitHub service unavailable',
+        detail=f'GitHub service unavailable ({type(e).__name__}): {e}',
     )
 
 
@@ -402,7 +442,7 @@ async def download_gh_interface(
         filename = await github_service.get_asset_filename(release_info)
 
         async def generate():
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(follow_redirects=True) as client:
                 try:
                     headers = _github_headers(
                         token, accept='application/octet-stream'
@@ -467,7 +507,7 @@ async def list_src_names(
         token = _github_token()
         api_base = _extract_api_url(repo_url)
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
             entries = await _list_repo_dir_cached(
                 client, api_base, token, 'grasshopper_userobjects_src', ref
             )
@@ -479,6 +519,10 @@ async def list_src_names(
             ]
 
             semaphore = asyncio.Semaphore(SRC_FETCH_CONCURRENCY)
+            to_fetch = [
+                item for item in files
+                if item['sha'] not in _blob_version_cache
+            ]
 
             async def cache_version(item: dict) -> None:
                 async with semaphore:
@@ -491,10 +535,21 @@ async def list_src_names(
             # Only files that were never read at this sha hit GitHub, and
             # they are read concurrently. In the steady state this route
             # costs a single (cached) directory listing.
-            await asyncio.gather(*(
-                cache_version(item) for item in files
-                if item['sha'] not in _blob_version_cache
-            ))
+            fetched = await asyncio.gather(
+                *(cache_version(item) for item in to_fetch),
+                return_exceptions=True,
+            )
+            failures = [
+                result for result in fetched
+                if isinstance(result, Exception)
+            ]
+            if failures and len(failures) == len(to_fetch):
+                raise failures[0]
+            for item, result in zip(to_fetch, fetched):
+                if isinstance(result, Exception):
+                    print(
+                        f'[ERROR] cache_version {item.get("name")}: {result}'
+                    )
 
             result: List[List[object]] = [
                 [
@@ -532,7 +587,7 @@ async def get_src_code(
         token = _github_token()
         api_base = _extract_api_url(repo_url)
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
             entries = await _list_repo_dir_cached(
                 client, api_base, token, 'grasshopper_userobjects_src', ref
             )
@@ -654,7 +709,7 @@ async def list_userobject_names(
         token = _github_token()
         api_base = _extract_api_url(repo_url)
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
             entries = await _list_repo_dir_cached(
                 client, api_base, token, 'grasshopper_userobjects', ref
             )
@@ -690,7 +745,7 @@ async def get_userobject(
         token = _github_token()
         api_base = _extract_api_url(repo_url)
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
             entries = await _list_repo_dir_cached(
                 client, api_base, token, 'grasshopper_userobjects', ref
             )

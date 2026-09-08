@@ -68,10 +68,8 @@ def test_resolve_update_channel_rejects_invalid_names():
     assert exc.value.status_code == 400
 
 
-def test_entry_content_uses_download_url_not_blobs_api():
-    """Public-repo listings include download_url; using /git/blobs burns
-    the unauthenticated 60 req/hour quota and surfaces as 503 in CSC_Update.
-    """
+def test_entry_content_without_token_uses_download_url():
+    """Unauthenticated REST is 60 req/hour; raw download_url does not count."""
     calls = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -81,19 +79,18 @@ def test_entry_content_uses_download_url_not_blobs_api():
     async def run():
         transport = httpx.MockTransport(handler)
         async with httpx.AsyncClient(transport=transport) as client:
-            entry = {
-                'sha': 'abc123',
-                'path': 'grasshopper_userobjects_src/Foo.py',
-                'download_url': (
-                    'https://raw.githubusercontent.com/digitaldesignunit/'
-                    'csc/main/grasshopper_userobjects_src/Foo.py'
-                ),
-            }
             content = await _get_repo_entry_content(
                 client,
                 'https://api.github.com/repos/digitaldesignunit/csc',
                 None,
-                entry,
+                {
+                    'sha': 'abc123',
+                    'path': 'grasshopper_userobjects_src/Foo.py',
+                    'download_url': (
+                        'https://raw.githubusercontent.com/digitaldesignunit/'
+                        'csc/main/grasshopper_userobjects_src/Foo.py'
+                    ),
+                },
                 'main',
             )
             assert content == b'Version: 260908'
@@ -104,3 +101,44 @@ def test_entry_content_uses_download_url_not_blobs_api():
         'csc/main/grasshopper_userobjects_src/Foo.py'
     ]
     assert not any('/git/blobs/' in url for url in calls)
+
+
+def test_entry_content_with_token_uses_blobs_api():
+    """A valid PAT should stay on api.github.com (5000 req/hour)."""
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(200, content=b'Version: 260908')
+
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            content = await _get_repo_entry_content(
+                client,
+                'https://api.github.com/repos/digitaldesignunit/csc',
+                'ghp_valid',
+                {
+                    'sha': 'abc123',
+                    'path': 'grasshopper_userobjects_src/Foo.py',
+                    'download_url': (
+                        'https://raw.githubusercontent.com/digitaldesignunit/'
+                        'csc/main/grasshopper_userobjects_src/Foo.py'
+                    ),
+                },
+                'main',
+            )
+            assert content == b'Version: 260908'
+
+    asyncio.run(run())
+    assert calls == [
+        'https://api.github.com/repos/digitaldesignunit/csc/git/blobs/abc123'
+    ]
+
+
+def test_github_timeout_is_described_in_503():
+    from apps.catalog.api.ghinterface import _http_exception_from_github
+
+    exc = _http_exception_from_github(httpx.TimeoutException('timed out'))
+    assert exc.status_code == 503
+    assert 'timed out' in exc.detail
