@@ -31,8 +31,14 @@ ghenv.Component.SubCategory = '0 Development'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Updates component sources and userobjects in document from server.\n'
     'NOTE: CheckForUpdates must be True to check for updates AND to '
-    'install updates! Switch on both to update everything.'
+    'install updates! Switch on both to update everything.\n'
+    'UPDATE_CHANNEL is a hardcoded GitHub branch name (default: main). '
+    'It must match the remote branch exactly.'
 )
+
+# GitHub branch to pull sources and UserObjects from. Must match the remote
+# branch name exactly (e.g. 'main', 'develop', 'feature/foo').
+UPDATE_CHANNEL = 'main'
 
 # Matches an actual version declaration - the word "version", a ":" or "=",
 # then the number. The separator is required so prose such as 'creates a
@@ -56,7 +62,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260908
+    Version: 260908.1
     """
 
     def __init__(self):
@@ -109,6 +115,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
             self.Component.Message = msg
             return None
         return auth_core
+
+    def _channel_params(self):
+        """Query params selecting the GitHub update channel (branch)."""
+        return {'channel': UPDATE_CHANNEL}
 
     def get_source_version(self, source):
         """
@@ -353,6 +363,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         api_src_versions = {}
         response = auth_core.authorized_get(
             '/ghinterface/src_names',
+            params=self._channel_params(),
             timeout=90
         )
         if response.status_code == 200:
@@ -366,6 +377,14 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     print(f'{name} has no version on server, skipping!')
                     continue
                 api_src_versions[name] = tuple(version)
+        elif response.status_code == 404:
+            msg = (
+                f'Update channel "{UPDATE_CHANNEL}" was not found on GitHub. '
+                'The branch name must match exactly.'
+            )
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
         elif response.status_code == 401:
             msg = 'Authentication failed. Please sign in again.'
             self._addError(msg)
@@ -394,10 +413,19 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         api_uo_names = []
         response = auth_core.authorized_get(
             '/ghinterface/userobject_names',
+            params=self._channel_params(),
             timeout=60
         )
         if response.status_code == 200:
             api_uo_names = list(response.json())
+        elif response.status_code == 404:
+            msg = (
+                f'Update channel "{UPDATE_CHANNEL}" was not found on GitHub. '
+                'The branch name must match exactly.'
+            )
+            self._addError(msg)
+            self.Component.Message = msg
+            return None
         elif response.status_code == 401:
             msg = 'Authentication failed. Please sign in again.'
             self._addError(msg)
@@ -425,6 +453,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         """Get source file from API."""
         response = auth_core.authorized_get(
             f'/ghinterface/src/{full_name}',
+            params=self._channel_params(),
             timeout=60
         )
         if response.status_code == 200:
@@ -460,6 +489,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         """Get userobject bytes from API."""
         response = auth_core.authorized_get(
             f'/ghinterface/userobject/{uo_name}',
+            params=self._channel_params(),
             timeout=60
         )
         if response.status_code == 200:
@@ -500,6 +530,13 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         auth_core = self.get_auth_core_from_sticky()
         if auth_core is None:
             return Status
+        if UPDATE_CHANNEL != 'main':
+            channel_msg = (
+                f'UPDATE_CHANNEL is "{UPDATE_CHANNEL}" (not main). '
+                'Branch name must match the GitHub remote exactly.'
+            )
+            self._addWarning(channel_msg)
+            Status.Add(channel_msg)
         # Check if authentication is valid
         if not auth_core.is_valid():
             msg = ('Authentication expired. Please use CSC_Session '
@@ -515,6 +552,9 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         self.Component.Message = msg
         try:
             if CheckForUpdates:
+                msg = f'Using GitHub update channel: {UPDATE_CHANNEL}'
+                self._addRemark(msg)
+                Status.Add(msg)
                 msg = (
                     f'Searching current document for {CATEGORY} script '
                     'components...'
@@ -533,7 +573,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addRemark(msg)
                 Status.Add(msg)
                 # make request to fetch all source file names and versions
-                msg = ('Checking Server for updates...')
+                msg = (
+                    f'Checking Server for updates '
+                    f'(channel: {UPDATE_CHANNEL})...'
+                )
                 self.Component.Message = msg
                 api_src_versions = self.get_api_source_versions(auth_core)
                 if api_src_versions is None:
