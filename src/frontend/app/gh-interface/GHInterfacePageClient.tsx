@@ -890,6 +890,23 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             imagePath={resolveStatic('/gh-interface/csc_syncwithrhinodoc.jpg')}
           />
 
+          <ComponentCard
+            icon={Settings}
+            name="CSC_PassportToD2P"
+            description="Converts CSC passport JSON into an in-memory D2P GHComponent. Geometry is registered as a nested Member tree (id_<identity> and snap_<snapshot> shells) so layer paths stay consistent for single- and multi-snapshot passport. Optional Parent prefixes ShortName for D2P child naming. CSC identity/snapshot metadata is stored on the component label user text."
+            inputs={[
+              { label: 'ComponentData', description: 'Passport JSON ({identity, snapshots[]}) from CSC catalog components' },
+              { label: 'MeshMode', description: "Mesh resolution: 'best' (default), 'inline', 'reduced', 'detailed', or 'all' (register every available variant as separate leaf members)" },
+              { label: 'CloudMode', description: "Point-cloud resolution: 'best' (default), 'inline', 'detailed', or 'all'. 'reduced' is accepted as an alias for inline. Empty inherits MeshMode (reduced maps to inline)" },
+              { label: 'SnapshotScope', description: "'current' (default) uses snapshots[0] only; 'all' includes every passport.snapshots[] entry. Each snapshot is always under a snap_* member shell" },
+              { label: 'Parent', description: 'Optional D2P parent component (Generic) or parent ShortName. Child ShortName becomes parent + delimiter + name for D2P parent-child retrieval. Ignores CSC parent_identities' }
+            ]}
+            outputs={[
+              { label: 'D2PComponent', description: 'In-memory D2P GHComponent (.NET IComponentBase) per passport entry. RetrieveGeometry accepts layer segments such as id_, snap_, Mesh, 00, or detailed' }
+            ]}
+            tip="Use with FetchAllSnapshots and SnapshotScope=all to build D2P members for every version. PLY mesh/cloud resolutions need an active CSC_Session (CSC_AuthCore in sticky)."
+          />
+
         </div>
       )
     },
