@@ -74,6 +74,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Legacy usrobject sources for dropped components
 
+### Fixed
+
+#### CSC FastAPI Backend
+
+- Version detection only accepts real declarations (`Version: <number>`), so
+  prose like "version-0 snapshot" in a component description no longer parses
+  as version `0` (affected `CSC_AddComponentIdentity`)
+- `/ghinterface/src_names` reads source files concurrently and caches parsed
+  versions per blob sha instead of fetching every file serially on each call
+- `/ghinterface/` routes reuse a short-lived directory listing cache, so an
+  `CSC_Update` install run no longer re-lists the repo once per file
+
+#### CSC Grasshopper Interface
+
+- `CSC_Update` and `CSC_ExportScriptsAndSource`: same version-declaration fix
+  as the backend, so all three parsers agree on a component's version
+- `CSC_Update`: source files without a parseable version are skipped instead
+  of aborting the whole update check
+- `CSC_Update`: components with no source on the server (renamed or removed,
+  e.g. `CreateComponent`) are now reported as a warning instead of being
+  skipped silently while the UserObjects update anyway
+- `CSC_Update`: longer request timeouts for source/UserObject downloads
+
 ## [0.4.7.0] - 2026-04-30
 
 ### Versions
