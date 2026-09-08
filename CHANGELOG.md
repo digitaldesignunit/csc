@@ -24,10 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin users API: `GET /users`, `PATCH /users/{user_id}`
 - `/ghinterface/` router: version, download, src, xml, userobject
 - Snapshot delete route; ETag on all-identities list
-- Radial signature no longer needs an extrusion profile: panels stored as a
-  mesh are cut at mid-thickness, and panels stored as a point cloud are
-  projected across their PCA thin axis and concave-hulled, so a scanned panel
-  yields the same descriptor as its modelled twin
+- Radial signature applies to every component type, not just extrusion
+  panels. Outlines are taken from the highest-resolution geometry available,
+  in order mesh (`detailed.ply` > `reduced.ply` > inline) > point cloud
+  (`0.ply` > inline preview) > extrusion profile. Meshes and clouds are
+  sectioned through the PCA centre plane; panels still rest-align the
+  resulting silhouette
+- `main_descriptors_simple.py --recompute` walks every snapshot one at a
+  time and overwrites every applicable descriptor (optional `--limit N`)
 
 #### CSC React Frontend
 
@@ -51,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Descriptors, previewgen, and geometry maintenance use snapshot model
 - Designs schema aligned with identity references
+- Radial signature outline extraction prefers on-disk `detailed.ply` (then
+  `reduced.ply`) over the inline mesh, and the full point-cloud PLY over the
+  inline preview. An extrusion profile is only used when no mesh or cloud
+  is available
 - The `{identity, snapshots[]}` read model is now called a **passport**:
   `ComposeIdentityResponse` → `ComponentPassport`. The route paths
   `GET /identities/{id}/compose` and `GET /schema/catalog-compose` are
