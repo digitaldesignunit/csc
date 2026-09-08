@@ -34,12 +34,29 @@ ghenv.Component.Description = (  # NOQA
     'install updates! Switch on both to update everything.'
 )
 
+# Matches an actual version declaration - the word "version", a ":" or "=",
+# then the number. The separator is required so prose such as 'creates a
+# version-0 snapshot' in a component description cannot be mistaken for a
+# version declaration. Keep this comment free of literal declarations, they
+# would be picked up before the real one below.
+VERSION_DECLARATION_RE = re.compile(
+    r'version\s*[:=]\s*(\d+(?:\.\d+)?[a-zA-Z]?)')
+
+# Components that were renamed or split. Their sources no longer exist on the
+# server, so they can only be reported - not updated in place.
+RENAMED_COMPONENTS = {
+    'AddComponent': 'AddComponentIdentity',
+    'ArrangeComponents': 'CreateArrangement',
+    'CreateComponent': 'CreateComponentIdentity / CreateComponentSnapshot',
+    'FetchGeometry': 'FetchReducedGeometry / FetchDetailedGeometry',
+}
+
 
 class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260908
     """
 
     def __init__(self):
@@ -95,25 +112,19 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
 
     def get_source_version(self, source):
         """
-        Attempts to get the first instance of the word "version"
-        (or, "Version") in a multi line string. Then attempts to extract a
-        version string from this line where the word "version" exists.
+        Attempts to find the first version declaration in a multi line string,
+        i.e. the word "version" (or, "Version") followed by ":" or "=" and a
+        version number. Lines that merely mention the word "version" are
+        ignored.
         Supports formats like:
             Version: 160121
             Version: 251009.1
             Version: 251009a
         """
-        # Get first line with version in it
-        src_lower = source.lower()
-        version_str = [ln for ln in src_lower.split('\n') if "version" in ln]
-        if version_str:
-            # Extract version string using regex to handle complex formats
-            # Look for patterns like: 251009, 251009.1, 251009a, etc.
-            version_match = re.search(
-                r'(\d+(?:\.\d+)?[a-zA-Z]?)', version_str[0])
+        for line in source.lower().split('\n'):
+            version_match = VERSION_DECLARATION_RE.search(line)
             if version_match:
-                version_text = version_match.group(1)
-                return self.parse_version_string(version_text)
+                return self.parse_version_string(version_match.group(1))
         return None
 
     def parse_version_string(self, version_str):
@@ -340,13 +351,21 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     def get_api_source_versions(self, auth_core):
         """Get source versions from API."""
         api_src_versions = {}
-        response = auth_core.authorized_get('/ghinterface/src_names')
+        response = auth_core.authorized_get(
+            '/ghinterface/src_names',
+            timeout=90
+        )
         if response.status_code == 200:
             api_src_files_json = response.json()
             for file_tuple in api_src_files_json:
                 name = file_tuple[0]
-                version = tuple(file_tuple[1])
-                api_src_versions[name] = version
+                version = file_tuple[1]
+                if not version:
+                    # Source file without a version declaration. Skip it
+                    # instead of failing the whole update check.
+                    print(f'{name} has no version on server, skipping!')
+                    continue
+                api_src_versions[name] = tuple(version)
         elif response.status_code == 401:
             msg = 'Authentication failed. Please sign in again.'
             self._addError(msg)
@@ -373,7 +392,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     def get_api_userobject_names(self, auth_core):
         """Get userobject names from API."""
         api_uo_names = []
-        response = auth_core.authorized_get('/ghinterface/userobject_names')
+        response = auth_core.authorized_get(
+            '/ghinterface/userobject_names',
+            timeout=60
+        )
         if response.status_code == 200:
             api_uo_names = list(response.json())
         elif response.status_code == 401:
@@ -401,7 +423,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
 
     def get_api_source_file_text(self, auth_core, full_name):
         """Get source file from API."""
-        response = auth_core.authorized_get(f'/ghinterface/src/{full_name}')
+        response = auth_core.authorized_get(
+            f'/ghinterface/src/{full_name}',
+            timeout=60
+        )
         if response.status_code == 200:
             return response.text
         elif response.status_code == 404:
@@ -434,7 +459,8 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     def get_api_userobject_bytes(self, auth_core, uo_name):
         """Get userobject bytes from API."""
         response = auth_core.authorized_get(
-            f'/ghinterface/userobject/{uo_name}'
+            f'/ghinterface/userobject/{uo_name}',
+            timeout=60
         )
         if response.status_code == 200:
             return response.content
@@ -523,37 +549,53 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
 
                 # loop over scripts in document
                 scripts_to_update = []
+                unmatched_names = []
                 for iguid, values in script_components:
                     script_type, nickname, name, obj, current_source = values
                     current_version = self.get_source_version(current_source)
-                    try:
-                        full_name = CATEGORY + '_' + name
-                        api_version = api_src_versions[full_name]
-                        vc = self.compare_versions(
-                            api_version,
-                            current_version
-                        )
-                        if vc == -1:
-                            print(
-                                f'!! --> {name} {api_version} '
-                                f'< {current_version}!'
-                            )
-                            msg = (
-                                f'{name} {api_version} < {current_version}! '
-                                'Is this a dev file? That should '
-                                'not happen otherwise! Proceed with caution!'
-                            )
-                            self._addWarning(msg)
-                            Status.Add(msg)
-                            continue
-                        elif vc == 0:
-                            print(f'{name} {api_version} == {current_version}')
-                        elif vc == 1:
-                            print(f'{name} {api_version} > {current_version}')
-                            scripts_to_update.append((iguid, values))
-                    except KeyError:
+                    full_name = CATEGORY + '_' + name
+                    if full_name not in api_src_versions:
                         print(f'{full_name} not found on server!')
+                        if name not in unmatched_names:
+                            unmatched_names.append(name)
                         continue
+                    api_version = api_src_versions[full_name]
+                    vc = self.compare_versions(
+                        api_version,
+                        current_version
+                    )
+                    if vc == -1:
+                        print(
+                            f'!! --> {name} {api_version} '
+                            f'< {current_version}!'
+                        )
+                        msg = (
+                            f'{name} {api_version} < {current_version}! '
+                            'Is this a dev file? That should '
+                            'not happen otherwise! Proceed with caution!'
+                        )
+                        self._addWarning(msg)
+                        Status.Add(msg)
+                        continue
+                    elif vc == 0:
+                        print(f'{name} {api_version} == {current_version}')
+                    elif vc == 1:
+                        print(f'{name} {api_version} > {current_version}')
+                        scripts_to_update.append((iguid, values))
+                if unmatched_names:
+                    details = ', '.join([
+                        (f'{n} (replaced by {RENAMED_COMPONENTS[n]})'
+                         if n in RENAMED_COMPONENTS else n)
+                        for n in sorted(unmatched_names)
+                    ])
+                    msg = (
+                        f'{len(unmatched_names)} {CATEGORY} components in '
+                        'this document have no source on the server and '
+                        f'cannot be updated in place: {details}. Replace '
+                        'them with the current components from the toolbar.'
+                    )
+                    self._addWarning(msg)
+                    Status.Add(msg)
                 if not scripts_to_update:
                     msg = 'No scripts in document need updating!'
                     self._addRemark(msg)
