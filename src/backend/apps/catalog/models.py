@@ -856,9 +856,9 @@ class CatalogSharedTypesEnvelope(BaseModel):
     geometry: ComponentGeometry
 
 
-class ComposeIdentityResponse(BaseModel):
+class ComponentPassport(BaseModel):
     """
-    Compose response: an identity plus one or more snapshot versions.
+    Component passport: an identity plus one or more snapshot versions.
 
     Returned by `GET /identities/{identity_id}/compose` - the primary read
     path for the new data model. A single-snapshot response uses

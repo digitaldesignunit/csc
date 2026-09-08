@@ -11,8 +11,10 @@ Owns the primary read path of the new data model:
     -> aggregated stats (identity + current snapshot)
 
 * `GET /identities/{identity_id}/compose`
-    -> identity + snapshots[]: default current, `?snapshots=all`, or
-    `?snapshots=<uuid>` (comma-separated for many)
+    -> passport (identity + snapshots[]): default current, `?snapshots=all`,
+    or `?snapshots=<uuid>` (comma-separated for many)
+    The `compose` path segment predates the `passport` term and stays for
+    compatibility with released Grasshopper userobjects.
 
 * `GET /identities/{identity_id}/snapshots`
     -> summary list of all snapshot versions for one identity
@@ -24,7 +26,7 @@ Owns the primary read path of the new data model:
     -> identity + snapshot lineage graph (ancestors, descendants, versions)
 
 * `GET /schema/catalog-compose`
-    -> JSON Schema for the compose body (frontend codegen)
+    -> JSON Schema for the passport body (frontend codegen)
 
 * `GET /schema/catalog-shared`
     -> JSON Schema for shared catalog value types (frontend codegen)
@@ -68,7 +70,7 @@ from apps.catalog.models import (
     ComponentCount,
     ComponentIdentity,
     ComponentSnapshot,
-    ComposeIdentityResponse,
+    ComponentPassport,
     CreateComponentRequest,
     CreateSnapshotRequest,
     SnapshotSummaryItem,
@@ -123,13 +125,13 @@ router = APIRouter()
 
 @router.get(
     '/schema/catalog-compose',
-    summary='JSON Schema for GET /identities/{id}/compose (v0.5 compose body)',
+    summary='JSON Schema for the passport body (GET .../{id}/compose)',
 )
-async def get_catalog_compose_json_schema():
+async def get_catalog_passport_json_schema():
     """
     Used by the frontend `generate:models` script (see `CatalogModels.ts`).
     """
-    schema = ComposeIdentityResponse.model_json_schema(by_alias=True)
+    schema = ComponentPassport.model_json_schema(by_alias=True)
     return JSONResponse(status_code=200, content=schema)
 
 
@@ -229,7 +231,7 @@ async def get_create_identity_json_schema(request: Request):
     )
 
 
-def _compute_compose_etag(
+def _compute_passport_etag(
     identity_doc: dict,
     snapshot_docs: List[dict],
 ) -> str:
@@ -271,7 +273,7 @@ def _parse_snapshots_query(
     return 'ids', parsed
 
 
-async def _resolve_compose_snapshot_docs(
+async def _resolve_passport_snapshot_docs(
     request: Request,
     *,
     identity_id: str,
@@ -280,7 +282,7 @@ async def _resolve_compose_snapshot_docs(
     mode: str,
     snapshot_ids: List[str],
 ) -> List[dict]:
-    """Load full snapshot documents for compose."""
+    """Load full snapshot documents for a passport response."""
     if mode == 'all':
         try:
             cursor = snapshots_col.find(
@@ -288,7 +290,7 @@ async def _resolve_compose_snapshot_docs(
             ).sort('version', 1)
             docs = await cursor.to_list(length=None)
         except PyMongoError as exc:
-            print(f'[ERROR] compose snapshots=all DB: {exc}')
+            print(f'[ERROR] passport snapshots=all DB: {exc}')
             raise HTTPException(
                 status_code=500,
                 detail='Internal server error',
@@ -353,7 +355,7 @@ async def _resolve_compose_snapshot_docs(
     return docs
 
 
-def _compose_json_response(
+def _passport_response(
     identity_doc: dict,
     snapshot_docs: List[dict],
     *,
@@ -378,7 +380,7 @@ def _compose_json_response(
             model.model_dump(by_alias=True) for model in snapshot_models
         ],
     }
-    resolved_etag = etag or _compute_compose_etag(
+    resolved_etag = etag or _compute_passport_etag(
         identity_doc,
         snapshot_docs,
     )
@@ -762,7 +764,7 @@ async def list_identities_route(
 @router.post(
     '/identities',
     summary='Create identity and version-0 snapshot',
-    response_model=ComposeIdentityResponse,
+    response_model=ComponentPassport,
     response_model_by_alias=True,
     status_code=status.HTTP_201_CREATED,
 )
@@ -894,7 +896,7 @@ async def create_identity(
             detail='Internal server error',
         )
 
-    return _compose_json_response(
+    return _passport_response(
         identity_insert,
         [snapshot_insert],
         status_code=status.HTTP_201_CREATED,
@@ -943,7 +945,7 @@ async def _resolve_snapshot_name(
 @router.post(
     '/identities/{identity_id}/snapshots',
     summary='Create new snapshot version for an existing identity',
-    response_model=ComposeIdentityResponse,
+    response_model=ComponentPassport,
     response_model_by_alias=True,
     status_code=status.HTTP_201_CREATED,
 )
@@ -1096,7 +1098,7 @@ async def create_snapshot(
         identity_doc
     ).model_dump(by_alias=True)
 
-    return _compose_json_response(
+    return _passport_response(
         identity_insert,
         [snapshot_insert],
         status_code=status.HTTP_201_CREATED,
@@ -1480,7 +1482,7 @@ async def patch_identity(
 
 @router.get(
     '/identities/{identity_id}',
-    summary='Get one identity (shallow, compose, or identity-only)',
+    summary='Get one identity (shallow, passport, or identity-only)',
 )
 async def get_identity(
     request: Request,
@@ -1550,7 +1552,7 @@ async def get_identity(
     await refresh_snapshot_photo_count(
         request, str(snapshot_doc['_id']), snapshot_doc
     )
-    return _compose_json_response(
+    return _passport_response(
         identity_doc,
         [snapshot_doc],
         anonymous_public=anonymous_public,
@@ -1559,11 +1561,11 @@ async def get_identity(
 
 @router.get(
     '/identities/{identity_id}/compose',
-    summary='Compose identity + snapshot(s)',
-    response_model=ComposeIdentityResponse,
+    summary='Component passport (identity + snapshot(s))',
+    response_model=ComponentPassport,
     response_model_by_alias=True,
 )
-async def compose_identity(
+async def get_identity_passport(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
     identity_id: str,
@@ -1599,7 +1601,7 @@ async def compose_identity(
 
     mode, snapshot_ids = _parse_snapshots_query(snapshots)
 
-    snapshot_docs = await _resolve_compose_snapshot_docs(
+    snapshot_docs = await _resolve_passport_snapshot_docs(
         request,
         identity_id=identity_id,
         identity_doc=identity_doc,
@@ -1607,13 +1609,13 @@ async def compose_identity(
         mode=mode,
         snapshot_ids=snapshot_ids,
     )
-    etag = _compute_compose_etag(identity_doc, snapshot_docs)
+    etag = _compute_passport_etag(identity_doc, snapshot_docs)
 
     if_none_match = request.headers.get('if-none-match')
     if if_none_match and if_none_match == etag:
         return not_modified_response(etag)
 
-    return _compose_json_response(
+    return _passport_response(
         identity_doc,
         snapshot_docs,
         etag=etag,

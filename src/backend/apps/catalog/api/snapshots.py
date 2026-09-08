@@ -57,7 +57,7 @@ from pymongo.errors import PyMongoError
 
 from apps.catalog.models import (
     ComponentSnapshot,
-    ComposeIdentityResponse,
+    ComponentPassport,
     PendingValidationSnapshotItem,
     User,
 )
@@ -321,7 +321,7 @@ async def list_pending_validation_snapshots(
 @router.post(
     '/snapshots/{snapshot_id}/validate',
     summary='Validate snapshot and promote to live (admin only)',
-    response_model=ComposeIdentityResponse,
+    response_model=ComponentPassport,
     response_model_by_alias=True,
 )
 async def validate_snapshot_route(
@@ -335,9 +335,9 @@ async def validate_snapshot_route(
         snapshot_id,
     )
 
-    from .identities import _compose_json_response
+    from .identities import _passport_response
 
-    return _compose_json_response(
+    return _passport_response(
         identity_doc,
         [snapshot_doc],
     )
