@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### CSC FastAPI Backend
 
-- Identity/snapshot catalog: `component_identities` + versioned `component_snapshots`; compose and CRUD per identity/snapshot
+- Identity/snapshot catalog: `component_identities` + versioned `component_snapshots`; passport and CRUD per identity/snapshot
 - Inline reinforcement bars: `geometry.reinforcements[]` (`{spec, diameter, points}`)
 - Snapshot point-cloud PLY upload routes and photo slot routes
 - `POST /utility/compute-snapshot-orientation` (PCA frame from box geometry)
@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin users API: `GET /users`, `PATCH /users/{user_id}`
 - `/ghinterface/` router: version, download, src, xml, userobject
 - Snapshot delete route; ETag on all-identities list
+- Radial signature no longer needs an extrusion profile: panels stored as a
+  mesh are cut at mid-thickness, and panels stored as a point cloud are
+  projected across their PCA thin axis and concave-hulled, so a scanned panel
+  yields the same descriptor as its modelled twin
 
 #### CSC React Frontend
 
@@ -32,12 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin user management at `/admin/users`
 - Public component viewing without login; `is_public` toggle on edit page
 - Reinforcement visualization in component viewer
-- GH interface docs: `ListIdentitySnapshots`, `FetchComposeAllSnapshots`, `FetchComposeSnapshot`, `CreateReinforcement`
+- GH interface docs: `ListIdentitySnapshots`, `FetchAllSnapshots`, `FetchSnapshot`, `CreateReinforcement`
 
 #### CSC Grasshopper Interface
 
 - Identity/snapshot components: `CreateComponentIdentity`, `CreateComponentSnapshot`, `AddComponentIdentity`, `AddComponentSnapshot`
-- `CSC_ListIdentitySnapshots`, `CSC_FetchComposeAllSnapshots`, `CSC_FetchComposeSnapshot`
+- `CSC_ListIdentitySnapshots`, `CSC_FetchAllSnapshots`, `CSC_FetchSnapshot`
 - `CSC_CreateReinforcement`; reinforcement inputs on create/add; pipe baking in `CSC_BakeComponents`
 - Session identity/snapshot catalog cache (v0.5)
 
@@ -47,17 +51,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Descriptors, previewgen, and geometry maintenance use snapshot model
 - Designs schema aligned with identity references
+- The `{identity, snapshots[]}` read model is now called a **passport**:
+  `ComposeIdentityResponse` → `ComponentPassport`. The route paths
+  `GET /identities/{id}/compose` and `GET /schema/catalog-compose` are
+  unchanged, so released UserObjects keep working
 
 #### CSC React Frontend
 
-- Catalog UI adapted to identity/snapshot compose spec
+- Catalog UI adapted to identity/snapshot passport spec
 - Design detail actions use client session; proxy allows anonymous public GETs
 - Sidebar layout compacter; Next.js/npm updated
+- Generated type `ComposeIdentityResponse` → `ComponentPassport`; the GH
+  interface docs say "passport" instead of "compose JSON" throughout
 
 #### CSC Grasshopper Interface
 
 - Fetch/create components updated for identity/snapshot API
 - `CSC_Update` uses `/ghinterface/` paths
+- "Compose JSON" is now a **passport** everywhere in the interface:
+  `ComposeToD2P` → `PassportToD2P`, the `FetchAllSnapshots` / `FetchSnapshot`
+  output pin `ComposeData` → `Passport`, and the `CSC_Session` helpers
+  (`cached_get_compose` → `cached_get_passport`, `compose_json_string` →
+  `passport_json_string`). All UserObjects must be updated together
 
 #### Documentation & Deployment
 
@@ -85,6 +100,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   versions per blob sha instead of fetching every file serially on each call
 - `/ghinterface/` routes reuse a short-lived directory listing cache, so an
   `CSC_Update` install run no longer re-lists the repo once per file
+
+#### CSC React Frontend
+
+- GH interface cards used the wrong Grasshopper names `FetchComposeAllSnapshots` /
+  `FetchComposeSnapshot` (and output pin `ComposeJSON`); they now match
+  `FetchAllSnapshots` / `FetchSnapshot` with `Passport`, including screenshots
 
 #### CSC Grasshopper Interface
 
