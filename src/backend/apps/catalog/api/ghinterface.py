@@ -215,12 +215,54 @@ async def _get_repo_entry_content(
     entry: dict,
     ref: str,
 ) -> bytes:
-    """Read one file from a contents listing entry, by sha when available."""
+    """Read one file from a contents listing entry.
+
+    Prefer GitHub's public download_url (raw.githubusercontent.com) so a
+    CSC_Update run does not burn the unauthenticated REST quota (60/hour)
+    by fetching every blob through /git/blobs.
+    """
+    download_url = entry.get('download_url')
+    if download_url:
+        resp = await client.get(
+            download_url,
+            headers={'User-Agent': 'CSC-Backend/1.0'},
+            timeout=30.0,
+            follow_redirects=True,
+        )
+        resp.raise_for_status()
+        return resp.content
     sha = entry.get('sha')
     if sha:
         return await _get_repo_blob(client, api_base, token, sha)
     return await _get_repo_file(
         client, api_base, token, entry['path'], ref
+    )
+
+
+def _http_exception_from_github(e: httpx.HTTPError) -> HTTPException:
+    """Map GitHub HTTP failures to a CSC_Update-visible error."""
+    if isinstance(e, httpx.HTTPStatusError):
+        code = e.response.status_code
+        remaining = e.response.headers.get('X-RateLimit-Remaining')
+        if code == 401:
+            return HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    'GitHub rejected the request. Remove an invalid '
+                    'GITHUB_CSC_GH_TOKEN, or omit it for the public repo.'
+                ),
+            )
+        if code == 403 or remaining == '0':
+            return HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    'GitHub API rate limit exceeded. Wait for the hourly '
+                    'reset, or set GITHUB_CSC_GH_TOKEN for a higher limit.'
+                ),
+            )
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail='GitHub service unavailable',
     )
 
 
@@ -328,10 +370,7 @@ async def get_gh_interface_version(
 
     except httpx.HTTPError as e:
         print(f'[ERROR] get_gh_interface_version GitHub: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='GitHub service unavailable'
-        )
+        raise _http_exception_from_github(e)
     except Exception as e:
         print(f'[ERROR] get_gh_interface_version: {e}')
         raise HTTPException(
@@ -402,10 +441,7 @@ async def download_gh_interface(
 
     except httpx.HTTPError as e:
         print(f'[ERROR] download_gh_interface GitHub: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='GitHub service unavailable'
-        )
+        raise _http_exception_from_github(e)
     except ValueError as e:
         print(f'[ERROR] download_gh_interface asset lookup: {e}')
         raise HTTPException(
@@ -446,8 +482,8 @@ async def list_src_names(
 
             async def cache_version(item: dict) -> None:
                 async with semaphore:
-                    content_bytes = await _get_repo_blob(
-                        client, api_base, token, item['sha']
+                    content_bytes = await _get_repo_entry_content(
+                        client, api_base, token, item, ref
                     )
                 text = content_bytes.decode('utf-8', 'replace')
                 _blob_version_cache[item['sha']] = get_source_version(text)
@@ -475,10 +511,7 @@ async def list_src_names(
         raise
     except httpx.HTTPError as e:
         print(f'[ERROR] list_src_names GitHub: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='GitHub service unavailable',
-        )
+        raise _http_exception_from_github(e)
     except Exception as e:
         print(f'[ERROR] list_src_names: {e}')
         raise HTTPException(
@@ -527,10 +560,7 @@ async def get_src_code(
         raise
     except httpx.HTTPError as e:
         print(f'[ERROR] get_src_code GitHub: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='GitHub service unavailable',
-        )
+        raise _http_exception_from_github(e)
     except Exception as e:
         print(f'[ERROR] get_src_code: {e}')
         raise HTTPException(
@@ -639,10 +669,7 @@ async def list_userobject_names(
         raise
     except httpx.HTTPError as e:
         print(f'[ERROR] list_userobject_names GitHub: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='GitHub service unavailable',
-        )
+        raise _http_exception_from_github(e)
     except Exception as e:
         print(f'[ERROR] list_userobject_names: {e}')
         raise HTTPException(
@@ -693,10 +720,7 @@ async def get_userobject(
         raise
     except httpx.HTTPError as e:
         print(f'[ERROR] get_userobject GitHub: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='GitHub service unavailable',
-        )
+        raise _http_exception_from_github(e)
     except Exception as e:
         print(f'[ERROR] get_userobject: {e}')
         raise HTTPException(

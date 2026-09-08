@@ -1,9 +1,13 @@
 """Tests for Grasshopper component source version parsing."""
 
+import asyncio
+
+import httpx
 import pytest
 from fastapi import HTTPException
 
 from apps.catalog.api.ghinterface import (
+    _get_repo_entry_content,
     compare_versions,
     get_source_version,
     resolve_update_channel,
@@ -62,3 +66,41 @@ def test_resolve_update_channel_rejects_invalid_names():
     with pytest.raises(HTTPException) as exc:
         resolve_update_channel('../main')
     assert exc.value.status_code == 400
+
+
+def test_entry_content_uses_download_url_not_blobs_api():
+    """Public-repo listings include download_url; using /git/blobs burns
+    the unauthenticated 60 req/hour quota and surfaces as 503 in CSC_Update.
+    """
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(200, content=b'Version: 260908')
+
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            entry = {
+                'sha': 'abc123',
+                'path': 'grasshopper_userobjects_src/Foo.py',
+                'download_url': (
+                    'https://raw.githubusercontent.com/digitaldesignunit/'
+                    'csc/main/grasshopper_userobjects_src/Foo.py'
+                ),
+            }
+            content = await _get_repo_entry_content(
+                client,
+                'https://api.github.com/repos/digitaldesignunit/csc',
+                None,
+                entry,
+                'main',
+            )
+            assert content == b'Version: 260908'
+
+    asyncio.run(run())
+    assert calls == [
+        'https://raw.githubusercontent.com/digitaldesignunit/'
+        'csc/main/grasshopper_userobjects_src/Foo.py'
+    ]
+    assert not any('/git/blobs/' in url for url in calls)

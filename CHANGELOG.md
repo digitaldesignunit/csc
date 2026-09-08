@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/ghinterface/src*` and `/ghinterface/userobject*` accept a `channel`
   query param (GitHub branch; default `main`) so `CSC_Update` can follow
   a hardcoded `UPDATE_CHANNEL`
+- `/ghinterface/` source/UserObject fetches use GitHub `download_url`
+  (raw files) instead of `/git/blobs`, so CSC_Update no longer burns the
+  unauthenticated 60 req/hour REST quota and returns 503
 - GH XML sync clones the public repo without a GitHub token
 - `GITHUB_CSC_GH_TOKEN` is optional (higher GitHub API rate limits only);
   FastAPI starts and `/ghinterface/` works against the public repo without it
