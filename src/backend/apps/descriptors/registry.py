@@ -55,6 +55,8 @@ class DescriptorContext:
     mesh: Optional[trimesh.Trimesh] = None
     params: Mapping[str, Any] = field(default_factory=dict)
     log: LoggerFn = _noop_logger
+    meshes_dir: Optional[str] = None
+    point_clouds_dir: Optional[str] = None
 
 
 ComputeFn = Callable[[DescriptorContext], Dict[str, Any]]
@@ -215,6 +217,14 @@ def missing_specs_for(
     ]
 
 
+def applicable_specs_for(
+    component: Mapping[str, Any],
+    specs: Iterable[DescriptorSpec],
+) -> List[DescriptorSpec]:
+    """Return every spec that applies to `component`, missing or not."""
+    return [s for s in specs if s.is_applicable(component)]
+
+
 def collect_output_keys(specs: Iterable[DescriptorSpec]) -> List[str]:
     """Flatten all output keys across a set of specs (for logging)."""
     keys: List[str] = []
@@ -231,6 +241,8 @@ def compute_descriptor(
     component: Mapping[str, Any],
     mesh: Optional[trimesh.Trimesh],
     log: LoggerFn = _noop_logger,
+    meshes_dir: Optional[str] = None,
+    point_clouds_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run a single spec and return its flattened output dict.
 
@@ -247,6 +259,8 @@ def compute_descriptor(
         mesh=mesh,
         params=dict(spec.params),
         log=log,
+        meshes_dir=meshes_dir,
+        point_clouds_dir=point_clouds_dir,
     )
     try:
         out = spec.compute(context)

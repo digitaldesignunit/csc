@@ -2,21 +2,25 @@
 """
 Descriptor computation maintenance script.
 
-Thin orchestrator over the descriptor registry. Can run in two modes:
+Thin orchestrator over the descriptor registry. Can run in three modes:
 
     1. Cron worker (default): processes one snapshot per invocation. This
        is what the `descriptors_simple_cronjob.ini` entry uses.
     2. Batch backfill (``--all`` / ``--limit N``): loops over every
        snapshot that is missing an applicable descriptor, in a single
        MongoDB connection.
+    3. Full recompute (``--recompute``): walks every snapshot in the
+       database, one at a time, and overwrites every applicable descriptor.
+       Use after changing how a descriptor is computed.
 
 Responsibilities of this module, and nothing else:
     1. Connect to MongoDB (`component_snapshots` + `component_identities`).
     2. Ask the registry for a snapshot that is missing at least one
-       applicable descriptor.
+       applicable descriptor (or, in ``--recompute``, the next snapshot).
     3. Load geometry via `apps.descriptors.geometry.load_snapshot_mesh`.
-    4. Iterate the specs that apply to this snapshot and are missing,
-       running each spec's compute function via the registry.
+    4. Iterate the specs that apply to this snapshot (missing, or all of
+       them when recomputing), running each spec's compute function via
+       the registry.
     5. Merge the results back into the snapshot's ``descriptors`` field.
 
 All per-descriptor knowledge (parameters, applicability, output keys,
@@ -24,10 +28,12 @@ compute function) lives in `apps.descriptors/specs.py`. To add a new
 descriptor, add one `DescriptorSpec` there; no changes are needed here.
 
 Usage:
-    python main_descriptors_simple.py                # one snapshot
-    python main_descriptors_simple.py --all          # every missing
-    python main_descriptors_simple.py --limit 50     # up to 50
+    python main_descriptors_simple.py                     # one snapshot
+    python main_descriptors_simple.py --all               # every missing
+    python main_descriptors_simple.py --limit 50          # up to 50 missing
     python main_descriptors_simple.py --all --dry-run
+    python main_descriptors_simple.py --recompute         # overwrite all
+    python main_descriptors_simple.py --recompute --limit 10 --dry-run
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
@@ -35,7 +41,7 @@ import argparse
 import asyncio
 import random
 import sys
-from typing import Any, Dict, Iterable, List, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from pymongo import AsyncMongoClient
@@ -51,6 +57,7 @@ from utility import (
 from apps.descriptors.geometry import load_snapshot_mesh
 from apps.descriptors.registry import (
     DescriptorSpec,
+    applicable_specs_for,
     build_missing_query,
     collect_output_keys,
     compute_descriptor,
@@ -183,22 +190,36 @@ async def update_snapshot_descriptors(
 
 # CORE EXECUTION -------------------------------------------------------------
 
-def run_missing_specs_on_snapshot(
+def run_specs_on_snapshot(
     compute_doc: Dict[str, Any],
     meshes_dir: Optional[str],
     specs: List[DescriptorSpec],
     point_clouds_dir: Optional[str] = None,
+    recompute: bool = False,
 ) -> Dict[str, Any]:
-    """Execute every applicable+missing spec against a snapshot."""
-    missing = missing_specs_for(compute_doc, specs)
-    if not missing:
-        log('No missing applicable descriptors on this snapshot')
+    """Execute applicable specs against a snapshot.
+
+    By default only missing specs run. With ``recompute=True`` every
+    applicable spec runs again and overwrites the stored values.
+    """
+    to_run = (
+        applicable_specs_for(compute_doc, specs) if recompute
+        else missing_specs_for(compute_doc, specs)
+    )
+    if not to_run:
+        if recompute:
+            log('No applicable descriptors on this snapshot')
+        else:
+            log('No missing applicable descriptors on this snapshot')
         return {}
 
-    expected_keys = collect_output_keys(missing)
-    log(f'Missing applicable descriptors: {", ".join(expected_keys)}')
+    expected_keys = collect_output_keys(to_run)
+    if recompute:
+        log(f'Recomputing descriptors: {", ".join(expected_keys)}')
+    else:
+        log(f'Missing applicable descriptors: {", ".join(expected_keys)}')
 
-    needs_mesh = any(spec.requires_mesh for spec in missing)
+    needs_mesh = any(spec.requires_mesh for spec in to_run)
     mesh = None
     if needs_mesh:
         log('Loading geometry...')
@@ -214,15 +235,67 @@ def run_missing_specs_on_snapshot(
 
     log('Computing descriptors...')
     results: Dict[str, Any] = {}
-    for spec in missing:
+    for spec in to_run:
         spec_results = compute_descriptor(
             spec=spec,
             component=compute_doc,
             mesh=mesh,
             log=_spec_logger(spec),
+            meshes_dir=meshes_dir,
+            point_clouds_dir=point_clouds_dir,
         )
         results.update(spec_results)
     return results
+
+
+async def _process_snapshot(
+    snapshot: Dict[str, Any],
+    mongodb_snapshots,
+    mongodb_identities,
+    meshes_dir: Optional[str],
+    specs: List[DescriptorSpec],
+    dry_run: bool,
+    point_clouds_dir: Optional[str] = None,
+    recompute: bool = False,
+) -> bool:
+    """Compute descriptors for one already-loaded snapshot.
+
+    Returns True if the snapshot was updated (or would be, in dry-run).
+    """
+    snapshot_id = str(snapshot['_id'])
+
+    identity = await load_identity_for_snapshot(
+        mongodb_identities, snapshot)
+    if not identity:
+        log(f'Snapshot {snapshot_id} has no parent identity', prefix='WARNING')
+        return False
+
+    compute_doc = assemble_descriptor_document(identity, snapshot)
+
+    log(f'Found snapshot: {snapshot_id}')
+    log(f'  Identity: {identity.get("_id", "unknown")}')
+    log(f'  Name: {compute_doc.get("name", "Unnamed Component")}')
+    log(f'  Type: {compute_doc.get("type", "unknown")}')
+    log(f'  Version: {compute_doc.get("version", "?")}')
+
+    descriptors = run_specs_on_snapshot(
+        compute_doc=compute_doc,
+        meshes_dir=meshes_dir,
+        point_clouds_dir=point_clouds_dir,
+        specs=specs,
+        recompute=recompute,
+    )
+    if not descriptors:
+        log('No descriptors were computed', prefix='WARNING')
+        return False
+
+    if dry_run:
+        log(f'DRY RUN: Would update snapshot {snapshot_id} '
+            f'with descriptors: {list(descriptors.keys())}')
+        return True
+    return await update_snapshot_descriptors(
+        mongodb_snapshots, snapshot_id, descriptors
+    )
 
 
 async def _process_one(
@@ -248,61 +321,86 @@ async def _process_one(
     if not snapshot:
         return None
 
-    snapshot_id = str(snapshot['_id'])
-    seen_ids.add(snapshot_id)
-
-    identity = await load_identity_for_snapshot(
-        mongodb_identities, snapshot)
-    if not identity:
-        log(f'Snapshot {snapshot_id} has no parent identity', prefix='WARNING')
-        return False
-
-    compute_doc = assemble_descriptor_document(identity, snapshot)
-
-    log(f'Found snapshot: {snapshot_id}')
-    log(f'  Identity: {identity.get("_id", "unknown")}')
-    log(f'  Name: {compute_doc.get("name", "Unnamed Component")}')
-    log(f'  Type: {compute_doc.get("type", "unknown")}')
-    log(f'  Version: {compute_doc.get("version", "?")}')
-
-    descriptors = run_missing_specs_on_snapshot(
-        compute_doc=compute_doc,
+    seen_ids.add(str(snapshot['_id']))
+    return await _process_snapshot(
+        snapshot=snapshot,
+        mongodb_snapshots=mongodb_snapshots,
+        mongodb_identities=mongodb_identities,
         meshes_dir=meshes_dir,
-        point_clouds_dir=point_clouds_dir,
         specs=specs,
+        dry_run=dry_run,
+        point_clouds_dir=point_clouds_dir,
+        recompute=False,
     )
-    if not descriptors:
-        log('No descriptors were computed', prefix='WARNING')
-        return False
 
-    if dry_run:
-        log(f'DRY RUN: Would update snapshot {snapshot_id} '
-            f'with descriptors: {list(descriptors.keys())}')
-        return True
-    return await update_snapshot_descriptors(
-        mongodb_snapshots, snapshot_id, descriptors
-    )
+
+async def _recompute_all(
+    mongodb_snapshots,
+    mongodb_identities,
+    meshes_dir: Optional[str],
+    specs: List[DescriptorSpec],
+    dry_run: bool,
+    point_clouds_dir: Optional[str],
+    max_iterations: Optional[int],
+) -> Tuple[int, int]:
+    """Walk every snapshot, one at a time, and recompute applicable specs.
+
+    Returns ``(visited, updated)``.
+    """
+    visited = 0
+    updated = 0
+    cursor = mongodb_snapshots.find({}).sort('_id', 1)
+    async for snapshot in cursor:
+        if max_iterations is not None and visited >= max_iterations:
+            break
+        if visited > 0:
+            log('-' * 80)
+        result = await _process_snapshot(
+            snapshot=snapshot,
+            mongodb_snapshots=mongodb_snapshots,
+            mongodb_identities=mongodb_identities,
+            meshes_dir=meshes_dir,
+            specs=specs,
+            dry_run=dry_run,
+            point_clouds_dir=point_clouds_dir,
+            recompute=True,
+        )
+        visited += 1
+        if result:
+            updated += 1
+    if visited == 0:
+        log('No snapshots found in the database')
+    return visited, updated
 
 
 async def compute_descriptors(
     dry_run: bool = False,
     max_iterations: Optional[int] = 1,
+    recompute: bool = False,
 ) -> int:
-    """Find snapshots with missing descriptors, compute them, persist.
+    """Find snapshots, compute descriptors, persist.
 
     Args:
         dry_run: if True, never write to MongoDB.
         max_iterations: upper bound on snapshots processed in this run.
-            ``None`` means "until no snapshot needs work".
+            ``None`` means "until no snapshot is left".
+        recompute: if True, walk every snapshot and overwrite every
+            applicable descriptor. If False, only fill missing keys.
 
     Returns:
-        Number of snapshots for which new descriptors were written
+        Number of snapshots for which descriptors were written
         (or would be written, in dry-run).
     """
     log('Starting descriptor computation...')
     if dry_run:
         log('DRY RUN MODE - No database updates will be made')
-    if max_iterations is None:
+    if recompute:
+        if max_iterations is None:
+            log('Recompute mode: overwriting descriptors on every snapshot')
+        else:
+            log(f'Recompute mode: overwriting descriptors on up to '
+                f'{max_iterations} snapshots')
+    elif max_iterations is None:
         log('Batch mode: processing every snapshot with missing descriptors')
     elif max_iterations != 1:
         log(f'Batch mode: processing up to {max_iterations} snapshots')
@@ -334,27 +432,38 @@ async def compute_descriptors(
         registered_keys = collect_output_keys(ALL_SPECS)
         log(f'Registered descriptor keys: {", ".join(registered_keys)}')
 
-        while max_iterations is None or visited < max_iterations:
-            if visited > 0:
-                log('-' * 80)
-            result = await _process_one(
+        if recompute:
+            visited, updated = await _recompute_all(
                 mongodb_snapshots=mongodb_snapshots,
                 mongodb_identities=mongodb_identities,
                 meshes_dir=meshes_dir,
-                point_clouds_dir=point_clouds_dir,
                 specs=ALL_SPECS,
-                seen_ids=seen_ids,
                 dry_run=dry_run,
+                point_clouds_dir=point_clouds_dir,
+                max_iterations=max_iterations,
             )
-            if result is None:
-                if visited == 0:
-                    log('No snapshots with missing descriptors found')
-                else:
-                    log('No snapshots with missing descriptors left')
-                break
-            visited += 1
-            if result:
-                updated += 1
+        else:
+            while max_iterations is None or visited < max_iterations:
+                if visited > 0:
+                    log('-' * 80)
+                result = await _process_one(
+                    mongodb_snapshots=mongodb_snapshots,
+                    mongodb_identities=mongodb_identities,
+                    meshes_dir=meshes_dir,
+                    point_clouds_dir=point_clouds_dir,
+                    specs=ALL_SPECS,
+                    seen_ids=seen_ids,
+                    dry_run=dry_run,
+                )
+                if result is None:
+                    if visited == 0:
+                        log('No snapshots with missing descriptors found')
+                    else:
+                        log('No snapshots with missing descriptors left')
+                    break
+                visited += 1
+                if result:
+                    updated += 1
 
         if visited > 0:
             log('-' * 80)
@@ -374,7 +483,7 @@ async def compute_descriptors(
 
 def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Compute missing descriptors for CSC component snapshots.',
+        description='Compute descriptors for CSC component snapshots.',
     )
     parser.add_argument(
         '--dry-run', action='store_true',
@@ -386,26 +495,45 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help='Process every snapshot with missing descriptors.',
     )
     group.add_argument(
+        '--recompute', action='store_true',
+        help=(
+            'Overwrite every applicable descriptor on every snapshot, '
+            'one snapshot at a time. Use after changing how a descriptor '
+            'is computed.'
+        ),
+    )
+    parser.add_argument(
         '--limit', type=int, default=None, metavar='N',
-        help='Process at most N snapshots (default: 1, i.e. cron mode).',
+        help=(
+            'Process at most N snapshots. Default is 1 in cron mode, '
+            'unlimited with --all or --recompute.'
+        ),
     )
     return parser.parse_args(argv)
 
 
+def _max_iterations(args: argparse.Namespace) -> Optional[int]:
+    if args.limit is not None and args.limit <= 0:
+        print('--limit must be a positive integer', file=sys.stderr)
+        sys.exit(2)
+    if args.recompute:
+        return args.limit
+    if args.process_all:
+        return args.limit
+    if args.limit is not None:
+        return args.limit
+    return 1
+
+
 if __name__ == '__main__':
     args = _parse_args()
-    if args.process_all:
-        max_iter: Optional[int] = None
-    elif args.limit is not None:
-        if args.limit <= 0:
-            print('--limit must be a positive integer', file=sys.stderr)
-            sys.exit(2)
-        max_iter = args.limit
-    else:
-        max_iter = 1
 
     updated_count = asyncio.run(
-        compute_descriptors(dry_run=args.dry_run, max_iterations=max_iter)
+        compute_descriptors(
+            dry_run=args.dry_run,
+            max_iterations=_max_iterations(args),
+            recompute=args.recompute,
+        )
     )
     if updated_count > 0:
         log(f'Descriptor computation completed: {updated_count} snapshot(s) '

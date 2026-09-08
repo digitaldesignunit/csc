@@ -649,7 +649,7 @@ def _noop_logger(_message: str) -> None:
 # SNAPSHOT-LEVEL LOADING -----------------------------------------------------
 
 def first_extrusion(geometry: Dict) -> Optional[Dict]:
-    """Return the first extrusion primitive from snapshot or legacy geometry."""
+    """Return the first extrusion from snapshot or legacy geometry."""
     extrusions = geometry.get('extrusions') or []
     if extrusions:
         return extrusions[0]
@@ -682,7 +682,7 @@ def get_snapshot_point_cloud_path(
     return path if os.path.isfile(path) else None
 
 
-def _first_point_cloud_points(
+def load_snapshot_point_cloud_points(
     geometry: Dict,
     snapshot_id: str,
     point_clouds_dir: Optional[str],
@@ -731,6 +731,83 @@ def get_snapshot_mesh_paths(
     return paths
 
 
+def _mesh_ply_resolutions_to_try(snapshot: Dict) -> Tuple[str, ...]:
+    """Prefer detailed, then reduced, then any other stored resolution."""
+    manifest = (snapshot.get('mesh_ply_resolutions') or {}).get('0') or []
+    preferred = ('detailed', 'reduced')
+    resolutions = tuple(
+        r for r in preferred if r in manifest
+    ) + tuple(r for r in manifest if r not in preferred)
+    return resolutions or preferred
+
+
+def load_snapshot_surface_mesh(
+    snapshot: Dict,
+    meshes_dir: Optional[str] = None,
+    logger: LoggerFn = _noop_logger,
+) -> Tuple[Optional[trimesh.Trimesh], Optional[str]]:
+    """Load the highest-resolution *surface mesh* for a snapshot.
+
+    Priority:
+        1. ``detailed.ply`` on disk (``meshes/<snapshot_id>/<i>/``)
+        2. ``reduced.ply`` on disk
+        3. inline ``geometry.meshes[0]``
+           (``vertices``/``faces`` or ``v``/``f``)
+
+    Does not fall through to extrusions or point-cloud hulls. The radial
+    signature needs a real surface to section; a hull would erase the
+    concavities that make the descriptor useful.
+
+    Returns:
+        ``(mesh, source)`` on success, ``(None, None)`` if no surface mesh
+        is available.
+    """
+    snapshot_id = str(snapshot.get('_id', '<unknown>'))
+    pca_frame = snapshot.get('pca_frame')
+
+    if meshes_dir is not None:
+        paths = get_snapshot_mesh_paths(
+            meshes_dir, snapshot_id, 0,
+            _mesh_ply_resolutions_to_try(snapshot),
+        )
+        for label, path in paths.items():
+            if not path:
+                continue
+            try:
+                from apps.catalog.geometry_mesh_export import (
+                    load_trimesh_from_ply_file,
+                )
+                logger(f'Loading {label}.ply for snapshot {snapshot_id}')
+                mesh = load_trimesh_from_ply_file(path)
+                if pca_frame is not None:
+                    mesh = apply_pca_frame_transform(mesh, pca_frame)
+                source = f'meshes/0/{label}.ply'
+                logger(
+                    f'Loaded {source} ({len(mesh.vertices)} vertices, '
+                    f'{len(mesh.faces)} faces)'
+                )
+                return mesh, source
+            except Exception as exc:
+                logger(f'Failed to load {label}.ply: {exc}')
+
+    geometry = snapshot.get('geometry') or {}
+    meshes = geometry.get('meshes') or []
+    if meshes:
+        vertices, faces = _inline_mesh_vertices_faces(meshes[0])
+        if vertices and faces:
+            try:
+                mesh = load_primitive_mesh_for_descriptor(
+                    vertices=vertices,
+                    faces=faces,
+                    pca_frame=pca_frame,
+                )
+                return mesh, 'geometry.meshes[0]'
+            except Exception as exc:
+                logger(f'Failed to load geometry.meshes[0]: {exc}')
+
+    return None, None
+
+
 def load_snapshot_mesh(
     snapshot: Dict,
     meshes_dir: Optional[str] = None,
@@ -743,7 +820,8 @@ def load_snapshot_mesh(
     Priority:
         1. ``detailed.ply`` on disk (``meshes/<snapshot_id>/<i>/``)
         2. ``reduced.ply`` on disk
-        3. inline ``geometry.meshes[0]`` (``vertices``/``faces`` or ``v``/``f``)
+        3. inline ``geometry.meshes[0]``
+           (``vertices``/``faces`` or ``v``/``f``)
         4. ``geometry.extrusions[0]`` or legacy ``geometry.extrusion``
         5. convex hull of ``geometry.point_clouds[0]``
            (``point_clouds/<snapshot_id>/0.ply`` when available)
@@ -757,56 +835,17 @@ def load_snapshot_mesh(
     snapshot_id = str(snapshot.get('_id', '<unknown>'))
     pca_frame = snapshot.get('pca_frame')
 
-    if meshes_dir is not None:
-        manifest = (snapshot.get('mesh_ply_resolutions') or {}).get('0') or []
-        preferred = ('detailed', 'reduced')
-        resolutions = tuple(
-            r for r in preferred if r in manifest
-        ) + tuple(r for r in manifest if r not in preferred)
-        if not resolutions:
-            resolutions = preferred
-        paths = get_snapshot_mesh_paths(
-            meshes_dir, snapshot_id, 0, resolutions)
-        for label, path in paths.items():
-            if not path:
-                continue
-            try:
-                from apps.catalog.geometry_mesh_export import (
-                    load_trimesh_from_ply_file,
-                )
-                logger(f'Loading {label}.ply for snapshot {snapshot_id}')
-                mesh = load_trimesh_from_ply_file(path)
-                if pca_frame is not None:
-                    mesh = apply_pca_frame_transform(mesh, pca_frame)
-                logger(
-                    f'Loaded {label}.ply ({len(mesh.vertices)} vertices, '
-                    f'{len(mesh.faces)} faces)'
-                )
-                return mesh
-            except Exception as exc:
-                logger(f'Failed to load {label}.ply: {exc}')
+    mesh, source = load_snapshot_surface_mesh(
+        snapshot, meshes_dir=meshes_dir, logger=logger)
+    if mesh is not None:
+        return mesh
 
     geometry = snapshot.get('geometry') or {}
     primitive_source: Optional[str] = None
     primitive_loader: Optional[Callable[[], trimesh.Trimesh]] = None
 
-    meshes = geometry.get('meshes')
-    if meshes:
-        mesh_data = meshes[0]
-        vertices, faces = _inline_mesh_vertices_faces(mesh_data)
-        if vertices and faces:
-            primitive_source = 'geometry.meshes[0]'
-
-            def _load_from_meshes() -> trimesh.Trimesh:
-                return load_primitive_mesh_for_descriptor(
-                    vertices=vertices,
-                    faces=faces,
-                    pca_frame=pca_frame,
-                )
-            primitive_loader = _load_from_meshes
-
     extrusion = first_extrusion(geometry)
-    if primitive_loader is None and extrusion:
+    if extrusion:
         primitive_source = 'geometry.extrusions[0]'
 
         def _load_from_extrusion() -> trimesh.Trimesh:
@@ -818,7 +857,7 @@ def load_snapshot_mesh(
         primitive_loader = _load_from_extrusion
 
     if primitive_loader is None:
-        cloud_points, cloud_source = _first_point_cloud_points(
+        cloud_points, cloud_source = load_snapshot_point_cloud_points(
             geometry, snapshot_id, point_clouds_dir, logger)
         if cloud_points is not None:
             primitive_source = f'{cloud_source} (convex hull)'

@@ -125,6 +125,10 @@ def _inline_mesh(mesh):
     return {'v': mesh.vertices.tolist(), 'f': mesh.faces.tolist()}
 
 
+def _tetra_preview():
+    return [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+
 # POLICY ---------------------------------------------------------------------
 
 def test_only_panels_are_rest_aligned():
@@ -315,15 +319,25 @@ def test_cloud_section_ignores_non_finite_points():
 
 # COMPONENT RESOLUTION: PANELS -----------------------------------------------
 
-def test_panel_extrusion_profile_outranks_mesh_and_cloud():
+def test_mesh_outranks_point_cloud_and_extrusion():
     outline, source, reason = outline_from_component(_panel({
         'extrusions': [{'profile': L_PROFILE, 'height': PANEL_THICKNESS}],
-        'meshes': [{'v': [[0, 0, 0]], 'f': [[0, 0, 0]]}],
-        'point_clouds': [{'points': _l_surface_points(100).tolist()}],
+        'meshes': [_inline_mesh(_l_mesh())],
+        'point_clouds': [{'points': _l_surface_points(200).tolist()}],
     }))
     assert reason is None
-    assert source == 'geometry.extrusions[0].profile'
-    assert outline == L_PROFILE
+    assert source == 'geometry.meshes[0] (section)'
+    assert _area(outline) == pytest.approx(L_AREA, rel=1e-9)
+
+
+def test_point_cloud_outranks_extrusion_when_there_is_no_mesh():
+    outline, source, reason = outline_from_component(_panel({
+        'extrusions': [{'profile': L_PROFILE, 'height': PANEL_THICKNESS}],
+        'point_clouds': [{'points': _l_surface_points().tolist()}],
+    }))
+    assert reason is None
+    assert source == 'geometry.point_clouds[0] (section)'
+    assert _area(outline) == pytest.approx(L_AREA, rel=0.05)
 
 
 def test_mesh_outranks_point_cloud():
@@ -349,6 +363,41 @@ def test_cloud_only_component_ignores_a_hull_mesh_from_the_runner():
     )
     assert reason is None
     assert source == 'geometry.point_clouds[0] (section)'
+    assert _area(outline) == pytest.approx(L_AREA, rel=0.05)
+
+
+def test_detailed_ply_outranks_inline_mesh(tmp_path):
+    """On-disk detailed.ply is the highest-resolution mesh source."""
+    snapshot_id = 'snap-1'
+    ply_dir = tmp_path / snapshot_id / '0'
+    ply_dir.mkdir(parents=True)
+    detailed = create_mesh_from_extrusion(L_PROFILE, PANEL_THICKNESS)
+    detailed.export(str(ply_dir / 'detailed.ply'))
+
+    inline = trimesh.creation.box(extents=[80.0, 40.0, 6.0])
+    outline, source, reason = outline_from_component(
+        _panel({'meshes': [_inline_mesh(inline)]}),
+        meshes_dir=str(tmp_path),
+    )
+    assert reason is None
+    assert source == 'meshes/0/detailed.ply (section)'
+    assert _area(outline) == pytest.approx(L_AREA, rel=1e-6)
+
+
+def test_point_cloud_ply_outranks_inline_preview(tmp_path):
+    """The full PLY is preferred over the subsampled inline preview."""
+    snapshot_id = 'snap-1'
+    cloud_dir = tmp_path / snapshot_id
+    cloud_dir.mkdir()
+    full = trimesh.PointCloud(_l_surface_points())
+    (cloud_dir / '0.ply').write_bytes(full.export(file_type='ply'))
+
+    outline, source, reason = outline_from_component(
+        _panel({'point_clouds': [{'points': _tetra_preview()}]}),
+        point_clouds_dir=str(tmp_path),
+    )
+    assert reason is None
+    assert source == 'point_clouds/0.ply (section)'
     assert _area(outline) == pytest.approx(L_AREA, rel=0.05)
 
 

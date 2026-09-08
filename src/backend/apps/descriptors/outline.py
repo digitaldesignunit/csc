@@ -23,8 +23,8 @@ slab around the cut height are flattened and wrapped in a concave hull.
 
 Panels are the exception, described by `PANEL_POLICY` below: they are thin
 and prismatic, so their meaningful outline is the silhouette rather than a
-band through the middle, and they can use an authored extrusion profile
-directly.
+band through the middle, and an authored extrusion profile may be used
+directly when no mesh or point cloud is available.
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
@@ -44,7 +44,8 @@ from apps.descriptors.geometry import (
     apply_pca_frame_to_points,
     first_extrusion,
     load_extrusion_mesh_for_descriptor,
-    load_primitive_mesh_for_descriptor,
+    load_snapshot_point_cloud_points,
+    load_snapshot_surface_mesh,
 )
 
 # MODULE CONSTANTS ------------------------------------------------------------
@@ -389,24 +390,11 @@ def section_outline_from_points(
 # COMPONENT-LEVEL RESOLUTION --------------------------------------------------
 
 
-def _build_section_mesh(
-    meshes: List[Dict],
-    extrusion: Optional[Dict],
+def _build_extrusion_mesh(
+    extrusion: Dict,
     pca_frame: Optional[Dict[str, List[float]]],
 ) -> trimesh.Trimesh:
-    """Build the PCA-aligned mesh to cut from a component's inline geometry.
-
-    Only reached when the runner did not already supply a mesh, in which
-    case this rebuilds it from the reduced inline copy. That is enough for
-    an outline, which is a low-frequency feature of the geometry.
-    """
-    if meshes:
-        vertices = meshes[0].get('v') or meshes[0].get('vertices')
-        faces = meshes[0].get('f') or meshes[0].get('faces')
-        if not vertices or not faces:
-            raise ValueError('inline mesh has no vertices or faces')
-        return load_primitive_mesh_for_descriptor(
-            vertices=vertices, faces=faces, pca_frame=pca_frame)
+    """Sweep an extrusion into a PCA-aligned mesh to cut."""
     return load_extrusion_mesh_for_descriptor(
         profile=extrusion['profile'],
         height=extrusion['height'],
@@ -419,32 +407,36 @@ def outline_from_component(
     mesh: Optional[trimesh.Trimesh] = None,
     concavity: float = DEFAULT_CONCAVITY,
     policy: Optional[OutlinePolicy] = None,
+    meshes_dir: Optional[str] = None,
+    point_clouds_dir: Optional[str] = None,
     logger: LoggerFn = _noop_logger,
 ) -> Tuple[Optional[List[List[float]]], Optional[str], Optional[str]]:
     """
     Resolve the best available 2D outline for a component.
 
     Priority:
-        1. ``geometry.extrusions[0].profile`` - panels only, see
-           `OutlinePolicy.use_extrusion_profile`
-        2. ``geometry.meshes[0]``, else ``geometry.extrusions[0]`` swept
-           into a mesh - cut through the centre
-        3. ``geometry.point_clouds[0]`` - sliced and concave-hulled
+        1. highest-resolution surface mesh
+           (``detailed.ply`` > ``reduced.ply`` > inline ``geometry.meshes[0]``)
+        2. highest-resolution point cloud
+           (``point_clouds/<id>/0.ply`` > inline preview)
+        3. ``geometry.extrusions[0]`` - authored profile for panels, or a
+           section of the swept mesh for every other type
 
-    Meshes outrank clouds for the same reason they do in
-    `geometry.load_snapshot_mesh`: when a snapshot carries both, they
-    describe one object and the mesh is the higher-fidelity record.
-
-    `mesh` is used only when the component actually carries mesh or
-    extrusion geometry. A cloud-only snapshot resolves to its convex hull
-    upstream, and hulling away the concavities is exactly what makes a
-    radial signature meaningless, so that case re-reads the raw points.
+    A mesh passed in from the runner is ignored. `load_snapshot_mesh`
+    hulls cloud-only snapshots, and cutting that hull would erase the
+    concavities the signature exists to capture. This function always
+    reloads the highest-resolution surface mesh or the raw points.
 
     Args:
         component: snapshot or component document.
-        mesh: PCA-aligned mesh the runner already loaded, if any.
+        mesh: unused; kept so the runner can pass `ctx.mesh` without a
+            special case. See above.
         concavity: passed to `section_outline_from_points`.
         policy: how to reduce this component; defaults to `policy_for`.
+        meshes_dir: on-disk snapshot mesh directory; detailed PLY is
+            preferred over the inline mesh when present.
+        point_clouds_dir: on-disk snapshot point-cloud directory; the full
+            PLY is preferred over the inline preview when present.
         logger: optional progress logger.
 
     Returns:
@@ -455,52 +447,69 @@ def outline_from_component(
     policy = policy if policy is not None else policy_for(component)
     geometry = component.get('geometry') or {}
     pca_frame = component.get('pca_frame')
+    snapshot_id = str(component.get('_id', '<unknown>'))
+    last_reason: Optional[str] = None
+    _ = mesh
 
-    profile, profile_reason = rs.get_profile_from_component(component)
-    if policy.use_extrusion_profile and profile is not None:
-        return profile, 'geometry.extrusions[0].profile', None
-
-    meshes = geometry.get('meshes') or []
-    extrusion = first_extrusion(geometry)
-    if meshes or extrusion:
-        source = (
-            'geometry.meshes[0] (section)' if meshes
-            else 'geometry.extrusions[0] (section)'
-        )
+    surface_mesh, mesh_source = load_snapshot_surface_mesh(
+        component, meshes_dir=meshes_dir, logger=logger)
+    if surface_mesh is not None:
+        source = f'{mesh_source} (section)'
         try:
-            section_mesh = mesh
-            if section_mesh is None:
-                section_mesh = _build_section_mesh(
-                    meshes, extrusion, pca_frame)
             return (
-                section_outline_from_mesh(section_mesh, logger=logger),
+                section_outline_from_mesh(surface_mesh, logger=logger),
                 source,
                 None,
             )
         except Exception as exc:
-            return None, None, f'{source}: {exc}'
+            last_reason = f'{source}: {exc}'
+            logger(last_reason)
 
-    point_clouds = geometry.get('point_clouds') or []
-    if point_clouds:
-        source = 'geometry.point_clouds[0] (section)'
+    if geometry.get('point_clouds'):
+        cloud_points, cloud_source = load_snapshot_point_cloud_points(
+            geometry, snapshot_id, point_clouds_dir, logger)
+        if cloud_points is None:
+            last_reason = last_reason or 'inline point cloud has no points'
+        else:
+            source = f'{cloud_source} (section)'
+            try:
+                points = cloud_points
+                if pca_frame is not None:
+                    points = apply_pca_frame_to_points(points, pca_frame)
+                return (
+                    section_outline_from_points(
+                        points,
+                        slab_fraction=policy.slab_fraction,
+                        concavity=concavity,
+                        widen_sparse_slab=policy.widen_sparse_slab,
+                        logger=logger,
+                    ),
+                    source,
+                    None,
+                )
+            except Exception as exc:
+                last_reason = f'{source}: {exc}'
+                logger(last_reason)
+
+    extrusion = first_extrusion(geometry)
+    profile, profile_reason = rs.get_profile_from_component(component)
+    if extrusion is not None:
+        if policy.use_extrusion_profile and profile is not None:
+            return profile, 'geometry.extrusions[0].profile', None
+        source = 'geometry.extrusions[0] (section)'
         try:
-            points = point_clouds[0].get('points') or []
-            if not points:
-                return None, None, 'inline point cloud has no points'
-            if pca_frame is not None:
-                points = apply_pca_frame_to_points(points, pca_frame)
             return (
-                section_outline_from_points(
-                    points,
-                    slab_fraction=policy.slab_fraction,
-                    concavity=concavity,
-                    widen_sparse_slab=policy.widen_sparse_slab,
+                section_outline_from_mesh(
+                    _build_extrusion_mesh(extrusion, pca_frame),
                     logger=logger,
                 ),
                 source,
                 None,
             )
         except Exception as exc:
-            return None, None, f'{source}: {exc}'
+            last_reason = f'{source}: {exc}'
+            logger(last_reason)
 
-    return None, None, profile_reason or 'no outline-capable geometry'
+    return None, None, last_reason or profile_reason or (
+        'no outline-capable geometry'
+    )

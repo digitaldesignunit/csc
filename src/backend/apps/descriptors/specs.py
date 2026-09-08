@@ -113,6 +113,8 @@ def _radial_signature(ctx: DescriptorContext) -> Dict[str, Any]:
         mesh=ctx.mesh,
         concavity=float(ctx.params.get('concavity', DEFAULT_CONCAVITY)),
         policy=policy,
+        meshes_dir=ctx.meshes_dir,
+        point_clouds_dir=ctx.point_clouds_dir,
         logger=lambda m: ctx.log(f'radial_signature: {m}'),
     )
     if outline is None:
