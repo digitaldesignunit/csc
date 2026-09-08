@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin user management at `/admin/users`
 - Public component viewing without login; `is_public` toggle on edit page
 - Reinforcement visualization in component viewer
-- GH interface docs: `ListIdentitySnapshots`, `FetchAllSnapshots`, `FetchSnapshot`, `CreateReinforcement`
+- GH interface docs: `ListIdentitySnapshots`, `FetchAllSnapshots`, `FetchSnapshot`, `CreateReinforcement`, `PassportToD2P`
 
 #### CSC Grasshopper Interface
 
