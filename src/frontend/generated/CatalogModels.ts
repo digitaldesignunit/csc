@@ -88,11 +88,11 @@ export interface SnapshotReinforcement {
   points: number[][]; // Open centerline polyline as [x, y, z] coordinate triplets; same coordinate frame as meshes/extrusions/marker_points
 }
 
-export interface ComposeIdentityResponse {
+export interface ComponentPassport {
   identity: ComponentIdentity;
   snapshots: ComponentSnapshot[];
 }
 
 /** Canonical read model: `GET /identities/{id}/compose` (same JSON as the API). */
-export type CatalogComponent = ComposeIdentityResponse
+export type CatalogComponent = ComponentPassport
 

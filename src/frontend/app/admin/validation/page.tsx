@@ -183,7 +183,7 @@ export default function ValidationPage() {
     await deleteIdentity(identityId, snapshotId)
   }
 
-  const fetchComposePreview = async (identityId: string, snapshotId: string) => {
+  const fetchPassportPreview = async (identityId: string, snapshotId: string) => {
     setLoadingPreviews((prev) => new Set(prev).add(snapshotId))
     try {
       const params = new URLSearchParams({ snapshots: snapshotId })
@@ -199,7 +199,7 @@ export default function ValidationPage() {
         }))
       }
     } catch (error) {
-      console.error('Failed to fetch compose for preview:', error)
+      console.error('Failed to fetch passport for preview:', error)
     } finally {
       setLoadingPreviews((prev) => {
         const next = new Set(prev)
@@ -223,7 +223,7 @@ export default function ValidationPage() {
     })
 
     if (!wasExpanded && !previewById[snapshotId]) {
-      void fetchComposePreview(row.identity_id, snapshotId)
+      void fetchPassportPreview(row.identity_id, snapshotId)
     }
   }
 

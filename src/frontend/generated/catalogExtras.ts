@@ -9,10 +9,10 @@
 
 import type {
   ComponentSnapshot,
-  ComposeIdentityResponse,
+  ComponentPassport,
 } from './CatalogModels'
 
-/** Row shape from `GET /identities` with `expand=shallow` (not a full compose payload). */
+/** Row shape from `GET /identities` with `expand=shallow` (not a full passport payload). */
 export type CatalogShallowRow = {
   _id?: string
   type?: string
@@ -90,13 +90,13 @@ export type SnapshotMeshRouting = {
   mesh_ply_resolutions?: Record<string, string[]> | null
 }
 
-/** First snapshot in a compose payload (the active row for detail views). */
+/** First snapshot in a passport payload (the active row for detail views). */
 export function primarySnapshot(
-  catalog: Pick<ComposeIdentityResponse, 'snapshots'>,
+  catalog: Pick<ComponentPassport, 'snapshots'>,
 ): ComponentSnapshot {
   const snap = catalog.snapshots?.[0]
   if (!snap) {
-    throw new Error('Compose payload has no snapshots')
+    throw new Error('Passport payload has no snapshots')
   }
   return snap
 }

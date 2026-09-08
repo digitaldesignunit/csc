@@ -18,7 +18,7 @@ import {
 
 type ComponentSnapshotPhotoGalleryProps = {
   snapshotId: string
-  /** From snapshot.photo_count (compose refreshes from disk). */
+  /** From snapshot.photo_count (passport refreshes from disk). */
   photoCount?: unknown
   compact?: boolean
 }

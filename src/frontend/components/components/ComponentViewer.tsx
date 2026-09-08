@@ -385,7 +385,7 @@ async function loadExternalMeshes(
   }
 
   if (!snapshotRouting?.snapshot_id) {
-    const msg = `No snapshot routing for ${mode} mode (compose payload missing current snapshot _id)`
+    const msg = `No snapshot routing for ${mode} mode (passport payload missing current snapshot _id)`
     externalMeshCache.set(cacheKey, {
       meshes: null,
       etag: undefined,
@@ -454,7 +454,7 @@ async function loadExternalPointClouds(
   }
 
   if (!snapshotRouting?.snapshot_id) {
-    const msg = 'No snapshot routing for point cloud PLY (compose payload missing current snapshot _id)'
+    const msg = 'No snapshot routing for point cloud PLY (passport payload missing current snapshot _id)'
     externalPointCloudCache.set(cacheKey, {
       pointClouds: null,
       etag: undefined,

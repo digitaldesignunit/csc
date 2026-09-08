@@ -37,12 +37,12 @@ export default async function ComponentDetailPage({
 
   const fetchOpts = { cache: 'no-store' as const, headers: { cookie } }
 
-  const composeUrl = requestedSnapshotId
+  const passportUrl = requestedSnapshotId
     ? `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose?${new URLSearchParams({ snapshots: requestedSnapshotId }).toString()}`
     : `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose`
 
-  const [composeRes, snapshotsRes, childrenRes] = await Promise.all([
-    fetch(composeUrl, fetchOpts),
+  const [passportRes, snapshotsRes, childrenRes] = await Promise.all([
+    fetch(passportUrl, fetchOpts),
     fetch(
       `${base}/api/backend/identities/${encodeURIComponent(component_id)}/snapshots`,
       fetchOpts,
@@ -53,7 +53,7 @@ export default async function ComponentDetailPage({
     ),
   ])
 
-  const res = composeRes
+  const res = passportRes
 
   if (res.status === 401) {
     const callback = requestedSnapshotId
@@ -67,7 +67,7 @@ export default async function ComponentDetailPage({
   if (!res.ok) {
     const body = await res.text()
     throw new Error(
-      `Failed to fetch compose ${component_id}: ${res.status} ${body}`,
+      `Failed to fetch passport ${component_id}: ${res.status} ${body}`,
     )
   }
 

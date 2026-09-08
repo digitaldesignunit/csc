@@ -8,7 +8,7 @@
  *
  * - `/schema/catalog-shared` → `CatalogSharedTypes.ts` (frames, location, design mesh types)
  * - `/schema/design` → `DesignModel`
- * - `/schema/catalog-compose` → `CatalogModels` (compose body with snapshots[])
+ * - `/schema/catalog-compose` → `CatalogModels` (passport body with snapshots[])
  * - `/schema/snapshot-summary` → `SnapshotSummaryItem` in `SnapshotModels.ts`
  * - `/schema/pending-validation-snapshot` → `PendingValidationSnapshotItem` in `SnapshotModels.ts`
  */
@@ -19,7 +19,7 @@ import path from 'path'
 const BACKEND_URL = process.env.FASTAPI_URL || 'https://api.2ndchances.build'
 const OUTPUT_DIR = path.join(process.cwd(), 'generated')
 
-/** Reuse shared defs from `CatalogSharedTypes.ts` in compose/design outputs. */
+/** Reuse shared defs from `CatalogSharedTypes.ts` in passport/design outputs. */
 const SHARED_DEFS_FROM_CATALOG_SHARED = new Set([
   'ComponentBoundingBox',
   'ComponentFrame',
@@ -30,9 +30,9 @@ async function generateModel(
   schemaPath: string,
   interfaceName: string,
   outputFileName: string,
-  options?: { catalogCompose?: boolean; defsOnly?: boolean },
+  options?: { catalogPassport?: boolean; defsOnly?: boolean },
 ) {
-  const catalogCompose = options?.catalogCompose ?? false
+  const catalogPassport = options?.catalogPassport ?? false
   const defsOnly = options?.defsOnly ?? false
   console.log(`🔍 Fetching ${interfaceName} schema from ${BACKEND_URL}${schemaPath}...`)
   const response = await fetch(`${BACKEND_URL}${schemaPath}`)
@@ -44,7 +44,7 @@ async function generateModel(
   const schema = await response.json()
   console.log(`✅ ${interfaceName} schema fetched successfully`)
   writeGeneratedModel(schema, interfaceName, schemaPath, outputFileName, {
-    catalogCompose,
+    catalogPassport,
     defsOnly,
   })
 }
@@ -54,7 +54,7 @@ function writeGeneratedModel(
   rootInterfaceName: string,
   schemaPath: string,
   outputFileName: string,
-  opts: { catalogCompose: boolean; defsOnly: boolean },
+  opts: { catalogPassport: boolean; defsOnly: boolean },
 ) {
   if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true })
@@ -92,7 +92,7 @@ async function appendModelFromSchema(
     schema,
     interfaceName,
     schemaPath,
-    { catalogCompose: false, defsOnly: false },
+    { catalogPassport: false, defsOnly: false },
   )
   const interfaceOnly = typescriptBlock.replace(
     /^[\s\S]*?export interface /,
@@ -113,8 +113,8 @@ async function run() {
 
     await generateModel('/schema/design', 'DesignModel', 'DesignModel.ts')
 
-    await generateModel('/schema/catalog-compose', 'ComposeIdentityResponse', 'CatalogModels.ts', {
-      catalogCompose: true,
+    await generateModel('/schema/catalog-compose', 'ComponentPassport', 'CatalogModels.ts', {
+      catalogPassport: true,
     })
 
     await generateModel(
@@ -173,7 +173,7 @@ function generateTypeScriptInterface(
   schema: Record<string, unknown>,
   rootInterfaceName: string,
   schemaPath: string,
-  opts: { catalogCompose: boolean; defsOnly: boolean },
+  opts: { catalogPassport: boolean; defsOnly: boolean },
 ): string {
   const { properties, required = [], $defs } = schema as {
     properties: Record<string, unknown>
@@ -192,7 +192,7 @@ import { ComponentGeometry } from './CatalogSharedTypes';
 `
   }
 
-  if (opts.catalogCompose) {
+  if (opts.catalogPassport) {
     interfaceCode += `
 import type {
   ComponentBoundingBox,
@@ -210,7 +210,7 @@ import type {
       if (rootInterfaceName === 'DesignModel' && SHARED_DESIGN_DEFS.has(defName)) {
         continue
       }
-      if (opts.catalogCompose && SHARED_DEFS_FROM_CATALOG_SHARED.has(defName)) {
+      if (opts.catalogPassport && SHARED_DEFS_FROM_CATALOG_SHARED.has(defName)) {
         continue
       }
       interfaceCode += generateNestedInterface(
@@ -258,9 +258,9 @@ export type ComponentManufacturedPrecision = 'exact' | 'month' | 'year' | 'unkno
 `
   }
 
-  if (opts.catalogCompose && rootInterfaceName === 'ComposeIdentityResponse') {
+  if (opts.catalogPassport && rootInterfaceName === 'ComponentPassport') {
     interfaceCode += `/** Canonical read model: \`GET /identities/{id}/compose\` (same JSON as the API). */
-export type CatalogComponent = ComposeIdentityResponse
+export type CatalogComponent = ComponentPassport
 
 `
   }
@@ -272,7 +272,7 @@ function generateNestedInterface(
   name: string,
   schema: Record<string, unknown>,
   $defs: Record<string, unknown> | undefined,
-  genOpts: { catalogCompose: boolean; defsOnly?: boolean },
+  genOpts: { catalogPassport: boolean; defsOnly?: boolean },
 ): string {
   const { properties, required = [] } = schema as {
     properties?: Record<string, unknown>
@@ -303,14 +303,14 @@ function generateNestedInterface(
 function getTypeScriptType(
   schema: Schema,
   $defs: Record<string, unknown> | undefined,
-  genOpts: { catalogCompose: boolean },
+  genOpts: { catalogPassport: boolean },
 ): string {
-  const catalogCompose = genOpts.catalogCompose
+  const catalogPassport = genOpts.catalogPassport
   if (schema.$ref && typeof schema.$ref === 'string') {
     const refPath = schema.$ref
     if (refPath.startsWith('#/$defs/')) {
       const refName = refPath.replace('#/$defs/', '')
-      if (catalogCompose && SHARED_DEFS_FROM_CATALOG_SHARED.has(refName)) {
+      if (catalogPassport && SHARED_DEFS_FROM_CATALOG_SHARED.has(refName)) {
         return refName
       }
       return refName

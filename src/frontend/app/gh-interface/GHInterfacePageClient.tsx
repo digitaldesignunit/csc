@@ -286,7 +286,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1">
               <li>• <strong>Identity</strong> — stable catalog entry: type, material, dataset, provenance (manufactured/salvaged dates, parent identities), and attributes.</li>
               <li>• <strong>Snapshot</strong> — versioned state: geometry, descriptors, condition, placement frame (iframe), PCA frame, color, location, and notes.</li>
-              <li>• <strong>Compose JSON</strong> — most components pass data as <code className="text-xs">{`{identity, snapshots[]}`}</code> pairs. Use <strong>CSC_DisassembleComponent</strong> to unpack them in Grasshopper.</li>
+              <li>• <strong>Passport</strong> — one identity together with one or more of its snapshots, as <code className="text-xs">{`{identity, snapshots[]}`}</code>. This is the shape most components pass along the wire (as a JSON string). Use <strong>CSC_DisassembleComponent</strong> to unpack one in Grasshopper.</li>
               <li>• <strong>Designs</strong> pin specific snapshot versions (not identity/current) and store placement iframes per snapshot.</li>
             </ul>
           </div>
@@ -448,9 +448,9 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Database}
             name="CSC_ListIdentitySnapshots"
-            description="Lists all snapshot versions for one identity (id and name). Input can be an identity UUID or compose JSON."
+            description="Lists all snapshot versions for one identity (id and name). Input can be an identity UUID or passport JSON."
             inputs={[
-              { label: 'Input', description: 'Identity UUID or compose JSON ({identity, snapshots[]})' },
+              { label: 'Input', description: 'Identity UUID or passport JSON ({identity, snapshots[]})' },
             ]}
             outputs={[
               { label: 'SnapshotID', description: 'Snapshot UUIDs ordered by version' },
@@ -463,27 +463,27 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Database}
             name="CSC_FetchAllSnapshots"
-            description="Fetches compose JSON with every snapshot version for one identity ({identity, snapshots[]})."
+            description="Fetches passport JSON with every snapshot version for one identity ({identity, snapshots[]})."
             inputs={[
-              { label: 'Input', description: 'Identity UUID or compose JSON ({identity, snapshots[]})' },
+              { label: 'Input', description: 'Identity UUID or passport JSON ({identity, snapshots[]})' },
             ]}
             outputs={[
-              { label: 'ComposeData', description: 'Full multi-version compose from GET /identities/{id}/compose?snapshots=all' },
+              { label: 'Passport', description: 'Full multi-version passport from GET /identities/{id}/compose?snapshots=all' },
             ]}
-            tip="Use with ComposeToD2P (SnapshotScope=all) to build D2P members for every version."
+            tip="Use with PassportToD2P (SnapshotScope=all) to build D2P members for every version."
             imagePath={resolveStatic('/gh-interface/csc_fetchallsnapshots.png')}
           />
 
           <ComponentCard
             icon={Database}
             name="CSC_FetchSnapshot"
-            description="Fetches compose JSON for one identity and a specific snapshot ({identity, snapshots:[one]})."
+            description="Fetches passport JSON for one identity and a specific snapshot ({identity, snapshots:[one]})."
             inputs={[
-              { label: 'Input', description: 'Identity UUID or compose JSON ({identity, snapshots[]})' },
+              { label: 'Input', description: 'Identity UUID or passport JSON ({identity, snapshots[]})' },
               { label: 'SnapshotID', description: 'Snapshot UUID to fetch' },
             ]}
             outputs={[
-              { label: 'ComposeData', description: 'Compose with the requested snapshot only (snapshots length 1)' },
+              { label: 'Passport', description: 'Passport with the requested snapshot only (snapshots length 1)' },
             ]}
             tip="Uses GET /identities/{id}/compose?snapshots=<uuid>. Current-snapshot-only fetch remains CSC_FetchComponents."
             imagePath={resolveStatic('/gh-interface/csc_fetchsnapshot.png')}
@@ -492,12 +492,12 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Database}
             name="CSC_FetchComponents"
-            description="Fetches specific identities (with their current snapshot) from the remote Catalog by their identity IDs. Supports caching and returns compose JSON ({identity, snapshots:[current]}) with error handling for missing identities."
+            description="Fetches specific identities (with their current snapshot) from the remote Catalog by their identity IDs. Supports caching and returns passport JSON ({identity, snapshots:[current]}) with error handling for missing identities."
             inputs={[
               { label: 'ComponentID', description: 'One or many identity IDs (UUIDs) to fetch' }
             ]}
             outputs={[
-              { label: 'ComponentData', description: 'Compose JSON per entry ({identity, snapshots[]}) fetched from the server. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
+              { label: 'ComponentData', description: 'Passport JSON per entry ({identity, snapshots[]}) fetched from the server. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
             ]}
             tip="Supports ETag caching for faster subsequent access. Handles missing identities gracefully."
             imagePath={resolveStatic('/gh-interface/csc_fetchcomponents.jpg')}
@@ -520,7 +520,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Database}
             name="CSC_FilterComponents"
-            description="Filters a list of compose JSON entries ({identity, snapshots[]}) based on various criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Works with local compose data from fetch components."
+            description="Filters a list of passport JSON entries ({identity, snapshots[]}) based on various criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Works with local passport data from fetch components."
             inputs={[
               { label: 'Type', description: 'Component type filter (identity.type, e.g., "beam", "slab", "column")' },
               { label: 'Material', description: 'Material type filter (identity.material, e.g., "concrete", "steel", "wood")' },
@@ -533,20 +533,20 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: "MaxDimensionY", description: "Maximum Y dimension filter (snapshot.bbx)" },
               { label: "MinDimensionZ", description: "Minimum Z dimension filter (snapshot.bbx)" },
               { label: "MaxDimensionZ", description: "Maximum Z dimension filter (snapshot.bbx)" },
-              { label: 'ComponentData', description: 'Compose JSON strings to filter ({identity, snapshots[]}), e.g. from FetchAllComponents, FetchComponents, or FetchFilteredComponents' },
+              { label: 'ComponentData', description: 'Passport JSON strings to filter ({identity, snapshots[]}), e.g. from FetchAllComponents, FetchComponents, or FetchFilteredComponents' },
             ]}
             outputs={[
               { label: 'FilterDescription', description: 'Human-readable description of the applied filters' },
-              { label: 'FilteredComponentData', description: 'Filtered compose JSON strings ({identity, snapshots[]}). Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
+              { label: 'FilteredComponentData', description: 'Filtered passport JSON strings ({identity, snapshots[]}). Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
             ]}
-            tip="Local filter for compose data. Use after FetchAllComponents, FetchComponents, or FetchFilteredComponents to narrow results without another API call."
+            tip="Local filter for passport data. Use after FetchAllComponents, FetchComponents, or FetchFilteredComponents to narrow results without another API call."
             imagePath={resolveStatic('/gh-interface/csc_filtercomponents.jpg')}
           />
 
           <ComponentCard
             icon={Database}
             name="CSC_FetchFilteredComponents"
-            description="Fetches identities (with their current snapshot) from the remote Catalog based on filter criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Mirrors the web catalog filter menu and returns compose JSON ({identity, snapshots[]}) results."
+            description="Fetches identities (with their current snapshot) from the remote Catalog based on filter criteria (type, material, dataset, complexity, fragment, bounding box dimensions). Mirrors the web catalog filter menu and returns passport JSON ({identity, snapshots[]}) results."
             inputs={[
               { label: 'Type', description: 'Component type filter (e.g., "beam", "slab", "column")' },
               { label: 'Material', description: 'Material type filter (e.g., "concrete", "steel", "wood")' },
@@ -563,7 +563,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             ]}
             outputs={[
               { label: 'FilterDescription', description: 'Human-readable description of the applied filters and query' },
-              { label: 'ComponentData', description: 'Compose JSON per entry ({identity, snapshots[]}) fetched from the server. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
+              { label: 'ComponentData', description: 'Passport JSON per entry ({identity, snapshots[]}) fetched from the server. Use \'DisassembleComponent\' to access the individual fields ready for Grasshopper' }
             ]}
             tip="Filters mirror the web catalog filter menu (plus a reservation-status filter) and run server-side on validated current snapshots. More efficient than fetching all components and filtering locally."
             imagePath={resolveStatic('/gh-interface/csc_fetchfilteredcomponents.jpg')}
@@ -574,7 +574,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             name="CSC_FetchReducedGeometry"
             description="Fetches the reduced (catalog default) snapshot geometry as binary PLY from the API or local cache, parses it to Rhino meshes and point clouds, and applies the snapshot iframe transform."
             inputs={[
-              { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' compose userstring\nb) A compose JSON string ({identity, snapshots[]})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
+              { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' passport userstring\nb) A passport JSON string ({identity, snapshots[]})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
             ]}
             outputs={[
               { label: 'GeometryData', description: 'Fetched reduced geometry as Rhino meshes and point clouds (one object per snapshot primitive)' },
@@ -590,7 +590,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             name="CSC_FetchDetailedGeometry"
             description="Fetches the detailed (high fidelity) snapshot geometry as binary PLY from the API or local cache, parses it to Rhino meshes and point clouds, and applies the snapshot iframe transform."
             inputs={[
-              { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' compose userstring\nb) A compose JSON string ({identity, snapshots[]})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
+              { label: 'Input', description: 'Input can be:\na) Geometry with the \'csc_component\' passport userstring\nb) A passport JSON string ({identity, snapshots[]})\nc) A raw identity_id (resolves current snapshot)\nd) A raw snapshot_id' }
             ]}
             outputs={[
               { label: 'GeometryData', description: 'Fetched detailed geometry as Rhino meshes and point clouds (one object per snapshot primitive)' },
@@ -604,13 +604,13 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Database}
             name="CSC_FetchDesign"
-            description="Fetches a design from the remote Catalog along with all pinned snapshot placements. Resolves each snapshot reference to compose JSON ({identity, snapshots[]}) and overwrites snapshot.iframe with the design insertion frame. Uses caching for optimal performance."
+            description="Fetches a design from the remote Catalog along with all pinned snapshot placements. Resolves each snapshot reference to passport JSON ({identity, snapshots[]}) and overwrites snapshot.iframe with the design insertion frame. Uses caching for optimal performance."
             inputs={[
               { label: 'DesignID', description: 'Design ID to fetch' }
             ]}
             outputs={[
               { label: 'DesignData', description: 'Design JSON string' },
-              { label: 'ComponentData', description: 'Compose JSON per placement with design iframe applied' },
+              { label: 'ComponentData', description: 'Passport JSON per placement with design iframe applied' },
               { label: 'AdditionalGeometryData', description: 'Additional geometry items (list of JSON strings)' },
               { label: 'AdditionalGeometry', description: 'Additional geometry as Rhino meshes' }
             ]}
@@ -683,7 +683,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: 'Run', description: 'Toggle to execute the create operation' }
             ]}
             outputs={[
-              { label: 'AddedComponentData', description: 'Compose response JSON ({identity, snapshots[]}) returned from POST /identities' }
+              { label: 'AddedComponentData', description: 'Passport response JSON ({identity, snapshots[]}) returned from POST /identities' }
             ]}
             tip="Validates the payload, posts the identity, uploads staged mesh and point-cloud PLY files, and non-fatally consumes any pending transmitted ID. Requires authentication."
             imagePath={resolveStatic('/gh-interface/csc_addcomponent.jpg')}
@@ -727,7 +727,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: 'Run', description: 'Toggle to execute the snapshot create operation' }
             ]}
             outputs={[
-              { label: 'AddedSnapshotData', description: 'Compose response JSON ({identity, snapshots[]}) after create' }
+              { label: 'AddedSnapshotData', description: 'Passport response JSON ({identity, snapshots[]}) after create' }
             ]}
             tip="Validates the snapshot payload, posts the new version, and uploads any staged mesh and point-cloud PLY files. Requires authentication."
             imagePath={resolveStatic('/gh-interface/csc_addcomponent.jpg')}
@@ -736,9 +736,9 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Code}
             name="CSC_DisassembleComponent"
-            description="Parses compose JSON ({identity, snapshots[]}) back into Grasshopper-compatible geometry and metadata. Type, material, and provenance come from identity; geometry, condition, descriptors, and frames come from snapshot."
+            description="Parses passport JSON ({identity, snapshots[]}) back into Grasshopper-compatible geometry and metadata. Type, material, and provenance come from identity; geometry, condition, descriptors, and frames come from snapshot."
             inputs={[
-              { label: 'ComponentData', description: 'Compose JSON ({identity, snapshots[]}) fetched from the server.' }
+              { label: 'ComponentData', description: 'Passport JSON ({identity, snapshots[]}) fetched from the server.' }
             ]}
             outputs={[
               { label: 'ID', description: 'Identity ID (GUID)' },
@@ -761,7 +761,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               { label: 'ParentComponent', description: 'Parent identity IDs (GUIDs) from identity.parent_identities' },
               { label: 'ReinforcementJson', description: 'Reinforcement JSON strings ({spec, diameter, points}) in iframe space; one per bar, same format as CreateReinforcement' }
             ]}
-            tip="Parses compose JSON into individual Grasshopper-compatible outputs for further processing. Point clouds prefer the cached full PLY (same path as Bake / FetchDetailed); without Session, the inline preview is used. ReinforcementJson can be fed back into CreateComponentIdentity / CreateComponentSnapshot or reconstructed in Grasshopper."
+            tip="Parses passport JSON into individual Grasshopper-compatible outputs for further processing. Point clouds prefer the cached full PLY (same path as Bake / FetchDetailed); without Session, the inline preview is used. ReinforcementJson can be fed back into CreateComponentIdentity / CreateComponentSnapshot or reconstructed in Grasshopper."
             imagePath={resolveStatic('/gh-interface/csc_disassemblecomponent.jpg')}
           />
 
@@ -770,52 +770,52 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             name="CSC_TransformComponent"
             description="Applies transformations to snapshot insertion frames for positioning and orientation."
             inputs={[
-              { label: 'ComponentData', description: 'Compose JSON string ({identity, snapshots[]})' },
+              { label: 'ComponentData', description: 'Passport JSON string ({identity, snapshots[]})' },
               { label: 'XForm', description: 'Rhino transform to apply to the snapshot insertion frame' }
             ]}
             outputs={[
-              { label: 'XComponentData', description: 'Transformed compose JSON string ({identity, snapshots[]})' }
+              { label: 'XComponentData', description: 'Transformed passport JSON string ({identity, snapshots[]})' }
             ]}
-            tip="Updates the snapshot's insertion frame with the applied transformation while preserving all other compose data."
+            tip="Updates the snapshot's insertion frame with the applied transformation while preserving all other passport data."
             imagePath={resolveStatic('/gh-interface/csc_transformcomponent.jpg')}
           />
 
           <ComponentCard
             icon={Code}
             name="CSC_GetComponentData"
-            description="Extracts the csc_component compose data ({identity, snapshots[]} JSON string) from Rhino geometry objects. Safely retrieves and parses the compose data stored as user strings."
+            description="Extracts the csc_component passport data ({identity, snapshots[]} JSON string) from Rhino geometry objects. Safely retrieves and parses the passport data stored as user strings."
             inputs={[
-              { label: 'Geometry', description: 'Geometry objects with the \'csc_component\' compose userdata' }
+              { label: 'Geometry', description: 'Geometry objects with the \'csc_component\' passport userdata' }
             ]}
             outputs={[
-              { label: 'ComponentData', description: 'Compose JSON strings ({identity, snapshots[]}) extracted from geometry userdata' }
+              { label: 'ComponentData', description: 'Passport JSON strings ({identity, snapshots[]}) extracted from geometry userdata' }
             ]}
-            tip="Useful for retrieving compose data from geometry that was previously processed by CSC components."
+            tip="Useful for retrieving passport data from geometry that was previously processed by CSC components."
             imagePath={resolveStatic('/gh-interface/csc_getcomponentdata.jpg')}
           />
 
           <ComponentCard
             icon={Code}
             name="CSC_ApplyPCAFrame"
-            description="Applies an inverse PCA transformation to align geometry or compose data with the world coordinate system, using the snapshot pca_frame. Takes either compose JSON ({identity, snapshots[]}) or Rhino geometry and transforms it to align with the world XY plane."
+            description="Applies an inverse PCA transformation to align geometry or passport data with the world coordinate system, using the snapshot pca_frame. Takes either passport JSON ({identity, snapshots[]}) or Rhino geometry and transforms it to align with the world XY plane."
             inputs={[
-              { label: 'Input', description: 'Compose JSON string ({identity, snapshots[]}) or geometry objects with the \'csc_component\' compose userdata' }
+              { label: 'Input', description: 'Passport JSON string ({identity, snapshots[]}) or geometry objects with the \'csc_component\' passport userdata' }
             ]}
             outputs={[
-              { label: 'Output', description: 'Transformed compose JSON (if input was JSON) or transformed geometry with updated compose userdata (if input was geometry)' }
+              { label: 'Output', description: 'Transformed passport JSON (if input was JSON) or transformed geometry with updated passport userdata (if input was geometry)' }
             ]}
-            tip="Handles both compose JSON and geometry objects with compose userdata automatically."
+            tip="Handles both passport JSON and geometry objects with passport userdata automatically."
             imagePath={resolveStatic('/gh-interface/csc_applypcaframe.jpg')}
           />
 
           <ComponentCard
             icon={Code}
             name="CSC_CreateDesign"
-            description="Creates a design JSON string from compose JSON ({identity, snapshots[]}), ready for posting to the Catalog. Pins each placement to a specific snapshot version and stores the design insertion iframe. Does NOT post the design - only generates the JSON string."
+            description="Creates a design JSON string from passport JSON ({identity, snapshots[]}), ready for posting to the Catalog. Pins each placement to a specific snapshot version and stores the design insertion iframe. Does NOT post the design - only generates the JSON string."
             inputs={[
               { label: 'DesignName', description: 'Design name (mandatory)' },
               { label: 'DesignDescription', description: 'Design description (optional)' },
-              { label: 'ComponentData', description: 'List of compose JSON strings with snapshot.iframe set to the design placement' },
+              { label: 'ComponentData', description: 'List of passport JSON strings with snapshot.iframe set to the design placement' },
               { label: 'AdditionalGeometry', description: 'AdditionalGeometry (List of Mesh)' }
             ]}
             outputs={[
@@ -864,27 +864,27 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
           <ComponentCard
             icon={Settings}
             name="CSC_BakeComponents"
-            description="Bakes compose entries ({identity, snapshots[]}) into the Rhino document as meshes, extrusions, or point clouds."
+            description="Bakes passport entries ({identity, snapshots[]}) into the Rhino document as meshes, extrusions, or point clouds."
             inputs={[
               { label: 'Bake', description: 'Toggle to bake components to Rhino' },
-              { label: 'ComponentData', description: 'Compose JSON strings from FetchComponents' }
+              { label: 'ComponentData', description: 'Passport JSON strings from FetchComponents' }
             ]}
             outputs={[
               { label: 'None', description: 'This component has no outputs' }
             ]}
-            tip="Prefers cached PLY meshes and point-cloud PLYs when available, then inline snapshot primitives (extrusions, meshes, point-cloud previews). Bakes reinforcement bars as pipe Breps on CSC_COMPONENTS::{identity_id}::Reinforcement (on by default). Stores full compose JSON on csc_component user text."
+            tip="Prefers cached PLY meshes and point-cloud PLYs when available, then inline snapshot primitives (extrusions, meshes, point-cloud previews). Bakes reinforcement bars as pipe Breps on CSC_COMPONENTS::{identity_id}::Reinforcement (on by default). Stores full passport JSON on csc_component user text."
             imagePath={resolveStatic('/gh-interface/csc_bakecomponents.jpg')}
           />
 
           <ComponentCard
             icon={Settings}
             name="CSC_SyncWithRhinoDoc"
-            description="Reads baked objects from the Rhino document and updates snapshot.iframe in compose JSON."
+            description="Reads baked objects from the Rhino document and updates snapshot.iframe in passport JSON."
             inputs={[
               { label: 'Sync', description: 'Trigger to sync components with Rhino document' }
             ]}
             outputs={[
-              { label: 'ComponentData', description: 'DataTree of compose JSON with updated snapshot.iframe from text tags or geometry bounds' }
+              { label: 'ComponentData', description: 'DataTree of passport JSON with updated snapshot.iframe from text tags or geometry bounds' }
             ]}
             tip="Groups objects by identity._id. Prefers text-tag planes over combined bounding-box frames."
             imagePath={resolveStatic('/gh-interface/csc_syncwithrhinodoc.jpg')}
@@ -1049,7 +1049,7 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
             name="CSC_CreateArrangement"
             description="Arranges components in an even square grid based on their snapshot bounding boxes. Calculates grid cell size from the largest component dimension."
             inputs={[
-              { label: 'ComponentData', description: 'Compose JSON strings ({identity, snapshots[]})' },
+              { label: 'ComponentData', description: 'Passport JSON strings ({identity, snapshots[]})' },
               { label: 'Spacing', description: 'Additional spacing between grid cells (default: 100.0)' },
               { label: 'InsertionPoint', description: 'Insertion point (starting corner of grid, default: 0,0,0)' }
             ]}
@@ -1175,9 +1175,9 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
           <ComponentCard
             icon={HelpCircle}
             name="CSC_GetDescriptor"
-            description="Retrieves a specific descriptor from multiple compose inputs ({identity, snapshots[]}). Accepts compose JSON strings or geometries with the csc_component userdata. Returns descriptor values for the specified key from snapshot.descriptors. Handles single values, lists, and nested lists by mapping them to appropriate Grasshopper data structures with input indices as the first path level."
+            description="Retrieves a specific descriptor from multiple passport inputs ({identity, snapshots[]}). Accepts passport JSON strings or geometries with the csc_component userdata. Returns descriptor values for the specified key from snapshot.descriptors. Handles single values, lists, and nested lists by mapping them to appropriate Grasshopper data structures with input indices as the first path level."
             inputs={[
-              { label: 'Input', description: 'List of compose JSON strings ({identity, snapshots[]}) OR geometries with the \'csc_component\' compose userdata' },
+              { label: 'Input', description: 'List of passport JSON strings ({identity, snapshots[]}) OR geometries with the \'csc_component\' passport userdata' },
               { label: 'DescriptorKey', description: 'Key string to retrieve from snapshot.descriptors' }
             ]}
             outputs={[
@@ -1226,7 +1226,7 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
                 <li>Authenticate with <strong>CSC_Session</strong></li>
                 <li>Optionally fetch a transmitted tag ID with <strong>CSC_FetchTransmittedID</strong> (after scanning in the web UI)</li>
                 <li>Build the create payload with <strong>CSC_CreateComponentIdentity</strong> (wire the identity UUID from step 2 or CreateUUID)</li>
-                <li>Post to the catalog with <strong>CSC_AddComponentIdentity</strong> — returns compose JSON ({`{identity, snapshots[]}`})</li>
+                <li>Post to the catalog with <strong>CSC_AddComponentIdentity</strong> — returns passport JSON ({`{identity, snapshots[]}`})</li>
               </ol>
             </div>
           </div>
@@ -1259,8 +1259,8 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
             <div className="space-y-3">
               <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
                 <li>Authenticate with <strong>CSC_Session</strong></li>
-                <li>Fetch compose JSON with <strong>CSC_FetchComponents</strong> and place with <strong>CSC_SyncWithRhinoDoc</strong></li>
-                <li>Create design with <strong>CSC_CreateDesign</strong> from compose JSON (includes additional geometry)</li>
+                <li>Fetch passport JSON with <strong>CSC_FetchComponents</strong> and place with <strong>CSC_SyncWithRhinoDoc</strong></li>
+                <li>Create design with <strong>CSC_CreateDesign</strong> from passport JSON (includes additional geometry)</li>
                 <li>Save design to database with <strong>CSC_AddDesign</strong></li>
                 <li>Fetch and work with design using <strong>CSC_FetchDesign</strong></li>
               </ol>

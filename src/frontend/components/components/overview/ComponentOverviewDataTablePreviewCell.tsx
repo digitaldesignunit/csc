@@ -21,7 +21,7 @@ import ComponentPreviewImage from '../ComponentPreviewImage'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-async function fetchCatalogComposePreview(
+async function fetchCatalogPassportPreview(
   identityId: string,
 ): Promise<CatalogComponent> {
   const res = await fetch(
@@ -31,7 +31,7 @@ async function fetchCatalogComposePreview(
   if (res.status === 401) throw new Error('unauthorized')
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    throw new Error(`Failed to fetch compose: ${res.status} ${body}`)
+    throw new Error(`Failed to fetch passport: ${res.status} ${body}`)
   }
   return (await res.json()) as CatalogComponent
 }
@@ -71,10 +71,10 @@ export default function ComponentOverviewDataTablePreviewCell({
     if (catalogPreview) return
     setIsLoading(true)
     try {
-      const compose = await fetchCatalogComposePreview(compId as string)
-      setCatalogPreview(compose)
+      const passport = await fetchCatalogPassportPreview(compId as string)
+      setCatalogPreview(passport)
     } catch (e: unknown) {
-      console.error('Error fetching compose for preview:', e)
+      console.error('Error fetching passport for preview:', e)
       if (e instanceof Error && e.message.toLowerCase().includes('unauthorized')) {
         router.push(`/auth/signin?callbackUrl=/components`)
       }

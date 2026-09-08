@@ -131,7 +131,7 @@ export async function deleteSnapshotPhoto(
   }
 }
 
-/** Parse ``photo_count`` from compose/list snapshot payloads. */
+/** Parse ``photo_count`` from passport/list snapshot payloads. */
 export function parseSnapshotPhotoCount(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.max(0, Math.floor(value))
