@@ -85,7 +85,9 @@ export JWT_SECRET="your-openssl-rand-hex-32-value"
 export JWT_ALGORITHM="HS256"
 export JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60"
 export GITHUB_REPO_URL="https://github.com/your-org/your-repo"
-export GITHUB_CSC_GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
+# Optional: increases GitHub API rate limits for CSC_Update. Public repo
+# file fetch (GH XML sync, /ghinterface/) works without a token.
+# export GITHUB_CSC_GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
 export SMTP_HOST="yourhost.uberspace.de"
 export SMTP_PORT="587"
 export SMTP_USER="noreply@yourdomain.com"
@@ -128,7 +130,7 @@ The CSC Grasshopper Interface consists of Python 3 components that can be used d
 - **Requirements**: Python 3 with packages: requests, numpy, scipy, scikit-learn
 - **Authentication**: Use `CSC_SignIn` component first to authenticate with the backend
 - **Documentation**: Component reference, copy-to-clipboard XML, and release download on the frontend at `/gh-interface`
-- **Backend routes**: Release download, source/XML sync, and updater assets are served under `/ghinterface/` (e.g. `version`, `download`, `src/{name}`, `xml/{name}`, `userobject/{name}`). `CSC_Update` uses these paths.
+- **Backend routes**: Release download, source/XML sync, and updater assets are served under `/ghinterface/` (e.g. `version`, `download`, `src/{name}`, `xml/{name}`, `userobject/{name}`). `CSC_Update` uses these paths and sends a `channel` query param (GitHub branch; default `main`).
 
 ## Configuring Uberspace
 
@@ -458,14 +460,14 @@ that the cron job picks up the environment variables.
 
 ## Grasshopper XML Sync CronJob
 
-The GH XML sync automatically mirrors pasteable XML files from the private GitHub
+The GH XML sync automatically mirrors pasteable XML files from the public GitHub
 repository to make them available for copy-to-clipboard functionality on the
 frontend.
 
 ### Configuration
 
-The script reads `GITHUB_REPO_URL`, `GITHUB_CSC_GH_TOKEN`, and
-`GH_XML_CACHE_DIR` from the environment. Make sure these are set in
+The script reads `GITHUB_REPO_URL` and `GH_XML_CACHE_DIR` from the environment
+(no GitHub token; the repo is public). Make sure these are set in
 `~/.bash_profile` (see the environment variables section above).
 
 ### Testing
@@ -477,7 +479,7 @@ To test the sync script manually, SSH into the server and run:
 ```
 
 This will clone (if needed) and sync only the `grasshopper_userobjects_xml/`
-folder from your private GitHub repository. Check the log file for results:
+folder from the public GitHub repository. Check the log file for results:
 
 ```bash
 [user@servername csc]$ tail -f /home/ddu/csc/backend/logs/ghxml_sync.log
