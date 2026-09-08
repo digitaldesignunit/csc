@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resulting silhouette
 - `main_descriptors_simple.py --recompute` walks every snapshot one at a
   time and overwrites every applicable descriptor (optional `--limit N`)
+- `/ghinterface/src*` and `/ghinterface/userobject*` accept a `channel`
+  query param (GitHub branch; default `main`) so `CSC_Update` can follow
+  a hardcoded `UPDATE_CHANNEL`
+- GH XML sync clones the public repo without a GitHub token
+- `GITHUB_CSC_GH_TOKEN` is optional (higher GitHub API rate limits only);
+  FastAPI starts and `/ghinterface/` works against the public repo without it
 
 #### CSC React Frontend
 
@@ -48,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CSC_ListIdentitySnapshots`, `CSC_FetchAllSnapshots`, `CSC_FetchSnapshot`
 - `CSC_CreateReinforcement`; reinforcement inputs on create/add; pipe baking in `CSC_BakeComponents`
 - Session identity/snapshot catalog cache (v0.5)
+- `CSC_Update`: hardcoded `UPDATE_CHANNEL` (default `main`) selects the
+  GitHub branch to pull sources and UserObjects from; the name must match
+  the remote branch exactly
 
 ### Changed
 
