@@ -187,9 +187,9 @@ class ScanUploader:
                 timeout=self.timeout
             )
             if response.status_code == 201:
-                compose = response.json()
-                identity_doc = compose.get('identity') or {}
-                snapshots = compose.get('snapshots') or []
+                passport = response.json()
+                identity_doc = passport.get('identity') or {}
+                snapshots = passport.get('snapshots') or []
                 snapshot_doc = snapshots[0] if snapshots else {}
                 identity_id = identity_doc.get('_id') or payload.get('_id')
                 snapshot_id = snapshot_doc.get('_id')
