@@ -187,7 +187,7 @@ All components below live in `grasshopper_userobjects_src/`. Descriptions are sh
 | `AddComponentIdentity` | POSTs a new catalog identity (+ v0 snapshot) from `CreateComponentIdentity` JSON; uploads staged PLY meshes; may consume a pending transmitted ID. |
 | `AddComponentSnapshot` | POSTs a new snapshot for an existing identity from `CreateComponentSnapshot` JSON; uploads staged PLY mesh files. |
 | `AddDesign` | Validates design JSON and POSTs a new design (component refs + embedded geometry) to the Catalog. |
-| `FetchAllComponents` | GET `/identities` -> fetches all identities joined with current snapshots as compose JSON `{identity, snapshot}`; cached. |
+| `FetchAllComponents` | GET `/identities` -> fetches all identities joined with current snapshots as passport JSON `{identity, snapshot}`; cached. |
 | `FetchComponents` | Fetches specific catalog components by ID; handles missing IDs; supports cache. |
 | `FetchDesign` | Fetches a design and its components; applies the design iframe to each component; returns design JSON, component data, and extra geometry. |
 | `FetchFilteredComponents` | Server-side filtered catalog query (type, material, dataset, complexity, dimensions, reservation status). |
@@ -195,7 +195,7 @@ All components below live in `grasshopper_userobjects_src/`. Descriptions are sh
 | `FetchReducedGeometry` | Fetches catalog-default reduced snapshot geometry as binary PLY (ETag cache); falls back to inline primitive meshes. |
 | `FetchGeometry` | Legacy combined fetch -> downloads reduced or detailed mesh geometry from JSON, geometry userdata, or component ID. Prefer `FetchDetailedGeometry` / `FetchReducedGeometry`. |
 | `FetchTransmittedID` | Returns the pending transmitted component ID for the signed-in user from the backend. |
-| `FilterComponents` | Locally filters a list of compose/component JSON by type, material, dataset, complexity, fragment, and bounding-box size. |
+| `FilterComponents` | Locally filters a list of passport/component JSON by type, material, dataset, complexity, fragment, and bounding-box size. |
 
 ### 3 Component Operations
 
@@ -205,10 +205,10 @@ All components below live in `grasshopper_userobjects_src/`. Descriptions are sh
 | `CreateComponentSnapshot` | Builds `CreateSnapshotRequest` JSON for an existing identity; stages PLY under `pending_snapshot_assets/`. |
 | `CreateDesign` | Assembles design JSON (UUID, timestamps, component refs, optional extra meshes) without posting to the server. |
 | `CreateUUID` | Generates and caches UUIDs; refresh input forces a new value. |
-| `DisassembleComponent` | Splits compose JSON `{identity, snapshot}` into Grasshopper-native outputs: metadata, descriptors, PCA frame, bbox, reconstructed geometry. |
+| `DisassembleComponent` | Splits passport JSON `{identity, snapshot}` into Grasshopper-native outputs: metadata, descriptors, PCA frame, bbox, reconstructed geometry. |
 | `GetComponentData` | Reads `csc_component` userdata JSON from Rhino geometry objects. |
 | `ApplyPCAFrame` | Inverse PCA transform -> aligns component JSON or geometry to the world XY plane. |
-| `TransformComponent` | Applies a Rhino transform to a snapshot insertion frame in compose JSON. |
+| `TransformComponent` | Applies a Rhino transform to a snapshot insertion frame in passport JSON. |
 
 ### 4 RhinoDoc Interaction
 
@@ -248,7 +248,7 @@ All components below live in `grasshopper_userobjects_src/`. Descriptions are sh
 
 | NickName | Description (for icon generation) |
 | --- | --- |
-| `CreateArrangement` | Lays out compose JSON components on a square grid from snapshot bounding boxes (spacing + insertion point). |
+| `CreateArrangement` | Lays out passport JSON components on a square grid from snapshot bounding boxes (spacing + insertion point). |
 | `CurvePreviewLW` | Custom curve preview with configurable line weights in the Grasshopper viewport. |
 | `ViewCaptureToFile` | Captures the active Rhino viewport to PNG with size, background, and grid/axis options. |
 | `VisualizeEmbedding` | Places geometry at PCA/t-SNE (or other) embedding coordinates; 1D–3D layout, extra dims mapped to RGB. |
