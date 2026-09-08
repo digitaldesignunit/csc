@@ -1,8 +1,12 @@
 """Tests for Grasshopper component source version parsing."""
 
+import pytest
+from fastapi import HTTPException
+
 from apps.catalog.api.ghinterface import (
     compare_versions,
     get_source_version,
+    resolve_update_channel,
 )
 
 
@@ -37,3 +41,24 @@ def test_newer_server_version_compares_greater():
     assert compare_versions(server, document) == 1
     assert compare_versions(document, server) == -1
     assert compare_versions(server, server) == 0
+
+
+def test_resolve_update_channel_defaults_to_main():
+    assert resolve_update_channel(None) == 'main'
+    assert resolve_update_channel('') == 'main'
+    assert resolve_update_channel('main') == 'main'
+
+
+def test_resolve_update_channel_preserves_exact_branch_name():
+    assert resolve_update_channel('feature/gh-xml') == 'feature/gh-xml'
+    assert resolve_update_channel('develop') == 'develop'
+
+
+def test_resolve_update_channel_rejects_invalid_names():
+    with pytest.raises(HTTPException) as exc:
+        resolve_update_channel('has space')
+    assert exc.value.status_code == 400
+
+    with pytest.raises(HTTPException) as exc:
+        resolve_update_channel('../main')
+    assert exc.value.status_code == 400

@@ -2,7 +2,7 @@
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import re
-from typing import Dict
+from typing import Dict, Optional
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
 import httpx
@@ -13,23 +13,25 @@ import httpx
 class GitHubService:
     """Service for interacting with GitHub API for release management."""
 
-    def __init__(self, repo_url: str, token: str):
+    def __init__(self, repo_url: str, token: Optional[str] = None):
         """
         Initialize GitHub service.
 
         Args:
             repo_url: GitHub repository URL (e.g.,
                 "https://github.com/owner/repo")
-            token: GitHub personal access token
+            token: Optional GitHub personal access token. Public repos
+                work without one; a token increases API rate limits.
         """
         self.token = token
         self.repo_url = repo_url
         self.api_base = self._extract_api_url(repo_url)
         self.headers = {
-            'Authorization': f'token {token}',
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': 'CSC-Backend/1.0'
         }
+        if token:
+            self.headers['Authorization'] = f'token {token}'
 
     def _extract_api_url(self, repo_url: str) -> str:
         """Extract API URL from repository URL."""
@@ -103,16 +105,22 @@ class GitHubService:
         asset_url = selected_asset.get('browser_download_url', 'NOT FOUND')
         print(f"Asset URL: {asset_url}")
 
-        # Use the GitHub API URL for downloading (requires authentication)
-        # The browser_download_url is for public access, but we need API access
-        download_url = selected_asset.get('url')
+        # Authenticated downloads use the API asset URL; public repos can
+        # use browser_download_url without a token.
+        if self.token:
+            download_url = (
+                selected_asset.get('url')
+                or selected_asset.get('browser_download_url')
+            )
+        else:
+            download_url = (
+                selected_asset.get('browser_download_url')
+                or selected_asset.get('url')
+            )
         if not download_url:
-            # Fallback to browser_download_url if API URL not available
-            download_url = selected_asset.get('browser_download_url')
-            if not download_url:
-                raise ValueError(
-                    "No download URL found for the selected asset"
-                )
+            raise ValueError(
+                "No download URL found for the selected asset"
+            )
 
         return download_url
 

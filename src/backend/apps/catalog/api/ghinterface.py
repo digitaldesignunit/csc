@@ -11,7 +11,7 @@ import time
 from typing import Annotated, Dict, List, Optional, Tuple
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 import httpx
 
@@ -27,11 +27,16 @@ router = APIRouter()
 # Directory listings are re-read constantly during a single CSC_Update run
 # (once per source file and once per UserObject), so they are cached briefly.
 REPO_DIR_CACHE_TTL_SECONDS = 120.0
+
+
 # Blob shas are content addressed, so a version parsed from one never changes.
 SRC_FETCH_CONCURRENCY = 8
 
 _repo_dir_cache: Dict[str, Tuple[float, List[dict]]] = {}
 _blob_version_cache: Dict[str, Optional[tuple]] = {}
+
+# GitHub branch CSC_Update reads from (query param `channel`).
+DEFAULT_UPDATE_CHANNEL = 'main'
 
 
 # INTERNAL HELPERS ------------------------------------------------------------
@@ -44,21 +49,79 @@ def _extract_api_url(repo_url: str) -> str:
     return f'https://api.github.com/repos/{owner}/{repo}'
 
 
+def _github_token() -> Optional[str]:
+    """
+    Optional PAT. Public repos work without it; a token increases rate limits.
+    """
+    token = (os.getenv('GITHUB_CSC_GH_TOKEN') or '').strip()
+    return token or None
+
+
+def _github_headers(
+    token: Optional[str],
+    accept: str = 'application/vnd.github.v3+json',
+) -> dict:
+    headers = {
+        'Accept': accept,
+        'User-Agent': 'CSC-Backend/1.0',
+    }
+    if token:
+        headers['Authorization'] = f'token {token}'
+    return headers
+
+
+def resolve_update_channel(channel: Optional[str]) -> str:
+    """
+    GitHub branch to read Grasshopper sources/UserObjects from.
+
+    Empty/None defaults to main. The name is passed to GitHub as `ref` and
+    must match a remote branch exactly.
+    """
+    if channel is None or channel == '':
+        return DEFAULT_UPDATE_CHANNEL
+    if (
+        len(channel) > 250
+        or any(c.isspace() or ord(c) < 32 for c in channel)
+        or '..' in channel
+        or '\\' in channel
+        or '?' in channel
+        or '#' in channel
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                'Invalid update channel. Branch name must match a GitHub '
+                'branch exactly.'
+            ),
+        )
+    return channel
+
+
+def _github_path_not_found(channel: str, what: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=(
+            f'{what} not found for update channel "{channel}". '
+            'The GitHub branch name must match exactly.'
+        ),
+    )
+
+
 async def _list_repo_dir(
     client: httpx.AsyncClient,
     api_base: str,
-    token: str,
+    token: Optional[str],
     path: str,
+    ref: str,
 ) -> List[dict]:
     resp = await client.get(
         f'{api_base}/contents/{path}',
-        headers={
-            'Authorization': f'token {token}',
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'CSC-Backend/1.0',
-        },
+        headers=_github_headers(token),
+        params={'ref': ref},
         timeout=30.0,
     )
+    if resp.status_code == 404:
+        raise _github_path_not_found(ref, f'Repository path "{path}"')
     resp.raise_for_status()
     data = resp.json()
     if not isinstance(data, list):
@@ -72,31 +135,31 @@ async def _list_repo_dir(
 async def _list_repo_dir_cached(
     client: httpx.AsyncClient,
     api_base: str,
-    token: str,
+    token: Optional[str],
     path: str,
+    ref: str,
 ) -> List[dict]:
     now = time.monotonic()
-    cached = _repo_dir_cache.get(path)
+    cache_key = f'{ref}:{path}'
+    cached = _repo_dir_cache.get(cache_key)
     if cached and (now - cached[0]) < REPO_DIR_CACHE_TTL_SECONDS:
         return cached[1]
-    entries = await _list_repo_dir(client, api_base, token, path)
-    _repo_dir_cache[path] = (now, entries)
+    entries = await _list_repo_dir(client, api_base, token, path, ref)
+    _repo_dir_cache[cache_key] = (now, entries)
     return entries
 
 
 async def _get_repo_blob(
     client: httpx.AsyncClient,
     api_base: str,
-    token: str,
+    token: Optional[str],
     sha: str,
 ) -> bytes:
     resp = await client.get(
         f'{api_base}/git/blobs/{sha}',
-        headers={
-            'Authorization': f'token {token}',
-            'Accept': 'application/vnd.github.v3.raw',
-            'User-Agent': 'CSC-Backend/1.0',
-        },
+        headers=_github_headers(
+            token, accept='application/vnd.github.v3.raw'
+        ),
         timeout=30.0,
     )
     resp.raise_for_status()
@@ -106,18 +169,18 @@ async def _get_repo_blob(
 async def _get_repo_file(
     client: httpx.AsyncClient,
     api_base: str,
-    token: str,
+    token: Optional[str],
     path: str,
+    ref: str,
 ) -> bytes:
     resp = await client.get(
         f'{api_base}/contents/{path}',
-        headers={
-            'Authorization': f'token {token}',
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'CSC-Backend/1.0',
-        },
+        headers=_github_headers(token),
+        params={'ref': ref},
         timeout=30.0,
     )
+    if resp.status_code == 404:
+        raise _github_path_not_found(ref, f'File "{path}"')
     resp.raise_for_status()
     payload = resp.json()
     content_b64: Optional[str] = payload.get('content')
@@ -148,14 +211,17 @@ async def _get_repo_file(
 async def _get_repo_entry_content(
     client: httpx.AsyncClient,
     api_base: str,
-    token: str,
+    token: Optional[str],
     entry: dict,
+    ref: str,
 ) -> bytes:
     """Read one file from a contents listing entry, by sha when available."""
     sha = entry.get('sha')
     if sha:
         return await _get_repo_blob(client, api_base, token, sha)
-    return await _get_repo_file(client, api_base, token, entry['path'])
+    return await _get_repo_file(
+        client, api_base, token, entry['path'], ref
+    )
 
 
 # Matches an actual version declaration - the word "version", a ":" or "=",
@@ -235,7 +301,7 @@ async def get_gh_interface_version(
     """Get the latest release version for the Grasshopper interface."""
     try:
         repo_url = os.environ['GITHUB_REPO_URL']
-        token = os.environ['GITHUB_CSC_GH_TOKEN']
+        token = _github_token()
         github_service = GitHubService(repo_url, token)
         release_info = await github_service.get_latest_release_info()
 
@@ -281,7 +347,7 @@ async def download_gh_interface(
     """Download the latest Grasshopper interface release as a ZIP file."""
     try:
         repo_url = os.environ['GITHUB_REPO_URL']
-        token = os.environ['GITHUB_CSC_GH_TOKEN']
+        token = _github_token()
         github_service = GitHubService(repo_url, token)
         release_info = await github_service.get_latest_release_info()
 
@@ -299,11 +365,9 @@ async def download_gh_interface(
         async def generate():
             async with httpx.AsyncClient() as client:
                 try:
-                    headers = {
-                        'Authorization': f'token {token}',
-                        'Accept': 'application/octet-stream',
-                        'User-Agent': 'CSC-Backend/1.0'
-                    }
+                    headers = _github_headers(
+                        token, accept='application/octet-stream'
+                    )
 
                     async with client.stream(
                         'GET',
@@ -358,16 +422,18 @@ async def download_gh_interface(
 
 @router.get('/ghinterface/src_names', response_model=List[str])
 async def list_src_names(
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(get_current_user)],
+    channel: str = Query(default='main'),
 ):
     try:
+        ref = resolve_update_channel(channel)
         repo_url = os.environ['GITHUB_REPO_URL']
-        token = os.environ['GITHUB_CSC_GH_TOKEN']
+        token = _github_token()
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
             entries = await _list_repo_dir_cached(
-                client, api_base, token, 'grasshopper_userobjects_src'
+                client, api_base, token, 'grasshopper_userobjects_src', ref
             )
             files = [
                 item for item in entries
@@ -405,6 +471,8 @@ async def list_src_names(
             json.dumps(result),
             media_type='application/json'
         )
+    except HTTPException:
+        raise
     except httpx.HTTPError as e:
         print(f'[ERROR] list_src_names GitHub: {e}')
         raise HTTPException(
@@ -423,15 +491,17 @@ async def list_src_names(
 async def get_src_code(
     name: str,
     current_user: Annotated[User, Depends(get_current_user)],
+    channel: str = Query(default='main'),
 ):
     try:
+        ref = resolve_update_channel(channel)
         repo_url = os.environ['GITHUB_REPO_URL']
-        token = os.environ['GITHUB_CSC_GH_TOKEN']
+        token = _github_token()
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
             entries = await _list_repo_dir_cached(
-                client, api_base, token, 'grasshopper_userobjects_src'
+                client, api_base, token, 'grasshopper_userobjects_src', ref
             )
             matches = [
                 it for it in entries
@@ -449,18 +519,18 @@ async def get_src_code(
                     detail='Multiple source files share this name',
                 )
             content = await _get_repo_entry_content(
-                client, api_base, token, matches[0]
+                client, api_base, token, matches[0], ref
             )
 
         return Response(content, media_type='text/plain; charset=utf-8')
+    except HTTPException:
+        raise
     except httpx.HTTPError as e:
         print(f'[ERROR] get_src_code GitHub: {e}')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail='GitHub service unavailable',
         )
-    except HTTPException:
-        raise
     except Exception as e:
         print(f'[ERROR] get_src_code: {e}')
         raise HTTPException(
@@ -545,16 +615,18 @@ async def get_xml(
 
 @router.get('/ghinterface/userobject_names', response_model=List[str])
 async def list_userobject_names(
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(get_current_user)],
+    channel: str = Query(default='main'),
 ):
     try:
+        ref = resolve_update_channel(channel)
         repo_url = os.environ['GITHUB_REPO_URL']
-        token = os.environ['GITHUB_CSC_GH_TOKEN']
+        token = _github_token()
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
             entries = await _list_repo_dir_cached(
-                client, api_base, token, 'grasshopper_userobjects'
+                client, api_base, token, 'grasshopper_userobjects', ref
             )
         names: List[str] = []
         for item in entries:
@@ -563,6 +635,8 @@ async def list_userobject_names(
                 if name.lower().endswith('.ghuser'):
                     names.append(name[:-7])
         return sorted(list(dict.fromkeys(names)))
+    except HTTPException:
+        raise
     except httpx.HTTPError as e:
         print(f'[ERROR] list_userobject_names GitHub: {e}')
         raise HTTPException(
@@ -581,15 +655,17 @@ async def list_userobject_names(
 async def get_userobject(
     name: str,
     current_user: Annotated[User, Depends(get_current_user)],
+    channel: str = Query(default='main'),
 ):
     try:
+        ref = resolve_update_channel(channel)
         repo_url = os.environ['GITHUB_REPO_URL']
-        token = os.environ['GITHUB_CSC_GH_TOKEN']
+        token = _github_token()
         api_base = _extract_api_url(repo_url)
 
         async with httpx.AsyncClient() as client:
             entries = await _list_repo_dir_cached(
-                client, api_base, token, 'grasshopper_userobjects'
+                client, api_base, token, 'grasshopper_userobjects', ref
             )
             target_name = f'{name}.ghuser'
             matches = [
@@ -602,7 +678,7 @@ async def get_userobject(
                     detail='UserObject (.ghuser) not found',
                 )
             content = await _get_repo_entry_content(
-                client, api_base, token, matches[0]
+                client, api_base, token, matches[0], ref
             )
 
         headers = {
@@ -613,14 +689,14 @@ async def get_userobject(
             media_type='application/octet-stream',
             headers=headers,
         )
+    except HTTPException:
+        raise
     except httpx.HTTPError as e:
         print(f'[ERROR] get_userobject GitHub: {e}')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail='GitHub service unavailable',
         )
-    except HTTPException:
-        raise
     except Exception as e:
         print(f'[ERROR] get_userobject: {e}')
         raise HTTPException(

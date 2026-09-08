@@ -94,10 +94,12 @@ def get_github_repo_url() -> str:
 
 def get_github_repo_token() -> str:
     """
-    Read GitHub repository token from environment variable
-    GITHUB_CSC_GH_TOKEN.
+    Optional GitHub token from GITHUB_CSC_GH_TOKEN.
+
+    Public repos do not require a token. A token is only useful to increase
+    GitHub API rate limits for CSC_Update.
     """
-    return os.environ['GITHUB_CSC_GH_TOKEN']
+    return os.getenv('GITHUB_CSC_GH_TOKEN', '')
 
 
 def create_logging_timestamp():
