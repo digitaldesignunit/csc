@@ -528,6 +528,15 @@ Computes missing descriptors for components. Runs every 2 minutes; uses
 */2 * * * * source /home/ddu/.bash_profile && flock /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/main_descriptors_simple.py >> /home/ddu/csc/backend/logs/descriptors_simple_cronjob.log 2>&1
 ```
 
+## Component Map CronJob
+
+Precomputes PCA and UMAP layouts into MongoDB (`component_map_cache`) for the
+Component Map page. Runs every 6 hours; uses `flock` to prevent overlap.
+
+```
+0 */6 * * * source /home/ddu/.bash_profile && flock -n /tmp/component_map.lock /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/main_component_map.py >> /home/ddu/csc/backend/logs/component_map_cronjob.log 2>&1
+```
+
 Ready-made crontab entries for all jobs are in `uberspaceconfig/crontab/`.
 
 ## Deployment
