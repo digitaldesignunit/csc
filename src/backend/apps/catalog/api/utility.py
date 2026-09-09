@@ -27,14 +27,14 @@ from .auth import get_current_active_user, require_admin
 
 # INIT ROUTER -----------------------------------------------------------------
 router = APIRouter()
+_BACKEND_DIR = os.path.normpath(
+    os.path.abspath(str(Path(__file__).parents[3]))
+)
 
 
 def _read_last_log_lines(log_filename: str, line_count: int) -> str:
-    backend_dir = os.path.normpath(
-        os.path.abspath(str(Path(__file__).parents[3]))
-    )
     fp = os.path.normpath(os.path.abspath(
-        os.path.join(backend_dir, 'logs', log_filename))
+        os.path.join(_BACKEND_DIR, 'logs', log_filename))
     )
     try:
         with open(fp, 'r') as errorlog:
