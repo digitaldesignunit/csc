@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`0.ply` > inline preview) > extrusion profile. Meshes and clouds are
   sectioned through the PCA centre plane; panels still rest-align the
   resulting silhouette
+- `GET /identities/map`: 2D component map from descriptors (PCA first paint,
+  UMAP preferred). Bases: concatenated radial-signature distances, or
+  concatenated scalar scores (box/sphere/line/planescore). Components
+  missing the chosen basis are omitted; response reports displayed/total
+  coverage. Default scope layouts are served from `component_map_cache`
+  (`source=auto|cache|live`); UMAP is precomputed by cron
+- `main_component_map.py`: cron/worker that writes PCA+UMAP layouts into
+  `component_map_cache` for the Component Map page
 - `main_descriptors_simple.py --recompute` walks every snapshot one at a
   time and overwrites every applicable descriptor (optional `--limit N`)
 - `/ghinterface/src*` and `/ghinterface/userobject*` accept a `channel`
@@ -50,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin user management at `/admin/users`
 - Public component viewing without login; `is_public` toggle on edit page
 - Reinforcement visualization in component viewer
+- Component Map at `/components/map` (nav under Browse Components): loads
+  cached UMAP/PCA layouts from `GET /identities/map`, with pan/zoom canvas
+  and displayed/total coverage messaging
 - GH interface docs: `ListIdentitySnapshots`, `FetchAllSnapshots`, `FetchSnapshot`, `CreateReinforcement`, `PassportToD2P`
 
 #### CSC Grasshopper Interface
@@ -114,6 +125,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### CSC FastAPI Backend
 
+- Radial signature mesh sectioning no longer fails on open scanned surfaces
+  (e.g. rubble `detailed.ply`) whose faces are coplanar with the PCA centre
+  plane: the vertex silhouette is used when that single cut misses. Offset
+  and percentile cut heights are not retried, so outlines stay comparable
+  across PCA-aligned geometry
+- Open-mesh centre-plane cuts (gappy or not-star-convex loops, e.g.
+  Scanned Rubble 30) wrap the intersection points in a convex hull so
+  every radial ray hits; a watertight simple section that already contains
+  its centroid is kept
 - Version detection only accepts real declarations (`Version: <number>`), so
   prose like "version-0 snapshot" in a component description no longer parses
   as version `0` (affected `CSC_AddComponentIdentity`)
