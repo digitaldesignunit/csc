@@ -84,6 +84,36 @@ export type ProvenanceGraph = {
   edges: ProvenanceGraphEdge[]
 }
 
+/** Feature basis for `GET /identities/map`. */
+export type ComponentMapBasis = 'radial_signature' | 'scalars'
+
+/** Embedding method for `GET /identities/map`. */
+export type ComponentMapMethod = 'pca' | 'umap'
+
+export type ComponentMapPoint = {
+  id: string
+  x: number
+  y: number
+  name?: string | null
+  type?: string | null
+  catalog_number?: number | null
+  color?: unknown
+}
+
+/** Payload from `GET /identities/map`. */
+export type ComponentMapResponse = {
+  basis: ComponentMapBasis
+  basis_label: string
+  method: ComponentMapMethod
+  requested_method: ComponentMapMethod
+  total: number
+  displayed: number
+  points: ComponentMapPoint[]
+  cached?: boolean
+  source?: 'cache' | 'live'
+  computed_at?: string | null
+}
+
 /** For `GET /snapshots/{id}/meshes/…` PLY routing. */
 export type SnapshotMeshRouting = {
   snapshot_id: string

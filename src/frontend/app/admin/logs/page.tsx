@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
-type LogKey = 'fastapi_log' | 'previewgen_log' | 'descriptors_simple_log'
+type LogKey = 'fastapi_log' | 'previewgen_log' | 'descriptors_simple_log' | 'component_map_log'
 type LogState = Record<LogKey, string>
 
 const LOG_ENDPOINTS: Array<{ key: LogKey; title: string; description: string }> = [
@@ -28,6 +28,11 @@ const LOG_ENDPOINTS: Array<{ key: LogKey; title: string; description: string }> 
     title: 'Simple Descriptors',
     description: 'Simple descriptors cronjob log.',
   },
+  {
+    key: 'component_map_log',
+    title: 'Component Map',
+    description: 'Component map PCA/UMAP cache cronjob log.',
+  },
 ]
 
 export default function AdminLogsPage() {
@@ -40,6 +45,7 @@ export default function AdminLogsPage() {
     fastapi_log: '',
     previewgen_log: '',
     descriptors_simple_log: '',
+    component_map_log: '',
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -65,16 +71,18 @@ export default function AdminLogsPage() {
     setLoading(true)
     setError(null)
     try {
-      const [fastapiLog, previewgenLog, descriptorsSimpleLog] = await Promise.all([
+      const [fastapiLog, previewgenLog, descriptorsSimpleLog, componentMapLog] = await Promise.all([
         fetchLog('fastapi_log', lineCount),
         fetchLog('previewgen_log', lineCount),
         fetchLog('descriptors_simple_log', lineCount),
+        fetchLog('component_map_log', lineCount),
       ])
 
       setLogs({
         fastapi_log: fastapiLog,
         previewgen_log: previewgenLog,
         descriptors_simple_log: descriptorsSimpleLog,
+        component_map_log: componentMapLog,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load logs.'

@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react'
 import {
   Home,
   Package,
+  Map,
   PackagePlus,
   Award,
   FileText,
@@ -110,6 +111,13 @@ export default function AppMenu() {
             >
               <Package className="h-4 w-4" />
               Browse Components
+            </div>
+            <div
+              onClick={() => handleNavigation('/components/map')}
+              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+            >
+              <Map className="h-4 w-4" />
+              Component Map
             </div>
             <div className="my-0.5 mx-2 border-t border-border/60" />
             <div className="px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
