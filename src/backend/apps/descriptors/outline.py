@@ -15,11 +15,17 @@ step that could mirror or rotate it relative to the extrusion profiles the
 signature was originally built on.
 
 Meshes are cut exactly: `trimesh.Trimesh.section` returns the true
-cross-section, concavities and all. Extrusions are turned into meshes and
-cut the same way, because an extrusion's own profile lies in its extrusion
-frame, which is only the PCA plane when the extrusion axis happens to be
-the shortest one. Point clouds have no faces to cut, so the points within a
-slab around the cut height are flattened and wrapped in a concave hull.
+cross-section, concavities and all. Only the PCA centre plane is used; a
+different height would be a different section. If that plane misses -
+typical of an open scanned surface whose faces lie in the cut plane - the
+outline falls back to the concave hull of the vertices in XY, which is the
+same silhouette a mid-plane cut would have produced on a solid of that
+footprint.
+Extrusions are turned into meshes and cut the same way, because an
+extrusion's own profile lies in its extrusion frame, which is only the PCA
+plane when the extrusion axis happens to be the shortest one. Point clouds
+have no faces to cut, so the points within a slab around the cut height are
+flattened and wrapped in a concave hull.
 
 Panels are the exception, described by `PANEL_POLICY` below: they are thin
 and prismatic, so their meaningful outline is the silhouette rather than a
@@ -102,13 +108,6 @@ Panels widen to the full silhouette at that point, since failing to produce
 any outline is worse than producing the full-depth one. Other components
 fail instead: widening their slab would silently swap the section they
 asked for with a silhouette, which is a different descriptor.
-"""
-
-_SECTION_RETRY_FRACTIONS: Tuple[float, ...] = (0.0, 0.02, -0.02, 0.1, -0.1)
-"""Cut heights to try, as fractions of depth from the centre plane.
-
-A plane exactly through the centre can land on a coplanar band of faces and
-return nothing usable, so we step off it slightly before giving up.
 """
 
 _CLOSED_EPS: float = 1e-9
@@ -231,12 +230,67 @@ def _finalize_outline(loop: np.ndarray) -> List[List[float]]:
     return [[float(p[0]), float(p[1])] for p in loop]
 
 
+def _centre_plane_height(mesh: trimesh.Trimesh) -> float:
+    """Z of the PCA centre plane.
+
+    Origin when the mesh straddles z=0 (the usual PCA-aligned case), else
+    the middle of the Z bounds for geometry stored without a frame. No
+    other height is used: an offset cut is a different section, so outlines
+    would not be comparable across identically oriented components.
+    """
+    z_min = float(mesh.bounds[0][2])
+    z_max = float(mesh.bounds[1][2])
+    return 0.0 if z_min < 0.0 < z_max else 0.5 * (z_min + z_max)
+
+
+def _loops_from_section(section: object) -> List[np.ndarray]:
+    """2D loops from a trimesh Path3D section, XY of each discrete entity."""
+    discrete = getattr(section, 'discrete', None)
+    if not discrete:
+        return []
+    loops = []
+    for path in discrete:
+        arr = np.asarray(path, dtype=np.float64)
+        if arr.ndim != 2 or arr.shape[1] < 2 or len(arr) < 3:
+            continue
+        loops.append(arr[:, :2])
+    return loops
+
+
+def _outline_from_mesh_vertices(
+    mesh: trimesh.Trimesh,
+    concavity: float,
+    logger: LoggerFn,
+) -> List[List[float]]:
+    """Silhouette of a mesh the centre plane could not slice.
+
+    Used for open scanned surfaces whose faces are nearly parallel to the
+    PCA XY plane: a Z-normal section is coplanar with the triangles and
+    trimesh returns no line intersections. The XY of the vertices is then
+    the same outline a mid-plane cut would have produced on a solid.
+    """
+    points = np.asarray(mesh.vertices, dtype=np.float64)
+    logger(
+        'centre plane did not intersect the mesh; using the vertex '
+        f'silhouette ({len(points)} vertices, z-extent '
+        f'{float(mesh.extents[2]):.6g})'
+    )
+    return section_outline_from_points(
+        points,
+        slab_fraction=1.0,
+        concavity=concavity,
+        widen_sparse_slab=False,
+        logger=logger,
+    )
+
+
 # MESH SECTIONING -------------------------------------------------------------
 
 
 def section_outline_from_mesh(
     mesh: trimesh.Trimesh,
     logger: LoggerFn = _noop_logger,
+    concavity: float = DEFAULT_CONCAVITY,
 ) -> List[List[float]]:
     """
     Cut a PCA-aligned mesh through its centre and return the outer loop.
@@ -244,52 +298,52 @@ def section_outline_from_mesh(
     Args:
         mesh: PCA-aligned mesh, i.e. shortest principal axis on world Z.
         logger: optional progress logger.
+        concavity: hull ratio used only if the centre plane misses, i.e. on
+            open scanned surfaces that lie in the section plane.
 
     Returns:
         List of [x, y] vertices describing the closed outer boundary.
 
     Raises:
-        ValueError: if no usable cross-section can be cut.
+        ValueError: if no usable outline can be produced.
     """
     z_min = float(mesh.bounds[0][2])
     z_max = float(mesh.bounds[1][2])
     depth = z_max - z_min
-    if not np.isfinite(depth) or depth <= 0.0:
+    if not np.isfinite(depth) or depth < 0.0:
         raise ValueError(
             f'Mesh has no extent along the section axis (depth {depth}); '
             f'it cannot be cut'
         )
 
-    # The PCA frame puts the component's centre at the origin, so z = 0 is
-    # the centre plane. Geometry stored without a frame can sit anywhere,
-    # so fall back to the middle of the bounds rather than cutting thin air.
-    centre = 0.0 if z_min < 0.0 < z_max else 0.5 * (z_min + z_max)
-
-    for fraction in _SECTION_RETRY_FRACTIONS:
-        height = centre + fraction * depth
-        try:
-            section = mesh.section(
-                plane_origin=[0.0, 0.0, height],
-                plane_normal=[0.0, 0.0, 1.0],
-            )
-        except Exception as exc:
-            logger(f'section at z={height:.6g} failed: {exc}')
-            continue
-        if section is None:
-            continue
-        loop = _largest_loop([np.asarray(d)[:, :2] for d in section.discrete])
+    height = _centre_plane_height(mesh)
+    last_empty_reason = 'no intersection'
+    try:
+        section = mesh.section(
+            plane_origin=[0.0, 0.0, height],
+            plane_normal=[0.0, 0.0, 1.0],
+        )
+    except Exception as exc:
+        logger(f'section at z={height:.6g} failed: {exc}')
+        section = None
+        last_empty_reason = str(exc)
+    if section is not None:
+        loop = _largest_loop(_loops_from_section(section))
         if loop is None:
-            continue
-        if fraction != 0.0:
-            logger(
-                f'section through the centre was empty, cut at '
-                f'{fraction:+.0%} of depth instead'
-            )
-        return _finalize_outline(loop)
+            last_empty_reason = 'intersection produced no usable loop'
+        else:
+            try:
+                return _finalize_outline(loop)
+            except ValueError as exc:
+                last_empty_reason = str(exc)
 
-    raise ValueError(
-        'Mesh produced no usable cross-section at any candidate height'
-    )
+    try:
+        return _outline_from_mesh_vertices(mesh, concavity, logger)
+    except Exception as exc:
+        raise ValueError(
+            f'Mesh produced no usable cross-section at the centre plane '
+            f'({last_empty_reason}); vertex silhouette also failed: {exc}'
+        ) from exc
 
 
 # POINT CLOUD SECTIONING ------------------------------------------------------
@@ -457,7 +511,8 @@ def outline_from_component(
         source = f'{mesh_source} (section)'
         try:
             return (
-                section_outline_from_mesh(surface_mesh, logger=logger),
+                section_outline_from_mesh(
+                    surface_mesh, logger=logger, concavity=concavity),
                 source,
                 None,
             )
@@ -502,6 +557,7 @@ def outline_from_component(
                 section_outline_from_mesh(
                     _build_extrusion_mesh(extrusion, pca_frame),
                     logger=logger,
+                    concavity=concavity,
                 ),
                 source,
                 None,

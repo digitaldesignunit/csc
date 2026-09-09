@@ -198,12 +198,59 @@ def test_mesh_section_cuts_the_centre_even_when_offset_from_zero():
         3200.0, rel=1e-9)
 
 
-def test_mesh_section_rejects_a_mesh_with_no_depth():
+def test_mesh_section_does_not_cut_away_from_the_centre_plane():
+    """A gap at z=0 must not be papered over by cutting a different height."""
+    top = trimesh.creation.box(extents=[80.0, 40.0, 2.0])
+    top.apply_translation([0.0, 0.0, 30.0])
+    bottom = trimesh.creation.box(extents=[10.0, 10.0, 2.0])
+    bottom.apply_translation([0.0, 0.0, -30.0])
+    mesh = trimesh.util.concatenate([top, bottom])
+    logs = []
+    outline = section_outline_from_mesh(mesh, logger=logs.append)
+    assert any('vertex silhouette' in message for message in logs)
+    # A cut through the bottom slab would be 100 and would mean we left z=0.
+    assert _area(outline) != pytest.approx(100.0, rel=0.02)
+
+
+def _planar_l_mesh():
+    """Open surface of the L, all faces in the PCA cut plane.
+
+    Scanned rubble arrives this way: a one-sided triangulation whose faces
+    never cross a Z-normal plane, so trimesh.section returns nothing.
+    """
+    vertices = [
+        [0, 0, 0], [100, 0, 0], [100, 40, 0], [0, 40, 0],
+        [40, 40, 0], [40, 100, 0], [0, 100, 0],
+    ]
+    faces = [[0, 1, 2], [0, 2, 3], [3, 4, 5], [3, 5, 6]]
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+
+
+def test_mesh_section_of_a_planar_open_surface_uses_the_vertex_silhouette():
+    logs = []
+    outline = section_outline_from_mesh(_planar_l_mesh(), logger=logs.append)
+    assert _area(outline) == pytest.approx(L_AREA, rel=0.05)
+    assert _area(outline) < 0.85 * L_HULL_AREA
+    assert any('vertex silhouette' in message for message in logs)
+
+
+def test_mesh_section_of_a_single_triangle_uses_the_vertex_silhouette():
     flat = trimesh.Trimesh(
-        vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+        vertices=[[0, 0, 0], [4, 0, 0], [0, 6, 0]],
         faces=[[0, 1, 2]],
+        process=False,
     )
-    with pytest.raises(ValueError, match='no extent'):
+    outline = section_outline_from_mesh(flat)
+    assert _area(outline) == pytest.approx(12.0, rel=1e-6)
+
+
+def test_mesh_section_rejects_collinear_vertices():
+    flat = trimesh.Trimesh(
+        vertices=[[0, 0, 0], [1, 0, 0], [2, 0, 0]],
+        faces=[[0, 1, 2]],
+        process=False,
+    )
+    with pytest.raises(ValueError, match='vertex silhouette also failed'):
         section_outline_from_mesh(flat)
 
 
