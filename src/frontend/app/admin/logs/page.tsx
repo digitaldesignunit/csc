@@ -12,6 +12,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 type LogKey = 'fastapi_log' | 'previewgen_log' | 'descriptors_simple_log' | 'component_map_log'
 type LogState = Record<LogKey, string>
 
+const EMPTY_LOGS: LogState = {
+  fastapi_log: '',
+  previewgen_log: '',
+  descriptors_simple_log: '',
+  component_map_log: '',
+}
+
 const LOG_ENDPOINTS: Array<{ key: LogKey; title: string; description: string }> = [
   {
     key: 'fastapi_log',
@@ -41,12 +48,7 @@ export default function AdminLogsPage() {
   const MAX_LINES = 5000
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [logs, setLogs] = useState<LogState>({
-    fastapi_log: '',
-    previewgen_log: '',
-    descriptors_simple_log: '',
-    component_map_log: '',
-  })
+  const [logs, setLogs] = useState<LogState>(EMPTY_LOGS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lineCount, setLineCount] = useState<number>(DEFAULT_LINES)
@@ -70,26 +72,28 @@ export default function AdminLogsPage() {
   const fetchAllLogs = useCallback(async () => {
     setLoading(true)
     setError(null)
-    try {
-      const [fastapiLog, previewgenLog, descriptorsSimpleLog, componentMapLog] = await Promise.all([
-        fetchLog('fastapi_log', lineCount),
-        fetchLog('previewgen_log', lineCount),
-        fetchLog('descriptors_simple_log', lineCount),
-        fetchLog('component_map_log', lineCount),
-      ])
+    const keys = LOG_ENDPOINTS.map(({ key }) => key)
+    const results = await Promise.allSettled(keys.map((key) => fetchLog(key, lineCount)))
 
-      setLogs({
-        fastapi_log: fastapiLog,
-        previewgen_log: previewgenLog,
-        descriptors_simple_log: descriptorsSimpleLog,
-        component_map_log: componentMapLog,
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load logs.'
-      setError(message)
-    } finally {
-      setLoading(false)
+    const nextLogs: LogState = { ...EMPTY_LOGS }
+    const failures: string[] = []
+    results.forEach((result, index) => {
+      const key = keys[index]
+      if (result.status === 'fulfilled') {
+        nextLogs[key] = result.value
+        return
+      }
+      const message =
+        result.reason instanceof Error ? result.reason.message : `Failed to fetch ${key}`
+      nextLogs[key] = message
+      failures.push(message)
+    })
+
+    setLogs(nextLogs)
+    if (failures.length === keys.length) {
+      setError(failures.join(' '))
     }
+    setLoading(false)
   }, [fetchLog, lineCount])
 
   useEffect(() => {
@@ -155,10 +159,11 @@ export default function AdminLogsPage() {
       )}
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as LogKey)}>
-        <TabsList className="gap-1.5">
+        <TabsList className="h-auto flex-wrap gap-1.5">
           <TabsTrigger value="fastapi_log">FastAPI</TabsTrigger>
           <TabsTrigger value="previewgen_log">PreviewGen</TabsTrigger>
           <TabsTrigger value="descriptors_simple_log">Simple Descriptors</TabsTrigger>
+          <TabsTrigger value="component_map_log">Component Map</TabsTrigger>
         </TabsList>
 
         {LOG_ENDPOINTS.map(({ key, title, description }) => (

@@ -98,7 +98,7 @@ function computeViewBox(points: Array<{ x: number; y: number }>): ViewBox {
   }
 }
 
-function pointColor(point: ComponentMapPoint): string {
+function rgbFromPoint(point: ComponentMapPoint): string | null {
   const c = point.color
   if (Array.isArray(c) && c.length >= 3) {
     const [r, g, b] = c
@@ -107,12 +107,12 @@ function pointColor(point: ComponentMapPoint): string {
       return `rgb(${toByte(r)} ${toByte(g)} ${toByte(b)})`
     }
   }
-  return 'var(--primary)'
+  return null
 }
 
-/** Theme accent/ring for point outlines (pink in light, readable in dark). */
-function pointAccentStroke(): string {
-  return 'var(--ring)'
+function cssColor(el: Element, variable: string, fallback: string): string {
+  const value = getComputedStyle(el).getPropertyValue(variable).trim()
+  return value || fallback
 }
 
 async function fetchCatalogPassportPreview(identityId: string): Promise<CatalogComponent> {
@@ -140,11 +140,19 @@ function ComponentMapCanvas({
   onSelect: (point: ComponentMapPoint) => void
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const sizeRef = useRef({ width: 0, height: 0 })
+  const cameraRef = useRef<Camera>({ x: 0, y: 0, k: 1 })
+  const hoverIdRef = useRef<string | null>(null)
+  const viewRef = useRef<ViewBox>(computeViewBox(points))
+  const padRef = useRef(PAD_DESKTOP)
+  const hitRRef = useRef(DOT_HIT_R)
+  const onSelectRef = useRef(onSelect)
+  const drawRef = useRef<() => void>(() => {})
+
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [hoverId, setHoverId] = useState<string | null>(null)
   const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, k: 1 })
-  const [frame, setFrame] = useState(0)
   const animRef = useRef<AnimPoint[]>([])
   const animStartRef = useRef(0)
   const rafRef = useRef<number | null>(null)
@@ -154,6 +162,10 @@ function ComponentMapCanvas({
     startY: number
     originX: number
     originY: number
+  } | null>(null)
+  const pendingSelectRef = useRef<{
+    pointerId: number
+    point: AnimPoint
   } | null>(null)
   const pointersRef = useRef(
     new Map<number, { x: number; y: number }>(),
@@ -167,14 +179,109 @@ function ComponentMapCanvas({
     originY: number
   } | null>(null)
   const [dragging, setDragging] = useState(false)
+
   const isCompact = size.width > 0 && size.width < 640
   const pad = isCompact ? PAD_MOBILE : PAD_DESKTOP
   const hitR = isCompact ? DOT_HIT_R_MOBILE : DOT_HIT_R
+  const view = useMemo(() => computeViewBox(points), [points])
 
-  const view = useMemo(
-    () => computeViewBox(points),
-    [points],
-  )
+  cameraRef.current = camera
+  hoverIdRef.current = hoverId
+  viewRef.current = view
+  padRef.current = pad
+  hitRRef.current = hitR
+  onSelectRef.current = onSelect
+
+  const project = useCallback((x: number, y: number, cam: Camera = cameraRef.current) => {
+    const { width, height } = sizeRef.current
+    const v = viewRef.current
+    const p = padRef.current
+    if (width <= 0 || height <= 0) return { cx: 0, cy: 0 }
+    const sx = (width - p * 2) / v.width
+    const sy = (height - p * 2) / v.height
+    const bx = p + (x - v.minX) * sx
+    const by = height - p - (y - v.minY) * sy
+    return {
+      cx: bx * cam.k + cam.x,
+      cy: by * cam.k + cam.y,
+    }
+  }, [])
+
+  const hitTest = useCallback((mx: number, my: number): AnimPoint | null => {
+    const r2 = hitRRef.current * hitRRef.current
+    const pts = animRef.current
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i]
+      if (p.opacity <= 0.05) continue
+      const { cx, cy } = project(p.x, p.y)
+      const dx = mx - cx
+      const dy = my - cy
+      if (dx * dx + dy * dy <= r2) return p
+    }
+    return null
+  }, [project])
+
+  drawRef.current = () => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (!canvas || !container) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const { width, height } = sizeRef.current
+    if (width <= 0 || height <= 0) return
+
+    const dpr = window.devicePixelRatio || 1
+    const nextW = Math.max(1, Math.round(width * dpr))
+    const nextH = Math.max(1, Math.round(height * dpr))
+    if (canvas.width !== nextW || canvas.height !== nextH) {
+      canvas.width = nextW
+      canvas.height = nextH
+    }
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, width, height)
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+
+    const cam = cameraRef.current
+    const accent = cssColor(container, '--ring', '#888888')
+    const background = cssColor(container, '--background', '#ffffff')
+    const primary = cssColor(container, '--primary', '#888888')
+    const hover = hoverIdRef.current
+
+    const paint = (p: AnimPoint, active: boolean) => {
+      const alpha = Math.max(0, Math.min(1, p.opacity))
+      if (alpha <= 0) return
+      const { cx, cy } = project(p.x, p.y, cam)
+
+      ctx.globalAlpha = alpha * (active ? 1 : 0.9)
+      ctx.beginPath()
+      ctx.arc(cx, cy, active ? DOT_R + 3 : DOT_R + 1.5, 0, Math.PI * 2)
+      ctx.strokeStyle = accent
+      ctx.lineWidth = active ? POINT_STROKE_ACCENT + 0.5 : POINT_STROKE_ACCENT
+      ctx.stroke()
+
+      ctx.globalAlpha = alpha
+      ctx.beginPath()
+      ctx.arc(cx, cy, active ? DOT_R + 2 : DOT_R, 0, Math.PI * 2)
+      ctx.fillStyle = rgbFromPoint(p.meta) || primary
+      ctx.fill()
+      ctx.strokeStyle = background
+      ctx.lineWidth = POINT_STROKE_INNER
+      ctx.stroke()
+    }
+
+    for (const p of animRef.current) {
+      if (p.id === hover) continue
+      paint(p, false)
+    }
+    if (hover) {
+      const hp = animRef.current.find((p) => p.id === hover)
+      if (hp) paint(hp, true)
+    }
+    ctx.globalAlpha = 1
+  }
 
   useEffect(() => {
     const el = containerRef.current
@@ -262,8 +369,8 @@ function ComponentMapCanvas({
 
     animRef.current = nextAnim
     animStartRef.current = performance.now()
+    cameraRef.current = { x: 0, y: 0, k: 1 }
     setCamera({ x: 0, y: 0, k: 1 })
-    setFrame((n) => n + 1)
 
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current)
 
@@ -291,7 +398,7 @@ function ComponentMapCanvas({
       }
 
       animRef.current = updated
-      setFrame((n) => n + 1)
+      drawRef.current()
       if (stillMoving) {
         rafRef.current = requestAnimationFrame(tick)
       } else {
@@ -305,30 +412,16 @@ function ComponentMapCanvas({
     }
   }, [points])
 
-  const projectBase = useCallback(
-    (x: number, y: number) => {
-      const { width, height } = size
-      if (width <= 0 || height <= 0) return { cx: 0, cy: 0 }
-      const sx = (width - pad * 2) / view.width
-      const sy = (height - pad * 2) / view.height
-      return {
-        cx: pad + (x - view.minX) * sx,
-        cy: height - pad - (y - view.minY) * sy,
-      }
-    },
-    [size, view, pad],
-  )
+  useEffect(() => {
+    drawRef.current()
+  }, [camera, size, hoverId, view, pad])
 
-  const project = useCallback(
-    (x: number, y: number) => {
-      const base = projectBase(x, y)
-      return {
-        cx: base.cx * camera.k + camera.x,
-        cy: base.cy * camera.k + camera.y,
-      }
-    },
-    [projectBase, camera],
-  )
+  useEffect(() => {
+    const root = document.documentElement
+    const obs = new MutationObserver(() => drawRef.current())
+    obs.observe(root, { attributes: true, attributeFilter: ['class'] })
+    return () => obs.disconnect()
+  }, [])
 
   const zoomAt = useCallback((mx: number, my: number, factor: number) => {
     setCamera((prev) => {
@@ -342,21 +435,33 @@ function ComponentMapCanvas({
     })
   }, [])
 
-  const onWheel = useCallback(
-    (event: React.WheelEvent<SVGSVGElement>) => {
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onWheel = (event: WheelEvent) => {
       event.preventDefault()
-      const rect = event.currentTarget.getBoundingClientRect()
-      const mx = event.clientX - rect.left
-      const my = event.clientY - rect.top
-      zoomAt(mx, my, event.deltaY < 0 ? 1.12 : 1 / 1.12)
-    },
-    [zoomAt],
-  )
+      const rect = canvas.getBoundingClientRect()
+      zoomAt(
+        event.clientX - rect.left,
+        event.clientY - rect.top,
+        event.deltaY < 0 ? 1.12 : 1 / 1.12,
+      )
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [zoomAt, size.width, size.height])
+
+  const localPoint = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    }
+  }
 
   const onPointerDown = useCallback(
-    (event: React.PointerEvent<SVGSVGElement>) => {
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
       if (event.button !== 0 && event.pointerType === 'mouse') return
-      const target = event.target as Element | null
       pointersRef.current.set(event.pointerId, {
         x: event.clientX,
         y: event.clientY,
@@ -364,6 +469,7 @@ function ComponentMapCanvas({
 
       if (pointersRef.current.size >= 2) {
         dragRef.current = null
+        pendingSelectRef.current = null
         setDragging(false)
         const pts = [...pointersRef.current.values()]
         const dx = pts[0].x - pts[1].x
@@ -371,30 +477,38 @@ function ComponentMapCanvas({
         const rect = event.currentTarget.getBoundingClientRect()
         pinchRef.current = {
           distance: Math.hypot(dx, dy) || 1,
-          k: camera.k,
+          k: cameraRef.current.k,
           midX: (pts[0].x + pts[1].x) / 2 - rect.left,
           midY: (pts[0].y + pts[1].y) / 2 - rect.top,
-          originX: camera.x,
-          originY: camera.y,
+          originX: cameraRef.current.x,
+          originY: cameraRef.current.y,
         }
         return
       }
 
-      if (target?.closest?.('[data-map-point="1"]')) return
+      const { x, y } = localPoint(event)
+      const hit = hitTest(x, y)
+      if (hit) {
+        pendingSelectRef.current = { pointerId: event.pointerId, point: hit }
+        setHoverId(hit.id)
+        return
+      }
+
       event.currentTarget.setPointerCapture(event.pointerId)
       dragRef.current = {
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
-        originX: camera.x,
-        originY: camera.y,
+        originX: cameraRef.current.x,
+        originY: cameraRef.current.y,
       }
+      setHoverId(null)
       setDragging(true)
     },
-    [camera.x, camera.y, camera.k],
+    [hitTest],
   )
 
-  const onPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+  const onPointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     if (pointersRef.current.has(event.pointerId)) {
       pointersRef.current.set(event.pointerId, {
         x: event.clientX,
@@ -422,17 +536,36 @@ function ComponentMapCanvas({
     }
 
     const drag = dragRef.current
-    if (!drag || drag.pointerId !== event.pointerId) return
-    setCamera((prev) => ({
-      ...prev,
-      x: drag.originX + (event.clientX - drag.startX),
-      y: drag.originY + (event.clientY - drag.startY),
-    }))
-  }, [])
+    if (drag && drag.pointerId === event.pointerId) {
+      setCamera((prev) => ({
+        ...prev,
+        x: drag.originX + (event.clientX - drag.startX),
+        y: drag.originY + (event.clientY - drag.startY),
+      }))
+      return
+    }
 
-  const onPointerUp = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+    if (pendingSelectRef.current) return
+
+    const { x, y } = localPoint(event)
+    const hit = hitTest(x, y)
+    const nextId = hit?.id ?? null
+    setHoverId((prev) => (prev === nextId ? prev : nextId))
+  }, [hitTest])
+
+  const onPointerUp = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     pointersRef.current.delete(event.pointerId)
     if (pointersRef.current.size < 2) pinchRef.current = null
+
+    const pending = pendingSelectRef.current
+    if (pending && pending.pointerId === event.pointerId) {
+      pendingSelectRef.current = null
+      const { x, y } = localPoint(event)
+      const hit = hitTest(x, y)
+      if (hit && hit.id === pending.point.id) {
+        onSelectRef.current(hit.meta)
+      }
+    }
 
     const drag = dragRef.current
     if (drag && drag.pointerId === event.pointerId) {
@@ -444,11 +577,15 @@ function ComponentMapCanvas({
         // ignore
       }
     }
+  }, [hitTest])
+
+  const onPointerLeave = useCallback(() => {
+    if (dragRef.current || pinchRef.current) return
+    setHoverId(null)
   }, [])
 
-  const displayPoints = animRef.current
   const hoverPoint = hoverId
-    ? displayPoints.find((p) => p.id === hoverId)?.meta ?? null
+    ? points.find((p) => p.id === hoverId) ?? null
     : null
 
   return (
@@ -457,61 +594,22 @@ function ComponentMapCanvas({
       className={cn('relative w-full overflow-hidden rounded-md border bg-muted/20', CANVAS_HEIGHT_CLASS)}
     >
       {size.width > 0 && size.height > 0 && (
-        <svg
-          width={size.width}
-          height={size.height}
+        <canvas
+          ref={canvasRef}
           className="absolute inset-0 touch-none"
           role="img"
           aria-label={`Component map (${method})`}
-          onWheel={onWheel}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
-          style={{ cursor: dragging ? 'grabbing' : 'grab' }}
-        >
-          {displayPoints.map((p) => {
-            const { cx, cy } = project(p.x, p.y)
-            const active = hoverId === p.id
-            return (
-              <g
-                key={p.id}
-                data-map-point="1"
-                className="cursor-pointer"
-                opacity={Math.max(0, Math.min(1, p.opacity))}
-                onMouseEnter={() => setHoverId(p.id)}
-                onMouseLeave={() => setHoverId(null)}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onSelect(p.meta)
-                }}
-              >
-                <circle cx={cx} cy={cy} r={hitR} fill="transparent" />
-                {/* Accent halo — readable in light and dark */}
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={active ? DOT_R + 3 : DOT_R + 1.5}
-                  fill="none"
-                  stroke={pointAccentStroke()}
-                  strokeOpacity={active ? 1 : 0.9}
-                  strokeWidth={active ? POINT_STROKE_ACCENT + 0.5 : POINT_STROKE_ACCENT}
-                />
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={active ? DOT_R + 2 : DOT_R}
-                  fill={pointColor(p.meta)}
-                  fillOpacity={1}
-                  stroke="var(--background)"
-                  strokeWidth={POINT_STROKE_INNER}
-                >
-                  <title>{p.meta.name || p.id}</title>
-                </circle>
-              </g>
-            )
-          })}
-        </svg>
+          onPointerLeave={onPointerLeave}
+          style={{
+            width: size.width,
+            height: size.height,
+            cursor: dragging ? 'grabbing' : hoverId ? 'pointer' : 'grab',
+          }}
+        />
       )}
 
       {transitioning && (
