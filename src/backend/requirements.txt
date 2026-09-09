@@ -31,4 +31,5 @@ scipy
 # outline for the radial signature; it also ships as a trimesh extra.
 shapely>=2.0
 scikit-learn
+umap-learn
 robust-laplacian>=1.0.0

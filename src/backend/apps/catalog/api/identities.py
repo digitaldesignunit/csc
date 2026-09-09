@@ -10,6 +10,9 @@ Owns the primary read path of the new data model:
 * `GET /identities/stats`
     -> aggregated stats (identity + current snapshot)
 
+* `GET /identities/map`
+    -> 2D descriptor embedding (PCA / UMAP) for the component map
+
 * `GET /identities/{identity_id}/compose`
     -> passport (identity + snapshots[]): default current, `?snapshots=all`,
     or `?snapshots=<uuid>` (comma-separated for many)
@@ -48,6 +51,7 @@ PATCH current snapshot here;
 snapshot preview/photo file routes in `snapshots.py`.
 """
 
+import asyncio
 import hashlib
 import json
 import uuid
@@ -65,6 +69,11 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
+from apps.catalog.component_map import (
+    MapBasis,
+    MapMethod,
+    build_component_map,
+)
 from apps.catalog.models import (
     CatalogSharedTypesEnvelope,
     ComponentCount,
@@ -554,6 +563,120 @@ async def count_identities_route(
             detail='Internal server error',
         )
     return {'count': total}
+
+
+@router.get(
+    '/identities/map',
+    summary=(
+        '2D component map from descriptors '
+        '(PCA first paint, UMAP preferred layout)'
+    ),
+)
+async def get_identities_map(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    basis: MapBasis = Query(
+        'radial_signature',
+        description=(
+            'Feature space: radial_signature (concatenated ray distances) '
+            'or scalars (box/sphere/line/planescore)'
+        ),
+    ),
+    method: MapMethod = Query(
+        'pca',
+        description='Embedding method: pca (fast) or umap (preferred)',
+    ),
+    comptype: str = Query(''),
+    material: str = Query(''),
+    dataset: str = Query(''),
+    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
+    complexity: Optional[int] = Query(None),
+    fragment: Optional[bool] = Query(None),
+    reserved: Optional[str] = Query(None),
+    bbx_min_x: Optional[float] = Query(None),
+    bbx_min_y: Optional[float] = Query(None),
+    bbx_min_z: Optional[float] = Query(None),
+    bbx_max_x: Optional[float] = Query(None),
+    bbx_max_y: Optional[float] = Query(None),
+    bbx_max_z: Optional[float] = Query(None),
+    consumed_filter: ConsumedFilter = Query('active'),
+    sortorder: Literal['asc', 'desc'] = Query('asc', include_in_schema=False),
+):
+    """
+    Embed current-snapshot descriptors into 2D for the Component Map page.
+
+    Components missing the chosen descriptor basis are omitted from
+    ``points``; ``displayed`` / ``total`` report coverage.
+    """
+    ctx = _catalog_filter_context(
+        request,
+        sortorder=sortorder,
+        comptype=comptype,
+        material=material,
+        dataset=dataset,
+        validated=validated,
+        complexity=complexity,
+        fragment=fragment,
+        reserved=reserved,
+        bbx_min_x=bbx_min_x,
+        bbx_min_y=bbx_min_y,
+        bbx_min_z=bbx_min_z,
+        bbx_max_x=bbx_max_x,
+        bbx_max_y=bbx_max_y,
+        bbx_max_z=bbx_max_z,
+        consumed_filter=consumed_filter,
+    )
+    try:
+        pipeline = build_list_pipeline(
+            snapshots_collection=ctx['snapshots_collection'],
+            identity_match=ctx['identity_match'],
+            snapshot_match=ctx['snapshot_match'],
+            sortkey='_id',
+            sort_order=ctx['sort_order'],
+            page=0,
+            size=0,
+            include_username=False,
+            current_user_id=current_user.id,
+            reserved_filter=reserved,
+        )
+        pipeline.append({
+            '$project': {
+                '_id': 1,
+                'type': 1,
+                'catalog_number': 1,
+                'name': '$current_snapshot.name',
+                'color': '$current_snapshot.color',
+                'descriptors': '$current_snapshot.descriptors',
+            },
+        })
+        docs = await aggregate_identities(request, pipeline)
+    except PyMongoError as exc:
+        print(f'[ERROR] identities map DB error: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+    try:
+        payload = await asyncio.to_thread(
+            build_component_map,
+            docs,
+            basis=basis,
+            method=method,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        print(f'[ERROR] identities map embed: {exc}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Failed to compute component map embedding',
+        ) from exc
+
+    return JSONResponse(status_code=200, content=payload)
 
 
 def _normalize_stats_facet_lists(items):
