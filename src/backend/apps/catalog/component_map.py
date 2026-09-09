@@ -8,6 +8,9 @@ Two feature bases:
   - ``scalars``: concatenate box/sphere/line/planescore.
 
 PCA is the fast first paint; UMAP is the preferred layout when available.
+Heavy UMAP layouts are precomputed by ``main_component_map.py`` and stored
+in ``component_map_cache``; the API serves those by default.
+
 Components missing any required descriptor for the chosen basis are omitted
 from the point set (callers report displayed/total coverage).
 """
@@ -24,6 +27,10 @@ from apps.descriptors import radial_signature as rs
 
 MapBasis = Literal['radial_signature', 'scalars']
 MapMethod = Literal['pca', 'umap']
+MapSource = Literal['auto', 'cache', 'live']
+
+MAP_BASES: Tuple[MapBasis, ...] = ('radial_signature', 'scalars')
+MAP_METHODS: Tuple[MapMethod, ...] = ('pca', 'umap')
 
 SCALAR_KEYS: Tuple[str, ...] = (
     'boxscore',
@@ -41,9 +48,73 @@ RADIAL_DISTANCE_KEYS: Tuple[str, ...] = tuple(
     rs.radial_distance_key(n) for n in rs.SUPPORTED_RESOLUTIONS
 )
 
+CACHE_COLLECTION = 'component_map_cache'
+"""Mongo collection holding precomputed map layouts."""
+
 
 def basis_label(basis: MapBasis) -> str:
     return BASIS_LABELS[basis]
+
+
+def cache_doc_id(
+    basis: MapBasis,
+    method: MapMethod,
+    *,
+    consumed_filter: str = 'active',
+    validated: int = 1,
+) -> str:
+    """Stable ``_id`` for a cached layout under a catalog scope."""
+    return f'{basis}:{method}:{consumed_filter}:v{int(validated)}'
+
+
+def is_default_map_scope(
+    *,
+    consumed_filter: str,
+    validated: int,
+    comptype: str = '',
+    material: str = '',
+    dataset: str = '',
+    complexity: Optional[int] = None,
+    fragment: Optional[bool] = None,
+    reserved: Optional[str] = None,
+    bbx_min_x: Optional[float] = None,
+    bbx_min_y: Optional[float] = None,
+    bbx_min_z: Optional[float] = None,
+    bbx_max_x: Optional[float] = None,
+    bbx_max_y: Optional[float] = None,
+    bbx_max_z: Optional[float] = None,
+) -> bool:
+    """True when filters match the cron-cached catalog scope."""
+    return (
+        consumed_filter == 'active'
+        and int(validated) == 1
+        and not comptype
+        and not material
+        and not dataset
+        and complexity is None
+        and fragment is None
+        and reserved is None
+        and bbx_min_x is None
+        and bbx_min_y is None
+        and bbx_min_z is None
+        and bbx_max_x is None
+        and bbx_max_y is None
+        and bbx_max_z is None
+    )
+
+
+def map_rows_project_stage() -> Dict[str, Any]:
+    """``$project`` stage used by the map route and cron aggregation."""
+    return {
+        '$project': {
+            '_id': 1,
+            'type': 1,
+            'catalog_number': 1,
+            'name': '$current_snapshot.name',
+            'color': '$current_snapshot.color',
+            'descriptors': '$current_snapshot.descriptors',
+        },
+    }
 
 
 def _finite_float(value: Any) -> Optional[float]:
@@ -227,3 +298,28 @@ def build_component_map(
         'displayed': displayed,
         'points': points,
     }
+
+
+def payload_from_cache_doc(doc: Mapping[str, Any]) -> Dict[str, Any]:
+    """Strip Mongo bookkeeping and mark the payload as cached."""
+    return {
+        'basis': doc['basis'],
+        'basis_label': doc.get('basis_label') or basis_label(doc['basis']),
+        'method': doc['method'],
+        'requested_method': doc.get('requested_method', doc['method']),
+        'total': int(doc.get('total', 0)),
+        'displayed': int(doc.get('displayed', 0)),
+        'points': list(doc.get('points') or []),
+        'cached': True,
+        'source': 'cache',
+        'computed_at': doc.get('computed_at'),
+    }
+
+
+def annotate_live_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Mark a freshly computed payload as live (uncached)."""
+    out = dict(payload)
+    out['cached'] = False
+    out['source'] = 'live'
+    out['computed_at'] = None
+    return out

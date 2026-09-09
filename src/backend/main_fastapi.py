@@ -86,6 +86,8 @@ async def lifespan(app: FastAPI):
     ]
     app.mongodb_component_identities = app.mongodb['component_identities']
     app.mongodb_component_snapshots = app.mongodb['component_snapshots']
+    app.mongodb_component_map_cache = app.mongodb['component_map_cache']
+    app.mongodb_component_measurements = app.mongodb['component_measurements']
     app.mongodb_counters = app.mongodb['counters']
 
     # Create helpful indexes (idempotent)

@@ -11,7 +11,7 @@ Owns the primary read path of the new data model:
     -> aggregated stats (identity + current snapshot)
 
 * `GET /identities/map`
-    -> 2D descriptor embedding (PCA / UMAP) for the component map
+    -> 2D descriptor embedding (cached UMAP/PCA; optional live compute)
 
 * `GET /identities/{identity_id}/compose`
     -> passport (identity + snapshots[]): default current, `?snapshots=all`,
@@ -72,7 +72,13 @@ from pymongo.errors import PyMongoError
 from apps.catalog.component_map import (
     MapBasis,
     MapMethod,
+    MapSource,
+    annotate_live_payload,
     build_component_map,
+    cache_doc_id,
+    is_default_map_scope,
+    map_rows_project_stage,
+    payload_from_cache_doc,
 )
 from apps.catalog.models import (
     CatalogSharedTypesEnvelope,
@@ -569,7 +575,7 @@ async def count_identities_route(
     '/identities/map',
     summary=(
         '2D component map from descriptors '
-        '(PCA first paint, UMAP preferred layout)'
+        '(cached UMAP/PCA by default; live compute optional)'
     ),
 )
 async def get_identities_map(
@@ -583,8 +589,15 @@ async def get_identities_map(
         ),
     ),
     method: MapMethod = Query(
-        'pca',
+        'umap',
         description='Embedding method: pca (fast) or umap (preferred)',
+    ),
+    source: MapSource = Query(
+        'auto',
+        description=(
+            'auto=prefer cache for the default catalog scope; '
+            'cache=cache only; live=recompute now'
+        ),
     ),
     comptype: str = Query(''),
     material: str = Query(''),
@@ -605,9 +618,83 @@ async def get_identities_map(
     """
     Embed current-snapshot descriptors into 2D for the Component Map page.
 
+    Default catalog scope layouts are precomputed by ``main_component_map.py``
+    into ``component_map_cache``. ``source=auto`` serves those when present.
+
     Components missing the chosen descriptor basis are omitted from
     ``points``; ``displayed`` / ``total`` report coverage.
     """
+    del current_user
+    default_scope = is_default_map_scope(
+        consumed_filter=consumed_filter,
+        validated=validated,
+        comptype=comptype,
+        material=material,
+        dataset=dataset,
+        complexity=complexity,
+        fragment=fragment,
+        reserved=reserved,
+        bbx_min_x=bbx_min_x,
+        bbx_min_y=bbx_min_y,
+        bbx_min_z=bbx_min_z,
+        bbx_max_x=bbx_max_x,
+        bbx_max_y=bbx_max_y,
+        bbx_max_z=bbx_max_z,
+    )
+
+    if source in ('auto', 'cache') and default_scope:
+        cache_col = request.app.mongodb_component_map_cache
+        doc_id = cache_doc_id(
+            basis,
+            method,
+            consumed_filter=consumed_filter,
+            validated=validated,
+        )
+        try:
+            cached = await cache_col.find_one({'_id': doc_id})
+        except PyMongoError as exc:
+            print(f'[ERROR] identities map cache read: {exc}')
+            cached = None
+        if cached is not None:
+            return JSONResponse(
+                status_code=200,
+                content=payload_from_cache_doc(cached),
+            )
+        if source == 'cache':
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    f'No cached map for {doc_id}. '
+                    'Run main_component_map.py or use source=live.'
+                ),
+            )
+        # auto + cache miss: for umap, prefer a cached pca sibling over a
+        # slow live UMAP; for pca, fall through to live compute.
+        if method == 'umap':
+            pca_id = cache_doc_id(
+                basis,
+                'pca',
+                consumed_filter=consumed_filter,
+                validated=validated,
+            )
+            try:
+                pca_cached = await cache_col.find_one({'_id': pca_id})
+            except PyMongoError:
+                pca_cached = None
+            if pca_cached is not None:
+                payload = payload_from_cache_doc(pca_cached)
+                payload['requested_method'] = method
+                return JSONResponse(status_code=200, content=payload)
+
+    if source == 'cache':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                'source=cache only supports the default catalog scope '
+                '(active + validated, no extra filters)'
+            ),
+        )
+
     ctx = _catalog_filter_context(
         request,
         sortorder=sortorder,
@@ -636,19 +723,10 @@ async def get_identities_map(
             page=0,
             size=0,
             include_username=False,
-            current_user_id=current_user.id,
+            current_user_id=None,
             reserved_filter=reserved,
         )
-        pipeline.append({
-            '$project': {
-                '_id': 1,
-                'type': 1,
-                'catalog_number': 1,
-                'name': '$current_snapshot.name',
-                'color': '$current_snapshot.color',
-                'descriptors': '$current_snapshot.descriptors',
-            },
-        })
+        pipeline.append(map_rows_project_stage())
         docs = await aggregate_identities(request, pipeline)
     except PyMongoError as exc:
         print(f'[ERROR] identities map DB error: {exc}')
@@ -657,12 +735,18 @@ async def get_identities_map(
             detail='Internal server error',
         )
 
+    # Avoid surprise multi-minute request timeouts: auto/live umap outside
+    # cache falls back to PCA unless the caller forced source=live.
+    live_method: MapMethod = method
+    if source == 'auto' and method == 'umap':
+        live_method = 'pca'
+
     try:
         payload = await asyncio.to_thread(
             build_component_map,
             docs,
             basis=basis,
-            method=method,
+            method=live_method,
         )
     except RuntimeError as exc:
         raise HTTPException(
@@ -676,7 +760,9 @@ async def get_identities_map(
             detail='Failed to compute component map embedding',
         ) from exc
 
-    return JSONResponse(status_code=200, content=payload)
+    annotated = annotate_live_payload(payload)
+    annotated['requested_method'] = method
+    return JSONResponse(status_code=200, content=annotated)
 
 
 def _normalize_stats_facet_lists(items):

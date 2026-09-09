@@ -101,6 +101,10 @@ async def get_snapshots_col(request: Request):
     return request.app.mongodb_component_snapshots
 
 
+async def get_component_map_cache_col(request: Request):
+    return request.app.mongodb_component_map_cache
+
+
 def validate_uuid(value: str, *, label: str = 'id') -> str:
     try:
         uuid.UUID(str(value))

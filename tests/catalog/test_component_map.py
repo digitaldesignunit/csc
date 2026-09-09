@@ -5,8 +5,11 @@ import pytest
 
 from apps.catalog.component_map import (
     build_component_map,
+    cache_doc_id,
     extract_radial_feature,
     extract_scalar_feature,
+    is_default_map_scope,
+    payload_from_cache_doc,
 )
 from apps.descriptors import radial_signature as rs
 
@@ -184,3 +187,30 @@ def test_umap_embedding_when_available():
     assert payload['method'] == 'umap'
     assert payload['displayed'] == 12
     assert len(payload['points']) == 12
+
+
+def test_cache_doc_id_and_default_scope():
+    assert cache_doc_id('scalars', 'umap') == 'scalars:umap:active:v1'
+    assert is_default_map_scope(consumed_filter='active', validated=1)
+    assert not is_default_map_scope(
+        consumed_filter='active', validated=1, comptype='panel',
+    )
+
+
+def test_payload_from_cache_doc():
+    doc = {
+        '_id': 'scalars:pca:active:v1',
+        'basis': 'scalars',
+        'basis_label': 'scalar descriptors',
+        'method': 'pca',
+        'requested_method': 'pca',
+        'total': 2,
+        'displayed': 2,
+        'points': [{'id': 'a', 'x': 0.0, 'y': 1.0}],
+        'computed_at': '2026-09-09T10:00:00Z',
+    }
+    payload = payload_from_cache_doc(doc)
+    assert payload['cached'] is True
+    assert payload['source'] == 'cache'
+    assert payload['computed_at'] == '2026-09-09T10:00:00Z'
+    assert payload['points'][0]['id'] == 'a'

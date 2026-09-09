@@ -81,6 +81,18 @@ async def get_descriptors_simple_cronjob_log(
     return _read_last_log_lines('descriptors_simple_cronjob.log', lines)
 
 
+@router.get('/component_map_log',
+            response_description='Get Component Map Cronjob log',
+            response_class=PlainTextResponse)
+async def get_component_map_cronjob_log(
+    request: Request,
+    _admin_user: Annotated[User, Depends(require_admin)],
+    lines: Annotated[int, Query(ge=1, le=5000)] = 200,
+):
+    del request, _admin_user
+    return _read_last_log_lines('component_map_cronjob.log', lines)
+
+
 @router.post(
     '/utility/compute-snapshot-orientation',
     response_model=ComputeSnapshotOrientationResponse,
