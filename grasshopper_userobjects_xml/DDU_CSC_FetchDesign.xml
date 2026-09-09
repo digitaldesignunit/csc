@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">bb2aa1ab-9863-4e89-bcc4-eed1743f1b30</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">e560c8c9-75f1-4fe8-b240-c6c6a312c104</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639245527151920913</item>
+            <item name="Date" type_name="gh_date" type_code="8">639245585319632946</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -108,7 +108,7 @@
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="458">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAFfSURBVEhL3VNBSsNQEC2ewIXdqjdI8t62Cz3BT0XdFNzoPerKlQeQJsVDuFRw053WOwjiQjCBuhBsMTLxR+KQLyRRKD54zGT++/MmA7/TWSYk4bgn1PVfQ2KiJ6Gut0I2HK7MdsddydMwmgkll5qcaX1tpCY+ScJ4nvTjQWEgudTkTOtrIwlHJjHRImcYveb8+h4ZrW+EfGITLdIwzoR583480LpW+FyRNWjbnOQayXOSt2Webh3dC1X9BsCZ53mruo8T0hzAQhtUEcCU5LuY6D5O2Kmmkvu+3wWwLVHrCgC4kzu67kRpwh7JF5KZjZWvuNDruhMlgwsAzyQPbLwCMCmtZxIEwcZSG/z5itZJHpI8tnGvgqJpZgDg0k7vpNU0M7DT6Yk1m/+BrrtQVy8P5xrAI4D9iomr+CB3dB8nSBoAb3rfLgKYi5Hu8yNkt0EQ7FRM+42i8TxvU9//P/gA/qwry354a4gAAAAASUVORK5CYII=</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">156ffa22-e12b-4eb2-b588-d172bfab59cc</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">60344af9-054d-42a7-8d27-c7b24a1e54d3</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -126,7 +126,7 @@
                       <items count="2">
                         <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
                           <X>1145</X>
-                          <Y>23227</Y>
+                          <Y>27451</Y>
                           <W>215</W>
                           <H>93</H>
                         </item>
@@ -151,7 +151,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of text fragments</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">eaea9049-051e-4e51-ab04-1d393c142cd3</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">542b95d1-a8dd-454a-9b1d-f7cbc302895d</item>
                             <item name="Name" type_name="gh_string" type_code="10">DesignID</item>
                             <item name="NickName" type_name="gh_string" type_code="10">DesignID</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -185,7 +185,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">rhinoscriptsyntax geometry</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">8207e582-3e7a-4c17-90fb-07cda1325437</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">de33293d-71f7-4610-8f9f-afa7163a102b</item>
                             <item name="Name" type_name="gh_string" type_code="10">DesignData</item>
                             <item name="NickName" type_name="gh_string" type_code="10">DesignData</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -219,7 +219,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">rhinoscriptsyntax geometry</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">1fdc623a-ba59-4688-9a05-edcb9a954f7f</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">aeb27736-4698-439f-aadd-a5778c31da06</item>
                             <item name="Name" type_name="gh_string" type_code="10">ComponentData</item>
                             <item name="NickName" type_name="gh_string" type_code="10">ComponentData</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -253,7 +253,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">rhinoscriptsyntax geometry</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">50788d42-7c5b-4662-b54c-06a1937ba4fa</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">4cc95237-ddab-464e-a31a-ded450f057ef</item>
                             <item name="Name" type_name="gh_string" type_code="10">AdditionalGeometryData</item>
                             <item name="NickName" type_name="gh_string" type_code="10">AdditionalGeometryData</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
@@ -287,7 +287,7 @@
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">rhinoscriptsyntax geometry</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">084ecc46-e6c5-44f7-8c36-8c0c848a378b</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">889e28cd-c859-46ec-bdce-f3d1240906eb</item>
                             <item name="Name" type_name="gh_string" type_code="10">AdditionalGeometry</item>
                             <item name="NickName" type_name="gh_string" type_code="10">AdditionalGeometry</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
