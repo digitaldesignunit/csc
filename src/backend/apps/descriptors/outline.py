@@ -16,11 +16,13 @@ signature was originally built on.
 
 Meshes are cut exactly: `trimesh.Trimesh.section` returns the true
 cross-section, concavities and all. Only the PCA centre plane is used; a
-different height would be a different section. If that plane misses -
-typical of an open scanned surface whose faces lie in the cut plane - the
-outline falls back to the concave hull of the vertices in XY, which is the
-same silhouette a mid-plane cut would have produced on a solid of that
-footprint.
+different height would be a different section. A watertight cut yields a
+simple closed loop, which is kept. An open scan yields open polylines;
+those intersection points are wrapped in a convex hull so the boundary is
+simple and the centroid lies inside (a gappy polyline closed by a chord
+can miss rays). If the plane misses entirely - typical of an open surface
+whose faces lie in the cut plane - the outline falls back to the concave
+hull of the vertices in XY.
 Extrusions are turned into meshes and cut the same way, because an
 extrusion's own profile lies in its extrusion frame, which is only the PCA
 plane when the extrusion axis happens to be the shortest one. Point clouds
@@ -42,7 +44,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import numpy as np
 import trimesh
-from shapely import MultiPoint, concave_hull
+from shapely import MultiPoint, Polygon, concave_hull
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.descriptors import radial_signature as rs
@@ -197,6 +199,58 @@ def _polygon_area(xy: np.ndarray) -> float:
     return 0.5 * abs(float(cross))
 
 
+def _is_closed_loop(loop: np.ndarray) -> bool:
+    return bool(np.allclose(loop[0], loop[-1], atol=_CLOSED_EPS))
+
+
+def _loop_is_simple_polygon(loop: np.ndarray) -> bool:
+    """True when `loop` is a simple, valid polygon the centroid can sit in."""
+    try:
+        poly = Polygon(loop)
+    except Exception:
+        return False
+    return (
+        poly.geom_type == 'Polygon'
+        and (not poly.is_empty)
+        and poly.is_valid
+        and poly.is_simple
+    )
+
+
+def _radial_rays_all_hit(outline: List[List[float]]) -> bool:
+    """True when every radial-signature ray hits `outline`.
+
+    A simple closed section can still fail the descriptor: a C-shape puts
+    its centroid in the opening, and a nearly-closed scan loop can leave a
+    crack that one of 32 rays slips through. Convex hull of the same points
+    is star-convex from its centroid, so those cases fall back to that.
+    """
+    try:
+        rs.compute_radial_signatures(outline, rest_align=False)
+    except Exception:
+        return False
+    return True
+
+
+def _convex_outline_from_xy(xy: np.ndarray) -> List[List[float]]:
+    """Closed convex hull of 2D section (or silhouette) points."""
+    pts = np.asarray(xy, dtype=np.float64)
+    pts = pts[np.isfinite(pts).all(axis=1)]
+    pts = np.unique(np.round(pts, 9), axis=0)
+    if len(pts) < 3:
+        raise ValueError(
+            f'Section collapses to {len(pts)} distinct points, '
+            f'too few for an outline'
+        )
+    hull = MultiPoint(pts).convex_hull
+    if hull.geom_type != 'Polygon' or hull.is_empty:
+        raise ValueError(
+            f'Convex hull of the section degenerated to {hull.geom_type}'
+        )
+    loop = np.asarray(hull.exterior.coords, dtype=np.float64)
+    return _finalize_outline(loop)
+
+
 def _largest_loop(loops: Sequence[np.ndarray]) -> Optional[np.ndarray]:
     """Pick the outer boundary from a set of candidate 2D loops.
 
@@ -208,10 +262,7 @@ def _largest_loop(loops: Sequence[np.ndarray]) -> Optional[np.ndarray]:
     usable = [lp for lp in usable if lp.ndim == 2 and len(lp) >= 3]
     if not usable:
         return None
-    closed = [
-        lp for lp in usable
-        if np.allclose(lp[0], lp[-1], atol=_CLOSED_EPS)
-    ]
+    closed = [lp for lp in usable if _is_closed_loop(lp)]
     candidates = closed or usable
     return max(candidates, key=_polygon_area)
 
@@ -257,6 +308,24 @@ def _loops_from_section(section: object) -> List[np.ndarray]:
     return loops
 
 
+def _section_xy_points(section: object) -> np.ndarray:
+    """Every unique intersection vertex of a Path3D section, as XY.
+
+    Open scan meshes typically section into two-point line fragments, which
+    `_loops_from_section` ignores. The vertices of those fragments are still
+    the true mid-plane outline; a convex hull of them is a closed boundary.
+    """
+    vertices = getattr(section, 'vertices', None)
+    if vertices is not None:
+        arr = np.asarray(vertices, dtype=np.float64)
+        if arr.ndim == 2 and arr.shape[1] >= 2 and len(arr) >= 3:
+            return arr[:, :2]
+    loops = _loops_from_section(section)
+    if not loops:
+        return np.empty((0, 2), dtype=np.float64)
+    return np.vstack(loops)
+
+
 def _outline_from_mesh_vertices(
     mesh: trimesh.Trimesh,
     concavity: float,
@@ -299,7 +368,9 @@ def section_outline_from_mesh(
         mesh: PCA-aligned mesh, i.e. shortest principal axis on world Z.
         logger: optional progress logger.
         concavity: hull ratio used only if the centre plane misses, i.e. on
-            open scanned surfaces that lie in the section plane.
+            open scanned surfaces that lie in the section plane. Open
+            polylines from a successful cut are wrapped in a convex hull
+            instead; this argument does not apply to that path.
 
     Returns:
         List of [x, y] vertices describing the closed outer boundary.
@@ -328,14 +399,35 @@ def section_outline_from_mesh(
         section = None
         last_empty_reason = str(exc)
     if section is not None:
-        loop = _largest_loop(_loops_from_section(section))
-        if loop is None:
-            last_empty_reason = 'intersection produced no usable loop'
-        else:
+        loops = _loops_from_section(section)
+        closed = [
+            lp for lp in loops
+            if _is_closed_loop(lp) and _loop_is_simple_polygon(lp)
+        ]
+        hull_reason: Optional[str] = None
+        if closed:
             try:
-                return _finalize_outline(loop)
+                outline = _finalize_outline(max(closed, key=_polygon_area))
             except ValueError as exc:
                 last_empty_reason = str(exc)
+            else:
+                if _radial_rays_all_hit(outline):
+                    return outline
+                hull_reason = (
+                    'closed section is not star-convex from its centroid'
+                )
+        points = _section_xy_points(section)
+        if len(points) >= 3:
+            logger(
+                f'{hull_reason or "open section"}; using convex hull of '
+                f'{len(points)} intersection points'
+            )
+            try:
+                return _convex_outline_from_xy(points)
+            except ValueError as exc:
+                last_empty_reason = str(exc)
+        else:
+            last_empty_reason = 'intersection produced no usable loop'
 
     try:
         return _outline_from_mesh_vertices(mesh, concavity, logger)

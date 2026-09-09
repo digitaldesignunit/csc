@@ -254,6 +254,45 @@ def test_mesh_section_rejects_collinear_vertices():
         section_outline_from_mesh(flat)
 
 
+def _open_c_wall_mesh():
+    """Open C-shaped wall spanning z=0. The centre cut is an open polyline."""
+    angles = np.linspace(0.4 * np.pi, 1.6 * np.pi, 48)
+    xy = np.column_stack([50.0 * np.cos(angles), 50.0 * np.sin(angles)])
+    n = len(xy)
+    vertices = np.vstack([
+        np.column_stack([xy, np.full(n, -8.0)]),
+        np.column_stack([xy, np.full(n, 8.0)]),
+    ])
+    faces = []
+    for i in range(n - 1):
+        faces.append([i, i + 1, n + i + 1])
+        faces.append([i, n + i + 1, n + i])
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+
+
+def test_open_mesh_section_hulls_intersection_points():
+    logs = []
+    outline = section_outline_from_mesh(
+        _open_c_wall_mesh(), logger=logs.append)
+    assert any('convex hull' in message for message in logs)
+    rs.compute_radial_signatures(outline, rest_align=False)
+
+
+def test_closed_section_that_misses_a_ray_falls_back_to_convex_hull():
+    """A C-shaped solid has a simple closed cut whose centroid sits in the
+    opening, so one or more radial rays miss. Hull the section points."""
+    profile = [
+        [0, 0], [100, 0], [100, 100], [80, 100],
+        [80, 20], [20, 20], [20, 100], [0, 100],
+    ]
+    logs = []
+    outline = section_outline_from_mesh(
+        create_mesh_from_extrusion(profile, 10.0), logger=logs.append)
+    assert any('convex hull' in message for message in logs)
+    rs.compute_radial_signatures(outline, rest_align=False)
+    assert _area(outline) > 8000.0
+
+
 # POINT CLOUD SECTIONING -----------------------------------------------------
 
 def test_flattened_cloud_recovers_the_concavity():
