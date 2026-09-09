@@ -595,8 +595,8 @@ async def get_identities_map(
     source: MapSource = Query(
         'auto',
         description=(
-            'auto=prefer cache for the default catalog scope; '
-            'cache=cache only; live=recompute now'
+            'auto/cache=read component_map_cache only (default scope); '
+            'live=recompute now'
         ),
     ),
     comptype: str = Query(''),
@@ -619,7 +619,8 @@ async def get_identities_map(
     Embed current-snapshot descriptors into 2D for the Component Map page.
 
     Default catalog scope layouts are precomputed by ``main_component_map.py``
-    into ``component_map_cache``. ``source=auto`` serves those when present.
+    into ``component_map_cache``. ``source=auto`` / ``cache`` serve those only
+    (no surprise live recompute). Pass ``source=live`` to compute on demand.
 
     Components missing the chosen descriptor basis are omitted from
     ``points``; ``displayed`` / ``total`` report coverage.
@@ -642,8 +643,11 @@ async def get_identities_map(
         bbx_max_z=bbx_max_z,
     )
 
+    cache_col = getattr(request.app, 'mongodb_component_map_cache', None)
+    if cache_col is None:
+        cache_col = request.app.mongodb['component_map_cache']
+
     if source in ('auto', 'cache') and default_scope:
-        cache_col = request.app.mongodb_component_map_cache
         doc_id = cache_doc_id(
             basis,
             method,
@@ -660,16 +664,7 @@ async def get_identities_map(
                 status_code=200,
                 content=payload_from_cache_doc(cached),
             )
-        if source == 'cache':
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    f'No cached map for {doc_id}. '
-                    'Run main_component_map.py or use source=live.'
-                ),
-            )
-        # auto + cache miss: for umap, prefer a cached pca sibling over a
-        # slow live UMAP; for pca, fall through to live compute.
+        # Prefer a cached PCA sibling over a slow live embed.
         if method == 'umap':
             pca_id = cache_doc_id(
                 basis,
@@ -686,12 +681,29 @@ async def get_identities_map(
                 payload['requested_method'] = method
                 return JSONResponse(status_code=200, content=payload)
 
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f'No cached map for {doc_id}. '
+                'Run main_component_map.py or use source=live.'
+            ),
+        )
+
     if source == 'cache':
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 'source=cache only supports the default catalog scope '
                 '(active + validated, no extra filters)'
+            ),
+        )
+
+    if source != 'live':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                'Non-default filters require source=live '
+                '(or use the default active/validated scope with cache)'
             ),
         )
 
@@ -735,18 +747,12 @@ async def get_identities_map(
             detail='Internal server error',
         )
 
-    # Avoid surprise multi-minute request timeouts: auto/live umap outside
-    # cache falls back to PCA unless the caller forced source=live.
-    live_method: MapMethod = method
-    if source == 'auto' and method == 'umap':
-        live_method = 'pca'
-
     try:
         payload = await asyncio.to_thread(
             build_component_map,
             docs,
             basis=basis,
-            method=live_method,
+            method=method,
         )
     except RuntimeError as exc:
         raise HTTPException(

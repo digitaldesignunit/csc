@@ -302,6 +302,21 @@ def build_component_map(
 
 def payload_from_cache_doc(doc: Mapping[str, Any]) -> Dict[str, Any]:
     """Strip Mongo bookkeeping and mark the payload as cached."""
+    points_raw = doc.get('points') or []
+    points: List[Dict[str, Any]] = []
+    if isinstance(points_raw, list):
+        for row in points_raw:
+            if not isinstance(row, Mapping):
+                continue
+            points.append({
+                'id': str(row.get('id') or ''),
+                'x': float(row.get('x', 0.0)),
+                'y': float(row.get('y', 0.0)),
+                'name': row.get('name'),
+                'type': row.get('type'),
+                'catalog_number': row.get('catalog_number'),
+                'color': row.get('color'),
+            })
     return {
         'basis': doc['basis'],
         'basis_label': doc.get('basis_label') or basis_label(doc['basis']),
@@ -309,7 +324,7 @@ def payload_from_cache_doc(doc: Mapping[str, Any]) -> Dict[str, Any]:
         'requested_method': doc.get('requested_method', doc['method']),
         'total': int(doc.get('total', 0)),
         'displayed': int(doc.get('displayed', 0)),
-        'points': list(doc.get('points') or []),
+        'points': points,
         'cached': True,
         'source': 'cache',
         'computed_at': doc.get('computed_at'),
