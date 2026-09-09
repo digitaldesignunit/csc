@@ -76,19 +76,25 @@ if [ -n "$REQUESTED_TAG" ]; then
   TAG_NAME="$REQUESTED_TAG"
 else
   echo "GIT: Finding latest ${TAG_PREFIX}* release..."
-  # List releases and pick the newest tag starting with frontend-
-  auth_curl "${API_BASE}/releases?per_page=30" > "$RELEASE_JSON"
+  # GitHub lists releases by tag name, not date — sort by published_at ourselves.
+  auth_curl "${API_BASE}/releases?per_page=100" > "$RELEASE_JSON"
   TAG_NAME=$(python3 - "$RELEASE_JSON" "$TAG_PREFIX" <<'PY'
 import json, sys
 path, prefix = sys.argv[1], sys.argv[2]
 releases = json.load(open(path, encoding="utf-8"))
-for rel in releases:
-    tag = rel.get("tag_name") or ""
-    if tag.startswith(prefix) and not rel.get("draft") and not rel.get("prerelease"):
-        print(tag)
-        break
-else:
+candidates = [
+    rel for rel in releases
+    if (rel.get("tag_name") or "").startswith(prefix)
+    and not rel.get("draft")
+    and not rel.get("prerelease")
+]
+if not candidates:
     sys.exit("No published release found with tag prefix " + prefix)
+candidates.sort(
+    key=lambda rel: rel.get("published_at") or rel.get("created_at") or "",
+    reverse=True,
+)
+print(candidates[0]["tag_name"])
 PY
 )
   echo "GIT: Selected tag ${TAG_NAME}"
