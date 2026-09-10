@@ -48,7 +48,7 @@ const MAX_ZOOM = 12
 const TRANSITION_MS = 700
 const ENTER_STAGGER_MS = 12
 const CANVAS_HEIGHT_CLASS =
-  'h-[min(52dvh,380px)] sm:h-[min(60vh,520px)] md:h-[min(70vh,720px)]'
+  'h-[min(42dvh,320px)] md:h-full md:min-h-0 md:flex-1'
 
 type ViewBox = { minX: number; minY: number; width: number; height: number }
 type Camera = { x: number; y: number; k: number }
@@ -774,14 +774,19 @@ export default function ComponentMapPageClient() {
   const previewId = previewPoint?.id || ''
 
   return (
-    <div className="container mx-auto max-w-full space-y-4 overflow-x-hidden p-4 sm:space-y-6 sm:p-6">
-      <div className="mb-2 space-y-3 sm:mb-6">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <MapIcon className="h-5 w-5 shrink-0 text-primary sm:h-6 sm:w-6" />
-            <h1 className="text-xl font-bold sm:text-2xl">Component Map</h1>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+    <div className="mx-auto flex max-w-full flex-col overflow-x-hidden p-3 md:h-[calc(100dvh-6.5rem)] md:min-h-0 md:p-4">
+      <div className="mb-2 flex shrink-0 items-center gap-2">
+        <MapIcon className="h-5 w-5 shrink-0 text-primary" />
+        <h1 className="text-lg font-bold sm:text-xl">Component Map</h1>
+        <p className="hidden min-w-0 truncate text-sm text-muted-foreground md:block">
+          Arranged by descriptor similarity
+        </p>
+      </div>
+
+      <Card className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden py-0">
+        <CardHeader className="flex flex-col gap-2 space-y-0 px-3 py-2.5 sm:px-4 md:flex-row md:flex-wrap md:items-center md:gap-x-4 md:gap-y-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <CardTitle className="text-sm sm:text-base">Layout</CardTitle>
             <ToggleGroup
               type="single"
               value={method}
@@ -803,7 +808,7 @@ export default function ComponentMapPageClient() {
               value={basis}
               onValueChange={(value) => setBasis(value as ComponentMapBasis)}
             >
-              <SelectTrigger className="w-full sm:w-[220px]">
+              <SelectTrigger className="h-8 w-full sm:w-[200px]">
                 <SelectValue placeholder="Feature basis" />
               </SelectTrigger>
               <SelectContent>
@@ -812,32 +817,28 @@ export default function ComponentMapPageClient() {
               </SelectContent>
             </Select>
           </div>
-        </div>
-        <p className="text-sm text-muted-foreground sm:text-base">
-          Components arranged by descriptor similarity. Switch layout or basis to
-          re-arrange the map.
-        </p>
-      </div>
-
-      <Card className="overflow-hidden">
-        <CardHeader className="space-y-1 px-4 pb-3 pt-4 sm:px-6 sm:pt-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-base">Layout</CardTitle>
-            {(loading || switching) && (
+          <div className="min-w-0 flex-1 md:text-right">
+            {(loading || switching) ? (
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 {switching ? 'Switching layout…' : 'Loading map…'}
               </span>
-            )}
-            {cacheNote && !loading && !switching && (
-              <span className="text-xs text-muted-foreground">{cacheNote}</span>
+            ) : (
+              <CardDescription
+                className={cn(
+                  'text-xs',
+                  error && 'text-amber-700 dark:text-amber-300',
+                )}
+              >
+                {error
+                  ? `${coverage ? `${coverage}. ` : ''}${error}`
+                  : [coverage, cacheNote].filter(Boolean).join(' · ') ||
+                    'Loading coverage…'}
+              </CardDescription>
             )}
           </div>
-          <CardDescription className={cn('text-xs sm:text-sm', error && 'text-amber-700 dark:text-amber-300')}>
-            {error ? `${coverage ? `${coverage}. ` : ''}${error}` : coverage || 'Loading coverage…'}
-          </CardDescription>
         </CardHeader>
-        <CardContent className="px-3 pb-3 sm:px-6 sm:pb-4">
+        <CardContent className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-0 sm:px-4 sm:pb-4">
           {data && data.points.length > 0 ? (
             <ComponentMapCanvas
               points={data.points}

@@ -49,10 +49,10 @@ export default function CookieSettingsSection() {
       <CardContent className="space-y-6">
         {/* Current Status */}
         <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
-          <h4 className="font-medium mb-2 text-green-800 dark:text-green-200">✅ Privacy-Friendly Approach</h4>
+          <h4 className="font-medium mb-2 text-green-800 dark:text-green-200">Privacy-Friendly Approach</h4>
           <p className="text-sm text-green-700 dark:text-green-300">
             We only use technically necessary cookies. No tracking, no analytics, no marketing cookies! 
-            Your privacy is protected by default. 🛡️
+            Your privacy is protected by default.
           </p>
         </div>
 
@@ -77,10 +77,10 @@ export default function CookieSettingsSection() {
           <div className="p-4 border rounded-lg bg-muted/30">
             <h4 className="font-medium mb-2">What We DON&apos;T Use</h4>
             <ul className="text-sm text-muted-foreground space-y-1 ml-4">
-              <li>❌ No analytics or tracking cookies</li>
-              <li>❌ No advertising or marketing cookies</li>
-              <li>❌ No third-party tracking scripts</li>
-              <li>❌ No social media tracking pixels</li>
+              <li>• No analytics or tracking cookies</li>
+              <li>• No advertising or marketing cookies</li>
+              <li>• No third-party tracking scripts</li>
+              <li>• No social media tracking pixels</li>
             </ul>
           </div>
         </div>

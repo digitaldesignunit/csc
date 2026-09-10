@@ -38,7 +38,7 @@ export default function ImprintPage() {
           <CardContent className="space-y-4 text-base leading-relaxed">
             <div className="space-y-2">
               <p><strong>©</strong> Max Benjamin Eschenbach 2024-2026</p>
-              <p><strong>E-Mail:</strong> <a href="mailto:eschenbach@dg.tu-darmstadt.de" className="text-blue-500 underline">eschenbach@dg.tu-darmstadt.de</a></p>
+              <p><strong>E-Mail:</strong> <a href="mailto:max.eschenbach@tu-darmstadt.de" className="text-blue-500 underline">max.eschenbach@tu-darmstadt.de</a></p>
               <div className="mt-4 space-y-1">
                 <p>Fachgebiet Digitales Gestalten (Digital Design Unit, DDU)</p>
                 <p>TU Darmstadt</p>

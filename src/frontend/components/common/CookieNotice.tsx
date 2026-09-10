@@ -32,38 +32,31 @@ export default function CookieNotice() {
   if (!showBanner) return null
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 p-2">
-      <Card className="mx-auto max-w-2xl border-2 shadow-lg bg-background/95 backdrop-blur-sm">
-        <CardContent className="p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-            <div className="flex items-center gap-2 flex-1">
-              <Cookie className="h-8 w-8 text-amber-600 flex-shrink-0 animate-bounce" />
-              <div className="text-sm">
-                <p className="font-bold text-lg">🍪 Can I has cookie?</p>
-                <p className="text-muted-foreground">
-                  We only use technically necessary cookies.
-                  Since this might change in the future,
-                  I am asking you, pretty please?
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-1 w-full sm:w-auto">
-              <Button
-                size="sm"
-                onClick={handleAccept}
-                className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700"
-              >
-                🍪 OM NOM NOM!
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleDismiss}
-                className="w-full sm:w-auto"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+    <div className="fixed bottom-0 left-0 right-0 z-50 p-2 pointer-events-none">
+      <Card className="mx-auto max-w-xl border shadow-md bg-background/95 backdrop-blur-sm pointer-events-auto">
+        <CardContent className="p-2.5">
+          <div className="flex items-center gap-2">
+            <Cookie className="h-4 w-4 text-amber-600 flex-shrink-0" />
+            <p className="text-xs text-muted-foreground flex-1 leading-snug">
+              <span className="font-semibold text-foreground">Can I has cookie?</span>
+              {' '}We only use technically necessary cookies. Since this might change in the future, I am asking you, pretty please?
+            </p>
+            <Button
+              size="sm"
+              onClick={handleAccept}
+              className="h-7 px-2.5 text-xs bg-amber-600 hover:bg-amber-700 flex-shrink-0"
+            >
+              Accept
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleDismiss}
+              className="h-7 w-7 flex-shrink-0"
+              aria-label="Dismiss cookie notice"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </CardContent>
       </Card>

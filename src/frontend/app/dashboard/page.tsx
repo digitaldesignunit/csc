@@ -237,7 +237,7 @@ export default function DashboardPage() {
               Get help with using the system or report issues.
             </p>
             <div className="mt-auto pt-4">
-              <Link href={`mailto:eschenbach@dg.tu-darmstadt.de?subject=[CSC]%20Support%20Request%20by%20user%20'${username}'&body=Please%20describe%20the%20issue%20you%20are%20facing%20in%20detail.%20Include%20any%20error%20messages%20or%20logs%20you%20have%20received.`}>
+              <Link href={`mailto:max.eschenbach@tu-darmstadt.de?subject=[CSC]%20Support%20Request%20by%20user%20'${username}'&body=Please%20describe%20the%20issue%20you%20are%20facing%20in%20detail.%20Include%20any%20error%20messages%20or%20logs%20you%20have%20received.`}>
                 <Button className="w-full" variant="outline">
                   Get Help!
                 </Button>

@@ -1345,7 +1345,7 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
           <li>• Check the component runtime messages for error details</li>
           <li>• Ensure you&apos;re properly authenticated with <strong>CSC_Session</strong></li>
           <li>• Verify your internet connection for API access</li>
-          <li>• Contact <a href={`mailto:eschenbach@dg.tu-darmstadt.de?subject=[CSC]%20Support%20Request%20by%20user&body=Please%20describe%20the%20issue%20you%20are%20facing%20in%20detail.%20Include%20any%20error%20messages%20or%20logs%20you%20have%20received.`} className='text-blue-500 underline'>Max</a> via e-mail or various messenger apps</li>
+          <li>• Contact <a href={`mailto:max.eschenbach@tu-darmstadt.de?subject=[CSC]%20Support%20Request%20by%20user&body=Please%20describe%20the%20issue%20you%20are%20facing%20in%20detail.%20Include%20any%20error%20messages%20or%20logs%20you%20have%20received.`} className='text-blue-500 underline'>Max</a> via e-mail or various messenger apps</li>
         </ul>
       </div>
     </div>

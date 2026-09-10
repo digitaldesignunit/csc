@@ -1,6 +1,20 @@
 import BackgroundMesh from '@/components/components/BackgroundMesh'
+import BibtexCitation from '@/components/credits/BibtexCitation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Award, Users, Code, ExternalLink, BookOpen } from 'lucide-react'
+
+const CSC_BIBTEX = `@software{eschenbach_catalog_2026,
+	title = {Catalog of {Second} {Chances} ({CSC}) - {Digital} {Database} and {Corresponding} {Interfaces} for {ReUse} of {Architectural} {Components}},
+	copyright = {MIT License, Copyright (C) 2024-2026 by the Authors},
+	url = {https://zenodo.org/doi/10.5281/zenodo.20156666},
+	doi = {10.5281/ZENODO.20156666},
+	abstract = {The Catalog of Second Chances (CSC) provides a prototypical platform and the corresponding tools to leverage a database of uniquely identified, digitized architectural components for creating designs that reuse these components.},
+	publisher = {Zenodo},
+	author = {Eschenbach, Max Benjamin},
+	month = may,
+	year = {2026},
+	note = {Language: en},
+}`
 
 export default function CreditsPage() {
   return (
@@ -39,10 +53,14 @@ export default function CreditsPage() {
           <CardContent className="space-y-4 text-base leading-relaxed">
             <p>
               This piece of software and the underlying research is part of the
-              PhD thesis of <a href='https://www.researchgate.net/profile/Max-Eschenbach' target='_blank' className='text-blue-500 underline'>Max Benjamin Eschenbach</a> at
+              PhD thesis <em>Collaborative Computational Reuse</em> of <a href='https://www.researchgate.net/profile/Max-Eschenbach' target='_blank' className='text-blue-500 underline'>Max Benjamin Eschenbach</a> at
               the <a href='https://www.dg.architektur.tu-darmstadt.de/fachgebiet_ddu/index.de.jsp' target='_blank' className='text-blue-500 underline'>Digital Design Unit (DDU)</a>
               , supervised and chaired by Prof. Dr.-Ing. Oliver Tessmann, at the <a href='https://www.tu-darmstadt.de/' target='_blank' className='text-blue-500 underline'>Technical University of Darmstadt</a>.
             </p>
+            <p>
+              If you want to reference or cite this work, please use the following BibTeX entry:
+            </p>
+            <BibtexCitation bibtex={CSC_BIBTEX} />
           </CardContent>
         </Card>
 
