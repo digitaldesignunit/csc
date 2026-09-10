@@ -43,9 +43,9 @@ export function getDms2026PublicDemoBanner(identityId: string) {
       <img
         src={dms26BackgroundSrc()}
         alt=""
-        className="absolute inset-0 w-full object-cover opacity-65"
+        className="absolute inset-0 w-full h-full object-cover"
       />
-      <div className="absolute inset-0 bg-black/25" />
+      <div className="absolute inset-0" />
       <div className="relative">
         <p className="font-medium">Design Modelling Symposium 2026 - Public Demo View</p>
         <p className="mt-1 text-sm text-white/90">
