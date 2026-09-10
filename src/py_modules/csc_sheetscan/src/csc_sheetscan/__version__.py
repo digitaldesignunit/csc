@@ -5,7 +5,7 @@ __description__ = (
 __url__ = "about:blank"
 __version__ = "0.0.1.11"
 __author__ = "Max Benjamin Eschenbach, Digital Design Unit (DDU)"
-__author_email__ = "eschenbach@dg.tu-darmstadt.de"
+__author_email__ = "max.eschenbach@tu-darmstadt.de"
 __license__ = "MIT License"
 __copyright__ = (
     "Copyright 2024 Max Benjamin Eschenbach, Digital Design Unit (DDU)"
