@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { Children, type ReactNode } from 'react'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
 import { ComponentLocation } from '@/generated/CatalogSharedTypes'
@@ -24,6 +24,7 @@ type ComponentDetailPageLayoutProps = {
   activeSnapshotId: string
   liveSnapshotId: string
   childIdentities?: CatalogShallowRow[]
+  publicDemoBanner?: ReactNode
   children: ReactNode
 }
 
@@ -33,6 +34,7 @@ export default function ComponentDetailPageLayout({
   activeSnapshotId,
   liveSnapshotId,
   childIdentities = [],
+  publicDemoBanner,
   children,
 }: ComponentDetailPageLayoutProps) {
   const { data: session } = useSession()
@@ -55,21 +57,26 @@ export default function ComponentDetailPageLayout({
         'lg:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)]',
       )}
     >
-      {isPublicDemoView && (
-        <div
-          role="status"
-          className="[grid-area:banner] rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 text-sky-950 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-100"
-        >
-          <p className="font-medium">Public demo view</p>
-          <p className="mt-1 text-sm text-sky-900/90 dark:text-sky-100/90">
-            This component is shared without login.{' '}
-            <Link href="/auth/signin" className="font-medium underline underline-offset-4 hover:no-underline">
-              Sign in
-            </Link>{' '}
-            for catalog actions and reservation workflows.
-          </p>
-        </div>
-      )}
+      {isPublicDemoView
+        ? publicDemoBanner != null
+          ? Children.toArray(publicDemoBanner)
+          : (
+            <div
+              key="public-demo-banner"
+              role="status"
+              className="[grid-area:banner] rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 text-sky-950 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-100"
+            >
+              <p className="font-medium">Public demo view</p>
+              <p className="mt-1 text-sm text-sky-900/90 dark:text-sky-100/90">
+                This component is shared without login.{' '}
+                <Link href="/auth/signin" className="font-medium underline underline-offset-4 hover:no-underline">
+                  Sign in
+                </Link>{' '}
+                for catalog actions and reservation workflows.
+              </p>
+            </div>
+          )
+        : null}
 
       <div className="contents 2xl:flex 2xl:min-w-0 2xl:flex-col 2xl:gap-4 2xl:[grid-area:stage]">
         <div className="min-w-0 [grid-area:viewer]">{children}</div>
