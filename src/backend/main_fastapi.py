@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.13
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os
@@ -15,6 +15,12 @@ from slowapi.errors import RateLimitExceeded
 
 # LOCAL IMPORTS (pre-app) -----------------------------------------------------
 from limiter import limiter
+from apps.catalog.client_header import (
+    ClientHeaderLogMiddleware,
+    configure_client_log,
+)
+from apps.catalog.api.catalog_common import ensure_catalog_number_counter
+from csc_version import CSC_VERSION
 
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -63,6 +69,12 @@ if _missing:
 # FASTAPI SETUP ---------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # --- Client identification log (X-CSC-Client, spec §7.4) ---------------
+    configure_client_log(os.getenv(
+        'CLIENT_LOG_PATH',
+        os.path.join(os.path.dirname(__file__), 'logs', 'client_versions.log'),
+    ))
+
     # --- JWT config ----------------------------------------------------------
     app.state.jwt_secret = os.environ['JWT_SECRET']
     app.state.jwt_algorithm = os.getenv('JWT_ALGORITHM', 'HS256')
@@ -93,6 +105,7 @@ async def lifespan(app: FastAPI):
     # Create helpful indexes (idempotent)
     await app.mongodb_users.create_index('email', unique=True)
     await app.mongodb_users.create_index('username', unique=True)
+    await ensure_catalog_number_counter(app.mongodb)
 
     # --- Directories ---------------------------------------------------------
     app.snapshot_preview_dir = get_snapshot_preview_directory()
@@ -132,7 +145,7 @@ app = FastAPI(
         'Backend API for Catalog of Second Chances. '
         'FastAPI + MongoDB (async).'
     ),
-    version='0.5.0.0',
+    version=CSC_VERSION,
     lifespan=lifespan,
 )
 app.state.limiter = limiter
@@ -146,6 +159,9 @@ app.add_middleware(
     allow_methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
     allow_headers=['*'],
 )
+
+# Outermost: logs every request's X-CSC-Client header (0.5.1.0: log only)
+app.add_middleware(ClientHeaderLogMiddleware)
 
 # ROUTERS ---------------------------------------------------------------------
 # New, modern router structure under apps/catalog/api/*
