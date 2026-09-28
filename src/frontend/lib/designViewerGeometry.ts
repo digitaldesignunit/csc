@@ -16,7 +16,7 @@ import { snapshotMeshRoutingFromSnapshot } from '@/generated/catalogExtras'
 /**
  * Design-viewer geometry stays in Rhino Z-up (CSC canonical frame).
  * Placement/orientation is applied by DesignViewer.createTransformMatrix on
- * the parent group — do not rotate meshes here (unlike ComponentViewer at
+ * the parent group --- do not rotate meshes here (unlike ComponentViewer at
  * origin, which uses rotateX(-π/2) without an iframe matrix).
  */
 

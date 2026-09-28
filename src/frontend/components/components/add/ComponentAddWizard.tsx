@@ -429,7 +429,7 @@ export default function ComponentAddWizard() {
                   {isCheckingId ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      Checking availability…
+                      Checking availability...
                     </span>
                   ) : (
                     idCheckMessage || 'Enter a valid UUID.'
@@ -950,7 +950,7 @@ export default function ComponentAddWizard() {
                 {submitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating…
+                    Creating...
                   </>
                 ) : (
                   <>

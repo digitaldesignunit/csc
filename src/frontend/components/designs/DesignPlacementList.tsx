@@ -74,9 +74,9 @@ export default function DesignPlacementList({ placements }: DesignPlacementListP
                 <div className="font-small font-mono break-all">{placement.snapshot}</div>
                 <div className="text-sm text-muted-foreground">
                   {loading
-                    ? 'Loading snapshot…'
+                    ? 'Loading snapshot...'
                     : meta
-                      ? `${meta.name} (identity ${meta.identityId.slice(0, 8)}…)`
+                      ? `${meta.name} (identity ${meta.identityId.slice(0, 8)}...)`
                       : 'Snapshot metadata unavailable'}
                 </div>
                 <div className="text-sm text-muted-foreground">

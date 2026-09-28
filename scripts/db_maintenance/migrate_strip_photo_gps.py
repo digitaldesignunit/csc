@@ -5,8 +5,8 @@ Strip location and personal metadata from stored snapshot photos.
 Design decision 7.13 / data model spec §8.1 step 14. Every JPEG under the
 snapshot photos directory is rewritten to keep only orientation, capture time
 and camera make / model (the same whitelist as the upload pipeline,
-``apps.catalog.api.snapshot_images``). The pixels are not re-encoded — only
-the metadata segments change — so the script is safe to run repeatedly.
+``apps.catalog.api.snapshot_images``). The pixels are not re-encoded --- only
+the metadata segments change --- so the script is safe to run repeatedly.
 
 Files only; the database is not touched.
 
@@ -94,7 +94,7 @@ def main() -> int:
                 print(f'{"would clean" if args.dry_run else "cleaned"} '
                       f'{path}{"  (had GPS)" if had_gps else ""}')
 
-    mode = 'DRY RUN — nothing written. ' if args.dry_run else ''
+    mode = 'DRY RUN --- nothing written. ' if args.dry_run else ''
     print(f'{mode}{total} photos, {with_gps} with GPS, {changed} '
           f'{"to clean" if args.dry_run else "cleaned"}, {failed} failed')
     return 1 if failed else 0

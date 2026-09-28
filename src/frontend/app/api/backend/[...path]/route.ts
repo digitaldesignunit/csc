@@ -9,7 +9,7 @@ const FASTAPI_URL = process.env.FASTAPI_URL!
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET
 const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 MB
 
-// Geometry uploads (PUT/POST) must go directly to FastAPI — not via this proxy.
+// Geometry uploads (PUT/POST) must go directly to FastAPI --- not via this proxy.
 // GET downloads for the web viewer are proxied with the user's bearer token.
 const BLOCKED_UPLOAD_PATTERNS = [
   /^\/snapshots\/[^/]+\/meshes\/[^/]+\/reduced$/,

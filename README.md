@@ -29,7 +29,7 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.5.1.0 — backend, web frontend and Grasshopper interface are released together
+- **CSC**: 0.5.1.0 --- backend, web frontend and Grasshopper interface are released together
   under one version (tag `v0.5.1.0`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
@@ -38,8 +38,8 @@ See `CHANGELOG.md` for release notes.
 
 ## Local development and tests
 
-A complete local setup — MongoDB, FastAPI backend, Next.js frontend, test
-suite — that never touches production. Commands are for PowerShell on Windows;
+A complete local setup --- MongoDB, FastAPI backend, Next.js frontend, test
+suite --- that never touches production. Commands are for PowerShell on Windows;
 run them from the repository root unless stated otherwise.
 
 ### One-time setup
@@ -64,7 +64,7 @@ run them from the repository root unless stated otherwise.
    ```
 
    If an older `csc` env exists, remove it first (`conda env remove -n csc`).
-   Don't `conda rename` an env: pip's `.exe` launchers (`invoke`, `pytest`, …)
+   Don't `conda rename` an env: pip's `.exe` launchers (`invoke`, `pytest`, ...)
    keep the old path and fail with "Fatal error in launcher". After `csc_env.yml` or the
    requirements change: `conda env update -n csc -f csc_env.yml` (it adds and
    upgrades; to drop packages, recreate the env).
@@ -96,7 +96,7 @@ run them from the repository root unless stated otherwise.
 | terminal | command | serves |
 |---|---|---|
 | 1 | `invoke dev-backend` | FastAPI on http://127.0.0.1:8000 (API docs at `/docs`), auto-reload |
-| 2 | `cd src/frontend` then `npm run dev` | web app on http://localhost:3000 — log in with the account from step 5 |
+| 2 | `cd src/frontend` then `npm run dev` | web app on http://localhost:3000 --- log in with the account from step 5 |
 
 MongoDB needs no terminal: it is the Windows service. The Grasshopper
 UserObjects always talk to production (`CSC_Session` has no base-URL input yet).
@@ -117,7 +117,7 @@ Route tests are skipped with a message if no `mongod` is found.
 - **`[next-auth][error][CLIENT_FETCH_ERROR] ... "<!DOCTYPE" is not valid JSON`**
   (or "Jest worker encountered child process exceptions" in the dev server
   output): the Turbopack dev cache is broken. Stop `npm run dev`, delete
-  `src/frontend/.next`, start again. Run only one dev server per checkout — a
+  `src/frontend/.next`, start again. Run only one dev server per checkout --- a
   second one shares and corrupts the same cache.
 - **`Fatal error in launcher`** from `invoke` / `pytest`: the conda env was
   renamed or moved; recreate it (see step 2) or use `python -m invoke ...`. Every request
@@ -209,7 +209,7 @@ push is automated.
 **Cutting a release**
 
 1. On your working branch: `invoke bump-version --version 0.5.1.1` (add `--gh`
-   if the Grasshopper UserObjects changed — then re-export the changed
+   if the Grasshopper UserObjects changed --- then re-export the changed
    `.ghuser` / XML in Rhino). Fill in the new `CHANGELOG.md` section: it becomes
    the release notes.
 2. Open a PR into `main`; CI must pass (`.github/workflows/ci.yml`): backend
@@ -226,7 +226,7 @@ push is automated.
    `csc_release_deploy.sh v<v>` on Uberspace over a restricted SSH key: download
    and verify the bundles, unpack to `~/csc/releases/<v>/`, build a venv only if
    the requirements changed, switch `~/csc/current`, restart, health-check
-   (`/version` must report `<v>`, the frontend must answer) — or roll back to
+   (`/version` must report `<v>`, the frontend must answer) --- or roll back to
    the previous release by itself.
 
 **Grasshopper updates** come from the release the server runs: `CSC_Update` and
@@ -285,7 +285,7 @@ npx @next/codemod upgrade canary
 Uberspace runs services with _Supervisor_. The templates in
 `uberspaceconfig/etc/services.d/` run the active release from `~/csc/current`:
 copy `fastapi.ini.example` to `~/etc/services.d/fastapi.ini` and fill in the
-`environment=` block (it holds the backend's secrets and is gitignored — never
+`environment=` block (it holds the backend's secrets and is gitignored --- never
 commit a filled-in copy), copy `frontend.ini.example` to
 `~/etc/services.d/frontend.ini`, then `supervisorctl reread && supervisorctl
 update`. Deploys restart both services themselves.

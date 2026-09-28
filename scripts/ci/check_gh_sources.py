@@ -6,10 +6,10 @@ Check that changed Grasshopper component sources were released properly.
 
 For every file in grasshopper_userobjects_src/ that changed since --base:
 
-- its ``Version:`` declaration must have increased — CSC_Update compares these
+- its ``Version:`` declaration must have increased --- CSC_Update compares these
   to decide which UserObjects a user needs;
 - its compiled UserObject (grasshopper_userobjects/<name>.ghuser) and XML
-  export (grasshopper_userobjects_xml/<name>.xml) must have changed too — they
+  export (grasshopper_userobjects_xml/<name>.xml) must have changed too --- they
   are exported by hand in Rhino, and a forgotten export ships stale code.
 
 Without a usable --base (first push of a branch) the check is skipped.

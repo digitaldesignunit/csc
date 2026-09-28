@@ -12,7 +12,7 @@ PHOTO_EXTENSION = '.jpg'
 PHOTO_MEDIA_TYPE = 'image/jpeg'
 
 # EXIF kept on stored photos (design decision 7.13): orientation, capture
-# time and camera make / model. Everything else is dropped — GPS position,
+# time and camera make / model. Everything else is dropped --- GPS position,
 # artist, copyright, owner and serial numbers, maker notes, and any tag not
 # listed here. Photos are served to anonymous readers of public components.
 _KEEP_IFD0_TAGS = (

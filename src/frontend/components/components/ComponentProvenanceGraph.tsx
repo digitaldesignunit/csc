@@ -226,7 +226,7 @@ export default function ComponentProvenanceGraph({
   }
 
   if (nodes.length === 0) {
-    return <p className="p-4 text-sm text-muted-foreground">Preparing graph…</p>
+    return <p className="p-4 text-sm text-muted-foreground">Preparing graph...</p>
   }
 
   return (

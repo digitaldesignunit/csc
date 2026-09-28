@@ -32,7 +32,7 @@ def mongod():
         with MongoClient(external, serverSelectionTimeoutMS=5000) as client:
             if client['csc']['component_identities'].estimated_document_count():
                 pytest.exit('CSC_TEST_MONGODB_URI holds catalog data; route '
-                            'tests empty the database — use a disposable one')
+                            'tests empty the database --- use a disposable one')
         yield _ExternalMongo(external)
         return
     binary = find_mongod()

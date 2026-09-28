@@ -168,7 +168,7 @@ Rescanned from `grasshopper_userobjects_src/` (Python + C# script components). D
 | Icon | Meaning |
 | --- | --- |
 | yes | `svg/{NickName}.svg` exists (PNG export expected in `24x24/`) |
-| **missing** | No SVG source yet — needs artwork |
+| **missing** | No SVG source yet --- needs artwork |
 
 To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_icons/rasterize.py --check`
 
@@ -196,7 +196,7 @@ To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_i
 | `AddComponentIdentity` | yes | POSTs a new catalog identity (+ v0 snapshot) from `CreateComponentIdentity` JSON; uploads staged PLY meshes/point clouds; may consume a pending transmitted ID. |
 | `AddComponentSnapshot` | yes | POSTs a new snapshot for an existing identity from `CreateComponentSnapshot` JSON; uploads staged PLY mesh/point-cloud files. |
 | `AddDesign` | yes | Validates design JSON and POSTs a new design (component refs + embedded geometry) to the Catalog. |
-| `FetchAllComponents` | yes | GET `/identities` — fetches all identities joined with current snapshots as passport JSON `{identity, snapshots[]}`; cached. |
+| `FetchAllComponents` | yes | GET `/identities` --- fetches all identities joined with current snapshots as passport JSON `{identity, snapshots[]}`; cached. |
 | `FetchAllSnapshots` | yes | Fetches passport JSON with every snapshot for one identity (`{identity, snapshots[]}`); input can be a UUID or passport JSON. |
 | `FetchComponents` | yes | Fetches specific catalog components by identity ID; handles missing IDs; supports cache. |
 | `FetchDesign` | yes | Fetches a design and its pinned snapshot placements; applies the design iframe to each snapshot; returns design JSON, passport data, and extra geometry. |
@@ -218,7 +218,7 @@ To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_i
 | `CreateUUID` | yes | Generates and caches UUIDs; refresh input forces a new value. |
 | `DisassembleComponent` | yes | Splits passport JSON `{identity, snapshots[]}` into Grasshopper-native outputs: metadata, descriptors, PCA frame, bbox, reconstructed geometry. |
 | `GetComponentData` | yes | Reads `csc_component` passport JSON from Rhino geometry objects. |
-| `ApplyPCAFrame` | yes | Inverse PCA transform — aligns passport JSON or geometry to the world XY plane. |
+| `ApplyPCAFrame` | yes | Inverse PCA transform --- aligns passport JSON or geometry to the world XY plane. |
 | `TransformComponent` | yes | Applies a Rhino transform to a snapshot insertion frame in passport JSON. |
 
 ### 4 RhinoDoc Interaction

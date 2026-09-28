@@ -17,7 +17,7 @@ Coordinate contract
 One ``o`` / ``g`` object in the OBJ file becomes one ``Trimesh`` and one PLY
 at ``meshes/<snapshot_id>/<primitive_index>/{reduced|detailed}.ply``. Object
 order in the file must match ``geometry.meshes[0]``, ``geometry.meshes[1]``,
-… (e.g. Grasshopper ``o object_0``, ``o object_1`` in a single ``mesh.obj``).
+... (e.g. Grasshopper ``o object_0``, ``o object_1`` in a single ``mesh.obj``).
 """
 
 from __future__ import annotations

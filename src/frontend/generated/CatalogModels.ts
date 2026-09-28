@@ -54,7 +54,7 @@ export interface ComponentSnapshot {
   added_by_username?: string | unknown; // Username at create time (display cache for added_by_user_id)
   notes?: string | unknown; // Free-text notes for this snapshot state
   quantity?: number; // Number of identical physical items represented by this catalog entry (e.g. a batch of matching fixtures)
-  mesh_ply_resolutions?: Record<string, unknown> | unknown; // Which resolution files exist on disk per mesh primitive index (string keys '0', '1', … matching ``geometry.meshes``). Values list role names: typically 'reduced', optionally 'detailed'. Paths: ``meshes/<snapshot_id>/<i>/reduced.ply`` and ``.../detailed.ply``. Example: {'0': ['reduced', 'detailed']}.
+  mesh_ply_resolutions?: Record<string, unknown> | unknown; // Which resolution files exist on disk per mesh primitive index (string keys '0', '1', ... matching ``geometry.meshes``). Values list role names: typically 'reduced', optionally 'detailed'. Paths: ``meshes/<snapshot_id>/<i>/reduced.ply`` and ``.../detailed.ply``. Example: {'0': ['reduced', 'detailed']}.
   created: string; // ISO timestamp when this snapshot was created
   lastmodified: string; // ISO timestamp when this snapshot was last modified
 }

@@ -53,7 +53,7 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 - `X-CSC-Client: <client>/<version>` header sent by the web frontend
   (`web/0.5.1.0`) and the Grasshopper UserObjects (`gh-userobjects/0.5.1.0`,
   `CSC_Session` 260928); the backend logs every request's client to
-  `logs/client_versions.log` (logging only — 0.6 will reject outdated clients).
+  `logs/client_versions.log` (logging only --- 0.6 will reject outdated clients).
 - CI (`.github/workflows/ci.yml`): backend tests on a MongoDB container, server
   wheel check, deploy-script end-to-end test, frontend type check / lint /
   build, Grasshopper source checks (changed components need a version bump and
@@ -69,13 +69,13 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 
 - The old deploy scripts (`csc_deploy*.sh`), the server-side frontend build
   configs and the `frontend-standalone-release` / `grasshopper-folder-release`
-  workflows — replaced by the release workflow and `csc_release_deploy.sh`.
+  workflows --- replaced by the release workflow and `csc_release_deploy.sh`.
 
 ### Fixed
 
 - The Grasshopper interface download (web page, `/ghinterface/download`) and
   `/ghinterface/version` handed out the newest release of the whole repository
-  — a frontend bundle since `frontend-0.5.0.0-beta-1`. They now use the
+  --- a frontend bundle since `frontend-0.5.0.0-beta-1`. They now use the
   interface asset of the backend's own release.
 - `email-validator` was missing from `requirements.txt` although the user
   models need it; a fresh server venv would not have started.

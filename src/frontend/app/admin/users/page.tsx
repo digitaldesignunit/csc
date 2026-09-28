@@ -225,7 +225,7 @@ export default function AdminUsersPage() {
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by username, email, name, or ID…"
+            placeholder="Search by username, email, name, or ID..."
             className="max-w-md"
           />
 

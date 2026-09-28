@@ -1072,7 +1072,7 @@ def render_markdown(report: Dict[str, Any]) -> str:
             lines.append(f"| `{c['child_id']}` | `{c['parent_id']}` |")
         if len(cands) > 25:
             lines.append("")
-            lines.append(f"_…and {len(cands) - 25} more (see JSON report)._")
+            lines.append(f"_...and {len(cands) - 25} more (see JSON report)._")
         lines.append("")
 
     # Geometry

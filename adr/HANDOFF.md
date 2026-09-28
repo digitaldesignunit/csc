@@ -1,4 +1,4 @@
-# Handoff — CSC data model / evidence system design
+# Handoff --- CSC data model / evidence system design
 
 **Update 2026-09-28 (later):** 0.5.1.0 implemented in the working tree of `v-0.5.1.0`, uncommitted:
 Python 3.13, client header, EXIF strip, local test environment, **release + deploy pipeline
@@ -6,10 +6,10 @@ Python 3.13, client header, EXIF strip, local test environment, **release + depl
 Rhino, commits, PRs to main, runs the server conversion (`uberspaceconfig/deployment/README.md`),
 tags `v0.5.1.0`. Then P1 of the 0.6 plan.
 
-**Last session:** 2026-09-28 — consistency pass done (spec draft 4, decisions 8.1–8.4), LoW codes
+**Last session:** 2026-09-28 --- consistency pass done (spec draft 4, decisions 8.1–8.4), LoW codes
 verified, open data facts confirmed, **implementation plan drafted** (`adr/IMPLEMENTATION_PLAN_0.6.md`,
 under review: its §5 Q1–Q3). **Next step:** settle Q1–Q3, then start P0 (0.5.1.0).
-**Who:** fstwn (eschenbach@dg.tu-darmstadt.de), TU Darmstadt DG — sole maintainer of CSC.
+**Who:** fstwn (eschenbach@dg.tu-darmstadt.de), TU Darmstadt DG --- sole maintainer of CSC.
 
 ## 1. What this work is
 
@@ -20,12 +20,12 @@ release 0.5.0.0; the design targets **0.6.0.0 on branch `v-0.6.0.0`**.
 
 Threads merged into one spec:
 
-1. **Evidence system** — measurements (rebound hammer, cores) and non-instrumental claims as
+1. **Evidence system** --- measurements (rebound hammer, cores) and non-instrumental claims as
    attributable, time-pinned records on a component identity (sessions 2026-09-10 --> 13).
-2. **Generalised representation** — proxies with deviation maps, derived shape class, property
-   descriptors `{range, confidence, source}`. Precedent: M. Bernhard, *HYBREP* — **cited, never
+2. **Generalised representation** --- proxies with deviation maps, derived shape class, property
+   descriptors `{range, confidence, source}`. Precedent: M. Bernhard, *HYBREP* --- **cited, never
    used as a name**.
-3. **CPR 2024/3110 / DPP alignment** — CSC can *emit* a passport-shaped record (2026-09-12).
+3. **CPR 2024/3110 / DPP alignment** --- CSC can *emit* a passport-shaped record (2026-09-12).
 4. **Provenance, lifecycle, permissions, release path** (2026-09-23): `origin` / `exit`,
    lineage inheritance, tombstones, datasets as projects with memberships, snapshot freeze,
    client header, server-side derivation pipeline, materials vocabulary, Python 3.13.
@@ -37,22 +37,22 @@ Threads merged into one spec:
 
 | file | role |
 |---|---|
-| `adr/DATA_MODEL_SPEC.md` | **authoritative spec**, draft 4 (2026-09-28). §0 reading guide … §10 CPR/DPP, Appendices A (evidence payloads, A.4 reinforcement layout), B (proxy primitives). §9 = open questions (all struck through as decided). |
+| `adr/DATA_MODEL_SPEC.md` | **authoritative spec**, draft 4 (2026-09-28). §0 reading guide ... §10 CPR/DPP, Appendices A (evidence payloads, A.4 reinforcement layout), B (proxy primitives). §9 = open questions (all struck through as decided). |
 | `adr/DESIGN_DECISIONS.md` | decision log: 1.x evidence, 2.x property fold, 3.x geometry, 4.x classification, 5.x CPR proposals, 6.x provenance / permissions / release, **7.x entry surfaces / representation / scope (2026-09-24), **8.x consistency pass (2026-09-28)**. |
 | `CONTEXT.md` (repo root) | **glossary** (domain-modeling format): canonical terms + words to avoid. Created 2026-09-24. |
 | `adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1–P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; open Q1–Q3 |
 | `adr/HANDOFF.md` | this file |
-| `future_implementation/MEASUREMENTS_SPEC.md` | original measurement spec — superseded, kept for domain research and standards sources. Gitignored. |
+| `future_implementation/MEASUREMENTS_SPEC.md` | original measurement spec --- superseded, kept for domain research and standards sources. Gitignored. |
 | `future_implementation/IMPLEMENTATION_PLAN_V0-5+.md` | older plan; its 0.5.0.2 moderator section is **superseded by 6.5** |
 | `reference/pdf/Bernhard_HYBREP.pdf`, `reference/pdf/CPR_2024_3110.pdf` | sources. Gitignored. |
-| `mongodb_collections_local/260916/` | newest local dump (identities, snapshots, map cache — **no designs**) |
+| `mongodb_collections_local/260916/` | newest local dump (identities, snapshots, map cache --- **no designs**) |
 | `D:\01_PROJECT_WORKDATA\260916_CSC_ASSETS` | files for that dump (meshes, point clouds, photos, previews) |
 
 `adr/` and `CONTEXT.md` are untracked; nothing is committed yet.
 
 ## 3. Resume here
 
-**A. Grilling — done.** HANDOFF items 1–3 of 2026-09-23 closed by 7.1–7.13 (A.3 "designs × new
+**A. Grilling --- done.** HANDOFF items 1–3 of 2026-09-23 closed by 7.1–7.13 (A.3 "designs × new
 lifecycle" dissolved: designs are removed, 7.11).
 
 **B. Claude's work, reviewed by user:**
@@ -61,7 +61,7 @@ lifecycle" dissolved: designs are removed, 7.11).
    pseudo-code (§4.4) reads only `summary`, although `derived[]` entries with a different quantity
    are meant to feed the fold (`compressive_strength_in_situ`); §4.3 prose still says "PCA" in
    places; §7 route list vs. 7.1–7.11 (designs gone, `/evidence/bulk`, attachments); cross-refs.
-2. ~~**Verify the 5 LoW codes.**~~ **Done** — all exist; fit notes in §2.10 (source: AVV Anlage).
+2. ~~**Verify the 5 LoW codes.**~~ **Done** --- all exist; fit notes in §2.10 (source: AVV Anlage).
 3. ~~**Phased implementation plan**~~ **Drafted** --> `adr/IMPLEMENTATION_PLAN_0.6.md`. Original brief: work breakdown, order, tests, migration
    rehearsal on 260916 (steps 1–14). Suggested spine: vocab + models --> datasets / permissions -->
    status lifecycle / tombstones / freeze --> origin / exit / lineage --> geometry runner (frame 7.10,
@@ -73,9 +73,9 @@ lifecycle" dissolved: designs are removed, 7.11).
 **C. Implementation-ready now:** **0.5.1.0** on `v-0.5.1.0` (spec §8.0): `X-CSC-Client` header in
 all GH UserObjects + backend logging; Python 3.9 --> 3.13 with `constraints.txt` (glibc-2.17
 ceiling). The **photo-metadata strip** (7.13, upload pipeline + migration step 14) is also
-independent of 0.6 — it could ship with 0.5.1.0 or as its own patch (user not yet asked).
+independent of 0.6 --- it could ship with 0.5.1.0 or as its own patch (user not yet asked).
 
-**Small confirmations:** answered 2026-09-28 — ZirKuS bars `basis: drawing`; 2024-07-24 applies to
+**Small confirmations:** answered 2026-09-28 --- ZirKuS bars `basis: drawing`; 2024-07-24 applies to
 all 16 `dbu_zirkus` pieces.
 
 ## 4. Decisions that are locked (do not re-ask)
@@ -100,8 +100,8 @@ Session 4 (2026-09-24):
 - **7.2** No campaign concept; `campaign_id` dropped (study = dataset, occasion = the record).
 - **7.3** Attachments: one copy per record (hard-linked), `attachments[]` with sha256 + uploader;
   add-only after publish, removal = moderator + tombstone entry.
-- **7.4** Inspection photos are evidence attachments, per observation — not snapshot photos.
-- **7.5** Web snapshot form from four places: new component, cut from…, record new state,
+- **7.4** Inspection photos are evidence attachments, per observation --- not snapshot photos.
+- **7.5** Web snapshot form from four places: new component, cut from..., record new state,
   correct. Draft --> submit. Web mesh / point-cloud upload deferred (planned).
 - **7.6** GH bridge builder components `Actor`, `Origin`, `IdentityMetadata`,
   `SnapshotMetadata` (JSON fragments of the API payload); Create components ~8 inputs.
@@ -109,7 +109,7 @@ Session 4 (2026-09-24):
   and the robot gripper mesh leave `geometry`.
 - **7.8** Reinforcement is evidence: `reinforcement_layout`, one record per source, tier by
   basis; the bridge ships `ReinforcementLayout` + generic `AddEvidence`.
-- **7.9** `condition_grade` = first-class overall visual grade (3 good … 0 unusable as is);
+- **7.9** `condition_grade` = first-class overall visual grade (3 good ... 0 unusable as is);
   0.5 default grades not migrated; badge = grade, else 3 − worst finding.
 - **7.10** The frame (`frame` + `bbx`, renamed from `pca_frame`) is its own derived field:
   minimum-volume box; longest --> X, middle --> Y, shortest --> Z; linear `IfcColumn` stands (Z).
@@ -121,7 +121,7 @@ Session 4 (2026-09-24):
 
 ## 5. Facts about the data (dump 260916)
 
-697 identities / **701 snapshots** — 4 identities have a v1 (3 `schoenes_neues_feld`, 1
+697 identities / **701 snapshots** --- 4 identities have a v1 (3 `schoenes_neues_feld`, 1
 `dbu_zirkus`); all `validated: true`, none virtual. Datasets: `mineral_composite_panels` 477,
 `sas_cita_scans` 71, `ddu_build_with_debris` 70, `ddu_aggregations` 50, `dbu_zirkus` 16,
 `spa_example_data` 9, `schoenes_neues_feld` 4. 45 split children / 37 parents. 42 consumed. 700 of
@@ -132,13 +132,13 @@ inside `geometry`: 4 constant blue markers (±120 mm cross = gripper marker plan
 the stone (a few pieces), and the gripper as `meshes[1]` with PLYs. **Reinforcements:** 1 snapshot
 (`dbu_zirkus`, 35 bars, BSt III Ø8). **Photos:** 3 of 8 in the assets folder carry GPS. The web
 wizard's `canonicalizeBoxAxesMm` already encodes the 7.10 axis convention. GH tooltips still say
-dataset `mineral_composite_sheets` (the data says `mineral_composite_panels`) — fixed by the GH
+dataset `mineral_composite_sheets` (the data says `mineral_composite_panels`) --- fixed by the GH
 bridge rewrite; old migration scripts are left as they are (user).
 
 ## 6. Caveats
 
 - No code written; no migrations exist; `adr/` and `CONTEXT.md` uncommitted.
-- Number of designs in production unknown (not in the dumps) — archived at cutover (§8 step 13).
+- Number of designs in production unknown (not in the dumps) --- archived at cutover (§8 step 13).
 - CPR analysis is alignment, not compliance (delegated act under Art 75(1) does not exist yet).
   EN 18219/18220/18221/18222 only needed for deferred items (identifiers, export).
 - DIN SPEC 91484 not obtained.

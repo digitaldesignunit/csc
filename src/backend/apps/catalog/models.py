@@ -363,7 +363,7 @@ class SnapshotMesh(BaseModel):
         ``meshes/<snapshot_id>/<i>/reduced.ply``  (catalog default)
         ``meshes/<snapshot_id>/<i>/detailed.ply`` (optional higher fidelity)
 
-    Multiple distinct mesh bodies use ``i = 0, 1, …``; dual-resolution pairs
+    Multiple distinct mesh bodies use ``i = 0, 1, ...``; dual-resolution pairs
     share the same ``i`` and differ only by ``reduced`` vs ``detailed``. Legacy
     on-disk OBJ may hold several ``o`` objects in one file; object order maps
     to ``i`` (not separate OBJ files per primitive).
@@ -811,7 +811,7 @@ class ComponentSnapshot(BaseModel):
         None,
         description=(
             "Which resolution files exist on disk per mesh primitive index "
-            "(string keys '0', '1', … matching ``geometry.meshes``). "
+            "(string keys '0', '1', ... matching ``geometry.meshes``). "
             "Values list role names: "
             "typically 'reduced', optionally 'detailed'. "
             "Paths: ``meshes/<snapshot_id>/<i>/reduced.ply`` and "

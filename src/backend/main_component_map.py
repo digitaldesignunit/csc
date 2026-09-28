@@ -124,7 +124,7 @@ async def compute_and_store(
     stored = 0
     for basis in bases:
         for method in methods:
-            log(f'Computing basis={basis} method={method}…')
+            log(f'Computing basis={basis} method={method}...')
             try:
                 payload = await asyncio.to_thread(
                     build_component_map,

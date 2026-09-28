@@ -51,11 +51,11 @@ chmod +x ~/csc/bin/*.sh
 
 ### 3. On the server: authorize the deploy key (restricted)
 
-Append **one line** to `~/.ssh/authorized_keys` — the prefix limits the key to
+Append **one line** to `~/.ssh/authorized_keys` --- the prefix limits the key to
 the gate script, whatever GitHub (or anyone holding the key) sends:
 
 ```
-command="/home/ddu/csc/bin/csc_deploy_gate.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAA…(contents of csc_deploy_key.pub)
+command="/home/ddu/csc/bin/csc_deploy_gate.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAA...(contents of csc_deploy_key.pub)
 ```
 
 ### 4. First release: install, then move the services over
@@ -82,12 +82,12 @@ command=%(ENV_HOME)s/csc/current/venv/bin/gunicorn --config %(ENV_HOME)s/csc/cur
 
 ```bash
 supervisorctl reread && supervisorctl update       # restarts both
-curl -s http://127.0.0.1:8000/version              # {"version":"0.5.1.0",…}
+curl -s http://127.0.0.1:8000/version              # {"version":"0.5.1.0",...}
 supervisorctl status
 ```
 
 Log in on the website once. If something is wrong, put the old paths back in
-both `.ini` files and run `supervisorctl reread && supervisorctl update` — the old
+both `.ini` files and run `supervisorctl reread && supervisorctl update` --- the old
 layout is untouched until step 7.
 
 ### 5. Cron jobs and `.bash_profile`

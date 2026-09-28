@@ -12,7 +12,7 @@ Coordinate contract
 Path layout (file-level resolution, same primitive index)
 ---------------------------------------------------------
 
-* **Primitive index** ``i`` = position in ``geometry.meshes[i]`` (0, 1, …).
+* **Primitive index** ``i`` = position in ``geometry.meshes[i]`` (0, 1, ...).
 * **Resolution** is the **filename**, not a second index:
 
       meshes/<snapshot_id>/<i>/reduced.ply
@@ -23,7 +23,7 @@ Path layout (file-level resolution, same primitive index)
 
 * **Multi-primitive components:** one legacy ``mesh.obj`` (or ``mesh_reduced.obj``)
   may contain several ``o`` / ``g`` blocks (e.g. ``o object_0``, ``o object_1``).
-  Block order **must** match ``geometry.meshes[0]``, ``geometry.meshes[1]``, …
+  Block order **must** match ``geometry.meshes[0]``, ``geometry.meshes[1]``, ...
   Each block becomes one PLY tree::
 
       meshes/<snapshot_id>/0/{reduced|detailed}.ply
@@ -207,7 +207,7 @@ def _alignment_warnings(
         warnings.append(
             f'{identity_id}: legacy OBJ has {n_obj} object(s) but '
             f'geometry.meshes has {mesh_primitive_count} primitive(s); '
-            f'object order must match meshes[0], meshes[1], …'
+            f'object order must match meshes[0], meshes[1], ...'
         )
     return warnings
 

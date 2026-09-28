@@ -132,7 +132,7 @@ PY
     [ -e "$env_file" ] && ln -sfn "$env_file" "$target.tmp/frontend/$(basename "$env_file")"
   done
   ls "$target.tmp"/frontend/.env* >/dev/null 2>&1 \
-    || die "no $SHARED/frontend/.env* — the frontend needs its secrets there"
+    || die "no $SHARED/frontend/.env* --- the frontend needs its secrets there"
   rm -rf "$target.tmp/backend/logs"
   ln -s "$SHARED/logs" "$target.tmp/backend/logs"
 

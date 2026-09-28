@@ -6,7 +6,7 @@ dependencies:
   - python=3.13
   - pip
   # Only what needs conda: cairosvg's native cairo library on Windows.
-  # Everything numeric comes from pip wheels, exactly as on the server —
+  # Everything numeric comes from pip wheels, exactly as on the server ---
   # conda's numpy next to pip's scipy crashes on Windows (DLL clash).
   - cairosvg
   - pillow<=12.2.0
@@ -15,7 +15,7 @@ dependencies:
     # backend + tests, same versions as production (see src/backend/constraints.txt)
     - -r requirements-dev.txt
     - -c src/backend/constraints.txt
-    # local tools (label printing, sheet scanning) — not needed by the backend
+    # local tools (label printing, sheet scanning) --- not needed by the backend
     - -e src/py_modules/csc_sheetscan
     - opencv-python
     - pandas

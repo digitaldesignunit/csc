@@ -274,7 +274,7 @@ export default function AnalyticsPage() {
             <CardDescription>Filtered population size</CardDescription>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">
-            {loading && !data ? '…' : (data?.total ?? 0).toLocaleString()}
+            {loading && !data ? '...' : (data?.total ?? 0).toLocaleString()}
           </CardContent>
         </Card>
 

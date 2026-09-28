@@ -1,6 +1,6 @@
-# Implementation plan — CSC 0.5.1.0 and 0.6.0.0
+# Implementation plan --- CSC 0.5.1.0 and 0.6.0.0
 
-**Status:** draft 2, 2026-09-28 — accepted by the user with the changes in §5. Implements `adr/DATA_MODEL_SPEC.md` (draft 4) and the
+**Status:** draft 2, 2026-09-28 --- accepted by the user with the changes in §5. Implements `adr/DATA_MODEL_SPEC.md` (draft 4) and the
 decisions in `adr/DESIGN_DECISIONS.md` (1.1–8.4). Terms follow `CONTEXT.md`.
 **Branches:** P0 on `v-0.5.1.0`; P1–P9 on `v-0.6.0.0`.
 **Sizes** are relative (S < M < L < XL), not durations.
@@ -25,9 +25,9 @@ decisions in `adr/DESIGN_DECISIONS.md` (1.1–8.4). Terms follow `CONTEXT.md`.
 
 | layer | what | how |
 |---|---|---|
-| unit | vocab, models, derivations (§4), predicates (§3.6, §7.0, I15, I21), migration mapping functions | pytest, no DB — the bulk of the tests |
+| unit | vocab, models, derivations (§4), predicates (§3.6, §7.0, I15, I21), migration mapping functions | pytest, no DB --- the bulk of the tests |
 | route | every route's permission row (§7.0) × role, status transitions, 409 / 410 / 426 paths | pytest + `httpx.AsyncClient(ASGITransport)` (pattern already in `test_ghinterface_versions.py`) against a **throwaway `mongod`** started by a session fixture |
-| invariants | §5 as code: `scripts/db_maintenance/check_invariants.py` — scans a whole database, reports every violation by invariant id | used by the migration rehearsal, by route tests (after each test module), and once against production after cutover |
+| invariants | §5 as code: `scripts/db_maintenance/check_invariants.py` --- scans a whole database, reports every violation by invariant id | used by the migration rehearsal, by route tests (after each test module), and once against production after cutover |
 | rehearsal | 260916 JSON dumps --> throwaway `mongod` --> §8.1 in run order --> `check_invariants` --> per-dataset report vs. the spec's tables | one command, `invoke rehearse` (new task in `tasks.py`); rerun at every phase end and at cutover on the then-current dump |
 | geometry | frame / shape class / proxies / complexity on real assets | tuning script over 260916 + `D:\01_PROJECT_WORKDATA\260916_CSC_ASSETS`; confusion tables reviewed by the user |
 | frontend | no test framework today | `tsc --noEmit`, `eslint`, model codegen, and a scripted manual walkthrough per phase in the in-app browser (phone + desktop viewport) |
@@ -39,29 +39,29 @@ pytest fixture (~30 lines, `tests/mongod.py`) that starts `mongod --dbpath <tmp>
 from `PATH` or `MONGOD_BIN` and stops it after the session; route tests skip with a clear message
 if no binary is found. The same install serves local backend development
 (`MONGODB_URI=mongodb://localhost/csc06`) and the rehearsal. Rejected: `pymongo-inmemory` (works,
-but last release March 2025 — owning 30 lines beats a quiet dependency, as in 6.11); a database
+but last release March 2025 --- owning 30 lines beats a quiet dependency, as in 6.11); a database
 on the Atlas cluster (network-bound, slow, shared with production).
 
 ---
 
-## 2b. P0 — 0.5.1.0 on `v-0.5.1.0` (ready now) — size M
+## 2b. P0 --- 0.5.1.0 on `v-0.5.1.0` (ready now) --- size M
 
 Independent of the data model; ships first so a runtime problem is never confused with a
-data-model one (6.12). User: "the pre-work" — everything 0.6 builds on that does not change the
+data-model one (6.12). User: "the pre-work" --- everything 0.6 builds on that does not change the
 data model, **including a full local test environment** (item 0).
 
-0. **Local test environment** — MongoDB Community Server installed locally (user step); own
+0. **Local test environment** --- MongoDB Community Server installed locally (user step); own
    pytest fixture `tests/mongod.py` starting a throwaway `mongod`; `app` / `client` fixtures that
    build the FastAPI app against it with temp storage dirs and test env vars; a first route test
    suite (auth, identities list / detail, snapshots, the header middleware); `invoke test` and
    `invoke dev-backend` (local backend on `mongodb://localhost`, optionally seeded from a local
    dump via `invoke seed --dump 260916`). README section "Local development and tests".
 
-1. **Python 3.13** — new venv; `requirements.txt` + `constraints.txt` with the glibc-2.17 ceiling
+1. **Python 3.13** --- new venv; `requirements.txt` + `constraints.txt` with the glibc-2.17 ceiling
    and its reason (`numpy<2.3`, `scipy<1.17`, `scikit-learn<1.8`, `robust-laplacian<1.1`);
    `csc_env.yml`, README install + cron lines (`python3.9` --> `python3.13`). Existing test suite
    green on 3.13 locally, then on the server.
-2. **Client header, logging only** (§7.4, 6.7) — FastAPI middleware logs `X-CSC-Client` per
+2. **Client header, logging only** (§7.4, 6.7) --- FastAPI middleware logs `X-CSC-Client` per
    request (missing --> `unknown`), never rejects. GH: header added in `auth_core.auth_header()` in
    `DDU_CSC_Session` (covers the authenticated calls) and in the unauthenticated calls
    (`CSC_Update`, anonymous fetches); `gh-userobjects/0.5.1.0`. Web: the `/api/backend` proxy
@@ -71,7 +71,7 @@ data model, **including a full local test environment** (item 0).
    dir, `current` symlink, rollback), GH updates from the running release, fix of
    the GH download serving the frontend bundle. Server conversion per
    `uberspaceconfig/deployment/README.md`.
-3. **Photo EXIF strip** (7.13, §3.5) — `snapshot_images.py` drops GPS / owner / serial, keeps
+3. **Photo EXIF strip** (7.13, §3.5) --- `snapshot_images.py` drops GPS / owner / serial, keeps
    orientation, `DateTimeOriginal`, make / model; unit test with the 3 GPS-bearing asset photos;
    then step 14 (`migrate_strip_photo_gps.py`) on production.
 
@@ -83,7 +83,7 @@ photo carries GPS. Uberspace steps are handed to the user as a terse checklist.
 
 ## 3. Phases of 0.6.0.0
 
-### P1 — Foundations — size L
+### P1 --- Foundations --- size L
 - `apps/catalog/vocab.py`: every controlled list of spec §2 (original function, shape class,
   primitives, fit methods, evidence methods + tiers, quantities with unit / kind / scope /
   ranking, precisions, origin / exit kinds, statuses, roles, visibility, material seed).
@@ -103,7 +103,7 @@ photo carries GPS. Uberspace steps are handed to the user as a terse checklist.
 **Done when:** models validate hand-written examples of every §3 document; predicate tables fully
 covered; header tests (missing / old / exempt) pass.
 
-### P2 — Migrations and rehearsal — size XL
+### P2 --- Migrations and rehearsal --- size XL
 - Every §8.1 script except the runner steps (5, 7, 8), in run order, each idempotent with
   `--dry-run` and its abort guards: 1, 1b, 1c, 9, 2, 11, 12, 3, 10, 10c, 10b, 6, 6c, 6d, 6b, 4, 9b,
   13, 14, 11b. Mapping logic as pure functions with unit tests (the step 10 table, the 37 / 5 / 1
@@ -116,9 +116,9 @@ covered; header tests (missing / old / exempt) pass.
   extrusions, no condition field); every write control hidden until its phase.
 
 **Done when:** rehearsal runs clean except the invariants owned by later phases (frame, shape
-class, proxies — listed as expected-missing); the web app browses the migrated 260916 data.
+class, proxies --- listed as expected-missing); the web app browses the migrated 260916 data.
 
-### P3 — Datasets, permissions, lifecycle — size L
+### P3 --- Datasets, permissions, lifecycle --- size L
 - `datasets` routes and memberships (§3.6, §7.7); `GET /users/me` with global role + roles per
   dataset (the frontend reads this; nothing role-related lives in the session token besides the
   global role).
@@ -135,26 +135,26 @@ class, proxies — listed as expected-missing); the web app browses the migrated
 **Done when:** a table-driven route test covers every §7.0 row × {anonymous, user, contributor,
 reviewer, moderator, other-dataset moderator, admin}.
 
-### P4 — Provenance, lineage, materials — size M
+### P4 --- Provenance, lineage, materials --- size M
 - `origin` / `exit` / `past_cycles` routes (§3.1.1, §3.1.3, §7.1): exit, undo, re-entry; server-set
   split / merge on child creation.
 - Lineage inheritance (§3.1.2): copy-on-create, recursive propagation on parent PATCH, detach on
   child PATCH, re-inherit, merge unanimity (I17).
 - `materials` collection + routes (§2.10, §7.7); `material_class` derivation + override (I25).
 - Web: origin / exit forms and cards, lineage view with inherited markers, circulation filter,
-  materials in `/admin`, "cut from…" entry point of the snapshot form (7.5).
+  materials in `/admin`, "cut from..." entry point of the snapshot form (7.5).
 
 **Done when:** propagation tests over a 3-generation lineage incl. a merge; I16–I18, I25 checked by
 `check_invariants` on the rehearsal DB.
 
-### P5 — Geometry runner — size XL
+### P5 --- Geometry runner --- size XL
 - `capture` block and fixture files (§3.2.3, `SNAPSHOT_CAPTURE_DIR`); derivations never read
   markers / fixtures (I23).
 - `main_geometry.py` (§4.3) with stages frame --> shape_class --> proxies --> descriptors -->
   complexity --> previews; stages 1–2 synchronous on draft geometry writes and submit; `*_VERSION`
   skipping; replaces `main_descriptors_simple.py` and `main_previewgen.py` in cron.
 - Frame (7.10, 8.1): minimum-volume OBB, axis convention incl. the column rule, deterministic
-  signs, stored as a transform — stored coordinates never touched.
+  signs, stored as a transform --- stored coordinates never touched.
 - Proxies (§4.3, App. B): box, planar / linear prism, cylinder (in-house RANSAC, seeded), hull;
   residuals; deviation maps (16-bit PNG per face, spherical map for hull).
 - Descriptors moved into the runner, frame-aligned, version bump.
@@ -168,7 +168,7 @@ reviewer, moderator, other-dataset moderator, admin}.
 **Done when:** every rehearsed snapshot has frame, bbx, shape class, proxies, descriptors,
 complexity; the user has signed off the tuning tables and the frame report.
 
-### P6 — Evidence — size XL
+### P6 --- Evidence --- size XL
 - `component_evidence` + method registry (§4.5) with the seven methods (A.1–A.4); payload
   validation incl. server-recomputed fields (rebound median / discard rule, core F/A, l/d class).
 - Routes (§7.2): create, bulk (all-or-nothing), lifecycle, supersede, verification (I22),
@@ -185,14 +185,14 @@ complexity; the user has signed off the tuning tables and the frame report.
 **Done when:** fold unit tests cover tier precedence, derived results, verification, inheritance
 and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> moderate --> verify" works.
 
-### P7 — Web completion — size M
-- Snapshot form's remaining entry points (new component, record new state, correct — 7.5),
+### P7 --- Web completion --- size M
+- Snapshot form's remaining entry points (new component, record new state, correct --- 7.5),
   wizard's optional inspection step (7.9), edit form reduced to mutable metadata.
 - Every remaining 0.5 consumer of removed fields gone (`type`, `extrusions`, `condition`,
   `consumed*`, `validated`, `iframe`, `pca_frame`); client header `web/0.6.0.0`.
 - Full walkthrough checklist (appendix of this plan, written during P3–P6).
 
-### P8 — GH bridge — size L
+### P8 --- GH bridge --- size L
 - Header `gh-userobjects/0.6.0.0`; builders `Actor`, `Origin`, `IdentityMetadata`,
   `SnapshotMetadata` (7.6); `CreateComponentIdentity` / `CreateComponentSnapshot` with ~8 inputs,
   create-as-draft + submit, no PCA / reduction; robot-scan import writes `capture`;
@@ -202,7 +202,7 @@ and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> m
 - **Done when:** the DDU aggregation and robot-scan definitions run end-to-end against a staging
   backend.
 
-### P9 — Cutover — size M
+### P9 --- Cutover --- size M
 1. Freeze writes on production (0.5.1.0); take the cutover dump + assets backup.
 2. `invoke rehearse` on that dump --> clean report (the abort guards catch drift since 260916).
 3. Deploy 0.6 backend + frontend; run §8.1 on production in run order; `check_invariants`.
