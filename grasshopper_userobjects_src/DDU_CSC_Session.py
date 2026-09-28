@@ -42,11 +42,11 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 260928
+Version: 260928.1
 """
 
 # Sent as X-CSC-Client on every request so the backend can tell which
-# UserObjects release is calling (spec §7.4).
+# UserObjects release is calling (spec 7.4).
 CSC_CLIENT = 'gh-userobjects/0.5.1.0'
 
 

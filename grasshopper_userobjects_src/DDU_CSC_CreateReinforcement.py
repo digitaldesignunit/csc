@@ -30,7 +30,7 @@ class CSC_CreateReinforcement(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260610
+    Version: 260928
     """
 
     def __init__(self):
@@ -127,7 +127,7 @@ class CSC_CreateReinforcement(Grasshopper.Kernel.GH_ScriptInstance):
             }
             ReinforcementJson = json.dumps(payload)
             self.Component.Message = (
-                f'Reinforcement {spec} Ø{diameter:g} mm, '
+                f'Reinforcement {spec} Cross-Section {diameter:g} mm, '
                 f'{len(points)} points'
             )
             return ReinforcementJson
