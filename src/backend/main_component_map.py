@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.13
 """
 Precompute Component Map layouts (PCA + UMAP) into ``component_map_cache``.
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.13
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from typing import Optional, List, Dict, Union, Literal
@@ -63,6 +63,19 @@ class UserPublic(BaseModel):
         populate_by_name = True
 
 
+BCRYPT_MAX_PASSWORD_BYTES = 72
+
+
+def _check_password_bytes(v: str) -> str:
+    """bcrypt reads at most 72 bytes; non-ASCII characters take several."""
+    if len(v.encode('utf-8')) > BCRYPT_MAX_PASSWORD_BYTES:
+        raise ValueError(
+            f'password must be at most {BCRYPT_MAX_PASSWORD_BYTES} bytes '
+            'in UTF-8 (fewer characters if it contains umlauts or symbols)'
+        )
+    return v
+
+
 class RegisterPayload(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     full_name: str = Field(min_length=1, max_length=100)
@@ -70,10 +83,20 @@ class RegisterPayload(BaseModel):
     # max_length=72 matches bcrypt's hard truncation limit, also prevents DoS
     password: str = Field(min_length=8, max_length=72)
 
+    @field_validator('password')
+    @classmethod
+    def _password_fits_bcrypt(cls, v: str) -> str:
+        return _check_password_bytes(v)
+
 
 class ChangePasswordPayload(BaseModel):
     current_password: str = Field(min_length=1, max_length=72)
     new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator('new_password')
+    @classmethod
+    def _new_password_fits_bcrypt(cls, v: str) -> str:
+        return _check_password_bytes(v)
 
 
 class AdminUserUpdate(BaseModel):

@@ -1,0 +1,11 @@
+# CSC Development Requirements
+# Backend requirements pinned exactly like production, plus test and task tools.
+# Install with: pip install -r requirements-dev.txt
+
+-r src/backend/requirements.txt
+-c src/backend/constraints.txt
+
+pytest>=8
+coverage
+flake8
+invoke>=2

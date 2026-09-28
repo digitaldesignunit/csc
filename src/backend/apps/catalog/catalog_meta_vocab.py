@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.13
 """
 Additional catalog metadata values for dropdowns and filters.
 

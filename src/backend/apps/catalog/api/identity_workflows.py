@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.13
 """
 Identity lifecycle workflows for the v0.5 model (reserve, validate, consume).
 """

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.13
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from datetime import datetime, timedelta, timezone
@@ -9,10 +9,11 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalog.models import Token, User, UserInDB, UserPublic, RegisterPayload, ChangePasswordPayload # NOQA
+from apps.catalog.models import BCRYPT_MAX_PASSWORD_BYTES
 from services.email_service import (
     generate_verification_token,
     get_token_expiry,
@@ -33,7 +34,6 @@ oauth2_scheme_optional = OAuth2PasswordBearer(
     tokenUrl='/auth/token',
     auto_error=False,
 )
-pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 # Only allow @*.tu-darmstadt.de emails (at registration; optional at login)
 TU_REGEX = re.compile(r'^[^@]+@([^.]+\.)*tu-darmstadt\.de$', re.IGNORECASE)
@@ -42,11 +42,18 @@ TU_REGEX = re.compile(r'^[^@]+@([^.]+\.)*tu-darmstadt\.de$', re.IGNORECASE)
 # HELPERS ---------------------------------------------------------------------
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    # Stored hashes were written by passlib on bcrypt < 5, which silently
+    # truncated to 72 bytes; truncate the same way so old passwords verify.
+    secret = plain_password.encode('utf-8')[:BCRYPT_MAX_PASSWORD_BYTES]
+    try:
+        return bcrypt.checkpw(secret, hashed_password.encode('utf-8'))
+    except ValueError:  # malformed stored hash
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    # Payload validators cap passwords at 72 bytes, so bcrypt never truncates.
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode()
 
 
 def _jwt_now():
