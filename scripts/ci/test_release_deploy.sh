@@ -146,7 +146,7 @@ deploy --rollback > "$t/log4" 2>&1 || { cat "$t/log4"; fail "manual rollback"; }
 [ "$(active)" = 9.9.9.1 ] || fail "manual rollback target"
 ok "manual rollback"
 
-deploy --status | grep -q "9.9.9.1" || fail "status"
+out=$(deploy --status) && grep -q "9.9.9.1" <<< "$out" || fail "status"
 ok "status"
 
 CSC_KEEP_RELEASES=1 deploy v9.9.9.2 > "$t/log5" 2>&1 || { cat "$t/log5"; fail "redeploy"; }
@@ -158,8 +158,8 @@ ok "pruning keeps active + previous"
 
 SSH_ORIGINAL_COMMAND="deploy v9.9.9.2; rm -rf /" "$CSC_HOME/bin/csc_deploy_gate.sh" \
   > /dev/null 2>&1 && fail "gate accepted an injected command"
-SSH_ORIGINAL_COMMAND="status" "$CSC_HOME/bin/csc_deploy_gate.sh" | grep -q "9.9.9.2" \
-  || fail "gate status"
+out=$(SSH_ORIGINAL_COMMAND="status" "$CSC_HOME/bin/csc_deploy_gate.sh") \
+  && grep -q "9.9.9.2" <<< "$out" || fail "gate status"
 ok "deploy gate"
 
 echo "all deploy tests passed"

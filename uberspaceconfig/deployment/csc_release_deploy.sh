@@ -187,7 +187,7 @@ activate() {  # activate <release dir>: switch, restart, check; roll back on fai
 }
 
 after_success() {  # static GH images, self-update of these scripts, pruning
-  local target="$1" keep dir
+  local target="$1" keep dir used r
   if [ -d "$target/frontend/public/gh-interface" ]; then
     mkdir -p "$STATIC_GH_IMAGES"
     cp -a "$target/frontend/public/gh-interface/." "$STATIC_GH_IMAGES/"
@@ -198,17 +198,19 @@ after_success() {  # static GH images, self-update of these scripts, pruning
 
   # keep the KEEP_RELEASES most recently activated plus active and previous
   # (a release that never passed its health check is not kept); drop unused venvs
-  keep=$(ls -1t "$RELEASES"/*/.activated 2>/dev/null | head -n "$KEEP_RELEASES"     | xargs -r -n1 dirname | xargs -r -n1 readlink -f)
+  keep=$(ls -1t "$RELEASES"/*/.activated 2>/dev/null | sed -n "1,${KEEP_RELEASES}p" | xargs -r -n1 dirname | xargs -r -n1 readlink -f)
   keep="$keep"$'\n'"$(active_release)"$'\n'"$(cat "$PREVIOUS_FILE" 2>/dev/null || true)"
   for dir in "$RELEASES"/*/; do
     [ -d "$dir" ] || continue
     dir=$(readlink -f "$dir")
     grep -qxF "$dir" <<< "$keep" || { log "pruning release $(basename "$dir")"; rm -rf "$dir"; }
   done
+  # collected first: grep -q in a pipe can cut off the writer (pipefail)
+  used=$(for r in "$RELEASES"/*/venv; do readlink -f "$r"; done 2>/dev/null || true)
   for dir in "$VENVS"/*/; do
     [ -d "$dir" ] || continue
     dir=$(readlink -f "$dir")
-    if ! for r in "$RELEASES"/*/venv; do readlink -f "$r"; done 2>/dev/null | grep -qxF "$dir"; then
+    if ! grep -qxF "$dir" <<< "$used"; then
       log "pruning venv $(basename "$dir")"
       rm -rf "$dir"
     fi
