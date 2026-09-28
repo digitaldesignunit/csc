@@ -73,19 +73,21 @@ make_release 9.9.9.3 broken
 pids+=($!)
 # the server starts in the background: wait until it answers
 for _ in $(seq 1 50); do
-  curl -fsS -o /dev/null "http://127.0.0.1:$api_port/repos/owner/repo/releases/tags/v9.9.9.1" && break
+  curl -fs -o /dev/null "http://127.0.0.1:$api_port/repos/owner/repo/releases/tags/v9.9.9.1" && break
   sleep 0.2
 done
 curl -fsS -o /dev/null "http://127.0.0.1:$api_port/repos/owner/repo/releases/tags/v9.9.9.1" \
   || fail "fake GitHub API did not start"
 
 # --- supervisorctl stub: (re)start the two tiny services -----------------------
+# 9>&-: the services must not inherit the deploy lock (fd 9); the real
+# supervisorctl only asks supervisord, so nothing inherits it on the server
 cat > "$t/bin/supervisorctl" <<EOF
 #!/usr/bin/env bash
 [ -f "$t/stub.pids" ] && xargs -r kill < "$t/stub.pids" 2>/dev/null
 sleep 0.3
-python3 "$t/backend_stub.py" $be_port & echo \$! > "$t/stub.pids"
-python3 "$t/frontend_stub.py" $fe_port & echo \$! >> "$t/stub.pids"
+python3 "$t/backend_stub.py" $be_port 9>&- & echo \$! > "$t/stub.pids"
+python3 "$t/frontend_stub.py" $fe_port 9>&- & echo \$! >> "$t/stub.pids"
 EOF
 chmod +x "$t/bin/supervisorctl"
 cat > "$t/backend_stub.py" <<EOF
