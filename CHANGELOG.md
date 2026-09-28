@@ -79,6 +79,9 @@ and deployed by GitHub Actions (README, "Releases and deployment").
   interface asset of the backend's own release.
 - `email-validator` was missing from `requirements.txt` although the user
   models need it; a fresh server venv would not have started.
+- `networkx` was missing from `requirements.txt` although trimesh needs it for
+  mesh sections; in a fresh venv the radial signature descriptors failed (found
+  by the new CI, which installs only the declared requirements).
 
 ## [Unreleased] - 2026-06-10
 

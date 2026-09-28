@@ -103,6 +103,7 @@ http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 EOF
 export PATH="$t/bin:$PATH"
 cp "$root/uberspaceconfig/deployment/"*.sh "$CSC_HOME/bin/"
+chmod +x "$CSC_HOME/bin/"*.sh   # as on the server (step 2 of the deploy README)
 deploy() { "$CSC_HOME/bin/csc_release_deploy.sh" "$@"; }
 active() { cat "$CSC_HOME/current/VERSION"; }
 
