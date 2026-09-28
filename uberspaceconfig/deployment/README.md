@@ -19,6 +19,10 @@ Replace `ddu` / `columba.uberspace.de` with your user and host.
 
 ### 1. On your computer: deploy key and GitHub environment
 
+Git Bash or any Unix shell (Windows PowerShell 5.1 drops the empty `-N ""`
+argument; there, leave out `-N ""` and press Enter twice at the passphrase
+prompts --- the key must have no passphrase):
+
 ```bash
 ssh-keygen -t ed25519 -N "" -C "github-actions csc deploy" -f csc_deploy_key
 ssh-keyscan -t ed25519 columba.uberspace.de > csc_known_hosts
