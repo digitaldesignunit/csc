@@ -37,7 +37,8 @@ GitHub --> repository --> Settings --> Environments --> **New environment** `pro
   `UBERSPACE_USER` = `ddu`.
 - Repository variable `NEXT_PUBLIC_STATIC_BASE_URL` stays as it is (frontend build).
 
-Then delete `csc_deploy_key` from your computer; GitHub holds the only copy.
+Once step 3 works, delete `csc_deploy_key` from your computer; GitHub holds
+the only copy.
 
 ### 2. On the server: Python, folders, scripts
 
@@ -56,11 +57,25 @@ chmod +x ~/csc/bin/*.sh
 ### 3. On the server: authorize the deploy key (restricted)
 
 Append **one line** to `~/.ssh/authorized_keys` --- the prefix limits the key to
-the gate script, whatever GitHub (or anyone holding the key) sends:
+the gate script, whatever GitHub (or anyone holding the key) sends. Append it
+with these commands rather than an editor (nano on Uberspace 7 wraps long
+lines, which breaks the entry):
 
+```bash
+# the whole line from csc_deploy_key.pub, "ssh-ed25519 AAAAC3Nza... github-actions csc deploy"
+key='PASTE THE LINE FROM csc_deploy_key.pub HERE'
+if [[ "$key" == "ssh-ed25519 AAAA"* ]]; then
+  [ -z "$(tail -c1 ~/.ssh/authorized_keys)" ] || echo >> ~/.ssh/authorized_keys
+  echo "command=\"$HOME/csc/bin/csc_deploy_gate.sh\",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty $key" >> ~/.ssh/authorized_keys
+  chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
+  ssh-keygen -lf ~/.ssh/authorized_keys   # must list the ED25519 deploy key
+else
+  echo "not a public key: $key"
+fi
 ```
-command="/home/ddu/csc/bin/csc_deploy_gate.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAA...(contents of csc_deploy_key.pub)
-```
+
+Check from your computer (needs the private key): `ssh -i csc_deploy_key
+ddu@columba.uberspace.de status` prints the deploy status.
 
 ### 4. First release: install, then move the services over
 
