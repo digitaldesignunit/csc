@@ -24,9 +24,9 @@ ssh-keygen -t ed25519 -N "" -C "github-actions csc deploy" -f csc_deploy_key
 ssh-keyscan -t ed25519 columba.uberspace.de > csc_known_hosts
 ```
 
-GitHub → repository → Settings → Environments → **New environment** `production`:
+GitHub --> repository --> Settings --> Environments --> **New environment** `production`:
 
-- Deployment protection rules: **Required reviewers** → yourself.
+- Deployment protection rules: **Required reviewers** --> yourself.
 - Environment secrets: `UBERSPACE_SSH_KEY` = contents of `csc_deploy_key`
   (the private key), `UBERSPACE_KNOWN_HOSTS` = contents of `csc_known_hosts`.
 - Environment variables: `UBERSPACE_HOST` = `columba.uberspace.de`,
@@ -108,7 +108,7 @@ clone-based deploy). Compare with `../.bash_profile.example`.
 
 ### 6. Approve the waiting deploy
 
-In GitHub → Actions → the release run → **Review deployments** → approve. It
+In GitHub --> Actions --> the release run --> **Review deployments** --> approve. It
 connects with the deploy key, re-activates the installed release, runs the
 health check and finishes the setup (GH interface images, script self-update).
 From now on every release deploys this way.
@@ -135,6 +135,6 @@ From now on every release deploys this way.
 | what | how |
 |---|---|
 | release | tag `v<version>` on main, approve the deploy in GitHub |
-| redeploy / roll back / status | Actions → **Deploy** → run with `deploy v<version>`, `rollback` or `status` |
+| redeploy / roll back / status | Actions --> **Deploy** --> run with `deploy v<version>`, `rollback` or `status` |
 | same on the server | `~/csc/bin/csc_release_deploy.sh v<version>` / `--rollback` / `--status` |
 | deploy log | `~/csc/shared/logs/deploy.log` |

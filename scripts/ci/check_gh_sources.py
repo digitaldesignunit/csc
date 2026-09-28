@@ -30,8 +30,8 @@ VERSION_RE = re.compile(r'version\s*[:=]\s*(\d+)(?:\.(\d+))?([a-zA-Z]?)',
 
 
 def git(*args: str) -> str:
-    return subprocess.run(['git', *args], check=True, capture_output=True,
-                          text=True).stdout
+    return subprocess.run(['git', *args], check=True, capture_output=True
+                          ).stdout.decode('utf-8', 'replace')
 
 
 def source_version(text: str):
@@ -74,8 +74,10 @@ def main() -> int:
         if not os.path.exists(path):
             notes.append(f'{name}: removed')
             continue
-        with open(path, encoding='utf-8') as handle:
-            new = source_version(handle.read())
+        # Rhino's editor saves Windows-1252; Version lines are ASCII (as in
+        # the backend's get_source_version, decode tolerantly)
+        with open(path, 'rb') as handle:
+            new = source_version(handle.read().decode('utf-8', 'replace'))
         old_text = show(base, path)
         old = source_version(old_text) if old_text is not None else None
         if new is None:

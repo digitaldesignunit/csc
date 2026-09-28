@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Produce a self-contained server tree for CI → Uberspace deploys
+  // Produce a self-contained server tree for CI --> Uberspace deploys
   // (avoids running `next build` on hosts with an older glibc).
   output: "standalone",
   // Trace from the frontend itself: keeps `.next/standalone` flat (server.js at

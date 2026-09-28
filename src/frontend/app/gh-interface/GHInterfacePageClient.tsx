@@ -670,7 +670,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             outputs={[
               { label: 'ComponentData', description: 'CreateComponentRequest JSON for POST /identities (inline geometry + staged mesh and point-cloud PLY manifest)' }
             ]}
-            tip="Pair with CSC_AddComponentIdentity to post. Point clouds over 5000 points are staged as PLY; smaller clouds stay as an inline preview. Wire CreateReinforcement → Reinforcements for inline rebar centerlines. Use CSC_FetchTransmittedID to obtain the identity UUID after a web tag scan."
+            tip="Pair with CSC_AddComponentIdentity to post. Point clouds over 5000 points are staged as PLY; smaller clouds stay as an inline preview. Wire CreateReinforcement --> Reinforcements for inline rebar centerlines. Use CSC_FetchTransmittedID to obtain the identity UUID after a web tag scan."
             imagePath={resolveStatic('/gh-interface/csc_createcomponent.jpg')}
           />
 
@@ -714,7 +714,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             outputs={[
               { label: 'SnapshotData', description: 'CreateSnapshotRequest JSON (includes identity_id) for POST /identities/{id}/snapshots' }
             ]}
-            tip="Use when an identity already exists and you need a new version — e.g. after re-scanning, condition change, or geometry update. Point clouds over 5000 points are staged as PLY; smaller clouds stay as an inline preview. Wire CreateReinforcement → Reinforcements for inline rebar centerlines."
+            tip="Use when an identity already exists and you need a new version — e.g. after re-scanning, condition change, or geometry update. Point clouds over 5000 points are staged as PLY; smaller clouds stay as an inline preview. Wire CreateReinforcement --> Reinforcements for inline rebar centerlines."
             imagePath={resolveStatic('/gh-interface/csc_createcomponent.jpg')}
           />
 

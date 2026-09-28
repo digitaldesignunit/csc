@@ -6,11 +6,11 @@
  * All schemas are fetched from `FASTAPI_URL` (override with env when generating
  * against a local backend), e.g. `FASTAPI_URL=http://127.0.0.1:8000 npm run generate:models`.
  *
- * - `/schema/catalog-shared` → `CatalogSharedTypes.ts` (frames, location, design mesh types)
- * - `/schema/design` → `DesignModel`
- * - `/schema/catalog-compose` → `CatalogModels` (passport body with snapshots[])
- * - `/schema/snapshot-summary` → `SnapshotSummaryItem` in `SnapshotModels.ts`
- * - `/schema/pending-validation-snapshot` → `PendingValidationSnapshotItem` in `SnapshotModels.ts`
+ * - `/schema/catalog-shared` --> `CatalogSharedTypes.ts` (frames, location, design mesh types)
+ * - `/schema/design` --> `DesignModel`
+ * - `/schema/catalog-compose` --> `CatalogModels` (passport body with snapshots[])
+ * - `/schema/snapshot-summary` --> `SnapshotSummaryItem` in `SnapshotModels.ts`
+ * - `/schema/pending-validation-snapshot` --> `PendingValidationSnapshotItem` in `SnapshotModels.ts`
  */
 
 import fs from 'fs'

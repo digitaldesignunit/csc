@@ -92,7 +92,7 @@ Prefer one accent colour per icon; avoid gradients and fine detail that disappea
 - [ ] Drop shadow applied (if used on other CSC icons)
 - [ ] Visually matches the SVG at canvas zoom
 
-### Rasterizing SVG → PNG
+### Rasterizing SVG --> PNG
 
 Regenerate `24x24/` whenever `svg/` changes. Examples:
 

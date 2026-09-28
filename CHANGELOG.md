@@ -20,7 +20,7 @@ and deployed by GitHub Actions (README, "Releases and deployment").
   `frontend-*` and `gh-interface-*` releases end; a release now carries
   `csc-backend-<v>.tar.gz`, `csc-frontend-<v>.zip`, `csc-gh-interface-<v>.zip`
   and `SHA256SUMS`.
-- **Deployment**: tag push → CI → GitHub Release → deploy after approval
+- **Deployment**: tag push --> CI --> GitHub Release --> deploy after approval
   (environment `production`). On Uberspace, releases unpack into
   `~/csc/releases/<version>/`, `~/csc/current` points at the active one, venvs
   are reused while requirements do not change, and a failed health check rolls
@@ -44,7 +44,7 @@ and deployed by GitHub Actions (README, "Releases and deployment").
   in their EXIF; GPS position, owner and serial numbers are removed on upload.
 - The backend creates the `catalog_number` counter on startup if it is missing
   (fresh or seeded databases); an existing counter is never touched.
-- Frontend: Next.js 16.3.4 → 16.3.6 (patch; with `eslint-config-next` and
+- Frontend: Next.js 16.3.4 --> 16.3.6 (patch; with `eslint-config-next` and
   `@next/eslint-plugin-next`); lint errors fixed so CI can enforce lint.
 
 ### Added
@@ -160,7 +160,7 @@ and deployed by GitHub Actions (README, "Releases and deployment").
   inline preview. An extrusion profile is only used when no mesh or cloud
   is available
 - The `{identity, snapshots[]}` read model is now called a **passport**:
-  `ComposeIdentityResponse` → `ComponentPassport`. The route paths
+  `ComposeIdentityResponse` --> `ComponentPassport`. The route paths
   `GET /identities/{id}/compose` and `GET /schema/catalog-compose` are
   unchanged, so released UserObjects keep working
 
@@ -169,7 +169,7 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 - Catalog UI adapted to identity/snapshot passport spec
 - Design detail actions use client session; proxy allows anonymous public GETs
 - Sidebar layout compacter; Next.js/npm updated
-- Generated type `ComposeIdentityResponse` → `ComponentPassport`; the GH
+- Generated type `ComposeIdentityResponse` --> `ComponentPassport`; the GH
   interface docs say "passport" instead of "compose JSON" throughout
 
 #### CSC Grasshopper Interface
@@ -177,9 +177,9 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 - Fetch/create components updated for identity/snapshot API
 - `CSC_Update` uses `/ghinterface/` paths
 - "Compose JSON" is now a **passport** everywhere in the interface:
-  `ComposeToD2P` → `PassportToD2P`, the `FetchAllSnapshots` / `FetchSnapshot`
-  output pin `ComposeData` → `Passport`, and the `CSC_Session` helpers
-  (`cached_get_compose` → `cached_get_passport`, `compose_json_string` →
+  `ComposeToD2P` --> `PassportToD2P`, the `FetchAllSnapshots` / `FetchSnapshot`
+  output pin `ComposeData` --> `Passport`, and the `CSC_Session` helpers
+  (`cached_get_compose` --> `cached_get_passport`, `compose_json_string` -->
   `passport_json_string`). All UserObjects must be updated together
 
 #### Documentation & Deployment
@@ -191,7 +191,7 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 #### CSC FastAPI Backend
 
 - Legacy monolithic component routes/models
-- `downloads` and `ghupdates` routers (→ `/ghinterface/`)
+- `downloads` and `ghupdates` routers (--> `/ghinterface/`)
 
 #### CSC Grasshopper Interface
 
@@ -1106,7 +1106,7 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 #### CSC Grasshopper Interface
 - **Authentication Flow**: Replaced scattered authentication logic with centralized AuthCore system
 - **Component Architecture**: Standardized all components with consistent `__init__`, `_add*` methods, and error handling
-- **Mesh Color Handling**: Implemented three-tier color fallback system (mesh colors → component color → default gray)
+- **Mesh Color Handling**: Implemented three-tier color fallback system (mesh colors --> component color --> default gray)
 - **Output Format**: Descriptors now output as JSON strings for consistency with other components
 - **Error Recovery**: All components now provide graceful error handling with clear user feedback
 - **Code Quality**: Applied consistent pyright suppressions, import organization, and coding standards

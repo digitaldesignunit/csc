@@ -29,7 +29,9 @@ def version_key(version: str):
 
 
 def read(path: str) -> str:
-    return (ROOT / path).read_text(encoding='utf-8')
+    # Grasshopper sources saved by Rhino's editor are Windows-1252, not UTF-8;
+    # the lines checked here are ASCII, so decode tolerantly like the backend
+    return (ROOT / path).read_bytes().decode('utf-8', 'replace')
 
 
 def find(pattern: str, text: str, what: str, errors: list):

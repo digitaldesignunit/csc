@@ -28,7 +28,7 @@ decisions in `adr/DESIGN_DECISIONS.md` (1.1–8.4). Terms follow `CONTEXT.md`.
 | unit | vocab, models, derivations (§4), predicates (§3.6, §7.0, I15, I21), migration mapping functions | pytest, no DB — the bulk of the tests |
 | route | every route's permission row (§7.0) × role, status transitions, 409 / 410 / 426 paths | pytest + `httpx.AsyncClient(ASGITransport)` (pattern already in `test_ghinterface_versions.py`) against a **throwaway `mongod`** started by a session fixture |
 | invariants | §5 as code: `scripts/db_maintenance/check_invariants.py` — scans a whole database, reports every violation by invariant id | used by the migration rehearsal, by route tests (after each test module), and once against production after cutover |
-| rehearsal | 260916 JSON dumps → throwaway `mongod` → §8.1 in run order → `check_invariants` → per-dataset report vs. the spec's tables | one command, `invoke rehearse` (new task in `tasks.py`); rerun at every phase end and at cutover on the then-current dump |
+| rehearsal | 260916 JSON dumps --> throwaway `mongod` --> §8.1 in run order --> `check_invariants` --> per-dataset report vs. the spec's tables | one command, `invoke rehearse` (new task in `tasks.py`); rerun at every phase end and at cutover on the then-current dump |
 | geometry | frame / shape class / proxies / complexity on real assets | tuning script over 260916 + `D:\01_PROJECT_WORKDATA\260916_CSC_ASSETS`; confusion tables reviewed by the user |
 | frontend | no test framework today | `tsc --noEmit`, `eslint`, model codegen, and a scripted manual walkthrough per phase in the in-app browser (phone + desktop viewport) |
 
@@ -59,10 +59,10 @@ data model, **including a full local test environment** (item 0).
 
 1. **Python 3.13** — new venv; `requirements.txt` + `constraints.txt` with the glibc-2.17 ceiling
    and its reason (`numpy<2.3`, `scipy<1.17`, `scikit-learn<1.8`, `robust-laplacian<1.1`);
-   `csc_env.yml`, README install + cron lines (`python3.9` → `python3.13`). Existing test suite
+   `csc_env.yml`, README install + cron lines (`python3.9` --> `python3.13`). Existing test suite
    green on 3.13 locally, then on the server.
 2. **Client header, logging only** (§7.4, 6.7) — FastAPI middleware logs `X-CSC-Client` per
-   request (missing → `unknown`), never rejects. GH: header added in `auth_core.auth_header()` in
+   request (missing --> `unknown`), never rejects. GH: header added in `auth_core.auth_header()` in
    `DDU_CSC_Session` (covers the authenticated calls) and in the unauthenticated calls
    (`CSC_Update`, anonymous fetches); `gh-userobjects/0.5.1.0`. Web: the `/api/backend` proxy
    sets `web/0.5.1.0`. UserObjects shipped through `CSC_Update`.
@@ -150,8 +150,8 @@ reviewer, moderator, other-dataset moderator, admin}.
 ### P5 — Geometry runner — size XL
 - `capture` block and fixture files (§3.2.3, `SNAPSHOT_CAPTURE_DIR`); derivations never read
   markers / fixtures (I23).
-- `main_geometry.py` (§4.3) with stages frame → shape_class → proxies → descriptors →
-  complexity → previews; stages 1–2 synchronous on draft geometry writes and submit; `*_VERSION`
+- `main_geometry.py` (§4.3) with stages frame --> shape_class --> proxies --> descriptors -->
+  complexity --> previews; stages 1–2 synchronous on draft geometry writes and submit; `*_VERSION`
   skipping; replaces `main_descriptors_simple.py` and `main_previewgen.py` in cron.
 - Frame (7.10, 8.1): minimum-volume OBB, axis convention incl. the column rule, deterministic
   signs, stored as a transform — stored coordinates never touched.
@@ -159,7 +159,7 @@ reviewer, moderator, other-dataset moderator, admin}.
   residuals; deviation maps (16-bit PNG per face, spherical map for hull).
 - Descriptors moved into the runner, frame-aligned, version bump.
 - **Tuning script**: shape class thresholds and complexity thresholds on 260916; confusion tables
-  (complexity against the 71 authored `sas_cita_scans` ratings) → user review → thresholds frozen.
+  (complexity against the 71 authored `sas_cita_scans` ratings) --> user review --> thresholds frozen.
 - Rehearsal now includes steps 5, 7, 8. Frame report: per dataset, how many frames changed axis
   order vs. 0.5 `pca_frame`.
 - Web: viewer shows canonical vs. stored orientation, proxy + deviation-map overlay; GH-facing
@@ -183,7 +183,7 @@ complexity; the user has signed off the tuning tables and the frame report.
   condition badge (7.9), timeline.
 
 **Done when:** fold unit tests cover tier precedence, derived results, verification, inheritance
-and merges; the phone walkthrough "scan → add 3 rebound areas → submit → moderate → verify" works.
+and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> moderate --> verify" works.
 
 ### P7 — Web completion — size M
 - Snapshot form's remaining entry points (new component, record new state, correct — 7.5),
@@ -196,7 +196,7 @@ and merges; the phone walkthrough "scan → add 3 rebound areas → submit → m
 - Header `gh-userobjects/0.6.0.0`; builders `Actor`, `Origin`, `IdentityMetadata`,
   `SnapshotMetadata` (7.6); `CreateComponentIdentity` / `CreateComponentSnapshot` with ~8 inputs,
   create-as-draft + submit, no PCA / reduction; robot-scan import writes `capture`;
-  `ReinforcementLayout` + generic `AddEvidence` (7.8); `ApplyPCAFrame` → `ApplyFrame`; inputs
+  `ReinforcementLayout` + generic `AddEvidence` (7.8); `ApplyPCAFrame` --> `ApplyFrame`; inputs
   removed (`Type`, `Salvage*`, `Condition`, `Complexity`, `Assembly`, `Virtual`, `MarkerPoints`,
   `Reinforcements`); tooltips (dataset names) updated.
 - **Done when:** the DDU aggregation and robot-scan definitions run end-to-end against a staging
@@ -204,11 +204,11 @@ and merges; the phone walkthrough "scan → add 3 rebound areas → submit → m
 
 ### P9 — Cutover — size M
 1. Freeze writes on production (0.5.1.0); take the cutover dump + assets backup.
-2. `invoke rehearse` on that dump → clean report (the abort guards catch drift since 260916).
+2. `invoke rehearse` on that dump --> clean report (the abort guards catch drift since 260916).
 3. Deploy 0.6 backend + frontend; run §8.1 on production in run order; `check_invariants`.
 4. Set `MIN_CLIENT_VERSIONS` to 0.6.0.0; publish the bridge UserObjects via `CSC_Update`.
 5. Designs archived by step 13 (count verified).
-6. After cutover: personal accounts created → step 11b retires `ddu`; memberships assigned in
+6. After cutover: personal accounts created --> step 11b retires `ddu`; memberships assigned in
    `/admin`.
 
 ---

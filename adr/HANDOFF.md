@@ -21,7 +21,7 @@ release 0.5.0.0; the design targets **0.6.0.0 on branch `v-0.6.0.0`**.
 Threads merged into one spec:
 
 1. **Evidence system** — measurements (rebound hammer, cores) and non-instrumental claims as
-   attributable, time-pinned records on a component identity (sessions 2026-09-10 → 13).
+   attributable, time-pinned records on a component identity (sessions 2026-09-10 --> 13).
 2. **Generalised representation** — proxies with deviation maps, derived shape class, property
    descriptors `{range, confidence, source}`. Precedent: M. Bernhard, *HYBREP* — **cited, never
    used as a name**.
@@ -40,7 +40,7 @@ Threads merged into one spec:
 | `adr/DATA_MODEL_SPEC.md` | **authoritative spec**, draft 4 (2026-09-28). §0 reading guide … §10 CPR/DPP, Appendices A (evidence payloads, A.4 reinforcement layout), B (proxy primitives). §9 = open questions (all struck through as decided). |
 | `adr/DESIGN_DECISIONS.md` | decision log: 1.x evidence, 2.x property fold, 3.x geometry, 4.x classification, 5.x CPR proposals, 6.x provenance / permissions / release, **7.x entry surfaces / representation / scope (2026-09-24), **8.x consistency pass (2026-09-28)**. |
 | `CONTEXT.md` (repo root) | **glossary** (domain-modeling format): canonical terms + words to avoid. Created 2026-09-24. |
-| `adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1–P9 = 0.6 (foundations → migrations + rehearsal → permissions / lifecycle → provenance → geometry runner → evidence → web → GH bridge → cutover); test strategy; open Q1–Q3 |
+| `adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1–P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; open Q1–Q3 |
 | `adr/HANDOFF.md` | this file |
 | `future_implementation/MEASUREMENTS_SPEC.md` | original measurement spec — superseded, kept for domain research and standards sources. Gitignored. |
 | `future_implementation/IMPLEMENTATION_PLAN_V0-5+.md` | older plan; its 0.5.0.2 moderator section is **superseded by 6.5** |
@@ -62,16 +62,16 @@ lifecycle" dissolved: designs are removed, 7.11).
    are meant to feed the fold (`compressive_strength_in_situ`); §4.3 prose still says "PCA" in
    places; §7 route list vs. 7.1–7.11 (designs gone, `/evidence/bulk`, attachments); cross-refs.
 2. ~~**Verify the 5 LoW codes.**~~ **Done** — all exist; fit notes in §2.10 (source: AVV Anlage).
-3. ~~**Phased implementation plan**~~ **Drafted** → `adr/IMPLEMENTATION_PLAN_0.6.md`. Original brief: work breakdown, order, tests, migration
-   rehearsal on 260916 (steps 1–14). Suggested spine: vocab + models → datasets / permissions →
-   status lifecycle / tombstones / freeze → origin / exit / lineage → geometry runner (frame 7.10,
-   shape_class) → capture migration (7.7) → proxies → evidence + fold + attachments (7.3) +
-   reinforcement layout (7.8) → migrations rehearsed → frontend (snapshot form 7.5, evidence form
-   7.1 / 7.4, moderation, `/admin` datasets) → GH bridge (builders 7.6, `ReinforcementLayout` +
+3. ~~**Phased implementation plan**~~ **Drafted** --> `adr/IMPLEMENTATION_PLAN_0.6.md`. Original brief: work breakdown, order, tests, migration
+   rehearsal on 260916 (steps 1–14). Suggested spine: vocab + models --> datasets / permissions -->
+   status lifecycle / tombstones / freeze --> origin / exit / lineage --> geometry runner (frame 7.10,
+   shape_class) --> capture migration (7.7) --> proxies --> evidence + fold + attachments (7.3) +
+   reinforcement layout (7.8) --> migrations rehearsed --> frontend (snapshot form 7.5, evidence form
+   7.1 / 7.4, moderation, `/admin` datasets) --> GH bridge (builders 7.6, `ReinforcementLayout` +
    `AddEvidence`).
 
 **C. Implementation-ready now:** **0.5.1.0** on `v-0.5.1.0` (spec §8.0): `X-CSC-Client` header in
-all GH UserObjects + backend logging; Python 3.9 → 3.13 with `constraints.txt` (glibc-2.17
+all GH UserObjects + backend logging; Python 3.9 --> 3.13 with `constraints.txt` (glibc-2.17
 ceiling). The **photo-metadata strip** (7.13, upload pipeline + migration step 14) is also
 independent of 0.6 — it could ship with 0.5.1.0 or as its own patch (user not yet asked).
 
@@ -102,7 +102,7 @@ Session 4 (2026-09-24):
   add-only after publish, removal = moderator + tombstone entry.
 - **7.4** Inspection photos are evidence attachments, per observation — not snapshot photos.
 - **7.5** Web snapshot form from four places: new component, cut from…, record new state,
-  correct. Draft → submit. Web mesh / point-cloud upload deferred (planned).
+  correct. Draft --> submit. Web mesh / point-cloud upload deferred (planned).
 - **7.6** GH bridge builder components `Actor`, `Origin`, `IdentityMetadata`,
   `SnapshotMetadata` (JSON fragments of the API payload); Create components ~8 inputs.
 - **7.7** Per-snapshot `capture` block (frame, labelled markers, fixture meshes); marker points
@@ -112,7 +112,7 @@ Session 4 (2026-09-24):
 - **7.9** `condition_grade` = first-class overall visual grade (3 good … 0 unusable as is);
   0.5 default grades not migrated; badge = grade, else 3 − worst finding.
 - **7.10** The frame (`frame` + `bbx`, renamed from `pca_frame`) is its own derived field:
-  minimum-volume box; longest → X, middle → Y, shortest → Z; linear `IfcColumn` stands (Z).
+  minimum-volume box; longest --> X, middle --> Y, shortest --> Z; linear `IfcColumn` stands (Z).
   Matrix §6 reviewed.
 - **7.11** Designs removed from CSC (collection archived at cutover); `exit.design_id` and the
   snapshot `iframe` go. Evaluation happens in GH; published designs belong in tools like Speckle.
