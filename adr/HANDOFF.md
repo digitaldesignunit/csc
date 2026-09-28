@@ -1,10 +1,12 @@
 # Handoff --- CSC data model / evidence system design
 
-**Update 2026-09-28 (later):** 0.5.1.0 implemented in the working tree of `v-0.5.1.0`, uncommitted:
-Python 3.13, client header, EXIF strip, local test environment, **release + deploy pipeline
-(decision 8.5)**. Next: user re-exports `DDU_CSC_Session` / `DDU_CSC_Update` `.ghuser` + XML in
-Rhino, commits, PRs to main, runs the server conversion (`uberspaceconfig/deployment/README.md`),
-tags `v0.5.1.0`. Then P1 of the 0.6 plan.
+**Update 2026-09-28 (end of day):** **0.5.1.0 is released and live** (tag `v0.5.1.0`, deployed on
+Uberspace through the tag-driven release + approval-gated deploy pipeline, decision 8.5; server
+converted to `~/csc/releases` + `current`, cron and `.bash_profile` moved, photo metadata
+stripped). Python 3.13, client header (logged only), EXIF strip, local test environment and CI
+are in place. **Next: P1 of `adr/IMPLEMENTATION_PLAN_0.6.md` on a new branch `v-0.6.0.0` from
+`main`.** Pending cleanup after a few good releases: the old server layout (deployment README,
+step 7).
 
 **Last session:** 2026-09-28 --- consistency pass done (spec draft 4, decisions 8.1--8.4), LoW codes
 verified, open data facts confirmed, **implementation plan drafted** (`adr/IMPLEMENTATION_PLAN_0.6.md`,
