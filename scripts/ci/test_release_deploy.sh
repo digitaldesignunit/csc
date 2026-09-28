@@ -71,6 +71,13 @@ make_release 9.9.9.2
 make_release 9.9.9.3 broken
 (cd "$t/api" && exec python3 -m http.server "$api_port" --bind 127.0.0.1 >/dev/null 2>&1) &
 pids+=($!)
+# the server starts in the background: wait until it answers
+for _ in $(seq 1 50); do
+  curl -fsS -o /dev/null "http://127.0.0.1:$api_port/repos/owner/repo/releases/tags/v9.9.9.1" && break
+  sleep 0.2
+done
+curl -fsS -o /dev/null "http://127.0.0.1:$api_port/repos/owner/repo/releases/tags/v9.9.9.1" \
+  || fail "fake GitHub API did not start"
 
 # --- supervisorctl stub: (re)start the two tiny services -----------------------
 cat > "$t/bin/supervisorctl" <<EOF
