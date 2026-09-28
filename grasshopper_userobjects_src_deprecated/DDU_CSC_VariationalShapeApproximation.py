@@ -28,7 +28,7 @@ class CSC_VariationalShapeApproximation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Variational Shape Approximation (VSA) implementation based on:
     Cohen-Steiner D, Alliez P, Desbrun M (2004) Variational shape
-    approximation. ACM Trans Graph (TOG) 23(3):905–914
+    approximation. ACM Trans Graph (TOG) 23(3):905--914
 
     Author: Max Benjamin Eschenbach
     License: MIT License
