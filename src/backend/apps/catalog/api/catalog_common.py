@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException, Request, status
 from fastapi.responses import Response
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 
 def not_modified_response(etag: str, **extra_headers: str) -> Response:
@@ -52,6 +53,32 @@ def resolve_new_component_name(
     if not raw or raw.lower() == 'unnamed component':
         return f'Component #{catalog_number}'
     return raw
+
+
+async def ensure_catalog_number_counter(database) -> None:
+    """
+    Create the catalog_number counter if it is missing (fresh database,
+    test database, seeded dump); it continues after the highest existing
+    number. An existing counter is never touched. Safe when several workers
+    start at once: the first insert wins.
+    """
+    counters = database['counters']
+    if await counters.find_one({'_id': 'catalog_number'}) is not None:
+        return
+    highest = await database['component_identities'].find_one(
+        {'catalog_number': {'$type': 'number'}},
+        sort=[('catalog_number', -1)],
+        projection={'catalog_number': 1},
+    )
+    next_value = int(highest['catalog_number']) + 1 if highest else 1
+    try:
+        await counters.update_one(
+            {'_id': 'catalog_number'},
+            {'$setOnInsert': {'next_value': next_value}},
+            upsert=True,
+        )
+    except DuplicateKeyError:
+        pass
 
 
 async def allocate_catalog_number(request: Request) -> int:
