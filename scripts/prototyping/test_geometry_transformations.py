@@ -243,7 +243,7 @@ def print_mesh_info(mesh: trimesh.Trimesh, label: str):
     print(f'  Faces: {len(mesh.faces)}')
     print(f'  Centroid: [{centroid[0]:.4f}, {centroid[1]:.4f}, '
           f'{centroid[2]:.4f}]')
-    print(f'  Extents (L×W×H): [{extents[0]:.4f}, {extents[1]:.4f}, '
+    print(f'  Extents (LxWxH): [{extents[0]:.4f}, {extents[1]:.4f}, '
           f'{extents[2]:.4f}]')
     print(f'  Bounds Min: [{bounds[0][0]:.4f}, {bounds[0][1]:.4f}, '
           f'{bounds[0][2]:.4f}]')

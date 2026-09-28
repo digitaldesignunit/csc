@@ -1,4 +1,4 @@
-"""X-CSC-Client parsing (data model spec §7.4)."""
+"""X-CSC-Client parsing (data model spec section 7.4)."""
 
 from apps.catalog.client_header import describe_client, parse_client_header
 

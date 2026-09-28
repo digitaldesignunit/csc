@@ -9,7 +9,7 @@ def identity_frame():
 
 
 def panel_payload(**overrides):
-    """A 400 × 200 × 12 mm panel as the 0.5 web wizard would create it."""
+    """A 400 x 200 x 12 mm panel as the 0.5 web wizard would create it."""
     payload = {
         'type': 'panel',
         'material': 'corian',

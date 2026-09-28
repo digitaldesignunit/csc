@@ -2,7 +2,7 @@
 """
 Strip location and personal metadata from stored snapshot photos.
 
-Design decision 7.13 / data model spec §8.1 step 14. Every JPEG under the
+Design decision 7.13 / data model spec section 8.1 step 14. Every JPEG under the
 snapshot photos directory is rewritten to keep only orientation, capture time
 and camera make / model (the same whitelist as the upload pipeline,
 ``apps.catalog.api.snapshot_images``). The pixels are not re-encoded --- only

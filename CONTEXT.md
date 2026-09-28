@@ -95,7 +95,7 @@ _Avoid_: active, unconsumed
 A user's hold on a component in circulation, signalling that they intend to use it.
 
 **Re-entry**:
-An installed, returned or lost component coming back with a new origin; the previous origin–exit cycle is archived.
+An installed, returned or lost component coming back with a new origin; the previous origin--exit cycle is archived.
 
 **Lineage**:
 The split and merge relations between identities. Children inherit their parents' past --- origin, material, manufacture date, original function --- unless they state their own.

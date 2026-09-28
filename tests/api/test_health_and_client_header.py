@@ -22,7 +22,7 @@ def test_requests_are_logged_with_their_client(api, backend_env):
 
 
 def test_missing_or_invalid_header_is_logged_never_rejected(api, backend_env):
-    # 0.5.1.0 only logs; enforcement arrives with 0.6 (spec §7.4)
+    # 0.5.1.0 only logs; enforcement arrives with 0.6 (spec section 7.4)
     response = api.get('/health/db', headers={
         'X-CSC-Client': '', 'User-Agent': 'python-requests/2.32'})
     assert response.status_code == 200

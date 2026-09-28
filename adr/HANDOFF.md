@@ -6,9 +6,9 @@ Python 3.13, client header, EXIF strip, local test environment, **release + depl
 Rhino, commits, PRs to main, runs the server conversion (`uberspaceconfig/deployment/README.md`),
 tags `v0.5.1.0`. Then P1 of the 0.6 plan.
 
-**Last session:** 2026-09-28 --- consistency pass done (spec draft 4, decisions 8.1–8.4), LoW codes
+**Last session:** 2026-09-28 --- consistency pass done (spec draft 4, decisions 8.1--8.4), LoW codes
 verified, open data facts confirmed, **implementation plan drafted** (`adr/IMPLEMENTATION_PLAN_0.6.md`,
-under review: its §5 Q1–Q3). **Next step:** settle Q1–Q3, then start P0 (0.5.1.0).
+under review: its section 5 Q1--Q3). **Next step:** settle Q1--Q3, then start P0 (0.5.1.0).
 **Who:** fstwn (eschenbach@dg.tu-darmstadt.de), TU Darmstadt DG --- sole maintainer of CSC.
 
 ## 1. What this work is
@@ -37,10 +37,10 @@ Threads merged into one spec:
 
 | file | role |
 |---|---|
-| `adr/DATA_MODEL_SPEC.md` | **authoritative spec**, draft 4 (2026-09-28). §0 reading guide ... §10 CPR/DPP, Appendices A (evidence payloads, A.4 reinforcement layout), B (proxy primitives). §9 = open questions (all struck through as decided). |
+| `adr/DATA_MODEL_SPEC.md` | **authoritative spec**, draft 4 (2026-09-28). section 0 reading guide ... section 10 CPR/DPP, Appendices A (evidence payloads, A.4 reinforcement layout), B (proxy primitives). section 9 = open questions (all struck through as decided). |
 | `adr/DESIGN_DECISIONS.md` | decision log: 1.x evidence, 2.x property fold, 3.x geometry, 4.x classification, 5.x CPR proposals, 6.x provenance / permissions / release, **7.x entry surfaces / representation / scope (2026-09-24), **8.x consistency pass (2026-09-28)**. |
 | `CONTEXT.md` (repo root) | **glossary** (domain-modeling format): canonical terms + words to avoid. Created 2026-09-24. |
-| `adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1–P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; open Q1–Q3 |
+| `adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1--P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; open Q1--Q3 |
 | `adr/HANDOFF.md` | this file |
 | `future_implementation/MEASUREMENTS_SPEC.md` | original measurement spec --- superseded, kept for domain research and standards sources. Gitignored. |
 | `future_implementation/IMPLEMENTATION_PLAN_V0-5+.md` | older plan; its 0.5.0.2 moderator section is **superseded by 6.5** |
@@ -52,25 +52,25 @@ Threads merged into one spec:
 
 ## 3. Resume here
 
-**A. Grilling --- done.** HANDOFF items 1–3 of 2026-09-23 closed by 7.1–7.13 (A.3 "designs × new
+**A. Grilling --- done.** HANDOFF items 1--3 of 2026-09-23 closed by 7.1--7.13 (A.3 "designs x new
 lifecycle" dissolved: designs are removed, 7.11).
 
 **B. Claude's work, reviewed by user:**
-1. ~~**Spec consistency pass.**~~ **Done 2026-09-28** (draft 4, decisions 8.1–8.4). Known items: §0 / §1 still describe the pre-6.x model (no datasets,
+1. ~~**Spec consistency pass.**~~ **Done 2026-09-28** (draft 4, decisions 8.1--8.4). Known items: section 0 / section 1 still describe the pre-6.x model (no datasets,
    origin / exit, capture, frame); "measurement" wording where "evidence" is meant (1.6); the fold
-   pseudo-code (§4.4) reads only `summary`, although `derived[]` entries with a different quantity
-   are meant to feed the fold (`compressive_strength_in_situ`); §4.3 prose still says "PCA" in
-   places; §7 route list vs. 7.1–7.11 (designs gone, `/evidence/bulk`, attachments); cross-refs.
-2. ~~**Verify the 5 LoW codes.**~~ **Done** --- all exist; fit notes in §2.10 (source: AVV Anlage).
+   pseudo-code (section 4.4) reads only `summary`, although `derived[]` entries with a different quantity
+   are meant to feed the fold (`compressive_strength_in_situ`); section 4.3 prose still says "PCA" in
+   places; section 7 route list vs. 7.1--7.11 (designs gone, `/evidence/bulk`, attachments); cross-refs.
+2. ~~**Verify the 5 LoW codes.**~~ **Done** --- all exist; fit notes in section 2.10 (source: AVV Anlage).
 3. ~~**Phased implementation plan**~~ **Drafted** --> `adr/IMPLEMENTATION_PLAN_0.6.md`. Original brief: work breakdown, order, tests, migration
-   rehearsal on 260916 (steps 1–14). Suggested spine: vocab + models --> datasets / permissions -->
+   rehearsal on 260916 (steps 1--14). Suggested spine: vocab + models --> datasets / permissions -->
    status lifecycle / tombstones / freeze --> origin / exit / lineage --> geometry runner (frame 7.10,
    shape_class) --> capture migration (7.7) --> proxies --> evidence + fold + attachments (7.3) +
    reinforcement layout (7.8) --> migrations rehearsed --> frontend (snapshot form 7.5, evidence form
    7.1 / 7.4, moderation, `/admin` datasets) --> GH bridge (builders 7.6, `ReinforcementLayout` +
    `AddEvidence`).
 
-**C. Implementation-ready now:** **0.5.1.0** on `v-0.5.1.0` (spec §8.0): `X-CSC-Client` header in
+**C. Implementation-ready now:** **0.5.1.0** on `v-0.5.1.0` (spec section 8.0): `X-CSC-Client` header in
 all GH UserObjects + backend logging; Python 3.9 --> 3.13 with `constraints.txt` (glibc-2.17
 ceiling). The **photo-metadata strip** (7.13, upload pipeline + migration step 14) is also
 independent of 0.6 --- it could ship with 0.5.1.0 or as its own patch (user not yet asked).
@@ -80,17 +80,17 @@ all 16 `dbu_zirkus` pieces.
 
 ## 4. Decisions that are locked (do not re-ask)
 
-Full list with consequences in `DESIGN_DECISIONS.md`. Sessions 1–2 (1.x–4.x): documentation of
+Full list with consequences in `DESIGN_DECISIONS.md`. Sessions 1--2 (1.x--4.x): documentation of
 record; snapshot context recomputed; atomic evidence, range+n; destructive test = event;
 `component_evidence`; `status` + `verification`; supersede-don't-edit; derived property fold
-(tiers, per-quantity scope, ×0.8 inheritance); `condition` dropped; `geometry.proxies[]`;
+(tiers, per-quantity scope, x0.8 inheritance); `condition` dropped; `geometry.proxies[]`;
 `original_function` (IFC names) + derived `shape_class`; `regions[]` slot only.
 
-Session 3 (2026-09-23): 6.1 `origin` · 6.2 server-side lineage inheritance · 6.3 `exit` +
-re-entry · 6.4 tombstones · 6.5 datasets as projects, roles `{contributor, reviewer, moderator}` ·
-6.6 published snapshots freeze · 6.7 release path, header enforced, no aliases · 6.8 CPR triage ·
-6.9 raw-UUID tags + `/id/{uuid}` · 6.10 materials + LoW class + trade name · 6.11 no new geometry
-dependency · 6.12 Python 3.13 · 6.13 small items · 6.14 all derivation server-side · 6.15
+Session 3 (2026-09-23): 6.1 `origin` ; 6.2 server-side lineage inheritance ; 6.3 `exit` +
+re-entry ; 6.4 tombstones ; 6.5 datasets as projects, roles `{contributor, reviewer, moderator}` ;
+6.6 published snapshots freeze ; 6.7 release path, header enforced, no aliases ; 6.8 CPR triage ;
+6.9 raw-UUID tags + `/id/{uuid}` ; 6.10 materials + LoW class + trade name ; 6.11 no new geometry
+dependency ; 6.12 Python 3.13 ; 6.13 small items ; 6.14 all derivation server-side ; 6.15
 `complexity` derived + overridable.
 
 Session 4 (2026-09-24):
@@ -110,10 +110,10 @@ Session 4 (2026-09-24):
 - **7.8** Reinforcement is evidence: `reinforcement_layout`, one record per source, tier by
   basis; the bridge ships `ReinforcementLayout` + generic `AddEvidence`.
 - **7.9** `condition_grade` = first-class overall visual grade (3 good ... 0 unusable as is);
-  0.5 default grades not migrated; badge = grade, else 3 − worst finding.
+  0.5 default grades not migrated; badge = grade, else 3 - worst finding.
 - **7.10** The frame (`frame` + `bbx`, renamed from `pca_frame`) is its own derived field:
   minimum-volume box; longest --> X, middle --> Y, shortest --> Z; linear `IfcColumn` stands (Z).
-  Matrix §6 reviewed.
+  Matrix section 6 reviewed.
 - **7.11** Designs removed from CSC (collection archived at cutover); `exit.design_id` and the
   snapshot `iframe` go. Evaluation happens in GH; published designs belong in tools like Speckle.
 - **7.12** Virtual snapshots removed.
@@ -128,9 +128,9 @@ Session 4 (2026-09-24):
 701 snapshots written by the shared `ddu` account. `processes` empty and `assembly` false
 everywhere. `complexity` and `condition` are batch defaults (condition `2` on 698 of 701; only
 `schoenes_neues_feld` varies). **All 70 `ddu_build_with_debris` snapshots** hold the robot rig
-inside `geometry`: 4 constant blue markers (±120 mm cross = gripper marker plane), green markers on
+inside `geometry`: 4 constant blue markers (+/-120 mm cross = gripper marker plane), green markers on
 the stone (a few pieces), and the gripper as `meshes[1]` with PLYs. **Reinforcements:** 1 snapshot
-(`dbu_zirkus`, 35 bars, BSt III Ø8). **Photos:** 3 of 8 in the assets folder carry GPS. The web
+(`dbu_zirkus`, 35 bars, BSt III dia. 8). **Photos:** 3 of 8 in the assets folder carry GPS. The web
 wizard's `canonicalizeBoxAxesMm` already encodes the 7.10 axis convention. GH tooltips still say
 dataset `mineral_composite_sheets` (the data says `mineral_composite_panels`) --- fixed by the GH
 bridge rewrite; old migration scripts are left as they are (user).
@@ -138,9 +138,9 @@ bridge rewrite; old migration scripts are left as they are (user).
 ## 6. Caveats
 
 - No code written; no migrations exist; `adr/` and `CONTEXT.md` uncommitted.
-- Number of designs in production unknown (not in the dumps) --- archived at cutover (§8 step 13).
+- Number of designs in production unknown (not in the dumps) --- archived at cutover (section 8 step 13).
 - CPR analysis is alignment, not compliance (delegated act under Art 75(1) does not exist yet).
   EN 18219/18220/18221/18222 only needed for deferred items (identifiers, export).
 - DIN SPEC 91484 not obtained.
 - Shape-class and complexity thresholds are guesses until the tuning script runs.
-- U7 = CentOS 7 / glibc 2.17: numpy ≤ 2.2.6, scipy ≤ 1.16.3, scikit-learn ≤ 1.7.2 on cp313.
+- U7 = CentOS 7 / glibc 2.17: numpy <= 2.2.6, scipy <= 1.16.3, scikit-learn <= 1.7.2 on cp313.

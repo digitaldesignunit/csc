@@ -387,7 +387,7 @@ def generate_labels(N: int,
 
     print("Starting QR code generation...")
     print(f"  - Count: {N} QR codes")
-    print(f"  - Layout: {cols} columns × {rows} rows")
+    print(f"  - Layout: {cols} columns x {rows} rows")
     print(f"  - Output directory: {outdir}")
     print(f"  - QR size: {qr_size}")
     print(f"  - Error correction: {error_correction}")
@@ -489,8 +489,8 @@ def generate_labels(N: int,
 
     for page_index, lines in enumerate(lineImgChunks):
         print(f"  Creating page {page_index + 1}/{len(lineImgChunks)}...")
-        # Create a new image for each page (A4 size: 210mm × 297mm at 300 DPI)
-        # A4 at 300 DPI = 2480 × 3508 pixels
+        # Create a new image for each page (A4 size: 210mm x 297mm at 300 DPI)
+        # A4 at 300 DPI = 2480 x 3508 pixels
         page_width = 2480   # A4 width in pixels at 300 DPI
         page_height = 3508  # A4 height in pixels at 300 DPI
 
@@ -708,7 +708,7 @@ def generate_nfc_labels(N: int,
     """
     print("Starting NFC QR code generation...")
     print(f"  - Count: {N} QR codes")
-    print(f"  - Layout: {cols} columns × {rows} rows")
+    print(f"  - Layout: {cols} columns x {rows} rows")
     print(f"  - Output directory: {outdir}")
 
     dpi = 300

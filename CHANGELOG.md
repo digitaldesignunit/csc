@@ -374,7 +374,7 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 
 ### Changes
 
-- **Project Name**: Renamed the whole project to "Catalog" instead of "Catalogue" because it was just a shit choice in the beginning :´)
+- **Project Name**: Renamed the whole project to "Catalog" instead of "Catalogue" because it was just a shit choice in the beginning :')
 
 ## [0.4.5.0] - 2026-02-03
 
@@ -749,10 +749,10 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 
 ### Versions
 
-- CSC FastAPI Backend:  0.3.0.0 ✨
-- CSC React Frontend:   0.3.0.0 ✨
+- CSC FastAPI Backend:  0.3.0.0
+- CSC React Frontend:   0.3.0.0
 - CSC Sheetscan Module: 0.0.1.11
-- CSC Grasshopper Interface: 0.2.0.0 ✨
+- CSC Grasshopper Interface: 0.2.0.0
 
 ### Added
 
@@ -857,10 +857,10 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 
 ### Versions
 
-- CSC FastAPI Backend:  0.2.9.0 ✨
-- CSC React Frontend:   0.2.4.0 ✨
+- CSC FastAPI Backend:  0.2.9.0
+- CSC React Frontend:   0.2.4.0
 - CSC Sheetscan Module: 0.0.1.11
-- CSC Grasshopper Interface: 0.1.2.0 ✨
+- CSC Grasshopper Interface: 0.1.2.0
 
 ### Added
 
@@ -904,10 +904,10 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 
 ### Versions
 
-- CSC FastAPI Backend:  0.2.8.0 ✨
-- CSC React Frontend:   0.2.3.0 ✨
+- CSC FastAPI Backend:  0.2.8.0
+- CSC React Frontend:   0.2.3.0
 - CSC Sheetscan Module: 0.0.1.11
-- CSC Grasshopper Interface: 0.1.1.0 ✨
+- CSC Grasshopper Interface: 0.1.1.0
 
 ### Added
 
@@ -938,8 +938,8 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 
 ### Versions
 
-- CSC FastAPI Backend:  0.2.5.0 ✨
-- CSC React Frontend:   0.2.2.0 ✨
+- CSC FastAPI Backend:  0.2.5.0
+- CSC React Frontend:   0.2.2.0
 - CSC Sheetscan Module: 0.0.1.11
 - CSC Grasshopper Interface: 0.1.0.0
 
@@ -1005,8 +1005,8 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 
 ### Versions
 
-- CSC FastAPI Backend:  0.2.4.0 ✨
-- CSC React Frontend:   0.2.1.0 ✨
+- CSC FastAPI Backend:  0.2.4.0
+- CSC React Frontend:   0.2.1.0
 - CSC Sheetscan Module: 0.0.1.11
 - CSC Grasshopper Interface: 0.1.0.0
 
@@ -1045,7 +1045,7 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 
 ### Versions
 
-- CSC FastAPI Backend:  0.2.3.0 ✨
+- CSC FastAPI Backend:  0.2.3.0
 - CSC React Frontend:   0.2.0.9
 - CSC Sheetscan Module: 0.0.1.11
 - CSC Grasshopper Interface: 0.1.0.0
@@ -1082,7 +1082,7 @@ and deployed by GitHub Actions (README, "Releases and deployment").
 - CSC FastAPI Backend:  0.2.2.0
 - CSC React Frontend:   0.2.0.9
 - CSC Sheetscan Module: 0.0.1.11
-- **CSC Grasshopper Interface: 0.1.0.0** ✨
+- **CSC Grasshopper Interface: 0.1.0.0**
 
 ### Added
 

@@ -69,7 +69,7 @@ if _missing:
 # FASTAPI SETUP ---------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- Client identification log (X-CSC-Client, spec §7.4) ---------------
+    # --- Client identification log (X-CSC-Client, spec section 7.4) ---------------
     configure_client_log(os.getenv(
         'CLIENT_LOG_PATH',
         os.path.join(os.path.dirname(__file__), 'logs', 'client_versions.log'),

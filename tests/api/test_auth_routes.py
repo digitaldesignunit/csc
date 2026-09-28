@@ -37,7 +37,7 @@ def test_registration_rejects_foreign_domains_and_long_passwords(api):
     assert foreign.status_code in (400, 422)
     too_long = api.post('/auth/register', json={
         'username': 'eve', 'full_name': 'Eve',
-        'email': 'eve@tu-darmstadt.de', 'password': 'ä' * 40,  # 80 bytes
+        'email': 'eve@tu-darmstadt.de', 'password': '\u00e4' * 40,  # a-umlaut: 80 bytes
     })
     assert too_long.status_code == 422
 

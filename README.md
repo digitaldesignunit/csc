@@ -246,12 +246,12 @@ The server runs whatever `~/csc/current` points to:
 
 ```
 ~/csc/
-├─ releases/<version>/   backend/ frontend/ deploy/ VERSION venv -> ../../venvs/<hash>
-├─ current -> releases/<version>
-├─ venvs/<hash>/         one per requirements + constraints content
-├─ shared/frontend/      .env / .env.local (frontend secrets, linked into releases)
-├─ shared/logs/          backend and cron logs (linked as backend/logs)
-└─ bin/                  csc_release_deploy.sh, csc_deploy_gate.sh
++- releases/<version>/   backend/ frontend/ deploy/ VERSION venv -> ../../venvs/<hash>
++- current -> releases/<version>
++- venvs/<hash>/         one per requirements + constraints content
++- shared/frontend/      .env / .env.local (frontend secrets, linked into releases)
++- shared/logs/          backend and cron logs (linked as backend/logs)
++- bin/                  csc_release_deploy.sh, csc_deploy_gate.sh
 ```
 
 The one-time setup (Python 3.13, directories, services, cron, deploy key, GitHub
@@ -464,12 +464,12 @@ const component: ComponentModel = {
 
 ```
 src/frontend/
-├── scripts/
-│   └── generate-models.ts    # Generation script
-├── generated/                 # Auto-generated models
-│   ├── ComponentModel.ts     # Generated ComponentModel interface
-│   └── index.ts             # Export index
-└── package.json              # Contains generate:models script
++-- scripts/
+|   +-- generate-models.ts    # Generation script
++-- generated/                 # Auto-generated models
+|   +-- ComponentModel.ts     # Generated ComponentModel interface
+|   +-- index.ts             # Export index
++-- package.json              # Contains generate:models script
 ```
 
 ## Testing and linting

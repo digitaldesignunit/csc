@@ -2,7 +2,7 @@
 Client identification through the ``X-CSC-Client`` request header.
 
 Every client names itself as ``<client>/<version>``, e.g.
-``gh-userobjects/0.5.1.0`` or ``web/0.5.1.0`` (data model spec §7.4).
+``gh-userobjects/0.5.1.0`` or ``web/0.5.1.0`` (data model spec section 7.4).
 0.5.1.0 only logs the header so that old clients can be identified before
 the 0.6 cutover; 0.6 rejects clients below a minimum version.
 """
