@@ -47,10 +47,15 @@ def test_newer_server_version_compares_greater():
     assert compare_versions(server, server) == 0
 
 
-def test_resolve_update_channel_defaults_to_main():
-    assert resolve_update_channel(None) == 'main'
-    assert resolve_update_channel('') == 'main'
+def test_resolve_update_channel_defaults_to_this_release(monkeypatch):
+    # CSC_Update follows the release the running backend belongs to
+    from csc_version import release_tag
+    monkeypatch.delenv('GH_UPDATE_REF', raising=False)
+    assert resolve_update_channel(None) == release_tag()
+    assert resolve_update_channel('') == release_tag()
     assert resolve_update_channel('main') == 'main'
+    monkeypatch.setenv('GH_UPDATE_REF', 'staging')
+    assert resolve_update_channel('') == 'staging'
 
 
 def test_resolve_update_channel_preserves_exact_branch_name():

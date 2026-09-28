@@ -114,7 +114,7 @@ export type ComponentMapResponse = {
   computed_at?: string | null
 }
 
-/** For `GET /snapshots/{id}/meshes/…` PLY routing. */
+/** For `GET /snapshots/{id}/meshes/...` PLY routing. */
 export type SnapshotMeshRouting = {
   snapshot_id: string
   mesh_ply_resolutions?: Record<string, string[]> | null

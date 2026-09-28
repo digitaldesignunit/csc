@@ -111,7 +111,7 @@ export function buildPointCloudGroupFromPlyBuffer(
   name: string,
   options?: {
     defaultColor?: number
-    /** ComponentViewer: Rhino Z-up → Three.js Y-up + mm scale on parent. */
+    /** ComponentViewer: Rhino Z-up --> Three.js Y-up + mm scale on parent. */
     applyComponentViewerFrame?: boolean
     scale?: number
   },

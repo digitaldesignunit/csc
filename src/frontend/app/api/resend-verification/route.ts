@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { CSC_CLIENT_HEADERS } from '@/lib/cscClient'
 
 const FASTAPI_URL = process.env.FASTAPI_URL!
 
@@ -7,7 +8,7 @@ export async function POST(req: Request) {
 
   const upstream = await fetch(`${FASTAPI_URL}/auth/resend-verification`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CSC_CLIENT_HEADERS },
     body: JSON.stringify(body),
   })
 

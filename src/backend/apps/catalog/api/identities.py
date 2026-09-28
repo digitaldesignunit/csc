@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.13
 """
 Routes for the v0.5 `component_identities` collection.
 
@@ -801,7 +801,7 @@ async def get_identities_stats(
     material: Optional[str] = Query(None, description='Material type filter'),
     dataset: Optional[str] = Query(None, description='Dataset name filter'),
     validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
-    complexity: Optional[int] = Query(None, description='Complexity (0–3)'),
+    complexity: Optional[int] = Query(None, description='Complexity (0--3)'),
     fragment: Optional[bool] = Query(None, description='Is fragment'),
     bbx_min_x: Optional[float] = Query(None, description='Min X'),
     bbx_min_y: Optional[float] = Query(None, description='Min Y'),

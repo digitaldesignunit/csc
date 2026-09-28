@@ -3,12 +3,13 @@ export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { CSC_CLIENT_HEADERS } from '@/lib/cscClient'
 
 const FASTAPI_URL = process.env.FASTAPI_URL!
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET
 const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 MB
 
-// Geometry uploads (PUT/POST) must go directly to FastAPI — not via this proxy.
+// Geometry uploads (PUT/POST) must go directly to FastAPI --- not via this proxy.
 // GET downloads for the web viewer are proxied with the user's bearer token.
 const BLOCKED_UPLOAD_PATTERNS = [
   /^\/snapshots\/[^/]+\/meshes\/[^/]+\/reduced$/,
@@ -76,10 +77,10 @@ async function handle(
   const hasBody = !['GET', 'HEAD'].includes(method)
   const body = hasBody ? await req.arrayBuffer() : undefined
 
-  const headers = forwardableHeaders(
-    req,
-    apiToken ? { Authorization: `Bearer ${apiToken}` } : {},
-  )
+  const headers = forwardableHeaders(req, {
+    ...CSC_CLIENT_HEADERS,
+    ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+  })
 
   // 6) Call FastAPI
   const upstream = await fetch(target, {

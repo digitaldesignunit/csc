@@ -1,6 +1,6 @@
 # CSC Backend Requirements
 # Requirements for all Backend processes, i.e. FastAPI and Services
-# Install with: pip install -r requirements.txt
+# Python 3.13. Install with: pip install -r requirements.txt -c constraints.txt
 
 # --- Server ---
 fastapi
@@ -9,11 +9,14 @@ uvicorn[standard]
 python-multipart
 
 # --- Database ---
-pymongo[srv]
+pymongo
 
 # --- Auth ---
 python-jose[cryptography]
-passlib[bcrypt]
+# direct bcrypt; passlib (unmaintained) breaks on bcrypt >= 5
+bcrypt
+# EmailStr in the user models needs it
+email-validator
 slowapi
 
 # --- HTTP client (GitHub service) ---
@@ -26,6 +29,8 @@ Pillow
 
 # --- Descriptor computation ---
 trimesh>=3.15.0
+# trimesh needs it for mesh sections (radial signature); not pulled in by trimesh
+networkx
 scipy
 # shapely.concave_hull (2.0+) wraps projected point-cloud sections into an
 # outline for the radial signature; it also ships as a trimesh extra.

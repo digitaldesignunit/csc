@@ -142,9 +142,9 @@ def rotate_vertices(vertices: np.ndarray) -> np.ndarray:
 
 def rotate_for_viewer(vertices: np.ndarray) -> np.ndarray:
     """
-    Apply +90° X rotation to compensate for viewer's -90° X rotation.
+    Apply +90 deg X rotation to compensate for viewer's -90 deg X rotation.
     Viewer applies rotateX(-Math.PI/2), so we pre-apply rotateX(+Math.PI/2).
-    Rotation matrix for +90° about X: [[1,0,0], [0,0,-1], [0,1,0]]
+    Rotation matrix for +90 deg about X: [[1,0,0], [0,0,-1], [0,1,0]]
     """
     if vertices.size == 0:
         return vertices

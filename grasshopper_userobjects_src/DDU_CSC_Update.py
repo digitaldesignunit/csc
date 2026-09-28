@@ -32,13 +32,15 @@ ghenv.Component.Description = (  # NOQA
     'Updates component sources and userobjects in document from server.\n'
     'NOTE: CheckForUpdates must be True to check for updates AND to '
     'install updates! Switch on both to update everything.\n'
-    'UPDATE_CHANNEL is a hardcoded GitHub branch name (default: main). '
-    'It must match the remote branch exactly.'
+    'Updates come from the Grasshopper release that belongs to the '
+    'server. UPDATE_CHANNEL (empty by default) may name a GitHub branch or '
+    'tag for testing; it must match the remote name exactly.'
 )
 
-# GitHub branch to pull sources and UserObjects from. Must match the remote
-# branch name exactly (e.g. 'main', 'develop', 'feature/foo').
-UPDATE_CHANNEL = 'main'
+# Leave empty: the server then delivers the UserObjects of the release it runs
+# (tag v<version>), so an update always matches the backend. Testers may set a
+# GitHub branch or tag here; it must match the remote name exactly.
+UPDATE_CHANNEL = ''
 
 # Matches an actual version declaration - the word "version", a ":" or "=",
 # then the number. The separator is required so prose such as 'creates a
@@ -62,7 +64,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260908.3
+    Version: 260928
     """
 
     def __init__(self):
@@ -118,7 +120,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
 
     def _channel_params(self):
         """Query params selecting the GitHub update channel (branch)."""
-        return {'channel': UPDATE_CHANNEL}
+        return {'channel': UPDATE_CHANNEL} if UPDATE_CHANNEL else {}
 
     def get_source_version(self, source):
         """
@@ -379,8 +381,9 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 api_src_versions[name] = tuple(version)
         elif response.status_code == 404:
             msg = (
-                f'Update channel "{UPDATE_CHANNEL}" was not found on GitHub. '
-                'The branch name must match exactly.'
+                f'Update channel "{UPDATE_CHANNEL or "server release"}" was '
+                'not found on GitHub. A branch or tag name must match '
+                'exactly; the server release exists once it is published.'
             )
             self._addError(msg)
             self.Component.Message = msg
@@ -426,8 +429,9 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
             api_uo_names = list(response.json())
         elif response.status_code == 404:
             msg = (
-                f'Update channel "{UPDATE_CHANNEL}" was not found on GitHub. '
-                'The branch name must match exactly.'
+                f'Update channel "{UPDATE_CHANNEL or "server release"}" was '
+                'not found on GitHub. A branch or tag name must match '
+                'exactly; the server release exists once it is published.'
             )
             self._addError(msg)
             self.Component.Message = msg
@@ -536,10 +540,11 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         auth_core = self.get_auth_core_from_sticky()
         if auth_core is None:
             return Status
-        if UPDATE_CHANNEL != 'main':
+        if UPDATE_CHANNEL:
             channel_msg = (
-                f'UPDATE_CHANNEL is "{UPDATE_CHANNEL}" (not main). '
-                'Branch name must match the GitHub remote exactly.'
+                f'UPDATE_CHANNEL is "{UPDATE_CHANNEL}" instead of the '
+                "server's release. It must match a GitHub branch or tag "
+                'exactly.'
             )
             self._addWarning(channel_msg)
             Status.Add(channel_msg)
@@ -558,7 +563,12 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         self.Component.Message = msg
         try:
             if CheckForUpdates:
-                msg = f'Using GitHub update channel: {UPDATE_CHANNEL}'
+                msg = (
+                    f'Using GitHub update channel: {UPDATE_CHANNEL}'
+                    if UPDATE_CHANNEL else
+                    "Using the Grasshopper release that belongs to the "
+                    'server'
+                )
                 self._addRemark(msg)
                 Status.Add(msg)
                 msg = (
@@ -581,7 +591,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 # make request to fetch all source file names and versions
                 msg = (
                     f'Checking Server for updates '
-                    f'(channel: {UPDATE_CHANNEL})...'
+                    f'(channel: {UPDATE_CHANNEL or "server release"})...'
                 )
                 self.Component.Message = msg
                 api_src_versions = self.get_api_source_versions(auth_core)

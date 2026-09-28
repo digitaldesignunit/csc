@@ -59,3 +59,6 @@ scripts/**/*.log
 
 # REPO-WIDE LOG OUTPUT (scripts, maintenance, audits)
 /logs/
+# LOCAL DEVELOPMENT (invoke dev-backend): data, assets, logs
+/.dev/
+src/backend/logs/*.log

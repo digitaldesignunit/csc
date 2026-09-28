@@ -129,15 +129,15 @@ function sortedBoxSideLengths(
 /** Human-readable axis assignment for the add-component dimension hint. */
 export function boxAxisAssignmentHint(componentType: string): string {
   if (componentType.toLowerCase() === 'column') {
-    return 'longest → Z, middle → X, shortest → Y'
+    return 'longest --> Z, middle --> X, shortest --> Y'
   }
-  return 'longest → X, middle → Y, shortest → Z'
+  return 'longest --> X, middle --> Y, shortest --> Z'
 }
 
 /**
  * Sort L/W/H into canonical box axes.
- * Default: longest → X, middle → Y, shortest → Z.
- * Column: longest → Z, middle → X, shortest → Y.
+ * Default: longest --> X, middle --> Y, shortest --> Z.
+ * Column: longest --> Z, middle --> X, shortest --> Y.
  */
 export function canonicalizeBoxAxesMm(
   lengthMm: number,

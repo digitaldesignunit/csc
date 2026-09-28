@@ -1,0 +1,89 @@
+name: Release
+
+# Push a tag v<version> (matching VERSION) on main:
+#   CI -> build the three bundles -> GitHub Release -> deploy (needs approval)
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Version from tag
+        id: meta
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          python scripts/ci/check_version.py --tag "$GITHUB_REF_NAME"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac >> "$GITHUB_OUTPUT"
+
+      - name: Frontend build
+        working-directory: src/frontend
+        env:
+          NEXT_PUBLIC_STATIC_BASE_URL: ${{ vars.NEXT_PUBLIC_STATIC_BASE_URL }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package
+        run: |
+          v="${{ steps.meta.outputs.version }}"
+          for part in backend frontend gh; do
+            bash scripts/ci/package_release.sh "$part" "$v" dist
+          done
+          (cd dist && sha256sum csc-* > SHA256SUMS && cat SHA256SUMS)
+          python scripts/ci/release_notes.py "$v" > dist/NOTES.md
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: dist
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: CSC ${{ needs.build.outputs.version }}
+          body_path: dist/NOTES.md
+          prerelease: ${{ needs.build.outputs.prerelease == 'true' }}
+          files: |
+            dist/csc-backend-*.tar.gz
+            dist/csc-frontend-*.zip
+            dist/csc-gh-interface-*.zip
+            dist/SHA256SUMS
+
+  deploy:
+    needs: publish
+    uses: ./.github/workflows/deploy.yml
+    with:
+      command: deploy ${{ github.ref_name }}
+    secrets: inherit

@@ -3,7 +3,7 @@
  * Start Next standalone with explicit env loading.
  *
  * `node server.js` alone can miss `.env.local` / `.env` depending on Next version
- * and how supervisord launches the process — which makes /api/auth/* return 500.
+ * and how supervisord launches the process --- which makes /api/auth/* return 500.
  *
  * Usage (from the standalone root, next to server.js):
  *   node start-standalone.cjs
@@ -71,7 +71,7 @@ if (missing.length) {
 }
 
 console.log(
-  `[start-standalone] NEXTAUTH_URL=${process.env.NEXTAUTH_URL} — starting server.js`
+  `[start-standalone] NEXTAUTH_URL=${process.env.NEXTAUTH_URL} --- starting server.js`
 )
 
 require('./server.js')

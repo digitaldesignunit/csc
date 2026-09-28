@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.13
 """
 Precompute Component Map layouts (PCA + UMAP) into ``component_map_cache``.
 
@@ -124,7 +124,7 @@ async def compute_and_store(
     stored = 0
     for basis in bases:
         for method in methods:
-            log(f'Computing basis={basis} method={method}…')
+            log(f'Computing basis={basis} method={method}...')
             try:
                 payload = await asyncio.to_thread(
                     build_component_map,

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Produce a self-contained server tree for CI → Uberspace deploys
+  // Produce a self-contained server tree for CI --> Uberspace deploys
   // (avoids running `next build` on hosts with an older glibc).
   output: "standalone",
   // Trace from the frontend itself: keeps `.next/standalone` flat (server.js at
@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
   },
   // `2ndchances.build` is the canonical origin. NextAuth v4 anchors every
   // absolute auth URL to the single `NEXTAUTH_URL`, so the legacy host cannot
-  // serve the app itself — signing in there would set a host-only cookie and
+  // serve the app itself --- signing in there would set a host-only cookie and
   // then redirect to the canonical origin without it. Kept temporary (307)
   // until the switch has settled; browsers cache a 308 very aggressively.
   async redirects() {

@@ -186,7 +186,7 @@ export function componentBounds(component_bbx: ComponentBoundingBox): Array<numb
 }
 
 // Assets shipped inside the Next `public/` folder. The Apache static host only
-// serves uploaded catalog assets, so these must stay on the app origin —
+// serves uploaded catalog assets, so these must stay on the app origin ---
 // otherwise they 404 (and cross-origin GLB fetches additionally fail CORS).
 const BUNDLED_ASSET_PREFIXES = ['/logo/', '/gh-interface/', '/backgroundmeshes/']
 

@@ -42,8 +42,12 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 260908
+Version: 260928.1
 """
+
+# Sent as X-CSC-Client on every request so the backend can tell which
+# UserObjects release is calling (spec 7.4).
+CSC_CLIENT = 'gh-userobjects/0.5.1.0'
 
 
 def _compute_passport_etag(identity_doc, snapshot_docs):
@@ -1160,6 +1164,8 @@ class _AuthCore(object):
     License: MIT License
     """
 
+    CLIENT = CSC_CLIENT
+
     def __init__(self, base_url, leeway=30, disable_cache=False):
         self.base_url = (base_url or 'https://api.2ndchances.build').rstrip('/')
         self.leeway = int(leeway) if leeway is not None else 30
@@ -1218,10 +1224,15 @@ class _AuthCore(object):
         with self._lock:
             return self._username
 
+    def client_header(self):
+        return {'X-CSC-Client': self.CLIENT}
+
     def auth_header(self):
+        headers = self.client_header()
         with self._lock:
-            return ({'Authorization': 'Bearer ' + self._token}
-                    if self._token else {})
+            if self._token:
+                headers['Authorization'] = 'Bearer ' + self._token
+        return headers
 
     def authorized_get(
             self,
@@ -1743,7 +1754,8 @@ class _AuthCore(object):
 
         if not self._cache:
             try:
-                response = requests.get(f'{self.base_url}{endpoint}')
+                response = requests.get(f'{self.base_url}{endpoint}',
+                                        headers=self.client_header())
                 if response.status_code == 200:
                     return response.json()
                 return None
@@ -1757,7 +1769,7 @@ class _AuthCore(object):
                 return cached_schema
 
         try:
-            headers = {}
+            headers = self.client_header()
             if not force_refresh:
                 cached_schema, cached_etag, is_from_cache = self._cache.get(
                     cache_key)
@@ -1811,7 +1823,8 @@ class _AuthCore(object):
         # (schema endpoint is unprotected)
         if not self._cache:
             try:
-                response = requests.get(f'{self.base_url}/schema/design')
+                response = requests.get(f'{self.base_url}/schema/design',
+                                        headers=self.client_header())
                 if response.status_code == 200:
                     return response.json()
                 return None
@@ -1828,7 +1841,7 @@ class _AuthCore(object):
         # Make request to get schema (unprotected endpoint)
         try:
             # Prepare headers for conditional request
-            headers = {}
+            headers = self.client_header()
             if not force_refresh:
                 cached_schema, cached_etag, is_from_cache = self._cache.get(
                     'schema:design')
@@ -1926,6 +1939,20 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
             auth_core = sc.sticky.get('CSC_AuthCore')
         else:
             auth_core = None
+        if auth_core is not None and \
+                getattr(auth_core, 'CLIENT', None) != CSC_CLIENT:
+            # Left in sticky by an older release: its methods do not send
+            # X-CSC-Client. Replace it, keeping the login and settings.
+            old = auth_core
+            auth_core = _AuthCore(
+                base_url=getattr(old, 'base_url', None),
+                leeway=getattr(old, 'leeway', 30),
+                disable_cache=getattr(old, 'disable_cache', False),
+            )
+            auth_core._token = getattr(old, '_token', None)
+            auth_core._exp = getattr(old, '_exp', 0)
+            auth_core._username = getattr(old, '_username', None)
+            sc.sticky['CSC_AuthCore'] = auth_core
         if auth_core is None:
             # Create new AuthCore instance with default settings
             auth_core = _AuthCore(
@@ -2053,7 +2080,8 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                 f'{auth_core.base_url}/auth/token',
                 data=login_data,
                 headers={
-                    'Content-Type': 'application/x-www-form-urlencoded'
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    **auth_core.client_header(),
                 },
                 timeout=20
             )

@@ -22,14 +22,11 @@ export JWT_ALGORITHM="HS256"
 export JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60"
 
 # GitHub
-#     DEPLOY_TOKEN is used by deploy shell script
-#     GH_TOKEN is optional: increases GitHub API rate limits for CSC_Update.
-#     Public repo file fetch (GH XML sync, /ghinterface/) works without it.
+#     The repo is public: releases (deploys) and /ghinterface/ need no token.
+#     GITHUB_CSC_GH_TOKEN is optional and only raises GitHub API rate limits
+#     (CSC_Update, csc_release_deploy.sh).
 export GITHUB_REPO_URL="https://github.com/your-org/your-repo"
-export GITHUB_USERNAME="your-github-username"
-# export GITHUB_CSC_GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
-export GITHUB_CSC_DEPLOY_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
-export GITHUB_DEPLOY_URL="https://{$GITHUB_USERNAME}:{$GITHUB_CSC_DEPLOY_TOKEN}@github.com/your-org/your-repo.git"
+# export GITHUB_CSC_GH_TOKEN="github_pat_xxxxxxxxxxxxxxxxxxxx"
 
 # SMTP / Email
 export SMTP_HOST="yourhost.uberspace.de"
@@ -41,7 +38,8 @@ export SMTP_FROM_NAME="Catalog of Second Chances"
 export FRONTEND_URL="https://2ndchances.build"
 
 # Filesystem paths
-export GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml"
+# shipped with each release (grasshopper_userobjects_xml)
+export GH_XML_CACHE_DIR="/home/ddu/csc/current/backend/static/ghxml"
 export SNAPSHOT_PREVIEW_DIR="/home/ddu/html/csc_assets/snapshot_previews"
 export SNAPSHOT_PHOTOS_DIR="/home/ddu/html/csc_assets/snapshot_photos"
 export SNAPSHOT_MESHES_DIR="/home/ddu/html/csc_assets/meshes"

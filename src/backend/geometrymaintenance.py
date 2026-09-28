@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.13
 """
 Remove on-disk snapshot geometry assets that no longer exist in MongoDB.
 

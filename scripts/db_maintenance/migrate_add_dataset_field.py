@@ -5,10 +5,10 @@ MongoDB Dataset Field Migration Script
 This script adds the dataset field to all components in the CSC database and
 performs the following operations:
 
-1. All material: "corian" components → dataset: "mineral_composite_sheets"
-2. All type: "beam" components → DELETE from database
-3. Component ID "5d01d037-7b18-4e7a-8ab9-4cb975053648" → dataset: "ddu_build_with_debris"
-4. All other components → dataset: "sas_cita_scans"
+1. All material: "corian" components --> dataset: "mineral_composite_sheets"
+2. All type: "beam" components --> DELETE from database
+3. Component ID "5d01d037-7b18-4e7a-8ab9-4cb975053648" --> dataset: "ddu_build_with_debris"
+4. All other components --> dataset: "sas_cita_scans"
 
 The script:
 1. Connects to MongoDB

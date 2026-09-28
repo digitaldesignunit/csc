@@ -1,5 +1,6 @@
 // app/api/register/route.ts
 import { NextResponse } from 'next/server'
+import { CSC_CLIENT_HEADERS } from '@/lib/cscClient'
 
 const FASTAPI_URL = process.env.FASTAPI_URL!
 const MAX_BODY_BYTES = 32 * 1024 // 32 KB
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
 
   const upstream = await fetch(`${FASTAPI_URL}/auth/register`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CSC_CLIENT_HEADERS },
     body: JSON.stringify(body),
   })
 

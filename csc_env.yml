@@ -3,38 +3,25 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.9.18
+  - python=3.13
   - pip
-  - coverage
+  # Only what needs conda: cairosvg's native cairo library on Windows.
+  # Everything numeric comes from pip wheels, exactly as on the server ---
+  # conda's numpy next to pip's scipy crashes on Windows (DLL clash).
   - cairosvg
-  - flake8
-  - invoke>=0.14
-  - numpy>=1.15.4
-  - opencv
-  - pandas
-  - pymongo
-  - pytest>=6.2.5
+  - pillow<=12.2.0
   - qrcode
-  - scipy
-  - scikit-learn
   - pip:
-    - gunicorn
-    - fastapi
-    - httptools
-    - matplotlib
+    # backend + tests, same versions as production (see src/backend/constraints.txt)
+    - -r requirements-dev.txt
+    - -c src/backend/constraints.txt
+    # local tools (label printing, sheet scanning) --- not needed by the backend
+    - -e src/py_modules/csc_sheetscan
+    - opencv-python
+    - pandas
+    - requests
     - qreader
     - open3d>=0.15.1
-    - passlib[bcrypt]
-    - robust-laplacian>=1.0.0
     - potpourri3d>=1.0.0
     - polyscope
-    - pydantic
-    - python-multipart
-    - python-jose[cryptography]
-    - requests
-    - uvicorn
-    - httpx
-    - trimesh>=3.15.0
     - fast-simplification
-    - slowapi
-    - email-validator

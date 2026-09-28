@@ -17,7 +17,7 @@ interface BackgroundMeshProps {
 }
 
 // Served from Next `public/backgroundmeshes` (same origin). Do not route these
-// through NEXT_PUBLIC_STATIC_BASE_URL — cross-origin GLB fetches need CORS and
+// through NEXT_PUBLIC_STATIC_BASE_URL --- cross-origin GLB fetches need CORS and
 // a failed useGLTF throws hard enough to tear down the whole page.
 const MESH_BASE_PATH = '/backgroundmeshes/'
 

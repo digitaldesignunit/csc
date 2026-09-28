@@ -52,7 +52,7 @@ function normalizeColors(colors: number[]): number[] {
 /**
  * Placement matrix from a Rhino Z-up iframe into the Three.js Y-up scene.
  * Snapshot mesh data is left in Rhino Z-up; this matrix is the only axis
- * conversion (legacy OBJ used a separate per-mesh rotateX — not used here).
+ * conversion (legacy OBJ used a separate per-mesh rotateX --- not used here).
  */
 function createTransformMatrix(iframe: DesignComponent['iframe']): THREE.Matrix4 {
   const matrix = new THREE.Matrix4()

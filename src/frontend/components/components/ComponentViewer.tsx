@@ -87,7 +87,9 @@ function Turntable({
 }) {
   const groupRef = useRef<THREE.Group>(null)
   const enabledRef = useRef(enabled)
-  enabledRef.current = enabled
+  useEffect(() => {
+    enabledRef.current = enabled
+  }, [enabled])
 
   useFrame((_, delta) => {
     if (!enabledRef.current || !groupRef.current) return

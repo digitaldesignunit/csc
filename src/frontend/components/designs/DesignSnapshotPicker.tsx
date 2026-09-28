@@ -139,7 +139,7 @@ export default function DesignSnapshotPicker({
                 {isExpanded && (
                   <div className="space-y-1 pl-2 border-l">
                     {isLoadingVersions ? (
-                      <p className="text-sm text-muted-foreground">Loading versions…</p>
+                      <p className="text-sm text-muted-foreground">Loading versions...</p>
                     ) : versionRows.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No snapshots found.</p>
                     ) : (

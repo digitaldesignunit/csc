@@ -19,7 +19,7 @@ not working, etc. pp.
 - The Catalog consists of a _database_, _backend_, _frontend_, and _Grasshopper interface_
 - We use [_MongoDB Atlas_](https://www.mongodb.com/) as database
 - The backend is implemented using [_FastAPI_](https://fastapi.tiangolo.com/)
-- We use Python 3.9.18
+- We use Python 3.13 (see `src/backend/constraints.txt` for the server's package caps)
 - The frontend is implemented using the [_Next.JS_](https://nextjs.org/)
 framework
 - The frontend is designed to connect to the backend on the same server using JWT-based auth
@@ -29,11 +29,100 @@ framework
 
 ## Current Versions
 
-- **CSC FastAPI Backend**: 0.5.0.0
-- **CSC React Frontend**: 0.5.0.0
-- **CSC Grasshopper Interface**: 0.5.0.0
+- **CSC**: 0.5.1.0 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.5.1.0`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
+
+---
+
+## Local development and tests
+
+A complete local setup --- MongoDB, FastAPI backend, Next.js frontend, test
+suite --- that never touches production. Commands are for PowerShell on Windows;
+run them from the repository root unless stated otherwise.
+
+### One-time setup
+
+1. **MongoDB Community Server** (runs as the Windows service `MongoDB` on port
+   27017 and starts with Windows):
+
+   ```
+   winget install --id MongoDB.Server --source winget
+   Get-Service MongoDB          # Status should be Running
+   ```
+
+   The tests start their own throwaway `mongod` from this installation; set
+   `MONGOD_BIN` only if it lives outside `C:\Program Files\MongoDB\Server\`.
+
+2. **Python environment** (Python 3.13; backend packages at production
+   versions, test tools, local tools):
+
+   ```
+   conda env create -f csc_env.yml      # creates the env "csc"
+   conda activate csc
+   ```
+
+   If an older `csc` env exists, remove it first (`conda env remove -n csc`).
+   Don't `conda rename` an env: pip's `.exe` launchers (`invoke`, `pytest`, ...)
+   keep the old path and fail with "Fatal error in launcher". After `csc_env.yml` or the
+   requirements change: `conda env update -n csc -f csc_env.yml` (it adds and
+   upgrades; to drop packages, recreate the env).
+
+3. **Backend settings**: copy `src/backend/dev.env.example` to
+   `src/backend/dev.env` (gitignored). To see meshes, previews and photos, point
+   the `SNAPSHOT_*_DIR` entries at a copy of the production assets.
+
+4. **Frontend settings**: copy `src/frontend/.env.development.local.example` to
+   `src/frontend/.env.development.local` (gitignored). `npm run dev` loads it
+   last, so `.env` / `.env.local` can keep production values. Then install:
+
+   ```
+   cd src/frontend
+   npm install
+   ```
+
+5. **Local data and an account**:
+
+   ```
+   invoke seed --dump 260916            # loads mongodb_collections_local/260916 into the local "csc" database
+   invoke create-user --username me --email me@example.org --admin    # prompts for a password
+   ```
+
+   `invoke seed --dump 260916 --replace` reloads a dump over existing data.
+
+### Running it (two terminals, env `csc` active)
+
+| terminal | command | serves |
+|---|---|---|
+| 1 | `invoke dev-backend` | FastAPI on http://127.0.0.1:8000 (API docs at `/docs`), auto-reload |
+| 2 | `cd src/frontend` then `npm run dev` | web app on http://localhost:3000 --- log in with the account from step 5 |
+
+MongoDB needs no terminal: it is the Windows service. The Grasshopper
+UserObjects always talk to production (`CSC_Session` has no base-URL input yet).
+
+### Tests
+
+```
+invoke test                       # unit tests + route tests on a throwaway mongod
+invoke test -k auth               # a subset
+invoke test --dump 260916         # also the smoke test against a local dump
+invoke check-server-wheels        # would the backend install on Uberspace 7 without compiling?
+```
+
+Route tests are skipped with a message if no `mongod` is found.
+
+### Troubleshooting
+
+- **`[next-auth][error][CLIENT_FETCH_ERROR] ... "<!DOCTYPE" is not valid JSON`**
+  (or "Jest worker encountered child process exceptions" in the dev server
+  output): the Turbopack dev cache is broken. Stop `npm run dev`, delete
+  `src/frontend/.next`, start again. Run only one dev server per checkout --- a
+  second one shares and corrupts the same cache.
+- **`Fatal error in launcher`** from `invoke` / `pytest`: the conda env was
+  renamed or moved; recreate it (see step 2) or use `python -m invoke ...`. Every request
+to a backend is logged with its `X-CSC-Client` header in
+`logs/client_versions.log` (locally `.dev/logs/`).
 
 ---
 
@@ -76,32 +165,10 @@ The backend reads all configuration from the environment at startup and will
 exit immediately with a clear error listing any missing variables. There are
 two places you need to set them:
 
-**1. `~/.bash_profile`** - for shell scripts and cron jobs (see
-`uberspaceconfig/.bash_profile.example` for the full template):
-
-```bash
-export MONGODB_URI="mongodb+srv://user:password@host/csc"
-export JWT_SECRET="your-openssl-rand-hex-32-value"
-export JWT_ALGORITHM="HS256"
-export JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60"
-export GITHUB_REPO_URL="https://github.com/your-org/your-repo"
-# Optional: increases GitHub API rate limits for CSC_Update. Public repo
-# file fetch (GH XML sync, /ghinterface/) works without a token.
-# export GITHUB_CSC_GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
-export SMTP_HOST="yourhost.uberspace.de"
-export SMTP_PORT="587"
-export SMTP_USER="noreply@yourdomain.com"
-export SMTP_PASSWORD="your-mailbox-password"
-export SMTP_FROM_EMAIL="noreply@yourdomain.com"
-export SMTP_FROM_NAME="Catalog of Second Chances"
-export SMTP_DEV_MODE="false"
-export FRONTEND_URL="https://yourdomain.com"
-export PREVIEW_DIR="/home/ddu/csc/backend/static/previews"
-export GEOMETRY_DIR="/home/ddu/csc/backend/static/geometry"
-export GEOMETRY_ARCHIVE_DIR="/home/ddu/csc/backend/static/geometry_archive"
-export GH_XML_CACHE_DIR="/home/ddu/csc/backend/static/ghxml"
-export FASTAPI_CORS_ORIGINS="https://yourdomain.com,http://localhost:3000"
-```
+**1. `~/.bash_profile`** - for the cron jobs and the deploy script: copy the
+template `uberspaceconfig/.bash_profile.example` and fill it in (MongoDB, JWT,
+SMTP, asset folders, CORS origins; optionally `GITHUB_CSC_GH_TOKEN` for higher
+GitHub rate limits in `CSC_Update`).
 
 Apply immediately by running: `source ~/.bash_profile`
 
@@ -130,148 +197,69 @@ The CSC Grasshopper Interface consists of Python 3 components that can be used d
 - **Requirements**: Python 3 with packages: requests, numpy, scipy, scikit-learn
 - **Authentication**: Use `CSC_SignIn` component first to authenticate with the backend
 - **Documentation**: Component reference, copy-to-clipboard XML, and release download on the frontend at `/gh-interface`
-- **Backend routes**: Release download, source/XML sync, and updater assets are served under `/ghinterface/` (e.g. `version`, `download`, `src/{name}`, `xml/{name}`, `userobject/{name}`). `CSC_Update` uses these paths and sends a `channel` query param (GitHub branch; default `main`).
+- **Backend routes**: Release download, sources, XML and updater assets are served under `/ghinterface/` (e.g. `version`, `download`, `src/{name}`, `xml/{name}`, `userobject/{name}`). They come from the GitHub release of the running backend (tag `v<version>`); a `channel` query param (GitHub branch or tag) overrides that for testing.
 
-## Configuring Uberspace
+## Releases and deployment
 
-If you want to setup _CSC_ on _Uberspace_, here are some guidelines. Please
-also check the [Uberlab Guides](https://lab.uberspace.de/) for further / more
-detailed information on the covered topics.
+Backend, web frontend and Grasshopper interface are one product with one
+version (`VERSION`), released together as tag `v<version>` and deployed by
+GitHub Actions. You make every commit, merge and tag; everything after the tag
+push is automated.
 
-- Create a folder for running CSC and a virtual environment on your uberspace
-server.
+**Cutting a release**
 
-```
-[user@servername ~]$ mkdir ~/csc
-[user@servername ~]$ cd ~/csc
-[user@servername csc]$ python3.9 -m venv venv
-[user@servername csc]$ source venv/bin/activate
-(venv) [user@servername ~]$
-```
+1. On your working branch: `invoke bump-version --version 0.5.1.1` (add `--gh`
+   if the Grasshopper UserObjects changed --- then re-export the changed
+   `.ghuser` / XML in Rhino). Fill in the new `CHANGELOG.md` section: it becomes
+   the release notes.
+2. Open a PR into `main`; CI must pass (`.github/workflows/ci.yml`): backend
+   tests on MongoDB, server wheel check, deploy-script test, frontend type
+   check / lint / build, Grasshopper checks (a changed component needs a higher
+   `Version:` and a re-exported `.ghuser` + XML), version consistency.
+3. Merge, then tag the merge commit on `main` and push the tag:
+   `git tag v0.5.1.1 && git push origin v0.5.1.1`.
+4. `.github/workflows/release.yml` runs CI again, builds
+   `csc-backend-<v>.tar.gz`, `csc-frontend-<v>.zip`, `csc-gh-interface-<v>.zip`
+   and `SHA256SUMS`, and publishes GitHub Release `v<v>` (pre-release if the
+   version has a `-suffix`).
+5. The deploy job waits for your approval (environment `production`), then runs
+   `csc_release_deploy.sh v<v>` on Uberspace over a restricted SSH key: download
+   and verify the bundles, unpack to `~/csc/releases/<v>/`, build a venv only if
+   the requirements changed, switch `~/csc/current`, restart, health-check
+   (`/version` must report `<v>`, the frontend must answer) --- or roll back to
+   the previous release by itself.
 
-- Install necessary packages and then deactivate the venv
+**Grasshopper updates** come from the release the server runs: `CSC_Update` and
+the interface download on the web page read tag `v<version>` of the running
+backend. Merging to `main` publishes nothing; deploying a release updates
+backend, web and Grasshopper at once. Testers can still point `UPDATE_CHANNEL`
+in `CSC_Update` at a branch.
 
-```
-(venv) [user@servername csc]$ pip install -r ~/csc/backend/requirements.txt
-(venv) [user@servername csc]$ deactivate
-[user@servername ~]$
-```
+**Redeploy, roll back, status:** run workflow **Deploy** by hand with
+`deploy v<version>`, `rollback` or `status`; on the server the same commands are
+`~/csc/bin/csc_release_deploy.sh v<version> | --rollback | --status`. Database
+migrations are never part of a deploy.
 
-## Uploading files
+## Server setup (Uberspace)
 
-Use a file transfer software to upload the `backend` and `frontend` folders to
-your web server. In our case the folder structure looks like this:
-
-```
-/home/user/
-├─ csc/
-│  ├─ venv/
-│  ├─ backend/
-│  ├─ frontend/
-```
-
-After the initial upload, make sure the `logs`directory in `backend` exists...
-
-```
-/home/user/
-├─ csc/
-│  ├─ venv/
-│  ├─ backend/
-│  │  ├─ ...
-│  │  ├─ logs/
-│  │  ├─ ...
-│  ├─ frontend/
-```
-
-...or create it manually:
+The server runs whatever `~/csc/current` points to:
 
 ```
-mkdir -p ~/csc/backend/logs
+~/csc/
++- releases/<version>/   backend/ frontend/ deploy/ VERSION venv -> ../../venvs/<hash>
++- current -> releases/<version>
++- venvs/<hash>/         one per requirements + constraints content
++- shared/frontend/      .env / .env.local (frontend secrets, linked into releases)
++- shared/logs/          backend and cron logs (linked as backend/logs)
++- bin/                  csc_release_deploy.sh, csc_deploy_gate.sh
 ```
 
-The deployment scripts (`csc_deploy.sh`, `csc_deploy_backend.sh`) handle this automatically on subsequent deploys.
+The one-time setup (Python 3.13, directories, services, cron, deploy key, GitHub
+environment) is described step by step in `uberspaceconfig/deployment/README.md`.
+Templates: `uberspaceconfig/etc/services.d/` (supervisord),
+`uberspaceconfig/crontab/` (cron jobs), `uberspaceconfig/.bash_profile.example`.
 
-## Setting up FastAPI
-
-We provide a pre-configured configuration file for gunicorn. Test if everything
-is working by running:
-
-```
-[user@servername ~]$ ~/csc/venv/bin/gunicorn --config ~/csc/backend/conf.py --check-config
-```
-
-If there is no output, you should be good. For additional info on setting up
-FastAPI on Uberspace, please check
-[Uberlab](https://lab.uberspace.de/guide_fastapi/).
-
-## Setting up the Next.js based React Frontend
-
-The frontend runs using _Next.js_, which is a frontend framework based on
-_React_. All that runs using _Node.js_. First off, we check our node version.
-This repo assumes we run version 18:
-
-```
-[user@servername ~]$ uberspace tools version show node
-Using 'Node.js' version: '18'
-[user@servername ~]$
-```
-
-Once that is checked, navigate to `/home/user/csc/frontend` and run the
-following commands:
-
-```
-npm install -g npm@latest
-
-removed 2 packages, and changed 53 packages in 9s
-
-24 packages are looking for funding
-[user@servername frontend]$ npm i
-up to date, audited 482 packages in 4s
-[user@servername frontend]$
-```
-
-This should install all necessary packages using the node package manager
-(npm). Once that is done, run:
-
-```
-[user@servername frontend]$ npm run build
-
-> frontend@0.2.0.9 build
-> next build
-
-   ▲ Next.js 15.5.0
-   - Environments: .env.local
-
-   Creating an optimized production build ...
-   ✓ Linting and checking validity of types
-   ✓ Collecting page data
-   ✓ Generating static pages (8/8)
-   ✓ Collecting build traces
-   ✓ Finalizing page optimization
-
-Route (app)                              Size     First Load JS
-┌ ○ /                                    141 B          84.5 kB
-├ ○ /_not-found                          882 B          85.2 kB
-├ λ /components                          244 kB          346 kB
-├ λ /components/[component_id]           816 B          91.9 kB
-├ ○ /findcomponent                       111 kB          203 kB
-└ ○ /settings                            141 B          84.5 kB
-+ First Load JS shared by all            84.4 kB
-  ├ chunks/69-9d1319c8f23893a2.js        29 kB
-  ├ chunks/fd9d1056-7473a1f6941f0e46.js  53.4 kB
-  └ other shared chunks (total)          1.97 kB
-
-
-○  (Static)   prerendered as static content
-λ  (Dynamic)  server-rendered on demand using Node.js
-
-[user@servername frontend]$ 
-```
-
-Now you should be almost set up! The last things to do are configuring services
-and corresponding web backends...
-
-### Upgrading Next.js
+## Upgrading Next.js
 
 Use the official Next.js codemod to upgrade the frontend to a newer version:
 
@@ -292,32 +280,17 @@ npx @next/codemod upgrade 16
 npx @next/codemod upgrade canary
 ```
 
-### Services Config using Supervisor
+## Services Config using Supervisor
 
-Again, we will consider our setup case using Uberspace, which uses Supervisor
-for services:
+Uberspace runs services with _Supervisor_. The templates in
+`uberspaceconfig/etc/services.d/` run the active release from `~/csc/current`:
+copy `fastapi.ini.example` to `~/etc/services.d/fastapi.ini` and fill in the
+`environment=` block (it holds the backend's secrets and is gitignored --- never
+commit a filled-in copy), copy `frontend.ini.example` to
+`~/etc/services.d/frontend.ini`, then `supervisorctl reread && supervisorctl
+update`. Deploys restart both services themselves.
 
-- On your computer, navigate to `...\csc\uberspaceconfig\etc\services.d`
-- This folder contains two configuration files for _Supervisor_
-- For `fastapi.ini`: use `fastapi.ini.example` as a template, fill in the real
-  values in the `environment=` block, and transfer your filled-in copy to the
-  server - never commit the file with real secrets (it is gitignored)
-- For `react-frontend.ini`: transfer as-is, no user-specific values needed. It
-  only sets `NODE_ENV=production`; all frontend configuration is baked in at
-  build time via `.env`.
-- Transfer the files to Uberspace into `/home/yourusername/etc/services.d`
-- Run the following commands:
-
-```
-[user@servername ~]$ supervisorctl reread
-SERVICE: available
-[user@servername ~]$ supervisorctl update
-SERVICE: added process group
-[user@servername ~]$ supervisorctl status
-SERVICE                            RUNNING   pid 26020, uptime 0:03:14
-```
-
-### Configuring Web Backends
+## Configuring Web Backends
 
 - _Gunicorn_ is set up to run the _FastAPI_ backend on Port 8000
 - The _Next.js_ frontend is configured to run on Port 3000
@@ -373,7 +346,7 @@ Uberlab guides:
 - [Uberspace Web Backends](https://manual.uberspace.de/web-backends/)
 - [Uberspace Web Domains](https://manual.uberspace.de/web-domains/)
 
-### Custom domain (`2ndchances.build`)
+## Custom domain (`2ndchances.build`)
 
 `2ndchances.build` is the canonical frontend origin; The old address `ddu.uber.space`
 stays registered and redirects to it. The app cannot be served on both origins
@@ -408,7 +381,7 @@ requirement: the browser only ever calls the API through the same-origin proxy
 at `/api/backend/[...path]`, which is a server-to-server request and therefore
 not subject to CORS.
 
-### Deploying .htaccess
+## Deploying .htaccess
 
 The repo contains `uberspaceconfig/html/.htaccess` which must be placed at
 `~/html/.htaccess` on the server. It sets CORS headers for the Apache layer and
@@ -425,129 +398,22 @@ match your actual frontend domains. A plain `Header set Access-Control-Allow-Ori
 can only name a single origin, which is why the file reflects a matched origin
 instead.
 
-## Preview Generation CronJob
+## Cron jobs
 
-Preview generation is a separate python app that is run using a cronjob. To
-test the preview generation, SSH into the server, activate the venv and run it
-using the command line:
+All jobs run the active release (`~/csc/current`) and log to `~/csc/shared/logs/`.
+The entries, ready to paste into `crontab -e`, are in `uberspaceconfig/crontab/`:
 
-```
-[user@servername csc]$ source venv/bin/activate
-(venv) [user@servername ~]$
-(venv) [user@servername ~]$ python /home/ddu/csc/backend/main_previewgen.py
-```
+| job | schedule | what |
+|---|---|---|
+| `previewgen_cronjob.ini` | every 5 min | renders missing component previews |
+| `descriptors_simple_cronjob.ini` | every 5 min (`flock`) | computes missing geometric descriptors |
+| `component_map_cronjob.ini` | every 6 h (`flock`) | precomputes PCA / UMAP layouts for the component map |
+| `usermaintenance_cronjob.ini` | daily 2:00 | removes unverified accounts older than 7 days |
+| `geometrymaintenance_cronjob.ini` | daily 3:00 | removes geometry folders without a component |
 
-To check if it is already a cronjob on your instance, run:
-```
-[user@servername csc]$ crontab -l
-```
-
-To add the cronjob to your crontab run:
-
-```
-[user@servername csc]$ crontab -e
-```
-
-...to open the crontab in an editor and then add:
-
-```
-*/30 * * * * source /home/ddu/.bash_profile && /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/main_previewgen.py >> /home/ddu/csc/backend/logs/previewgen_cronjob.log 2>&1
-```
-
-This will run the preview generation script every 30 minutes and write the
-results to a logging file. The `source ~/.bash_profile` prefix is required so
-that the cron job picks up the environment variables.
-
-## Grasshopper XML Sync CronJob
-
-The GH XML sync automatically mirrors pasteable XML files from the public GitHub
-repository to make them available for copy-to-clipboard functionality on the
-frontend.
-
-### Configuration
-
-The script reads `GITHUB_REPO_URL` and `GH_XML_CACHE_DIR` from the environment
-(no GitHub token; the repo is public). Make sure these are set in
-`~/.bash_profile` (see the environment variables section above).
-
-### Testing
-
-To test the sync script manually, SSH into the server and run:
-
-```bash
-[user@servername csc]$ /bin/bash /home/ddu/csc/backend/ghxml_sync.sh
-```
-
-This will clone (if needed) and sync only the `grasshopper_userobjects_xml/`
-folder from the public GitHub repository. Check the log file for results:
-
-```bash
-[user@servername csc]$ tail -f /home/ddu/csc/backend/logs/ghxml_sync.log
-```
-
-### Setting up the CronJob
-
-To add the sync cronjob, copy the configuration from
-`uberspaceconfig/crontab/ghxml_sync_cronjob.ini` or add it manually:
-
-```bash
-[user@servername csc]$ crontab -e
-```
-
-Add this line:
-
-```
-*/30 * * * * source /home/ddu/.bash_profile && /bin/bash /home/ddu/csc/backend/ghxml_sync.sh >> /home/ddu/csc/backend/logs/ghxml_sync.log 2>&1
-```
-
-This will run the sync every 30 minutes and log results to the log file.
-
-## User Maintenance CronJob
-
-Removes unverified user accounts older than 7 days. Runs daily at 2:00 AM.
-
-```
-0 2 * * * source /home/ddu/.bash_profile && /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/usermaintenance.py >> /home/ddu/csc/backend/logs/usermaintenance_cronjob.log 2>&1
-```
-
-## Geometry Maintenance CronJob
-
-Removes geometry subdirectories that have no corresponding component in the
-database. Runs daily at 3:00 AM.
-
-```
-0 3 * * * source /home/ddu/.bash_profile && /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/geometrymaintenance.py >> /home/ddu/csc/backend/logs/geometrymaintenance_cronjob.log 2>&1
-```
-
-## Descriptor Computation CronJob
-
-Computes missing descriptors for components. Runs every 2 minutes; uses
-`flock` to prevent overlapping runs.
-
-```
-*/2 * * * * source /home/ddu/.bash_profile && flock /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/main_descriptors_simple.py >> /home/ddu/csc/backend/logs/descriptors_simple_cronjob.log 2>&1
-```
-
-## Component Map CronJob
-
-Precomputes PCA and UMAP layouts into MongoDB (`component_map_cache`) for the
-Component Map page. Runs every 6 hours; uses `flock` to prevent overlap.
-
-```
-0 */6 * * * source /home/ddu/.bash_profile && flock -n /tmp/component_map.lock /home/ddu/csc/venv/bin/python3.9 /home/ddu/csc/backend/main_component_map.py >> /home/ddu/csc/backend/logs/component_map_cronjob.log 2>&1
-```
-
-Ready-made crontab entries for all jobs are in `uberspaceconfig/crontab/`.
-
-## Deployment
-
-Deployment scripts are provided in `uberspaceconfig/deployment/`. All require
-`GITHUB_DEPLOY_URL` to be set in `~/.bash_profile`.
-
-- `csc_deploy.sh` - full deploy from `main`: pulls backend + frontend, restarts backend, rebuilds and restarts frontend
-- `csc_deploy_backend.sh` - backend only from `main`: pulls backend, restarts FastAPI
-
-
+Each line starts with `source ~/.bash_profile &&` so the job sees the backend's
+environment variables. To run a job by hand:
+`~/csc/current/venv/bin/python ~/csc/current/backend/main_previewgen.py`.
 
 ## OpenAPI Model Generation
 
@@ -598,27 +464,19 @@ const component: ComponentModel = {
 
 ```
 src/frontend/
-├── scripts/
-│   └── generate-models.ts    # Generation script
-├── generated/                 # Auto-generated models
-│   ├── ComponentModel.ts     # Generated ComponentModel interface
-│   └── index.ts             # Export index
-└── package.json              # Contains generate:models script
++-- scripts/
+|   +-- generate-models.ts    # Generation script
++-- generated/                 # Auto-generated models
+|   +-- ComponentModel.ts     # Generated ComponentModel interface
+|   +-- index.ts             # Export index
++-- package.json              # Contains generate:models script
 ```
 
-## Testing
+## Testing and linting
 
-To run all available tests, call
-```
-invoke test
-```
-
-## Linting
-
-To lint all python code, call
-```
-invoke lint
-```
+See "Local development and tests" above: `invoke test` runs the Python tests;
+the frontend is checked with `npx tsc --noEmit` and `npm run lint` in
+`src/frontend`. CI runs all of it on every PR.
 
 # Credits
 

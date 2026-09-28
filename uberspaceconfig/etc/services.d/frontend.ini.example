@@ -1,8 +1,16 @@
+# Supervisor config for the CSC web frontend (Next.js standalone bundle from a
+# GitHub release). Copy to ~/etc/services.d/frontend.ini.
+#
+# ~/csc/current is the active release; csc_release_deploy.sh switches it and
+# restarts this service. Secrets live in ~/csc/shared/frontend/.env and/or
+# .env.local and are linked into each release. Required: NEXTAUTH_SECRET,
+# NEXTAUTH_URL, MONGODB_URI, MONGODB_DB, MONGODB_USERCOLLECTION, FASTAPI_URL.
+
 [program:frontend]
-directory=%(ENV_HOME)s/csc/frontend
-command=npm run start
+directory=%(ENV_HOME)s/csc/current/frontend
+command=node start-standalone.cjs
 autostart=true
 autorestart=true
-environment=NODE_ENV=production
+environment=NODE_ENV=production,PORT=3000,HOSTNAME=0.0.0.0
 # `startsecs` is set by Uberspace monitoring team, to prevent a broken service from looping
 startsecs=30

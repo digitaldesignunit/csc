@@ -30,4 +30,11 @@ export default [
       },
     },
   },
+  {
+    // CommonJS entrypoints (e.g. scripts/start-standalone.cjs) load with require()
+    files: ['**/*.cjs'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
 ];

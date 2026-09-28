@@ -1,5 +1,4 @@
 import type {
-  CatalogComponent,
   ComponentIdentity,
   ComponentSnapshot,
 } from '@/generated/CatalogModels'
@@ -8,13 +7,13 @@ import type { CatalogShallowRow } from '@/generated/catalogExtras'
 export function conditionLabel(c: number): string {
   switch (c) {
     case 0:
-      return '0 — Destroyed / Retired'
+      return '0 --- Destroyed / Retired'
     case 1:
-      return '1 — Poor'
+      return '1 --- Poor'
     case 2:
-      return '2 — Average'
+      return '2 --- Average'
     case 3:
-      return '3 — Good'
+      return '3 --- Good'
     default:
       return String(c)
   }

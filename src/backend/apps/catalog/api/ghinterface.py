@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3.13
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import asyncio
@@ -19,6 +19,7 @@ import httpx
 from apps.catalog.api.auth import get_current_user
 from apps.catalog.models import User
 from services.github_service import GitHubService
+from csc_version import release_tag
 
 # INIT ROUTER -----------------------------------------------------------------
 router = APIRouter()
@@ -35,8 +36,32 @@ SRC_FETCH_CONCURRENCY = 8
 _repo_dir_cache: Dict[str, Tuple[float, List[dict]]] = {}
 _blob_version_cache: Dict[str, Optional[tuple]] = {}
 
-# GitHub branch CSC_Update reads from (query param `channel`).
-DEFAULT_UPDATE_CHANNEL = 'main'
+# UserObjects, sources and the interface ZIP are served from the GitHub release
+# this backend belongs to (tag v<CSC_VERSION>), so a deploy updates backend, web
+# and Grasshopper together and merging to main publishes nothing. Testers pick a
+# branch with `?channel=`; GH_UPDATE_REF overrides the default (e.g. staging).
+GH_INTERFACE_ASSET_PREFIX = 'csc-gh-interface-'
+
+
+def default_update_ref() -> str:
+    return (os.getenv('GH_UPDATE_REF') or '').strip() or release_tag()
+
+
+async def _release_of_this_backend(github_service: GitHubService) -> dict:
+    """The GitHub release tagged v<CSC_VERSION>; 404 if it does not exist."""
+    tag = release_tag()
+    try:
+        return await github_service.get_release_by_tag(tag)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    f'No GitHub release {tag}: this backend runs a version '
+                    'that has not been released (local or pre-release build).'
+                ),
+            )
+        raise
 
 
 # INTERNAL HELPERS ------------------------------------------------------------
@@ -72,13 +97,15 @@ def _github_headers(
 
 def resolve_update_channel(channel: Optional[str]) -> str:
     """
-    GitHub branch to read Grasshopper sources/UserObjects from.
+    Git ref (release tag or branch) to read Grasshopper sources/UserObjects
+    from.
 
-    Empty/None defaults to main. The name is passed to GitHub as `ref` and
-    must match a remote branch exactly.
+    Empty/None means this backend's own release (``default_update_ref``). A
+    given name is passed to GitHub as `ref` and must match a remote branch or
+    tag exactly.
     """
     if channel is None or channel == '':
-        return DEFAULT_UPDATE_CHANNEL
+        return default_update_ref()
     if (
         len(channel) > 250
         or any(c.isspace() or ord(c) < 32 for c in channel)
@@ -90,8 +117,8 @@ def resolve_update_channel(channel: Optional[str]) -> str:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                'Invalid update channel. Branch name must match a GitHub '
-                'branch exactly.'
+                'Invalid update channel. It must match a GitHub branch or '
+                'tag exactly.'
             ),
         )
     return channel
@@ -380,14 +407,17 @@ def _compute_dir_etag(dir_path: str) -> str:
 async def get_gh_interface_version(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """Get the latest release version for the Grasshopper interface."""
+    """The Grasshopper interface release that belongs to this backend."""
     try:
         repo_url = os.environ['GITHUB_REPO_URL']
         token = _github_token()
         github_service = GitHubService(repo_url, token)
-        release_info = await github_service.get_latest_release_info()
+        release_info = await _release_of_this_backend(github_service)
 
-        assets = release_info.get('assets', [])
+        assets = [
+            a for a in release_info.get('assets', [])
+            if a.get('name', '').startswith(GH_INTERFACE_ASSET_PREFIX)
+        ]
         asset_info = []
         for asset in assets:
             asset_info.append({
@@ -408,6 +438,8 @@ async def get_gh_interface_version(
             'assets': asset_info
         }
 
+    except HTTPException:
+        raise
     except httpx.HTTPError as e:
         print(f'[ERROR] get_gh_interface_version GitHub: {e}')
         raise _http_exception_from_github(e)
@@ -423,12 +455,12 @@ async def get_gh_interface_version(
 async def download_gh_interface(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """Download the latest Grasshopper interface release as a ZIP file."""
+    """Download this backend's Grasshopper interface release as a ZIP."""
     try:
         repo_url = os.environ['GITHUB_REPO_URL']
         token = _github_token()
         github_service = GitHubService(repo_url, token)
-        release_info = await github_service.get_latest_release_info()
+        release_info = await _release_of_this_backend(github_service)
 
         if not release_info:
             raise HTTPException(
@@ -437,9 +469,11 @@ async def download_gh_interface(
             )
 
         download_url = github_service.get_release_asset_download_url(
-            release_info
+            release_info, GH_INTERFACE_ASSET_PREFIX
         )
-        filename = await github_service.get_asset_filename(release_info)
+        filename = await github_service.get_asset_filename(
+            release_info, GH_INTERFACE_ASSET_PREFIX
+        )
 
         async def generate():
             async with httpx.AsyncClient(follow_redirects=True) as client:
@@ -479,6 +513,8 @@ async def download_gh_interface(
             }
         )
 
+    except HTTPException:
+        raise
     except httpx.HTTPError as e:
         print(f'[ERROR] download_gh_interface GitHub: {e}')
         raise _http_exception_from_github(e)
@@ -499,7 +535,7 @@ async def download_gh_interface(
 @router.get('/ghinterface/src_names', response_model=List[str])
 async def list_src_names(
     current_user: Annotated[User, Depends(get_current_user)],
-    channel: str = Query(default='main'),
+    channel: str = Query(default=''),
 ):
     try:
         ref = resolve_update_channel(channel)
@@ -579,7 +615,7 @@ async def list_src_names(
 async def get_src_code(
     name: str,
     current_user: Annotated[User, Depends(get_current_user)],
-    channel: str = Query(default='main'),
+    channel: str = Query(default=''),
 ):
     try:
         ref = resolve_update_channel(channel)
@@ -701,7 +737,7 @@ async def get_xml(
 @router.get('/ghinterface/userobject_names', response_model=List[str])
 async def list_userobject_names(
     current_user: Annotated[User, Depends(get_current_user)],
-    channel: str = Query(default='main'),
+    channel: str = Query(default=''),
 ):
     try:
         ref = resolve_update_channel(channel)
@@ -737,7 +773,7 @@ async def list_userobject_names(
 async def get_userobject(
     name: str,
     current_user: Annotated[User, Depends(get_current_user)],
-    channel: str = Query(default='main'),
+    channel: str = Query(default=''),
 ):
     try:
         ref = resolve_update_channel(channel)

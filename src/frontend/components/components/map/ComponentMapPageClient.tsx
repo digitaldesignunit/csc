@@ -616,7 +616,7 @@ function ComponentMapCanvas({
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center pt-3">
           <Badge variant="secondary" className="gap-1.5 shadow-sm">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Updating layout…
+            Updating layout...
           </Badge>
         </div>
       )}
@@ -821,7 +821,7 @@ export default function ComponentMapPageClient() {
             {(loading || switching) ? (
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {switching ? 'Switching layout…' : 'Loading map…'}
+                {switching ? 'Switching layout...' : 'Loading map...'}
               </span>
             ) : (
               <CardDescription
@@ -833,7 +833,7 @@ export default function ComponentMapPageClient() {
                 {error
                   ? `${coverage ? `${coverage}. ` : ''}${error}`
                   : [coverage, cacheNote].filter(Boolean).join(' · ') ||
-                    'Loading coverage…'}
+                    'Loading coverage...'}
               </CardDescription>
             )}
           </div>
@@ -854,7 +854,7 @@ export default function ComponentMapPageClient() {
               )}
             >
               {loading
-                ? 'Loading map…'
+                ? 'Loading map...'
                 : data
                   ? coverage
                   : error || 'No points to display'}

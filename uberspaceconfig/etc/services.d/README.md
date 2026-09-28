@@ -1,7 +1,10 @@
 # Uberspace Supervisord Services
 
-- Copy `fastapi.ini.example` and rename it to `fastapi.ini`
-- Set your environment variables
-- Create supervisord services for fastapi and frontend using the SSH shell
-- For CI-built frontend deploys (no `next build` on the host), use
-  `frontend_ci.ini.example` as `frontend.ini` so the process runs `node server.js`
+Two services, both running the active release under `~/csc/current`:
+
+- `fastapi.ini.example` --> `~/etc/services.d/fastapi.ini` (fill in the environment
+  variables --- this file holds the backend's secrets and is gitignored)
+- `frontend.ini.example` --> `~/etc/services.d/frontend.ini`
+
+After changing them: `supervisorctl reread && supervisorctl update`.
+Deploys restart both services themselves (`csc_release_deploy.sh`).
