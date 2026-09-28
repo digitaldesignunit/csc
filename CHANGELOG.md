@@ -4,6 +4,82 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1.0] - unreleased
+
+Pre-work for the 0.6 data model: runtime, releases and deployment, client
+identification, privacy, and a local test environment. No data-model change.
+
+From this release on, backend, web frontend and Grasshopper interface share
+**one version** and are released together as tag `v<version>`, built, released
+and deployed by GitHub Actions (README, "Releases and deployment").
+
+### Changed
+
+- **One product version** in the `VERSION` file (`invoke bump-version`); CI
+  checks that backend, frontend and README agree. The per-component
+  `frontend-*` and `gh-interface-*` releases end; a release now carries
+  `csc-backend-<v>.tar.gz`, `csc-frontend-<v>.zip`, `csc-gh-interface-<v>.zip`
+  and `SHA256SUMS`.
+- **Deployment**: tag push → CI → GitHub Release → deploy after approval
+  (environment `production`). On Uberspace, releases unpack into
+  `~/csc/releases/<version>/`, `~/csc/current` points at the active one, venvs
+  are reused while requirements do not change, and a failed health check rolls
+  back automatically (`uberspaceconfig/deployment/csc_release_deploy.sh`).
+  Services and cron jobs run from `~/csc/current`; logs and frontend secrets
+  live in `~/csc/shared`.
+- **Grasshopper updates follow the server**: `CSC_Update` and the interface
+  download use the GitHub release of the running backend instead of the `main`
+  branch, so merging to main no longer publishes UserObjects (`CSC_Update`
+  260928; `UPDATE_CHANNEL` is now empty by default and only for testers).
+- The GH XML exports ship inside the backend release (`static/ghxml`); the
+  `ghxml_sync` cron job is no longer needed.
+- Backend runs on **Python 3.13** (was 3.9, end of life). `src/backend/constraints.txt`
+  caps numpy, scipy, scikit-learn, robust-laplacian, pillow and contourpy at the
+  last releases with wheels for Uberspace 7 (glibc 2.17); `invoke
+  check-server-wheels` verifies it.
+- Passwords are hashed with `bcrypt` directly; passlib (unmaintained) fails on
+  bcrypt 5. Existing hashes stay valid. New passwords are limited to 72 bytes
+  in UTF-8 (was 72 characters).
+- Snapshot photos keep only orientation, capture time and camera make / model
+  in their EXIF; GPS position, owner and serial numbers are removed on upload.
+- The backend creates the `catalog_number` counter on startup if it is missing
+  (fresh or seeded databases); an existing counter is never touched.
+- Frontend: Next.js 16.3.4 → 16.3.6 (patch; with `eslint-config-next` and
+  `@next/eslint-plugin-next`); lint errors fixed so CI can enforce lint.
+
+### Added
+
+- `GET /version` (public): the backend's CSC version and release tag.
+- `X-CSC-Client: <client>/<version>` header sent by the web frontend
+  (`web/0.5.1.0`) and the Grasshopper UserObjects (`gh-userobjects/0.5.1.0`,
+  `CSC_Session` 260928); the backend logs every request's client to
+  `logs/client_versions.log` (logging only — 0.6 will reject outdated clients).
+- CI (`.github/workflows/ci.yml`): backend tests on a MongoDB container, server
+  wheel check, deploy-script end-to-end test, frontend type check / lint /
+  build, Grasshopper source checks (changed components need a version bump and
+  a re-exported `.ghuser` / XML).
+- `scripts/db_maintenance/migrate_strip_photo_gps.py`: removes the same metadata
+  from already stored photos without re-encoding them.
+- Local development and tests (README): route tests against a throwaway
+  `mongod`, `invoke test | dev-backend | seed | create-user`, `dev.env.example`,
+  `.env.development.local.example`, `requirements-dev.txt`, an opt-in smoke test
+  against a local catalog dump.
+
+### Removed
+
+- The old deploy scripts (`csc_deploy*.sh`), the server-side frontend build
+  configs and the `frontend-standalone-release` / `grasshopper-folder-release`
+  workflows — replaced by the release workflow and `csc_release_deploy.sh`.
+
+### Fixed
+
+- The Grasshopper interface download (web page, `/ghinterface/download`) and
+  `/ghinterface/version` handed out the newest release of the whole repository
+  — a frontend bundle since `frontend-0.5.0.0-beta-1`. They now use the
+  interface asset of the backend's own release.
+- `email-validator` was missing from `requirements.txt` although the user
+  models need it; a fresh server venv would not have started.
+
 ## [Unreleased] - 2026-06-10
 
 ### Individual Versions
