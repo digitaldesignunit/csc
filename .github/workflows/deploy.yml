@@ -1,0 +1,59 @@
+name: Deploy
+
+# Runs csc_release_deploy.sh on Uberspace through the restricted deploy key.
+# Called by release.yml after publishing; start it by hand to redeploy a
+# release, roll back, or ask for the status.
+#
+# Environment `production` (Settings -> Environments) must require a reviewer
+# and hold: secrets UBERSPACE_SSH_KEY, UBERSPACE_KNOWN_HOSTS;
+# variables UBERSPACE_HOST, UBERSPACE_USER.
+
+on:
+  workflow_call:
+    inputs:
+      command:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'deploy v<version> | rollback | status'
+        type: string
+        required: true
+        default: status
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://2ndchances.build
+    steps:
+      - name: Check command
+        env:
+          COMMAND: ${{ inputs.command }}
+        run: |
+          [[ "$COMMAND" =~ ^(deploy\ v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?|rollback|status)$ ]] \
+            || { echo "refused: '$COMMAND'"; exit 1; }
+      - name: Run on Uberspace
+        env:
+          COMMAND: ${{ inputs.command }}
+          SSH_KEY: ${{ secrets.UBERSPACE_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.UBERSPACE_KNOWN_HOSTS }}
+          HOST: ${{ vars.UBERSPACE_HOST }}
+          USER_NAME: ${{ vars.UBERSPACE_USER }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # the key's forced command on the server accepts only this command
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$USER_NAME@$HOST" "$COMMAND"

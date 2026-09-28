@@ -1,0 +1,106 @@
+name: CI
+
+# Every PR and push, and as the first stage of every release (release.yml).
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'v-*']
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  versions:
+    name: Versions agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python scripts/ci/check_version.py
+
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping: 1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      CSC_TEST_MONGODB_URI: mongodb://127.0.0.1:27017
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            src/backend/requirements.txt
+            src/backend/constraints.txt
+      - run: pip install -r requirements-dev.txt
+      # csc_sheetscan (local tool, heavy dependencies) is tested locally only
+      - run: python -m pytest tests -q --ignore=tests/csc_sheetscan
+      - name: Backend installs on Uberspace 7 without compiling
+        run: python -m invoke check-server-wheels
+
+  deploy-script:
+    name: Deploy script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: src/backend/requirements.txt
+      - run: sudo apt-get install -y shellcheck
+      - run: shellcheck -S warning uberspaceconfig/deployment/*.sh scripts/ci/*.sh
+      - run: bash scripts/ci/test_release_deploy.sh
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm run build
+
+  grasshopper:
+    name: Grasshopper sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Sources compile
+        run: python -m compileall -q grasshopper_userobjects_src
+      - name: Changed sources are versioned and re-exported
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            base="origin/${{ github.base_ref }}"
+          elif [ "${{ github.ref_type }}" = tag ]; then
+            base="$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)"
+          else
+            base="${{ github.event.before }}"
+          fi
+          python scripts/ci/check_gh_sources.py --base "${base:-HEAD}"
