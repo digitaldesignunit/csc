@@ -333,7 +333,7 @@ export default function ComponentAddWizard() {
 
   const colorHex = hexComponentColor([form.colorR, form.colorG, form.colorB])
 
-  const useCurrentLocation = useCallback(() => {
+  const fillCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setLocationError('Geolocation is not supported in this browser.')
       return
@@ -697,7 +697,7 @@ export default function ComponentAddWizard() {
                   size="sm"
                   className="w-full sm:w-auto"
                   disabled={locating}
-                  onClick={() => useCurrentLocation()}
+                  onClick={() => fillCurrentLocation()}
                 >
                   {locating ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

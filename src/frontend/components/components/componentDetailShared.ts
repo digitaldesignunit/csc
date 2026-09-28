@@ -1,5 +1,4 @@
 import type {
-  CatalogComponent,
   ComponentIdentity,
   ComponentSnapshot,
 } from '@/generated/CatalogModels'

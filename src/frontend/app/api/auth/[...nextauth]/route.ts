@@ -4,6 +4,7 @@ export const runtime = 'nodejs'
 import NextAuth, { type AuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { MongoClient, type Collection, type WithId } from 'mongodb'
+import { CSC_CLIENT_HEADERS } from '@/lib/cscClient'
 import bcrypt from 'bcryptjs'
 import type { JWT } from 'next-auth/jwt'
 import type { Session } from 'next-auth'
@@ -197,6 +198,7 @@ async function authorizeUser(credentials?: { identifier: string; password: strin
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'application/json',
+        ...CSC_CLIENT_HEADERS,
       },
       body,
       cache: 'no-store',

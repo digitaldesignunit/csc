@@ -3,6 +3,7 @@ export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { CSC_CLIENT_HEADERS } from '@/lib/cscClient'
 
 const FASTAPI_URL = process.env.FASTAPI_URL!
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET
@@ -76,10 +77,10 @@ async function handle(
   const hasBody = !['GET', 'HEAD'].includes(method)
   const body = hasBody ? await req.arrayBuffer() : undefined
 
-  const headers = forwardableHeaders(
-    req,
-    apiToken ? { Authorization: `Bearer ${apiToken}` } : {},
-  )
+  const headers = forwardableHeaders(req, {
+    ...CSC_CLIENT_HEADERS,
+    ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+  })
 
   // 6) Call FastAPI
   const upstream = await fetch(target, {
