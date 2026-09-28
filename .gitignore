@@ -62,3 +62,7 @@ scripts/**/*.log
 # LOCAL DEVELOPMENT (invoke dev-backend): data, assets, logs
 /.dev/
 src/backend/logs/*.log
+
+csc_deploy_key.pub
+csc_deploy_key
+csc_known_hosts
