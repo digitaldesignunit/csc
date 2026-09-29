@@ -1,7 +1,7 @@
 # CSC Data Model Specification --- v0.6 (draft 4)
 
 **Status:** draft 4, 2026-09-28 --- consistency pass after grilling closed (decisions 1.1--7.13,
-`adr/DESIGN_DECISIONS.md`). Draft 3 2026-09-24 (7.x), draft 2 2026-09-23 (6.x), first draft
+`docs/adr/DESIGN_DECISIONS.md`). Draft 3 2026-09-24 (7.x), draft 2 2026-09-23 (6.x), first draft
 2026-09-12. Glossary: `CONTEXT.md` (repo root) --- field names follow its terms. Supersedes
 `future_implementation/MEASUREMENTS_SPEC.md` (kept for its domain research and sources). Nothing
 here is open; items marked **deferred** are out of 0.6 by the triage rule (6.8).
@@ -1010,6 +1010,21 @@ Proxy fitting per snapshot (stage 3):
    rewritten from a proxy.
 
 Authored proxies (`fit.method == "authored"`) are skipped by the cron.
+
+**HKS descriptor (stage 4, decision 8.6).** The heat kernel signature is computed on **3000 points
+spread evenly over the component's surface** with `robust_laplacian.point_cloud_laplacian`, never
+on the mesh topology and never on the convex hull:
+
+1. Sample: meshes and authored primitives area-uniformly; point clouds thinned to the same size;
+   fixed seed; all component geometry, never `capture` markers / fixtures (I23).
+2. 64 non-zero eigenpairs of `L phi = lambda M phi`; time grid **fixed in area-normalised units**
+   (one grid for the catalogue, not per shape), so values compare across pieces.
+3. Per-point HKS, mass-weighted mean + variance pooling, L2-normalised (as in `hks_features.py`).
+
+Intrinsic, so it needs no frame (8.1). Why points: in the 260916 probe every mesh failure came from
+a mesh in disconnected pieces (scan islands; unmerged seams) --- the sample never failed (169 / 169)
+and ranks pieces like the intact mesh (rho 0.98); the hull always works but describes the envelope
+only (rho 0.34). Errors raise and are recorded by the runner; `HKS_VERSION` versions the result.
 
 ### 4.4 Property fold --- `properties.py`
 

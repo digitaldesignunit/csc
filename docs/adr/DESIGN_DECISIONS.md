@@ -1,10 +1,10 @@
 # Design Decisions --- Evidence System & Component Data Model
 
-Decision log from the grilling sessions behind `adr/DATA_MODEL_SPEC.md`. Philosophical precedent:
+Decision log from the grilling sessions behind `docs/adr/DATA_MODEL_SPEC.md`. Philosophical precedent:
 M. Bernhard, *HYBREP* (`reference/Bernhard_HYBREP.pdf`) --- referenced, not adopted as a name.
 Regulatory reference: Regulation (EU) 2024/3110 (`reference/CPR_2024_3110.pdf`), analysed in the spec section 10.
 
-**Started:** 2026-09-10 ; **Updated:** 2026-09-28 ; **Status:** in progress; consolidated into `adr/DATA_MODEL_SPEC.md`, which is now authoritative.
+**Started:** 2026-09-10 ; **Updated:** 2026-09-28 ; **Status:** in progress; consolidated into `docs/adr/DATA_MODEL_SPEC.md`, which is now authoritative.
 
 **Calibration:** research prototype; user-facing breakage is acceptable. Optimise for
 correctness and best practice, not migration cost. Recommendations that hedge toward minimal
@@ -67,7 +67,7 @@ column 8, other 1. `processes` empty everywhere. `attributes` has ad-hoc `primit
 
 Source read 2026-09-12: Regulation (EU) 2024/3110 (recast Construction Products Regulation), Chapter X
 Digital Product Passport, Art 3 definitions, Arts 14/15/18/21/22/26, Annexes I/II/IV/V/VII. Full
-analysis in `adr/DATA_MODEL_SPEC.md` section 10. Goal: CSC can *emit* a DPP-shaped record; it is not itself a
+analysis in `docs/adr/DATA_MODEL_SPEC.md` section 10. Goal: CSC can *emit* a DPP-shaped record; it is not itself a
 passport system (that arrives by delegated act, Art 75(1)).
 
 | # | Proposal | Why |
@@ -137,6 +137,7 @@ into one **metadata object**.
 | 8.3 | **One snapshot PATCH: `PATCH /snapshots/{sid}`** with per-field permission (draft: author / moderator(D); published: moderator(D) for mutable metadata, valid time, overrides; frozen field --> 409 pointing at `/supersede`). Replaces 0.5 `PATCH /identities/{id}/current-snapshot` (current snapshot only) and the drafted `PATCH /identities/{id}/snapshots/{sid}`. | Mutable metadata becomes editable on any snapshot, not only the current one. Spec section 4.1, section 7.1. |
 | 8.4 | **Pass findings fixed without a new decision:** migration run order (section 8.1 rebuilt in run order with an `after` column --- the frame step ran *before* the gripper mesh left `geometry` in 6c, which would have fitted 70 frames to stone + gripper); the fold reads `derived[]` results with their record's tier and I7 allows one result per quantity per record; withdraw / exit / re-entry permissions aligned to section 7.0 (`moderator(D)`); routes the decisions implied were added (snapshot + identity withdraw / reinstate, promote, snapshot delete, fixture files, section 7.7 datasets / materials / redaction); I24 (attachments add-only), I25 (materials FK + derived class); status enums gain `withdrawn`; new step 1c initialises new fields; LoW codes verified against the AVV (verbatim German transposition). | Spec draft 4. |
 | 8.5 | **Monorepo release model (user, Q17): one product version, one tag, released and deployed together.** `VERSION` is the single source (`invoke bump-version`); tag `v<version>` on `main` --> CI --> GitHub Release with `csc-backend-<v>.tar.gz`, `csc-frontend-<v>.zip`, `csc-gh-interface-<v>.zip`, `SHA256SUMS` --> deploy job gated by the GitHub environment `production` (approval) --> SSH with a forced-command key --> `csc_release_deploy.sh`: `~/csc/releases/<v>/`, `current` symlink, venv per requirements hash, health check, automatic rollback. **GH `CSC_Update` and the interface download follow the release tag of the running backend**, not `main` or GitHub's repo-wide "latest". GH per-component `Version: YYMMDD` stays the file revision CSC_Update compares; CI requires a bump + re-exported `.ghuser`/XML for every changed source. Delivered in 0.5.1.0. | Fixes a live bug: "latest release" was a frontend bundle, served as the GH interface download. Merging to main no longer publishes UserObjects, so the 0.6 cutover (bridge + header enforcement) goes live atomically with the backend. Old deploy scripts, server-side builds, per-component release workflows and the ghxml_sync cron are removed. The user makes every commit, merge and tag. README "Releases and deployment", `uberspaceconfig/deployment/README.md`. |
+| 8.6 | **HKS is computed on 3000 points spread evenly over the component's surface, with the point-cloud Laplacian** (user, 2026-09-29). HKS (`apps/descriptors/hks_features.py`) exists but was never registered as a descriptor --- no snapshot has a value. User: it fails on open meshes; idea: HKS on the convex hull. Probe on all 169 mesh assets of 260916 (existing pipeline, 64 eigenpairs): mesh loaded like `geometry.py` (`process=False`, vertices not merged) 139 / 169; merged 152 / 169; convex hull 169 / 169 but ranks pieces unlike the real surface (Spearman rho 0.34 on pairwise distances); **surface sample 169 / 169, rho 0.98 against the merged mesh, median 0.37 s**. Openness is not the cause (123 of 169 are open, most work): every failure is a mesh in **disconnected pieces** --- scan islands (17: islands get no heat, or more than 10 zero modes) and, without vertex merging, seams that split apart (14 more; every mesh of `spa_example_data` and `schoenes_neues_feld`). Rejected: convex hull (loses notches, holes, pockets --- the detail HKS should add; not redundant with the four hull scores either, rho 0.35); merged mesh + island removal (still tessellation-dependent, no path for clouds or authored primitives). | One path for every source: meshes and authored primitives are sampled area-uniformly, point clouds thinned to the same size; fixed seed; never capture markers / fixtures (I23). Intrinsic, so independent of the frame (8.1). A **fixed time grid in area-normalised units** replaces the per-shape grid of `make_time_grid`, so values compare across pieces. Registered as a `DescriptorSpec` in runner stage 4 for every shape class, `HKS_VERSION`; errors raise and are recorded by the runner (today `compute_pooled_hks_for_mesh` prints and returns `None`). Nothing to migrate. Spec section 4.3; plan P5. |
 
 **Facts confirmed (user, 2026-09-28):** the 35 ZirKuS reinforcement bars were modelled after the
 original drawing --> `basis: drawing` (step 6d). The 2024-07-24 deinstallation applies to all 16
@@ -147,5 +148,5 @@ original drawing --> `basis: drawing` (step 6d). The 2024-07-24 deinstallation a
 ## Resume here
 
 Grilling and the consistency pass are complete (1.1--8.4). Next: the phased implementation plan
-(`adr/HANDOFF.md` section 3). 0.5.1.0 (client header + Python 3.13 + photo EXIF strip) is
+(`docs/adr/HANDOFF.md` section 3). 0.5.1.0 (client header + Python 3.13 + photo EXIF strip) is
 implementation-ready. Glossary: `CONTEXT.md` at the repo root.

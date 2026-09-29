@@ -4,12 +4,12 @@
 Uberspace through the tag-driven release + approval-gated deploy pipeline, decision 8.5; server
 converted to `~/csc/releases` + `current`, cron and `.bash_profile` moved, photo metadata
 stripped). Python 3.13, client header (logged only), EXIF strip, local test environment and CI
-are in place. **Next: P1 of `adr/IMPLEMENTATION_PLAN_0.6.md` on a new branch `v-0.6.0.0` from
+are in place. **Next: P1 of `docs/adr/IMPLEMENTATION_PLAN_0.6.md` on a new branch `v-0.6.0.0` from
 `main`.** Pending cleanup after a few good releases: the old server layout (deployment README,
 step 7).
 
 **Last session:** 2026-09-28 --- consistency pass done (spec draft 4, decisions 8.1--8.4), LoW codes
-verified, open data facts confirmed, **implementation plan drafted** (`adr/IMPLEMENTATION_PLAN_0.6.md`,
+verified, open data facts confirmed, **implementation plan drafted** (`docs/adr/IMPLEMENTATION_PLAN_0.6.md`,
 under review: its section 5 Q1--Q3). **Next step:** settle Q1--Q3, then start P0 (0.5.1.0).
 **Who:** fstwn (eschenbach@dg.tu-darmstadt.de), TU Darmstadt DG --- sole maintainer of CSC.
 
@@ -39,18 +39,18 @@ Threads merged into one spec:
 
 | file | role |
 |---|---|
-| `adr/DATA_MODEL_SPEC.md` | **authoritative spec**, draft 4 (2026-09-28). section 0 reading guide ... section 10 CPR/DPP, Appendices A (evidence payloads, A.4 reinforcement layout), B (proxy primitives). section 9 = open questions (all struck through as decided). |
-| `adr/DESIGN_DECISIONS.md` | decision log: 1.x evidence, 2.x property fold, 3.x geometry, 4.x classification, 5.x CPR proposals, 6.x provenance / permissions / release, **7.x entry surfaces / representation / scope (2026-09-24), **8.x consistency pass (2026-09-28)**. |
+| `docs/adr/DATA_MODEL_SPEC.md` | **authoritative spec**, draft 4 (2026-09-28). section 0 reading guide ... section 10 CPR/DPP, Appendices A (evidence payloads, A.4 reinforcement layout), B (proxy primitives). section 9 = open questions (all struck through as decided). |
+| `docs/adr/DESIGN_DECISIONS.md` | decision log: 1.x evidence, 2.x property fold, 3.x geometry, 4.x classification, 5.x CPR proposals, 6.x provenance / permissions / release, **7.x entry surfaces / representation / scope (2026-09-24), **8.x consistency pass (2026-09-28)**. |
 | `CONTEXT.md` (repo root) | **glossary** (domain-modeling format): canonical terms + words to avoid. Created 2026-09-24. |
-| `adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1--P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; open Q1--Q3 |
-| `adr/HANDOFF.md` | this file |
+| `docs/adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1--P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; open Q1--Q3 |
+| `docs/adr/HANDOFF.md` | this file |
 | `future_implementation/MEASUREMENTS_SPEC.md` | original measurement spec --- superseded, kept for domain research and standards sources. Gitignored. |
 | `future_implementation/IMPLEMENTATION_PLAN_V0-5+.md` | older plan; its 0.5.0.2 moderator section is **superseded by 6.5** |
 | `reference/pdf/Bernhard_HYBREP.pdf`, `reference/pdf/CPR_2024_3110.pdf` | sources. Gitignored. |
 | `mongodb_collections_local/260916/` | newest local dump (identities, snapshots, map cache --- **no designs**) |
 | `D:\01_PROJECT_WORKDATA\260916_CSC_ASSETS` | files for that dump (meshes, point clouds, photos, previews) |
 
-`adr/` and `CONTEXT.md` are untracked; nothing is committed yet.
+`docs/adr/` (moved from `adr/` 2026-09-29) and `CONTEXT.md` are tracked in git.
 
 ## 3. Resume here
 
@@ -64,7 +64,7 @@ lifecycle" dissolved: designs are removed, 7.11).
    are meant to feed the fold (`compressive_strength_in_situ`); section 4.3 prose still says "PCA" in
    places; section 7 route list vs. 7.1--7.11 (designs gone, `/evidence/bulk`, attachments); cross-refs.
 2. ~~**Verify the 5 LoW codes.**~~ **Done** --- all exist; fit notes in section 2.10 (source: AVV Anlage).
-3. ~~**Phased implementation plan**~~ **Drafted** --> `adr/IMPLEMENTATION_PLAN_0.6.md`. Original brief: work breakdown, order, tests, migration
+3. ~~**Phased implementation plan**~~ **Drafted** --> `docs/adr/IMPLEMENTATION_PLAN_0.6.md`. Original brief: work breakdown, order, tests, migration
    rehearsal on 260916 (steps 1--14). Suggested spine: vocab + models --> datasets / permissions -->
    status lifecycle / tombstones / freeze --> origin / exit / lineage --> geometry runner (frame 7.10,
    shape_class) --> capture migration (7.7) --> proxies --> evidence + fold + attachments (7.3) +
@@ -121,6 +121,10 @@ Session 4 (2026-09-24):
 - **7.12** Virtual snapshots removed.
 - **7.13** Photo EXIF: strip GPS / owner / serial, keep orientation, capture time, make / model.
 
+Sessions 2026-09-28 / 29: 8.1--8.4 consistency pass (`frame` = canonical orientation only; outranked;
+one snapshot PATCH; pass fixes); 8.5 monorepo release model; **8.6 HKS on a 3000-point even surface
+sample with the point-cloud Laplacian** (not the mesh, not the convex hull; fixed time grid) --- plan P5.
+
 ## 5. Facts about the data (dump 260916)
 
 697 identities / **701 snapshots** --- 4 identities have a v1 (3 `schoenes_neues_feld`, 1
@@ -139,7 +143,7 @@ bridge rewrite; old migration scripts are left as they are (user).
 
 ## 6. Caveats
 
-- No code written; no migrations exist; `adr/` and `CONTEXT.md` uncommitted.
+- No code written; no migrations exist; `docs/adr/` and `CONTEXT.md` uncommitted.
 - Number of designs in production unknown (not in the dumps) --- archived at cutover (section 8 step 13).
 - CPR analysis is alignment, not compliance (delegated act under Art 75(1) does not exist yet).
   EN 18219/18220/18221/18222 only needed for deferred items (identifiers, export).

@@ -1,7 +1,7 @@
 # Implementation plan --- CSC 0.5.1.0 and 0.6.0.0
 
-**Status:** draft 2, 2026-09-28 --- accepted by the user with the changes in section 5. Implements `adr/DATA_MODEL_SPEC.md` (draft 4) and the
-decisions in `adr/DESIGN_DECISIONS.md` (1.1--8.4). Terms follow `CONTEXT.md`.
+**Status:** draft 2, 2026-09-28 --- accepted by the user with the changes in section 5. Implements `docs/adr/DATA_MODEL_SPEC.md` (draft 4) and the
+decisions in `docs/adr/DESIGN_DECISIONS.md` (1.1--8.4). Terms follow `CONTEXT.md`.
 **Branches:** P0 on `v-0.5.1.0`; P1--P9 on `v-0.6.0.0`.
 **Sizes** are relative (S < M < L < XL), not durations.
 
@@ -158,6 +158,10 @@ reviewer, moderator, other-dataset moderator, admin}.
 - Proxies (section 4.3, App. B): box, planar / linear prism, cylinder (in-house RANSAC, seeded), hull;
   residuals; deviation maps (16-bit PNG per face, spherical map for hull).
 - Descriptors moved into the runner, frame-aligned, version bump.
+- **HKS registered** (8.6): 3000-point even surface sample + point-cloud Laplacian for meshes,
+  clouds and authored primitives; fixed seed; one fixed time grid in area-normalised units (derived
+  once on 260916, then frozen); errors raise instead of `print` + `None`. Test: all 169 mesh
+  assets of 260916 succeed (the probe's baseline: 169 / 169, rho 0.98 against merged meshes).
 - **Tuning script**: shape class thresholds and complexity thresholds on 260916; confusion tables
   (complexity against the 71 authored `sas_cita_scans` ratings) --> user review --> thresholds frozen.
 - Rehearsal now includes steps 5, 7, 8. Frame report: per dataset, how many frames changed axis
