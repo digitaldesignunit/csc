@@ -1,6 +1,6 @@
 # CSC Data Model Specification --- v0.6 (draft 4)
 
-**Status:** draft 4, 2026-09-28 --- consistency pass after grilling closed (decisions 1.1--7.13,
+**Status:** draft 4, 2026-09-28 --- consistency pass after grilling closed (decisions 1.1--8.6,
 `docs/adr/DESIGN_DECISIONS.md`). Draft 3 2026-09-24 (7.x), draft 2 2026-09-23 (6.x), first draft
 2026-09-12. Glossary: `CONTEXT.md` (repo root) --- field names follow its terms. Supersedes
 `future_implementation/MEASUREMENTS_SPEC.md` (kept for its domain research and sources). Nothing
@@ -383,7 +383,7 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
                                              //      projection rule (conservative bound) in section 10.3; environmental characteristics Annex II via `env_*` quantities
     "compressive_strength": {
       "range": [36.2, 40.1], "unit": "MPa",
-      "confidence": 0.93, "source": "destructive",
+      "confidence": 0.95, "source": "destructive",   // n=4, all verified: (1 - 0.10 x 4^-0.5) x 1.0
       "n": 4, "evidence_ids": ["..."],
       "inherited_from": null,                 // or [parent ids] (merges: several)
       "derived_at": "..."
@@ -393,6 +393,7 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
 
   "attributes": {},                          // kept; migration empties the three ad-hoc keys (section 8)
                                              // capture metadata lives on the SNAPSHOT (section 3.2, decision 7.7) --- a re-scan has its own
+  "created_by_user_id": "uuid",              // NEW (decision 8.9): the creator --- may edit metadata while the identity is unpublished (section 3.1.5)
   "created": "...", "lastmodified": "..."
 }
 ```
@@ -450,11 +451,15 @@ The counterpart of `origin`. `exit == null` means the piece is in the catalogue'
 (available, reservable). Replaces 0.5 `consumed_at`, which conflated a piece that no longer
 exists (split, recycled) with one that exists elsewhere (installed, returned).
 
-- **Split / merge are server-set.** Creating an identity whose `parent_identities` includes a
-  parent with `exit == null` sets that parent's `exit = {kind: split | merged, at: <child's
-  first-snapshot effective_from>, recorded_by_user_id: null}` (`merged` when the child has >1
-  parent). A client-set `split` without catalogued children is legal ("cut up, pieces not
-  recorded").
+- **Split / merge are server-derived from published children (decision 8.8).** Creating a child
+  (an identity with `parent_identities`) changes nothing on the parent: while the child's v0 is a
+  draft or pending, the parent stays in circulation and shows "a cut from this piece is awaiting
+  review". **Publishing the child's first snapshot** sets each parent's `exit = {kind: split |
+  merged, at: <earliest effective_from over the parent's published children>, recorded_by_user_id:
+  null}` (`merged` when the child has >1 parent) and clears the parent's reservation. The server
+  keeps it true: a moderator edit of that `effective_from` moves `exit.at`; withdrawing the last
+  published child clears the server-set exit. A client-set `split` without catalogued children is
+  legal ("cut up, pieces not recorded") and is never touched by this rule.
 - **Everything else is authored**: `POST /identities/{id}/exit` (`moderator(D)`, section 7.0) with the block.
   `construction_work` only for `kind == installed` (I18).
 - **Re-entry** (an `installed` or `returned` piece comes back, e.g. from a temporary pavilion):
@@ -486,6 +491,25 @@ hard-deleted.**
 ```jsonc
 "withdrawn": { "at": "...", "by_user_id": "uuid", "reason": "...", "duplicate_of": "uuid" | null } | null
 ```
+
+#### 3.1.5 Unpublished identity (decision 8.9)
+
+An identity is **unpublished** until its first snapshot is published --- derived, never stored: no
+snapshot of it has ever had `status` `published` / `withdrawn` (the same test as I19). While
+unpublished:
+
+- **Editing:** `created_by_user_id` and `moderator(D)` may PATCH all identity metadata (`origin`,
+  `material`, `trade_name`, `original_function`, `manufactured_at`, ...). After the first publish:
+  `moderator(D)` only (section 7.0).
+- **Visibility:** as a draft --- the creator and `moderator(D)`; never in lists, the map, `/id/{uuid}`
+  or the public tier. Hard delete stays allowed (I19).
+- **Evidence:** may be created and submitted (e.g. the wizard's optional inspection step, 7.9);
+  **publishing it is refused until the identity is published** (409 "publish the component
+  first", I26). The moderation queue shows such evidence next to the v0 it belongs to, so both are
+  published in one pass.
+
+Migration: `created_by_user_id` = the `added_by_user_id` of the identity's v0 (step 1c); every
+260916 identity is already published.
 
 ### 3.2 `component_snapshots`
 
@@ -523,7 +547,7 @@ hard-deleted.**
 
   "descriptors": { "boxscore": ..., "radial_distance_32": ..., "hks": ... },        // DERIVED, runner stage 4 (section 4.3); frame-aligned
   "properties": {                              // DERIVED section 4.4 as-of fold --- snapshot-scoped quantities only
-    "spalling": { "range": [1, 2], "confidence": 0.3, "source": "visual", "n": 2, "evidence_ids": ["..."], "derived_at": "..." }
+    "spalling": { "range": [1, 2], "confidence": 0.35, "source": "visual", "n": 2, "evidence_ids": ["..."], "derived_at": "..." }
   },
   "properties_version": 1,
   "frame": { "o": [x,y,z], "x": [...], "y": [...], "z": [...] },   // DERIVED stage 1 (decision 7.10): minimum-volume box, axis convention section 4.3; REPLACES pca_frame + bbx_origin
@@ -875,6 +899,16 @@ existing product's passport, Art 76(1), 75(2)(e) --- the snapshot chain *is* tha
 
 - Set when the snapshot is created: now, or the author's value for a state that began earlier
   (the snapshot form, section 7.6). A correction inherits its predecessor's (section 3.2.2).
+- **Default for v0 (decision 8.10):** `origin.at` with its precision when known --- the piece is
+  assumed unchanged since it left its previous context; else `capture.captured_at`; else `created`.
+  A child's v0 (cut from a parent) starts at the cut: `created` or the author's date --- never the
+  parent's inherited `origin.at`. Later versions: now or the author's date.
+- **Evidence outside the snapshot history** (8.10): resolution `before_first` (e.g. an inspection
+  while the piece was still installed) or `after_exit` (e.g. inspected in the building it went
+  into) feeds no snapshot's `properties` --- no snapshot records that state. The record belongs to
+  the identity like all evidence (I5): identity-scoped quantities fold from it as from any
+  evidence, and every record --- of either scope --- is listed on the identity page and the timeline
+  under "before cataloguing" / "after leaving circulation".
 - After publish, `moderator(D)`-editable via `PATCH /snapshots/{sid}` (section 7.1) --- decision 6.6.
 - Always set: there are no virtual snapshots (decision 7.12).
 - Monotonic in `version` per identity over non-superseded, non-withdrawn snapshots (I3); a
@@ -897,7 +931,7 @@ resolve_snapshot_at(snapshots, at) -> Context
 ### 4.2 Shape class --- `shape_class.py`
 
 Inputs: the frame's box extents (`bbx`, section 4.3 stage 1) sorted `e1 >= e2 >= e3` and
-`descriptors.{boxscore, spherescore, linescore, planescore}` once they exist. Sorting makes the
+`descriptors.{boxscore, spherescore, linescore, planescore}` --- computed in stage 1 from the same hull and box as the frame (decision 8.7), so always present. Sorting makes the
 class independent of the frame's axis order, so the column rule of stage 1 (which reads the
 class) cannot loop: stage 1 runs with the current class (none on a new snapshot --> the default
 lying convention), stage 2 derives the class, and stage 1 re-runs only if the class became
@@ -945,15 +979,19 @@ nothing derived. `/utility/compute-snapshot-orientation` and client-sent `bbx` /
 
 | # | stage | reads | writes | cost | when |
 |---|---|---|---|---|---|
-| 1 | `frame` | source geometry, `shape_class`, identity `original_function` | `frame`, `bbx` (no proxy --- decision 7.10) | cheap | **synchronous** on every source-geometry write to a draft (create, PLY upload/replace) and on submit; again when `original_function` or `shape_class` changes |
-| 2 | `shape_class` | stage 1 extents + scores (if present) | `shape_class` (unless `assigned`) | cheap | synchronous, right after 1 (re-run after 4 once scores exist) |
+| 1 | `frame` | source geometry, `shape_class`, identity `original_function` | `frame`, `bbx` (no proxy --- decision 7.10); the four hull scores `boxscore`, `spherescore`, `linescore`, `planescore` from the same hull + box (8.7) | cheap | **synchronous** on every source-geometry write to a draft (create, PLY upload/replace) and on submit; again when `original_function` or `shape_class` changes |
+| 2 | `shape_class` | stage 1 extents + scores | `shape_class` (unless `assigned`) | cheap | synchronous, right after 1 |
 | 3 | `proxies` | source + `shape_class` | fitted primary/part proxies, residuals, `deviation_maps` | expensive | async runner |
-| 4 | `descriptors` | source + `frame` (radial section, rest alignment) | `descriptors` | expensive | async runner |
+| 4 | `descriptors` | source + `frame` (radial section, rest alignment) | the expensive descriptors: radial signatures, HKS (8.6) | expensive | async runner |
 | 5 | `complexity` | proxy residuals (`p95_mm` / size), `boxscore`, part count | `complexity` 0--3 (unless `assigned`) | cheap | async, after 3--4 |
 | 6 | `previews` | source / proxies | `previews/<sid>.webp` | medium | async runner |
 
-Each stage is idempotent and skips snapshots whose stored `*_VERSION` equals the code's; the cron
-sweeps everything stale. Authored proxies are never refitted but still feed stage 1--2 (frame
+Each stage is idempotent and stores, next to its output, its `*_VERSION` **and a fingerprint of
+its inputs** (decision 8.7) --- e.g. for `proxies`: source-geometry etag, `shape_class`,
+`shape_class_source`. A stage is stale when either differs; the cron sweeps everything stale. So
+any change of an upstream result --- a recompute, a moderator override of `shape_class`, an
+`original_function` change that flips the column rule --- makes stages 3--5 of that snapshot
+stale and they rerun; no stage order can loop. Authored proxies are never refitted but still feed stage 1--2 (frame
 from the authored primitive).
 
 **The frame (stage 1, decision 7.10)** is the piece's standard orientation and size, used by GH
@@ -1033,7 +1071,7 @@ One pure function, two call sites that differ only in the input filter and the t
 | target | input set | runs on |
 |---|---|---|
 | `identity.properties` | all published, non-superseded evidence for the identity; quantities with `scope == identity` | evidence publish / withdraw / reinstate / supersede / verification change; identity creation with parents (inheritance); **a parent's `properties` changing** (recomputes every descendant that still inherits --- same propagation as section 3.1.2) |
-| `snapshot.properties` (per snapshot) | the **as-of** set: published, non-superseded evidence whose resolved context (section 4.1) is *this* snapshot; quantities with `scope == snapshot` | the same evidence events, **plus** any `effective_from` change on any snapshot of the identity (it moves the windows), plus snapshot publish / withdraw / reinstate / supersede |
+| `snapshot.properties` (per snapshot) | the **as-of** set: published, non-superseded evidence whose resolved context (section 4.1) is *this* snapshot --- `before_first` / `after_exit` evidence enters no snapshot (8.10); quantities with `scope == snapshot` | the same evidence events, **plus** any `effective_from` change on any snapshot of the identity (it moves the windows), plus snapshot publish / withdraw / reinstate / supersede |
 
 Unpublished evidence (draft, pending, rejected) never enters the fold, so creating, rejecting or
 hard-deleting it triggers nothing.
@@ -1115,7 +1153,7 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 | I15 | `status` transitions (snapshots and evidence): `draft-->pending`, `pending-->published\|rejected`, `rejected-->draft` (resubmit), `published-->withdrawn` (`moderator(D)`, reason required), `withdrawn-->published` (`moderator(D)` reinstate). Hard delete only from `draft\|pending\|rejected`. Evidence additionally leaves the default set via supersession. |
 | I16 | `origin.construction_work != null` => `origin.kind in {deinstallation, demolition}`. |
 | I17 | `inherited_fields` and `inherited_from` are server-maintained: never accepted from a client except `inherited_fields` additions (re-inherit). `inherited_fields != []` => `inherited_from in parent_identities`. |
-| I18 | `exit.construction_work` non-null => `exit.kind == installed`. `exit.kind in {split, merged, recycled, disposed}` => `reenter` rejected. `reserved` non-empty => `exit == null`. `past_cycles` never client-writable. |
+| I18 | A server-set `exit` (`recorded_by_user_id == null`, kind `split` / `merged`) exists iff the identity has >= 1 non-withdrawn child with a published snapshot; `exit.at` = the earliest such child's first `effective_from` (8.8). `exit.construction_work` non-null => `exit.kind == installed`. `exit.kind in {split, merged, recycled, disposed}` => `reenter` rejected. `reserved` non-empty => `exit == null`. `past_cycles` never client-writable. |
 | I19 | Identity hard `DELETE` only if no snapshot or evidence of it ever reached `published` (server checks `status` history: any `published`/`withdrawn` record => 409). `?purge=1` overrides, admin only, leaves a purge stub. `withdrawn.duplicate_of` must reference a non-withdrawn identity != self (no chains: re-point to the terminal). |
 | I20 | `identity.dataset` references an existing `datasets._id`. At least one enabled user with `role == admin` exists (the last admin cannot be demoted or disabled). A dataset always has >=1 `moderator` member or is administered by admins only (allowed, warned). |
 | I21 | Frozen snapshot fields and files (section 3.2.2) of a `published` snapshot reject PUT/PATCH/DELETE (409, pointing at `/supersede`). Derived fields are rejected from every client payload. A snapshot is superseded at most once; `supersedes` references a `published` snapshot of the same identity. |
@@ -1123,6 +1161,7 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 | I23 | `capture.markers` and `capture.fixtures` never satisfy I1 and are never read by a derivation (section 3.2.3). A `reinforcement_layout` record requires `position.snapshot_id` (its bar coordinates are in that snapshot's stored coordinates). |
 | I24 | Evidence `attachments[]` of a `published` record: entries are never removed or reordered; a removal sets `removed {at, by_user_id, reason}` (`moderator(D)`, reason required) and deletes the file. `sha256` is computed server-side over the stored bytes. Same rule for snapshot photos after publish (section 3.2.2). |
 | I25 | `identity.material` references an existing `materials._id`; `material_class_source == derived` => `material_class == materials[material].default_class` (recomputed when the material or its default changes); `assigned` values are never overwritten. |
+| I26 | Evidence of an unpublished identity (section 3.1.5) cannot be published (409). `created_by_user_id` is server-set on create and never changed by a client. |
 
 ---
 
@@ -1181,14 +1220,14 @@ role)`; the frontend merely hides controls. `admin` passes every check. D = the 
 | action | who |
 |---|---|
 | read `published` / `withdrawn` (tombstone) records | visibility rule section 3.6 |
-| read `draft` / `pending` / `rejected` | author; `moderator(D)`; `reviewer(D)` for pending evidence |
-| create identity in D, snapshot, evidence | `contributor(D)` |
+| read `draft` / `pending` / `rejected` | author; `moderator(D)`; `reviewer(D)` for pending evidence. An unpublished identity (section 3.1.5): its creator and `moderator(D)` |
+| create identity in D, snapshot, evidence | `contributor(D)`; a child also needs read access to each parent (8.8) |
 | edit a draft; submit `draft --> pending`; resubmit `rejected --> draft` | author |
 | upload / replace / delete geometry files and photos | author or `moderator(D)`, **only while the snapshot is not `published`** (freeze rules: decision 6.6) |
 | evidence attachments | unpublished record: author or `moderator(D)` add / remove; published: `contributor(D)` adds, `moderator(D)` removes with reason, tombstone entry kept (decision 7.3) |
-| publish / reject / withdraw / reinstate (snapshot, evidence) | `moderator(D)` |
+| publish / reject / withdraw / reinstate (snapshot, evidence) | `moderator(D)`; publishing a child's **first** snapshot also ends its parents (split / merge, 8.8), so it needs `moderator` of every parent's dataset as well --- otherwise it waits in that dataset's queue |
 | promote `current_snapshot_id`; `effective_from`, `shape_class` overrides | `moderator(D)` |
-| PATCH identity metadata (`origin`, `material`, `original_function`, `is_public`, ...) | `moderator(D)` |
+| PATCH identity metadata (`origin`, `material`, `original_function`, `is_public`, ...) | `moderator(D)`; while the identity is unpublished also its creator (8.9) |
 | `exit`, `reenter`, `withdraw` identity | `moderator(D)` |
 | move identity D1 --> D2 | `moderator(D1) and moderator(D2)` |
 | set evidence `verification` | `reviewer(D)` |
@@ -1359,7 +1398,7 @@ and the materials list.
 
 | release | branch | contents |
 |---|---|---|
-| **0.5.1.0** | `v-0.5.1.0` | (a) backend logs `X-CSC-Client` (does not enforce); every GH UserObject sends `gh-userobjects/0.5.1.0`; shipped through `CSC_Update`. Purpose: at cutover, old clients are identifiable and stoppable. (b) **Runtime bump Python 3.9.18 --> 3.13** on Uberspace 7 (decision 6.12), isolated from any data-model change: new venv, `csc_env.yml`, README cron lines `python3.9` --> `python3.13`, `requirements.txt` + `constraints.txt` pinning the **glibc-2.17 ceiling** (`numpy<2.3`, `scipy<1.17`, `scikit-learn<1.8`, `robust-laplacian<1.1`; comment explains U7 = CentOS 7, newer wheels are manylinux_2_28). |
+| **0.5.1.0** | `v-0.5.1.0` | (a) backend logs `X-CSC-Client` (does not enforce); every GH UserObject sends `gh-userobjects/0.5.1.0`; shipped through `CSC_Update`. Purpose: at cutover, old clients are identifiable and stoppable. (b) **Runtime bump Python 3.9.18 --> 3.13** on Uberspace 7 (decision 6.12), isolated from any data-model change: new venv, `csc_env.yml`, README cron lines `python3.9` --> `python3.13`, `requirements.txt` + `constraints.txt` pinning the **glibc-2.17 ceiling** (`numpy<2.3`, `scipy<1.17`, `scikit-learn<1.8`, `robust-laplacian<1.1`; comment explains U7 = CentOS 7, newer wheels are manylinux_2_28). (c) photo-metadata strip at upload + cleanup of stored photos (7.13, step 14). (d) release + deploy pipeline: one version, tag-driven release, approval-gated deploy (8.5). **Released 2026-09-28.** |
 | **0.6.0.0** | `v-0.6.0.0` | this spec in backend + web frontend; header **enforced** (section 7.4); **GH bridge**: the UserObjects adapted to the new model with minimal workflow change (`type` input --> `original_function`, extrusion input --> authored prism proxy, salvage inputs --> `origin`, no client-side consume after split, create-as-draft + submit, header `gh-userobjects/0.6.0.0`). **Builder components** (decision 7.6): `Actor`, `Origin`, `IdentityMetadata`, `SnapshotMetadata` each output a JSON fragment of the API payload; `CreateComponentIdentity` / `CreateComponentSnapshot` take ID, dataset, metadata objects, geometry (+ parents) --- ~8 inputs instead of 22 / 16 --- and no longer compute PCA or reduce meshes (6.14). `MarkerPoints` and `Reinforcements` inputs removed (7.7, 7.8); **one evidence path**: `ReinforcementLayout` builder + generic `AddEvidence` (7.8). |
 | after 0.6 | --- | full GH interface rebuild (Python or C# `.gha`), designed separately. |
 | after 0.6 | --- | **Uberspace 8** (Arch, systemd) once out of public beta: lifts the constraints pins; supervisord `.ini` --> systemd units. MongoDB is on Atlas, unaffected. Infrastructure item, not in this spec. |
@@ -1385,9 +1424,9 @@ cutover.
 
 | run | step | script | after | what |
 |---|---|---|---|---|
-| 1 | 1 | `migrate_add_snapshot_effective_from.py` | --- | `effective_from = created`, precision `exact`, on all snapshots. 260916: 4 identities have a v1; `created` is monotonic in `version` for all of them --- the script asserts that and aborts otherwise. |
+| 1 | 1 | `migrate_add_snapshot_effective_from.py` | --- | `effective_from` by the 8.10 default --- v0: `origin.at` + precision when known (Corian 2022-10-26 day, ZirKuS 2024-07-24 day, `schoenes_neues_feld` 2026-05-19 day; children: their `created`), else `created` (`exact`); v1+: `created` (`exact`). Reads the 0.5 `salvaged_at` directly (step 10 converts and drops it later), so the run order is unchanged. 260916: 4 identities have a v1; `created` is monotonic in `version` for all of them --- the script asserts that and aborts otherwise. |
 | 2 | 1b | `migrate_snapshot_validated_to_status.py` | 1 | `validated: true --> status: published`; `false --> pending`; drop `validated`. Rejected 0.5 snapshots were deleted, so none map to `rejected`. |
-| 3 | 1c | `migrate_init_06_fields.py` | 1b | initialise every new field to its empty value so no reader meets a missing key: snapshots `supersedes` / `superseded_by` / `status_changed_*` = null, `capture` = null, `effective_from_precision` from step 1; identities `withdrawn` = null, `past_cycles` = [], `properties` = {}; later steps overwrite where they have data. |
+| 3 | 1c | `migrate_init_06_fields.py` | 1b | initialise every new field to its empty value so no reader meets a missing key: snapshots `supersedes` / `superseded_by` / `status_changed_*` = null, `capture` = null, `effective_from_precision` from step 1; identities `withdrawn` = null, `past_cycles` = [], `properties` = {}; later steps overwrite where they have data. Identities: `created_by_user_id` = their v0 `added_by_user_id` (8.9) |
 | 4 | 9 | `migrate_drop_snapshot_fields.py` | --- | `$unset` `processes` (empty in all 701) and `assembly` (false in all 701) --- 6.13; `virtual` (false in all 701) --- 7.12; `iframe` (always identity) --- 7.11. Aborts if any snapshot has `virtual: true`. |
 | 5 | 2 | `migrate_rename_measurements_collection.py` | --- | drop the empty `component_measurements`; bind `component_evidence`. |
 | 6 | 11 | `migrate_datasets_collection.py` | --- | create the 7 `datasets` docs from distinct `identity.dataset` values, `members: []`. Visibility: `catalog` for `mineral_composite_panels`, `sas_cita_scans`, `ddu_build_with_debris`, `ddu_aggregations`; `members` for `dbu_zirkus`, `schoenes_neues_feld`, `spa_example_data`. `admin` stays global admin. Memberships are **not** migrated --- assigned afterwards by admin through the extended user-administration frontend (deliverable: dataset CRUD + per-dataset member/role editor under `/admin`). |
@@ -1404,7 +1443,7 @@ cutover.
 | 17 | 9b | `migrate_complexity_source.py` | --- | `sas_cita_scans` (71): keep value, `complexity_source: assigned`. All others (630, batch defaults): `complexity_source: derived`, value recomputed by stage 5 of `main_geometry.py`. |
 | 18 | 5 | `main_geometry.py --stages frame,shape_class --recompute` | 3, 4, 6c | every snapshot gets `frame` + `bbx` by the 7.10 rule (min-volume box, axis convention); `pca_frame` and `bbx_origin` `$unset`. Replaces the planned `migrate_obb_to_box_proxy.py` --- the frame is no longer a proxy. Prints, per dataset, how many frames changed axis order vs. 0.5 (expected: diagonal cases, columns). **Must run after 4 (authored prisms), 6c (gripper leaves `geometry`) and 3 (column rule reads `original_function`).** |
 | 19 | 7 | `main_geometry.py --stages proxies,descriptors,complexity,previews --recompute` | 5, 9b | fits, residuals, deviation maps, descriptors (frame-aligned, version bump), complexity, previews (6.14). |
-| 20 | 8 | `main_geometry.py --stages shape_class,frame --recompute` | 7 + threshold tuning | after tuning and once scores exist: final `shape_class` (`derived`), then the frame again where the class changed (column rule, 7.10). |
+| 20 | 8 | `main_geometry.py --stages shape_class,frame --recompute` | 7 + threshold tuning | after threshold tuning: recompute `shape_class`; where it changed, the frame (column rule, 7.10) and --- by fingerprint (8.7) --- stages 3--5 rerun. An ordinary recompute, no special pass. |
 | 21 | 13 | `migrate_archive_designs.py` | --- | decision 7.11: export the whole `designs` collection to `designs_archive_<yymmdd>.json` next to the cutover dump, verify the document count, then drop the collection. |
 | 22 | 14 | `migrate_strip_photo_gps.py` | --- | decision 7.13: re-save every stored snapshot photo without GPS / owner / serial (orientation, capture time, make / model kept); prints how many files carried GPS (260916 assets: 3 of 8). Independent of 0.6 --- can run as soon as the upload pipeline strips too. |
 | post | 11b | `migrate_retire_shared_account.py` | cutover done, personal accounts exist | **after personal accounts exist.** Input: a mapping file (`dataset` or explicit snapshot/identity id list --> personal `user_id`). Rewrites `added_by_user_id`/`added_by_username` on snapshots (and `recorded_by_*` on migrated evidence, `performed_by` user actors), keeping `attribution_corrected: {from_user_id, at, by_user_id}` on each touched document so the correction is auditable. Adds the mapped users as `contributor` of the datasets they authored. Then sets `ddu.disabled = true` --- never deleted, it is still referenced by `attribution_corrected`. Refuses to run while any record still points at `ddu` without a mapping. |

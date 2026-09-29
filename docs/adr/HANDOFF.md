@@ -8,17 +8,18 @@ are in place. **Next: P1 of `docs/adr/IMPLEMENTATION_PLAN_0.6.md` on a new branc
 `main`.** Pending cleanup after a few good releases: the old server layout (deployment README,
 step 7).
 
-**Last session:** 2026-09-28 --- consistency pass done (spec draft 4, decisions 8.1--8.4), LoW codes
-verified, open data facts confirmed, **implementation plan drafted** (`docs/adr/IMPLEMENTATION_PLAN_0.6.md`,
-under review: its section 5 Q1--Q3). **Next step:** settle Q1--Q3, then start P0 (0.5.1.0).
+**Last session:** 2026-09-29 --- decision 8.6 (HKS on a 3000-point surface sample), `adr/` moved to
+`docs/adr/`, agent-skill setup (`AGENTS.md`, `docs/agents/`), external review checked: stale docs
+fixed, gaps 1--8 grilled: items 1--4 decided as 8.7--8.10; 5--7 before P3 / P6, 8 before P5. 2026-09-28: consistency pass (8.1--8.4),
+LoW codes verified, implementation plan accepted, 0.5.1.0 released (8.5).
 **Who:** fstwn (eschenbach@dg.tu-darmstadt.de), TU Darmstadt DG --- sole maintainer of CSC.
 
 ## 1. What this work is
 
 CSC (Catalog of Second Chances) is a research-prototype catalog of reclaimed building components:
 FastAPI + MongoDB Atlas backend (`src/backend`), Next.js frontend (`src/frontend`), Grasshopper
-UserObjects (`grasshopper_userobjects_src`). Production: Uberspace 7, Python 3.9.18. Current
-release 0.5.0.0; the design targets **0.6.0.0 on branch `v-0.6.0.0`**.
+UserObjects (`grasshopper_userobjects_src`). Production: Uberspace 7, Python 3.13. Current
+release 0.5.1.0 (live 2026-09-28); the design targets **0.6.0.0 on branch `v-0.6.0.0`**.
 
 Threads merged into one spec:
 
@@ -44,6 +45,7 @@ Threads merged into one spec:
 | `CONTEXT.md` (repo root) | **glossary** (domain-modeling format): canonical terms + words to avoid. Created 2026-09-24. |
 | `docs/adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1--P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; open Q1--Q3 |
 | `docs/adr/HANDOFF.md` | this file |
+| `AGENTS.md`, `docs/agents/` | agent-skill config: GitHub issues, triage labels, domain-doc rules (2026-09-29) |
 | `future_implementation/MEASUREMENTS_SPEC.md` | original measurement spec --- superseded, kept for domain research and standards sources. Gitignored. |
 | `future_implementation/IMPLEMENTATION_PLAN_V0-5+.md` | older plan; its 0.5.0.2 moderator section is **superseded by 6.5** |
 | `reference/pdf/Bernhard_HYBREP.pdf`, `reference/pdf/CPR_2024_3110.pdf` | sources. Gitignored. |
@@ -56,6 +58,21 @@ Threads merged into one spec:
 
 **A. Grilling --- done.** HANDOFF items 1--3 of 2026-09-23 closed by 7.1--7.13 (A.3 "designs x new
 lifecycle" dissolved: designs are removed, 7.11).
+
+**A2. Review gaps (external review, checked 2026-09-29) --- grill before the phase they touch:**
+before P1: ~~(1) stage-order loop~~ (decided 8.7) shape class <-> proxies (stage 2 needs `boxscore` from stage 4);
+~~(2) when a split takes effect~~ (decided 8.8) (parent `exit` set by a child whose v0 is still a draft; cross-dataset
+`exit` without `moderator(parent D)`); ~~(3) identity has no draft state~~ (decided 8.9) (contributor cannot fix a
+typo; visibility of an identity whose only snapshot is a draft; evidence on it); ~~(4) v0
+`effective_from = created`~~ (decided 8.10) vs. valid time (`origin.at`), and what the snapshot fold does with
+`before_first` / `after_exit` evidence. Before P3 / P6: (5) header enforcement vs. `/id/{uuid}` and
+anonymous API readers; (6) who sets `self_attested`, four-eyes for `reviewed`, typed-in
+accreditation; (7) attachments on public pieces vs. GDPR (redaction does not reach files). Before
+P5: (8) frame sign rule + tie-break tolerance for near-equal extents. Minor: withdrawing the current
+snapshot without replacement vs. I3b; two pending supersessions of one record (I14); evidence on
+exited / withdrawn identities; reinforcement layouts after a correction in new coordinates.
+(The review's CORS side note on item 5 is wrong: browser calls go through `/api/backend`, which
+adds the header; CORS already allows all headers.)
 
 **B. Claude's work, reviewed by user:**
 1. ~~**Spec consistency pass.**~~ **Done 2026-09-28** (draft 4, decisions 8.1--8.4). Known items: section 0 / section 1 still describe the pre-6.x model (no datasets,
@@ -72,10 +89,9 @@ lifecycle" dissolved: designs are removed, 7.11).
    7.1 / 7.4, moderation, `/admin` datasets) --> GH bridge (builders 7.6, `ReinforcementLayout` +
    `AddEvidence`).
 
-**C. Implementation-ready now:** **0.5.1.0** on `v-0.5.1.0` (spec section 8.0): `X-CSC-Client` header in
-all GH UserObjects + backend logging; Python 3.9 --> 3.13 with `constraints.txt` (glibc-2.17
-ceiling). The **photo-metadata strip** (7.13, upload pipeline + migration step 14) is also
-independent of 0.6 --- it could ship with 0.5.1.0 or as its own patch (user not yet asked).
+**C. Shipped:** **0.5.1.0** (tag `v0.5.1.0`, live 2026-09-28): `X-CSC-Client` header in all GH
+UserObjects + backend logging; Python 3.13 with `constraints.txt` (glibc-2.17 ceiling); photo-metadata
+strip (7.13, incl. cleanup of stored photos); local test environment, CI, release + deploy pipeline (8.5).
 
 **Small confirmations:** answered 2026-09-28 --- ZirKuS bars `basis: drawing`; 2024-07-24 applies to
 all 16 `dbu_zirkus` pieces.
@@ -143,7 +159,7 @@ bridge rewrite; old migration scripts are left as they are (user).
 
 ## 6. Caveats
 
-- No code written; no migrations exist; `docs/adr/` and `CONTEXT.md` uncommitted.
+- No 0.6 code yet (0.5.1.0 shipped); no 0.6 migrations exist.
 - Number of designs in production unknown (not in the dumps) --- archived at cutover (section 8 step 13).
 - CPR analysis is alignment, not compliance (delegated act under Art 75(1) does not exist yet).
   EN 18219/18220/18221/18222 only needed for deferred items (identifiers, export).

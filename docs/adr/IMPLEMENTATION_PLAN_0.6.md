@@ -1,7 +1,7 @@
 # Implementation plan --- CSC 0.5.1.0 and 0.6.0.0
 
 **Status:** draft 2, 2026-09-28 --- accepted by the user with the changes in section 5. Implements `docs/adr/DATA_MODEL_SPEC.md` (draft 4) and the
-decisions in `docs/adr/DESIGN_DECISIONS.md` (1.1--8.4). Terms follow `CONTEXT.md`.
+decisions in `docs/adr/DESIGN_DECISIONS.md` (1.1--8.6). Terms follow `CONTEXT.md`.
 **Branches:** P0 on `v-0.5.1.0`; P1--P9 on `v-0.6.0.0`.
 **Sizes** are relative (S < M < L < XL), not durations.
 
@@ -44,7 +44,7 @@ on the Atlas cluster (network-bound, slow, shared with production).
 
 ---
 
-## 2b. P0 --- 0.5.1.0 on `v-0.5.1.0` (ready now) --- size M
+## 2b. P0 --- 0.5.1.0 on `v-0.5.1.0` --- **done, released 2026-09-28** --- size M
 
 Independent of the data model; ships first so a runtime problem is never confused with a
 data-model one (6.12). User: "the pre-work" --- everything 0.6 builds on that does not change the
@@ -119,6 +119,8 @@ covered; header tests (missing / old / exempt) pass.
 class, proxies --- listed as expected-missing); the web app browses the migrated 260916 data.
 
 ### P3 --- Datasets, permissions, lifecycle --- size L
+- Unpublished identity (8.9): derived state; creator + `moderator(D)` edit metadata and see it;
+  evidence publish refused until the identity is published (I26); queue groups evidence with v0.
 - `datasets` routes and memberships (section 3.6, section 7.7); `GET /users/me` with global role + roles per
   dataset (the frontend reads this; nothing role-related lives in the session token besides the
   global role).
@@ -136,6 +138,9 @@ class, proxies --- listed as expected-missing); the web app browses the migrated
 reviewer, moderator, other-dataset moderator, admin}.
 
 ### P4 --- Provenance, lineage, materials --- size M
+- Split / merge exit derived from published children (8.8): set on the child's first publish (needs
+  `moderator` of child and parent datasets), `at` = earliest child `effective_from`, cleared when the last
+  published child is withdrawn; tests for draft / rejected / withdrawn children and cross-dataset cuts.
 - `origin` / `exit` / `past_cycles` routes (section 3.1.1, section 3.1.3, section 7.1): exit, undo, re-entry; server-set
   split / merge on child creation.
 - Lineage inheritance (section 3.1.2): copy-on-create, recursive propagation on parent PATCH, detach on
@@ -157,7 +162,9 @@ reviewer, moderator, other-dataset moderator, admin}.
   signs, stored as a transform --- stored coordinates never touched.
 - Proxies (section 4.3, App. B): box, planar / linear prism, cylinder (in-house RANSAC, seeded), hull;
   residuals; deviation maps (16-bit PNG per face, spherical map for hull).
-- Descriptors moved into the runner, frame-aligned, version bump.
+- Descriptors moved into the runner, frame-aligned, version bump. The four hull scores run in
+  stage 1 with the frame (8.7); every stage stores `*_VERSION` + an input fingerprint and is stale
+  on mismatch (test: override `shape_class` -> proxies, descriptors, complexity rerun).
 - **HKS registered** (8.6): 3000-point even surface sample + point-cloud Laplacian for meshes,
   clouds and authored primitives; fixed seed; one fixed time grid in area-normalised units (derived
   once on 260916, then frozen); errors raise instead of `print` + `None`. Test: all 169 mesh
