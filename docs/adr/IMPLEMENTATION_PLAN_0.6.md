@@ -84,6 +84,16 @@ photo carries GPS. Uberspace steps are handed to the user as a terse checklist.
 ## 3. Phases of 0.6.0.0
 
 ### P1 --- Foundations --- size L
+
+**Status 2026-09-29: done** (awaiting the user's review). Built:
+`apps/catalog/vocab.py`, `documents.py` (all section 3 documents; one-document invariants as
+validators naming their id), `permissions.py` (`can`, `can_see_component`, `can_see_record`),
+`lifecycle.py` (I15 transitions, per-field PATCH rule of 8.3), `invariants.py` + the CLI
+`scripts/db_maintenance/check_invariants.py` (all 26 ids; every data invariant already checks, the
+rest are route-only); designs removed. The throwaway-`mongod` fixture came with 0.5.1.0. 312 tests
+green --- 336 with the header enforcement (8.11: `CSC_MIN_CLIENT_VERSIONS`, unset = log only). First
+run on the 0.5 dump lists exactly the P2 work (plus nulls, now in step 1c).
+
 - `apps/catalog/vocab.py`: every controlled list of spec section 2 (original function, shape class,
   primitives, fit methods, evidence methods + tiers, quantities with unit / kind / scope /
   ranking, precisions, origin / exit kinds, statuses, roles, visibility, material seed).
@@ -131,6 +141,8 @@ class, proxies --- listed as expected-missing); the web app browses the migrated
   freeze (I21); one in flight (I3b); `PATCH /snapshots/{sid}` with per-field permission (8.3).
 - Identity withdrawal, `duplicate_of`, purge + `purged_records` + 410 (section 3.1.4); `/id/{uuid}`
   resolver, API and frontend route (section 7.5); scanners accept UUID or URL.
+  --- a piece the viewer cannot see shows "not public" + sign-in (anonymous) or "no access"
+  (logged in) instead of a 404 (8.11).
 - Web: moderation queues (snapshots), `/admin` datasets + member / role editor, withdraw /
   duplicate dialogs, controls shown per `/users/me`.
 

@@ -244,8 +244,8 @@ How the piece left circulation (section 3.1.3).
 
 | value | label | physical piece | terminal? | notes |
 |---|---|---|---|---|
-| `split` | Split | ceased to exist as this identity | yes | server-set on child creation; children via lineage |
-| `merged` | Merged | ceased to exist as this identity | yes | server-set when a child has >1 parent |
+| `split` | Split | ceased to exist as this identity | yes | server-set when a child's first snapshot is published (8.8); children via lineage |
+| `merged` | Merged | ceased to exist as this identity | yes | server-set like `split` when the child has >1 parent (8.8) |
 | `installed` | Installed | exists, in a construction work | no --- re-entry allowed | reuse accomplished; `construction_work` optional (where it went). A later deinstallation starts a new CPR life (Art 3(53)) |
 | `recycled` | Recycled | material recovered, not the piece | yes | crushed to aggregate, melted, ... |
 | `disposed` | Disposed | landfilled / waste | yes | |
@@ -626,7 +626,8 @@ routes on published snapshots, client-writable `descriptors`, publish-before-upl
 
 | class | fields | before publish | after publish |
 |---|---|---|---|
-| **frozen** --- claims about the piece's state | inline `geometry.*` (meshes, point_clouds, authored proxies); mesh + point-cloud PLY files; `capture` except `capture.notes` (incl. fixture files); `fragment`, `quantity`; `shape_class` / `complexity` when `assigned` | author / `moderator(D)` | never in place --> correction (below) |
+| **frozen** --- claims about the piece's state | inline `geometry.*` (meshes, point_clouds, authored proxies); mesh + point-cloud PLY files; `capture` except `capture.notes` (incl. fixture files); `fragment`, `quantity` | author / `moderator(D)` | never in place --> correction (below) |
+| **overrides** | `shape_class` / `complexity` set by hand (`*_source: assigned`) | author / `moderator(D)` | `moderator(D)` in place (8.3); never overwritten by a recompute |
 | **derived** --- server only | `descriptors`, fitted proxies + `deviation_maps`, `shape_class` / `complexity` when `derived`, `properties`, `frame`, `bbx`, previews, `mesh_ply_resolutions` | server | server, any time (crons, recompute routes). **Never accepted from a client** --- `descriptors` leaves `UpdateComponentSnapshotModel` |
 | **mutable metadata** | `name`, `notes`, `location`, `color` | author / `moderator(D)` | `moderator(D)` in place |
 | **photos** | `photos/<sid>/*` | author / `moderator(D)` | append: `contributor(D)`; delete: `moderator(D)` |
@@ -1232,7 +1233,8 @@ role)`; the frontend merely hides controls. `admin` passes every check. D = the 
 | move identity D1 --> D2 | `moderator(D1) and moderator(D2)` |
 | set evidence `verification` | `reviewer(D)` |
 | supersede published evidence | `contributor(D)` (new record enters `pending`) |
-| reserve / release | any authenticated user who can read the piece |
+| reserve | any authenticated user who can read the piece, while it is not reserved |
+| release | the reserving user, or `moderator(D)` (as 0.5) |
 | manage D's members, D's `visibility` / `name` / `description` | `moderator(D)` |
 | create dataset; users; logs; `?purge=1`; actor redaction | `admin` |
 
@@ -1304,12 +1306,19 @@ Photos served to anyone are EXIF-stripped at upload (section 3.5, decision 7.13)
 
 ### 7.4 Client identification (decision 6.7)
 
-Every request carries `X-CSC-Client: <client>/<version>`, e.g. `gh-userobjects/0.6.0.0`,
-`web/0.6.0.0`. The backend keeps a minimum-version table per client kind (`MIN_CLIENT_VERSIONS`
-in settings). Missing header, unknown client, or version below minimum --> **426 Upgrade
-Required** with a human-readable body naming the fix ("update via CSC_Update"). Exempt: the
-updater itself (`/ghinterface/userobject*`, `/ghinterface/src*`), `/docs`, `/openapi.json`,
-health. The web frontend sets the header in its API client (server- and browser-side). The
+Clients send `X-CSC-Client: <client>/<version>`, e.g. `gh-userobjects/0.6.0.0`,
+`web/0.6.0.0`. The backend keeps a minimum-version table per client kind (env
+`CSC_MIN_CLIENT_VERSIONS`, e.g. `gh-userobjects=0.6.0.0,web=0.6.0.0`; unset = log only).
+Decision 8.11:
+
+| request | header |
+|---|---|
+| any write (POST / PUT / PATCH / DELETE), and any request with a login token | required: known client, version >= minimum, else **426 Upgrade Required** with a body naming the fix ("update via CSC_Update" / "reload the page") |
+| anonymous GET / HEAD | optional --- the `/id/{uuid}` resolver, public pieces, curl / Python readers |
+| a known client below its minimum | **426**, always |
+
+Exempt: CORS preflight (`OPTIONS`), `/ghinterface/*` (the updater), `/docs`, `/redoc`,
+`/openapi.json`, `/health*`, `/version`. The web frontend sets the header in its API client (server- and browser-side). The
 header is logged per request; it is identification for compatibility, **not** authentication.
 
 ### 7.5 Identifier resolution (decision 6.9)
@@ -1322,8 +1331,10 @@ GET /id/{uuid}      frontend route AND API route, permanent --- never renamed, n
 - `Accept: application/json` --> 302 to `/identities/{uuid}/compose` (the passport).
 - Withdrawn with `duplicate_of` --> **301** to `/id/{duplicate_of}`; withdrawn without --> the
   tombstone page / JSON with `withdrawn`; purged --> **410**; unknown --> 404.
-- Visibility rules (section 3.6) apply after the redirect, not before: resolution never leaks whether
-  a members-only piece exists beyond a 404-equivalent for non-members.
+- Visibility rules (section 3.6) apply after the redirect. A piece the viewer cannot see does
+  **not** hide behind a 404 (decision 8.11) --- whoever scans a tag holds the piece: anonymous -->
+  a page "this component is not public" with a sign-in link (callback to the piece); logged in
+  without access --> "you have no access to this component", without dataset details.
 - Scanners (`identify`, `locate-by-id`, `transmit-id`, GH) accept a raw UUID **or** any URL whose
   last path segment is a UUID --- so a future URL-bearing tag works with no code change.
 - Later (additive): `/id/{scheme}/{value}` for `identifiers[]`.
@@ -1426,7 +1437,7 @@ cutover.
 |---|---|---|---|---|
 | 1 | 1 | `migrate_add_snapshot_effective_from.py` | --- | `effective_from` by the 8.10 default --- v0: `origin.at` + precision when known (Corian 2022-10-26 day, ZirKuS 2024-07-24 day, `schoenes_neues_feld` 2026-05-19 day; children: their `created`), else `created` (`exact`); v1+: `created` (`exact`). Reads the 0.5 `salvaged_at` directly (step 10 converts and drops it later), so the run order is unchanged. 260916: 4 identities have a v1; `created` is monotonic in `version` for all of them --- the script asserts that and aborts otherwise. |
 | 2 | 1b | `migrate_snapshot_validated_to_status.py` | 1 | `validated: true --> status: published`; `false --> pending`; drop `validated`. Rejected 0.5 snapshots were deleted, so none map to `rejected`. |
-| 3 | 1c | `migrate_init_06_fields.py` | 1b | initialise every new field to its empty value so no reader meets a missing key: snapshots `supersedes` / `superseded_by` / `status_changed_*` = null, `capture` = null, `effective_from_precision` from step 1; identities `withdrawn` = null, `past_cycles` = [], `properties` = {}; later steps overwrite where they have data. Identities: `created_by_user_id` = their v0 `added_by_user_id` (8.9) |
+| 3 | 1c | `migrate_init_06_fields.py` | 1b | initialise every new field to its empty value so no reader meets a missing key: snapshots `supersedes` / `superseded_by` / `status_changed_*` = null, `capture` = null, `effective_from_precision` from step 1; identities `withdrawn` = null, `past_cycles` = [], `properties` = {}; later steps overwrite where they have data. Identities: `created_by_user_id` = their v0 `added_by_user_id` (8.9) Nulls in list / dict fields become empty, as the 0.6 models expect (found by `check_invariants.py` on 260916): `geometry.meshes` null on 531 snapshots and `geometry.point_clouds` on 700 --> `[]`, `mesh_ply_resolutions` null on 532 --> `{}`, `manufactured_precision` null on 6 identities --> `unknown`. |
 | 4 | 9 | `migrate_drop_snapshot_fields.py` | --- | `$unset` `processes` (empty in all 701) and `assembly` (false in all 701) --- 6.13; `virtual` (false in all 701) --- 7.12; `iframe` (always identity) --- 7.11. Aborts if any snapshot has `virtual: true`. |
 | 5 | 2 | `migrate_rename_measurements_collection.py` | --- | drop the empty `component_measurements`; bind `component_evidence`. |
 | 6 | 11 | `migrate_datasets_collection.py` | --- | create the 7 `datasets` docs from distinct `identity.dataset` values, `members: []`. Visibility: `catalog` for `mineral_composite_panels`, `sas_cita_scans`, `ddu_build_with_debris`, `ddu_aggregations`; `members` for `dbu_zirkus`, `schoenes_neues_feld`, `spa_example_data`. `admin` stays global admin. Memberships are **not** migrated --- assigned afterwards by admin through the extended user-administration frontend (deliverable: dataset CRUD + per-dataset member/role editor under `/admin`). |

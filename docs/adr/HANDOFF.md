@@ -8,6 +8,10 @@ are in place. **Next: P1 of `docs/adr/IMPLEMENTATION_PLAN_0.6.md` on a new branc
 `main`.** Pending cleanup after a few good releases: the old server layout (deployment README,
 step 7).
 
+**P1 status (2026-09-29): done**, awaiting the user's review: vocab, document models, permission /
+lifecycle predicates, invariant checker, designs removed, client-header enforcement (8.11); 336
+tests green. Nothing committed (the user commits). **Next: P2** (migrations + rehearsal).
+
 **Last session:** 2026-09-29 --- decision 8.6 (HKS on a 3000-point surface sample), `adr/` moved to
 `docs/adr/`, agent-skill setup (`AGENTS.md`, `docs/agents/`), external review checked: stale docs
 fixed, gaps 1--8 grilled: items 1--4 decided as 8.7--8.10; 5--7 before P3 / P6, 8 before P5. 2026-09-28: consistency pass (8.1--8.4),
@@ -65,8 +69,8 @@ before P1: ~~(1) stage-order loop~~ (decided 8.7) shape class <-> proxies (stage
 `exit` without `moderator(parent D)`); ~~(3) identity has no draft state~~ (decided 8.9) (contributor cannot fix a
 typo; visibility of an identity whose only snapshot is a draft; evidence on it); ~~(4) v0
 `effective_from = created`~~ (decided 8.10) vs. valid time (`origin.at`), and what the snapshot fold does with
-`before_first` / `after_exit` evidence. Before P3 / P6: (5) header enforcement vs. `/id/{uuid}` and
-anonymous API readers; (6) who sets `self_attested`, four-eyes for `reviewed`, typed-in
+`before_first` / `after_exit` evidence. Before P3 / P6: ~~(5) header enforcement vs. `/id/{uuid}` and
+anonymous API readers~~ (decided 8.11); (6) who sets `self_attested`, four-eyes for `reviewed`, typed-in
 accreditation; (7) attachments on public pieces vs. GDPR (redaction does not reach files). Before
 P5: (8) frame sign rule + tie-break tolerance for near-equal extents. Minor: withdrawing the current
 snapshot without replacement vs. I3b; two pending supersessions of one record (I14); evidence on
