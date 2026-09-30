@@ -18,7 +18,8 @@ from apps.catalog.permissions import RULES
 from apps.catalog.vocab import STATUSES
 
 ALLOWED = {
-    ('draft', 'pending'), ('pending', 'published'), ('pending', 'rejected'),
+    ('draft', 'pending'), ('pending', 'draft'), ('pending', 'published'),
+    ('pending', 'rejected'),
     ('rejected', 'draft'), ('published', 'withdrawn'), ('withdrawn', 'published'),
 }
 
@@ -77,6 +78,15 @@ def test_draft_snapshot_editable_by_author():
     assert patch_problems('snapshot', fields, status='draft', is_author=True) == {}
     assert patch_problems('snapshot', fields, status='draft') == \
         {'forbidden': ['geometry', 'name', 'effective_from', 'fragment']}
+
+
+def test_pending_is_moderator_only_and_rejected_is_read_only():
+    fields = {'geometry': [], 'name': []}
+    assert patch_problems('snapshot', fields, status='pending', is_author=True) ==         {'forbidden': ['geometry', 'name']}                  # recall to draft first (8.18)
+    assert patch_problems('snapshot', fields, status='pending', is_moderator=True) == {}
+    assert patch_problems('snapshot', fields, status='rejected', is_moderator=True) ==         {'forbidden': ['geometry', 'name']}                  # resubmit to draft first
+    assert patch_problems('evidence', {'summary': []}, status='pending',
+                          is_author=True) == {'forbidden': ['summary']}
 
 
 # evidence (section 3.3.4) ----------------------------------------------------

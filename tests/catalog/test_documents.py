@@ -194,6 +194,36 @@ def test_i22_accredited_needs_a_covering_accreditation():
     _invalid(Evidence, doc, 'I22')                         # expired before observed_at
 
 
+def test_i27_reviewed_needs_a_second_person():
+    doc = ex.evidence()
+    doc['verification']['by'] = None
+    _invalid(Evidence, doc, 'I27')
+    doc = ex.evidence()
+    doc['verification']['by']['user_id'] = ex.USER_ID      # the recorder
+    _invalid(Evidence, doc, 'I27')
+    doc = ex.evidence()
+    doc['verification']['state'] = 'reviewed'
+    doc['performed_by'].append({'kind': 'user', 'user_id': ex.MODERATOR_ID,
+                                'role': 'operator'})
+    _invalid(Evidence, doc, 'I27')                         # reviewer performed it
+    doc = ex.evidence()
+    doc['verification']['note'] = '  '
+    _invalid(Evidence, doc, 'I27')                         # accredited without a note
+    doc = ex.evidence()
+    doc['verification'].update(state='reviewed', note=None)
+    Evidence.model_validate(doc)
+
+
+def test_i27_self_attested_only_by_a_performer():
+    doc = ex.evidence()
+    doc['verification'] = {'state': 'self_attested', 'by': None, 'at': ex.T1,
+                           'note': None}
+    _invalid(Evidence, doc, 'I27')                         # an outside lab did it
+    doc['performed_by'].append({'kind': 'user', 'user_id': ex.USER_ID,
+                                'role': 'operator'})
+    Evidence.model_validate(doc)
+
+
 def test_tier_and_destructive_follow_the_method():
     doc = ex.evidence()
     doc['source_tier'] = 'ndt'

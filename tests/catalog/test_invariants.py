@@ -30,7 +30,7 @@ def _ids(violations, severity='error'):
 def test_every_invariant_id_is_registered_once():
     ids = [inv.id for inv in INVARIANTS]
     assert len(ids) == len(set(ids))
-    expected = {f'I{n}' for n in range(1, 27)} | {'I3b'}
+    expected = {f'I{n}' for n in range(1, 29)} | {'I3b'}
     assert set(ids) == expected
     for inv in INVARIANTS:
         assert inv.kind in ('document', 'corpus', 'route', 'dropped')
@@ -93,6 +93,17 @@ def test_i14_supersession_same_method_and_published_target():
     assert check_all(corpus) == []
     corpus.evidence[0]['status'] = 'draft'
     assert 'I14' in _ids(check_all(corpus))
+
+
+def test_i14_one_open_correction_per_record():
+    corpus = _corpus()
+    for n in (2, 3):
+        newer = ex.evidence()
+        newer.update({'_id': f'e{n}', 'supersedes': ex.EVIDENCE_ID, 'status': 'draft'})
+        corpus.evidence.append(newer)
+    assert _ids(check_all(corpus)) == {'I14'}
+    corpus.evidence[2]['status'] = 'rejected'
+    assert check_all(corpus) == []
 
 
 def test_i17_inherited_fields_equal_the_parent():
@@ -162,3 +173,26 @@ def test_i26_no_published_evidence_on_an_unpublished_identity():
     corpus.snapshots[0]['status'] = 'draft'
     corpus.identities[0]['current_snapshot_id'] = None
     assert _ids(check_all(corpus)) == {'I26'}
+
+
+def test_i28_no_evidence_on_withdrawn_or_after_terminal_exit():
+    corpus = _corpus()
+    identity = corpus.identities[0]
+    identity['exit'] = {'kind': 'recycled', 'at': '2026-02-25T00:00:00Z'}
+    assert _ids(check_all(corpus)) == {'I28'}          # core test observed after it
+    identity['exit'] = {'kind': 'installed', 'at': '2026-02-25T00:00:00Z'}
+    assert check_all(corpus) == []                     # non-terminal: after_exit
+    identity['exit'] = None
+    identity['withdrawn'] = {'at': '2026-02-01T00:00:00Z', 'by_user_id': ex.MODERATOR_ID,
+                             'reason': 'duplicate'}
+    assert _ids(check_all(corpus)) == {'I28'}          # created after the withdrawal
+    identity['withdrawn']['at'] = '2026-03-01T00:00:00Z'
+    assert check_all(corpus) == []
+
+
+def test_i3b_no_current_only_when_no_published_snapshot_is_left():
+    corpus = _corpus()
+    corpus.identities[0]['current_snapshot_id'] = None
+    assert _ids(check_all(corpus)) == {'I3b'}
+    corpus.snapshots[0]['status'] = 'withdrawn'
+    assert check_all(corpus) == []

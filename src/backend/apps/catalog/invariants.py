@@ -2,7 +2,7 @@
 """
 The invariants of data model spec section 5 as code.
 
-Every id I1..I26 is registered once. Four kinds:
+Every id I1..I28 is registered once. Four kinds:
 
 * ``document`` --- one document can break it; checked by validating each
   stored document against its model in ``documents.py`` (the validator
@@ -38,7 +38,11 @@ from apps.catalog.documents import (
     Evidence,
     Material,
 )
-from apps.catalog.vocab import EVER_PUBLISHED_STATUSES, OPEN_STATUSES
+from apps.catalog.vocab import (
+    EVER_PUBLISHED_STATUSES,
+    OPEN_STATUSES,
+    TERMINAL_EXIT_KINDS,
+)
 
 IDENTITIES = 'component_identities'
 SNAPSHOTS = 'component_snapshots'
@@ -146,9 +150,15 @@ def check_i3b(corpus: Corpus) -> Iterable[Violation]:
         if len(open_) > 1:
             yield _v('I3b', IDENTITIES, {'_id': identity_id},
                      f'{len(open_)} draft / pending snapshots')
+    grouped = _by_identity(corpus)
     for identity in corpus.identities:
         current = identity.get('current_snapshot_id')
         if current is None:
+            if any(s.get('status') == 'published'
+                   and s.get('superseded_by') is None
+                   for s in grouped.get(identity['_id'], [])):
+                yield _v('I3b', IDENTITIES, identity, 'no current snapshot '
+                         'although a published one is left (8.17)')
             continue
         snap = by_id.get(current)
         if snap is None or snap.get('status') != 'published' \
@@ -172,6 +182,7 @@ def _check_supersession(records: List[dict], collection: str,
                         invariant: str) -> Iterable[Violation]:
     by_id = {r['_id']: r for r in records}
     targets: Dict[str, str] = {}
+    open_for: Dict[str, int] = defaultdict(int)
     for record in records:
         old_id = record.get('supersedes')
         if old_id is None:
@@ -192,6 +203,11 @@ def _check_supersession(records: List[dict], collection: str,
             yield _v(invariant, collection, record,
                      'a record is superseded at most once (no forks)')
         targets.setdefault(old_id, record['_id'])
+        if record.get('status') in OPEN_STATUSES:
+            open_for[old_id] += 1
+            if open_for[old_id] == 2:
+                yield _v(invariant, collection, record,
+                         'at most one open correction per record (8.16)')
 
 
 def check_i14(corpus: Corpus) -> Iterable[Violation]:
@@ -316,6 +332,24 @@ def check_i26(corpus: Corpus) -> Iterable[Violation]:
                      'published evidence on an unpublished identity')
 
 
+def check_i28(corpus: Corpus) -> Iterable[Violation]:
+    """No evidence on a withdrawn identity; after a terminal exit only
+    observations from before it (8.16)."""
+    identities = {i['_id']: i for i in corpus.identities}
+    for record in corpus.evidence:
+        identity = identities.get(record.get('identity_id'))
+        if identity is None:
+            continue
+        withdrawn = identity.get('withdrawn')
+        if withdrawn and record.get('created') and                 _when(record['created']) > _when(withdrawn['at']):
+            yield _v('I28', EVIDENCE, record,
+                     'created after its identity was withdrawn')
+        exit_ = identity.get('exit')
+        if exit_ and exit_.get('kind') in TERMINAL_EXIT_KINDS and                 exit_.get('at') and record.get('observed_at') and                 _when(record['observed_at']) > _when(exit_['at']):
+            yield _v('I28', EVIDENCE, record,
+                     f'observed after a terminal exit ({exit_["kind"]})')
+
+
 # REGISTRY (spec section 5) ---------------------------------------------------
 INVARIANTS: Tuple[Invariant, ...] = (
     Invariant('I1', 'geometry: a mesh, a point cloud or an authored proxy',
@@ -364,6 +398,10 @@ INVARIANTS: Tuple[Invariant, ...] = (
               'class', 'corpus', check_i25),
     Invariant('I26', 'no published evidence on an unpublished identity',
               'corpus', check_i26),
+    Invariant('I27', 'verification four eyes; self_attested by a '
+              'performer', 'document'),
+    Invariant('I28', 'no evidence on a withdrawn identity or after a '
+              'terminal exit', 'corpus', check_i28),
 )
 INVARIANT_BY_ID: Dict[str, Invariant] = {inv.id: inv for inv in INVARIANTS}
 

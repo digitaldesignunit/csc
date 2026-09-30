@@ -17,6 +17,8 @@ from apps.catalog.documents import Dataset
 from apps.catalog.vocab import DATASET_ROLES, DELETABLE_STATUSES
 
 Roles = FrozenSet[str]
+# 'full' | 'tombstone' (withdrawn, outside D) | None (not visible)
+Projection = Optional[str]
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,52 @@ def can_see_component(
     return is_public
 
 
+def withdrawn_projection(
+    viewer: Viewer,
+    dataset: Dataset,
+    *,
+    component_visible: bool,
+) -> Projection:
+    """
+    A withdrawn identity, snapshot or evidence record (8.17): members of D
+    and admin see it in full (content, files, reason); anyone else the
+    component is visible to sees a tombstone; nobody else sees anything.
+    """
+    if dataset_roles(viewer, dataset):
+        return 'full'
+    return 'tombstone' if component_visible else None
+
+
+def record_projection(
+    viewer: Viewer,
+    dataset: Dataset,
+    *,
+    kind: str,
+    status: str,
+    author_id: Optional[str],
+    component_visible: bool,
+) -> Projection:
+    """
+    How much of a snapshot or evidence record the viewer sees. Published
+    ones follow the component's visibility; withdrawn ones are a tombstone
+    outside D (8.17); draft / pending / rejected ones are seen by the
+    author, ``moderator(D)``, and ``reviewer(D)`` for pending evidence.
+    """
+    if status == 'published':
+        return 'full' if component_visible else None
+    if status == 'withdrawn':
+        return withdrawn_projection(viewer, dataset,
+                                    component_visible=component_visible)
+    roles = dataset_roles(viewer, dataset)
+    if 'moderator' in roles:
+        return 'full'
+    if viewer.logged_in and viewer.user_id == author_id:
+        return 'full'
+    if kind == 'evidence' and status == 'pending' and 'reviewer' in roles:
+        return 'full'
+    return None
+
+
 def can_see_record(
     viewer: Viewer,
     dataset: Dataset,
@@ -80,19 +128,10 @@ def can_see_record(
     author_id: Optional[str],
     component_visible: bool,
 ) -> bool:
-    """
-    A snapshot or evidence record. Published / withdrawn ones follow the
-    component's visibility; draft / pending / rejected ones are seen by the
-    author, ``moderator(D)``, and ``reviewer(D)`` for pending evidence.
-    """
-    if status in ('published', 'withdrawn'):
-        return component_visible
-    roles = dataset_roles(viewer, dataset)
-    if 'moderator' in roles:
-        return True
-    if viewer.logged_in and viewer.user_id == author_id:
-        return True
-    return kind == 'evidence' and status == 'pending' and 'reviewer' in roles
+    """Whether the viewer sees the record at all (full or tombstone)."""
+    return record_projection(
+        viewer, dataset, kind=kind, status=status, author_id=author_id,
+        component_visible=component_visible) is not None
 
 
 # ACTIONS (section 7.0) -------------------------------------------------------
@@ -152,24 +191,33 @@ def _create(viewer: Viewer, roles: Roles, target: Target) -> bool:
     return 'contributor' in roles and target.readable
 
 
+def _unpublished_editor(viewer: Viewer, roles: Roles,
+                        target: Target) -> bool:
+    """Edits before publish (8.18): a draft --- author or moderator(D); a
+    pending record --- moderator(D) only; a rejected one --- nobody."""
+    if target.status == 'draft':
+        return _author_or_moderator(viewer, roles, target)
+    return target.status == 'pending' and 'moderator' in roles
+
+
 def _geometry_files(viewer: Viewer, roles: Roles, target: Target) -> bool:
     """Geometry files only while the snapshot is not published (6.6)."""
-    return _unpublished(target) and \
-        _author_or_moderator(viewer, roles, target)
+    return _unpublished(target) and _unpublished_editor(viewer, roles, target)
 
 
 def _add_photo(viewer: Viewer, roles: Roles, target: Target) -> bool:
-    """Before publish author / moderator(D); after publish appended by
-    contributor(D) (3.2.2)."""
+    """Before publish as any unpublished edit (8.18); after publish
+    appended by contributor(D) (3.2.2)."""
     if _unpublished(target):
-        return _author_or_moderator(viewer, roles, target)
+        return _unpublished_editor(viewer, roles, target)
     return 'contributor' in roles or 'moderator' in roles
 
 
 def _remove_photo(viewer: Viewer, roles: Roles, target: Target) -> bool:
-    """Before publish author / moderator(D); after publish moderator(D)."""
+    """Before publish as any unpublished edit (8.18); after publish
+    moderator(D)."""
     if _unpublished(target):
-        return _author_or_moderator(viewer, roles, target)
+        return _unpublished_editor(viewer, roles, target)
     return 'moderator' in roles
 
 
@@ -221,10 +269,11 @@ RULES: Dict[str, Rule] = {
     'create_evidence': _create,
     'supersede_snapshot': _role('contributor'),
     'supersede_evidence': _role('contributor'),
-    # the author's own drafts (PATCH on a draft: author or moderator, 8.3)
-    'edit_draft': _author_or_moderator,
+    # unpublished records: draft author / moderator, pending moderator (8.18)
+    'edit_draft': _unpublished_editor,
     'submit': _author,
     'resubmit': _author,
+    'recall': _author,                    # pending --> draft (8.18)
     'delete_record': _delete_record,
     # files
     'upload_geometry': _geometry_files,

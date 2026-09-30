@@ -16,6 +16,8 @@ from apps.catalog.permissions import (
     can_see_component,
     can_see_record,
     dataset_roles,
+    record_projection,
+    withdrawn_projection,
 )
 
 T = '2026-02-03T10:15:00Z'
@@ -82,6 +84,10 @@ TABLE = [
     ('edit_draft', DRAFT, {'author', 'mod', 'admin'}),
     ('submit', DRAFT, {'author', 'admin'}),
     ('resubmit', REJECTED, {'author', 'admin'}),
+    ('recall', PENDING, {'author', 'admin'}),
+    ('edit_draft', PENDING, {'mod', 'admin'}),
+    ('edit_draft', REJECTED, {'admin'}),
+    ('upload_geometry', PENDING, {'mod', 'admin'}),
     # hard delete only unpublished
     ('delete_record', DRAFT, {'author', 'mod', 'admin'}),
     ('delete_record', PENDING, {'author', 'mod', 'admin'}),
@@ -199,8 +205,20 @@ def test_unpublished_record_visibility(kind, status, expected):
     assert seen == expected
 
 
-@pytest.mark.parametrize('status', ['published', 'withdrawn'])
-def test_published_records_follow_the_component(status):
+def test_published_records_follow_the_component():
     for visible in (True, False):
-        assert can_see_record(STRANGER, D, kind='evidence', status=status,
+        assert can_see_record(STRANGER, D, kind='evidence', status='published',
                               author_id='author', component_visible=visible) is visible
+
+
+def test_withdrawn_is_full_in_the_dataset_and_a_tombstone_outside():
+    got = {n: record_projection(v, D, kind='snapshot', status='withdrawn',
+                                author_id='author', component_visible=True)
+           for n, v in ALL.items()}
+    assert got == {'anonymous': 'tombstone', 'stranger': 'tombstone',
+                   'author': 'full', 'contrib': 'full', 'review': 'full',
+                   'mod': 'full', 'admin': 'full'}
+    assert record_projection(STRANGER, D, kind='evidence', status='withdrawn',
+                             author_id='author', component_visible=False) is None
+    assert withdrawn_projection(ANONYMOUS, D, component_visible=True) == 'tombstone'
+    assert withdrawn_projection(ADMIN, OTHER, component_visible=False) == 'full'

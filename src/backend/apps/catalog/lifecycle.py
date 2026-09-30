@@ -24,6 +24,7 @@ from apps.catalog.vocab import DELETABLE_STATUSES
 # evidence. Leaving `published` by supersession is not a status change.
 TRANSITIONS: Dict[Tuple[str, str], str] = {
     ('draft', 'pending'): 'submit',
+    ('pending', 'draft'): 'recall',           # author, until a moderator acts (8.18)
     ('pending', 'published'): 'publish',
     ('pending', 'rejected'): 'reject',
     ('rejected', 'draft'): 'resubmit',
@@ -44,6 +45,21 @@ def transition_action(current: str, target: str) -> Optional[str]:
 
 def transition_allowed(current: str, target: str) -> bool:
     return (current, target) in TRANSITIONS
+
+
+def unpublished_editable(status: Optional[str], is_author: bool,
+                         is_moderator: bool) -> bool:
+    """
+    Who edits a record that was never published (8.18): a draft --- its
+    author or ``moderator(D)``; a pending one --- ``moderator(D)`` only (the
+    author recalls it to draft first); a rejected one --- nobody (resubmit
+    turns it back into a draft).
+    """
+    if status == 'draft':
+        return is_author or is_moderator
+    if status == 'pending':
+        return is_moderator
+    return False
 
 
 def hard_delete_allowed(status: str) -> bool:
@@ -142,20 +158,19 @@ def patch_problems(
         'derived': [], 'frozen': [], 'forbidden': []}
     names = _expand([k for k, v in fields.items()],
                     {k: v for k, v in fields.items() if v})
+    editable = unpublished_editable(status, is_author, is_moderator)
 
     if kind == 'snapshot':
         published = status in ('published', 'withdrawn')
         for name in names:
             top = name.split('.', 1)[0]
-            if name in SNAPSHOT_MUTABLE_METADATA:
-                allowed = is_moderator or (not published and is_author)
-            elif top in SNAPSHOT_VALID_TIME or top in SNAPSHOT_OVERRIDES:
-                allowed = is_moderator or (not published and is_author)
+            if name in SNAPSHOT_MUTABLE_METADATA or                     top in SNAPSHOT_VALID_TIME or top in SNAPSHOT_OVERRIDES:
+                allowed = is_moderator if published else editable
             elif top in SNAPSHOT_FROZEN:
                 if published:
                     problems['frozen'].append(name)
                     continue
-                allowed = is_moderator or is_author
+                allowed = editable
             else:
                 problems['derived'].append(name)
                 continue
@@ -167,13 +182,13 @@ def patch_problems(
         for name in names:
             top = name.split('.', 1)[0]
             if name in EVIDENCE_MUTABLE or top == 'notes':
-                allowed = is_moderator or (not published and is_author)
+                allowed = is_moderator if published else editable
             elif (name in EVIDENCE_FROZEN or top in EVIDENCE_FROZEN
                   or top == 'position'):
                 if published:
                     problems['frozen'].append(name)
                     continue
-                allowed = is_author or is_moderator
+                allowed = editable
             else:
                 problems['derived'].append(name)
                 continue

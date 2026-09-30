@@ -728,12 +728,33 @@ class Evidence(_Document):
             raise ValueError('destructive follows the method')
         if self.verification.state == 'accredited':
             self._check_accreditation()
+        self._check_verifier()
         indices = [a.index for a in self.attachments]
         if indices != sorted(set(indices)):
             raise ValueError('attachment indices are unique and ascending')
         if self.supersedes is not None and self.supersedes == self.id:
             raise ValueError('a record cannot supersede itself')
         return self
+
+    def _check_verifier(self) -> None:
+        """I27: who may hold which verification state (decision 8.12)."""
+        state = self.verification.state
+        performers = {a.user_id for a in self.performed_by if a.user_id}
+        if state == 'self_attested' and                 self.recorded_by_user_id not in performers:
+            raise ValueError('self_attested needs the recorder among '
+                             'performed_by (I27)')
+        if state not in ('reviewed', 'accredited'):
+            return
+        by = self.verification.by
+        if by is None or not by.user_id:
+            raise ValueError(f'{state} names its reviewer (I27)')
+        if by.user_id == self.recorded_by_user_id or by.user_id in performers:
+            raise ValueError('the reviewer is neither the recorder nor a '
+                             'performer (I27)')
+        if state == 'accredited' and not (self.verification.note or
+                                          '').strip():
+            raise ValueError('accredited needs a note on what was checked '
+                             '(I27)')
 
     def _check_accreditation(self) -> None:
         """I22: an accredited performer whose scope covers the standard."""
