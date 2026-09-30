@@ -12,8 +12,6 @@ from .utility import ( # NOQA401
     get_gh_xml_cache_directory,
     create_logging_timestamp,
     get_current_timestamp_z,
-    generate_design_etag,
-    generate_etag_for_designs,
     ensure_file,
     get_geometry_upload_limit_bytes,
     read_upload_limited,
