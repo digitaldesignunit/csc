@@ -45,7 +45,7 @@ export type ComponentMeshVertices = number[][];
 export type ComponentPolylinePoints = number[][];
 
 
-// Shared catalog value types (frames, location, design mesh geometry, etc.)
+// Shared catalog value types (frames, location, mesh geometry, etc.)
 export type ComponentType =
   | 'panel'
   | 'beam'

@@ -52,8 +52,6 @@ export const config = {
     '/api/backend/:path*',  // protect the catch-all proxy too
     '/gh-interface/:path*', // protect the gh-interface too
     '/gh-interface',        // protect gh-interface root
-    '/designs/:path*',      // protect designs subpages
-    '/designs',             // protect designs root - THIS WAS MISSING!
     '/locate-by-id/:path*', // protect locate-by-id subpages
     '/locate-by-id',       // protect locate-by-id root
     '/identify/:path*',     // protect identify subpages

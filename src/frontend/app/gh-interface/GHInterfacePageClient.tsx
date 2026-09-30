@@ -287,7 +287,6 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
               <li>• <strong>Identity</strong> — stable catalog entry: type, material, dataset, provenance (manufactured/salvaged dates, parent identities), and attributes.</li>
               <li>• <strong>Snapshot</strong> — versioned state: geometry, descriptors, condition, placement frame (iframe), PCA frame, color, location, and notes.</li>
               <li>• <strong>Passport</strong> — one identity together with one or more of its snapshots, as <code className="text-xs">{`{identity, snapshots[]}`}</code>. This is the shape most components pass along the wire (as a JSON string). Use <strong>CSC_DisassembleComponent</strong> to unpack one in Grasshopper.</li>
-              <li>• <strong>Designs</strong> pin specific snapshot versions (not identity/current) and store placement iframes per snapshot.</li>
             </ul>
           </div>
 
@@ -603,23 +602,6 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
 
           <ComponentCard
             icon={Database}
-            name="CSC_FetchDesign"
-            description="Fetches a design from the remote Catalog along with all pinned snapshot placements. Resolves each snapshot reference to passport JSON ({identity, snapshots[]}) and overwrites snapshot.iframe with the design insertion frame. Uses caching for optimal performance."
-            inputs={[
-              { label: 'DesignID', description: 'Design ID to fetch' }
-            ]}
-            outputs={[
-              { label: 'DesignData', description: 'Design JSON string' },
-              { label: 'ComponentData', description: 'Passport JSON per placement with design iframe applied' },
-              { label: 'AdditionalGeometryData', description: 'Additional geometry items (list of JSON strings)' },
-              { label: 'AdditionalGeometry', description: 'Additional geometry as Rhino meshes' }
-            ]}
-            tip="Designs pin specific snapshot versions, not identity/current. Use DisassembleComponent on ComponentData outputs."
-            imagePath={resolveStatic('/gh-interface/csc_fetchdesign.jpg')}
-          />
-
-          <ComponentCard
-            icon={Database}
             name="CSC_FetchTransmittedID"
             description="Fetches the currently pending transmitted identity ID for the signed-in user. Used with the web Transmit ID workflow: after scanning a physical tag in the browser, the pending ID can be picked up here — including ids that already exist in the catalog."
             inputs={[
@@ -806,38 +788,6 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             ]}
             tip="Handles both passport JSON and geometry objects with passport userdata automatically."
             imagePath={resolveStatic('/gh-interface/csc_applypcaframe.jpg')}
-          />
-
-          <ComponentCard
-            icon={Code}
-            name="CSC_CreateDesign"
-            description="Creates a design JSON string from passport JSON ({identity, snapshots[]}), ready for posting to the Catalog. Pins each placement to a specific snapshot version and stores the design insertion iframe. Does NOT post the design - only generates the JSON string."
-            inputs={[
-              { label: 'DesignName', description: 'Design name (mandatory)' },
-              { label: 'DesignDescription', description: 'Design description (optional)' },
-              { label: 'ComponentData', description: 'List of passport JSON strings with snapshot.iframe set to the design placement' },
-              { label: 'AdditionalGeometry', description: 'AdditionalGeometry (List of Mesh)' }
-            ]}
-            outputs={[
-              { label: 'DesignJSON', description: 'Design JSON string ready for posting' }
-            ]}
-            tip="Automatically processes additional geometry meshes by centering them, computing iframes, and performing mesh reduction if needed."
-            imagePath={resolveStatic('/gh-interface/csc_createdesign.jpg')}
-          />
-
-          <ComponentCard
-            icon={Code}
-            name="CSC_AddDesign"
-            description="Adds a new design to the remote database. Takes design data (JSON), validates it, and makes an authenticated POST request to add the design to the Catalog. Designs pin specific snapshot versions and may embed additional geometry directly in the JSON."
-            inputs={[
-              { label: 'DesignData', description: 'Design data as JSON string to add to the database' },
-              { label: 'Run', description: 'Toggle to execute the add operation' }
-            ]}
-            outputs={[
-              { label: 'AddedDesignData', description: 'The added design data returned from the server as JSON' }
-            ]}
-            tip="Validates design data including snapshot placements and additional geometry before posting to the database."
-            imagePath={resolveStatic('/gh-interface/csc_adddesign.jpg')}
           />
 
           <ComponentCard
@@ -1267,19 +1217,6 @@ Idea and prototype code by Alessandro Garruto. Refactored and integrated by Max 
                 <li>Fetch component data with <strong>CSC_FetchComponents</strong></li>
                 <li>Extract available descriptors with <strong>CSC_GetDescriptor</strong></li>
                 <li>Process the data in your Grasshopper definition, i.e. by categorizing and sorting components</li>
-              </ol>
-            </div>
-          </div>
-
-          <div className="border rounded-lg p-4">
-            <h4 className="font-semibold text-lg mb-3">Creating Designs</h4>
-            <div className="space-y-3">
-              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                <li>Authenticate with <strong>CSC_Session</strong></li>
-                <li>Fetch passport JSON with <strong>CSC_FetchComponents</strong> and place with <strong>CSC_SyncWithRhinoDoc</strong></li>
-                <li>Create design with <strong>CSC_CreateDesign</strong> from passport JSON (includes additional geometry)</li>
-                <li>Save design to database with <strong>CSC_AddDesign</strong></li>
-                <li>Fetch and work with design using <strong>CSC_FetchDesign</strong></li>
               </ol>
             </div>
           </div>

@@ -14,7 +14,6 @@ import {
   Shield,
   QrCode,
   Terminal,
-  Layers2,
   BarChart2,
   Archive,
   Send,
@@ -155,24 +154,6 @@ export default function AppMenu() {
             >
               <BarChart2 className="h-4 w-4" />
               Analytics
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DESIGNS Section - Only visible to logged in users */}
-      {session && !session.error && (
-        <div className="space-y-1">
-          <h3 className="text-xs font-semibold text-muted-foreground px-2 uppercase tracking-wider">
-            Designs
-          </h3>
-          <div>
-            <div
-              onClick={() => handleNavigation('/designs')}
-              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
-            >
-              <Layers2 className="h-4 w-4" />
-              Browse Designs
             </div>
           </div>
         </div>

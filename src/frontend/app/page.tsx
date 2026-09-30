@@ -108,13 +108,6 @@ export default function Home() {
                     <span className="text-xs">Explore the component Catalog</span>
                   </Button>
                 </Link>
-                <Link href="/designs">
-                  <Button variant="outline" className="w-full h-auto p-4 flex flex-col items-center gap-2">
-                    <BookOpen className="h-6 w-6" />
-                    <span className="font-medium">View Designs</span>
-                    <span className="text-xs">Browse design collections</span>
-                  </Button>
-                </Link>
                 <Link href="/dashboard">
                   <Button variant="outline" className="w-full h-auto p-4 flex flex-col items-center gap-2">
                     <Users className="h-6 w-6" />

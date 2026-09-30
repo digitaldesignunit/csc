@@ -6,8 +6,7 @@
  * All schemas are fetched from `FASTAPI_URL` (override with env when generating
  * against a local backend), e.g. `FASTAPI_URL=http://127.0.0.1:8000 npm run generate:models`.
  *
- * - `/schema/catalog-shared` --> `CatalogSharedTypes.ts` (frames, location, design mesh types)
- * - `/schema/design` --> `DesignModel`
+ * - `/schema/catalog-shared` --> `CatalogSharedTypes.ts` (frames, location, mesh types)
  * - `/schema/catalog-compose` --> `CatalogModels` (passport body with snapshots[])
  * - `/schema/snapshot-summary` --> `SnapshotSummaryItem` in `SnapshotModels.ts`
  * - `/schema/pending-validation-snapshot` --> `PendingValidationSnapshotItem` in `SnapshotModels.ts`
@@ -19,7 +18,7 @@ import path from 'path'
 const BACKEND_URL = process.env.FASTAPI_URL || 'https://api.2ndchances.build'
 const OUTPUT_DIR = path.join(process.cwd(), 'generated')
 
-/** Reuse shared defs from `CatalogSharedTypes.ts` in passport/design outputs. */
+/** Reuse shared defs from `CatalogSharedTypes.ts` in passport outputs. */
 const SHARED_DEFS_FROM_CATALOG_SHARED = new Set([
   'ComponentBoundingBox',
   'ComponentFrame',
@@ -111,8 +110,6 @@ async function run() {
       { defsOnly: true },
     )
 
-    await generateModel('/schema/design', 'DesignModel', 'DesignModel.ts')
-
     await generateModel('/schema/catalog-compose', 'ComponentPassport', 'CatalogModels.ts', {
       catalogPassport: true,
     })
@@ -132,7 +129,6 @@ async function run() {
     const indexFile = path.join(OUTPUT_DIR, 'index.ts')
     const indexContent = `// Auto-generated models from backend OpenAPI schema
 export * from './CatalogSharedTypes';
-export * from './DesignModel';
 export * from './CatalogModels';
 export * from './SnapshotModels';
 export * from './catalogExtras';
@@ -159,16 +155,6 @@ type Schema = Record<string, unknown> & {
   allOf?: Schema[]
 }
 
-const SHARED_DESIGN_DEFS = new Set([
-  'ComponentExtrusion',
-  'ComponentGeometry',
-  'ComponentMesh',
-  'ComponentMeshColors',
-  'ComponentMeshFaces',
-  'ComponentMeshVertices',
-  'ComponentPolylinePoints',
-])
-
 function generateTypeScriptInterface(
   schema: Record<string, unknown>,
   rootInterfaceName: string,
@@ -186,12 +172,6 @@ function generateTypeScriptInterface(
 // Source: ${BACKEND_URL}${schemaPath}
 `
 
-  if (rootInterfaceName === 'DesignModel') {
-    interfaceCode += `
-import { ComponentGeometry } from './CatalogSharedTypes';
-`
-  }
-
   if (opts.catalogPassport) {
     interfaceCode += `
 import type {
@@ -207,9 +187,6 @@ import type {
 
   if ($defs) {
     for (const [defName, defSchema] of Object.entries($defs)) {
-      if (rootInterfaceName === 'DesignModel' && SHARED_DESIGN_DEFS.has(defName)) {
-        continue
-      }
       if (opts.catalogPassport && SHARED_DEFS_FROM_CATALOG_SHARED.has(defName)) {
         continue
       }
@@ -240,7 +217,7 @@ import type {
   }
 
   if (opts.defsOnly) {
-    interfaceCode += `// Shared catalog value types (frames, location, design mesh geometry, etc.)
+    interfaceCode += `// Shared catalog value types (frames, location, mesh geometry, etc.)
 export type ComponentType =
   | 'panel'
   | 'beam'
