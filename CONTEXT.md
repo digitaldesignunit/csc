@@ -39,6 +39,9 @@ _Avoid_: part (parts belong to the component)
 A labelled reference point in a capture --- fixed on the capture rig, or stuck on the component.
 _Avoid_: marker point
 
+**Current snapshot**:
+The published snapshot a component page and the passport show by default; set by a moderator, and falls back to the latest published one when it is withdrawn.
+
 **State change**:
 The component physically changed (cut, weathered, repaired); recorded as a new snapshot that starts later.
 _Avoid_: update, edit
@@ -48,14 +51,14 @@ A recorded fact was wrong; recorded as a new record that supersedes the wrong on
 _Avoid_: edit, fix, overwrite
 
 **Draft**:
-A record its author is still preparing --- editable, and visible only to the author and the dataset's moderators; submitting it hands it to moderation.
+A record its author is still preparing --- editable, and visible only to the author and the dataset's moderators; submitting it hands it to moderation, and the author can recall it until a moderator acts.
 
 **Publishing**:
 The moderation act that makes a record visible in the catalog and lets it count.
 _Avoid_: validation, approval
 
 **Withdrawal**:
-Marking a published record as not belonging in the catalog (wrong, duplicate); it stays retrievable as a tombstone.
+Marking a published record as not belonging in the catalog (wrong, duplicate, a problem in a photo); the dataset still sees it in full, everyone else only a tombstone.
 _Avoid_: deletion, exit (exit is physical)
 
 **Duplicate**:
@@ -98,7 +101,7 @@ A user's hold on a component in circulation, signalling that they intend to use 
 An installed, returned or lost component coming back with a new origin; the previous origin--exit cycle is archived.
 
 **Lineage**:
-The split and merge relations between identities. Children inherit their parents' past --- origin, material, manufacture date, original function --- unless they state their own.
+The split and merge relations between identities. Children inherit their parents' past --- origin, material, trade name, manufacture date, original function --- unless they state their own.
 
 ### Evidence and properties
 
@@ -125,7 +128,7 @@ _Avoid_: reinforcements (as snapshot geometry)
 A test that damages the component, such as drilling a core; the test itself is the event, and no new snapshot is recorded for the hole.
 
 **Verification**:
-Confirmation by someone competent (a reviewer, or an accredited body) that evidence is what it claims to be; independent of publishing.
+Confirmation that evidence is what it claims to be; independent of publishing. The recorder may self-attest their own work; `reviewed` and `accredited` need a second person, never the recorder or a performer.
 _Avoid_: validation
 
 **Condition grade**:
@@ -191,7 +194,11 @@ _Avoid_: campaign (the study is the dataset; the occasion --- one day's tests --
 The three dataset roles, held in any combination: a contributor adds components, snapshots and evidence; a reviewer verifies evidence; a moderator publishes, corrects and manages members.
 
 **Admin**:
-The global role that holds every privilege in every dataset.
+The global role that holds every privilege in every dataset --- except reviewing a record they recorded or performed (four eyes).
+
+**Invitation**:
+A single-use registration code bound to one email address, issued by an admin or a dataset moderator, that lets someone outside the open registration domains create an account, or pre-assigns dataset roles to someone who has no account yet.
+_Avoid_: invite code, access code
 
 **Actor**:
 A person or organization credited with an act --- who deinstalled, who drilled, who tested, who attested.

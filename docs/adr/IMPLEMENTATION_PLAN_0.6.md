@@ -1,7 +1,7 @@
 # Implementation plan --- CSC 0.5.1.0 and 0.6.0.0
 
-**Status:** draft 2, 2026-09-28 --- accepted by the user with the changes in section 5. Implements `docs/adr/DATA_MODEL_SPEC.md` (draft 4) and the
-decisions in `docs/adr/DESIGN_DECISIONS.md` (1.1--8.6). Terms follow `CONTEXT.md`.
+**Status:** draft 3, 2026-09-30 --- accepted by the user with the changes in section 5. Implements `docs/adr/DATA_MODEL_SPEC.md` (draft 5) and the
+decisions in `docs/adr/DESIGN_DECISIONS.md` (1.1--8.21). Terms follow `CONTEXT.md`.
 **Branches:** P0 on `v-0.5.1.0`; P1--P9 on `v-0.6.0.0`.
 **Sizes** are relative (S < M < L < XL), not durations.
 
@@ -85,11 +85,12 @@ photo carries GPS. Uberspace steps are handed to the user as a terse checklist.
 
 ### P1 --- Foundations --- size L
 
-**Status 2026-09-29: done** (awaiting the user's review). Built:
+**Status: done**, committed by the user 2026-09-30; added since (8.12--8.18, working tree): I27,
+I28, the I14 extension, `record_projection`, recall (8.18) --- 346 tests green, 1 skipped. Built:
 `apps/catalog/vocab.py`, `documents.py` (all section 3 documents; one-document invariants as
 validators naming their id), `permissions.py` (`can`, `can_see_component`, `can_see_record`),
 `lifecycle.py` (I15 transitions, per-field PATCH rule of 8.3), `invariants.py` + the CLI
-`scripts/db_maintenance/check_invariants.py` (all 26 ids; every data invariant already checks, the
+`scripts/db_maintenance/check_invariants.py` (all 27 ids + I3b; every data invariant already checks, the
 rest are route-only); designs removed. The throwaway-`mongod` fixture came with 0.5.1.0. 312 tests
 green --- 336 with the header enforcement (8.11: `CSC_MIN_CLIENT_VERSIONS`, unset = log only). First
 run on the 0.5 dump lists exactly the P2 work (plus nulls, now in step 1c).
@@ -104,9 +105,9 @@ run on the 0.5 dump lists exactly the P2 work (plus nulls, now in step 1c).
 - Pure predicates: `can(user, action, target)` over the section 7.0 table; `is_visible(user, identity,
   dataset)` (section 3.6); `transition_allowed(status, to, role)` (I15); `frozen_fields(doc)` (section 3.2.2,
   section 3.3.4).
-- Client-header **enforcement** middleware with `MIN_CLIENT_VERSIONS` and the exempt paths (section 7.4).
-- Test harness: throwaway `mongod` fixture, `check_invariants.py` skeleton (all 25 ids registered,
-  checks filled in as their phase lands).
+- Client-header **enforcement** middleware with `CSC_MIN_CLIENT_VERSIONS` and the exempt paths (section 7.4).
+- Test harness: throwaway `mongod` fixture, `check_invariants.py` (every id registered, checks
+  filled in as their phase lands).
 - Remove designs (7.11): routes, `/schema/design`, models; frontend `/designs` pages and
   components; GH design components move to the deprecated folder. (Archive script = step 13, P2.)
 
@@ -137,12 +138,26 @@ class, proxies --- listed as expected-missing); the web app browses the migrated
 - `require_dataset_role` on **every** write route (section 7.0); visibility on every read / list route;
   close the any-user file routes.
 - Snapshot lifecycle (section 7.1): create-as-draft, submit (+ moderator publish / promote), publish,
-  reject, promote, withdraw / reinstate, draft delete, supersede (inherits `effective_from`);
+  reject, recall (8.18), promote, withdraw / reinstate, draft delete, supersede (inherits `effective_from`);
   freeze (I21); one in flight (I3b); `PATCH /snapshots/{sid}` with per-field permission (8.3).
+- Withdrawn = full record for D, tombstone outside (8.17): `record_projection` /
+  `withdrawn_projection` on every read and file route; withdrawing the current snapshot falls back
+  to the latest published one or null (I3b).
 - Identity withdrawal, `duplicate_of`, purge + `purged_records` + 410 (section 3.1.4); `/id/{uuid}`
   resolver, API and frontend route (section 7.5); scanners accept UUID or URL.
   --- a piece the viewer cannot see shows "not public" + sign-in (anonymous) or "no access"
   (logged in) instead of a 404 (8.11).
+- `RULES` gains `invite`, `revoke_invitation` (8.14) and splits `set_verification` into the
+  recorder's `self_attest` and the reviewer's four-eyes act --- which the admin shortcut in `can`
+  must not bypass (8.12, I27).
+- Invitations (8.14): `invitations` collection, `POST/GET/DELETE /invitations`, `/auth/register`
+  with code (email must match; counts as verified; grants dataset + roles),
+  `CSC_OPEN_REGISTRATION_DOMAINS`; invite dialog in `/admin` and in the member editor.
+- Member editor by email (8.20): `POST /datasets/{did}/members {email, roles}` --- add + notify an
+  existing account, else invite (any domain); exact match for moderators, `GET /users/search`
+  (prefix) for admins; `RULES` gains `search_users` (admin).
+- Admin user list (8.21): memberships per account, URL-kept filters (text, dataset, dataset role,
+  no dataset, global role, account state, invited); invitations tab. `GET /users` query params.
 - Web: moderation queues (snapshots), `/admin` datasets + member / role editor, withdraw /
   duplicate dialogs, controls shown per `/users/me`.
 
@@ -153,8 +168,9 @@ reviewer, moderator, other-dataset moderator, admin}.
 - Split / merge exit derived from published children (8.8): set on the child's first publish (needs
   `moderator` of child and parent datasets), `at` = earliest child `effective_from`, cleared when the last
   published child is withdrawn; tests for draft / rejected / withdrawn children and cross-dataset cuts.
-- `origin` / `exit` / `past_cycles` routes (section 3.1.1, section 3.1.3, section 7.1): exit, undo, re-entry; server-set
-  split / merge on child creation.
+- `origin` / `exit` / `past_cycles` routes (section 3.1.1, section 3.1.3, section 7.1): exit, undo, re-entry
+  (server-set split / merge: first bullet); after re-entry the next snapshot defaults to the new
+  `origin.at` (8.19).
 - Lineage inheritance (section 3.1.2): copy-on-create, recursive propagation on parent PATCH, detach on
   child PATCH, re-inherit, merge unanimity (I17).
 - `materials` collection + routes (section 2.10, section 7.7); `material_class` derivation + override (I25).
@@ -170,8 +186,9 @@ reviewer, moderator, other-dataset moderator, admin}.
 - `main_geometry.py` (section 4.3) with stages frame --> shape_class --> proxies --> descriptors -->
   complexity --> previews; stages 1--2 synchronous on draft geometry writes and submit; `*_VERSION`
   skipping; replaces `main_descriptors_simple.py` and `main_previewgen.py` in cron.
-- Frame (7.10, 8.1): minimum-volume OBB, axis convention incl. the column rule, deterministic
-  signs, stored as a transform --- stored coordinates never touched.
+- Frame (7.10, 8.1, 8.15): minimum-volume OBB, axis convention incl. the column rule, the valid
+  frame closest to the stored axes (signs + ties within `max(2 %, 3 mm)`), stored as a transform ---
+  stored coordinates never touched; unit tests for a square column, a cube and a flipped upload.
 - Proxies (section 4.3, App. B): box, planar / linear prism, cylinder (in-house RANSAC, seeded), hull;
   residuals; deviation maps (16-bit PNG per face, spherical map for hull).
 - Descriptors moved into the runner, frame-aligned, version bump. The four hull scores run in
@@ -194,11 +211,17 @@ complexity; the user has signed off the tuning tables and the frame report.
 ### P6 --- Evidence --- size XL
 - `component_evidence` + method registry (section 4.5) with the seven methods (A.1--A.4); payload
   validation incl. server-recomputed fields (rebound median / discard rule, core F/A, l/d class).
-- Routes (section 7.2): create, bulk (all-or-nothing), lifecycle, supersede, verification (I22),
-  attachments (one copy per record via hard link, sha256, add-only after publish, I24), methods /
+- Routes (section 7.2): create, bulk (all-or-nothing), lifecycle, supersede, verification (I22;
+  8.12: recorder sets `self_attested`, four eyes for `reviewed` / `accredited`, I27, result edits
+  reset it), attachments (one copy per record via hard link, sha256, add-only after publish, I24;
+  8.13: download signed-in only, `gdpr` removal blanks the name, redaction worklist), methods /
   schema introspection with field descriptions.
+- `resolve_snapshot_at` incl. archived cycles: a date inside a past exit --> re-entry gap is
+  `after_exit` (8.19).
 - Fold (section 4.4): both targets, `derived[]` results, verification factors, inheritance incl. merges,
   `outranked_evidence_ids`, propagation to inheriting children; timeline route.
+- 8.16: evidence create on a withdrawn identity / after a terminal exit --> 409 (I28); one open
+  correction per record (I14).
 - Migrations 6b and 6d re-run with the real models in the rehearsal.
 - Web: evidence form from the component page (7.1: fan-out, repeat-from-last, apply-to-several),
   "?" popovers from the backend descriptions, per-observation inspection photos (7.4), position
@@ -209,7 +232,8 @@ complexity; the user has signed off the tuning tables and the frame report.
 and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> moderate --> verify" works.
 
 ### P7 --- Web completion --- size M
-- Snapshot form's remaining entry points (new component, record new state, correct --- 7.5),
+- Snapshot form's remaining entry points (new component, record new state, correct --- 7.5; the
+  correct dialog warns about evidence positioned on the previous version, 8.16),
   wizard's optional inspection step (7.9), edit form reduced to mutable metadata.
 - Every remaining 0.5 consumer of removed fields gone (`type`, `extrusions`, `condition`,
   `consumed*`, `validated`, `iframe`, `pca_frame`); client header `web/0.6.0.0`.
@@ -229,7 +253,7 @@ and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> m
 1. Freeze writes on production (0.5.1.0); take the cutover dump + assets backup.
 2. `invoke rehearse` on that dump --> clean report (the abort guards catch drift since 260916).
 3. Deploy 0.6 backend + frontend; run section 8.1 on production in run order; `check_invariants`.
-4. Set `MIN_CLIENT_VERSIONS` to 0.6.0.0; publish the bridge UserObjects via `CSC_Update`.
+4. Set `CSC_MIN_CLIENT_VERSIONS` to 0.6.0.0; publish the bridge UserObjects via `CSC_Update`.
 5. Designs archived by step 13 (count verified).
 6. After cutover: personal accounts created --> step 11b retires `ddu`; memberships assigned in
    `/admin`.

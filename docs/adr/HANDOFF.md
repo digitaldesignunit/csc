@@ -8,14 +8,15 @@ are in place. **Next: P1 of `docs/adr/IMPLEMENTATION_PLAN_0.6.md` on a new branc
 `main`.** Pending cleanup after a few good releases: the old server layout (deployment README,
 step 7).
 
-**P1 status (2026-09-29): done**, awaiting the user's review: vocab, document models, permission /
-lifecycle predicates, invariant checker, designs removed, client-header enforcement (8.11); 336
-tests green. Nothing committed (the user commits). **Next: P2** (migrations + rehearsal).
+**P1 status: done and committed** (2026-09-30; the 8.12--8.18 code additions are still in the working tree): vocab, document models, permission / lifecycle
+predicates, invariant checker (I1--I28 + I3b), designs removed, client-header enforcement (8.11);
+346 tests green. **Next: P2** (migrations + rehearsal on 260916).
 
-**Last session:** 2026-09-29 --- decision 8.6 (HKS on a 3000-point surface sample), `adr/` moved to
-`docs/adr/`, agent-skill setup (`AGENTS.md`, `docs/agents/`), external review checked: stale docs
-fixed, gaps 1--8 grilled: items 1--4 decided as 8.7--8.10; 5--7 before P3 / P6, 8 before P5. 2026-09-28: consistency pass (8.1--8.4),
-LoW codes verified, implementation plan accepted, 0.5.1.0 released (8.5).
+**Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
+attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.
+"withdrawn" = tombstone outside the dataset), 8.14 invitations (new), full document review for
+consistency. 2026-09-29: 8.6 HKS, `adr/` --> `docs/adr/`, agent-skill setup, review gaps 1--5
+(8.7--8.11), P1. 2026-09-28: consistency pass (8.1--8.4), 0.5.1.0 released (8.5).
 **Who:** fstwn (eschenbach@dg.tu-darmstadt.de), TU Darmstadt DG --- sole maintainer of CSC.
 
 ## 1. What this work is
@@ -44,10 +45,10 @@ Threads merged into one spec:
 
 | file | role |
 |---|---|
-| `docs/adr/DATA_MODEL_SPEC.md` | **authoritative spec**, draft 4 (2026-09-28). section 0 reading guide ... section 10 CPR/DPP, Appendices A (evidence payloads, A.4 reinforcement layout), B (proxy primitives). section 9 = open questions (all struck through as decided). |
-| `docs/adr/DESIGN_DECISIONS.md` | decision log: 1.x evidence, 2.x property fold, 3.x geometry, 4.x classification, 5.x CPR proposals, 6.x provenance / permissions / release, **7.x entry surfaces / representation / scope (2026-09-24), **8.x consistency pass (2026-09-28)**. |
+| `docs/adr/DATA_MODEL_SPEC.md` | **authoritative spec**, draft 5 (2026-09-30). section 0 reading guide ... section 10 CPR/DPP, Appendices A (evidence payloads, A.4 reinforcement layout), B (proxy primitives). section 9 = open questions (all struck through as decided). |
+| `docs/adr/DESIGN_DECISIONS.md` | decision log: 1.x evidence, 2.x property fold, 3.x geometry, 4.x classification, 5.x CPR proposals, 6.x provenance / permissions / release, **7.x entry surfaces / representation / scope (2026-09-24)**, **8.x consistency pass + review gaps (2026-09-28 -- 30)**. |
 | `CONTEXT.md` (repo root) | **glossary** (domain-modeling format): canonical terms + words to avoid. Created 2026-09-24. |
-| `docs/adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1--P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; open Q1--Q3 |
+| `docs/adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1--P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; Q1--Q3 decided |
 | `docs/adr/HANDOFF.md` | this file |
 | `AGENTS.md`, `docs/agents/` | agent-skill config: GitHub issues, triage labels, domain-doc rules (2026-09-29) |
 | `future_implementation/MEASUREMENTS_SPEC.md` | original measurement spec --- superseded, kept for domain research and standards sources. Gitignored. |
@@ -63,18 +64,21 @@ Threads merged into one spec:
 **A. Grilling --- done.** HANDOFF items 1--3 of 2026-09-23 closed by 7.1--7.13 (A.3 "designs x new
 lifecycle" dissolved: designs are removed, 7.11).
 
-**A2. Review gaps (external review, checked 2026-09-29) --- grill before the phase they touch:**
+**A2. Review gaps (external review, checked 2026-09-29) --- all closed 2026-09-30 (8.7--8.17); next is P2:**
 before P1: ~~(1) stage-order loop~~ (decided 8.7) shape class <-> proxies (stage 2 needs `boxscore` from stage 4);
 ~~(2) when a split takes effect~~ (decided 8.8) (parent `exit` set by a child whose v0 is still a draft; cross-dataset
 `exit` without `moderator(parent D)`); ~~(3) identity has no draft state~~ (decided 8.9) (contributor cannot fix a
 typo; visibility of an identity whose only snapshot is a draft; evidence on it); ~~(4) v0
 `effective_from = created`~~ (decided 8.10) vs. valid time (`origin.at`), and what the snapshot fold does with
 `before_first` / `after_exit` evidence. Before P3 / P6: ~~(5) header enforcement vs. `/id/{uuid}` and
-anonymous API readers~~ (decided 8.11); (6) who sets `self_attested`, four-eyes for `reviewed`, typed-in
-accreditation; (7) attachments on public pieces vs. GDPR (redaction does not reach files). Before
-P5: (8) frame sign rule + tie-break tolerance for near-equal extents. Minor: withdrawing the current
-snapshot without replacement vs. I3b; two pending supersessions of one record (I14); evidence on
-exited / withdrawn identities; reinforcement layouts after a correction in new coordinates.
+anonymous API readers~~ (decided 8.11); ~~(6) who sets `self_attested`, four-eyes for `reviewed`, typed-in
+accreditation~~ (decided 8.12, I27 in code); ~~(7) attachments on public pieces vs. GDPR (redaction does not
+reach files)~~ (decided 8.13). New, not from the review: non-TU registration by email-bound invitation
+(decided 8.14, plan P3). Before
+P5: ~~(8) frame sign rule + tie-break tolerance for near-equal extents~~ (decided 8.15). Minor: ~~(a) withdrawing the current
+snapshot without replacement vs. I3b~~ (decided 8.17: tombstone outside the dataset, automatic fallback); ~~(b) two pending supersessions of one record (I14); (c) evidence on
+exited / withdrawn identities; (d) reinforcement layouts after a correction in new coordinates~~ (decided 8.16,
+I14 extension + I28 in code).
 (The review's CORS side note on item 5 is wrong: browser calls go through `/api/backend`, which
 adds the header; CORS already allows all headers.)
 
@@ -127,7 +131,7 @@ Session 4 (2026-09-24):
   correct. Draft --> submit. Web mesh / point-cloud upload deferred (planned).
 - **7.6** GH bridge builder components `Actor`, `Origin`, `IdentityMetadata`,
   `SnapshotMetadata` (JSON fragments of the API payload); Create components ~8 inputs.
-- **7.7** Per-snapshot `capture` block (frame, labelled markers, fixture meshes); marker points
+- **7.7** Per-snapshot `capture` block (coordinate system, labelled markers, fixture meshes); marker points
   and the robot gripper mesh leave `geometry`.
 - **7.8** Reinforcement is evidence: `reinforcement_layout`, one record per source, tier by
   basis; the bridge ships `ReinforcementLayout` + generic `AddEvidence`.
@@ -144,6 +148,15 @@ Session 4 (2026-09-24):
 Sessions 2026-09-28 / 29: 8.1--8.4 consistency pass (`frame` = canonical orientation only; outranked;
 one snapshot PATCH; pass fixes); 8.5 monorepo release model; **8.6 HKS on a 3000-point even surface
 sample with the point-cloud Laplacian** (not the mesh, not the convex hull; fixed time grid) --- plan P5.
+8.7 hull scores in stage 1 + input fingerprints; 8.8 split on the child's first publish (two
+moderators); 8.9 unpublished identity; 8.10 v0 starts at `origin.at`; 8.11 header optional for
+anonymous GETs, "not public" page.
+
+Session 2026-09-30: 8.12 verification owners (recorder self-attests, four eyes for `reviewed` /
+`accredited`, no admin exception, I27); 8.13 attachment files signed-in only, GDPR worklist; 8.14
+email-bound invitations; 8.15 frame = valid frame closest to the stored axes; 8.16 one open
+correction, I28, positioned evidence stays on its snapshot; 8.17 withdrawn = full for D, tombstone
+outside, automatic current-snapshot fallback; 8.18 pending records: moderator edits, author recalls; 8.19 archived out-of-circulation gaps resolve as `after_exit`; 8.20 member editor by email (exact for moderators, search for admins); 8.21 admin user list filters (dataset, role, state, invited).
 
 ## 5. Facts about the data (dump 260916)
 
@@ -163,7 +176,7 @@ bridge rewrite; old migration scripts are left as they are (user).
 
 ## 6. Caveats
 
-- No 0.6 code yet (0.5.1.0 shipped); no 0.6 migrations exist.
+- 0.6 code: P1 only (models, predicates, invariant checker); no 0.6 migrations exist yet (P2).
 - Number of designs in production unknown (not in the dumps) --- archived at cutover (section 8 step 13).
 - CPR analysis is alignment, not compliance (delegated act under Art 75(1) does not exist yet).
   EN 18219/18220/18221/18222 only needed for deferred items (identifiers, export).

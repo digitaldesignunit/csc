@@ -1,7 +1,8 @@
 # CSC Data Model Specification --- v0.6 (draft 4)
 
-**Status:** draft 4, 2026-09-28 --- consistency pass after grilling closed (decisions 1.1--8.6,
-`docs/adr/DESIGN_DECISIONS.md`). Draft 3 2026-09-24 (7.x), draft 2 2026-09-23 (6.x), first draft
+**Status:** draft 5, 2026-09-30 --- review gaps closed (decisions 1.1--8.21,
+`docs/adr/DESIGN_DECISIONS.md`). Draft 4 2026-09-28 (consistency pass, 8.1--8.6), draft 3
+2026-09-24 (7.x), draft 2 2026-09-23 (6.x), first draft
 2026-09-12. Glossary: `CONTEXT.md` (repo root) --- field names follow its terms. Supersedes
 `future_implementation/MEASUREMENTS_SPEC.md` (kept for its domain research and sources). Nothing
 here is open; items marked **deferred** are out of 0.6 by the triage rule (6.8).
@@ -9,10 +10,10 @@ here is open; items marked **deferred** are out of 0.6 by the triage rule (6.8).
 the scan, `{range, confidence, source}` property descriptors, resolution following design
 relevance --- follow M. Bernhard, *HYBREP: A Hybrid Representation Framework for Computational
 Design with Reclaimed Building Elements* (DBT, ETH Zuerich; `reference/pdf/Bernhard_HYBREP.pdf`).
+CSC does not adopt the name; it adopts the ideas and cites the paper.
 **Regulatory reference:** Regulation (EU) 2024/3110 (recast CPR). Every field it touches carries a
 `CPR:` note pointing at the article/annex; the full analysis is section 10, the wider EU passport
 landscape section 10.6.
-CSC does not adopt the name; it adopts the ideas and cites the paper.
 **Target:** 0.6.0.0 on branch `v-0.6.0.0` (decision 6.7); release path section 8.0.
 **Calibration:** research prototype. Correctness and best practice over migration cost.
 
@@ -376,7 +377,7 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
   "past_cycles": [ { "origin": { ... }, "exit": { ... } } ],   // section 3.1.3; append-only, server-written on re-entry
   "withdrawn": { "at": "...", "by_user_id": "uuid", "reason": "...", "duplicate_of": "uuid" | null } | null,   // section 3.1.4 --- record-level tombstone
   "reserved": "", "is_public": false,        // CPR: tiered access, public tier --- Art 75(2)(c), 76(2)(e--f), 78(f)
-  "current_snapshot_id": "uuid",
+  "current_snapshot_id": "uuid" | null,      // null while unpublished, or when no published snapshot is left (I3b, 8.17)
 
   "properties": {                            // DERIVED section 4.4 --- never written by clients
                                              // CPR: declared performances per essential characteristic (value / level / class, or NULL) --- Annex V 9(a--b), Art 3(6--7), 3(13--14);
@@ -401,7 +402,7 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
 Removed: `type`, `salvage_source`, `salvaged_at`, `consumed_at`; `material` becomes an FK.
 Added: `original_function`, `material_class(+_source)`, `trade_name`, `origin`, `exit`,
 `past_cycles`, `inherited_fields`, `inherited_from`, `withdrawn`, `properties`,
-`properties_version`.
+`properties_version`, `created_by_user_id`.
 
 #### 3.1.1 `origin` --- how the piece entered circulation
 
@@ -458,13 +459,16 @@ exists (split, recycled) with one that exists elsewhere (installed, returned).
   merged, at: <earliest effective_from over the parent's published children>, recorded_by_user_id:
   null}` (`merged` when the child has >1 parent) and clears the parent's reservation. The server
   keeps it true: a moderator edit of that `effective_from` moves `exit.at`; withdrawing the last
-  published child clears the server-set exit. A client-set `split` without catalogued children is
+  such child **identity** (the cut was recorded by mistake) clears the server-set exit.
+  Withdrawing a child's *snapshot* does not: a child counts once it has ever been published (a
+  `published` or `withdrawn` snapshot, the 8.9 test), because the cut happened. A client-set `split` without catalogued children is
   legal ("cut up, pieces not recorded") and is never touched by this rule.
 - **Everything else is authored**: `POST /identities/{id}/exit` (`moderator(D)`, section 7.0) with the block.
   `construction_work` only for `kind == installed` (I18).
 - **Re-entry** (an `installed` or `returned` piece comes back, e.g. from a temporary pavilion):
   `POST /identities/{id}/reenter` with a new `origin`. The server appends `{origin, exit}` to
-  `past_cycles`, clears `exit`, writes the new `origin`. `split`, `merged`, `recycled`,
+  `past_cycles`, clears `exit`, writes the new `origin`. Evidence dated inside an archived gap
+  resolves to `after_exit` (section 4.1); the next snapshot defaults to the new `origin.at` (8.19). `split`, `merged`, `recycled`,
   `disposed` are terminal --- re-entry is rejected (the physical piece no longer exists as this
   identity). `past_cycles` is never client-writable.
 - **Reservation** is only possible with `exit == null` (0.5 rule, unchanged).
@@ -482,15 +486,25 @@ hard-deleted.**
 | record | "delete" means | effect |
 |---|---|---|
 | evidence, snapshot in `draft\|pending\|rejected` | hard delete (+ files) | gone; never public |
-| evidence, snapshot `published` | `POST .../withdraw {reason}` --> `status: withdrawn` | out of default lists, fold, public tier, promotion (`current_snapshot_id` cannot point at it; withdrawing the current snapshot requires naming a replacement or leaves the identity without a current snapshot --> identity hidden from default lists); retrievable by id with `status` shown; files kept. `POST .../reinstate` reverses. |
+| evidence, snapshot `published` | `POST .../withdraw {reason}` --> `status: withdrawn` | out of default lists, fold, public tier, promotion (`current_snapshot_id` cannot point at it: withdrawing the current snapshot falls back to the latest remaining published, non-superseded one --- a named replacement is optional --- or, if none remains, sets `current_snapshot_id = null`: identity out of default lists, `/id` shows "no current state"); retrievable by id as a **tombstone** outside the dataset (below); files kept, members only. `POST .../reinstate` reverses. |
 | identity never published | `DELETE /identities/{id}` | hard delete, as 0.5 (reject a new v0) |
 | identity ever published | `POST /identities/{id}/withdraw {reason, duplicate_of?}` | `identity.withdrawn = {at, by_user_id, reason, duplicate_of}`; hidden everywhere by default; `GET /identities/{id}` returns it with the tombstone; with `duplicate_of`, `/id/{uuid}` (section 7.5) and the component page redirect to the canonical identity (**the 0.5 hard delete was a stand-in for this**) |
 | any | `?purge=1` (admin, body must repeat the id) | hard delete incl. files, then insert stub `{_id, purged_at, purged_by_user_id, reason}` in `purged_records`; every GET on that id --> **410 Gone** |
-| personal data in actors | `POST /actors/redact {user_id \| name+organization}` (admin; GDPR Art 17) | in every evidence/origin/exit actor: `name`, `email`, `orcid` --> null, `redacted_at` set; `organization` kept |
+| personal data in actors | `POST /actors/redact {user_id \| name+organization}` (admin; GDPR Art 17) | in every evidence/origin/exit actor: `name`, `email`, `orcid` --> null, `redacted_at` set; `organization` kept. Files are not reached: the response lists the attachments of records naming the person (`performed_by`, `recorded_by`, `uploaded_by`) as a moderator worklist --- add a redacted copy, remove the original with reason `gdpr` (blanks the tombstone's `name`; `sha256` kept) (decision 8.13) |
 
 ```jsonc
 "withdrawn": { "at": "...", "by_user_id": "uuid", "reason": "...", "duplicate_of": "uuid" | null } | null
 ```
+
+**Who sees a withdrawn record (decision 8.17)** --- the same rule for identities, snapshots and
+evidence. Members of D and `admin`: the full record, its files and the reason. Everyone else who
+can see the component (section 3.6): **200 with a tombstone** --- `_id`, kind, `version` (snapshots),
+`status: withdrawn` (identity: `withdrawn.at`), the withdrawal date, and a link to the identity's
+current snapshot or to `duplicate_of`. The reason is never shown outside D (it may name the
+problem, e.g. a person in a photo); files of withdrawn records are served to members only; the
+public timeline shows "v2 --- withdrawn (date)". **410** is only for purged records. The
+snapshots and evidence of a withdrawn identity are projected the same way (tombstones outside D),
+whatever their own status.
 
 #### 3.1.5 Unpublished identity (decision 8.9)
 
@@ -623,6 +637,9 @@ defaults to `[]`; nothing consumes it yet (section 6).
 
 Generalises ADR-015 ("geometry changes drive a new version") and closes its loopholes (file
 routes on published snapshots, client-writable `descriptors`, publish-before-upload).
+"Before publish" below means **a draft** (author or `moderator(D)`); a **pending** record is edited
+by `moderator(D)` only --- the author recalls it to draft first --- and a **rejected** one by nobody
+until it is resubmitted as a draft (decision 8.18; same for evidence).
 
 | class | fields | before publish | after publish |
 |---|---|---|---|
@@ -770,6 +787,12 @@ derived snapshot context. `point` is in that snapshot's stored geometry coordina
 for a robot scan, the coordinate system named by `capture.coordinate_system`, section 3.2.3) --- never in
 the canonical `frame`. `kind: "none"` + `description` must always be sufficient.
 
+When the snapshot is later corrected in new coordinates, the record keeps its `snapshot_id` and
+point; the viewer draws it only on that snapshot. The correction dialog warns "N evidence
+records are positioned on the previous version" and offers to supersede each with a re-placed
+point (a reinforcement layout: re-imported bars). No transform between versions is stored in 0.6
+(decision 8.16).
+
 #### 3.3.3 Moderation vs. verification
 
 The 0.5 snapshot `validated` boolean was a **publish gate** (admin-only, "pending approval",
@@ -778,16 +801,33 @@ default filter everywhere). One bit conflates three concerns, so they are split 
 
 | field | concern | actor | effect |
 |---|---|---|---|
-| `status` | moderation --- is this allowed in the catalog? | admin / moderator | `published` is the only status that lists by default, is visible anonymously, and enters the fold |
-| `verification.state` | epistemic --- has someone competent confirmed it is what it claims? | reviewer, or the responsible organization attesting its own result | scales confidence in the fold (section 4.4) |
+| `status` | moderation --- is this allowed in the catalog? | admin / moderator | `published` is the only status that lists by default, is visible beyond D (section 3.6), and enters the fold |
+| `verification.state` | epistemic --- has someone competent confirmed it is what it claims? | the recorder (`self_attested` only), a second person with `reviewer(D)` (`reviewed`, `accredited`; decision 8.12) | scales confidence in the fold (section 4.4) |
 | freeze | immutability | system, on `status --> published` | result-bearing fields become read-only; corrections supersede (section 3.3.4) |
 
-Lifecycle: `draft` (author only, editable) --> `pending` (submitted) --> `published` \| `rejected`;
+Lifecycle: `draft` (author and `moderator(D)` edit) --> `pending` (submitted; `moderator(D)` edits,
+the author may recall it to `draft`, 8.18) --> `published` \| `rejected`;
 `published` --> `withdrawn` (tombstone, section 3.1.4) and back by reinstatement; a published evidence
 record also leaves the default set when superseded (section 3.3.4).
-`verification` is independent: it can be set before or after publishing, by anyone with the
-`reviewer` role of the record's dataset (decision 6.5: per-dataset membership role, orthogonal
-to `moderator`). Verification factors are policy constants:
+`verification` is independent of `status`: it can be set before or after publishing. Who sets
+which state (decision 8.12):
+
+- **`self_attested`** --- the recorder's own claim ("I performed this and stand by the result",
+  a checkbox in the evidence form). Allowed only when `performed_by` contains an actor with
+  `user_id == recorded_by_user_id`; a result from an outside lab stays `unverified` until reviewed.
+  The recorder toggles `unverified` <--> `self_attested` and never overrides a reviewer's state.
+- **`reviewed`, `accredited`** --- four eyes: `reviewer(D)` (decision 6.5: per-dataset membership
+  role, orthogonal to `moderator`) or `admin`, who is neither the recorder nor a `performed_by`
+  user. No admin exception. The server sets `verification.by` (the reviewer as a `user` actor) and
+  `at` (I27). A one-person dataset cannot reach `reviewed` without a second person.
+- **`accredited`** additionally needs I22 (the typed-in `accreditation` block covers the standard)
+  and a `verification.note` saying what the reviewer checked; the reviewer view shows the block
+  and links the accreditation body's public register (e.g. DAkkS). No curated organisation
+  registry in 0.6.
+- Changing a result field (the frozen set of section 3.3.4) while `draft` / `pending` resets
+  `reviewed` / `accredited` to `unverified` --- a review never outlives what it reviewed.
+
+Verification factors are policy constants:
 
 | `verification.state` | factor |
 |---|---|
@@ -886,6 +926,44 @@ every dataset** --- kept as the testing and emergency hatch (user decision); at 
 admin must exist (I20). No `moderated_datasets` field (0.5.0.2 plan superseded by memberships).
 The shared `ddu` account is retired (section 8 step 11).
 
+**Registration (decision 8.14).** Self-registration is open to addresses of
+`CSC_OPEN_REGISTRATION_DOMAINS` (env, comma-separated, default `tu-darmstadt.de`, subdomains
+included), with the verification email as in 0.5. Every other address needs an **invitation**:
+
+```jsonc
+// invitations
+{ "_id": "uuid",
+  "email": "...",                            // required --- invitations are bound to one address
+  "code_sha256": "...",                      // the code (16-char base32, 80 bit) is mailed once, never stored
+  "dataset": "slug" | null, "roles": ["contributor", ...],   // granted on redemption
+  "created_by_user_id": "uuid", "created": "...",
+  "expires_at": "...",                       // default created + 14 days
+  "used_at": "..." | null, "used_by_user_id": "uuid" | null,
+  "revoked_at": "..." | null }
+```
+
+`admin` invites anyone into any dataset; `moderator(D)` invites only into D with D's roles. The
+mail carries `/auth/register?code=...`; registering with a code requires the invited address,
+which then counts as verified. A code is single-use; a batch is a list of addresses, one
+invitation each. There are no open codes. Index: `code_sha256` (unique), `email`.
+
+**Adding people to a dataset (decision 8.20).** The member editor takes an **email address** and
+the roles. An existing account is added at once and notified by mail ("added to dataset X as
+contributor by Y"); an address without an account gets an invitation --- for **any** domain, so an
+open-domain registrant (a TU student) arrives with the dataset roles already assigned. Lookup:
+`moderator(D)` must type the exact address (no user search, no user list --- moderators cannot
+browse who is registered); `admin` gets a search (username, name, email; prefix match) in the same
+editor, plus the full user list in `/admin`.
+
+**Admin user list (decision 8.21).** `/admin/users` shows each account with its memberships
+(dataset + roles, joined from `datasets.members`) and filters, combinable and kept in the URL so
+a filtered view can be bookmarked: text (username, name, email), **dataset** (member of),
+**dataset role** (in that dataset, or in any), **no dataset** (unaffiliated accounts), **global
+role** (`user` / `admin`), **account state** (enabled, disabled, email unverified), **invited**
+(registered through an invitation --- from `invitations.used_by_user_id`). Open invitations are
+listed in a second tab with the same dataset filter and their state (open, used, expired,
+revoked). No bulk actions in 0.6.
+
 ## 4. Derivations
 
 All are pure functions in `apps/catalog/`, unit-tested without a database, invoked from routes
@@ -903,13 +981,16 @@ existing product's passport, Art 76(1), 75(2)(e) --- the snapshot chain *is* tha
 - **Default for v0 (decision 8.10):** `origin.at` with its precision when known --- the piece is
   assumed unchanged since it left its previous context; else `capture.captured_at`; else `created`.
   A child's v0 (cut from a parent) starts at the cut: `created` or the author's date --- never the
-  parent's inherited `origin.at`. Later versions: now or the author's date.
+  parent's inherited `origin.at`. Later versions: now or the author's date; the first snapshot
+  after a **re-entry** defaults to the new `origin.at` (8.19).
 - **Evidence outside the snapshot history** (8.10): resolution `before_first` (e.g. an inspection
   while the piece was still installed) or `after_exit` (e.g. inspected in the building it went
   into) feeds no snapshot's `properties` --- no snapshot records that state. The record belongs to
   the identity like all evidence (I5): identity-scoped quantities fold from it as from any
   evidence, and every record --- of either scope --- is listed on the identity page and the timeline
-  under "before cataloguing" / "after leaving circulation".
+  under "before cataloguing" / "after leaving circulation". **Archived cycles count too (8.19):**
+  a date between a `past_cycles[k].exit.at` and the next cycle's `origin.at` (the time the piece
+  was installed elsewhere, returned or lost before it re-entered) also resolves to `after_exit`.
 - After publish, `moderator(D)`-editable via `PATCH /snapshots/{sid}` (section 7.1) --- decision 6.6.
 - Always set: there are no virtual snapshots (decision 7.12).
 - Monotonic in `version` per identity over non-superseded, non-withdrawn snapshots (I3); a
@@ -923,6 +1004,8 @@ resolve_snapshot_at(snapshots, at) -> Context
   else:               s = max(candidates, key=(effective_from, version))
                       resolution = "exact" | "approximate" (if effective_from_precision coarser than `at` gap)
   if identity.exit and at > identity.exit.at:     resolution="after_exit"
+  for (cycle, next_origin) in gaps(identity.past_cycles, identity.origin):      # 8.19
+      if cycle.exit.at < at < next_origin.at:     resolution="after_exit"
 ```
 
 **Never persisted** on the evidence document. Returned under `context` when
@@ -1006,8 +1089,14 @@ descriptors and the shape class. It is **not a proxy**:
 2. Axes by extent: **longest --> x, middle --> y, shortest --> z** (lying on its largest face);
    **`shape_class == linear` and `original_function == IfcColumn`: longest --> z, middle --> x,
    shortest --> y** (standing). Same rule as the add-component wizard's `canonicalizeBoxAxesMm`.
-3. Right-handed; signs deterministic (fixed rule on the geometry, so a re-run gives the same
-   frame); `frame.o` = box centre; `bbx` = extents along x / y / z.
+3. **Signs and ties (decision 8.15): the valid frame closest to the stored coordinates.**
+   Candidates are the OBB axes assigned by step 2, where extents within
+   `max(2 % of the larger, 3 mm)` of each other count as tied and may swap, with either sign per
+   axis, right-handed only. The candidate with the smallest rotation from the stored axes
+   (maximum `trace(R)`) wins; exact ties go by a fixed candidate order. For round sections the
+   OBB's angle about the long axis is taken as trimesh returns it (deterministic on the same
+   input). Re-runs give the same frame; signs are not intrinsic (a rescan in another pose may
+   differ by a 180 degree flip). `frame.o` = box centre; `bbx` = extents along x / y / z.
 
 Recomputed when `original_function` or `shape_class` changes.
 
@@ -1139,7 +1228,7 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 | I1 | Snapshot geometry has >=1 of `meshes`, `point_clouds`, or a proxy with `fit.method == "authored"`. |
 | I2 | Exactly one proxy with `role == "primary"` per snapshot once proxies exist. |
 | I3 | `effective_from` is always set; over non-superseded, non-withdrawn snapshots it is monotonic in `version` per identity (a superseding snapshot shares its predecessor's `effective_from`). |
-| I3b | At most one snapshot with `status in {draft, pending}` per identity. `current_snapshot_id` must reference a `published` snapshot. |
+| I3b | At most one snapshot with `status in {draft, pending}` per identity. `current_snapshot_id`, if not null, references a `published` snapshot; it is null only when the identity has no published, non-superseded snapshot left (8.17). |
 | I4 | `shape_class == "composite"` => `shape_class_source == "assigned"`. |
 | I5 | Evidence `identity_id` is immutable after create. |
 | I6 | `summary` has `value` or `range` (or both), matching the quantity's kind and canonical unit after conversion. |
@@ -1150,11 +1239,11 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 | I11 | `properties` is never accepted from a client; any write path recomputes it. |
 | I12 | *dropped (6.13)* --- function and shape are orthogonal (4.1). |
 | I13 | Frozen fields (section 3.3.4) of a `published` evidence record cannot be changed by PATCH; the only path is a superseding record. |
-| I14 | `supersedes` must reference a `published` record of the same `identity_id` and same `method`; a record can be superseded at most once (no forks). |
-| I15 | `status` transitions (snapshots and evidence): `draft-->pending`, `pending-->published\|rejected`, `rejected-->draft` (resubmit), `published-->withdrawn` (`moderator(D)`, reason required), `withdrawn-->published` (`moderator(D)` reinstate). Hard delete only from `draft\|pending\|rejected`. Evidence additionally leaves the default set via supersession. |
+| I14 | `supersedes` must reference a `published` record of the same `identity_id` and same `method`; a record can be superseded at most once (no forks), and at most one `draft` / `pending` record may name it in `supersedes` at a time (8.16). |
+| I15 | `status` transitions (snapshots and evidence): `draft-->pending`, `pending-->draft` (author recall, 8.18), `pending-->published\|rejected`, `rejected-->draft` (resubmit), `published-->withdrawn` (`moderator(D)`, reason required), `withdrawn-->published` (`moderator(D)` reinstate). Hard delete only from `draft\|pending\|rejected`. Evidence additionally leaves the default set via supersession. |
 | I16 | `origin.construction_work != null` => `origin.kind in {deinstallation, demolition}`. |
 | I17 | `inherited_fields` and `inherited_from` are server-maintained: never accepted from a client except `inherited_fields` additions (re-inherit). `inherited_fields != []` => `inherited_from in parent_identities`. |
-| I18 | A server-set `exit` (`recorded_by_user_id == null`, kind `split` / `merged`) exists iff the identity has >= 1 non-withdrawn child with a published snapshot; `exit.at` = the earliest such child's first `effective_from` (8.8). `exit.construction_work` non-null => `exit.kind == installed`. `exit.kind in {split, merged, recycled, disposed}` => `reenter` rejected. `reserved` non-empty => `exit == null`. `past_cycles` never client-writable. |
+| I18 | A server-set `exit` (`recorded_by_user_id == null`, kind `split` / `merged`) exists iff the identity has >= 1 non-withdrawn child that has ever been published (a `published` or `withdrawn` snapshot); `exit.at` = the earliest such child's first `effective_from` (8.8). `exit.construction_work` non-null => `exit.kind == installed`. `exit.kind in {split, merged, recycled, disposed}` => `reenter` rejected. `reserved` non-empty => `exit == null`. `past_cycles` never client-writable. |
 | I19 | Identity hard `DELETE` only if no snapshot or evidence of it ever reached `published` (server checks `status` history: any `published`/`withdrawn` record => 409). `?purge=1` overrides, admin only, leaves a purge stub. `withdrawn.duplicate_of` must reference a non-withdrawn identity != self (no chains: re-point to the terminal). |
 | I20 | `identity.dataset` references an existing `datasets._id`. At least one enabled user with `role == admin` exists (the last admin cannot be demoted or disabled). A dataset always has >=1 `moderator` member or is administered by admins only (allowed, warned). |
 | I21 | Frozen snapshot fields and files (section 3.2.2) of a `published` snapshot reject PUT/PATCH/DELETE (409, pointing at `/supersede`). Derived fields are rejected from every client payload. A snapshot is superseded at most once; `supersedes` references a `published` snapshot of the same identity. |
@@ -1163,6 +1252,8 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 | I24 | Evidence `attachments[]` of a `published` record: entries are never removed or reordered; a removal sets `removed {at, by_user_id, reason}` (`moderator(D)`, reason required) and deletes the file. `sha256` is computed server-side over the stored bytes. Same rule for snapshot photos after publish (section 3.2.2). |
 | I25 | `identity.material` references an existing `materials._id`; `material_class_source == derived` => `material_class == materials[material].default_class` (recomputed when the material or its default changes); `assigned` values are never overwritten. |
 | I26 | Evidence of an unpublished identity (section 3.1.5) cannot be published (409). `created_by_user_id` is server-set on create and never changed by a client. |
+| I27 | `verification.state in {reviewed, accredited}` => `verification.by.user_id` is set, differs from `recorded_by_user_id` and from every `performed_by[].user_id`; `accredited` => `verification.note` non-empty. `self_attested` => some `performed_by[].user_id == recorded_by_user_id` (decision 8.12). |
+| I28 | No evidence is created on a withdrawn identity (409, naming `duplicate_of` if set). On an identity with a terminal `exit` (`split`, `merged`, `recycled`, `disposed`), evidence needs `observed_at <= exit.at` (8.16). |
 
 ---
 
@@ -1220,22 +1311,27 @@ role)`; the frontend merely hides controls. `admin` passes every check. D = the 
 
 | action | who |
 |---|---|
-| read `published` / `withdrawn` (tombstone) records | visibility rule section 3.6 |
+| read `published` records | visibility rule section 3.6 |
+| read `withdrawn` records | full: `member(D)` / `admin`; tombstone: anyone else the visibility rule admits (8.17) |
 | read `draft` / `pending` / `rejected` | author; `moderator(D)`; `reviewer(D)` for pending evidence. An unpublished identity (section 3.1.5): its creator and `moderator(D)` |
 | create identity in D, snapshot, evidence | `contributor(D)`; a child also needs read access to each parent (8.8) |
-| edit a draft; submit `draft --> pending`; resubmit `rejected --> draft` | author |
-| upload / replace / delete geometry files and photos | author or `moderator(D)`, **only while the snapshot is not `published`** (freeze rules: decision 6.6) |
-| evidence attachments | unpublished record: author or `moderator(D)` add / remove; published: `contributor(D)` adds, `moderator(D)` removes with reason, tombstone entry kept (decision 7.3) |
+| submit `draft --> pending`; recall `pending --> draft` (8.18); resubmit `rejected --> draft` | author |
+| edit an unpublished record (fields, files, photos, attachments) | draft: author or `moderator(D)`; pending: `moderator(D)`; rejected: nobody (8.18) |
+| upload / replace / delete geometry files and photos | as "edit an unpublished record", **only while the snapshot is not `published`** (freeze rules: decision 6.6) |
+| evidence attachments | unpublished record: as "edit an unpublished record"; published: `contributor(D)` adds, `moderator(D)` removes with reason, tombstone entry kept (decision 7.3) |
 | publish / reject / withdraw / reinstate (snapshot, evidence) | `moderator(D)`; publishing a child's **first** snapshot also ends its parents (split / merge, 8.8), so it needs `moderator` of every parent's dataset as well --- otherwise it waits in that dataset's queue |
 | promote `current_snapshot_id`; `effective_from`, `shape_class` overrides | `moderator(D)` |
 | PATCH identity metadata (`origin`, `material`, `original_function`, `is_public`, ...) | `moderator(D)`; while the identity is unpublished also its creator (8.9) |
 | `exit`, `reenter`, `withdraw` identity | `moderator(D)` |
 | move identity D1 --> D2 | `moderator(D1) and moderator(D2)` |
-| set evidence `verification` | `reviewer(D)` |
+| set evidence `verification` | `self_attested` / back to `unverified`: the recorder, unless a reviewer set the state; `reviewed` / `accredited` / any downgrade: `reviewer(D)` or `admin`, never the recorder or a `performed_by` user (8.12, I27) |
 | supersede published evidence | `contributor(D)` (new record enters `pending`) |
 | reserve | any authenticated user who can read the piece, while it is not reserved |
 | release | the reserving user, or `moderator(D)` (as 0.5) |
 | manage D's members, D's `visibility` / `name` / `description` | `moderator(D)` |
+| invite a user (8.14); add a member by exact email (8.20) | `admin` (any dataset, or none); `moderator(D)` (into D only) |
+| search users (8.20) | `admin` |
+| revoke an unused invitation | its creator, `moderator(D)` of its dataset, `admin` |
 | create dataset; users; logs; `?purge=1`; actor redaction | `admin` |
 
 ### 7.1 Snapshots
@@ -1244,14 +1340,15 @@ role)`; the frontend merely hides controls. `admin` passes every check. D = the 
 POST   /identities/{id}/snapshots                  contributor(D): always creates status draft (immediate-promote branch removed)
 POST   /snapshots/{sid}/supersede                  contributor(D): body = corrected snapshot; inherits effective_from (section 3.2.2)
 POST   /snapshots/{sid}/submit                     author: draft --> pending      (replaces implicit pending on create); ?publish=1&promote=1 for moderators
+POST   /snapshots/{sid}/recall                     author: pending --> draft (8.18)
 POST   /snapshots/{sid}/publish                    moderator(D): pending --> published (+ ?promote=1 to set current_snapshot_id; replaces /validate)
 POST   /snapshots/{sid}/reject                     moderator(D): pending --> rejected (+ reason; replaces DELETE-as-reject)
 POST   /snapshots/{sid}/promote                    moderator(D): set current_snapshot_id to this published, non-superseded snapshot
-POST   /snapshots/{sid}/withdraw                   moderator(D): published --> withdrawn (+ reason); names a replacement if it is current (section 3.1.4)
+POST   /snapshots/{sid}/withdraw                   moderator(D): published --> withdrawn (+ reason, replacement?); the current one falls back to the latest published or null (section 3.1.4, 8.17)
 POST   /snapshots/{sid}/reinstate                  moderator(D): withdrawn --> published
 DELETE /snapshots/{sid}                            author or moderator(D), only draft|pending|rejected (hard delete + files)
 GET    /snapshots/pending                          moderation queue (replaces /pending-validation), filtered to the caller's moderated datasets
-PATCH  /snapshots/{sid}                           per-field permission (section 3.2.2): draft --> author / moderator(D), everything but derived fields;
+PATCH  /snapshots/{sid}                           per-field permission (section 3.2.2): draft --> author / moderator(D), pending --> moderator(D), everything but derived fields;
                                                   published --> moderator(D): mutable metadata, effective_from(+precision), shape_class / complexity override;
                                                   frozen field on a published snapshot --> 409 pointing at /supersede. Replaces PATCH /identities/{id}/current-snapshot
 GET    /snapshots/{sid}/proxies/{i}/faces/{face}   deviation map PNG
@@ -1275,19 +1372,20 @@ GET    /identities/{id}/evidence                   ?method= ?tier= ?quantity= ?s
 GET    /identities/{id}/properties                 identity block + outranked_evidence_ids; ?as_of=<iso> recomputes identity-scoped quantities over a time window (computed, not stored)
 GET    /snapshots/{sid}/properties                 snapshot block (materialized as-of fold)
 GET    /evidence/{eid}                             ?include=context; ETag/304
-PATCH  /evidence/{eid}                             author while draft (all fields); moderator(D) after publish (`notes`, `position.description` only, I13)
-DELETE /evidence/{eid}                             author, only in draft|pending|rejected (hard delete); published --> /withdraw (6.4)
+PATCH  /evidence/{eid}                             draft: author / moderator(D); pending: moderator(D) (all fields); after publish moderator(D) (`notes`, `position.description` only, I13)
+DELETE /evidence/{eid}                             author or moderator(D), only in draft|pending|rejected (hard delete); published --> /withdraw (6.4)
 POST   /evidence/{eid}/withdraw                    moderator(D): published --> withdrawn (+ reason); /reinstate reverses
 POST   /evidence/{eid}/submit                      author: draft --> pending
+POST   /evidence/{eid}/recall                      author: pending --> draft (8.18)
 POST   /evidence/{eid}/publish                     moderator(D): pending --> published; freezes; recomputes properties
 POST   /evidence/{eid}/reject                      moderator(D): pending --> rejected (+ reason)
-POST   /evidence/{eid}/supersede                   contributor(D): body = full new record; server links supersedes/superseded_by on publish; new record enters as pending
-PUT    /evidence/{eid}/verification                reviewer(D): set state/by/at/note; I22 checked; recomputes properties
+POST   /evidence/{eid}/supersede                   contributor(D): body = full new record; server links supersedes/superseded_by on publish; new record enters as pending; 409 if a correction of eid is already open (I14)
+PUT    /evidence/{eid}/verification                recorder (self_attested) | reviewer(D), four eyes (8.12): set state/note; server sets by/at; I22, I27 checked; recomputes properties
 GET    /evidence                                   cross-catalog; ?dataset= ?method= ?quantity= ?min= ?max= ?status= ?verification=
 GET    /evidence/pending                           moderation queue, filtered to the caller's moderated datasets
 GET    /evidence/methods                           registry introspection
 POST   /evidence/attachments                       multipart: one file + record_ids[] --- attaches one upload to several records (one stored copy per record, 7.3)
-GET    /evidence/{eid}/attachments[/{index}]       list / download; visibility of the record
+GET    /evidence/{eid}/attachments[/{index}]       list: visibility of the record; download: signed in + visibility of the record (anonymous --> 401, 8.13)
 DELETE /evidence/{eid}/attachments/{index}         unpublished: author; published: moderator(D) + reason --> tombstone entry, file deleted
 GET    /schema/evidence  /schema/create-evidence   codegen
 ```
@@ -1302,7 +1400,12 @@ misread it.
 Anonymous readers of an `is_public` identity get `published`, non-superseded evidence only, with
 actors projected to organization level. (CPR: free access for economic operators, clients, users
 and authorities, Art 76(2)(e); levels of access, Art 76(2)(f); personal data, Art 77(1)(e).)
-Photos served to anyone are EXIF-stripped at upload (section 3.5, decision 7.13).
+Photos served to anyone are EXIF-stripped at upload (section 3.5, decision 7.13). **Evidence
+attachment files are never served anonymously** (decision 8.13): the public tier lists them
+(`media_type`, `size`, `sha256`, `uploaded_at`) with "sign in to download", so a holder of a copy
+can still check it against the checksum. Snapshot photos stay public. The upload control notes
+that private persons, faces and number plates must be redacted before upload; nothing scans
+file content.
 
 ### 7.4 Client identification (decision 6.7)
 
@@ -1330,7 +1433,8 @@ GET /id/{uuid}      frontend route AND API route, permanent --- never renamed, n
 - `Accept: text/html` (a phone that scanned a tag, a browser) --> 302 to the component page.
 - `Accept: application/json` --> 302 to `/identities/{uuid}/compose` (the passport).
 - Withdrawn with `duplicate_of` --> **301** to `/id/{duplicate_of}`; withdrawn without --> the
-  tombstone page / JSON with `withdrawn`; purged --> **410**; unknown --> 404.
+  tombstone page / JSON (members of D: the full record, 8.17); `current_snapshot_id == null` -->
+  the component page with "no current state"; purged --> **410**; unknown --> 404.
 - Visibility rules (section 3.6) apply after the redirect. A piece the viewer cannot see does
   **not** hide behind a 404 (decision 8.11) --- whoever scans a tag holds the piece: anonymous -->
   a page "this component is not public" with a sign-in link (callback to the piece); logged in
@@ -1373,7 +1477,7 @@ steps; geometry = an authored box from L x W x H --- reached from four places:
 | entry point | reached from | creates |
 |---|---|---|
 | new component | scan an unused tag | identity + v0 |
-| cut from ... | scan an unused tag, then the parent's tag(s) | child identity; server inherits (section 3.1.2) and sets the parents' `exit` split / merged (section 3.1.3) |
+| cut from ... | scan an unused tag, then the parent's tag(s) | child identity; server inherits (section 3.1.2); publishing its v0 sets the parents' `exit` split / merged (section 3.1.3, 8.8) |
 | record new state | component page | next version, `effective_from` = now unless set; only for a changed **shape** --- damage without shape change is evidence |
 | correct | a published snapshot | superseding snapshot (section 3.2.2), prefilled, geometry kept unless dimensions are re-entered, same `effective_from` |
 
@@ -1393,15 +1497,22 @@ GET    /datasets                                   datasets the caller can see (
 POST   /datasets                                   admin; body = {_id slug, name, description, visibility (default members)}
 PATCH  /datasets/{did}                             moderator(D): name, description, visibility (_id immutable)
 PUT    /datasets/{did}/members/{user_id}           moderator(D): body = {roles: [...]}; empty set = remove
+POST   /datasets/{did}/members                     moderator(D): body = {email, roles}; exact match --> added + notified, no account --> invitation (8.20)
+GET    /users/search?q=                            admin: prefix search over username, name, email (member editor lookup, 8.20)
+GET    /users                                      admin: + memberships per user; ?q= ?dataset= ?dataset_role= ?no_dataset=1 ?role= ?state=enabled|disabled|unverified ?invited=1 (8.21)
 PATCH  /identities/{id}                            moderator(D) for metadata; changing `dataset` needs moderator of both (section 7.0)
 GET    /materials                                  public: the controlled list (section 2.10)
 POST   /materials                                  admin; `default_class` required (I25)
 PATCH  /materials/{mid}                            admin; label, group, default_class, uniclass, notes (_id immutable); re-derives material_class
 POST   /actors/redact                              admin; GDPR redaction (section 3.1.4)
+POST   /invitations                                admin | moderator(D): body = {emails: [...], dataset?, roles[], expires_days?}; mails one code per address (8.14)
+GET    /invitations                                admin: all; moderator(D): D's; ?status=open|used|expired|revoked
+DELETE /invitations/{iid}                          revoke while unused
+POST   /auth/register                              body + code? --- open domain: as 0.5; otherwise the code must match an open invitation for that email
 ```
 
-The `/admin` web area gains dataset CRUD and a per-dataset member / role editor (decision 6.5)
-and the materials list.
+The `/admin` web area gains dataset CRUD and a per-dataset member / role editor (decision 6.5),
+the materials list, and invitations (8.14; also from the member editor).
 
 ## 8. Migration from 0.5
 
@@ -1444,7 +1555,7 @@ cutover.
 | 7 | 12 | `migrate_material_vocab.py` | --- | seed `materials` (section 2.10); map `corian --> mineral_composite` + `trade_name: "Corian"`, `concrete --> concrete`, `brick --> fired_clay`, `aerated-concrete --> autoclaved_aerated_concrete`, `asphalt --> asphalt`, `steel --> steel`, `wood --> timber`; derive `material_class` (`derived`). Aborts on any unmapped value. Runs before 10b (inheritance compares `material`/`trade_name`). |
 | 8 | 3 | `migrate_type_to_original_function.py` | --- | `panel-->IfcPlate`, `beam-->IfcBeam`, `column-->IfcColumn`, `slab-->IfcSlab`, `brick-->IfcBuildingElementPart` (6.13; no 0.5 identity uses it), `pipe-->IfcPipeSegment`, `profile-->IfcMember`, `connector-->IfcDiscreteAccessory`, `rubble-->CscDebris`, `other-->IfcBuildingElementProxy`. Drops `type` (no alias, section 8.0). |
 | 9 | 10 | `migrate_salvage_to_origin.py` | --- | Hand-mapped, not string-copied --- the 0.5 data holds only 4 distinct `salvage_source` values (table below). `salvaged_at` --> `origin.at`, precision `day` (all stored values are midnight). Identities with no salvage data get `origin.kind` from their dataset (table below). Drops `salvage_source`, `salvaged_at`. |
-| 10 | 10c | `migrate_consumed_to_exit.py` | --- | 42 consumed identities (260916): the 37 split parents --> `{kind: split, at: consumed_at, precision exact, recorded_by_user_id: null}`; 5 `ddu_build_with_debris` --> `{kind: installed, notes: "modified by students during the workshop; resulting pieces not catalogued"}`; 1 `ddu_aggregations` --> `{kind: lost, notes: same}`. `at` = `consumed_at`. All others `exit: null`, `past_cycles: []`. Drops `consumed_at`. Script asserts the 37/5/1 split and aborts on any consumed identity it cannot classify. |
+| 10 | 10c | `migrate_consumed_to_exit.py` | --- | 42 consumed identities (260916): the 37 split parents --> `{kind: split, at: consumed_at, precision exact, recorded_by_user_id: null}` (in 260916 `consumed_at` equals the earliest child's v0 `created` to the microsecond for all 37 --- the I18 `at`; the script asserts it); 5 `ddu_build_with_debris` --> `{kind: installed, notes: "modified by students during the workshop; resulting pieces not catalogued"}`; 1 `ddu_aggregations` --> `{kind: lost, notes: same}`. `at` = `consumed_at`. All others `exit: null`, `past_cycles: []`. Drops `consumed_at`. Script asserts the 37/5/1 split and aborts on any consumed identity it cannot classify. |
 | 11 | 10b | `migrate_lineage_inheritance.py` | 3, 10, 12 | after 3 and 10. For every identity with `parent_identities`: set `inherited_from`; for each inheritable field equal to the parent's value --> list it in `inherited_fields`. **`manufactured_at` on the 45 children holds their creation timestamp (GH wrote it)** --> overwrite with the parent's (all `unknown`) and list it as inherited; the cut moment survives as the child's first-snapshot `effective_from` (step 1). Roots get `inherited_fields: []`, `inherited_from: null`. |
 | 12 | 6 | `migrate_attributes_cleanup.py` | 1c | `attributes.primitive` --> dropped (now derivable); `attributes.scan` --> `capture.notes`; `attributes.3d_scan_metadata` --> `capture{method: photogrammetry, captured_at, device, software}` **on the identity's v0 snapshot** (7.7); local paths dropped. |
 | 13 | 6c | `migrate_capture_context.py` | 6 | the 70 `ddu_build_with_debris` snapshots (7.7): `geometry.marker_points` --> `capture.markers` --- labels re-read from the source OBJs (`marker_blue_*`, `marker_green_*`) if still on disk, else by position (the +/-120 mm cross at z ~ 0 --> `role: rig`, the rest --> `role: component`); `meshes[1]` (`end_effector`) --> `capture.fixtures[0]`, its `detailed.ply` moved to `capture/<sid>/fixtures/0.ply`, inline copy and `reduced.ply` dropped, `mesh_ply_resolutions["1"]` removed; `capture.coordinate_system = {name: "DDU robot gripper marker plane"}`. Drops `geometry.marker_points`. Asserts every moved mesh is the effector (bbox +/-145 mm around the marker plane). |
@@ -1572,9 +1683,9 @@ Consequences, and how CSC absorbs them:
 | Art 77(1)(d) open standards, machine-readable, structured, searchable, transferable, no vendor lock-in | JSON Schema at `/schema/*`, UCUM units, IFC-name vocabularies, Uniclass codes; IFC/IfcOpenShell export as a projection |
 | Art 75(2)(a) interoperable with **BIM** | `original_function` = IFC class names; proxies map to `IfcExtrudedAreaSolid` (prism/box/cylinder) and `IfcTriangulatedFaceSet` (mesh); properties export as a PSet |
 | Art 75(2)(c), 76(2)(f), 78(f) tiered access rights per actor class | `is_public` + auth + `reviewer` + admin/moderator; `status == published` is the public tier |
-| Art 77(1)(e) no end-user personal data without GDPR consent | actor projection: organization-only for anonymous readers (section 3.3.1); `email` never in lists |
+| Art 77(1)(e) no end-user personal data without GDPR consent | actor projection: organization-only for anonymous readers (section 3.3.1); `email` never in lists; attachment files never served anonymously (8.13) |
 | Art 78(h) data authentication, reliability, integrity | `etag` hashes; supersession instead of edits (section 3.3.4); server-recomputed derived values; signed evidence records **deferred** (additive, 6.8) |
-| Art 75(2)(i) system available **25 years** after last placing; operator keeps passport >= **10 years** | **retention rule:** `published` snapshots and evidence are never hard-deleted --- `DELETE` becomes a tombstone (`status: withdrawn`, reason, by, at) that keeps the document and its files. Draft/pending/rejected may be hard-deleted. Identities are never deleted: they `exit` (section 3.1.3) |
+| Art 75(2)(i) system available **25 years** after last placing; operator keeps passport >= **10 years** | **retention rule:** `published` snapshots and evidence are never hard-deleted --- `DELETE` becomes a tombstone (`status: withdrawn`, reason, by, at) that keeps the document and its files. Draft/pending/rejected may be hard-deleted. An ever-published identity is never deleted: it `exit`s (physical, section 3.1.3) or is withdrawn (record, section 3.1.4); only the admin purge (410 stub) removes one |
 | Art 75(2)(e) arrangements for **updating** the passport of an existing product | snapshot versions + evidence supersession + fold recompute --- the update model is the whole point of section 3--4 |
 | Art 75(2)(j) "availability of information for the reuse and remanufacturing of products" | CSC's purpose; the timeline (section 7.1) is the human-readable form |
 | Art 15(2) environmental performance calculated with Commission software | out of scope for CSC; the `env_*` quantities are inputs/outputs of that step, tier `calculated` |
