@@ -16,8 +16,11 @@ from slowapi.errors import RateLimitExceeded
 # LOCAL IMPORTS (pre-app) -----------------------------------------------------
 from limiter import limiter
 from apps.catalog.client_header import (
+    MIN_VERSIONS_ENV,
+    ClientHeaderEnforcementMiddleware,
     ClientHeaderLogMiddleware,
     configure_client_log,
+    parse_min_versions,
 )
 from apps.catalog.api.catalog_common import ensure_catalog_number_counter
 from csc_version import CSC_VERSION
@@ -74,6 +77,12 @@ async def lifespan(app: FastAPI):
         'CLIENT_LOG_PATH',
         os.path.join(os.path.dirname(__file__), 'logs', 'client_versions.log'),
     ))
+    # minimum client versions (decision 8.11); unset = log only
+    app.state.min_client_versions = parse_min_versions(
+        os.getenv(MIN_VERSIONS_ENV))
+    if app.state.min_client_versions:
+        print(f'[INFO] Client header enforced: '
+              f'{os.getenv(MIN_VERSIONS_ENV)}')
 
     # --- JWT config ----------------------------------------------------------
     app.state.jwt_secret = os.environ['JWT_SECRET']
@@ -92,7 +101,6 @@ async def lifespan(app: FastAPI):
 
     app.mongodb = app.mongodb_client['csc']
     app.mongodb_users = app.mongodb['users']
-    app.mongodb_designs = app.mongodb['designs']
     app.mongodb_component_id_transmission = app.mongodb[
         'component_id_transmission'
     ]
@@ -151,6 +159,10 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Innermost: refuses outdated / unidentified clients with 426 (decision 8.11);
+# inside CORS so a refusal still carries CORS headers
+app.add_middleware(ClientHeaderEnforcementMiddleware)
+
 # CORS ------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
@@ -160,7 +172,7 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
-# Outermost: logs every request's X-CSC-Client header (0.5.1.0: log only)
+# Outermost: logs every request's X-CSC-Client header, refusals included
 app.add_middleware(ClientHeaderLogMiddleware)
 
 # ROUTERS ---------------------------------------------------------------------
