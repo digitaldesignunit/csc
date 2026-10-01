@@ -1,0 +1,23 @@
+{
+  "_comment": "Template for the step 11b mapping (decisions 8.22, 8.24-8.26). Copy it outside the tracked files (e.g. .dev/reattribute_06.json), fill in usernames or user ids and pass it with --mapping. The filled-in file names people: never commit it.",
+  "from": ["ddu", "admin"],
+  "moderators": ["<maintainer>", "<beyond-debris-author>"],
+  "datasets": {
+    "mineral_composite_panels": "<maintainer>",
+    "beyond_debris": "<beyond-debris-author>",
+    "ddu_build_with_debris": "<beyond-debris-author>",
+    "ddu_aggregations": "<aggregations-lead>",
+    "dbu_zirkus": "<maintainer>",
+    "spa_example_data": "<maintainer>",
+    "schoenes_neues_feld": "<maintainer>"
+  },
+  "descriptions": {
+    "beyond_debris": "<credit for the scans>"
+  },
+  "members": {
+    "ddu_aggregations": {
+      "<aggregations-lead>": ["moderator"],
+      "<aggregations-contributor>": ["contributor"]
+    }
+  }
+}
