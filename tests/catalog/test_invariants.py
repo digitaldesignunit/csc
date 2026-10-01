@@ -30,7 +30,7 @@ def _ids(violations, severity='error'):
 def test_every_invariant_id_is_registered_once():
     ids = [inv.id for inv in INVARIANTS]
     assert len(ids) == len(set(ids))
-    expected = {f'I{n}' for n in range(1, 29)} | {'I3b'}
+    expected = {f'I{n}' for n in range(1, 30)} | {'I3b'}
     assert set(ids) == expected
     for inv in INVARIANTS:
         assert inv.kind in ('document', 'corpus', 'route', 'dropped')
@@ -196,3 +196,13 @@ def test_i3b_no_current_only_when_no_published_snapshot_is_left():
     assert _ids(check_all(corpus)) == {'I3b'}
     corpus.snapshots[0]['status'] = 'withdrawn'
     assert check_all(corpus) == []
+
+
+def test_i29_usernames_lowercase_and_unique():
+    from apps.catalog.invariants import Corpus, check_i29
+    corpus = Corpus(users=[{'_id': '1', 'username': 'alice'},
+                           {'_id': '2', 'username': 'Bob'},
+                           {'_id': '3', 'username': 'bob'}])
+    messages = sorted(v.message for v in check_i29(corpus))
+    assert messages == ['username is not lowercase',
+                        'username is not unique once lowercased']

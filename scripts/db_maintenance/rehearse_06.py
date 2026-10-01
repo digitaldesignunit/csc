@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
+import json
 import shutil
 import sys
 import tempfile
@@ -92,7 +92,7 @@ def _report(db) -> None:
         row = rows[dataset_of[s['identity_id']]]
         row['snapshots'][s['status']] += 1
         capture = s.get('capture') or {}
-        row['capture'][f'markers={len(capture.get("markers") or [])>0} '
+        row['capture'][f'markers={len(capture.get("markers") or []) > 0} '
                        f'fixtures={len(capture.get("fixtures") or [])}'] += 1
         geo = s['geometry']
         row['geometry'][f'meshes={len(geo.get("meshes") or [])} '
@@ -108,13 +108,16 @@ def _report(db) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('--dump', default='260916',
+    parser.add_argument('--dump', default='261001',
                         help='folder name under mongodb_collections_local, '
                              'or a path')
     parser.add_argument('--assets', type=Path,
                         help='asset folder of the dump (meshes/...)')
     parser.add_argument('--limit', type=int, default=5,
                         help='violations printed per invariant')
+    parser.add_argument('--mapping', type=Path,
+                        help='also run step 11b with this (untracked) '
+                             'mapping file after the cutover steps')
     args = parser.parse_args()
 
     dump = Path(args.dump)
@@ -157,6 +160,14 @@ def main() -> int:
             return 1
         idempotent = _fingerprint(db) == before
         print(f'idempotent: {idempotent}')
+        if args.mapping:
+            print('\nstep 11b with the mapping')
+            try:
+                run(Context(db=db, files=False, shared_mapping=json.loads(
+                    args.mapping.read_text(encoding='utf-8'))), ['11b'])
+            except MigrationAbort as exc:
+                print(f'ABORTED: {exc}', file=sys.stderr)
+                return 1
         if files:
             fixtures = sorted(capture.glob('*/fixtures/0.ply'))
             print(f'fixture files: {len(fixtures)}')

@@ -341,16 +341,32 @@ def check_i28(corpus: Corpus) -> Iterable[Violation]:
         if identity is None:
             continue
         withdrawn = identity.get('withdrawn')
-        if withdrawn and record.get('created') and                 _when(record['created']) > _when(withdrawn['at']):
+        if withdrawn and record.get('created') \
+                and _when(record['created']) > _when(withdrawn['at']):
             yield _v('I28', EVIDENCE, record,
                      'created after its identity was withdrawn')
         exit_ = identity.get('exit')
-        if exit_ and exit_.get('kind') in TERMINAL_EXIT_KINDS and                 exit_.get('at') and record.get('observed_at') and                 _when(record['observed_at']) > _when(exit_['at']):
+        if exit_ and exit_.get('kind') in TERMINAL_EXIT_KINDS \
+                and exit_.get('at') and record.get('observed_at') \
+                and _when(record['observed_at']) > _when(exit_['at']):
             yield _v('I28', EVIDENCE, record,
                      f'observed after a terminal exit ({exit_["kind"]})')
 
 
 # REGISTRY (spec section 5) ---------------------------------------------------
+def check_i29(corpus: Corpus) -> Iterable[Violation]:
+    """Usernames are lowercase and unique (8.28)."""
+    seen: Dict[str, str] = {}
+    for user in corpus.users:
+        name = user.get('username') or ''
+        if name != name.lower():
+            yield _v('I29', 'users', user, 'username is not lowercase')
+        if name.lower() in seen:
+            yield _v('I29', 'users', user, 'username is not unique '
+                     'once lowercased')
+        seen[name.lower()] = user['_id']
+
+
 INVARIANTS: Tuple[Invariant, ...] = (
     Invariant('I1', 'geometry: a mesh, a point cloud or an authored proxy',
               'document'),
@@ -402,6 +418,8 @@ INVARIANTS: Tuple[Invariant, ...] = (
               'performer', 'document'),
     Invariant('I28', 'no evidence on a withdrawn identity or after a '
               'terminal exit', 'corpus', check_i28),
+    Invariant('I29', 'usernames lowercase and unique', 'corpus',
+              check_i29),
 )
 INVARIANT_BY_ID: Dict[str, Invariant] = {inv.id: inv for inv in INVARIANTS}
 

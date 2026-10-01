@@ -22,9 +22,10 @@ pytestmark = pytest.mark.skipif(
     not DUMP_DIR, reason='set CSC_DUMP_DIR to run against a local dump')
 
 
-def test_migrated_dump_matches_the_spec(db):
+def test_migrated_dump_matches_the_spec(db, tmp_path):
     load_dump(db, DUMP_DIR, replace=True)
-    run(Context(db=db, files=False, log=lambda _m: None), CUTOVER_STEPS)
+    run(Context(db=db, files=False, archive_dir=tmp_path,
+                log=lambda _m: None), CUTOVER_STEPS)
 
     identities = list(db['component_identities'].find({}))
     snapshots = list(db['component_snapshots'].find({}))

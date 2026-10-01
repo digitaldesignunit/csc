@@ -55,7 +55,7 @@ def _dev_env() -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('--dump', default='260916')
+    parser.add_argument('--dump', default='261001')
     parser.add_argument('--port', type=int, default=8000,
                         help='backend port (default 8000)')
     parser.add_argument('--mongo-port', type=int, default=27018,
@@ -95,8 +95,16 @@ def main() -> int:
                 shutil.copytree(source, meshes / snap['_id'] / '1')
                 copied += 1
         run(Context(db=db, meshes_dir=meshes, capture_dir=capture,
-                    log=lambda m: None), CUTOVER_STEPS)
+                    archive_dir=work / 'archive', log=lambda m: None),
+            CUTOVER_STEPS)
         print(f'migrated to 0.6 ({copied} gripper meshes -> {capture})')
+        # the untracked owner mapping (decisions 8.24-8.27), when present
+        mapping = dev / 'reattribute_06.json'
+        if mapping.is_file():
+            run(Context(db=db, files=False, log=lambda m: None,
+                        shared_mapping=json.loads(
+                            mapping.read_text(encoding='utf-8'))), ['11b'])
+            print('step 11b applied (.dev/reattribute_06.json)')
 
         password = secrets.token_urlsafe(12)
         db['users'].insert_one({

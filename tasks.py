@@ -185,26 +185,29 @@ def seed(c, dump, replace=False):
 
 
 @task(help={
-    'dump': 'dump folder name in mongodb_collections_local (default 260916)',
+    'dump': 'dump folder name in mongodb_collections_local (default 261001)',
     'assets': 'asset folder of the dump; step 6c then moves fixture files '
               'in a temporary copy',
+    'mapping': 'also run step 11b with this untracked mapping file '
+               '(e.g. .dev/reattribute_06.json)',
 })
-def rehearse(c, dump='260916', assets=''):
+def rehearse(c, dump='261001', assets='', mapping=''):
     """
     Rehearse the 0.6 migration on a local dump in a throwaway mongod.
     """
     args = f' --assets "{assets}"' if assets else ''
+    args += f' --mapping "{mapping}"' if mapping else ''
     with chdir(REPO_DIR):
         c.run(f'{sys.executable} scripts/db_maintenance/rehearse_06.py '
               f'--dump {dump}{args}', pty=False)
 
 
 @task(help={
-    'dump': 'dump folder name in mongodb_collections_local (default 260916)',
+    'dump': 'dump folder name in mongodb_collections_local (default 261001)',
     'port': 'backend port (default 8000)',
     'mongo_port': 'throwaway mongod port (default 27018)',
 })
-def dev_migrated(c, dump='260916', port=8000, mongo_port=27018):
+def dev_migrated(c, dump='261001', port=8000, mongo_port=27018):
     """
     Serve a migrated copy of a dump (throwaway mongod) for frontend work.
     """
