@@ -102,6 +102,14 @@ from apps.catalog.read_models import (
     passport_body,
 )
 from apps.catalog.documents import Evidence
+from apps.catalog.api.access import (
+    and_match,
+    deny_read,
+    viewer_of,
+    visible_identity_ids,
+    visible_identity_match,
+    visible_snapshot_docs,
+)
 from apps.catalog.provenance import (
     DEFAULT_PROVENANCE_DEPTH,
     MAX_PROVENANCE_DEPTH,
@@ -448,13 +456,31 @@ def _format_list_rows(
     return rows
 
 
-def _pipelines_args(request: Request,
-                    filters: CatalogFilters) -> Dict[str, Any]:
+async def _pipelines_args(request: Request, filters: CatalogFilters,
+                          user: Optional[User]) -> Dict[str, Any]:
+    """The filters plus the visibility rule (3.6) for this caller."""
     return {
         'snapshots_collection': request.app.mongodb_component_snapshots.name,
-        'identity_match': filters.identity_match(),
+        'identity_match': and_match(
+            filters.identity_match(),
+            await visible_identity_match(request, viewer_of(user))),
         'snapshot_match': filters.snapshot_match(),
     }
+
+
+async def _visible_map_payload(request: Request, user: Optional[User],
+                               payload: Dict[str, Any]) -> Dict[str, Any]:
+    """A cached map holds every component; keep the caller's (3.6)."""
+    viewer = viewer_of(user)
+    if viewer.is_admin:
+        return payload
+    ids = [p['id'] for p in payload.get('points') or []]
+    keep = await visible_identity_ids(request, viewer, ids)
+    if len(keep) == len(ids):
+        return payload
+    points = [p for p in payload['points'] if p['id'] in keep]
+    return {**payload, 'points': points, 'displayed': len(points),
+            'total': len(points)}
 
 
 @router.get(
@@ -469,7 +495,7 @@ async def count_identities_route(
 ):
     try:
         pipeline = build_count_pipeline(
-            **_pipelines_args(request, filters),
+            **(await _pipelines_args(request, filters, current_user)),
             reserved_filter=filters.reserved,
             current_user_id=current_user.id,
             include_username=True,
@@ -524,7 +550,6 @@ async def get_identities_map(
     Components missing the chosen descriptor basis are omitted from
     ``points``; ``displayed`` / ``total`` report coverage.
     """
-    del current_user
     cache_col = getattr(request.app, 'mongodb_component_map_cache', None)
     if cache_col is None:
         cache_col = request.app.mongodb['component_map_cache']
@@ -539,7 +564,8 @@ async def get_identities_map(
         if cached is not None:
             return JSONResponse(
                 status_code=200,
-                content=payload_from_cache_doc(cached),
+                content=await _visible_map_payload(
+                    request, current_user, payload_from_cache_doc(cached)),
             )
         # Prefer a cached PCA sibling over a slow live embed.
         if method == 'umap':
@@ -549,7 +575,8 @@ async def get_identities_map(
             except PyMongoError:
                 pca_cached = None
             if pca_cached is not None:
-                payload = payload_from_cache_doc(pca_cached)
+                payload = await _visible_map_payload(
+                    request, current_user, payload_from_cache_doc(pca_cached))
                 payload['requested_method'] = method
                 return JSONResponse(status_code=200, content=payload)
 
@@ -581,7 +608,7 @@ async def get_identities_map(
 
     try:
         pipeline = build_list_pipeline(
-            **_pipelines_args(request, filters),
+            **(await _pipelines_args(request, filters, current_user)),
             sortkey='_id',
             sort_order=1,
             page=0,
@@ -650,10 +677,9 @@ async def get_identities_stats(
     limit_dim: int = Query(10, description='Top-N limit for long tail dims'),
 ):
     """Facet counts over the filtered catalog (identity + current snapshot)."""
-    del current_user
     try:
         pipeline = build_identity_stats_pipeline(
-            **_pipelines_args(request, filters),
+            **(await _pipelines_args(request, filters, current_user)),
             limit_dim=limit_dim,
         )
         docs = await aggregate_identities(request, pipeline)
@@ -726,7 +752,7 @@ async def list_identities_route(
 ):
     try:
         pipeline = build_list_pipeline(
-            **_pipelines_args(request, filters),
+            **(await _pipelines_args(request, filters, current_user)),
             sortkey=sortkey,
             sort_order=-1 if sortorder == 'desc' else 1,
             page=page,
@@ -1127,9 +1153,9 @@ async def list_identity_children(
         projection={'_id': 1, 'is_public': 1},
     )
 
-    identity_match = children_identity_match(
-        identity_id,
-        public_only=current_user is None,
+    identity_match = and_match(
+        children_identity_match(identity_id),
+        await visible_identity_match(request, viewer_of(current_user)),
     )
     try:
         pipeline = build_list_pipeline(
@@ -1193,6 +1219,8 @@ _IDENTITY_LINEAGE_PROJECTION = {
     'exit': 1,
     'is_public': 1,
     'current_snapshot_id': 1,
+    'dataset': 1,
+    'created_by_user_id': 1,
 }
 
 _SNAPSHOT_LINEAGE_PROJECTION = {
@@ -1201,6 +1229,7 @@ _SNAPSHOT_LINEAGE_PROJECTION = {
     'version': 1,
     'status': 1,
     'superseded_by': 1,
+    'added_by_user_id': 1,
     'name': 1,
 }
 
@@ -1210,7 +1239,7 @@ async def _collect_lineage_identity_docs(
     *,
     root_doc: Dict[str, Any],
     max_depth: int,
-    public_only: bool,
+    visibility: Dict[str, Any],
 ) -> Dict[str, Dict[str, Any]]:
     collected: Dict[str, Dict[str, Any]] = {str(root_doc['_id']): root_doc}
 
@@ -1223,9 +1252,7 @@ async def _collect_lineage_identity_docs(
         pending = [pid for pid in frontier if pid not in collected]
         if not pending:
             break
-        query: Dict[str, Any] = {'_id': {'$in': pending}}
-        if public_only:
-            query['is_public'] = True
+        query = and_match({'_id': {'$in': pending}}, visibility)
         docs = await identities_col.find(
             query,
             _IDENTITY_LINEAGE_PROJECTION,
@@ -1240,9 +1267,8 @@ async def _collect_lineage_identity_docs(
 
     frontier = {str(root_doc['_id'])}
     for _ in range(max_depth):
-        query = {'parent_identities': {'$in': list(frontier)}}
-        if public_only:
-            query['is_public'] = True
+        query = and_match({'parent_identities': {'$in': list(frontier)}},
+                          visibility)
         docs = await identities_col.find(
             query,
             _IDENTITY_LINEAGE_PROJECTION,
@@ -1288,7 +1314,8 @@ async def get_identity_provenance(
         current_user,
         projection=_IDENTITY_LINEAGE_PROJECTION,
     )
-    public_only = current_user is None
+    visibility = await visible_identity_match(request,
+                                              viewer_of(current_user))
     identities_col = await get_identities_col(request)
     snapshots_col = await get_snapshots_col(request)
 
@@ -1297,7 +1324,7 @@ async def get_identity_provenance(
             identities_col,
             root_doc=identity_doc,
             max_depth=depth,
-            public_only=public_only,
+            visibility=visibility,
         )
         identity_ids = list(lineage.keys())
         snapshot_docs: List[Dict[str, Any]] = []
@@ -1320,6 +1347,10 @@ async def get_identity_provenance(
         if not ident_id:
             continue
         snapshots_by_identity.setdefault(ident_id, []).append(snap)
+    # drafts / pending / rejected only for their author and moderator(D)
+    for ident_id, snaps in snapshots_by_identity.items():
+        snapshots_by_identity[ident_id] = await visible_snapshot_docs(
+            request, current_user, lineage[ident_id], snaps)
 
     graph = build_provenance_graph(
         root_identity_id=identity_id,
@@ -1432,6 +1463,7 @@ async def list_identity_snapshots(
         'effective_from_precision': 1,
         'supersedes': 1,
         'superseded_by': 1,
+        'added_by_user_id': 1,
         'created': 1,
         'lastmodified': 1,
     }
@@ -1441,7 +1473,9 @@ async def list_identity_snapshots(
             {'identity_id': identity_id},
             projection,
         ).sort('version', 1)
-        docs = await cursor.to_list(length=None)
+        docs = await visible_snapshot_docs(
+            request, current_user, identity_doc,
+            await cursor.to_list(length=None))
     except PyMongoError as exc:
         print(f'[ERROR] list_identity_snapshots DB error: {exc}')
         raise HTTPException(
@@ -1671,6 +1705,11 @@ async def get_identity_passport(
         mode=mode,
         snapshot_ids=snapshot_ids,
     )
+    visible = await visible_snapshot_docs(
+        request, current_user, identity_doc, snapshot_docs)
+    if mode == 'ids' and len(visible) < len(snapshot_docs):
+        raise deny_read(viewer_of(current_user))
+    snapshot_docs = visible
     etag = _compute_passport_etag(identity_doc, snapshot_docs)
 
     if_none_match = request.headers.get('if-none-match')

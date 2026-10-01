@@ -5,7 +5,8 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException, Request, status
 
 from apps.catalog.models import User
-from .catalog_common import get_identities_col, get_snapshots_col
+from .access import ensure_identity_visible, ensure_snapshot_visible
+from .catalog_common import get_identities_col
 
 
 def identity_allows_anonymous_read(identity_doc: Dict[str, Any]) -> bool:
@@ -35,50 +36,24 @@ async def ensure_identity_read_access(
     *,
     projection: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
-    identity_doc = await load_identity_doc(
-        request,
-        identity_id,
-        projection=projection,
-    )
-    if current_user is not None:
-        return identity_doc
-    if identity_allows_anonymous_read(identity_doc):
-        return identity_doc
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail='Authentication required',
-        headers={'WWW-Authenticate': 'Bearer'},
-    )
+    """The identity, if the caller may see the component (3.6, 3.1.5);
+    401 (anonymous) / 403 (signed in) otherwise (8.11)."""
+    return await ensure_identity_visible(
+        request, identity_id, current_user, projection=projection)
 
 
 async def ensure_snapshot_read_access(
     request: Request,
     snapshot_id: str,
     current_user: Optional[User],
+    *,
+    allow_tombstone: bool = False,
 ) -> Dict[str, Any]:
-    snapshots = await get_snapshots_col(request)
-    snapshot_doc = await snapshots.find_one({'_id': snapshot_id})
-    if snapshot_doc is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Snapshot {snapshot_id} not found',
-        )
-
-    identity_id = snapshot_doc.get('identity_id')
-    if not identity_id:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Snapshot {snapshot_id} has no identity_id',
-        )
-
-    await ensure_identity_read_access(
-        request,
-        str(identity_id),
-        current_user,
-        projection={'_id': 1, 'is_public': 1},
-    )
-
-    return snapshot_doc
+    """The snapshot, if the caller sees it in full: published ones follow
+    the component's visibility, unpublished ones their author and
+    moderator(D) (7.0). Files never serve a tombstone."""
+    return await ensure_snapshot_visible(
+        request, snapshot_id, current_user, allow_tombstone=allow_tombstone)
 
 
 def public_cache_control() -> str:

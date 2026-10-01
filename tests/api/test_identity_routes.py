@@ -16,9 +16,9 @@ def _migrated(db):
     run(Context(db=db, files=False, log=lambda _m: None), CUTOVER_STEPS)
 
 
-def test_list_filters_and_rows(api, db, auth_headers):
+def test_list_filters_and_rows(api, db, member_headers):
     _migrated(db)
-    user = auth_headers('user')
+    user, _ = member_headers({'*': ['contributor']})
 
     rows = api.get('/identities', headers=user).json()
     # default: published, in circulation --- the split panel / cut and the
@@ -54,9 +54,9 @@ def test_list_filters_and_rows(api, db, auth_headers):
     assert iid('feld') in str(anyone.json())
 
 
-def test_passport_snapshots_children_provenance(api, db, auth_headers):
+def test_passport_snapshots_children_provenance(api, db, member_headers):
     _migrated(db)
-    user = auth_headers('user')
+    user, _ = member_headers({'*': ['contributor']})
 
     passport = api.get(f'/identities/{iid("beam")}/compose', params={'snapshots': 'all'},
                        headers=user)
@@ -94,9 +94,9 @@ def test_passport_snapshots_children_provenance(api, db, auth_headers):
         assert '_mesh_0_preview.ply' in preview.headers['content-disposition']
 
 
-def test_evidence_and_capture_fixture(api, db, auth_headers):
+def test_evidence_and_capture_fixture(api, db, member_headers):
     _migrated(db)
-    user = auth_headers('user')
+    user, _ = member_headers({'*': ['contributor']})
     layouts = api.get(f'/identities/{iid("beam")}/evidence',
                       params={'method': 'reinforcement_layout'}, headers=user)
     assert layouts.status_code == 200, layouts.text
@@ -116,9 +116,9 @@ def test_evidence_and_capture_fixture(api, db, auth_headers):
     assert missing.json()['detail'] == 'Fixture not found'
 
 
-def test_stats_vocab_materials(api, db, auth_headers):
+def test_stats_vocab_materials(api, db, member_headers):
     _migrated(db)
-    user = auth_headers('user')
+    user, _ = member_headers({'*': ['contributor']})
     stats = api.get('/identities/stats', params={'circulation': 'all'},
                     headers=user).json()
     assert stats['total'] == 6

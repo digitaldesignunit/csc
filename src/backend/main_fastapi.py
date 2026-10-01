@@ -109,10 +109,12 @@ async def lifespan(app: FastAPI):
     app.mongodb_component_map_cache = app.mongodb['component_map_cache']
     app.mongodb_component_evidence = app.mongodb['component_evidence']
     app.mongodb_counters = app.mongodb['counters']
+    app.mongodb_datasets = app.mongodb['datasets']
 
     # Create helpful indexes (idempotent)
     await app.mongodb_users.create_index('email', unique=True)
     await app.mongodb_users.create_index('username', unique=True)
+    await app.mongodb_datasets.create_index('members.user_id')
     await ensure_catalog_number_counter(app.mongodb)
 
     # --- Directories ---------------------------------------------------------

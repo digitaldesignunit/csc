@@ -80,6 +80,7 @@ from apps.catalog.geometry_mesh_export import (
 )
 
 from .auth import get_current_active_user, get_optional_current_user, require_admin
+from .access import require_snapshot_file_write
 from .public_access import ensure_snapshot_read_access
 from .catalog_common import (
     compute_snapshot_etag,
@@ -801,6 +802,9 @@ async def put_snapshot_mesh_ply(
         )
 
     doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'upload_geometry',
+        frozen_when_published=True)
     meshes = (doc.get('geometry') or {}).get('meshes') or []
     if primitive_index >= len(meshes):
         raise HTTPException(
@@ -888,6 +892,9 @@ async def delete_snapshot_mesh_ply(
         )
 
     doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'delete_geometry',
+        frozen_when_published=True)
     meshes = (doc.get('geometry') or {}).get('meshes') or []
     if primitive_index >= len(meshes):
         raise HTTPException(
@@ -1135,6 +1142,9 @@ async def put_snapshot_point_cloud_ply(
         )
 
     doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'upload_geometry',
+        frozen_when_published=True)
     point_clouds = (doc.get('geometry') or {}).get('point_clouds') or []
     if index >= len(point_clouds):
         raise HTTPException(
@@ -1197,6 +1207,9 @@ async def delete_snapshot_point_cloud_ply(
         raise HTTPException(status_code=400, detail='index must be >= 0')
 
     doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'delete_geometry',
+        frozen_when_published=True)
     point_clouds = (doc.get('geometry') or {}).get('point_clouds') or []
     if index >= len(point_clouds):
         raise HTTPException(
@@ -1305,7 +1318,10 @@ async def put_snapshot_photo(
     """
     Accept up to upload limit; store JPEG scaled/compressed to max output.
     """
-    await _load_snapshot(request, snapshot_id)
+    doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'add_photo',
+        frozen_when_published=False)
 
     content_type = (photo.content_type or '').split(';', 1)[0].strip().lower()
     if content_type not in _ALLOWED_PHOTO_TYPES:
@@ -1377,7 +1393,10 @@ async def delete_snapshot_photo(
     snapshot_id: str,
     index: int,
 ):
-    await _load_snapshot(request, snapshot_id)
+    doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'delete_photo',
+        frozen_when_published=False)
 
     removed = False
     for path in (

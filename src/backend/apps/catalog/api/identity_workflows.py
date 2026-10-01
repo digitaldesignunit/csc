@@ -11,6 +11,8 @@ from pymongo.errors import PyMongoError
 
 from apps.catalog import vocab
 from apps.catalog.models import User, normalize_username
+from apps.catalog.api.access import (
+    and_match, require, viewer_of, visible_identity_match)
 from apps.catalog.read_models import catalog_row
 from .auth import get_current_active_user, require_admin
 from .catalog_common import (
@@ -96,8 +98,10 @@ async def list_reserved_identities(
             detail='You can only view your own reserved components',
         )
 
-    identity_match = CatalogFilters(status='any').identity_match()
-    identity_match['reserved'] = user_id
+    identity_match = and_match(
+        CatalogFilters(status='any').identity_match(),
+        {'reserved': user_id},
+        await visible_identity_match(request, viewer_of(current_user)))
 
     pipeline = build_list_pipeline(
         snapshots_collection=request.app.mongodb_component_snapshots.name,
@@ -175,7 +179,9 @@ async def list_identity_datasets(
     current_user: Annotated[User, Depends(get_current_active_user)],
     circulation: Circulation = Query('active'),
 ):
-    match = CatalogFilters(circulation=circulation).identity_match()
+    match = and_match(
+        CatalogFilters(circulation=circulation).identity_match(),
+        await visible_identity_match(request, viewer_of(current_user)))
     coll = await get_identities_col(request)
     try:
         values = await coll.distinct('dataset', match)
@@ -217,6 +223,8 @@ async def reserve_identity(
             status_code=409,
             detail='Component is already reserved by another user',
         )
+    # any signed-in user who can read the piece (7.0)
+    await require(request, current_user, 'reserve', identity=identity)
 
     identities = await get_identities_col(request)
     try:
@@ -263,11 +271,8 @@ async def release_identity_reservation(
             },
         )
 
-    if current_user.id != reserved and current_user.role != 'admin':
-        raise HTTPException(
-            status_code=403,
-            detail='You can only release your own reservations',
-        )
+    # the reserving user, or moderator(D) (7.0)
+    await require(request, current_user, 'release', identity=identity)
 
     identities = await get_identities_col(request)
     try:

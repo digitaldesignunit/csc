@@ -147,3 +147,24 @@ def auth_headers(make_user, login):
         assert response.status_code == 200, response.text
         return {'Authorization': f"Bearer {response.json()['access_token']}"}
     return _headers
+
+
+@pytest.fixture
+def member_headers(db, make_user, login):
+    """Bearer headers for a fresh user with dataset roles (section 3.6):
+    ``member_headers({'dbu_zirkus': ['moderator']})``; ``'*'`` = every
+    dataset in the database. Returns (headers, user id)."""
+    def _headers(roles_by_dataset, username=None):
+        user = make_user(username=username or f'm-{uuid.uuid4().hex[:6]}')
+        if '*' in roles_by_dataset:
+            roles = roles_by_dataset['*']
+            roles_by_dataset = {d['_id']: roles for d in db['datasets'].find({}, {'_id': 1})}
+        for slug, roles in roles_by_dataset.items():
+            db['datasets'].update_one({'_id': slug}, {'$push': {'members': {
+                'user_id': user['id'], 'roles': list(roles),
+                'added_by_user_id': None, 'added_at': None}}})
+        response = login(user['username'])
+        assert response.status_code == 200, response.text
+        return ({'Authorization': f"Bearer {response.json()['access_token']}"},
+                user['id'])
+    return _headers
