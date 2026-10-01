@@ -76,12 +76,23 @@ def _check_password_bytes(v: str) -> str:
     return v
 
 
+def normalize_username(value: str) -> str:
+    """Usernames are stored lowercase and unique; every lookup by
+    username goes through this, so login ignores case (decision 8.28)."""
+    return value.strip().lower()
+
+
 class RegisterPayload(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     full_name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     # max_length=72 matches bcrypt's hard truncation limit, also prevents DoS
     password: str = Field(min_length=8, max_length=72)
+
+    @field_validator('username')
+    @classmethod
+    def _lowercase(cls, v: str) -> str:
+        return normalize_username(v)
 
     @field_validator('password')
     @classmethod

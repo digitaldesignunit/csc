@@ -659,13 +659,14 @@ def step_11b(ctx: Context) -> Report:
     users = ctx.db[USERS]
     names = {u['_id']: u.get('username') for u in users.find({}, {
         'username': 1})}
-    by_name = {name: user_id for user_id, name in names.items()}
+    by_name = {(name or '').lower(): user_id
+               for user_id, name in names.items()}
 
     def resolve(value: str) -> str:
         if value in names:
             return value
-        if value in by_name:
-            return by_name[value]
+        if value.lower() in by_name:
+            return by_name[value.lower()]
         raise MigrationAbort(f'mapping names unknown user {value!r}')
 
     sources = [resolve(a)
@@ -781,6 +782,31 @@ def step_11b(ctx: Context) -> Report:
     return report
 
 
+# STEP 15 --- lowercase usernames (8.28) --------------------------------------
+def step_15(ctx: Context) -> Report:
+    """Usernames become lowercase (login ignores case); aborts when two
+    accounts would share a name. Copies on snapshots and evidence follow."""
+    users = list(ctx.db[USERS].find({}, {'username': 1}))
+    by_lower: Dict[str, List[str]] = defaultdict(list)
+    for user in users:
+        by_lower[(user.get('username') or '').lower()].append(user['_id'])
+    clashes = sorted(k for k, ids in by_lower.items() if len(ids) > 1)
+    if clashes:
+        raise MigrationAbort(f'usernames clash once lowercased: {clashes}')
+    user_ops = [UpdateOne({'_id': u['_id']},
+                          {'$set': {'username': u['username'].lower()}})
+                for u in users
+                if u.get('username', '') != u.get('username', '').lower()]
+    report = {'users': _write(ctx, USERS, user_ops)}
+    for collection, key in ((SNAPSHOTS, 'added_by_username'),
+                            (EVIDENCE, 'recorded_by_username')):
+        ops = [UpdateOne({'_id': d['_id']}, {'$set': {key: d[key].lower()}})
+               for d in ctx.db[collection].find({key: {'$regex': '[A-Z]'}},
+                                                {key: 1})]
+        report[key] = _write(ctx, collection, ops)
+    return report
+
+
 # REGISTRY (spec section 8.1, run order) --------------------------------------
 STEPS: Tuple[Step, ...] = (
     Step('11a', 'rename dataset slugs (8.24)', (), 'db', step_11a),
@@ -814,6 +840,7 @@ STEPS: Tuple[Step, ...] = (
     Step('8', 'shape class after tuning (main_geometry.py)', ('7',),
          'runner'),
     Step('13', 'archive and drop designs', (), 'db', step_13),
+    Step('15', 'lowercase usernames (8.28)', (), 'db', step_15),
     Step('14', 'strip photo GPS (migrate_strip_photo_gps.py)', (), 'files'),
     Step('11b', 're-attribute the shared account\'s records (mapping)',
          ('cutover',), 'post', step_11b),

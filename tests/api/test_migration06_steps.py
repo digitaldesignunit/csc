@@ -162,3 +162,25 @@ def test_11b_rejects_unknown_dataset_roles(db):
         assert 'owner' in str(exc)
     else:
         raise AssertionError('an unknown role must abort')
+
+
+def test_usernames_become_lowercase_and_clashes_abort(db):
+    """Step 15 (decision 8.28)."""
+    seed_05_catalog(db)
+    db['users'].update_one({'_id': 'u-alice'}, {'$set': {'username': 'Alice'}})
+    db['component_snapshots'].update_one(
+        {'_id': sid('beam', 1)},
+        {'$set': {'added_by_user_id': 'u-alice', 'added_by_username': 'Alice'}})
+    ctx = Context(db=db, files=False, log=lambda _m: None)
+    report = run(ctx, ['15'])['15']
+    assert report == {'users': 1, 'added_by_username': 1,
+                      'recorded_by_username': 0}
+    assert db['users'].find_one({'_id': 'u-alice'})['username'] == 'alice'
+    assert run(ctx, ['15'])['15']['users'] == 0
+    db['users'].insert_one({'_id': 'u-alice2', 'username': 'ALICE'})
+    try:
+        run(ctx, ['15'])
+    except MigrationAbort as exc:
+        assert 'alice' in str(exc)
+    else:
+        raise AssertionError('a clash must abort')

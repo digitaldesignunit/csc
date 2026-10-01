@@ -14,6 +14,7 @@ import bcrypt
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalog.models import Token, User, UserInDB, UserPublic, RegisterPayload, ChangePasswordPayload # NOQA
 from apps.catalog.models import BCRYPT_MAX_PASSWORD_BYTES
+from apps.catalog.models import normalize_username
 from services.email_service import (
     generate_verification_token,
     get_token_expiry,
@@ -125,7 +126,7 @@ async def lookup_user_from_token(
         doc = await users.find_one({'_id': sub})
 
     if not doc and uname:
-        doc = await users.find_one({'username': uname})
+        doc = await users.find_one({'username': normalize_username(uname)})
 
     if not doc and email:
         doc = await users.find_one({'email': email})
@@ -198,9 +199,10 @@ async def login_for_access_token(
     users=Depends(users_coll),
 ):
     # OAuth2 form uses `.username` as the identifier field
-    identifier = form_data.username.strip()
+    # any case is accepted: emails and usernames are stored lowercase (8.28)
+    identifier = form_data.username.strip().lower()
     user = await users.find_one({
-        '$or': [{'email': identifier.lower()}, {'username': identifier}],
+        '$or': [{'email': identifier}, {'username': identifier}],
         'disabled': {'$ne': True},
     })
     if (
@@ -244,7 +246,7 @@ async def register_user(
     payload: RegisterPayload,
     users=Depends(users_coll),
 ):
-    username = payload.username.strip()
+    username = normalize_username(payload.username)
     full_name = payload.full_name.strip()
     email = payload.email.strip().lower()
     password = payload.password

@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
 from apps.catalog import vocab
-from apps.catalog.models import User
+from apps.catalog.models import User, normalize_username
 from apps.catalog.read_models import catalog_row
 from .auth import get_current_active_user, require_admin
 from .catalog_common import (
@@ -72,7 +72,7 @@ async def _resolve_user_id(
     user_doc = await users.find_one({
         '$or': [
             {'_id': user_identifier},
-            {'username': user_identifier},
+            {'username': normalize_username(user_identifier)},
         ],
     })
     if user_doc is None:

@@ -86,12 +86,18 @@ export default function RegisterPage() {
                 <Input 
                   id="username" 
                   value={username} 
-                  onChange={(e) => setUsername(e.target.value)} 
+                  onChange={(e) => setUsername(e.target.value.toLowerCase())}
                   onFocus={() => setFocusedField('username')}
                   onBlur={() => setFocusedField(null)}
                   placeholder={focusedField === 'username' ? '' : 're-usevelt'}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   className="backdrop-blur placeholder:opacity-40"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Lowercase; you can sign in with any case.
+                </p>
               </div>
 
               <div className="gap-1 flex flex-col">
