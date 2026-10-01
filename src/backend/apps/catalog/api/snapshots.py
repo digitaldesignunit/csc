@@ -337,11 +337,13 @@ async def get_snapshot_by_id(
     current_user: OptionalUser,
     snapshot_id: str,
 ):
-    """Return a single snapshot document. ETag == stored `etag` field."""
+    """Return a single snapshot document. ETag == stored `etag` field.
+    A withdrawn one outside its dataset answers with its tombstone (8.17)."""
     doc = await ensure_snapshot_read_access(
         request,
         snapshot_id,
         current_user,
+        allow_tombstone=True,
     )
 
     etag = doc.get('etag')

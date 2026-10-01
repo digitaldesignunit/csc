@@ -29,6 +29,7 @@ from apps.catalog.permissions import (
     can_see_component,
     dataset_roles,
     record_projection,
+    withdrawn_projection,
 )
 
 NOT_PUBLIC = 'This component is not public. Sign in to view it.'
@@ -130,29 +131,94 @@ async def component_visible(request: Request, viewer: Viewer,
         created_by_user_id=identity.get('created_by_user_id'))
 
 
+class TombstoneHit(Exception):
+    """Raised where a caller sees a withdrawn record only as a tombstone
+    (8.17); the app answers 200 with the tombstone body."""
+
+    def __init__(self, body: Dict[str, Any]):
+        super().__init__('tombstone')
+        self.body = body
+
+
+async def raise_if_purged(request: Request, record_id: str,
+                          what: str) -> None:
+    """A purged id answers 410 Gone, an unknown one 404 (3.1.4)."""
+    stub = await request.app.mongodb_purged_records.find_one(
+        {'_id': record_id}, {'purged_at': 1})
+    if stub is not None:
+        raise HTTPException(status_code=status.HTTP_410_GONE,
+                            detail=f'{what} {record_id} was purged on '
+                                   f'{stub.get("purged_at")}')
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f'{what} {record_id} not found')
+
+
 async def load_identity(request: Request, identity_id: str,
                         projection: Optional[Dict[str, int]] = None
                         ) -> Dict[str, Any]:
     if projection is not None:
         projection = {**projection, 'dataset': 1, 'is_public': 1,
-                      'current_snapshot_id': 1, 'created_by_user_id': 1}
+                      'current_snapshot_id': 1, 'created_by_user_id': 1,
+                      'withdrawn': 1, 'catalog_number': 1}
     doc = await request.app.mongodb_component_identities.find_one(
         {'_id': identity_id}, projection)
     if doc is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f'Identity {identity_id} not found')
+        await raise_if_purged(request, identity_id, 'Identity')
     return doc
+
+
+def identity_tombstone(identity: Dict[str, Any]) -> Dict[str, Any]:
+    """What a withdrawn identity shows outside its dataset (8.17): never
+    the reason."""
+    withdrawn = identity.get('withdrawn') or {}
+    return {'_id': identity['_id'], 'kind': 'identity',
+            'status': 'withdrawn', 'withdrawn_at': withdrawn.get('at'),
+            'catalog_number': identity.get('catalog_number'),
+            'identity_id': identity['_id'],
+            'current_snapshot_id': identity.get('current_snapshot_id'),
+            'duplicate_of': withdrawn.get('duplicate_of'), 'version': None}
+
+
+def snapshot_tombstone(snapshot: Dict[str, Any],
+                       identity: Dict[str, Any]) -> Dict[str, Any]:
+    if snapshot.get('status') == 'withdrawn':
+        at = snapshot.get('status_changed_at')
+    else:                                   # a snapshot of a withdrawn piece
+        at = (identity.get('withdrawn') or {}).get('at')
+    return {'_id': snapshot['_id'], 'kind': 'snapshot',
+            'status': 'withdrawn', 'withdrawn_at': at,
+            'catalog_number': identity.get('catalog_number'),
+            'identity_id': identity['_id'],
+            'current_snapshot_id': identity.get('current_snapshot_id'),
+            'duplicate_of': (identity.get('withdrawn') or {}).get(
+                'duplicate_of'),
+            'version': snapshot.get('version')}
+
+
+async def identity_projection(request: Request, viewer: Viewer,
+                              identity: Dict[str, Any]) -> Optional[str]:
+    """'full', 'tombstone' (withdrawn, outside D) or None (not visible)."""
+    if not await component_visible(request, viewer, identity):
+        return None
+    if not identity.get('withdrawn'):
+        return 'full'
+    dataset = await dataset_of(request, identity.get('dataset'))
+    return withdrawn_projection(viewer, dataset, component_visible=True)
 
 
 async def ensure_identity_visible(request: Request, identity_id: str,
                                   user: Optional[User], *,
                                   projection: Optional[Dict[str, int]] = None
                                   ) -> Dict[str, Any]:
-    """The identity document, if the caller may see the component."""
+    """The identity document, if the caller sees it in full; a withdrawn
+    one outside its dataset answers with its tombstone (8.17)."""
     viewer = viewer_of(user)
     doc = await load_identity(request, identity_id, projection)
-    if not await component_visible(request, viewer, doc):
+    seen = await identity_projection(request, viewer, doc)
+    if seen is None:
         raise deny_read(viewer)
+    if seen == 'tombstone':
+        raise TombstoneHit(identity_tombstone(doc))
     return doc
 
 
@@ -161,7 +227,8 @@ async def snapshot_projection(request: Request, viewer: Viewer,
                               identity: Optional[Dict[str, Any]] = None
                               ) -> Tuple[Optional[str], Dict[str, Any]]:
     """How much of a snapshot the viewer sees ('full', 'tombstone' or
-    None), and its identity."""
+    None), and its identity. The snapshots of a withdrawn identity are
+    tombstones outside D, whatever their own status (8.17)."""
     if identity is None:
         identity = await load_identity(request, str(snapshot['identity_id']))
     dataset = await dataset_of(request, identity.get('dataset'))
@@ -171,6 +238,9 @@ async def snapshot_projection(request: Request, viewer: Viewer,
         status=snapshot.get('status') or 'published',
         author_id=snapshot.get('added_by_user_id'),
         component_visible=visible)
+    if projection == 'full' and identity.get('withdrawn'):
+        projection = withdrawn_projection(viewer, dataset,
+                                          component_visible=visible)
     return projection, identity
 
 
@@ -178,8 +248,7 @@ async def load_snapshot(request: Request, snapshot_id: str) -> Dict[str, Any]:
     doc = await request.app.mongodb_component_snapshots.find_one(
         {'_id': snapshot_id})
     if doc is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f'Snapshot {snapshot_id} not found')
+        await raise_if_purged(request, snapshot_id, 'Snapshot')
     if not doc.get('identity_id'):
         raise HTTPException(status_code=500,
                             detail=f'Snapshot {snapshot_id} has no '
@@ -191,13 +260,20 @@ async def ensure_snapshot_visible(request: Request, snapshot_id: str,
                                   user: Optional[User], *,
                                   allow_tombstone: bool = False
                                   ) -> Dict[str, Any]:
-    """The snapshot document, if the caller sees it in full --- or, with
-    ``allow_tombstone``, at least as a tombstone (files never)."""
+    """The snapshot document, if the caller sees it in full. A tombstone
+    viewer gets the tombstone where JSON is served (``allow_tombstone``);
+    files of withdrawn records are for members only (8.17)."""
     viewer = viewer_of(user)
     doc = await load_snapshot(request, snapshot_id)
-    projection, _ = await snapshot_projection(request, viewer, doc)
-    if projection == 'full' or (allow_tombstone and projection == 'tombstone'):
+    projection, identity = await snapshot_projection(request, viewer, doc)
+    if projection == 'full':
         return doc
+    if projection == 'tombstone':
+        if allow_tombstone:
+            raise TombstoneHit(snapshot_tombstone(doc, identity))
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Withdrawn: its files are for dataset members only.')
     raise deny_read(viewer)
 
 
@@ -260,24 +336,38 @@ def ensure_unfrozen(snapshot: Dict[str, Any]) -> None:
                    'record a correction (POST /snapshots/{sid}/supersede).')
 
 
+_TOMBSTONE_SUMMARY_KEYS = (
+    '_id', 'identity_id', 'version', 'effective_from',
+    'effective_from_precision', 'status_changed_at', 'supersedes',
+    'superseded_by', 'created', 'lastmodified')
+
+
 async def visible_snapshot_docs(request: Request, user: Optional[User],
                                 identity: Dict[str, Any],
-                                docs: Iterable[Dict[str, Any]]
-                                ) -> list:
-    """The snapshots of one identity the caller may see (full or
-    tombstone): drafts / pending / rejected only for their author and
-    moderator(D) (7.0). The documents need `status` and `added_by_user_id`."""
+                                docs: Iterable[Dict[str, Any]], *,
+                                tombstones: bool = False) -> list:
+    """
+    The snapshots of one identity the caller may see in full: drafts /
+    pending / rejected only for their author and moderator(D) (7.0).
+    With ``tombstones``, withdrawn ones seen from outside D are kept as
+    bare rows (version, dates, ``status: withdrawn``, no content, 8.17) ---
+    for version lists and graphs, never for the passport. The documents
+    need ``status`` and ``added_by_user_id``.
+    """
     docs = list(docs)
     viewer = viewer_of(user)
     if viewer.is_admin:
         return docs
-    dataset = await dataset_of(request, identity.get('dataset'))
-    visible = await component_visible(request, viewer, identity)
-    return [d for d in docs if record_projection(
-        viewer, dataset, kind='snapshot',
-        status=d.get('status') or 'published',
-        author_id=d.get('added_by_user_id'),
-        component_visible=visible) is not None]
+    out = []
+    for doc in docs:
+        seen, _ = await snapshot_projection(request, viewer, doc, identity)
+        if seen == 'full':
+            out.append(doc)
+        elif seen == 'tombstone' and tombstones:
+            out.append({**{k: doc[k] for k in _TOMBSTONE_SUMMARY_KEYS
+                           if k in doc},
+                        'status': 'withdrawn', 'name': None})
+    return out
 
 
 async def visible_identity_ids(request: Request, viewer: Viewer,

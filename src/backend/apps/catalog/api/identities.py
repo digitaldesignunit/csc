@@ -1056,6 +1056,7 @@ _IDENTITY_LINEAGE_PROJECTION = {
     'current_snapshot_id': 1,
     'dataset': 1,
     'created_by_user_id': 1,
+    'withdrawn': 1,
 }
 
 _SNAPSHOT_LINEAGE_PROJECTION = {
@@ -1185,7 +1186,7 @@ async def get_identity_provenance(
     # drafts / pending / rejected only for their author and moderator(D)
     for ident_id, snaps in snapshots_by_identity.items():
         snapshots_by_identity[ident_id] = await visible_snapshot_docs(
-            request, current_user, lineage[ident_id], snaps)
+            request, current_user, lineage[ident_id], snaps, tombstones=True)
 
     graph = build_provenance_graph(
         root_identity_id=identity_id,
@@ -1310,7 +1311,7 @@ async def list_identity_snapshots(
         ).sort('version', 1)
         docs = await visible_snapshot_docs(
             request, current_user, identity_doc,
-            await cursor.to_list(length=None))
+            await cursor.to_list(length=None), tombstones=True)
     except PyMongoError as exc:
         print(f'[ERROR] list_identity_snapshots DB error: {exc}')
         raise HTTPException(

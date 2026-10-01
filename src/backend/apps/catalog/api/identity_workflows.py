@@ -3,7 +3,7 @@
 Identity lifecycle workflows for the v0.5 model (reserve, validate, consume).
 """
 
-from typing import Annotated, Any, Dict, List
+from typing import Annotated, Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -20,16 +20,13 @@ from .catalog_common import (
     get_snapshots_col,
     now_iso,
     retired_until,
-    validate_snapshot_and_promote,
     validate_uuid,
 )
 from .identity_filters import CatalogFilters, Circulation
 from .identity_query import (
     aggregate_identities,
     build_list_pipeline,
-    shallow_row_for_identity,
 )
-from .snapshots import _delete_snapshot_disk_assets
 
 router = APIRouter()
 
@@ -298,24 +295,6 @@ async def release_identity_reservation(
     )
 
 
-@router.get(
-    '/identities/{identity_id}/validate',
-    summary='Validate current snapshot (admin only)',
-    dependencies=[Depends(retired_until('P3'))],
-)
-async def validate_identity_snapshot(
-    request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
-    identity_id: str,
-):
-    """Validate the identity's live snapshot and ensure it stays current."""
-    identity = await _load_identity(request, identity_id)
-    snapshot = await _load_current_snapshot(request, identity)
-    await validate_snapshot_and_promote(request, snapshot['_id'])
-    row = await shallow_row_for_identity(request, identity_id)
-    return JSONResponse(status_code=200, content=row)
-
-
 @router.post(
     '/identities/{identity_id}/consume',
     summary='Mark identity as consumed (admin only)',
@@ -400,49 +379,4 @@ async def restore_identity(
             'message': 'Identity restored to active catalog',
             'identity_id': identity_id,
         },
-    )
-
-
-@router.delete(
-    '/identities/{identity_id}',
-    summary='Delete identity, snapshots, and on-disk assets (admin only)',
-    dependencies=[Depends(retired_until('P3'))],
-)
-async def delete_identity(
-    request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
-    identity_id: str,
-):
-    """Remove identity + all snapshots. Best-effort file cleanup."""
-    identity = await _load_identity(request, identity_id)
-    snapshots = await get_snapshots_col(request)
-    identities = await get_identities_col(request)
-
-    snapshot_ids: List[str] = []
-    async for snap in snapshots.find(
-        {'identity_id': identity_id},
-        {'_id': 1},
-    ):
-        snapshot_ids.append(snap['_id'])
-
-    current_id = identity.get('current_snapshot_id')
-    if current_id and current_id not in snapshot_ids:
-        snapshot_ids.append(current_id)
-
-    for snapshot_id in snapshot_ids:
-        _delete_snapshot_disk_assets(request, snapshot_id)
-
-    try:
-        await snapshots.delete_many({'identity_id': identity_id})
-        result = await identities.delete_one({'_id': identity_id})
-    except PyMongoError as exc:
-        print(f'[ERROR] delete_identity DB: {exc}')
-        raise HTTPException(status_code=500, detail='Internal server error')
-
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail='Identity not found')
-
-    return JSONResponse(
-        status_code=200,
-        content={'ok': True, 'identity_id': identity_id},
     )

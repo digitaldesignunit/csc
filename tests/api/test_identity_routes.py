@@ -141,8 +141,7 @@ def test_05_write_routes_are_retired(api, db, auth_headers):
             ('post', '/identities', panel_payload()),
             ('patch', '/identities/x', {'material': 'concrete'}),
             ('post', '/identities/x/consume', None),
-            ('post', '/identities/x/restore', None),
-            ('delete', '/identities/x', None)):
+            ('post', '/identities/x/restore', None)):
         call = getattr(api, method)
         response = call(path, json=body, headers=admin) if body is not None \
             else call(path, headers=admin)

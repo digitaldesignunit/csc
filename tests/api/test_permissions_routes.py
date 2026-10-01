@@ -88,6 +88,11 @@ def _republish_v1(world):
         {'_id': iid('beam')}, {'$set': {'current_snapshot_id': sid('beam', 1)}})
 
 
+def _reinstate_beam(world):
+    world['db']['component_identities'].update_one(
+        {'_id': iid('beam')}, {'$set': {'withdrawn': None}})
+
+
 def _expect(anonymous, user, contributor, reviewer, moderator,
             other_moderator, admin):
     return dict(zip(VIEWERS, (anonymous, user, contributor, reviewer,
@@ -152,6 +157,10 @@ ROWS = [
      lambda api, h: api.patch(f'/snapshots/{DRAFT}', json={'notes': 'n'},
                               headers=h),
      _expect(401, 403, 200, 403, 200, 403, 200), _set_draft('draft')),
+    ('withdraw a component: moderator(D)',
+     lambda api, h: api.post(f'/identities/{iid("beam")}/withdraw',
+                             json={'reason': 'test'}, headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), _reinstate_beam),
     # --- datasets (7.7) --------------------------------------------------
     ('edit dataset name / visibility: moderator(D)',
      lambda api, h: api.patch('/datasets/dbu_zirkus',

@@ -53,6 +53,7 @@ from .access import (
     viewer_of,
 )
 from .auth import get_current_active_user
+from .identity_lifecycle import PurgeBody, purge_snapshot_record
 from .catalog_common import compute_snapshot_etag, now_iso, validate_uuid
 
 router = APIRouter()
@@ -590,10 +591,17 @@ async def delete_snapshot(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
     snapshot_id: str,
+    purge: bool = Query(
+        False, description='admin: purge, whatever the status (3.1.4)'),
+    body: Optional[PurgeBody] = None,
 ):
     """Only draft / pending / rejected (I15); a published one is
-    withdrawn instead. Files go with it."""
+    withdrawn instead. Files go with it. ``?purge=1``: admin, anything,
+    leaves a 410 stub."""
     snapshot, identity = await _load(request, snapshot_id)
+    if purge:
+        return await purge_snapshot_record(request, current_user, snapshot,
+                                           identity, body)
     if snapshot.get('status') not in ('draft', 'pending', 'rejected'):
         # for everyone, admin included: published records are withdrawn
         raise HTTPException(

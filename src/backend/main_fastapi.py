@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pymongo import AsyncMongoClient
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -23,6 +24,7 @@ from apps.catalog.client_header import (
     parse_min_versions,
 )
 from apps.catalog.api.catalog_common import ensure_catalog_number_counter
+from apps.catalog.api.access import TombstoneHit
 from csc_version import CSC_VERSION
 
 
@@ -110,6 +112,7 @@ async def lifespan(app: FastAPI):
     app.mongodb_component_evidence = app.mongodb['component_evidence']
     app.mongodb_counters = app.mongodb['counters']
     app.mongodb_datasets = app.mongodb['datasets']
+    app.mongodb_purged_records = app.mongodb['purged_records']
 
     # Create helpful indexes (idempotent)
     await app.mongodb_users.create_index('email', unique=True)
@@ -163,6 +166,14 @@ app = FastAPI(
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def _tombstone_handler(request, exc):
+    """A withdrawn record seen from outside its dataset (8.17)."""
+    return JSONResponse(status_code=200, content=exc.body)
+
+
+app.add_exception_handler(TombstoneHit, _tombstone_handler)
 
 # Innermost: refuses outdated / unidentified clients with 426 (decision 8.11);
 # inside CORS so a refusal still carries CORS headers
