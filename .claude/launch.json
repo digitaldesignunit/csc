@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend-migrated",
+      "runtimeExecutable": "C:\\Users\\EFESTWIN\\miniconda3\\envs\\csc\\python.exe",
+      "runtimeArgs": ["-m", "invoke", "dev-migrated"],
+      "port": 8000
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "src/frontend", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}
