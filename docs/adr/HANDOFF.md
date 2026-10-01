@@ -21,8 +21,11 @@ sign-in; step 15, I29); nothing open. The 8.23 interface wording is built (viewe
 detail selector, download groups, `/meshes/{i}/preview` with `/primitive` as alias). Rehearsal on dump 261001 (2026-10-01, `invoke rehearse --mapping .dev/reattribute_06.json`): all
 cutover steps + 11b, idempotent, **0 errors, 0 warnings**; 10 usernames lowercased, 2 designs
 archived, nothing left unmapped. `invoke rehearse` / `dev-migrated` default to 261001; the preview
-applies the untracked mapping when present. 8.29 (navigation shell, closes O3); nothing open. **Next:** user review of P2, then P2b (navigation
-shell), then P3.
+applies the untracked mapping when present. 8.29 (navigation shell, closes O3); nothing open. P2 committed. **P2b built (branch `v-0.6.0.0-P2b`, 2026-10-01):** the
+navigation shell of 8.29 (`components/ui/sidebar.tsx`, `components/layout/AppSidebar.tsx`,
+`TopBar.tsx`, entries in `lib/navigation.ts`, Recent in `lib/recentComponents.ts`); the old
+`Sidebar` / `Header` / `AppMenu` / `UserItem` / `ThemeToggle` are gone. **Next:** user check of the
+signed-in shell, then P3.
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.

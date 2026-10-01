@@ -129,7 +129,7 @@ covered; header tests (missing / old / exempt) pass.
 **Done when:** rehearsal runs clean except the invariants owned by later phases (frame, shape
 class, proxies --- listed as expected-missing); the web app browses the migrated 260916 data.
 
-### P2b --- Navigation shell --- size S
+### P2b --- Navigation shell --- size S --- **built 2026-10-01, awaiting user check**
 - Decision 8.29 on its own branch: the shadcn/ui `Sidebar` primitive restyled for CSC; one entry
   list with visibility rules (signed out / user / moderator / admin); brand, groups, Recent,
   account menu; icon rail with tooltips, `Ctrl/Cmd+B`, cookie-remembered state, rail default
