@@ -506,6 +506,24 @@ public timeline shows "v2 --- withdrawn (date)". **410** is only for purged reco
 snapshots and evidence of a withdrawn identity are projected the same way (tombstones outside D),
 whatever their own status.
 
+The tombstone body (every JSON read of the record answers 200 with it; file routes answer 403):
+
+```jsonc
+{ "_id": "uuid", "kind": "identity" | "snapshot" | "evidence", "status": "withdrawn",
+  "withdrawn_at": "...", "version": 2 | null, "catalog_number": 412,
+  "identity_id": "uuid", "current_snapshot_id": "uuid" | null, "duplicate_of": "uuid" | null }
+```
+
+Version lists and the lineage graph show a withdrawn snapshot outside D as a bare row (version,
+dates, `status: withdrawn`, no name); the passport leaves it out.
+
+**Implementation notes (P3).** Withdrawing a piece that other withdrawn pieces name as their
+`duplicate_of` needs a `duplicate_of` of its own, and those followers are re-pointed to it (I19
+stays flat); without one the request is refused (409). Purge (`DELETE /identities/{id}?purge=1`,
+`DELETE /snapshots/{sid}?purge=1`; admin; body `{confirm_id, reason}`) refuses a piece that other
+pieces name as parent or `duplicate_of`, and the current snapshot (promote or withdraw first); it
+writes one `purged_records` stub per removed id (identity, its snapshots, its evidence).
+
 #### 3.1.5 Unpublished identity (decision 8.9)
 
 An identity is **unpublished** until its first snapshot is published --- derived, never stored: no
@@ -1372,7 +1390,8 @@ DELETE /identities/{id}/exit                       moderator(D); undo a mistaken
 POST   /identities/{id}/reenter                    moderator(D); body = new origin; archives {origin, exit} to past_cycles (section 3.1.3)
 POST   /identities/{id}/withdraw                   moderator(D); body = {reason, duplicate_of?} (section 3.1.4)
 POST   /identities/{id}/reinstate                  moderator(D); clears `withdrawn`
-DELETE /identities/{id}                            author or moderator(D) while nothing was ever published (I19); ?purge=1 admin only
+DELETE /identities/{id}                            author or moderator(D) while nothing was ever published (I19); ?purge=1 admin only (body {confirm_id, reason})
+DELETE /snapshots/{sid}?purge=1                    admin: any status (body {confirm_id, reason}); not the current snapshot
 ```
 
 ### 7.2 Evidence

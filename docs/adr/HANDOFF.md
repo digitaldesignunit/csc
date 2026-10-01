@@ -34,7 +34,11 @@ reinstate, `PATCH /snapshots/{sid}` per field (8.3), delete of never-published r
 (I3b), valid time in order (I3), `status_history` (8.30); the queue `GET /snapshots/pending` lists the
 caller's moderated datasets; the 0.5 validate / delete-as-reject / current-snapshot PATCH routes are
 gone. Not yet: publishing a child's first snapshot does not set the parents' `exit` (I18, plan P4).
-**Next:** part 3, withdrawal, purge and the `/id` resolver.
+Part 3 done --- `api/identity_lifecycle.py`: withdraw / reinstate (with `duplicate_of`, followers
+re-pointed), delete of never-published pieces, purge with 410 stubs (`purged_records`), `GET /id/{uuid}`;
+tombstones outside D on every JSON read (`TombstoneHit`, 200), files of withdrawn records members-only (403).
+Left for part 5 (web): the `/id/[uuid]` page, tombstone / "not public" / "no access" pages, scanners taking a
+URL. **Next:** part 4, invitations, the member editor by email, the admin user list, verification split.
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.
