@@ -8,6 +8,7 @@ import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { exitSummary, isOutOfCirculation, isPublished } from '@/components/components/componentDetailShared'
 import { Archive, Package } from 'lucide-react'
 import Link from 'next/link'
+import RecordRecentComponent from '@/components/layout/RecordRecentComponent'
 import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 
@@ -99,6 +100,10 @@ export default async function ComponentDetailPage({
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-full">
+      <RecordRecentComponent
+        id={String(catalog.identity._id)}
+        label={`#${catalog.identity.catalog_number} ${snapshot.name ?? ''}`.trim()}
+      />
       <div className="mb-4 sm:mb-6 space-y-4">
         <div className="flex items-center gap-2 sm:gap-3">
           {isConsumed ? (

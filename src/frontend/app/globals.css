@@ -3,6 +3,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * The sidebar's icon rail (decision 8.29): when chosen, or by default below
+ * 1024 px. `data-sidebar-state` sits on the shell; the phone sheet is
+ * portalled outside it and therefore never shows the rail.
+ */
+@custom-variant rail {
+  [data-sidebar-state="collapsed"] & {
+    @slot;
+  }
+  @media (width < 64rem) {
+    [data-sidebar-state="auto"] & {
+      @slot;
+    }
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
