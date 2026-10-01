@@ -1,7 +1,7 @@
 # Implementation plan --- CSC 0.5.1.0 and 0.6.0.0
 
 **Status:** draft 3, 2026-09-30 --- accepted by the user with the changes in section 5. Implements `docs/adr/DATA_MODEL_SPEC.md` (draft 5) and the
-decisions in `docs/adr/DESIGN_DECISIONS.md` (1.1--8.21). Terms follow `CONTEXT.md`.
+decisions in `docs/adr/DESIGN_DECISIONS.md` (1.1--8.22). Terms follow `CONTEXT.md`.
 **Branches:** P0 on `v-0.5.1.0`; P1--P9 on `v-0.6.0.0`.
 **Sizes** are relative (S < M < L < XL), not durations.
 
@@ -199,7 +199,7 @@ reviewer, moderator, other-dataset moderator, admin}.
   once on 260916, then frozen); errors raise instead of `print` + `None`. Test: all 169 mesh
   assets of 260916 succeed (the probe's baseline: 169 / 169, rho 0.98 against merged meshes).
 - **Tuning script**: shape class thresholds and complexity thresholds on 260916; confusion tables
-  (complexity against the 71 authored `sas_cita_scans` ratings) --> user review --> thresholds frozen.
+  (complexity against the 71 authored `beyond_debris` ratings) --> user review --> thresholds frozen.
 - Rehearsal now includes steps 5, 7, 8. Frame report: per dataset, how many frames changed axis
   order vs. 0.5 `pca_frame`.
 - Web: viewer shows canonical vs. stored orientation, proxy + deviation-map overlay; GH-facing
@@ -252,11 +252,15 @@ and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> m
 ### P9 --- Cutover --- size M
 1. Freeze writes on production (0.5.1.0); take the cutover dump + assets backup.
 2. `invoke rehearse` on that dump --> clean report (the abort guards catch drift since 260916).
-3. Deploy 0.6 backend + frontend; run section 8.1 on production in run order; `check_invariants`.
+3. Deploy 0.6 backend + frontend; run section 8.1 on production in run order; `check_invariants`;
+   rebuild the component-map cache (`main_component_map.py`: the cache ids changed with the 0.6
+   filters).
 4. Set `CSC_MIN_CLIENT_VERSIONS` to 0.6.0.0; publish the bridge UserObjects via `CSC_Update`.
 5. Designs archived by step 13 (count verified).
-6. After cutover: personal accounts created --> step 11b retires `ddu`; memberships assigned in
-   `/admin`.
+6. After cutover: personal accounts created --> fill in the untracked `.dev/reattribute_06.json` --> step 11b
+   re-attributes every `ddu` / `admin` record by the 8.24 mapping and adds the two moderators of
+   every dataset (8.25); `ddu` and `admin` stay as the user- and admin-role test accounts with no
+   records (8.22, 8.25); further memberships assigned in `/admin`.
 
 ---
 

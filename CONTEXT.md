@@ -170,6 +170,25 @@ _Avoid_: PCA frame, orientation; frame for any other coordinate system (a proxy 
 A simple primitive (box, prism, cylinder, hull) standing in for a snapshot's shape, together with how far the real shape deviates from it.
 _Avoid_: extrusion; bounding box (the frame's box is not a proxy)
 
+**Primitive**:
+The shape type of a proxy --- box, prism, cylinder or hull.
+_Avoid_: primitive for the small mesh stored in the snapshot (that is the *preview*)
+
+**Detail level**:
+Which version of a snapshot's geometry is shown or used: *proxy*, *preview*, *reduced* or *original*.
+_Avoid_: LOD, resolution (in the interface), "PLY mesh", numbered names ("Mesh 1") when there is only one
+
+**Preview**:
+The small copy of a mesh or point cloud stored in the snapshot record itself; the reduced and original versions are files next to it.
+_Avoid_: primitive, inline mesh, catalog primitive
+
+**Reduced**:
+A mesh file with fewer faces made from the original, for fast display.
+
+**Original**:
+The mesh or point cloud as uploaded to the catalog, never reduced by it; the reduced version and the preview are made from it. A detail level only --- never a field name or section heading, so *origin* keeps its own meaning. Stored on disk as `detailed.ply` until a later rename.
+_Avoid_: raw scan (the uploader may have cleaned it), detailed, full resolution
+
 **Deviation map**:
 An image per proxy face recording how far the real surface departs from the proxy.
 
@@ -187,7 +206,7 @@ _Avoid_: material
 ### People and permissions
 
 **Dataset**:
-The unit of membership, permission and visibility --- in practice one project or study (ZirKuS, SAS CITA scans). Every identity belongs to exactly one.
+The unit of membership, permission and visibility --- in practice one project or study (ZirKuS, Beyond Debris). Every identity belongs to exactly one.
 _Avoid_: campaign (the study is the dataset; the occasion --- one day's tests --- is stated by each evidence record), collection
 
 **Contributor / Reviewer / Moderator**:

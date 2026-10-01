@@ -8,16 +8,25 @@ are in place. **Next: P1 of `docs/adr/IMPLEMENTATION_PLAN_0.6.md` on a new branc
 `main`.** Pending cleanup after a few good releases: the old server layout (deployment README,
 step 7).
 
-**P1 status: done and committed** (2026-09-30; the 8.12--8.18 code additions are still in the working tree): vocab, document models, permission / lifecycle
+**P1 status: done and committed** (2026-09-30): vocab, document models, permission / lifecycle
 predicates, invariant checker (I1--I28 + I3b), designs removed, client-header enforcement (8.11);
-346 tests green. **Next: P2** (migrations + rehearsal on 260916).
+346 tests green. **P2 in progress (branch `v-0.6.0.0-P2`, 2026-09-30):** migrations
+(`apps/catalog/migration06/`, `migrate_06.py`, `invoke rehearse` --- 0 invariant errors on 260916, idempotent) and
+the read-only catch-up (0.6 read routes, 0.5 writes answer 503, frontend on generated 0.6 types; `invoke
+dev-migrated` serves a migrated 260916 for the web app) are built; the user checked the web app. Grilled from that check: 8.22 (`ddu` test account), 8.23 (detail
+levels Proxy / Preview / Reduced / Original), 8.24 (owners of every record, `beyond_debris`), 8.25
+(moderators, `admin` test account), 8.26 (`ddu_aggregations` roles), 8.27 (no names
+of people or accounts in committed files); nothing open. The 8.23 interface wording is built (viewer
+detail selector, download groups, `/meshes/{i}/preview` with `/primitive` as alias). **Next:** user
+review of P2, a rehearsal on the new dump, then P3. Before step 11b on production: fill the
+maintainer's username into the untracked `.dev/reattribute_06.json`.
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.
 "withdrawn" = tombstone outside the dataset), 8.14 invitations (new), full document review for
 consistency. 2026-09-29: 8.6 HKS, `adr/` --> `docs/adr/`, agent-skill setup, review gaps 1--5
 (8.7--8.11), P1. 2026-09-28: consistency pass (8.1--8.4), 0.5.1.0 released (8.5).
-**Who:** fstwn (eschenbach@dg.tu-darmstadt.de), TU Darmstadt DG --- sole maintainer of CSC.
+**Who:** the maintainer (TU Darmstadt DG) --- sole maintainer of CSC.
 
 ## 1. What this work is
 
@@ -162,7 +171,7 @@ outside, automatic current-snapshot fallback; 8.18 pending records: moderator ed
 
 697 identities / **701 snapshots** --- 4 identities have a v1 (3 `schoenes_neues_feld`, 1
 `dbu_zirkus`); all `validated: true`, none virtual. Datasets: `mineral_composite_panels` 477,
-`sas_cita_scans` 71, `ddu_build_with_debris` 70, `ddu_aggregations` 50, `dbu_zirkus` 16,
+`sas_cita_scans` 71 (0.6: `beyond_debris`, 8.24), `ddu_build_with_debris` 70, `ddu_aggregations` 50, `dbu_zirkus` 16,
 `spa_example_data` 9, `schoenes_neues_feld` 4. 45 split children / 37 parents. 42 consumed. 700 of
 701 snapshots written by the shared `ddu` account. `processes` empty and `assembly` false
 everywhere. `complexity` and `condition` are batch defaults (condition `2` on 698 of 701; only

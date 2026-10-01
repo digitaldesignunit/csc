@@ -1,6 +1,6 @@
 # CSC Data Model Specification --- v0.6 (draft 4)
 
-**Status:** draft 5, 2026-09-30 --- review gaps closed (decisions 1.1--8.21,
+**Status:** draft 5, 2026-09-30 --- review gaps closed (decisions 1.1--8.22,
 `docs/adr/DESIGN_DECISIONS.md`). Draft 4 2026-09-28 (consistency pass, 8.1--8.6), draft 3
 2026-09-24 (7.x), draft 2 2026-09-23 (6.x), first draft
 2026-09-12. Glossary: `CONTEXT.md` (repo root) --- field names follow its terms. Supersedes
@@ -349,7 +349,7 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
   "material_class": "17 01 01", "material_class_source": "derived" | "assigned",   // section 2.10 --- EU List of Waste ch. 17
   "trade_name": "..." | null,                  // section 2.10 --- brand / product name (e.g. "Corian")
                                              // CPR: "main materials used" --- Annex IV 1.2(e); input to product family (Annex VII)
-  "dataset": "sas_cita_scans",               // FK --> datasets._id (section 3.6); no longer a free string
+  "dataset": "beyond_debris",                // FK --> datasets._id (section 3.6); no longer a free string
   "manufactured_at": "...", "manufactured_precision": "year",
   "origin": {                                // section 3.1.1 --- REPLACES salvage_source + salvaged_at (decision 6.1)
                                              // CPR: when kind == deinstallation this IS "date and place of the latest deinstallation" --- Annex V 1(h);
@@ -606,7 +606,7 @@ The representation invariant becomes (section 5):
   "placement": { "o":[...], "x":[...], "y":[...], "z":[...] },   // the primitive's local axes, in stored coordinates (App. B)
   "fit": {
     "method": "authored" | "obb" | "ransac" | "lsq" | "hull",
-    "source": { "kind": "meshes" | "point_clouds", "index": 0, "resolution": "detailed" | "reduced" | "inline" } | null,
+    "source": { "kind": "meshes" | "point_clouds", "index": 0, "resolution": "original" | "reduced" | "preview" } | null,   // detail levels, 8.23
     "n_points": 184220,
     "inlier_ratio": 0.94,                      // ransac only
     "rms_mm": 2.1, "max_mm": 14.7, "p95_mm": 6.3,
@@ -623,7 +623,7 @@ The representation invariant becomes (section 5):
   "regions": [                                 // local resolution relevance; schema slot only this release
     { "label": "east connection",
       "bounds": { "min": [x,y,z], "max": [x,y,z] },   // proxy-local AABB
-      "resolution_hint": "full" | "reduced" | "proxy",
+      "resolution_hint": "original" | "reduced" | "proxy",   // 8.23
       "reason": "connection" | "damage" | "feature" | "other",
       "source": "assigned" | "derived" }
   ]
@@ -870,6 +870,11 @@ capture/<snapshot_id>/fixtures/<i>.ply              NEW  fixture meshes (e.g. ro
 evidence/<evidence_id>/<index>.<ext>                NEW  pdf | jpg | png | webp; sniffed, not trusted  (CPR: Annex V 7 reports; retention Art 75(2)(i))
 ```
 
+Detail levels (decision 8.23): the inline `geometry.meshes` / `point_clouds` are the **preview**,
+`reduced.ply` the **reduced** mesh, `detailed.ply` and the point-cloud PLY the **original** (as
+uploaded). The file name `detailed` stays until a later rename; schema values and the interface say
+`original`.
+
 Evidence attachments (decision 7.3): one upload attached to several records is stored once **per
 record** --- hard links where the filesystem allows, else copies --- so every record owns its files
 and no reference counting exists. PDFs are stored byte-for-byte; images go through the snapshot
@@ -893,8 +898,9 @@ belongs to exactly one.
 
 ```jsonc
 {
-  "_id": "sas_cita_scans",                   // slug, immutable; = identity.dataset (FK)
-  "name": "SAS CITA scans", "description": "...",
+  "_id": "beyond_debris",                    // slug, immutable; = identity.dataset (FK)
+  "name": "Beyond Debris",
+  "description": "...",                     // set by step 11b from the mapping (8.25)
   "visibility": "members" | "catalog",       // DEFAULT "members" (user decision)
   "members": [
     { "user_id": "uuid", "roles": ["contributor", "reviewer", "moderator"],   // a set, not a ladder
@@ -924,7 +930,10 @@ Unpublished records: section 7.0.
 Global `role in {user, admin}` unchanged. `admin` = system role and **implicit full membership of
 every dataset** --- kept as the testing and emergency hatch (user decision); at least one enabled
 admin must exist (I20). No `moderated_datasets` field (0.5.0.2 plan superseded by memberships).
-The shared `ddu` account is retired (section 8 step 11).
+The shared `ddu` account stays as the internal **user-role test account** (decision 8.22); all
+its records move to personal accounts by the 8.24 mapping (section 8 step 11b), so a test session
+never acts as the author of real records. The `admin` account likewise stays as the system admin
+and the **admin-role test account**; personal admin accounts are additional (decision 8.25).
 
 **Registration (decision 8.14).** Self-registration is open to addresses of
 `CSC_OPEN_REGISTRATION_DOMAINS` (env, comma-separated, default `tu-darmstadt.de`, subdomains
@@ -1038,7 +1047,7 @@ override writes `"assigned"` and is not overwritten by recompute.
 Ordinal 0--3 (0 simple, 1 normal, 2 complex, 3 very complex). Inputs: primary-proxy residual
 `p95_mm / e1` (how far the piece departs from its proxy), `boxscore` (hull concavity), and
 `shape_class == composite` => >= 2. Thresholds tuned by the same script as section 4.2 against the
-**71 `sas_cita_scans` ratings, which are authored per element** (user) --- the only genuine labels;
+**71 `beyond_debris` (0.5: `sas_cita_scans`) ratings, which are authored per element** (user) --- the only genuine labels;
 confusion table part of the deliverable. `complexity_source: derived | assigned`; assigned is never
 overwritten.
 
@@ -1282,7 +1291,7 @@ Reviewed against 6.14 (decision 7.10):
 Composite `part` proxies drawn by hand have no entry surface in 0.6 (neither web nor GH bridge)
 --> later.
 
-**Variable resolution** --- global LOD via `reduced` / `detailed` PLY and inline preview; the
+**Variable resolution** --- global detail levels (8.23): preview, reduced, original; the
 proxy is the "container" (Bernhard's term) with `fit.source` as the link to the original. Local
 relevance is expressed by `proxies[].regions[]` (section 3.2.1): a **schema slot only** in this release
 --- authored or later derived, consumed by nothing yet. The viewer and GH keep fetching global
@@ -1538,37 +1547,47 @@ abort-on-unclassifiable guards catch drift since 260916. Minimum client version 
 
 ### 8.1 Scripts
 
-Scripts in `scripts/db_maintenance/`, each idempotent with `--dry-run`. All run at cutover
-(section 8.0) on the then-current dump, **in the order of this table** (`run`); `after` names the
-steps whose output a step reads. Step IDs are stable names (the decision log cites them), not
-the order. Step 14 may also run on 0.5 once its upload pipeline strips EXIF; 11b runs after
-cutover.
+Every step is a function in `apps/catalog/migration06/steps.py` (the pure mappings in
+`mappings.py`, unit-tested), run through **one command**,
+`scripts/db_maintenance/migrate_06.py --all | --steps 1,1b,... | --list [--dry-run]`; the
+script names in the table are the steps' titles. Each step is idempotent (it selects only
+documents still in the 0.5 shape), validates what it builds against the 0.6 models, and writes
+nothing when a guard aborts. All run at cutover (section 8.0) on the then-current dump, **in the
+order of this table** (`run`); `after` names the steps whose output a step reads. Step IDs are
+stable names (the decision log cites them), not the order. Step 14 may also run on 0.5 once
+its upload pipeline strips EXIF (done in 0.5.1.0); 11b runs after cutover. **Rehearsal:**
+`invoke rehearse --dump 260916 [--assets <asset folder>]` --- throwaway `mongod`, all steps,
+a second run that must change nothing, `check_invariants`, per-dataset report; the spec's
+260916 numbers are asserted by `tests/api/test_migration06_dump.py` (`CSC_DUMP_DIR`).
+**Rehearsed 2026-09-30 on 260916: 0 invariant errors** (7 warnings: no dataset has a moderator
+until memberships are assigned), idempotent, 70 fixture files.
 
 | run | step | script | after | what |
 |---|---|---|---|---|
-| 1 | 1 | `migrate_add_snapshot_effective_from.py` | --- | `effective_from` by the 8.10 default --- v0: `origin.at` + precision when known (Corian 2022-10-26 day, ZirKuS 2024-07-24 day, `schoenes_neues_feld` 2026-05-19 day; children: their `created`), else `created` (`exact`); v1+: `created` (`exact`). Reads the 0.5 `salvaged_at` directly (step 10 converts and drops it later), so the run order is unchanged. 260916: 4 identities have a v1; `created` is monotonic in `version` for all of them --- the script asserts that and aborts otherwise. |
+| 0 | 11a | (in `migrate_06.py`) | --- | rename 0.5 dataset slugs before anything reads them (decision 8.24): `sas_cita_scans` --> `beyond_debris` ("Beyond Debris"). A `datasets` document made under the old slug moves to the new one. 260916: 71 identities. Steps 9b, 10 and 11 read the new slugs. |
+| 1 | 1 | `migrate_add_snapshot_effective_from.py` | --- | `effective_from` by the 8.10 default --- v0: `origin.at` + precision when known (Corian 2022-10-26 day, ZirKuS 2024-07-24 day for all 16, `schoenes_neues_feld` 2026-05-19 day; children: their `created`), else the robot scan's time (`attributes.3d_scan_metadata.created_utc`, the 70 `ddu_build_with_debris` stones), else `created` (`exact`); v1+: `created` (`exact`). Computes `origin.at` with step 10's mapping function (step 10 writes and drops the 0.5 fields later), so the run order is unchanged. 260916: 4 identities have a v1; `created` is monotonic in `version` for all of them --- the script asserts that and aborts otherwise. |
 | 2 | 1b | `migrate_snapshot_validated_to_status.py` | 1 | `validated: true --> status: published`; `false --> pending`; drop `validated`. Rejected 0.5 snapshots were deleted, so none map to `rejected`. |
 | 3 | 1c | `migrate_init_06_fields.py` | 1b | initialise every new field to its empty value so no reader meets a missing key: snapshots `supersedes` / `superseded_by` / `status_changed_*` = null, `capture` = null, `effective_from_precision` from step 1; identities `withdrawn` = null, `past_cycles` = [], `properties` = {}; later steps overwrite where they have data. Identities: `created_by_user_id` = their v0 `added_by_user_id` (8.9) Nulls in list / dict fields become empty, as the 0.6 models expect (found by `check_invariants.py` on 260916): `geometry.meshes` null on 531 snapshots and `geometry.point_clouds` on 700 --> `[]`, `mesh_ply_resolutions` null on 532 --> `{}`, `manufactured_precision` null on 6 identities --> `unknown`. |
 | 4 | 9 | `migrate_drop_snapshot_fields.py` | --- | `$unset` `processes` (empty in all 701) and `assembly` (false in all 701) --- 6.13; `virtual` (false in all 701) --- 7.12; `iframe` (always identity) --- 7.11. Aborts if any snapshot has `virtual: true`. |
 | 5 | 2 | `migrate_rename_measurements_collection.py` | --- | drop the empty `component_measurements`; bind `component_evidence`. |
-| 6 | 11 | `migrate_datasets_collection.py` | --- | create the 7 `datasets` docs from distinct `identity.dataset` values, `members: []`. Visibility: `catalog` for `mineral_composite_panels`, `sas_cita_scans`, `ddu_build_with_debris`, `ddu_aggregations`; `members` for `dbu_zirkus`, `schoenes_neues_feld`, `spa_example_data`. `admin` stays global admin. Memberships are **not** migrated --- assigned afterwards by admin through the extended user-administration frontend (deliverable: dataset CRUD + per-dataset member/role editor under `/admin`). |
+| 6 | 11 | `migrate_datasets_collection.py` | --- | create the 7 `datasets` docs from distinct `identity.dataset` values, `members: []`; `beyond_debris` gets its description (8.25). Visibility: `catalog` for `mineral_composite_panels`, `beyond_debris`, `ddu_build_with_debris`, `ddu_aggregations`; `members` for `dbu_zirkus`, `schoenes_neues_feld`, `spa_example_data`. `admin` stays global admin. Memberships are **not** migrated --- step 11b adds owners, the two moderators and per-dataset members (8.25, 8.26); everything else is assigned by admin through the extended user-administration frontend (deliverable: dataset CRUD + per-dataset member/role editor under `/admin`). |
 | 7 | 12 | `migrate_material_vocab.py` | --- | seed `materials` (section 2.10); map `corian --> mineral_composite` + `trade_name: "Corian"`, `concrete --> concrete`, `brick --> fired_clay`, `aerated-concrete --> autoclaved_aerated_concrete`, `asphalt --> asphalt`, `steel --> steel`, `wood --> timber`; derive `material_class` (`derived`). Aborts on any unmapped value. Runs before 10b (inheritance compares `material`/`trade_name`). |
 | 8 | 3 | `migrate_type_to_original_function.py` | --- | `panel-->IfcPlate`, `beam-->IfcBeam`, `column-->IfcColumn`, `slab-->IfcSlab`, `brick-->IfcBuildingElementPart` (6.13; no 0.5 identity uses it), `pipe-->IfcPipeSegment`, `profile-->IfcMember`, `connector-->IfcDiscreteAccessory`, `rubble-->CscDebris`, `other-->IfcBuildingElementProxy`. Drops `type` (no alias, section 8.0). |
 | 9 | 10 | `migrate_salvage_to_origin.py` | --- | Hand-mapped, not string-copied --- the 0.5 data holds only 4 distinct `salvage_source` values (table below). `salvaged_at` --> `origin.at`, precision `day` (all stored values are midnight). Identities with no salvage data get `origin.kind` from their dataset (table below). Drops `salvage_source`, `salvaged_at`. |
-| 10 | 10c | `migrate_consumed_to_exit.py` | --- | 42 consumed identities (260916): the 37 split parents --> `{kind: split, at: consumed_at, precision exact, recorded_by_user_id: null}` (in 260916 `consumed_at` equals the earliest child's v0 `created` to the microsecond for all 37 --- the I18 `at`; the script asserts it); 5 `ddu_build_with_debris` --> `{kind: installed, notes: "modified by students during the workshop; resulting pieces not catalogued"}`; 1 `ddu_aggregations` --> `{kind: lost, notes: same}`. `at` = `consumed_at`. All others `exit: null`, `past_cycles: []`. Drops `consumed_at`. Script asserts the 37/5/1 split and aborts on any consumed identity it cannot classify. |
+| 10 | 10c | `migrate_consumed_to_exit.py` | --- | 42 consumed identities (260916): by rule: consumed with catalogued children --> `{kind: split, at: <earliest child's first effective_from> (I18), precision exact, recorded_by_user_id: null}` (in 260916 that equals `consumed_at` to the microsecond for all 37; a difference is reported); consumed without children in `ddu_build_with_debris` --> `{kind: installed, notes: "modified by students during the workshop; resulting pieces not catalogued"}`, in `ddu_aggregations` --> `{kind: lost, notes: same}`, `at` = `consumed_at`; anything else aborts. **260916: 37 split (36 panels + 1 aggregations piece that was cut again), 5 installed, 0 lost** --- the draft's "1 lost" was that aggregations piece before its own cut was catalogued. All others `exit: null`, `past_cycles: []`. Drops `consumed_at`. |
 | 11 | 10b | `migrate_lineage_inheritance.py` | 3, 10, 12 | after 3 and 10. For every identity with `parent_identities`: set `inherited_from`; for each inheritable field equal to the parent's value --> list it in `inherited_fields`. **`manufactured_at` on the 45 children holds their creation timestamp (GH wrote it)** --> overwrite with the parent's (all `unknown`) and list it as inherited; the cut moment survives as the child's first-snapshot `effective_from` (step 1). Roots get `inherited_fields: []`, `inherited_from: null`. |
-| 12 | 6 | `migrate_attributes_cleanup.py` | 1c | `attributes.primitive` --> dropped (now derivable); `attributes.scan` --> `capture.notes`; `attributes.3d_scan_metadata` --> `capture{method: photogrammetry, captured_at, device, software}` **on the identity's v0 snapshot** (7.7); local paths dropped. |
-| 13 | 6c | `migrate_capture_context.py` | 6 | the 70 `ddu_build_with_debris` snapshots (7.7): `geometry.marker_points` --> `capture.markers` --- labels re-read from the source OBJs (`marker_blue_*`, `marker_green_*`) if still on disk, else by position (the +/-120 mm cross at z ~ 0 --> `role: rig`, the rest --> `role: component`); `meshes[1]` (`end_effector`) --> `capture.fixtures[0]`, its `detailed.ply` moved to `capture/<sid>/fixtures/0.ply`, inline copy and `reduced.ply` dropped, `mesh_ply_resolutions["1"]` removed; `capture.coordinate_system = {name: "DDU robot gripper marker plane"}`. Drops `geometry.marker_points`. Asserts every moved mesh is the effector (bbox +/-145 mm around the marker plane). |
-| 14 | 6d | `migrate_reinforcements_to_evidence.py` | 2 | the 1 snapshot with `geometry.reinforcements` (dbu_zirkus, 35 bars): one `reinforcement_layout` record (7.8) --- `basis: drawing` (user: the bars were modelled after the original drawing), bars copied, `position.snapshot_id` = that snapshot, `status: published`, `verification: unverified`, `observed_at` = snapshot `created` (day), `recorded_by` = snapshot author. Drops `geometry.reinforcements`. |
+| 12 | 6 | `migrate_attributes_cleanup.py` | 1c | `attributes.primitive` --> dropped (now derivable); `attributes.scan` --> `capture.notes`; `attributes.3d_scan_metadata` --> `capture{method: photogrammetry, captured_at: created_utc}` **on the identity's v0 snapshot** (7.7; device and software are not in the metadata); `attributes.scan` --> `capture.notes: "scan <n>"`; local paths dropped. 260916: 141 captures (70 robot scans, 71 `beyond_debris`). |
+| 13 | 6c | `migrate_capture_context.py` | 6 | the 70 `ddu_build_with_debris` snapshots (7.7): `geometry.marker_points` --> `capture.markers` by **order**: the import wrote the four blue rig markers first (`blue_1..4`, `role: rig`; asserted within 50 mm of the marker plane), then the green ones on the stone (`green_1..`, `role: component`; asserted z > 100 mm) --- in 260916 all 70 scans follow it, while the "+/-120 mm cross" of the draft fails on 7 (rotated or shifted planes); the source OBJs are not available. `meshes[1]` (`end_effector`) --> `capture.fixtures[0]`, its `detailed.ply` (else `reduced.ply`; one scan has neither --- its inline mesh is exported) moved to `capture/<sid>/fixtures/0.ply`, inline copy and `reduced.ply` dropped, `mesh_ply_resolutions["1"]` removed; `capture.coordinate_system = {name: "DDU robot gripper marker plane"}`. Drops `geometry.marker_points`. Asserts every moved mesh is the effector: every vertex within r 170 mm of the gripper axis, z -260 ... 310 mm (the robot pipeline cut it out with a cylinder r 160, h 300 --- `3d_scan_metadata.step4.cylinder_split`). 260916: 70 snapshots, 337 markers, 70 fixture files. |
+| 14 | 6d | `migrate_reinforcements_to_evidence.py` | 2 | the 1 snapshot with `geometry.reinforcements` (dbu_zirkus, 35 bars): one `reinforcement_layout` record (7.8) --- `basis: drawing` (user: the bars were modelled after the original drawing), bars copied, `position = {kind: none, snapshot_id: that snapshot, description}`, `status: published`, `verification: unverified`, `observed_at` = snapshot `created` (day), `recorded_by` = snapshot author. Drops `geometry.reinforcements`. |
 | 15 | 6b | `migrate_condition_to_evidence.py` | 2 | **only grades from datasets where they vary** (decision 7.9; 260916: `schoenes_neues_feld`, 5 snapshots) --- a value uniform across a dataset is a batch default and is dropped (698 x `2`); the script prints the per-dataset table and takes an override list. Each migrated snapshot --> one `component_evidence` record: `method: visual_inspection`, `summary: {condition_grade, value, ordinal, claimed}`, `source_tier: visual`, `status: published`, `verification: unverified`, `performed_by: [{kind: user, user_id: added_by_user_id}]`, `observed_at: snapshot.created` (precision `day`), `position: {kind: none, snapshot_id}`. Then drop `condition`. |
 | 16 | 4 | `migrate_extrusions_to_proxies.py` | --- | each `geometry.extrusions[i]` --> `proxies[i] = {primitive: prism, role: primary if i==0, params: {profile, height}, placement: the extrusion's own placement, fit: {method: authored}}`. Remove `extrusions`. |
-| 17 | 9b | `migrate_complexity_source.py` | --- | `sas_cita_scans` (71): keep value, `complexity_source: assigned`. All others (630, batch defaults): `complexity_source: derived`, value recomputed by stage 5 of `main_geometry.py`. |
+| 17 | 9b | `migrate_complexity_source.py` | 11a | `beyond_debris` (71): keep value, `complexity_source: assigned`. All others (630, batch defaults): `complexity_source: derived`, value recomputed by stage 5 of `main_geometry.py`. |
 | 18 | 5 | `main_geometry.py --stages frame,shape_class --recompute` | 3, 4, 6c | every snapshot gets `frame` + `bbx` by the 7.10 rule (min-volume box, axis convention); `pca_frame` and `bbx_origin` `$unset`. Replaces the planned `migrate_obb_to_box_proxy.py` --- the frame is no longer a proxy. Prints, per dataset, how many frames changed axis order vs. 0.5 (expected: diagonal cases, columns). **Must run after 4 (authored prisms), 6c (gripper leaves `geometry`) and 3 (column rule reads `original_function`).** |
 | 19 | 7 | `main_geometry.py --stages proxies,descriptors,complexity,previews --recompute` | 5, 9b | fits, residuals, deviation maps, descriptors (frame-aligned, version bump), complexity, previews (6.14). |
 | 20 | 8 | `main_geometry.py --stages shape_class,frame --recompute` | 7 + threshold tuning | after threshold tuning: recompute `shape_class`; where it changed, the frame (column rule, 7.10) and --- by fingerprint (8.7) --- stages 3--5 rerun. An ordinary recompute, no special pass. |
 | 21 | 13 | `migrate_archive_designs.py` | --- | decision 7.11: export the whole `designs` collection to `designs_archive_<yymmdd>.json` next to the cutover dump, verify the document count, then drop the collection. |
 | 22 | 14 | `migrate_strip_photo_gps.py` | --- | decision 7.13: re-save every stored snapshot photo without GPS / owner / serial (orientation, capture time, make / model kept); prints how many files carried GPS (260916 assets: 3 of 8). Independent of 0.6 --- can run as soon as the upload pipeline strips too. |
-| post | 11b | `migrate_retire_shared_account.py` | cutover done, personal accounts exist | **after personal accounts exist.** Input: a mapping file (`dataset` or explicit snapshot/identity id list --> personal `user_id`). Rewrites `added_by_user_id`/`added_by_username` on snapshots (and `recorded_by_*` on migrated evidence, `performed_by` user actors), keeping `attribution_corrected: {from_user_id, at, by_user_id}` on each touched document so the correction is auditable. Adds the mapped users as `contributor` of the datasets they authored. Then sets `ddu.disabled = true` --- never deleted, it is still referenced by `attribution_corrected`. Refuses to run while any record still points at `ddu` without a mapping. |
+| post | 11b | `migrate_reattribute_shared_account.py` | cutover done, personal accounts exist | **after personal accounts exist; may run again for later mappings.** Input: a mapping file (untracked; template `scripts/db_maintenance/reattribute_06.example.json`): `from` = the source accounts (default `ddu`), then `datasets` / `identities` / `snapshots` --> personal user id or username; an explicit snapshot wins over its identity, the identity over its dataset; an unknown user aborts. Rewrites `added_by_user_id`/`added_by_username` on snapshots, `created_by_user_id` on identities (and `recorded_by_*` on migrated evidence, `performed_by` user actors), keeping `attribution_corrected: {from_user_id, at, by_user_id}` on each touched document so the correction is auditable. Adds the mapped users as `contributor` of the datasets they authored. Records the mapping does not cover stay with their source account and are counted (`left unmapped`). **`ddu` is not disabled** (decision 8.22): it stays as the internal user-role test account and, after the 8.24 mapping, owns no records. The 8.24 mapping, from `ddu` and `admin`, gives every record a personal owner (who is who: decisions 8.24--8.26 by role). The mapping's `moderators` become `moderator` of every dataset (8.25); its `members` add roles per dataset (8.26; unknown roles abort); its `descriptions` set dataset descriptions (8.25). Roles are only ever added, so a rerun changes nothing. The filled-in mapping names people and stays untracked (`.dev/reattribute_06.json`; template `scripts/db_maintenance/reattribute_06.example.json`; decision 8.27). |
 
 Step 10 mapping (dump 260916):
 
@@ -1578,10 +1597,11 @@ Step 10 mapping (dump 260916):
 | `ExFeld Architektur, TU Darmstadt` | 4 (`schoenes_neues_feld`) | `kind: unknown`, `at: 2026-05-19` (day), `place: {name: "ExFeld", address: "TU Darmstadt"}` --- ExFeld is the location, not an institution; `performed_by: []` |
 | `Guenther Behnisch Strasse, TU Darmstadt Lichtwiese Campus, 64287 Darmstadt, Germany` | 1 (`dbu_zirkus` beam) | same as the `dbu_zirkus` row below |
 | `Measured by Hand, Parent not found (ID:69da...)` | 1 | `kind: unknown`, string --> `origin.notes` |
-| *(none)* `sas_cita_scans` | 71 | `kind: demolition`, rest null |
+| *(none)* `beyond_debris` (0.5 `sas_cita_scans`) | 71 | `kind: demolition`, rest null |
 | *(none)* `ddu_build_with_debris` | 70 | `kind: demolition`, rest null |
 | *(none)* `spa_example_data` | 9 | `kind: unknown` |
-| *(none)* `ddu_aggregations` without parent | 5 | as the Rosskopf row (`offcut`) |
+| *(none)* `ddu_aggregations` without parent | 4 | as the Rosskopf row (`offcut`) |
+| *(none)* child without salvage data | 1 | its parents' origin when they agree (the one piece cut from an aggregations child); step 10b lists it as inherited |
 | all 16 `dbu_zirkus` | 16 | `kind: deinstallation`, `place: {name: "TU Darmstadt Lichtwiese Campus", address: "Guenther-Behnisch-Strasse, 64287 Darmstadt, Germany"}`, `construction_work: {name: "Lichtwiese Campus Infrastructure --- pedestrian bridge", use: "pedestrian bridge"}`, `at: 2024-07-24` (day) --- one deinstallation for all 16 (user, 2026-09-28) |
 
 Frontend: regenerate models; replace every `type` and `extrusions` consumer. Grasshopper: bump
@@ -1606,7 +1626,7 @@ assigned in the first draft; the numbering is kept so older references stay vali
 11. *(decided 6.14: one runner, ordered stages, cheap stages synchronous)*
 12. *(decided: `condition` dropped; see section 2.6 `condition_grade`, section 8 6b)*
 13. *(decided 6.1, 6.4, 6.8, 6.9: CPR proposals triaged --- see section 10.5)*
-14. *(decided 6.15: `complexity` derived + overridable; sas_cita ratings = tuning labels)*
+14. *(decided 6.15: `complexity` derived + overridable; beyond_debris ratings = tuning labels)*
 15. *(decided 7.13: strip GPS / owner / serial at upload, keep orientation, capture time, make /
     model; one-off cleanup of stored photos --- 3 of 8 in the 260916 assets carried GPS)*
 
