@@ -16,10 +16,13 @@ the read-only catch-up (0.6 read routes, 0.5 writes answer 503, frontend on gene
 dev-migrated` serves a migrated 260916 for the web app) are built; the user checked the web app. Grilled from that check: 8.22 (`ddu` test account), 8.23 (detail
 levels Proxy / Preview / Reduced / Original), 8.24 (owners of every record, `beyond_debris`), 8.25
 (moderators, `admin` test account), 8.26 (`ddu_aggregations` roles), 8.27 (no names
-of people or accounts in committed files); nothing open. The 8.23 interface wording is built (viewer
-detail selector, download groups, `/meshes/{i}/preview` with `/primitive` as alias). **Next:** user
-review of P2, a rehearsal on the new dump, then P3. Before step 11b on production: fill the
-maintainer's username into the untracked `.dev/reattribute_06.json`.
+of people or accounts in committed files), 8.28 (lowercase usernames, case-insensitive
+sign-in; step 15, I29); nothing open. The 8.23 interface wording is built (viewer
+detail selector, download groups, `/meshes/{i}/preview` with `/primitive` as alias). Rehearsal on dump 261001 (2026-10-01, `invoke rehearse --mapping .dev/reattribute_06.json`): all
+cutover steps + 11b, idempotent, **0 errors, 0 warnings**; 10 usernames lowercased, 2 designs
+archived, nothing left unmapped. `invoke rehearse` / `dev-migrated` default to 261001; the preview
+applies the untracked mapping when present. 8.29 (navigation shell, closes O3); nothing open. **Next:** user review of P2, then P2b (navigation
+shell), then P3.
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.

@@ -129,6 +129,20 @@ covered; header tests (missing / old / exempt) pass.
 **Done when:** rehearsal runs clean except the invariants owned by later phases (frame, shape
 class, proxies --- listed as expected-missing); the web app browses the migrated 260916 data.
 
+### P2b --- Navigation shell --- size S
+- Decision 8.29 on its own branch: the shadcn/ui `Sidebar` primitive restyled for CSC; one entry
+  list with visibility rules (signed out / user / moderator / admin); brand, groups, Recent,
+  account menu; icon rail with tooltips, `Ctrl/Cmd+B`, cookie-remembered state, rail default
+  768--1024 px, slide-in below 768 px; slim top bar (toggle, page title, page actions; Scan
+  shortcut on phones); `Header.tsx` / `Sidebar.tsx` / `AppMenu.tsx` replaced.
+- Moderation shows to admins only until P3 brings memberships to the session; P3 then adds the
+  moderator rule, Users and invitations, Datasets and the queue badge; P7 adds Add component
+  and Drafts.
+
+**Done when:** every current page is reachable from the shell on desktop, tablet and phone;
+keyboard and screen-reader navigation work; the collapsed state survives a reload without a
+jump.
+
 ### P3 --- Datasets, permissions, lifecycle --- size L
 - Unpublished identity (8.9): derived state; creator + `moderator(D)` edit metadata and see it;
   evidence publish refused until the identity is published (I26); queue groups evidence with v0.

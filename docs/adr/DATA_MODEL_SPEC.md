@@ -927,7 +927,7 @@ Unpublished records: section 7.0.
 
 ### 3.7 `users` changes
 
-Global `role in {user, admin}` unchanged. `admin` = system role and **implicit full membership of
+Global `role in {user, admin}` unchanged. `username` is stored lowercase and unique; sign-in by username or e-mail ignores case (decision 8.28, I29). `admin` = system role and **implicit full membership of
 every dataset** --- kept as the testing and emergency hatch (user decision); at least one enabled
 admin must exist (I20). No `moderated_datasets` field (0.5.0.2 plan superseded by memberships).
 The shared `ddu` account stays as the internal **user-role test account** (decision 8.22); all
@@ -1263,6 +1263,7 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 | I26 | Evidence of an unpublished identity (section 3.1.5) cannot be published (409). `created_by_user_id` is server-set on create and never changed by a client. |
 | I27 | `verification.state in {reviewed, accredited}` => `verification.by.user_id` is set, differs from `recorded_by_user_id` and from every `performed_by[].user_id`; `accredited` => `verification.note` non-empty. `self_attested` => some `performed_by[].user_id == recorded_by_user_id` (decision 8.12). |
 | I28 | No evidence is created on a withdrawn identity (409, naming `duplicate_of` if set). On an identity with a terminal `exit` (`split`, `merged`, `recycled`, `disposed`), evidence needs `observed_at <= exit.at` (8.16). |
+| I29 | `users.username` is lowercase and unique (decision 8.28); registration lowercases it and sign-in compares lowercase. |
 
 ---
 
@@ -1586,6 +1587,7 @@ until memberships are assigned), idempotent, 70 fixture files.
 | 19 | 7 | `main_geometry.py --stages proxies,descriptors,complexity,previews --recompute` | 5, 9b | fits, residuals, deviation maps, descriptors (frame-aligned, version bump), complexity, previews (6.14). |
 | 20 | 8 | `main_geometry.py --stages shape_class,frame --recompute` | 7 + threshold tuning | after threshold tuning: recompute `shape_class`; where it changed, the frame (column rule, 7.10) and --- by fingerprint (8.7) --- stages 3--5 rerun. An ordinary recompute, no special pass. |
 | 21 | 13 | `migrate_archive_designs.py` | --- | decision 7.11: export the whole `designs` collection to `designs_archive_<yymmdd>.json` next to the cutover dump, verify the document count, then drop the collection. |
+| 21b | 15 | (in `migrate_06.py`) | --- | decision 8.28: lowercase every `users.username` and the copies `added_by_username` (snapshots) and `recorded_by_username` (evidence); aborts, naming them, if two accounts would share a name. 261001: 10 of 31 accounts, no clash. |
 | 22 | 14 | `migrate_strip_photo_gps.py` | --- | decision 7.13: re-save every stored snapshot photo without GPS / owner / serial (orientation, capture time, make / model kept); prints how many files carried GPS (260916 assets: 3 of 8). Independent of 0.6 --- can run as soon as the upload pipeline strips too. |
 | post | 11b | `migrate_reattribute_shared_account.py` | cutover done, personal accounts exist | **after personal accounts exist; may run again for later mappings.** Input: a mapping file (untracked; template `scripts/db_maintenance/reattribute_06.example.json`): `from` = the source accounts (default `ddu`), then `datasets` / `identities` / `snapshots` --> personal user id or username; an explicit snapshot wins over its identity, the identity over its dataset; an unknown user aborts. Rewrites `added_by_user_id`/`added_by_username` on snapshots, `created_by_user_id` on identities (and `recorded_by_*` on migrated evidence, `performed_by` user actors), keeping `attribution_corrected: {from_user_id, at, by_user_id}` on each touched document so the correction is auditable. Adds the mapped users as `contributor` of the datasets they authored. Records the mapping does not cover stay with their source account and are counted (`left unmapped`). **`ddu` is not disabled** (decision 8.22): it stays as the internal user-role test account and, after the 8.24 mapping, owns no records. The 8.24 mapping, from `ddu` and `admin`, gives every record a personal owner (who is who: decisions 8.24--8.26 by role). The mapping's `moderators` become `moderator` of every dataset (8.25); its `members` add roles per dataset (8.26; unknown roles abort); its `descriptions` set dataset descriptions (8.25). Roles are only ever added, so a rerun changes nothing. The filled-in mapping names people and stays untracked (`.dev/reattribute_06.json`; template `scripts/db_maintenance/reattribute_06.example.json`; decision 8.27). |
 
