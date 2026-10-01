@@ -30,7 +30,7 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260908
+    Version: 261001
     """
 
     def __init__(self):
@@ -66,7 +66,7 @@ class CSC_FilterComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Material type filter (e.g., "concrete", "steel", "wood")'
         )
         self.InputParams[2].Description = (
-            'Dataset name filter (e.g., "sas_cita_scans", '
+            'Dataset name filter (e.g., "beyond_debris", '
             '"mineral_composite_sheets")'
         )
         self.InputParams[3].Description = (
