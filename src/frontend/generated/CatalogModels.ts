@@ -1,92 +1,181 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-09-08T12:50:22.121Z
-// Source: https://api.2ndchances.build/schema/catalog-compose
+// Generated on: 2026-09-30T14:46:19.278Z
+// Source: http://127.0.0.1:8000/schema/catalog-compose
 
 import type {
-  ComponentBoundingBox,
-  ComponentFrame,
-  ComponentLocation,
+  Frame,
+  GeoLocation,
+  Geometry,
 } from './CatalogSharedTypes';
 
+export interface Accreditation {
+  scheme: 'iso_17025' | 'notified_body'; // iso_17025 = laboratory accreditation (e.g. DAkkS); notified_body = CPR notified body (Art 52 number)
+  id: string; // Accreditation or notified-body number
+  body: string; // Accrediting or notifying authority
+  scope: string[]; // Standards the accreditation covers
+  valid_until?: string | null;
+}
+
+export interface Actor {
+  kind: 'user' | 'person' | 'organization';
+  user_id?: string | null;
+  name?: string | null;
+  organization?: string | null;
+  organization_ror?: string | null;
+  orcid?: string | null;
+  email?: string | null;
+  role?: 'operator' | 'supervisor' | 'laboratory' | 'client' | 'witness' | null;
+  accreditation?: Accreditation | null;
+  redacted_at?: string | null;
+}
+
+export interface Capture {
+  method?: 'photogrammetry' | 'lidar' | 'structured_light' | 'manual' | null;
+  device?: string | null;
+  software?: string | null;
+  captured_at?: string | null;
+  notes?: string | null;
+  coordinate_system?: CoordinateSystem | null;
+  markers?: Marker[];
+  fixtures?: Fixture[];
+}
+
 export interface ComponentIdentity {
-  _id?: string; // Globally unique identity identifier (GUID)
-  catalog_number: number; // Monotonic human-facing catalog number; never recycled. Display as 'CSC-' + six-digit zero-padded decimal.
-  type: string; // Type of component. Must be one of ALLOWED_COMPONENT_TYPES.
-  material: string; // Material type of the component
-  dataset: string; // Dataset name that this component belongs to
-  manufactured_at?: string | unknown; // ISO-8601 timestamp (UTC) describing when the component was originally manufactured, to the precision indicated by `manufactured_precision`.
-  manufactured_precision?: string | unknown; // Precision qualifier for `manufactured_at`. Must be one of ALLOWED_MANUFACTURED_PRECISIONS.
-  salvage_source?: string | unknown; // Short free-text description of where the component was salvaged from (e.g. building name, demolition site).
-  salvaged_at?: string | unknown; // ISO-8601 timestamp (UTC) describing when the component was salvaged. Paired with `salvage_source`.
-  reserved?: string; // UUID of user who has reserved this component (empty if not reserved)
-  attributes?: Record<string, unknown> | unknown; // Additional static metadata about the physical piece
-  parent_identities?: string[] | unknown; // UUIDs of immediate parent identities. Single-element for 1:1 splits; multi-element for N:1 merges. `None` if no known parent.
-  consumed_at?: string | unknown; // ISO-8601 timestamp when the physical piece ceased to exist as a discrete object (split, demolished, returned). `None` = active.
-  is_public?: boolean; // When true, anonymous users may view all snapshots on the public component detail page (viewer + read-only metadata).
-  current_snapshot_id: string; // UUID of the snapshot in `component_snapshots` that represents the current state of this identity.
-  created: string; // ISO timestamp when this identity was first recorded
-  lastmodified: string; // ISO timestamp when this identity was last modified
+  _id: string;
+  catalog_number: number;
+  original_function: 'IfcBeam' | 'IfcColumn' | 'IfcSlab' | 'IfcPlate' | 'IfcWall' | 'IfcMember' | 'IfcPipeSegment' | 'IfcFooting' | 'IfcDiscreteAccessory' | 'IfcBuildingElementPart' | 'IfcBuildingElementProxy' | 'CscDebris';
+  material: string; // FK -> materials._id (I25)
+  material_class: string;
+  material_class_source?: 'derived' | 'assigned';
+  trade_name?: string | null;
+  dataset: string; // FK -> datasets._id (I20)
+  manufactured_at?: string | null;
+  manufactured_precision?: 'exact' | 'day' | 'month' | 'year' | 'unknown';
+  origin?: Origin | null;
+  parent_identities?: string[] | null;
+  inherited_fields?: string[];
+  inherited_from?: string | null;
+  exit?: Exit | null;
+  past_cycles?: PastCycle[];
+  withdrawn?: Withdrawn | null;
+  reserved?: string;
+  is_public?: boolean;
+  current_snapshot_id?: string | null;
+  properties?: Record<string, unknown>;
+  properties_version?: number;
+  attributes?: Record<string, unknown>;
+  created_by_user_id: string;
+  created: string;
+  lastmodified: string;
 }
 
 export interface ComponentSnapshot {
-  _id?: string; // Globally unique snapshot identifier (GUID)
-  identity_id: string; // UUID of the ComponentIdentity this snapshot belongs to
-  version: number; // Per-identity monotonic version, zero-based. First snapshot for an identity is `0`. Unique on (identity_id, version). Server-assigned: never accept this field from client payloads; the backend computes it (`0` on initial create, `max(existing)+1` on snapshot evolution).
-  virtual?: boolean; // True when this snapshot represents a hypothetical / proposal (not yet realized on the physical piece). Migrated snapshots from legacy are `False`.
-  name?: string | unknown; // Human readable name for this state (can change across snapshots, e.g. on remanufacturing).
-  geometry: SnapshotGeometry; // Multi-representation geometry block for this snapshot (meshes, point clouds, extrusions, marker_points, reinforcements). At least one of meshes / point_clouds / extrusions must be non-empty.
-  descriptors?: Record<string, unknown> | unknown; // Descriptors computed from this snapshot's geometry
-  bbx: ComponentBoundingBox; // Bounding box [X, Y, Z] for this snapshot's geometry
-  bbx_origin: number[]; // Bounding box origin [X, Y, Z] in PCA space
-  complexity: number; // Complexity level (0-3); derived from geometry
-  fragment: boolean; // Whether this snapshot's state is a fragment
-  assembly: boolean; // Whether this snapshot's state is an assembly
-  condition?: number | unknown; // Condition grade for this state. 0 = destroyed/retired, 1 = poor, 2 = average, 3 = good. `None` = unknown.
-  color?: number[] | unknown; // RGB rendering color as [R, G, B] integers (0-255)
-  location?: ComponentLocation | unknown; // Geographic location of the piece at the time of this snapshot. PATCH-able on the current snapshot without creating a new one.
-  processes?: Record<string, unknown> | unknown; // Manufacturing or processing information for this state
-  iframe: ComponentFrame; // Insertion frame / transformation matrix for this state
-  pca_frame: ComponentFrame; // PCA frame / principal-component transformation for this state
-  validated: boolean; // Whether this snapshot's state has been validated
-  etag?: string | unknown; // ETag for cache validation; recomputed from snapshot content.
-  photo_count?: number | unknown; // Number of user-uploaded photos on disk for this snapshot; optional cache for list UI
-  added_by_user_id?: string | unknown; // User id of whoever created this snapshot (set on v0 create; records who added the identity to the catalog)
-  added_by_username?: string | unknown; // Username at create time (display cache for added_by_user_id)
-  notes?: string | unknown; // Free-text notes for this snapshot state
-  quantity?: number; // Number of identical physical items represented by this catalog entry (e.g. a batch of matching fixtures)
-  mesh_ply_resolutions?: Record<string, unknown> | unknown; // Which resolution files exist on disk per mesh primitive index (string keys '0', '1', ... matching ``geometry.meshes``). Values list role names: typically 'reduced', optionally 'detailed'. Paths: ``meshes/<snapshot_id>/<i>/reduced.ply`` and ``.../detailed.ply``. Example: {'0': ['reduced', 'detailed']}.
-  created: string; // ISO timestamp when this snapshot was created
-  lastmodified: string; // ISO timestamp when this snapshot was last modified
+  _id: string;
+  identity_id: string;
+  version: number;
+  status: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
+  status_changed_by_user_id?: string | null;
+  status_changed_at?: string | null;
+  supersedes?: string | null;
+  superseded_by?: string | null;
+  name?: string | null;
+  effective_from: string;
+  effective_from_precision?: 'exact' | 'day' | 'month' | 'year' | 'unknown';
+  shape_class?: 'linear' | 'planar' | 'block' | 'irregular' | 'composite' | null;
+  shape_class_source?: 'derived' | 'assigned' | null;
+  geometry: Geometry;
+  capture?: Capture | null;
+  descriptors?: Record<string, unknown>;
+  properties?: Record<string, unknown>;
+  properties_version?: number;
+  frame?: Frame | null;
+  bbx?: number[] | null;
+  complexity?: number | null;
+  complexity_source?: 'derived' | 'assigned' | null;
+  fragment?: boolean;
+  color?: number[] | null;
+  location?: GeoLocation | null;
+  notes?: string | null;
+  quantity?: number;
+  added_by_user_id: string;
+  added_by_username?: string | null;
+  photo_count?: number;
+  mesh_ply_resolutions?: Record<string, unknown>;
+  etag?: string | null;
+  created: string;
+  lastmodified: string;
 }
 
-export interface SnapshotExtrusion {
-  profile: number[][]; // 2D profile polyline as array of [x, y] coordinate pairs (centered in XY)
-  height: number; // Extrusion length along Z
+export interface ConstructionWork {
+  name: string;
+  identifier?: string | null;
+  year_built?: number | null;
+  use?: string | null;
 }
 
-export interface SnapshotGeometry {
-  meshes?: SnapshotMesh[] | unknown; // Mesh primitives; optional PLY files under ``meshes/<snapshot_id>/<i>/{reduced,detailed}.ply``
-  point_clouds?: SnapshotPointCloud[] | unknown; // Array of point cloud primitives (each backed by a PLY file)
-  extrusions?: SnapshotExtrusion[] | unknown; // Array of extrusion primitives (profile + height; fully inline)
-  marker_points?: number[][] | unknown; // Shared marker points as array of [x, y, z] coordinate triplets; same coordinate frame as the meshes/point_clouds/extrusions
-  reinforcements?: SnapshotReinforcement[] | unknown; // Inline reinforcement bar centerlines (spec + diameter + open polyline); ancillary to primary mesh/point_cloud/extrusion representations
+export interface CoordinateSystem {
+  name: string;
+  description?: string | null;
 }
 
-export interface SnapshotMesh {
-  vertices: number[][]; // Mesh vertices as [x, y, z] in Rhino Z-up (CSC canonical frame)
-  faces: number[][]; // Mesh faces as array of vertex index lists (triangles or polygons)
-  colors?: number[][] | unknown; // Optional per-vertex RGB colors as [r, g, b] integers (0-255); parallel to vertices when present
+export interface Exit {
+  kind: 'split' | 'merged' | 'installed' | 'recycled' | 'disposed' | 'returned' | 'lost';
+  at: string;
+  at_precision?: 'exact' | 'day' | 'month' | 'year' | 'unknown';
+  construction_work?: ConstructionWork | null;
+  notes?: string | null;
+  recorded_by_user_id?: string | null;
 }
 
-export interface SnapshotPointCloud {
-  points: number[][]; // Point cloud points as array of [x, y, z] coordinates
-  colors?: number[][] | unknown; // Optional per-point RGB colors as [r, g, b] integers (0-255); parallel to points when present
+export interface Fixture {
+  label: string;
+  file: string;
 }
 
-export interface SnapshotReinforcement {
-  spec: string; // Reinforcement steel specification (e.g. B500B)
-  diameter: number; // Bar diameter in mm
-  points: number[][]; // Open centerline polyline as [x, y, z] coordinate triplets; same coordinate frame as meshes/extrusions/marker_points
+export interface Marker {
+  label: string;
+  role: 'rig' | 'component';
+  point: number[];
+}
+
+export interface Origin {
+  kind: 'deinstallation' | 'demolition' | 'offcut' | 'surplus' | 'unknown';
+  at?: string | null;
+  at_precision?: 'exact' | 'day' | 'month' | 'year' | 'unknown';
+  place?: Place | null;
+  construction_work?: ConstructionWork | null;
+  method?: string | null;
+  performed_by?: Actor[];
+  notes?: string | null;
+}
+
+export interface PastCycle {
+  origin?: Origin | null;
+  exit: Exit;
+}
+
+export interface Place {
+  name?: string | null;
+  address?: string | null;
+  location?: GeoLocation | null;
+}
+
+export interface PropertyValue {
+  range: number | string[];
+  unit?: string | null;
+  confidence: number;
+  source: 'destructive' | 'ndt' | 'archival' | 'visual' | 'heuristic' | 'inherited';
+  n: number;
+  evidence_ids?: string[];
+  inherited_from?: string[] | null;
+  derived_at: string;
+}
+
+export interface Withdrawn {
+  at: string;
+  by_user_id: string;
+  reason: string;
+  duplicate_of?: string | null;
 }
 
 export interface ComponentPassport {
@@ -96,4 +185,38 @@ export interface ComponentPassport {
 
 /** Canonical read model: `GET /identities/{id}/compose` (same JSON as the API). */
 export type CatalogComponent = ComponentPassport
+
+
+export interface CatalogRow {
+  _id: string;
+  catalog_number: number;
+  original_function: string;
+  material: string;
+  material_class: string;
+  trade_name?: string | null;
+  dataset: string;
+  origin?: Origin | null;
+  exit?: Exit | null;
+  reserved?: string;
+  reserved_by_username?: string | null;
+  is_public?: boolean;
+  current_snapshot_id?: string | null;
+  identity_id: string;
+  version: number;
+  status: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
+  name?: string | null;
+  effective_from?: string | null;
+  effective_from_precision?: 'exact' | 'day' | 'month' | 'year' | 'unknown' | null;
+  shape_class?: 'linear' | 'planar' | 'block' | 'irregular' | 'composite' | null;
+  complexity?: number | null;
+  fragment?: boolean;
+  quantity?: number;
+  color?: number[] | null;
+  location?: GeoLocation | null;
+  bbx?: number[] | null;
+  frame?: Frame | null;
+  etag?: string | null;
+  created: string;
+  lastmodified: string;
+}
 

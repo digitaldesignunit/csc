@@ -3,12 +3,12 @@
 import numpy as np
 import pytest
 
+from apps.catalog.api.identity_filters import CatalogFilters
 from apps.catalog.component_map import (
     build_component_map,
     cache_doc_id,
     extract_radial_feature,
     extract_scalar_feature,
-    is_default_map_scope,
     payload_from_cache_doc,
 )
 from apps.descriptors import radial_signature as rs
@@ -58,28 +58,28 @@ def test_build_component_map_omits_missing_and_reports_coverage():
         {
             '_id': 'a',
             'name': 'With radial',
-            'type': 'panel',
+            'original_function': 'IfcPlate',
             'catalog_number': 1,
             'descriptors': _radial_descriptors(),
         },
         {
             '_id': 'b',
             'name': 'Missing radial',
-            'type': 'beam',
+            'original_function': 'IfcBeam',
             'catalog_number': 2,
             'descriptors': {'boxscore': 0.5},
         },
         {
             '_id': 'c',
             'name': 'Also radial',
-            'type': 'panel',
+            'original_function': 'IfcPlate',
             'catalog_number': 3,
             'descriptors': _radial_descriptors(),
         },
         {
             '_id': 'd',
             'name': 'Also radial shifted',
-            'type': 'panel',
+            'original_function': 'IfcPlate',
             'catalog_number': 4,
             'descriptors': {
                 **_radial_descriptors(),
@@ -190,16 +190,15 @@ def test_umap_embedding_when_available():
 
 
 def test_cache_doc_id_and_default_scope():
-    assert cache_doc_id('scalars', 'umap') == 'scalars:umap:active:v1'
-    assert is_default_map_scope(consumed_filter='active', validated=1)
-    assert not is_default_map_scope(
-        consumed_filter='active', validated=1, comptype='panel',
-    )
+    assert cache_doc_id('scalars', 'umap') == 'scalars:umap:active:published'
+    assert CatalogFilters().is_default_scope()
+    assert not CatalogFilters(original_function='IfcPlate').is_default_scope()
+    assert not CatalogFilters(status='any').is_default_scope()
 
 
 def test_payload_from_cache_doc():
     doc = {
-        '_id': 'scalars:pca:active:v1',
+        '_id': 'scalars:pca:active:published',
         'basis': 'scalars',
         'basis_label': 'scalar descriptors',
         'method': 'pca',

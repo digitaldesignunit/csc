@@ -3,7 +3,7 @@
 import { type ReactNode } from 'react'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
-import { ComponentLocation } from '@/generated/CatalogSharedTypes'
+import { GeoLocation } from '@/generated/CatalogSharedTypes'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
@@ -40,7 +40,7 @@ export default function ComponentDetailPageLayout({
   const snapshot = primarySnapshot(catalog)
   const identityId = String(identity._id ?? '')
   const snapshotId = String(snapshot._id ?? identity.current_snapshot_id)
-  const location = (snapshot.location as ComponentLocation) ?? { lat: 0, lon: 0 }
+  const location = (snapshot.location as GeoLocation) ?? { lat: 0, lon: 0 }
   const isPublicIdentity =
     (identity as unknown as { is_public?: boolean }).is_public === true
   const isPublicDemoView = isPublicIdentity && !session?.user

@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_real_catalog_lists_and_composes(api, db, auth_headers):
-    counts = load_dump(db, DUMP_DIR)
+    counts = load_dump(db, DUMP_DIR, replace=True)
     identities = counts['component_identities']
     admin = auth_headers('admin')
 

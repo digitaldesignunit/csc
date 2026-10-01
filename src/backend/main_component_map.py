@@ -5,8 +5,8 @@ Precompute Component Map layouts (PCA + UMAP) into ``component_map_cache``.
 Runs as a cron job so the FastAPI ``GET /identities/map`` route can serve
 UMAP layouts without computing them on request.
 
-Default catalog scope matches the Component Map page:
-    consumed_filter=active, validated=True (validated=1).
+Default catalog scope matches the Component Map page: published current
+snapshots of pieces in circulation (``CatalogFilters()`` defaults).
 
 Usage:
     python main_component_map.py
@@ -28,10 +28,7 @@ from utility import (
     get_current_timestamp_z,
     get_db_connectionstring,
 )
-from apps.catalog.api.identity_filters import (
-    build_identity_match_stage,
-    build_snapshot_match_stage,
-)
+from apps.catalog.api.identity_filters import CatalogFilters
 from apps.catalog.api.identity_query import build_list_pipeline
 from apps.catalog.component_map import (
     MAP_BASES,
@@ -52,11 +49,12 @@ async def load_map_rows(
     identities_col,
     snapshots_collection: str,
 ) -> List[Dict[str, Any]]:
-    """Active + validated identity rows with current-snapshot descriptors."""
+    """Default-scope rows with current-snapshot descriptors."""
+    scope = CatalogFilters()
     pipeline = build_list_pipeline(
         snapshots_collection=snapshots_collection,
-        identity_match=build_identity_match_stage(consumed_filter='active'),
-        snapshot_match=build_snapshot_match_stage(validated=1),
+        identity_match=scope.identity_match(),
+        snapshot_match=scope.snapshot_match(),
         sortkey='_id',
         sort_order=1,
         page=0,
@@ -89,8 +87,8 @@ async def upsert_map_cache(
         'total': payload['total'],
         'displayed': payload['displayed'],
         'points': payload['points'],
-        'consumed_filter': 'active',
-        'validated': 1,
+        'circulation': 'active',
+        'status': 'published',
         'computed_at': now,
     }
     if dry_run:
@@ -119,7 +117,7 @@ async def compute_and_store(
     dry_run: bool,
 ) -> int:
     rows = await load_map_rows(identities_col, snapshots_collection)
-    log(f'Loaded {len(rows)} active validated components')
+    log(f'Loaded {len(rows)} published components in circulation')
 
     stored = 0
     for basis in bases:

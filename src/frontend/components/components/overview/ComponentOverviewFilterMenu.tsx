@@ -8,17 +8,22 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Filter } from 'lucide-react'
+import { ORIGINAL_FUNCTION_LABELS } from '@/generated/Vocab'
+
+type FilterOption = { value: string; label: string }
+
+const ORIGINAL_FUNCTION_OPTIONS: FilterOption[] = Object.entries(
+  ORIGINAL_FUNCTION_LABELS,
+).map(([value, label]) => ({ value, label }))
 
 interface ComponentOverviewFilterMenuProps {
   defaultMaterial: string
-  defaultCompType: string
+  defaultOriginalFunction: string
   defaultDataset: string
   defaultPageSize?: number
-  /** Optional custom endpoint for fetching materials (default: '/api/backend/materials') */
+  /** Materials list (`GET /materials`: `{_id, label}` documents) */
   materialsEndpoint?: string
-  /** Optional custom endpoint for fetching component types (default: '/api/backend/componenttypes') */
-  componentTypesEndpoint?: string
-  /** Optional custom endpoint for fetching datasets (default: '/api/backend/datasets') */
+  /** Dataset slugs (`GET /identities/meta/datasets`) */
   datasetsEndpoint?: string
 }
 
@@ -34,19 +39,18 @@ interface ComponentOverviewFilterMenuProps {
  */
 export default function ComponentOverviewFilterMenu({
   defaultMaterial,
-  defaultCompType,
+  defaultOriginalFunction,
   defaultDataset,
   defaultPageSize = 20,
   materialsEndpoint = '/api/backend/materials',
-  componentTypesEndpoint = '/api/backend/componenttypes',
-  datasetsEndpoint = '/api/backend/datasets',
+  datasetsEndpoint = '/api/backend/identities/meta/datasets',
 }: ComponentOverviewFilterMenuProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
   // Local state to store all the current filters
   const [material, setMaterial] = useState(defaultMaterial)
-  const [compType, setCompType] = useState(defaultCompType)
+  const [compType, setCompType] = useState(defaultOriginalFunction)
   const [dataset, setDataset] = useState(defaultDataset)
   const [complexity, setComplexity] = useState('')
   const [fragment, setFragment] = useState('')
@@ -59,8 +63,7 @@ export default function ComponentOverviewFilterMenu({
   const [pageSize, setPageSize] = useState(String(defaultPageSize))
   
   // State for available materials and component types
-  const [availableMaterials, setAvailableMaterials] = useState<string[]>([])
-  const [availableComponentTypes, setAvailableComponentTypes] = useState<string[]>([])
+  const [availableMaterials, setAvailableMaterials] = useState<FilterOption[]>([])
 
   // State for available datasets
   const [availableDatasets, setAvailableDatasets] = useState<string[]>([])
@@ -75,19 +78,14 @@ export default function ComponentOverviewFilterMenu({
   useEffect(() => {
     const fetchFilterOptions = async () => {
       try {
-        const [materialsResponse, componentTypesResponse, datasetsResponse] = await Promise.all([
+        const [materialsResponse, datasetsResponse] = await Promise.all([
           fetch(materialsEndpoint),
-          fetch(componentTypesEndpoint),
           fetch(datasetsEndpoint),
         ])
 
         if (materialsResponse.ok) {
-          const materials = await materialsResponse.json()
-          setAvailableMaterials(materials)
-        }
-        if (componentTypesResponse.ok) {
-          const types = await componentTypesResponse.json()
-          setAvailableComponentTypes(types)
+          const materials = (await materialsResponse.json()) as { _id: string; label: string }[]
+          setAvailableMaterials(materials.map((m) => ({ value: m._id, label: m.label })))
         }
         if (datasetsResponse.ok) {
           const datasets = await datasetsResponse.json()
@@ -98,13 +96,13 @@ export default function ComponentOverviewFilterMenu({
       }
     }
     fetchFilterOptions()
-  }, [materialsEndpoint, componentTypesEndpoint, datasetsEndpoint])
+  }, [materialsEndpoint, datasetsEndpoint])
 
   // Whenever the searchParams themselves change (due to another component),
   // we sync our local state so our inputs reflect the updated query string.
   useEffect(() => {
     const newMaterial = searchParams.get('material') || ''
-    const newCompType = searchParams.get('comptype') || ''
+    const newCompType = searchParams.get('original_function') || ''
     const newDataset = searchParams.get('dataset') || ''
     const newComplexity = searchParams.get('complexity') || ''
     const newFragment = searchParams.get('fragment') || ''
@@ -144,7 +142,7 @@ export default function ComponentOverviewFilterMenu({
 
     // Keep URL filter params in sync with local state, including cleared fields.
     applyFilterParam('material', material)
-    applyFilterParam('comptype', compType)
+    applyFilterParam('original_function', compType)
     applyFilterParam('dataset', dataset)
     applyFilterParam('complexity', complexity)
     applyFilterParam('fragment', fragment)
@@ -167,7 +165,7 @@ export default function ComponentOverviewFilterMenu({
     
     // Remove all filter parameters from the URL
     params.delete('material')
-    params.delete('comptype')
+    params.delete('original_function')
     params.delete('dataset')
     params.delete('complexity')
     params.delete('fragment')
@@ -229,7 +227,7 @@ export default function ComponentOverviewFilterMenu({
                     <option value="">Any material</option>
                     {availableMaterials.length > 0 ? (
                       availableMaterials.map((mat) => (
-                        <option key={mat} value={mat}>{mat}</option>
+                        <option key={mat.value} value={mat.value}>{mat.label}</option>
                       ))
                     ) : (
                       <option value="" disabled>Loading materials...</option>
@@ -238,21 +236,17 @@ export default function ComponentOverviewFilterMenu({
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="comptypeInput" className="text-sm font-medium">Component Type</Label>
+                  <Label htmlFor="comptypeInput" className="text-sm font-medium">Original function</Label>
                   <select
                     id="comptypeInput"
                     value={compType}
                     onChange={(e) => setCompType(e.target.value)}
                     className="h-8 px-3 py-1 text-sm border border-input rounded-md bg-background"
                   >
-                    <option value="">Any type</option>
-                    {availableComponentTypes.length > 0 ? (
-                      availableComponentTypes.map((type) => (
-                        <option key={type} value={type}>{type}</option>
-                      ))
-                    ) : (
-                      <option value="" disabled>Loading types...</option>
-                    )}
+                    <option value="">Any function</option>
+                    {ORIGINAL_FUNCTION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                 </div>
 

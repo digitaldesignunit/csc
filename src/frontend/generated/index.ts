@@ -2,4 +2,5 @@
 export * from './CatalogSharedTypes';
 export * from './CatalogModels';
 export * from './SnapshotModels';
+export * from './Vocab';
 export * from './catalogExtras';

@@ -5,7 +5,7 @@ import ComponentViewer from '@/components/components/ComponentViewer'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot, type CatalogShallowRow } from '@/generated/catalogExtras'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
-import { formatTimestamp } from '@/lib/utils'
+import { exitSummary, isOutOfCirculation, isPublished } from '@/components/components/componentDetailShared'
 import { Archive, Package } from 'lucide-react'
 import Link from 'next/link'
 import { headers } from 'next/headers'
@@ -16,10 +16,6 @@ export const dynamic = 'force-dynamic'
 
 type PageParams = { component_id: string }
 type PageSearchParams = { snapshots?: string }
-
-function isConsumedIdentity(consumedAt: unknown): boolean {
-  return consumedAt !== undefined && consumedAt !== null && String(consumedAt).trim() !== ''
-}
 
 export default async function ComponentDetailPage({
   params,
@@ -98,11 +94,8 @@ export default async function ComponentDetailPage({
       ? snapshot.version
       : snapshots.find((row) => row._id === activeSnapshotId)?.version ?? 0
 
-  const isConsumed = isConsumedIdentity(catalog.identity.consumed_at)
-  const consumedAtLabel =
-    isConsumed && catalog.identity.consumed_at
-      ? formatTimestamp(String(catalog.identity.consumed_at))
-      : null
+  const isConsumed = isOutOfCirculation(catalog.identity)
+  const exitLabel = exitSummary(catalog.identity.exit)
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-full">
@@ -114,7 +107,7 @@ export default async function ComponentDetailPage({
             <Package className="h-6 w-6 text-primary" />
           )}
           <h1 className="text-xl sm:text-2xl font-bold">
-            {isConsumed ? 'Consumed Component' : 'Component Details'}
+            {isConsumed ? 'Component out of circulation' : 'Component Details'}
           </h1>
         </div>
 
@@ -123,17 +116,15 @@ export default async function ComponentDetailPage({
             role="status"
             className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
           >
-            <p className="font-medium">This identity is consumed</p>
+            <p className="font-medium">This piece left circulation: {exitLabel}</p>
             <p className="mt-1 text-sm text-amber-900/90 dark:text-amber-100/90">
-              It no longer appears in the active catalog
-              {consumedAtLabel ? ` (marked ${consumedAtLabel})` : ''}.
-              Admins can restore it from the actions below.
+              It no longer appears in the active catalog; its record stays.
             </p>
             <Link
-              href="/components?consumed=1"
+              href="/components?circulation=exited"
               className="mt-2 inline-block text-sm font-medium underline underline-offset-4 hover:no-underline"
             >
-              Browse consumed components
+              Browse components out of circulation
             </Link>
           </div>
         )}
@@ -145,7 +136,7 @@ export default async function ComponentDetailPage({
             identityId={component_id}
             viewingVersion={viewingVersion}
             liveVersion={liveVersion}
-            isPending={!snapshot.validated}
+            isPending={!isPublished(snapshot)}
           />
         )}
         <ComponentDetailPageLayout

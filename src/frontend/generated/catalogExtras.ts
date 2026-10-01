@@ -1,49 +1,19 @@
 /**
  * Catalog types that are not a single Pydantic root on the backend.
  *
- * - **CatalogShallowRow**: merged row from `GET /identities?expand=shallow` (see
- *   `merge_shallow_catalog_row`); keep aligned with that projection.
+ * - **CatalogShallowRow**: alias of the generated `CatalogRow` (list rows).
  * - **SnapshotMeshRouting** + **snapshotMeshRoutingFromSnapshot**: small client helper
  *   for PLY mesh URLs (not duplicated as a dedicated API model).
  */
 
 import type {
+  CatalogRow,
   ComponentSnapshot,
   ComponentPassport,
 } from './CatalogModels'
 
-/** Row shape from `GET /identities` with `expand=shallow` (not a full passport payload). */
-export type CatalogShallowRow = {
-  _id?: string
-  type?: string
-  material?: string
-  dataset?: string
-  reserved?: string
-  catalog_number?: number
-  /** Set when the physical piece is consumed (archived); null = active in catalog */
-  consumed_at?: string | null
-  current_snapshot_id?: string
-  name?: unknown
-  created?: string
-  lastmodified?: string
-  complexity?: number
-  fragment?: boolean
-  assembly?: boolean
-  validated?: boolean
-  color?: unknown
-  bbx?: number[]
-  bbx_origin?: number[]
-  condition?: number | unknown
-  location?: unknown
-  processes?: Record<string, unknown> | unknown
-  iframe?: unknown
-  pca_frame?: unknown
-  etag?: string | unknown
-  virtual?: boolean
-  version?: number
-  identity_id?: string
-  reserved_by_username?: string | null
-}
+/** Row from `GET /identities` (`expand=shallow`): the generated `CatalogRow`. */
+export type CatalogShallowRow = CatalogRow
 
 export type ProvenanceIdentityNode = {
   id: string
@@ -51,8 +21,9 @@ export type ProvenanceIdentityNode = {
   identity_id: string
   catalog_number?: number | null
   name?: string | null
-  type?: string | null
-  consumed_at?: string | null
+  original_function?: string | null
+  /** `exit.kind` when the piece left circulation, else null */
+  exit_kind?: string | null
   is_root: boolean
 }
 
@@ -62,8 +33,8 @@ export type ProvenanceSnapshotNode = {
   snapshot_id: string
   identity_id: string
   version: number
-  virtual?: boolean
-  validated: boolean
+  status: string
+  superseded: boolean
   is_current: boolean
   name?: string | null
 }
@@ -95,7 +66,7 @@ export type ComponentMapPoint = {
   x: number
   y: number
   name?: string | null
-  type?: string | null
+  original_function?: string | null
   catalog_number?: number | null
   color?: unknown
 }
@@ -120,7 +91,10 @@ export type SnapshotMeshRouting = {
   mesh_ply_resolutions?: Record<string, string[]> | null
 }
 
-/** First snapshot in a passport payload (the active row for detail views). */
+/**
+ * First snapshot in a passport payload (the active row for detail views).
+ * A published identity may have none left (all withdrawn, decision 8.17).
+ */
 export function primarySnapshot(
   catalog: Pick<ComponentPassport, 'snapshots'>,
 ): ComponentSnapshot {

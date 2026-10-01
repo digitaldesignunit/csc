@@ -1,13 +1,15 @@
 import type {
   ComponentIdentity,
   ComponentSnapshot,
+  Exit,
 } from '@/generated/CatalogModels'
-import type { CatalogShallowRow } from '@/generated/catalogExtras'
+import { EXIT_KIND_LABELS, vocabLabel } from '@/generated/Vocab'
+import { formatTimestamp } from '@/lib/utils'
 
 export function conditionLabel(c: number): string {
   switch (c) {
     case 0:
-      return '0 --- Destroyed / Retired'
+      return '0 --- Unusable as is'
     case 1:
       return '1 --- Poor'
     case 2:
@@ -38,12 +40,22 @@ export function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0
 }
 
-export function isConsumedShallowRow(row: Pick<CatalogShallowRow, 'consumed_at'>): boolean {
-  return (
-    row.consumed_at !== undefined &&
-    row.consumed_at !== null &&
-    String(row.consumed_at).trim() !== ''
-  )
+/** A piece that left circulation (split, installed, recycled, ...; spec 3.1.3). */
+export function isOutOfCirculation(row: { exit?: Exit | null }): boolean {
+  return row.exit !== undefined && row.exit !== null
+}
+
+/** "Split on 29.04.2026" --- the exit kind and date, for badges and banners. */
+export function exitSummary(exit: Exit | null | undefined): string {
+  if (!exit) return ''
+  const kind = vocabLabel(EXIT_KIND_LABELS, exit.kind)
+  const at = exit.at ? formatTimestamp(String(exit.at)) : ''
+  return at ? `${kind} (${at})` : kind
+}
+
+/** Published is the only status listed by default (spec 3.3.3). */
+export function isPublished(snapshot: { status?: string | null }): boolean {
+  return snapshot.status === 'published'
 }
 
 export function parentIdentityIds(identity: ComponentIdentity): string[] {

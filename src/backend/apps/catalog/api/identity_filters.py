@@ -1,64 +1,146 @@
 """
-Shared filter/sort helpers for identity + current-snapshot list queries.
+Catalog filters and sort keys for the identity + current-snapshot queries
+(spec section 7: ``type`` -> ``original_function``, ``consumed_filter`` ->
+``circulation``, ``validated`` -> ``status``; withdrawn identities hidden
+unless asked for).
+
+``CatalogFilters`` is one FastAPI dependency shared by the list, count, map
+and stats routes, so every route filters the same way.
 """
 
+from dataclasses import dataclass, fields
 from typing import Any, Dict, Literal, Optional
 
-from apps.catalog.models import ALLOWED_COMPONENT_SORTKEYS
+from fastapi import Query
 
-ConsumedFilter = Literal['active', 'consumed', 'all']
+Circulation = Literal['active', 'exited', 'all']
+StatusFilter = Literal['published', 'pending', 'draft', 'rejected',
+                       'withdrawn', 'any']
 ExpandMode = Literal['none', 'current_snapshot', 'shallow']
 
 _IDENTITY_SORT_FIELDS = frozenset({
-    '_id', 'type', 'material', 'dataset', 'catalog_number', 'reserved',
+    '_id', 'catalog_number', 'original_function', 'material',
+    'material_class', 'dataset', 'reserved',
 })
 _SNAPSHOT_SORT_FIELDS = frozenset({
-    'name', 'color', 'complexity', 'fragment', 'assembly', 'validated',
-    'bbx.0', 'bbx.1', 'bbx.2', 'created', 'lastmodified',
+    'name', 'color', 'complexity', 'fragment', 'shape_class',
+    'effective_from', 'bbx.0', 'bbx.1', 'bbx.2', 'created', 'lastmodified',
 })
+SORT_KEYS = tuple(sorted(_IDENTITY_SORT_FIELDS | _SNAPSHOT_SORT_FIELDS))
+_BBX_AXES = (('x', 0), ('y', 1), ('z', 2))
 
 
-def build_identity_match_stage(
-    *,
-    comptype: str = '',
-    material: str = '',
-    dataset: str = '',
-    reserved: Optional[str] = None,
-    consumed_filter: ConsumedFilter = 'active',
-) -> Dict[str, Any]:
-    """Match stage on ``component_identities`` (pre-lookup)."""
-    match: Dict[str, Any] = {}
-
-    if consumed_filter == 'active':
-        match['consumed_at'] = None
-    elif consumed_filter == 'consumed':
-        match['consumed_at'] = {'$ne': None}
-
-    if comptype:
-        match['type'] = {'$regex': f'^{comptype}$', '$options': 'i'}
-    if material:
-        match['material'] = {'$regex': f'^{material}$', '$options': 'i'}
-    if dataset:
-        match['dataset'] = {'$regex': f'^{dataset}$', '$options': 'i'}
-
-    if reserved == 'true':
-        match['reserved'] = {'$ne': ''}
-    elif reserved == 'false':
-        match['reserved'] = ''
-
-    return match
+def _exact(value: str) -> Dict[str, Any]:
+    return {'$regex': f'^{value}$', '$options': 'i'}
 
 
-def build_children_identity_match(
-    parent_identity_id: str,
-    *,
-    public_only: bool = False,
-) -> Dict[str, Any]:
+@dataclass
+class CatalogFilters:
+    """What the catalog list shows; the defaults are the public catalog
+    view (published, in circulation, not withdrawn)."""
+    original_function: str = ''
+    material: str = ''
+    material_class: str = ''
+    dataset: str = ''
+    shape_class: str = ''
+    status: str = 'published'
+    circulation: str = 'active'
+    exit_kind: str = ''
+    complexity: Optional[int] = None
+    fragment: Optional[bool] = None
+    reserved: Optional[str] = None
+    include_withdrawn: bool = False
+    bbx_min_x: Optional[float] = None
+    bbx_min_y: Optional[float] = None
+    bbx_min_z: Optional[float] = None
+    bbx_max_x: Optional[float] = None
+    bbx_max_y: Optional[float] = None
+    bbx_max_z: Optional[float] = None
+
+    def identity_match(self) -> Dict[str, Any]:
+        """``$match`` on ``component_identities`` (before the lookup)."""
+        match: Dict[str, Any] = {}
+        if self.circulation == 'active':
+            match['exit'] = None
+        elif self.circulation == 'exited':
+            match['exit'] = {'$ne': None}
+        if self.exit_kind:
+            match['exit.kind'] = self.exit_kind
+        if not self.include_withdrawn:
+            match['withdrawn'] = None
+        for name in ('original_function', 'material', 'dataset'):
+            value = getattr(self, name)
+            if value:
+                match[name] = _exact(value)
+        if self.material_class:
+            match['material_class'] = self.material_class
+        if self.reserved == 'true':
+            match['reserved'] = {'$ne': ''}
+        elif self.reserved == 'false':
+            match['reserved'] = ''
+        return match
+
+    def snapshot_match(self, prefix: str = 'current_snapshot.'
+                       ) -> Dict[str, Any]:
+        """``$match`` after the ``$lookup`` + ``$unwind`` of the current
+        snapshot."""
+        match: Dict[str, Any] = {}
+        if self.status != 'any':
+            match[f'{prefix}status'] = self.status
+        if self.shape_class:
+            match[f'{prefix}shape_class'] = self.shape_class
+        if self.complexity is not None:
+            match[f'{prefix}complexity'] = self.complexity
+        if self.fragment is not None:
+            match[f'{prefix}fragment'] = self.fragment
+        for axis, index in _BBX_AXES:
+            bounds: Dict[str, float] = {}
+            low = getattr(self, f'bbx_min_{axis}')
+            high = getattr(self, f'bbx_max_{axis}')
+            if low is not None:
+                bounds['$gte'] = low
+            if high is not None:
+                bounds['$lte'] = high
+            if bounds:
+                match[f'{prefix}bbx.{index}'] = bounds
+        return match
+
+    def is_default_scope(self) -> bool:
+        """True for the scope the map cron precomputes (no filter set)."""
+        return all(getattr(self, f.name) == f.default for f in fields(self))
+
+
+def catalog_filters(
+    original_function: str = Query('', description='IFC class name'),
+    material: str = Query('', description='materials._id'),
+    material_class: str = Query('', description='List of Waste code'),
+    dataset: str = Query(''),
+    shape_class: str = Query(''),
+    status: StatusFilter = Query('published'),
+    circulation: Circulation = Query(
+        'active', description='active = no exit; exited; all'),
+    exit_kind: str = Query(''),
+    complexity: Optional[int] = Query(None),
+    fragment: Optional[bool] = Query(None),
+    reserved: Optional[str] = Query(None),
+    include_withdrawn: bool = Query(False),
+    bbx_min_x: Optional[float] = Query(None),
+    bbx_min_y: Optional[float] = Query(None),
+    bbx_min_z: Optional[float] = Query(None),
+    bbx_max_x: Optional[float] = Query(None),
+    bbx_max_y: Optional[float] = Query(None),
+    bbx_max_z: Optional[float] = Query(None),
+) -> CatalogFilters:
+    """FastAPI dependency: the catalog filters from the query string."""
+    return CatalogFilters(**{k: v for k, v in locals().items()})
+
+
+def children_identity_match(parent_identity_id: str, *,
+                            public_only: bool = False) -> Dict[str, Any]:
     """
-    Match identities that list ``parent_identity_id`` in ``parent_identities``.
-
-    Does not filter by ``consumed_at``: children of a consumed parent are
-    typically still active, and a child may itself be consumed.
+    Identities that list ``parent_identity_id`` in ``parent_identities``.
+    Exited children are included: children of a split parent are usually
+    still in circulation, and a child may itself be split.
     """
     match: Dict[str, Any] = {'parent_identities': parent_identity_id}
     if public_only:
@@ -66,107 +148,10 @@ def build_children_identity_match(
     return match
 
 
-def build_snapshot_match_stage(
-    *,
-    validated: int = 1,
-    complexity: Optional[int] = None,
-    fragment: Optional[bool] = None,
-    bbx_min_x: Optional[float] = None,
-    bbx_min_y: Optional[float] = None,
-    bbx_min_z: Optional[float] = None,
-    bbx_max_x: Optional[float] = None,
-    bbx_max_y: Optional[float] = None,
-    bbx_max_z: Optional[float] = None,
-    prefix: str = 'current_snapshot.',
-) -> Dict[str, Any]:
-    """
-    Match after ``$lookup`` + ``$unwind`` on the current snapshot.
-    """
-    match: Dict[str, Any] = {}
-
-    if validated == 1:
-        match[f'{prefix}validated'] = True
-    elif validated == -1:
-        match[f'{prefix}validated'] = False
-
-    if complexity is not None:
-        match[f'{prefix}complexity'] = complexity
-    if fragment is not None:
-        match[f'{prefix}fragment'] = fragment
-
-    if bbx_min_x is not None or bbx_max_x is not None:
-        bbx_query: Dict[str, Any] = {}
-        if bbx_min_x is not None:
-            bbx_query['$gte'] = bbx_min_x
-        if bbx_max_x is not None:
-            bbx_query['$lte'] = bbx_max_x
-        if bbx_query:
-            match[f'{prefix}bbx.0'] = bbx_query
-
-    if bbx_min_y is not None or bbx_max_y is not None:
-        bbx_query = {}
-        if bbx_min_y is not None:
-            bbx_query['$gte'] = bbx_min_y
-        if bbx_max_y is not None:
-            bbx_query['$lte'] = bbx_max_y
-        if bbx_query:
-            match[f'{prefix}bbx.1'] = bbx_query
-
-    if bbx_min_z is not None or bbx_max_z is not None:
-        bbx_query = {}
-        if bbx_min_z is not None:
-            bbx_query['$gte'] = bbx_min_z
-        if bbx_max_z is not None:
-            bbx_query['$lte'] = bbx_max_z
-        if bbx_query:
-            match[f'{prefix}bbx.2'] = bbx_query
-
-    return match
-
-
 def resolve_sort_field(sortkey: str) -> str:
-    """Map legacy shallow sort keys to identity or joined snapshot paths."""
-    if sortkey not in ALLOWED_COMPONENT_SORTKEYS:
-        sortkey = '_id'
+    """A sort key -> the identity or joined current-snapshot path."""
     if sortkey in _IDENTITY_SORT_FIELDS:
         return sortkey
     if sortkey in _SNAPSHOT_SORT_FIELDS:
         return f'current_snapshot.{sortkey}'
     return '_id'
-
-
-def merge_shallow_catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
-    """Legacy-style shallow row: identity core + current snapshot metadata."""
-    snap = doc.get('current_snapshot') or {}
-    row: Dict[str, Any] = {
-        '_id': doc.get('_id'),
-        'type': doc.get('type'),
-        'material': doc.get('material'),
-        'dataset': doc.get('dataset'),
-        'reserved': doc.get('reserved', ''),
-        'catalog_number': doc.get('catalog_number'),
-        'consumed_at': doc.get('consumed_at'),
-        'name': snap.get('name'),
-        'created': snap.get('created'),
-        'lastmodified': snap.get('lastmodified'),
-        'complexity': snap.get('complexity'),
-        'fragment': snap.get('fragment'),
-        'assembly': snap.get('assembly'),
-        'validated': snap.get('validated'),
-        'color': snap.get('color'),
-        'bbx': snap.get('bbx'),
-        'bbx_origin': snap.get('bbx_origin'),
-        'condition': snap.get('condition'),
-        'location': snap.get('location'),
-        'processes': snap.get('processes'),
-        'iframe': snap.get('iframe'),
-        'pca_frame': snap.get('pca_frame'),
-        'etag': snap.get('etag'),
-        'virtual': snap.get('virtual'),
-        'version': snap.get('version'),
-        'identity_id': snap.get('identity_id'),
-        'current_snapshot_id': doc.get('current_snapshot_id'),
-    }
-    if 'reserved_by_username' in doc:
-        row['reserved_by_username'] = doc['reserved_by_username']
-    return row

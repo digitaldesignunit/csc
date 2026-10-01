@@ -19,10 +19,15 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import {
-  conditionBadgeClass,
-  conditionLabel,
-  isConsumedShallowRow,
+  ORIGINAL_FUNCTION_LABELS,
+  SHAPE_CLASS_LABELS,
+  vocabLabel,
+} from '@/generated/Vocab'
+import {
+  exitSummary,
   isNonEmptyString,
+  isOutOfCirculation,
+  isPublished,
   snapshotAddedByDisplay,
 } from './componentDetailShared'
 
@@ -84,28 +89,32 @@ function CatalogMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
     Array.isArray(snapshot.color) ? snapshot.color : [],
   )
   const componentColorHex = hexComponentColor(Array.isArray(snapshot.color) ? snapshot.color : [])
-  const bounds = componentBounds(snapshot.bbx)
+  const bounds = componentBounds(snapshot.bbx ?? [0, 0, 0])
   const addedBy = snapshotAddedByDisplay(snapshot)
 
   return (
     <>
-      <MetadataRow label="Type">
-        <ValueChip tone="primary">{identity.type}</ValueChip>
+      <MetadataRow label="Original function">
+        <ValueChip tone="primary">
+          {vocabLabel(ORIGINAL_FUNCTION_LABELS, identity.original_function)}
+        </ValueChip>
       </MetadataRow>
       <MetadataRow label="Material">
-        <ValueChip tone="secondary">{identity.material}</ValueChip>
+        <ValueChip tone="secondary">
+          {identity.material}
+          {identity.trade_name ? ` (${identity.trade_name})` : ''}
+        </ValueChip>
       </MetadataRow>
-      <MetadataRow label="Condition">
-        {typeof snapshot.condition === 'number' ? (
-          <span
-            className={`inline-block rounded-md px-1.5 py-0.5 text-xs font-medium ${conditionBadgeClass(snapshot.condition)}`}
-          >
-            {conditionLabel(snapshot.condition)}
-          </span>
-        ) : (
-          <span className="text-xs italic text-muted-foreground">Unknown</span>
-        )}
+      <MetadataRow label="Waste class (LoW)">
+        <ValueChip tone="muted">{identity.material_class}</ValueChip>
       </MetadataRow>
+      {snapshot.shape_class && (
+        <MetadataRow label="Shape class">
+          <ValueChip tone="primary">
+            {vocabLabel(SHAPE_CLASS_LABELS, snapshot.shape_class)}
+          </ValueChip>
+        </MetadataRow>
+      )}
       <MetadataRow label="Color">
         <span className="inline-flex items-center justify-end gap-2">
           <span
@@ -166,9 +175,7 @@ function CatalogMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
 function TimelineMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
   const { identity } = catalog
   const snapshot = primarySnapshot(catalog)
-  const isConsumed = isConsumedShallowRow({
-    consumed_at: identity.consumed_at as string | null | undefined,
-  })
+  const outOfCirculation = isOutOfCirculation(identity)
   const reservedBy = typeof identity.reserved === 'string' ? identity.reserved.trim() : ''
 
   return (
@@ -179,23 +186,24 @@ function TimelineMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
       <MetadataRow label="Last modified">
         <ValueChip tone="primary">{formatTimestamp(snapshot.lastmodified)}</ValueChip>
       </MetadataRow>
-      <MetadataRow label="Validated">
-        {snapshot.validated ? (
+      <MetadataRow label="State since">
+        <ValueChip tone="secondary">{formatTimestamp(snapshot.effective_from)}</ValueChip>
+      </MetadataRow>
+      <MetadataRow label="Status">
+        {isPublished(snapshot) ? (
           <span className="rounded-md border border-green-300 bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800 dark:border-green-700 dark:bg-green-950/50 dark:text-green-200">
-            Yes
+            Published
           </span>
         ) : (
-          <ValueChip tone="muted">No</ValueChip>
+          <ValueChip tone="muted">{snapshot.status}</ValueChip>
         )}
       </MetadataRow>
       <MetadataRow label="Reserved">
         <ValueChip tone={reservedBy ? 'primary' : 'muted'}>{reservedBy ? 'Yes' : 'No'}</ValueChip>
       </MetadataRow>
-      {isConsumed && (
-        <MetadataRow label="Consumed">
-          <ValueChip tone="secondary">
-            {identity.consumed_at ? formatTimestamp(String(identity.consumed_at)) : 'Yes'}
-          </ValueChip>
+      {outOfCirculation && (
+        <MetadataRow label="Left circulation">
+          <ValueChip tone="secondary">{exitSummary(identity.exit)}</ValueChip>
         </MetadataRow>
       )}
       <MetadataRow label="Snapshot ID">

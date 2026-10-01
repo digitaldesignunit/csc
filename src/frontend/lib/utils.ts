@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { ComponentBoundingBox, ComponentLocation } from "@/generated/CatalogSharedTypes";
+import type { GeoLocation } from "@/generated/CatalogSharedTypes";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -154,17 +154,17 @@ export function formatTimestamp(input: string): string {
   return input || 'Unknown Date'
 }
 
-export function formatLocation(coords: ComponentLocation): string {
+export function formatLocation(coords: GeoLocation): string {
   const { lat, lon } = coords;
   return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
 }
 
-export function formatLocationMapsLink(coords: ComponentLocation): string {
+export function formatLocationMapsLink(coords: GeoLocation): string {
   const { lat, lon } = coords;
   return `https://www.google.com/maps/place/${lat.toFixed(6)},${lon.toFixed(6)}`;
 }
 
-export function componentBounds(component_bbx: ComponentBoundingBox): Array<number> {
+export function componentBounds(component_bbx: number[]): Array<number> {
   // Add defensive programming for unexpected data structures
   if (!component_bbx || !Array.isArray(component_bbx) || component_bbx.length < 3) {
     console.warn('Invalid bounding box data:', component_bbx)

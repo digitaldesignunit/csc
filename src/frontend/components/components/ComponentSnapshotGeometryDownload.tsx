@@ -25,9 +25,10 @@ type Props = {
 }
 
 const GROUP_ORDER: GeometryDownloadItem['group'][] = [
-  'mesh_file',
-  'mesh_primitive',
-  'extrusion',
+  'original',
+  'reduced',
+  'preview',
+  'proxy',
   'point_cloud',
 ]
 

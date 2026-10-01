@@ -80,9 +80,10 @@ ProxyRole = Literal['primary', 'part']
 PROXY_ROLES: Tuple[str, ...] = get_args(ProxyRole)
 
 FitSourceKind = Literal['meshes', 'point_clouds']
-FitSourceResolution = Literal['detailed', 'reduced', 'inline']
+# detail levels (decision 8.23): 'original' is stored on disk as detailed.ply
+FitSourceResolution = Literal['original', 'reduced', 'preview']
 
-ResolutionHint = Literal['full', 'reduced', 'proxy']
+ResolutionHint = Literal['original', 'reduced', 'proxy']
 RegionReason = Literal['connection', 'damage', 'feature', 'other']
 
 # CAPTURE (section 3.2.3) -----------------------------------------------------

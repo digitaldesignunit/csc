@@ -47,10 +47,10 @@ def _free_port() -> int:
 
 
 class ThrowawayMongod:
-    def __init__(self, binary: str):
+    def __init__(self, binary: str, port: Optional[int] = None):
         self.binary = binary
         self.dbpath = tempfile.mkdtemp(prefix='csc-mongod-')
-        self.port = _free_port()
+        self.port = port or _free_port()
         self.process: Optional[subprocess.Popen] = None
 
     @property

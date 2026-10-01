@@ -19,13 +19,16 @@ Routes for the v0.5 `component_snapshots` collection.
     -> rendered catalog thumbnail
 * `GET|PUT|DELETE
     /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}`
-    -> PLY file (GET supports `?format=obj`; DELETE clears disk + manifest)
+    -> reduced / original mesh file, stored as `reduced.ply` /
+    `detailed.ply` (GET supports `?format=obj`; DELETE clears disk +
+    manifest)
 * `GET
-    /snapshots/{snapshot_id}/meshes/{primitive_index}/primitive`
-    -> inline mesh (`?format=ply|obj`)
+    /snapshots/{snapshot_id}/meshes/{primitive_index}/preview`
+    -> the preview: the inline mesh (`?format=ply|obj`; decision 8.23;
+    `/primitive` is an alias until P5)
 * `GET
-    /snapshots/{snapshot_id}/extrusions/{index}`
-    -> inline extrusion mesh (`?format=ply|obj`)
+    /snapshots/{snapshot_id}/proxies/{index}/mesh`
+    -> prism proxy as a mesh (`?format=ply|obj`)
 * `GET|PUT|DELETE
     /snapshots/{snapshot_id}/point_clouds/{index}.ply`
     -> PLY file (GET falls back to inline points when no file on disk)
@@ -55,11 +58,12 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pymongo.errors import PyMongoError
 
-from apps.catalog.models import (
+from apps.catalog.models import ComponentPassport as LegacyPassport
+from apps.catalog.models import User
+from apps.catalog.read_models import (
     ComponentSnapshot,
-    ComponentPassport,
-    PendingValidationSnapshotItem,
-    User,
+    PendingSnapshotItem,
+    snapshot_body,
 )
 from utility import ensure_file, read_upload_limited
 
@@ -68,7 +72,6 @@ from apps.catalog.geometry_mesh_export import (
     export_inline_mesh,
     export_inline_point_cloud_ply,
     export_mesh_file,
-    get_inline_extrusion_primitive,
     get_inline_mesh_primitive,
     get_inline_point_cloud_primitive,
     mesh_export_extension,
@@ -84,6 +87,7 @@ from .catalog_common import (
     get_snapshots_col,
     not_modified_response,
     now_iso,
+    retired_until,
     validate_snapshot_and_promote,
     validate_uuid,
 )
@@ -234,36 +238,36 @@ async def _sync_photo_count(request: Request, snapshot_id: str) -> int:
 
 
 @router.get(
-    '/snapshots/pending-validation',
-    summary='List unvalidated snapshots awaiting admin approval',
-    response_model=List[PendingValidationSnapshotItem],
+    '/snapshots/pending',
+    summary='Moderation queue: snapshots with status pending',
+    response_model=List[PendingSnapshotItem],
     response_model_by_alias=True,
 )
-async def list_pending_validation_snapshots(
+async def list_pending_snapshots(
     request: Request,
     admin_user: Annotated[User, Depends(require_admin)],
 ):
     """
-    All snapshots with ``validated=false``,
-    newest first, with identity context.
+    All snapshots with ``status == pending``, newest first, with identity
+    context. (Per-dataset moderators: plan P3.)
     """
     snapshots = await get_snapshots_col(request)
     identities = await get_identities_col(request)
 
     try:
         pending_docs = await snapshots.find(
-            {'validated': False},
+            {'status': 'pending'},
             {
                 '_id': 1,
                 'identity_id': 1,
                 'version': 1,
-                'validated': 1,
+                'status': 1,
                 'name': 1,
                 'created': 1,
             },
         ).sort('created', -1).to_list(length=None)
     except PyMongoError as exc:
-        print(f'[ERROR] list_pending_validation_snapshots: {exc}')
+        print(f'[ERROR] list_pending_snapshots: {exc}')
         raise HTTPException(status_code=500, detail='Internal server error')
 
     items: List[Dict[str, Any]] = []
@@ -278,8 +282,9 @@ async def list_pending_validation_snapshots(
                 '_id': 1,
                 'current_snapshot_id': 1,
                 'catalog_number': 1,
-                'type': 1,
+                'original_function': 1,
                 'material': 1,
+                'dataset': 1,
             },
         )
         if identity_doc is None:
@@ -299,20 +304,21 @@ async def list_pending_validation_snapshots(
             **snap,
             'is_current': snap.get('_id') == current_snapshot_id,
             'catalog_number': identity_doc.get('catalog_number'),
-            'type': identity_doc.get('type'),
+            'original_function': identity_doc.get('original_function'),
             'material': identity_doc.get('material'),
+            'dataset': identity_doc.get('dataset'),
             'live_version': live_version,
         }
         try:
             items.append(
-                PendingValidationSnapshotItem.model_validate(row).model_dump(
+                PendingSnapshotItem.model_validate(row).model_dump(
                     by_alias=True
                 )
             )
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
-                detail=f'Pending validation row failed validation: {exc}',
+                detail=f'Pending snapshot row failed validation: {exc}',
             )
 
     return JSONResponse(status_code=200, content=items)
@@ -321,8 +327,9 @@ async def list_pending_validation_snapshots(
 @router.post(
     '/snapshots/{snapshot_id}/validate',
     summary='Validate snapshot and promote to live (admin only)',
-    response_model=ComponentPassport,
+    response_model=LegacyPassport,
     response_model_by_alias=True,
+    dependencies=[Depends(retired_until('P3'))],
 )
 async def validate_snapshot_route(
     request: Request,
@@ -346,6 +353,7 @@ async def validate_snapshot_route(
 @router.delete(
     '/snapshots/{snapshot_id}',
     summary='Reject and delete a pending snapshot (admin only)',
+    dependencies=[Depends(retired_until('P3'))],
 )
 async def delete_pending_snapshot(
     request: Request,
@@ -452,14 +460,12 @@ async def get_snapshot_by_id(
         return not_modified_response(etag)
 
     try:
-        model = ComponentSnapshot.model_validate(doc)
+        body = snapshot_body(doc)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
             detail=f'Stored snapshot failed Pydantic validation: {exc}',
         )
-
-    body = model.model_dump(by_alias=True)
 
     return JSONResponse(
         status_code=200,
@@ -526,10 +532,15 @@ def _http_mesh_format(format: str) -> str:
 
 
 @router.get(
-    '/snapshots/{snapshot_id}/meshes/{primitive_index}/primitive',
-    summary='Export inline mesh primitive (PLY or OBJ)',
+    '/snapshots/{snapshot_id}/meshes/{primitive_index}/preview',
+    summary='Export the mesh preview stored in the snapshot (PLY or OBJ)',
 )
-async def get_snapshot_mesh_primitive(
+@router.get(
+    '/snapshots/{snapshot_id}/meshes/{primitive_index}/primitive',
+    summary='Alias of .../preview until plan P5 (decision 8.23)',
+    deprecated=True,
+)
+async def get_snapshot_mesh_preview(
     request: Request,
     current_user: OptionalUser,
     snapshot_id: str,
@@ -537,8 +548,8 @@ async def get_snapshot_mesh_primitive(
     format: str = Query('ply', description='ply (default) or obj'),
 ):
     """
-    Build mesh from ``geometry.meshes[primitive_index]``;
-    OBJ is converted on the fly.
+    The preview (decision 8.23): ``geometry.meshes[primitive_index]`` as
+    a file; OBJ is converted on the fly.
     """
     fmt = _http_mesh_format(format)
     if primitive_index < 0:
@@ -555,18 +566,18 @@ async def get_snapshot_mesh_primitive(
         mesh = get_inline_mesh_primitive(doc, primitive_index)
         body = export_inline_mesh(mesh, fmt)  # type: ignore[arg-type]
     except IndexError:
-        raise HTTPException(status_code=404, detail='Mesh primitive not found')
+        raise HTTPException(status_code=404, detail='Mesh preview not found')
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        print(f'[ERROR] mesh primitive export ({fmt}): {exc}')
+        print(f'[ERROR] mesh preview export ({fmt}): {exc}')
         raise HTTPException(
             status_code=500,
-            detail=f'Failed to export mesh primitive as {fmt.upper()}',
+            detail=f'Failed to export mesh preview as {fmt.upper()}',
         )
 
     ext = mesh_export_extension(fmt)  # type: ignore[arg-type]
-    filename = f'{snapshot_id}_mesh_{primitive_index}_primitive.{ext}'
+    filename = f'{snapshot_id}_mesh_{primitive_index}_preview.{ext}'
     return _mesh_export_attachment_response(body, filename, fmt)
 
 
@@ -928,10 +939,55 @@ async def delete_snapshot_mesh_ply(
 
 
 @router.get(
-    '/snapshots/{snapshot_id}/extrusions/{index}',
-    summary='Export inline extrusion primitive (PLY or OBJ mesh)',
+    '/snapshots/{snapshot_id}/capture/fixtures/{index}.ply',
+    summary='Capture fixture mesh (e.g. the robot gripper; decision 7.7)',
 )
-async def get_snapshot_extrusion(
+async def get_snapshot_capture_fixture(
+    request: Request,
+    current_user: OptionalUser,
+    snapshot_id: str,
+    index: int,
+):
+    """
+    Serve ``capture.fixtures[index].file`` (``capture/<snapshot_id>/
+    fixtures/<i>.ply`` under ``SNAPSHOT_CAPTURE_DIR``). Fixtures are capture
+    context, never the component: no derivation reads them.
+    """
+    doc = await ensure_snapshot_read_access(
+        request,
+        snapshot_id,
+        current_user,
+    )
+    fixtures = ((doc.get('capture') or {}).get('fixtures')) or []
+    if index < 0 or index >= len(fixtures):
+        raise HTTPException(status_code=404, detail='Fixture not found')
+    root = getattr(request.app, 'snapshot_capture_dir', None)
+    relative = str(fixtures[index].get('file') or '')
+    if relative.startswith('capture/'):
+        relative = relative[len('capture/'):]
+    path = os.path.normpath(os.path.join(root, relative)) if root else ''
+    if not root or not path.startswith(os.path.normpath(root))             or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail='Fixture file not found')
+    etag = _mesh_etag(path)
+    if request.headers.get('if-none-match') == etag:
+        return not_modified_response(etag)
+    filename = f'{snapshot_id}_fixture_{index}.ply'
+    return FileResponse(
+        path,
+        media_type='model/ply',
+        filename=filename,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'private, max-age=86400',
+        },
+    )
+
+
+@router.get(
+    '/snapshots/{snapshot_id}/proxies/{index}/mesh',
+    summary='Export a prism proxy as a mesh (PLY or OBJ)',
+)
+async def get_snapshot_proxy_mesh(
     request: Request,
     current_user: OptionalUser,
     snapshot_id: str,
@@ -939,36 +995,41 @@ async def get_snapshot_extrusion(
     format: str = Query('ply', description='ply (default) or obj'),
 ):
     """
-    Triangulate ``geometry.extrusions[index]``;
-    OBJ is converted on the fly.
+    Triangulate ``geometry.proxies[index]`` (a prism: profile x height,
+    centred on z = 0; App. B); OBJ is converted on the fly. Other
+    primitives follow with the geometry runner (plan P5).
     """
     fmt = _http_mesh_format(format)
-    if index < 0:
-        raise HTTPException(status_code=400, detail='index must be >= 0')
     doc = await ensure_snapshot_read_access(
         request,
         snapshot_id,
         current_user,
     )
-    try:
-        ext = get_inline_extrusion_primitive(doc, index)
-        body = export_extrusion(ext, fmt)  # type: ignore[arg-type]
-    except IndexError:
+    proxies = (doc.get('geometry') or {}).get('proxies') or []
+    if index < 0 or index >= len(proxies):
+        raise HTTPException(status_code=404, detail='Proxy not found')
+    proxy = proxies[index]
+    if proxy.get('primitive') != 'prism':
         raise HTTPException(
-            status_code=404,
-            detail='Extrusion primitive not found'
+            status_code=400,
+            detail=f'no mesh export for {proxy.get("primitive")} proxies yet',
         )
+    params = proxy.get('params') or {}
+    try:
+        body = export_extrusion(  # type: ignore[arg-type]
+            {'profile': params.get('profile'), 'height': params.get('height')},
+            fmt)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        print(f'[ERROR] extrusion export ({fmt}): {exc}')
+        print(f'[ERROR] proxy export ({fmt}): {exc}')
         raise HTTPException(
             status_code=500,
-            detail=f'Failed to export extrusion as {fmt.upper()}',
+            detail=f'Failed to export proxy as {fmt.upper()}',
         )
 
     file_ext = mesh_export_extension(fmt)  # type: ignore[arg-type]
-    filename = f'{snapshot_id}_extrusion_{index}.{file_ext}'
+    filename = f'{snapshot_id}_proxy_{index}.{file_ext}'
     return _mesh_export_attachment_response(body, filename, fmt)
 
 

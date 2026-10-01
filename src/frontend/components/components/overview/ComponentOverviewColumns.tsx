@@ -3,13 +3,13 @@
 
 import { useState } from 'react'
 import { ColumnDef } from '@tanstack/react-table'
-import { ComponentBoundingBox } from '@/generated/CatalogSharedTypes'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { formatTimestamp, rgbToHex } from '@/lib/utils'
 import ComponentOverviewDataTablePreviewCell from './ComponentOverviewDataTablePreviewCell'
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
 import ComponentOverviewDataTableFilterCell from './ComponentOverviewDataTableFilterCell'
 import ComponentOverviewDataTableLocationCell from './ComponentOverviewDataTableLocationCell'
+import { ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/generated/Vocab'
 
 function ComponentOverviewDataTableCopyIdCell({ componentId }: { componentId: string }) {
   const [copied, setCopied] = useState(false)
@@ -68,16 +68,17 @@ export const ComponentOverviewColumns: ColumnDef<CatalogShallowRow>[] = [
     },
   },
   {
-    accessorKey: 'type',
-    header: () => <ComponentOverviewDataTableHeader header='Type' sortKey='type' />,
+    accessorKey: 'original_function',
+    header: () => <ComponentOverviewDataTableHeader header='Function' sortKey='original_function' />,
     meta: { colClassName: 'w-[120px] sm:w-[140px] md:w-[160px]' },
     cell: ({ row }) => {
-      const component_type: string = row.getValue('type')
+      const originalFunction: string = row.getValue('original_function')
       return (
         <ComponentOverviewDataTableFilterCell
-          param='comptype'
-          value={component_type}
-          titletext='Click to filter by this component type'
+          param='original_function'
+          value={originalFunction}
+          label={vocabLabel(ORIGINAL_FUNCTION_LABELS, originalFunction)}
+          titletext='Click to filter by this original function'
         />
       )
     },
@@ -117,7 +118,7 @@ export const ComponentOverviewColumns: ColumnDef<CatalogShallowRow>[] = [
     header: () => <ComponentOverviewDataTableHeader header='X' sortKey='bbx.0' />,
     meta: { colClassName: 'w-[84px] sm:w-[96px] text-left' },
     cell: ({ row }) => {
-      const bbx: ComponentBoundingBox = row.getValue('bbx')
+      const bbx: number[] = row.getValue('bbx') ?? [0, 0, 0]
       // Debug logging to understand data structure
       // if (process.env.NODE_ENV === 'development') {
       //   console.log('[ComponentOverviewColumns] BBX data:', bbx, 'Type:', typeof bbx, 'IsArray:', Array.isArray(bbx))
@@ -135,7 +136,7 @@ export const ComponentOverviewColumns: ColumnDef<CatalogShallowRow>[] = [
     header: () => <ComponentOverviewDataTableHeader header='Y' sortKey='bbx.1' />,
     meta: { colClassName: 'w-[84px] sm:w-[96px] text-left' },
     cell: ({ row }) => {
-      const bbx: ComponentBoundingBox = row.getValue('bbx')
+      const bbx: number[] = row.getValue('bbx') ?? [0, 0, 0]
       // Add defensive programming for unexpected data structures
       if (!bbx || !Array.isArray(bbx) || bbx.length < 2 || typeof bbx[1] !== 'number') {
         return <div className='text-xs text-muted-foreground'>N/A</div>
@@ -149,7 +150,7 @@ export const ComponentOverviewColumns: ColumnDef<CatalogShallowRow>[] = [
     header: () => <ComponentOverviewDataTableHeader header='Z' sortKey='bbx.2' />,
     meta: { colClassName: 'w-[84px] sm:w-[96px] text-left' },
     cell: ({ row }) => {
-      const bbx: ComponentBoundingBox = row.getValue('bbx')
+      const bbx: number[] = row.getValue('bbx') ?? [0, 0, 0]
       // Add defensive programming for unexpected data structures
       if (!bbx || !Array.isArray(bbx) || bbx.length < 3 || typeof bbx[2] !== 'number') {
         return <div className='text-xs text-muted-foreground'>N/A</div>

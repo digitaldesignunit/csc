@@ -7,7 +7,6 @@ import {
   Home,
   Package,
   Map,
-  PackagePlus,
   Award,
   FileText,
   User,
@@ -136,13 +135,7 @@ export default function AppMenu() {
               <Send className="h-4 w-4" />
               Transmit ID
             </div>
-            <div
-              onClick={() => handleNavigation('/add-component')}
-              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
-            >
-              <PackagePlus className="h-4 w-4" />
-              Add Component
-            </div>
+            {/* Add Component returns with the 0.6 snapshot form (plan P7) */}
 
             <div className="my-0.5 mx-2 border-t border-border/60" />
             <div className="px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -171,14 +164,14 @@ export default function AppMenu() {
               className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Shield className="h-4 w-4" />
-              Component Validation
+              Moderation queue
             </div>
             <div
-              onClick={() => handleNavigation('/components?consumed=1')}
+              onClick={() => handleNavigation('/components?circulation=exited')}
               className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Archive className="h-4 w-4" />
-              Consumed Components
+              Out of circulation
             </div>
             <div
               onClick={() => handleNavigation('/admin/users')}

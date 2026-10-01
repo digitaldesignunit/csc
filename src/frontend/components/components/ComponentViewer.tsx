@@ -7,12 +7,8 @@ import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import type {
   CatalogComponent,
   ComponentSnapshot,
-  SnapshotExtrusion,
-  SnapshotGeometry,
-  SnapshotMesh,
-  SnapshotPointCloud,
-  SnapshotReinforcement,
 } from '@/generated/CatalogModels'
+import type { Geometry, Mesh, PointCloud } from '@/generated/CatalogSharedTypes'
 import type { SnapshotMeshRouting } from '@/generated/catalogExtras'
 import {
   primarySnapshot,
@@ -33,7 +29,7 @@ import {
   REINFORCEMENT_RADIAL_SEGMENTS,
   buildReinforcementBarMeshes,
   reinforcementSteelMaterial,
-  snapshotReinforcementsFromGeometry,
+  type ReinforcementBar,
 } from '@/lib/reinforcementGeometry'
 import ComponentViewerSkeleton from './ComponentViewerSkeleton'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -117,8 +113,30 @@ const externalPointCloudCache = new Map<string, CachedPointCloudGeometry>()
 
 // Helpers
 
-type GeometryMode = 'primitive' | 'reduced' | 'detailed'
-type PointCloudGeometryMode = 'primitive' | 'detailed'
+/**
+ * Detail levels (decision 8.23): the proxy, the preview stored in the
+ * snapshot, the reduced mesh file and the original as uploaded (stored on
+ * disk as `detailed.ply`).
+ */
+type GeometryMode = 'proxy' | 'preview' | 'reduced' | 'original'
+type MeshFileLevel = Extract<GeometryMode, 'reduced' | 'original'>
+type PointCloudGeometryMode = 'preview' | 'original'
+
+const DETAIL_LABELS: Record<GeometryMode, string> = {
+  proxy: 'Proxy',
+  preview: 'Preview',
+  reduced: 'Reduced',
+  original: 'Original',
+}
+
+/** The file a mesh detail level is stored in (`mesh_ply_resolutions`). */
+const MESH_FILE_RESOLUTION: Record<MeshFileLevel, 'reduced' | 'detailed'> = {
+  reduced: 'reduced',
+  original: 'detailed',
+}
+
+const isMeshFileLevel = (mode: GeometryMode): mode is MeshFileLevel =>
+  mode === 'reduced' || mode === 'original'
 
 function nextObjectVisibility(
   count: number,
@@ -192,23 +210,27 @@ type PointCloudLoadResult = {
   message: string
 }
 
-/** Flat buffers for one mesh primitive (snapshot geometry). */
+/** Flat buffers for one preview mesh (stored in the snapshot, 8.23). */
 type PrimitiveDrawBuffers = {
   positionsFlat: number[]
   indices: number[]
   rawColors?: number[][]
 }
 
-function snapshotMeshesFromGeometry(geometry: SnapshotGeometry): SnapshotMesh[] {
+function snapshotMeshesFromGeometry(geometry: Geometry): Mesh[] {
   const meshes = geometry.meshes
-  return Array.isArray(meshes) ? (meshes as SnapshotMesh[]) : []
+  return Array.isArray(meshes) ? (meshes as Mesh[]) : []
 }
 
-function snapshotExtrusionsFromGeometry(
-  geometry: SnapshotGeometry,
-): SnapshotExtrusion[] {
-  const extrusions = geometry.extrusions
-  return Array.isArray(extrusions) ? (extrusions as SnapshotExtrusion[]) : []
+/** A prism proxy's shape: profile in xy, extruded along z, centred on z = 0. */
+type PrismShape = { profile: number[][]; height: number }
+
+/** Prism proxies of a snapshot (an authored L x W x H box or a GH extrusion). */
+function snapshotPrismsFromGeometry(geometry: Geometry): PrismShape[] {
+  return (geometry.proxies ?? [])
+    .filter((proxy) => proxy.primitive === 'prism')
+    .map((proxy) => proxy.params as PrismShape)
+    .filter((prism) => Array.isArray(prism?.profile) && typeof prism.height === 'number')
 }
 
 function vertexColorsFromSnapshot(
@@ -224,7 +246,7 @@ function vertexColorsFromSnapshot(
 }
 
 function snapshotMeshesToDrawBuffers(
-  meshes: SnapshotMesh[],
+  meshes: Mesh[],
 ): PrimitiveDrawBuffers[] {
   return meshes.map((m) => ({
     positionsFlat: m.vertices.flat(),
@@ -310,10 +332,10 @@ function buildThreeGroupFromPLYGeometry(
 
 async function loadSnapshotPlyMeshes(
   snapshotId: string,
-  mode: Exclude<GeometryMode, 'primitive'>,
+  mode: MeshFileLevel,
   manifest: Record<string, string[]> | null | undefined,
 ): Promise<{ ok: true; meshes: THREE.Group[]; etag?: string } | { ok: false }> {
-  const resolution = mode === 'reduced' ? 'reduced' : 'detailed'
+  const resolution = MESH_FILE_RESOLUTION[mode]
   const indices = plyPrimitiveIndicesForMode(manifest, resolution)
   if (indices.length === 0) {
     return { ok: false }
@@ -341,7 +363,7 @@ async function loadSnapshotPlyMeshes(
 
       const buffer = await response.arrayBuffer()
       const geom = loader.parse(buffer)
-      const label = `PLY Mesh ${primitiveIndex + 1}`
+      const label = `Mesh ${primitiveIndex + 1}`
       groups.push(buildThreeGroupFromPLYGeometry(geom, label))
     } catch (err) {
       debugLog(`PLY load error primitive ${primitiveIndex}:`, err)
@@ -364,10 +386,10 @@ async function loadSnapshotPlyMeshes(
 
 async function loadExternalMeshes(
   identityId: string,
-  mode: Exclude<GeometryMode, 'primitive'>,
+  mode: MeshFileLevel,
   snapshotRouting: SnapshotMeshRouting | null,
 ): Promise<MeshLoadResult> {
-  debugLog(`Loading ${mode} PLY meshes for identity ${identityId}`)
+  debugLog(`Loading ${mode} meshes for identity ${identityId}`)
 
   const hint = meshHintForCache(snapshotRouting)
   const cacheKey = `${identityId}:mesh:${mode}:${hint}`
@@ -382,7 +404,7 @@ async function loadExternalMeshes(
     return {
       success: false,
       error: 'not_found',
-      message: `No ${mode} PLY geometry available for this snapshot`,
+      message: `No ${mode} mesh stored for this snapshot`,
     }
   }
 
@@ -424,7 +446,7 @@ async function loadExternalMeshes(
   return {
     success: false,
     error: 'not_found',
-    message: `No ${mode} PLY geometry available for this snapshot`,
+    message: `No ${mode} mesh stored for this snapshot`,
   }
 }
 
@@ -433,7 +455,7 @@ async function loadExternalPointClouds(
   snapshotRouting: SnapshotMeshRouting | null,
   pointCloudCount: number,
 ): Promise<PointCloudLoadResult> {
-  debugLog(`Loading PLY point clouds for identity ${identityId}`)
+  debugLog(`Loading original point clouds for identity ${identityId}`)
 
   const hint = meshHintForCache(snapshotRouting)
   const cacheKey = `${identityId}:pc:${hint}:count${pointCloudCount}`
@@ -451,12 +473,12 @@ async function loadExternalPointClouds(
     return {
       success: false,
       error: 'not_found',
-      message: 'No PLY point cloud geometry available for this snapshot',
+      message: 'No original point cloud stored for this snapshot',
     }
   }
 
   if (!snapshotRouting?.snapshot_id) {
-    const msg = 'No snapshot routing for point cloud PLY (passport payload missing current snapshot _id)'
+    const msg = 'No snapshot routing for the original point cloud (passport payload missing current snapshot _id)'
     externalPointCloudCache.set(cacheKey, {
       pointClouds: null,
       etag: undefined,
@@ -493,7 +515,7 @@ async function loadExternalPointClouds(
   return {
     success: false,
     error: 'not_found',
-    message: 'No PLY point cloud geometry available for this snapshot',
+    message: 'No original point cloud stored for this snapshot',
   }
 }
 
@@ -578,19 +600,67 @@ const MarkerPoints = React.memo(({
 })
 MarkerPoints.displayName = 'MarkerPoints'
 
-const ReinforcementBar = React.memo(({
-  bar,
+/**
+ * Capture fixtures (decision 7.7): meshes captured with the piece that are
+ * not part of it, e.g. the robot gripper. Drawn translucent, never measured.
+ */
+async function loadCaptureFixtures(
+  snapshotId: string,
+  count: number,
+): Promise<THREE.Group[]> {
+  const loader = new PLYLoader()
+  const groups: THREE.Group[] = []
+  for (let index = 0; index < count; index += 1) {
+    const url = `/api/backend/snapshots/${encodeURIComponent(snapshotId)}/capture/fixtures/${index}.ply`
+    const response = await fetch(url, { credentials: 'include' })
+    if (!response.ok) continue
+    const geometry = loader.parse(await response.arrayBuffer())
+    geometry.computeVertexNormals()
+    geometry.rotateX(-Math.PI / 2)
+    const mesh = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({
+        color: 0x9ca3af,
+        transparent: true,
+        opacity: 0.35,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    )
+    mesh.name = `fixture_${index}`
+    const group = new THREE.Group()
+    group.add(mesh)
+    group.scale.set(scale, scale, scale)
+    groups.push(group)
+  }
+  return groups
+}
+
+const CaptureFixtures = React.memo(({
+  fixtures,
+  visible,
 }: {
-  bar: SnapshotReinforcement
+  fixtures: THREE.Group[]
+  visible: boolean
 }) => {
+  if (!visible || fixtures.length === 0) return null
+  return (
+    <>
+      {fixtures.map((group, index) => (
+        <primitive key={`fixture-${index}`} object={group} />
+      ))}
+    </>
+  )
+})
+CaptureFixtures.displayName = 'CaptureFixtures'
+
+const ReinforcementBarMesh = React.memo(({ bar }: { bar: ReinforcementBar }) => {
   const { segments, cornerJoints } = useMemo(
     () => buildReinforcementBarMeshes(bar.points),
-    [bar.points, bar.diameter],
+    [bar.points],
   )
-  const radius = bar.diameter / 2
-
+  const radius = bar.diameter_mm / 2
   if (segments.length === 0) return null
-
   return (
     <group>
       {segments.map((segment, index) => (
@@ -601,45 +671,33 @@ const ReinforcementBar = React.memo(({
           material={reinforcementSteelMaterial}
         >
           <cylinderGeometry
-            args={[
-              radius,
-              radius,
-              segment.height,
-              REINFORCEMENT_RADIAL_SEGMENTS,
-            ]}
+            args={[radius, radius, segment.height, REINFORCEMENT_RADIAL_SEGMENTS]}
           />
         </mesh>
       ))}
       {cornerJoints.map((joint, index) => (
-        <mesh
-          key={`joint-${index}`}
-          position={joint}
-          material={reinforcementSteelMaterial}
-        >
+        <mesh key={`joint-${index}`} position={joint} material={reinforcementSteelMaterial}>
           <sphereGeometry args={[radius, REINFORCEMENT_RADIAL_SEGMENTS, 12]} />
         </mesh>
       ))}
     </group>
   )
 })
-ReinforcementBar.displayName = 'ReinforcementBar'
+ReinforcementBarMesh.displayName = 'ReinforcementBarMesh'
 
+/** Bars of the `reinforcement_layout` evidence positioned on this snapshot. */
 const ReinforcementBars = React.memo(({
-  reinforcements,
+  bars,
   visible,
 }: {
-  reinforcements: SnapshotReinforcement[]
+  bars: ReinforcementBar[]
   visible: boolean
 }) => {
-  if (!visible || reinforcements.length === 0) return null
-
+  if (!visible || bars.length === 0) return null
   return (
     <group scale={[scale, scale, scale]} rotation={[-Math.PI / 2, 0, 0]}>
-      {reinforcements.map((bar, index) => (
-        <ReinforcementBar
-          key={`${bar.spec}-${bar.diameter}-${index}`}
-          bar={bar}
-        />
+      {bars.map((bar, index) => (
+        <ReinforcementBarMesh key={`${bar.spec}-${index}`} bar={bar} />
       ))}
     </group>
   )
@@ -653,13 +711,13 @@ const PointCloudVisualization = React.memo(({
   pointCloudGeometryMode,
   isLoadingExternal,
 }: {
-  pointClouds: SnapshotPointCloud[]
+  pointClouds: PointCloud[]
   visiblePointClouds: boolean[]
   externalPointClouds: THREE.Group[]
   pointCloudGeometryMode: PointCloudGeometryMode
   isLoadingExternal: boolean
 }) => {
-  const isExternalMode = pointCloudGeometryMode === 'detailed'
+  const isExternalMode = pointCloudGeometryMode === 'original'
 
   const inlineGroups = useMemo(
     () => pointClouds
@@ -713,7 +771,7 @@ const VisualizeMultipleMeshes = React.memo(({
   geometryError?: string | null
   showEdges: boolean
 }) => {
-  const isExternalMode = meshGeometryMode === 'reduced' || meshGeometryMode === 'detailed'
+  const isExternalMode = isMeshFileLevel(meshGeometryMode)
 
   if (isLoadingExternal) {
     return (
@@ -819,7 +877,7 @@ type VisualizeProps = {
   showEdges: boolean
 }
 
-function snapshotExtrusionRgb(snap: ComponentSnapshot): [number, number, number] {
+function snapshotPrismRgb(snap: ComponentSnapshot): [number, number, number] {
   const c = snap.color
   return [
     Array.isArray(c) ? (c[0] as number) : 110,
@@ -831,7 +889,7 @@ function snapshotExtrusionRgb(snap: ComponentSnapshot): [number, number, number]
 function VisualizeComponent(props: VisualizeProps) {
   const snapshot = primarySnapshot(props.catalog)
   const sg = snapshot.geometry
-  const ext = snapshotExtrusionsFromGeometry(sg)[0]
+  const ext = snapshotPrismsFromGeometry(sg)[0]
   const primitiveDraws = snapshotMeshesToDrawBuffers(snapshotMeshesFromGeometry(sg))
   const pointClouds = snapshotPointCloudsFromGeometry(sg)
 
@@ -840,13 +898,14 @@ function VisualizeComponent(props: VisualizeProps) {
   const hasMeshes = primitiveDraws.length > 0
   const hasPointClouds = pointClouds.length > 0
 
-  if (hasExtrusion) {
+  // the proxy stands in when there is nothing else, or when chosen (8.23)
+  if (hasExtrusion && (props.meshGeometryMode === 'proxy' || !hasMeshes)) {
     return (
       <>
         <ExtrusionVisualization
           profile={ext!.profile}
           height={ext!.height}
-          colorRgb={snapshotExtrusionRgb(snapshot)}
+          colorRgb={snapshotPrismRgb(snapshot)}
         />
         <PointCloudVisualization
           pointClouds={pointClouds}
@@ -858,7 +917,7 @@ function VisualizeComponent(props: VisualizeProps) {
       </>
     )
   }
-  if (hasMeshes || hasPointClouds || props.catalog.identity.type === 'panel') {
+  if (hasMeshes || hasPointClouds) {
     return (
       <>
         <VisualizeMultipleMeshes
@@ -904,8 +963,9 @@ function VisualizeComponent(props: VisualizeProps) {
 
 /**
  * Catalog 3D viewer: **`GET /identities/{id}/compose`** payload (`identity` + `snapshots[]`).
- * Reduced/detailed mesh modes load **`GET /snapshots/{snapshot_id}/meshes/...`** PLY.
- * Detailed point cloud mode loads **`GET /snapshots/{snapshot_id}/point_clouds/...`** PLY.
+ * Detail levels (decision 8.23): Proxy and Preview come from the snapshot
+ * itself; Reduced / Original meshes load **`GET /snapshots/{snapshot_id}/meshes/{i}/{reduced|detailed}`**,
+ * the original point cloud **`GET /snapshots/{snapshot_id}/point_clouds/{i}.ply`**.
  */
 export type ComponentViewerProps = {
   catalog: CatalogComponent
@@ -916,7 +976,6 @@ export type ComponentViewerProps = {
 export default function ComponentViewer({ catalog, compactDesktop = false }: ComponentViewerProps) {
   const snapshot = primarySnapshot(catalog)
   const identityId = catalog.identity._id
-  const catalogType = catalog.identity.type
 
   const snapshotRouting = useMemo(
     () => snapshotMeshRoutingFromSnapshot(snapshot),
@@ -928,8 +987,8 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     () => snapshotMeshesFromGeometry(snapshotGeometry),
     [snapshotGeometry],
   )
-  const snapshotExtrusions = useMemo(
-    () => snapshotExtrusionsFromGeometry(snapshotGeometry),
+  const snapshotPrisms = useMemo(
+    () => snapshotPrismsFromGeometry(snapshotGeometry),
     [snapshotGeometry],
   )
   const snapshotPointClouds = useMemo(
@@ -939,11 +998,11 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
 
   const canRenderViewport =
     snapshotMeshes.length > 0
-    || snapshotExtrusions.length > 0
+    || snapshotPrisms.length > 0
     || snapshotPointClouds.length > 0
 
-  const [meshGeometryMode, setMeshGeometryMode] = useState<GeometryMode>('primitive')
-  const [pointCloudGeometryMode, setPointCloudGeometryMode] = useState<PointCloudGeometryMode>('primitive')
+  const [meshGeometryMode, setMeshGeometryMode] = useState<GeometryMode>('preview')
+  const [pointCloudGeometryMode, setPointCloudGeometryMode] = useState<PointCloudGeometryMode>('preview')
   const [visibleMeshes, setVisibleMeshes] = useState<boolean[]>([])
   const [visiblePointClouds, setVisiblePointClouds] = useState<boolean[]>([])
   const [externalMeshes, setExternalMeshes] = useState<THREE.Group[]>([])
@@ -952,7 +1011,6 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
   const [isLoadingExternalPointClouds, setIsLoadingExternalPointClouds] = useState(false)
   const [meshGeometryError, setMeshGeometryError] = useState<string | null>(null)
   const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
-  const [showReinforcements, setShowReinforcements] = useState<boolean>(true)
   const [showEdges, setShowEdges] = useState<boolean>(true)
   const [showGrid, setShowGrid] = useState<boolean>(true)
   const [turntableEnabled, setTurntableEnabled] = useState<boolean>(false)
@@ -973,27 +1031,63 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     return `${snapshotRouting.snapshot_id}:${JSON.stringify(snapshotRouting.mesh_ply_resolutions ?? null)}`
   }, [snapshotRouting])
 
-  const isPanel = catalogType === 'panel'
+  // a proxy only: no preview and no files to switch to
+  const isProxyOnly = snapshotMeshes.length === 0 && snapshotPointClouds.length === 0
   const hasMultipleMeshes = primitiveMeshCount > 0
   const pointCloudVisibleByDefault = !hasMultipleMeshes
-  const isMeshExternalMode = meshGeometryMode === 'reduced' || meshGeometryMode === 'detailed'
-  const isPointCloudExternalMode = pointCloudGeometryMode === 'detailed'
+  const isMeshExternalMode = isMeshFileLevel(meshGeometryMode)
+  const isPointCloudExternalMode = pointCloudGeometryMode === 'original'
 
-  const markerPoints = useMemo(() => {
-    const points = snapshot.geometry.marker_points
-    if (Array.isArray(points) && points.length > 0) {
-      return points.filter((point) => Array.isArray(point) && point.length >= 3)
-    }
-    return []
-  }, [snapshot.geometry.marker_points])
+  // capture markers (robot scans, decision 7.7): context, not the component
+  const markerPoints = useMemo(
+    () => (snapshot.capture?.markers ?? []).map((marker) => marker.point),
+    [snapshot.capture],
+  )
 
   const hasMarkerPoints = markerPoints.length > 0
 
-  const reinforcements = useMemo(
-    () => snapshotReinforcementsFromGeometry(snapshot.geometry),
-    [snapshot.geometry],
-  )
-  const hasReinforcements = reinforcements.length > 0
+  // capture fixtures (e.g. the robot gripper) of this snapshot
+  const fixtureCount = snapshot.capture?.fixtures?.length ?? 0
+  const snapshotIdForOverlays = String(snapshot._id ?? '')
+  const [fixtureGroups, setFixtureGroups] = useState<THREE.Group[]>([])
+  const [showFixtures, setShowFixtures] = useState<boolean>(true)
+  useEffect(() => {
+    let cancelled = false
+    setFixtureGroups([])
+    if (fixtureCount > 0 && snapshotIdForOverlays) {
+      loadCaptureFixtures(snapshotIdForOverlays, fixtureCount)
+        .then((groups) => { if (!cancelled) setFixtureGroups(groups) })
+        .catch(() => { if (!cancelled) setFixtureGroups([]) })
+    }
+    return () => { cancelled = true }
+  }, [fixtureCount, snapshotIdForOverlays])
+  const hasFixtures = fixtureGroups.length > 0
+
+  // reinforcement layouts are evidence positioned on one snapshot (7.8)
+  const [reinforcementBars, setReinforcementBars] = useState<ReinforcementBar[]>([])
+  const [showReinforcement, setShowReinforcement] = useState<boolean>(true)
+  useEffect(() => {
+    let cancelled = false
+    setReinforcementBars([])
+    if (!identityId || !snapshotIdForOverlays) return
+    const params = new URLSearchParams({ method: 'reinforcement_layout' })
+    fetch(`/api/backend/identities/${encodeURIComponent(String(identityId))}/evidence?${params}`, {
+      credentials: 'include',
+    })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((records: { position?: { snapshot_id?: string | null }; payload?: { bars?: ReinforcementBar[] } }[]) => {
+        if (cancelled) return
+        const bars = records
+          .filter((record) => record.position?.snapshot_id === snapshotIdForOverlays)
+          .flatMap((record) => record.payload?.bars ?? [])
+          .filter((bar) => Array.isArray(bar.points) && bar.points.length >= 2 && bar.diameter_mm > 0)
+        setReinforcementBars(bars)
+      })
+      .catch(() => { if (!cancelled) setReinforcementBars([]) })
+    return () => { cancelled = true }
+  }, [identityId, snapshotIdForOverlays])
+  const hasReinforcement = reinforcementBars.length > 0
+
 
   useEffect(() => {
     let isMounted = true
@@ -1002,7 +1096,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
       meshVisibilitySeedRef.current !== visibilitySeed
     meshVisibilitySeedRef.current = visibilitySeed
 
-    if (isMeshExternalMode && catalogType !== 'panel' && identityId) {
+    if (isMeshExternalMode && !isProxyOnly && identityId) {
       setIsLoadingExternalMeshes(true)
       setMeshGeometryError(null)
       setShowEdges(false)
@@ -1059,7 +1153,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     }
   }, [
     meshGeometryMode,
-    catalogType,
+    isProxyOnly,
     identityId,
     isMeshExternalMode,
     primitiveMeshCount,
@@ -1075,7 +1169,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
       pointCloudVisibilitySeedRef.current !== visibilitySeed
     pointCloudVisibilitySeedRef.current = visibilitySeed
 
-    if (isPointCloudExternalMode && catalogType !== 'panel' && identityId) {
+    if (isPointCloudExternalMode && !isProxyOnly && identityId) {
       setIsLoadingExternalPointClouds(true)
       loadExternalPointClouds(
         identityId.toString(),
@@ -1125,7 +1219,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     }
   }, [
     pointCloudGeometryMode,
-    catalogType,
+    isProxyOnly,
     identityId,
     isPointCloudExternalMode,
     primitivePointCloudCount,
@@ -1202,52 +1296,63 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     return <ComponentViewerSkeleton message="No Geometry Available" />
   }
 
-  const meshResolutionOptions = [
-    { value: 'primitive', label: 'Primitive' },
-    { value: 'reduced', label: 'Reduced' },
-    { value: 'detailed', label: 'Detailed' },
+  // only the levels this snapshot has (decision 8.23)
+  const storedMeshFiles = new Set(
+    Object.values(snapshotRouting?.mesh_ply_resolutions ?? {}).flat(),
+  )
+  const meshDetailLevels: GeometryMode[] = [
+    ...(snapshotPrisms.length > 0 ? ['proxy' as const] : []),
+    'preview',
+    ...(storedMeshFiles.has('reduced') ? ['reduced' as const] : []),
+    ...(storedMeshFiles.has('detailed') ? ['original' as const] : []),
   ]
+  const meshDetailOptions = meshDetailLevels.map((value) => ({
+    value,
+    label: DETAIL_LABELS[value],
+  }))
 
-  const pointCloudResolutionOptions = [
-    { value: 'primitive', label: 'Primitive' },
-    { value: 'detailed', label: 'Detailed' },
-  ]
+  const pointCloudDetailOptions = (['preview', 'original'] as const).map((value) => ({
+    value,
+    label: DETAIL_LABELS[value],
+  }))
+
+  const primaryProxy = (snapshotGeometry.proxies ?? []).find((proxy) => proxy.role === 'primary')
+    ?? snapshotGeometry.proxies?.[0]
 
   const meshCount = activeMeshCount || primitiveMeshCount
   const pointCloudCount = activePointCloudCount || primitivePointCloudCount
-  const hasOverlays = hasMarkerPoints || hasReinforcements
+  const hasOverlays = hasMarkerPoints || hasFixtures || hasReinforcement
 
-  const meshLabel = (index: number) => (
-    isMeshExternalMode && externalMeshes[index]
-      ? (
-          externalMeshes[index]?.children[0]?.name ||
-          `External Mesh ${index + 1}`
-        )
-      : `Mesh ${index + 1}`
-  )
-
-  const pointCloudLabel = (index: number) => (
-    isPointCloudExternalMode
-      ? (
-          externalPointClouds[index]?.name ||
-          `Point Cloud ${index + 1}`
-        )
-      : `Point Cloud ${index + 1}`
-  )
+  // items are numbered only when there is more than one (8.23)
+  const meshLabel = (index: number) => `Mesh ${index + 1}`
+  const pointCloudLabel = (index: number) => `Point cloud ${index + 1}`
 
   const displayBlocks: React.ReactNode[] = []
 
+  if (isProxyOnly && primaryProxy) {
+    displayBlocks.push(
+      <MenuSubsection key="proxy" title="Proxy">
+        <p className="text-xs text-muted-foreground">
+          Showing: {primaryProxy.primitive} proxy ({primaryProxy.fit.method})
+        </p>
+      </MenuSubsection>,
+    )
+  }
+
   if (hasMultipleMeshes) {
     displayBlocks.push(
-      <MenuSubsection key="meshes" title={`Meshes (${meshCount})`}>
-        <SegmentedControl
-          id="meshGeometryModeSelect"
-          label="Resolution"
-          value={meshGeometryMode}
-          onValueChange={onMeshModeChange}
-          disabled={isPanel}
-          options={meshResolutionOptions}
-        />
+      <MenuSubsection key="meshes" title={meshCount > 1 ? `Meshes (${meshCount})` : 'Mesh'}>
+        {meshDetailOptions.length > 1 ? (
+          <SegmentedControl
+            id="meshGeometryModeSelect"
+            label="Detail"
+            value={meshGeometryMode}
+            onValueChange={onMeshModeChange}
+            options={meshDetailOptions}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground">Detail: Preview</p>
+        )}
         <CheckboxControl
           id="toggle-edges"
           label="Show edges"
@@ -1274,7 +1379,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
         ) : (
           <CheckboxControl
             id="toggle-mesh-0"
-            label={meshLabel(0)}
+            label="Show mesh"
             checked={visibleMeshes[0] ?? false}
             onChange={(checked) => {
               setVisibleMeshes((prev) => {
@@ -1294,14 +1399,17 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
       displayBlocks.push(<MenuDivider key="divider-pc" />)
     }
     displayBlocks.push(
-      <MenuSubsection key="point-clouds" title={`Point clouds (${pointCloudCount})`}>
+      <MenuSubsection
+        key="point-clouds"
+        title={pointCloudCount > 1 ? `Point clouds (${pointCloudCount})` : 'Point cloud'}
+      >
         <SegmentedControl
           id="pointCloudGeometryModeSelect"
-          label="Resolution"
+          label="Detail"
           value={pointCloudGeometryMode}
           onValueChange={onPointCloudModeChange}
-          disabled={isPanel}
-          options={pointCloudResolutionOptions}
+          disabled={isProxyOnly}
+          options={pointCloudDetailOptions}
         />
         {pointCloudCount > 1 ? (
           <>
@@ -1323,7 +1431,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
         ) : (
           <CheckboxControl
             id="toggle-point-cloud-0"
-            label={pointCloudLabel(0)}
+            label="Show point cloud"
             checked={visiblePointClouds[0] ?? false}
             onChange={(checked) => {
               setVisiblePointClouds((prev) => {
@@ -1352,12 +1460,20 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
             onChange={(checked) => setShowMarkerPoints(checked)}
           />
         )}
-        {hasReinforcements && (
+        {hasFixtures && (
           <CheckboxControl
-            id="toggle-reinforcements"
-            label={`Reinforcement (${reinforcements.length})`}
-            checked={showReinforcements}
-            onChange={(checked) => setShowReinforcements(checked)}
+            id="toggle-capture-fixtures"
+            label={`Capture fixtures (${fixtureGroups.length})`}
+            checked={showFixtures}
+            onChange={(checked) => setShowFixtures(checked)}
+          />
+        )}
+        {hasReinforcement && (
+          <CheckboxControl
+            id="toggle-reinforcement"
+            label={`Reinforcement (${reinforcementBars.length} bars)`}
+            checked={showReinforcement}
+            onChange={(checked) => setShowReinforcement(checked)}
           />
         )}
       </MenuSubsection>,
@@ -1475,10 +1591,8 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
                 showEdges={showEdges}
               />
               <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
-              <ReinforcementBars
-                reinforcements={reinforcements}
-                visible={showReinforcements}
-              />
+              <CaptureFixtures fixtures={fixtureGroups} visible={showFixtures} />
+              <ReinforcementBars bars={reinforcementBars} visible={showReinforcement} />
             </Turntable>
           </Bounds>
 

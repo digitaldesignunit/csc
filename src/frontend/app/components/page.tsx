@@ -20,7 +20,7 @@ type SearchParams = {
   size?: string
   sortkey?: string
   sortorder?: string
-  comptype?: string
+  original_function?: string
   material?: string
   dataset?: string
   complexity?: string
@@ -31,7 +31,7 @@ type SearchParams = {
   bbx_max_x?: string
   bbx_max_y?: string
   bbx_max_z?: string
-  consumed?: string
+  circulation?: string
 }
 
 export default async function ComponentsPage({
@@ -40,13 +40,13 @@ export default async function ComponentsPage({
   searchParams: Promise<SearchParams>
 }) {
   const sp = await searchParams
-  const showConsumed = sp?.consumed === '1' || sp?.consumed === 'true'
+  const showConsumed = sp?.circulation === 'exited'
 
   const page = Number(sp?.page ?? 1)
   const size = Number(sp?.size ?? 20)
   const sortkey = sp?.sortkey ?? '_id'
   const sortorder: 'asc' | 'desc' = sp?.sortorder === 'desc' ? 'desc' : 'asc'
-  const comptype = sp?.comptype ?? ''
+  const originalFunction = sp?.original_function ?? ''
   const material = sp?.material ?? ''
   const dataset = sp?.dataset ?? ''
   const complexity = sp?.complexity ?? ''
@@ -62,29 +62,26 @@ export default async function ComponentsPage({
   const cookie = h.get('cookie') ?? ''
   const base = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`
 
-  const consumedFilter = showConsumed ? 'consumed' : 'active'
-  const validated = showConsumed ? '0' : '1'
-  const signInCallback = showConsumed ? '/components?consumed=1' : '/components'
+  const circulation = showConsumed ? 'exited' : 'active'
+  const signInCallback = showConsumed ? '/components?circulation=exited' : '/components'
 
   const listParams = new URLSearchParams({
     page: String(page),
     size: String(size),
     sortkey,
     sortorder,
-    comptype,
+    original_function: originalFunction,
     material,
     dataset,
-    validated,
-    consumed_filter: consumedFilter,
+    circulation,
     expand: 'shallow',
   })
 
   const countParams = new URLSearchParams({
-    comptype,
+    original_function: originalFunction,
     material,
     dataset,
-    validated,
-    consumed_filter: consumedFilter,
+    circulation,
   })
 
   for (const [key, value] of [
@@ -127,10 +124,7 @@ export default async function ComponentsPage({
   const items = (await itemsRes.json()) as CatalogShallowRow[]
   const { count: total } = (await countRes.json()) as { count: number }
 
-  const metaSuffix = showConsumed ? '?consumed_filter=consumed' : ''
-  const materialsEndpoint = `/api/backend/identities/meta/materials${metaSuffix}`
-  const componentTypesEndpoint = `/api/backend/identities/meta/types${metaSuffix}`
-  const datasetsEndpoint = `/api/backend/identities/meta/datasets${metaSuffix}`
+  const datasetsEndpoint = `/api/backend/identities/meta/datasets?circulation=${circulation}`
 
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-full">
@@ -142,13 +136,13 @@ export default async function ComponentsPage({
             <Package className="h-6 w-6 text-primary" />
           )}
           <h1 className="text-xl sm:text-2xl font-bold">
-            {showConsumed ? 'Consumed Components' : 'Browse Components'}
+            {showConsumed ? 'Components out of circulation' : 'Browse Components'}
           </h1>
         </div>
         {showConsumed && (
           <p className="text-muted-foreground">
-            Physical pieces marked consumed (no longer in the active catalog).
-            Open any row for the same detail view as active components.
+            Pieces that left circulation: split, installed elsewhere, recycled,
+            returned or lost. Open any row for the same detail view.
           </p>
         )}
         <div className="flex flex-wrap gap-2">
@@ -172,7 +166,7 @@ export default async function ComponentsPage({
                 'border-orange-600 bg-orange-600 text-white hover:bg-orange-700 hover:text-white dark:border-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700',
             )}
           >
-            <Link href="/components?consumed=1">Consumed Components (Archive)</Link>
+            <Link href="/components?circulation=exited">Out of circulation</Link>
           </Button>
         </div>
       </div>
@@ -180,11 +174,9 @@ export default async function ComponentsPage({
       <div className="space-y-2">
         <ComponentOverviewFilterMenu
           defaultMaterial={material}
-          defaultCompType={comptype}
+          defaultOriginalFunction={originalFunction}
           defaultDataset={dataset}
           defaultPageSize={size}
-          materialsEndpoint={materialsEndpoint}
-          componentTypesEndpoint={componentTypesEndpoint}
           datasetsEndpoint={datasetsEndpoint}
         />
 

@@ -35,6 +35,7 @@ import type {
 } from '@/generated/catalogExtras'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { cn } from '@/lib/utils'
+import { ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/generated/Vocab'
 
 const PAD_DESKTOP = 28
 const PAD_MOBILE = 16
@@ -625,7 +626,7 @@ function ComponentMapCanvas({
         <div className="pointer-events-none absolute left-2 top-2 z-10 max-w-[calc(100%-1rem)] rounded-md border bg-background/95 px-2 py-1.5 text-xs shadow-sm sm:left-3 sm:top-3 sm:max-w-xs">
           <div className="truncate font-medium">{hoverPoint.name || hoverPoint.id}</div>
           <div className="truncate text-muted-foreground">
-            {[hoverPoint.type, hoverPoint.catalog_number != null ? `#${hoverPoint.catalog_number}` : null]
+            {[vocabLabel(ORIGINAL_FUNCTION_LABELS, hoverPoint.original_function), hoverPoint.catalog_number != null ? `#${hoverPoint.catalog_number}` : null]
               .filter(Boolean)
               .join(' · ')}
           </div>
@@ -688,8 +689,6 @@ export default function ComponentMapPageClient() {
         basis,
         method,
         source: 'cache',
-        consumed_filter: 'active',
-        validated: '1',
       })
 
       try {

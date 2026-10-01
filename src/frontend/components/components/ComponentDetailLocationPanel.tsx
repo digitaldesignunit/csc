@@ -2,12 +2,12 @@
 
 import { MapPin } from 'lucide-react'
 
-import { ComponentLocation } from '@/generated/CatalogSharedTypes'
+import { GeoLocation } from '@/generated/CatalogSharedTypes'
 import { formatLocation, formatLocationMapsLink } from '@/lib/utils'
 import ComponentDetailMap from './ComponentDetailMap'
 
 type ComponentDetailLocationPanelProps = {
-  location: ComponentLocation
+  location: GeoLocation
 }
 
 export default function ComponentDetailLocationPanel({

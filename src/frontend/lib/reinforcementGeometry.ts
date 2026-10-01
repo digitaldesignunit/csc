@@ -1,5 +1,15 @@
 import * as THREE from 'three'
-import type { SnapshotGeometry, SnapshotReinforcement } from '@/generated/CatalogModels'
+
+// Bar centrelines are drawn from `reinforcement_layout` evidence (decision
+// 7.8); the geometry no longer carries them. The viewer uses this in plan P6.
+
+/** One bar of a reinforcement layout payload (spec App. A.4). */
+export type ReinforcementBar = {
+  spec: string
+  diameter_mm: number
+  /** open centreline, in the stored coordinates of the layout's snapshot */
+  points: number[][]
+}
 
 export const REINFORCEMENT_STEEL_COLOR = 0x708090
 export const REINFORCEMENT_RADIAL_SEGMENTS = 16
@@ -14,23 +24,6 @@ type ReinforcementSegment = {
   position: THREE.Vector3
   quaternion: THREE.Quaternion
   height: number
-}
-
-export function snapshotReinforcementsFromGeometry(
-  geometry: SnapshotGeometry,
-): SnapshotReinforcement[] {
-  const reinforcements = geometry.reinforcements
-  if (!Array.isArray(reinforcements)) return []
-  return (reinforcements as SnapshotReinforcement[]).filter((bar) => (
-    typeof bar?.spec === 'string'
-    && bar.spec.trim().length > 0
-    && typeof bar.diameter === 'number'
-    && Number.isFinite(bar.diameter)
-    && bar.diameter > 0
-    && Array.isArray(bar.points)
-    && bar.points.length >= 2
-    && bar.points.every((pt) => Array.isArray(pt) && pt.length >= 3)
-  ))
 }
 
 export function buildReinforcementBarMeshes(
@@ -63,11 +56,11 @@ export function buildReinforcementBarMeshes(
 }
 
 export function buildReinforcementBarThreeGroup(
-  bar: SnapshotReinforcement,
+  bar: ReinforcementBar,
   name: string,
 ): THREE.Group | null {
   const { segments, cornerJoints } = buildReinforcementBarMeshes(bar.points)
-  const radius = bar.diameter / 2
+  const radius = bar.diameter_mm / 2
   if (segments.length === 0) return null
 
   const group = new THREE.Group()

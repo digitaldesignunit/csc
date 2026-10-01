@@ -1,59 +1,30 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import {
-  Archive,
-  CheckCircle,
-  ChevronDown,
-  Pencil,
-  RotateCcw,
-  Trash2,
-} from 'lucide-react'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
-import { primarySnapshot } from '@/generated/catalogExtras'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import ComponentSnapshotGeometryDownload from './ComponentSnapshotGeometryDownload'
 import { toast } from 'sonner'
-import { ExtendedUser, isConsumedShallowRow } from './componentDetailShared'
+import { ExtendedUser, isOutOfCirculation } from './componentDetailShared'
 
 type ComponentDetailActionsProps = {
   catalog: CatalogComponent
 }
 
+/**
+ * Download, locate and reserve. Moderation, exit, withdrawal and editing
+ * return with their 0.6 routes (plan P3 / P4 / P7); the 0.5 ones are retired.
+ */
 export default function ComponentDetailActions({ catalog }: ComponentDetailActionsProps) {
   const { identity } = catalog
-  const snapshot = primarySnapshot(catalog)
   const identityId = identity._id ?? ''
-  const isConsumed = isConsumedShallowRow({
-    consumed_at: identity.consumed_at as string | null | undefined,
-  })
+  const outOfCirculation = isOutOfCirculation(identity)
   const reservedBy = typeof identity.reserved === 'string' ? identity.reserved : ''
 
-  const router = useRouter()
   const { data: session } = useSession()
-
-  const [validating, setValidating] = useState(false)
-  const [archiving, setArchiving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [showDestructiveActions, setShowDestructiveActions] = useState(false)
-  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
-  const [archiveAction, setArchiveAction] = useState<'archive' | 'restore' | null>(null)
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-
-  const busy = validating || archiving || deleting
 
   const handleReserveComponent = async () => {
     try {
@@ -97,111 +68,6 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
     }
   }
 
-  const handleValidateComponent = async () => {
-    const snapshotId = String(snapshot._id ?? '')
-    if (!snapshotId) {
-      toast.error('No snapshot id available for validation.')
-      return
-    }
-
-    try {
-      setValidating(true)
-      const response = await fetch(
-        `/api/backend/snapshots/${encodeURIComponent(snapshotId)}/validate`,
-        { method: 'POST', credentials: 'include' },
-      )
-      if (response.ok) {
-        router.refresh()
-        toast.success('Snapshot validated')
-      } else {
-        toast.error('Failed to validate snapshot. Please try again.')
-      }
-    } catch {
-      toast.error('Failed to validate snapshot. Please try again.')
-    } finally {
-      setValidating(false)
-    }
-  }
-
-  const handleArchiveComponent = async () => {
-    try {
-      setArchiving(true)
-      const response = await fetch(
-        `/api/backend/identities/${encodeURIComponent(identityId)}/consume`,
-        { method: 'POST', credentials: 'include' },
-      )
-      if (response.ok) {
-        router.refresh()
-      } else {
-        toast.error('Failed to archive component. Please try again.')
-      }
-    } catch {
-      toast.error('Failed to archive component. Please try again.')
-    } finally {
-      setArchiving(false)
-    }
-  }
-
-  const handleUnarchiveComponent = async () => {
-    try {
-      setArchiving(true)
-      const response = await fetch(
-        `/api/backend/identities/${encodeURIComponent(identityId)}/restore`,
-        { method: 'POST', credentials: 'include' },
-      )
-      if (response.ok) {
-        router.refresh()
-      } else {
-        toast.error('Failed to restore component. Please try again.')
-      }
-    } catch {
-      toast.error('Failed to restore component. Please try again.')
-    } finally {
-      setArchiving(false)
-    }
-  }
-
-  const openArchiveConfirmation = () => {
-    setArchiveAction(isConsumed ? 'restore' : 'archive')
-    setArchiveConfirmOpen(true)
-  }
-
-  const handleConfirmArchiveAction = async () => {
-    const selectedAction = archiveAction
-    if (!selectedAction) return
-    setArchiveConfirmOpen(false)
-    setArchiveAction(null)
-    if (selectedAction === 'archive') {
-      await handleArchiveComponent()
-      return
-    }
-    await handleUnarchiveComponent()
-  }
-
-  const handleDeleteComponent = async () => {
-    try {
-      setDeleting(true)
-      const response = await fetch(
-        `/api/backend/identities/${encodeURIComponent(identityId)}`,
-        { method: 'DELETE', credentials: 'include' },
-      )
-      if (response.ok) {
-        router.push('/components')
-      } else {
-        toast.error('Failed to delete component. Please try again.')
-      }
-    } catch {
-      toast.error('Failed to delete component. Please try again.')
-    } finally {
-      setDeleting(false)
-    }
-  }
-
-  const handleConfirmDelete = async () => {
-    setDeleteConfirmOpen(false)
-    await handleDeleteComponent()
-  }
-
   const currentUserId = (session?.user as ExtendedUser)?.id
 
   if (!session?.user) {
@@ -228,7 +94,7 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
           </Tooltip>
         </TooltipProvider>
 
-        <TooltipProvider>
+        {!outOfCirculation && <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="flex-1 min-w-[8rem]">
@@ -262,135 +128,9 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
                 : 'Reserve for your project'}
             </TooltipContent>
           </Tooltip>
-        </TooltipProvider>
+        </TooltipProvider>}
       </div>
 
-      {session?.user?.role === 'admin' && (
-        <div className="space-y-2">
-          {!isConsumed && (
-            <Link href={`/components/${identityId}/edit`} className="block">
-              <Button variant="outline" className="h-8 w-full text-xs" size="sm" disabled={busy}>
-                <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                Edit metadata
-              </Button>
-            </Link>
-          )}
-
-          <div className="flex gap-2">
-            <Button
-              onClick={handleValidateComponent}
-              disabled={busy || Boolean(snapshot.validated)}
-              variant="default"
-              size="sm"
-              className="h-8 flex-1 bg-green-600 text-xs hover:bg-green-700"
-            >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              {snapshot.validated ? 'Validated' : 'Validate'}
-            </Button>
-            <Button
-              onClick={openArchiveConfirmation}
-              disabled={busy}
-              variant={isConsumed ? 'default' : 'outline'}
-              size="sm"
-              className="h-8 flex-1 text-xs"
-            >
-              {isConsumed ? (
-                <>
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Restore
-                </>
-              ) : (
-                <>
-                  <Archive className="h-4 w-4 mr-2" />
-                  Consume
-                </>
-              )}
-            </Button>
-          </div>
-
-          <div className="rounded-lg border border-destructive/30 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowDestructiveActions(!showDestructiveActions)}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
-            >
-              <span>Destructive actions</span>
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${showDestructiveActions ? 'rotate-180' : ''}`}
-              />
-            </button>
-            {showDestructiveActions && (
-              <div className="border-t border-destructive/30 p-3 pt-2">
-                <p className="mb-2 text-xs text-muted-foreground">
-                  Deleting is permanent. Prefer consume when possible.
-                </p>
-                <Button
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  disabled={busy}
-                  variant="destructive"
-                  size="sm"
-                  className="h-8 w-full text-xs"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Permanently delete
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <Dialog open={archiveConfirmOpen} onOpenChange={setArchiveConfirmOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {isConsumed ? 'Restore identity?' : 'Mark identity as consumed?'}
-            </DialogTitle>
-            <DialogDescription>
-              {isConsumed
-                ? 'This will return the identity to the active catalog.'
-                : 'This removes the identity from the active catalog. You can restore it later.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setArchiveConfirmOpen(false)
-                setArchiveAction(null)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant={isConsumed ? 'default' : 'outline'}
-              onClick={handleConfirmArchiveAction}
-              disabled={busy}
-            >
-              {isConsumed ? 'Confirm restore' : 'Confirm consume'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Permanently delete component?</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. The component and associated files will be removed.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete} disabled={busy}>
-              Confirm delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

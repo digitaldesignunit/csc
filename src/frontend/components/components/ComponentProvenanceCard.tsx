@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { GitFork, Loader2 } from 'lucide-react'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
+import { ORIGIN_KIND_LABELS, vocabLabel } from '@/generated/Vocab'
 import type { CatalogShallowRow, ProvenanceGraph } from '@/generated/catalogExtras'
 import { formatTimestamp } from '@/lib/utils'
 import {
@@ -16,7 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import ComponentLineageIdentityBadges from './ComponentLineageIdentityBadges'
 import {
-  isConsumedShallowRow,
+  isOutOfCirculation,
   isNonEmptyString,
   parentIdentityIds,
 } from './componentDetailShared'
@@ -58,7 +59,7 @@ function ValueChip({
   )
 }
 
-type LineageStatus = 'active' | 'consumed'
+type LineageStatus = 'active' | 'exited'
 
 type ComponentProvenanceCardProps = {
   catalog: CatalogComponent
@@ -86,7 +87,7 @@ export default function ComponentProvenanceCard({
     return [
       {
         id,
-        status: isConsumedShallowRow(row) ? ('consumed' as const) : ('active' as const),
+        status: isOutOfCirculation(row) ? ('exited' as const) : ('active' as const),
       },
     ]
   })
@@ -112,7 +113,7 @@ export default function ComponentProvenanceCard({
             const row = (await res.json()) as CatalogShallowRow
             return [
               parentId,
-              isConsumedShallowRow(row) ? 'consumed' : 'active',
+              isOutOfCirculation(row) ? 'exited' : 'active',
             ] as const
           } catch (error) {
             console.error('Failed to resolve parent component status:', error)
@@ -199,24 +200,38 @@ export default function ComponentProvenanceCard({
             </span>
           )}
         </MetadataRow>
-        <MetadataRow label="Salvaged">
-          {isNonEmptyString(identity.salvaged_at) ? (
-            <ValueChip>{formatTimestamp(identity.salvaged_at)}</ValueChip>
-          ) : (
-            <span className="rounded-md bg-muted/30 px-2 py-0.5 text-xs italic text-muted-foreground">
-              Unknown
-            </span>
-          )}
+        <MetadataRow label="Origin">
+          <ValueChip>
+            {vocabLabel(ORIGIN_KIND_LABELS, identity.origin?.kind ?? 'unknown')}
+            {identity.inherited_fields?.includes('origin') ? ' (inherited)' : ''}
+          </ValueChip>
         </MetadataRow>
-        <MetadataRow label="Salvage source">
-          {isNonEmptyString(identity.salvage_source) ? (
-            <ValueChip className="max-w-[12rem] whitespace-normal break-words">
-              {identity.salvage_source}
+        {isNonEmptyString(identity.origin?.at) && (
+          <MetadataRow label="Left previous context">
+            <ValueChip>
+              {formatTimestamp(String(identity.origin?.at))}
+              {identity.origin?.at_precision && identity.origin.at_precision !== 'exact'
+                ? ` (${identity.origin.at_precision})`
+                : ''}
             </ValueChip>
-          ) : (
-            <span className="text-xs italic text-muted-foreground">Unknown</span>
-          )}
-        </MetadataRow>
+          </MetadataRow>
+        )}
+        {(identity.origin?.place?.name || identity.origin?.place?.address) && (
+          <MetadataRow label="Place">
+            <ValueChip className="max-w-[12rem] whitespace-normal break-words">
+              {[identity.origin?.place?.name, identity.origin?.place?.address]
+                .filter(Boolean)
+                .join(', ')}
+            </ValueChip>
+          </MetadataRow>
+        )}
+        {identity.origin?.construction_work && (
+          <MetadataRow label="Construction work">
+            <ValueChip className="max-w-[12rem] whitespace-normal break-words">
+              {identity.origin.construction_work.name}
+            </ValueChip>
+          </MetadataRow>
+        )}
         <MetadataRow label="Parent">
           <ComponentLineageIdentityBadges
             kind="parent"
@@ -246,7 +261,7 @@ export default function ComponentProvenanceCard({
             <DialogTitle>Lineage graph</DialogTitle>
             <DialogDescription>
               Identities and snapshot versions related to this component. Green is
-              active, amber is consumed. Click a node to open it.
+              in circulation, amber has left it. Click a node to open it.
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border">

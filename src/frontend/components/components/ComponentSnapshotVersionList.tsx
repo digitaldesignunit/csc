@@ -1,15 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { Clock, History, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { Clock, History } from 'lucide-react'
 
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { formatTimestamp } from '@/lib/utils'
 
 type ComponentSnapshotVersionListProps = {
@@ -28,54 +23,19 @@ function versionHref(identityId: string, row: SnapshotSummaryItem): string {
   return `${base}?${params.toString()}`
 }
 
+/**
+ * The snapshot versions of one identity, each with its status and the date
+ * its state began (valid time). Moderation controls return in plan P3.
+ */
 export default function ComponentSnapshotVersionList({
   identityId,
   snapshots,
   activeSnapshotId,
   liveSnapshotId,
 }: ComponentSnapshotVersionListProps) {
-  const router = useRouter()
-  const { data: session } = useSession()
-  const isAdmin = session?.user?.role === 'admin'
-  const [rejectingId, setRejectingId] = useState<string | null>(null)
-
   const hasPendingUpdate = snapshots.some(
-    (row) => !row.validated && !row.is_current,
+    (row) => row.status === 'pending' && !row.is_current,
   )
-
-  const handleReject = async (row: SnapshotSummaryItem) => {
-    if (row.is_current) {
-      toast.error('Use identity delete for the live v0 snapshot.')
-      return
-    }
-
-    try {
-      setRejectingId(row._id)
-      const response = await fetch(
-        `/api/backend/snapshots/${encodeURIComponent(row._id)}`,
-        { method: 'DELETE', credentials: 'include' },
-      )
-      if (response.ok) {
-        toast.success(`Rejected pending v${row.version}`)
-        if (activeSnapshotId === row._id) {
-          router.push(`/components/${encodeURIComponent(identityId)}`)
-        } else {
-          router.refresh()
-        }
-      } else {
-        const body = await response.json().catch(() => ({}))
-        toast.error(
-          typeof body.detail === 'string'
-            ? body.detail
-            : 'Failed to reject pending snapshot.',
-        )
-      }
-    } catch {
-      toast.error('Failed to reject pending snapshot.')
-    } finally {
-      setRejectingId(null)
-    }
-  }
 
   if (snapshots.length === 0) {
     return null
@@ -95,16 +55,14 @@ export default function ComponentSnapshotVersionList({
           role="status"
           className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
         >
-          A newer snapshot is awaiting admin validation. The live version shown
-          above remains unchanged until it is approved.
+          A newer snapshot is awaiting moderation. The current version shown
+          above remains unchanged until it is published.
         </div>
       )}
 
       <ul className="space-y-2">
         {snapshots.map((row) => {
           const isActive = row._id === activeSnapshotId
-          const canReject =
-            isAdmin && !row.validated && !row.is_current && row.version > 0
 
           return (
             <li key={row._id}>
@@ -122,7 +80,7 @@ export default function ComponentSnapshotVersionList({
                   <span className="font-medium">v{row.version}</span>
                   {row.is_current && (
                     <Badge variant="default" className="text-[10px]">
-                      Live
+                      Current
                     </Badge>
                   )}
                   {isActive && !row.is_current && (
@@ -130,47 +88,31 @@ export default function ComponentSnapshotVersionList({
                       Viewing
                     </Badge>
                   )}
-                  {row.validated ? (
+                  {row.status === 'published' ? (
                     <Badge variant="secondary" className="text-[10px]">
-                      Validated
+                      Published
                     </Badge>
                   ) : (
                     <Badge
                       variant="outline"
                       className="text-[10px] border-amber-400 text-amber-800 dark:text-amber-200"
                     >
-                      Pending
+                      {row.status}
                     </Badge>
                   )}
-                  {row.virtual && (
+                  {row.superseded_by && (
                     <Badge variant="outline" className="text-[10px]">
-                      Virtual
+                      Corrected
                     </Badge>
                   )}
                 </Link>
 
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3 shrink-0" />
-                    <span>{formatTimestamp(row.created)}</span>
-                  </div>
-                  {canReject && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-destructive hover:text-destructive"
-                      disabled={rejectingId === row._id}
-                      onClick={() => void handleReject(row)}
-                      aria-label={`Reject pending v${row.version}`}
-                    >
-                      {rejectingId === row._id ? (
-                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                  )}
+                <div
+                  className="flex items-center gap-1 text-xs text-muted-foreground"
+                  title="When this state began"
+                >
+                  <Clock className="h-3 w-3 shrink-0" />
+                  <span>since {formatTimestamp(row.effective_from)}</span>
                 </div>
               </div>
             </li>

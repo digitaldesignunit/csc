@@ -180,7 +180,7 @@ export default function ReservedComponentsPage() {
         <Card className="p-3">
           <div className="text-center">
             <div className="text-lg font-bold">
-              {new Set(reservedComponents.map(c => c.type)).size}
+              {new Set(reservedComponents.map(c => c.original_function)).size}
             </div>
             <p className="text-xs text-muted-foreground">Component Types</p>
           </div>

@@ -26,6 +26,21 @@ def not_modified_response(etag: str, **extra_headers: str) -> Response:
     return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
 
 
+def retired_until(phase: str):
+    """
+    Dependency for a 0.5 write route whose 0.6 replacement lands in plan
+    ``phase``: it would write 0.5-shaped documents into a migrated
+    database, so it answers 503 until then (plan P2, read-only catch-up).
+    """
+    async def _retired() -> None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(f'This 0.5 write route is retired during the 0.6 '
+                    f'migration; its replacement lands in plan {phase}.'),
+        )
+    return _retired
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 

@@ -185,6 +185,52 @@ def seed(c, dump, replace=False):
 
 
 @task(help={
+    'dump': 'dump folder name in mongodb_collections_local (default 260916)',
+    'assets': 'asset folder of the dump; step 6c then moves fixture files '
+              'in a temporary copy',
+})
+def rehearse(c, dump='260916', assets=''):
+    """
+    Rehearse the 0.6 migration on a local dump in a throwaway mongod.
+    """
+    args = f' --assets "{assets}"' if assets else ''
+    with chdir(REPO_DIR):
+        c.run(f'{sys.executable} scripts/db_maintenance/rehearse_06.py '
+              f'--dump {dump}{args}', pty=False)
+
+
+@task(help={
+    'dump': 'dump folder name in mongodb_collections_local (default 260916)',
+    'port': 'backend port (default 8000)',
+    'mongo_port': 'throwaway mongod port (default 27018)',
+})
+def dev_migrated(c, dump='260916', port=8000, mongo_port=27018):
+    """
+    Serve a migrated copy of a dump (throwaway mongod) for frontend work.
+    """
+    with chdir(REPO_DIR):
+        c.run(f'{sys.executable} scripts/dev/serve_migrated.py --dump {dump} '
+              f'--port {port} --mongo-port {mongo_port}', pty=False)
+
+
+@task(help={
+    'dry_run': 'report only, write nothing',
+    'files': 'move fixture PLYs in the dev.env storage dirs (step 6c)',
+})
+def migrate_local(c, dry_run=False, files=False):
+    """
+    Run the 0.6 migration on the local database from dev.env.
+    """
+    env = _read_dev_env()
+    _local_db(env)                       # refuses a non-local database
+    flags = ' --dry-run' if dry_run else ''
+    flags += '' if files else ' --no-files'
+    with chdir(REPO_DIR):
+        c.run(f'{sys.executable} scripts/db_maintenance/migrate_06.py --all '
+              f'--uri "{env["MONGODB_URI"]}"{flags}', env=env, pty=False)
+
+
+@task(help={
     'username': 'account name',
     'email': 'e-mail (any domain; the TU check applies to registration only)',
     'admin': 'give the account the global admin role',

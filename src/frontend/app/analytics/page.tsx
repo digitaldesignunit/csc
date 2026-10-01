@@ -13,22 +13,31 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   LineChart, Line,
 } from 'recharts'
+import { ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/generated/Vocab'
 
 type DistItem = { label: string; count: number }
 
 type StatsResponse = {
   total: number
-  byType: DistItem[]
+  byOriginalFunction: DistItem[]
+  byShapeClass: DistItem[]
   byMaterial: DistItem[]
   byDataset: DistItem[]
   byComplexity: DistItem[]
-  byValidated: DistItem[]
+  byStatus: DistItem[]
   byFragment: DistItem[]
-  byAssembly: DistItem[]
   reserved: DistItem[]
   descriptorsKeys: DistItem[]
   createdMonthly: DistItem[]
   bbxX: DistItem[]
+}
+
+/** Facet rows with the original function's display label. */
+function withFunctionLabels(items: DistItem[] | undefined): DistItem[] {
+  return (items || []).map((d) => ({
+    ...d,
+    label: vocabLabel(ORIGINAL_FUNCTION_LABELS, d.label),
+  }))
 }
 
 const COLORS = ['#6366f1', '#22c55e', '#f97316', '#06b6d4', '#eab308', '#ef4444', '#a855f7', '#14b8a6']
@@ -80,8 +89,8 @@ export default function AnalyticsPage() {
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [materialFilter, setMaterialFilter] = useState<string>('')
   const [datasetFilter, setDatasetFilter] = useState<string>('')
-  const [validatedFilter, setValidatedFilter] = useState<string>('1')
-  const [materialOptions, setMaterialOptions] = useState<string[]>([])
+  const [statusFilter, setStatusFilter] = useState<string>('published')
+  const [materialOptions, setMaterialOptions] = useState<{ value: string; label: string }[]>([])
   const [datasetOptions, setDatasetOptions] = useState<string[]>([])
 
   async function load() {
@@ -89,10 +98,10 @@ export default function AnalyticsPage() {
     setError(null)
     try {
       const params = new URLSearchParams()
-      if (typeFilter && typeFilter !== 'all') params.set('comptype', typeFilter)
+      if (typeFilter && typeFilter !== 'all') params.set('original_function', typeFilter)
       if (materialFilter) params.set('material', materialFilter)
       if (datasetFilter) params.set('dataset', datasetFilter)
-      if (validatedFilter) params.set('validated', validatedFilter)
+      if (statusFilter) params.set('status', statusFilter)
       params.set('limit_dim', '10')
 
       const res = await fetch(`/api/backend/identities/stats?${params.toString()}`, { cache: 'no-store' })
@@ -100,13 +109,13 @@ export default function AnalyticsPage() {
         // Graceful: render empty stats rather than erroring
         setData({
           total: 0,
-          byType: [],
+          byOriginalFunction: [],
+          byShapeClass: [],
           byMaterial: [],
           byDataset: [],
           byComplexity: [],
-          byValidated: [],
+          byStatus: [],
           byFragment: [],
-          byAssembly: [],
           reserved: [],
           descriptorsKeys: [],
           createdMonthly: [],
@@ -140,11 +149,15 @@ export default function AnalyticsPage() {
       try {
         const [materials, datasets] = await Promise.all([
           fetch('/api/backend/materials', { cache: 'no-store' }).then(r => (r.ok ? r.json() : [])),
-          fetch('/api/backend/datasets', { cache: 'no-store' }).then(r => (r.ok ? r.json() : [])),
+          fetch('/api/backend/identities/meta/datasets?circulation=all', { cache: 'no-store' }).then(r => (r.ok ? r.json() : [])),
         ])
         if (cancelled) return
         if (Array.isArray(materials)) {
-          setMaterialOptions(materials.filter((v): v is string => typeof v === 'string' && v.trim().length > 0))
+          setMaterialOptions(
+            materials
+              .filter((m): m is { _id: string; label: string } => typeof m?._id === 'string')
+              .map((m) => ({ value: m._id, label: m.label })),
+          )
         }
         if (Array.isArray(datasets)) {
           setDatasetOptions(datasets.filter((v): v is string => typeof v === 'string' && v.trim().length > 0))
@@ -162,10 +175,10 @@ export default function AnalyticsPage() {
     }
   }, [])
 
-  const validatedPct = useMemo(() => {
+  const publishedPct = useMemo(() => {
     if (!data) return 0
-    const trueCount = data.byValidated.find(d => d.label === 'true')?.count ?? 0
-    return data.total ? Math.round((trueCount / data.total) * 100) : 0
+    const published = data.byStatus.find(d => d.label === 'published')?.count ?? 0
+    return data.total ? Math.round((published / data.total) * 100) : 0
   }, [data])
 
   return (
@@ -194,20 +207,13 @@ export default function AnalyticsPage() {
             <div>
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Type (all)" />
+                  <SelectValue placeholder="Original function (all)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="panel">panel</SelectItem>
-                  <SelectItem value="beam">beam</SelectItem>
-                  <SelectItem value="column">column</SelectItem>
-                  <SelectItem value="slab">slab</SelectItem>
-                  <SelectItem value="rubble">rubble</SelectItem>
-                  <SelectItem value="brick">brick</SelectItem>
-                  <SelectItem value="pipe">pipe</SelectItem>
-                  <SelectItem value="profile">profile</SelectItem>
-                  <SelectItem value="connector">connector</SelectItem>
-                  <SelectItem value="other">other</SelectItem>
+                  <SelectItem value="all">All functions</SelectItem>
+                  {Object.entries(ORIGINAL_FUNCTION_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -219,7 +225,7 @@ export default function AnalyticsPage() {
                 <SelectContent>
                   <SelectItem value="all">Any material</SelectItem>
                   {materialOptions.map((material) => (
-                    <SelectItem key={material} value={material}>{material}</SelectItem>
+                    <SelectItem key={material.value} value={material.value}>{material.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -238,14 +244,14 @@ export default function AnalyticsPage() {
               </Select>
             </div>
             <div>
-              <Select value={validatedFilter} onValueChange={setValidatedFilter}>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Validated" />
+                  <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">validated</SelectItem>
-                  <SelectItem value="-1">not validated</SelectItem>
-                  <SelectItem value="0">any</SelectItem>
+                  <SelectItem value="published">published</SelectItem>
+                  <SelectItem value="pending">pending</SelectItem>
+                  <SelectItem value="any">any status</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -254,7 +260,7 @@ export default function AnalyticsPage() {
             <Button onClick={() => load()} disabled={loading}>
               Apply
             </Button>
-            <Button variant="ghost" onClick={() => { setTypeFilter('all'); setMaterialFilter(''); setDatasetFilter(''); setValidatedFilter('1'); }}>
+            <Button variant="ghost" onClick={() => { setTypeFilter('all'); setMaterialFilter(''); setDatasetFilter(''); setStatusFilter('published'); }}>
               Reset
             </Button>
           </div>
@@ -280,13 +286,13 @@ export default function AnalyticsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Validation Rate</CardTitle>
-            <CardDescription>Share of validated items</CardDescription>
+            <CardTitle>Published</CardTitle>
+            <CardDescription>Share of published current snapshots</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-3">
-              <div className="text-3xl font-semibold">{validatedPct}%</div>
-              <Badge variant="secondary">validated</Badge>
+              <div className="text-3xl font-semibold">{publishedPct}%</div>
+              <Badge variant="secondary">published</Badge>
             </div>
           </CardContent>
         </Card>
@@ -312,7 +318,7 @@ export default function AnalyticsPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="gap-1.5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="types">Types</TabsTrigger>
+          <TabsTrigger value="types">Functions</TabsTrigger>
           <TabsTrigger value="materials">Materials</TabsTrigger>
           <TabsTrigger value="datasets">Datasets</TabsTrigger>
           <TabsTrigger value="descriptors">Descriptors</TabsTrigger>
@@ -332,14 +338,14 @@ export default function AnalyticsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><PieIcon className="h-4 w-4" /> Type distribution</CardTitle>
+                <CardTitle className="flex items-center gap-2"><PieIcon className="h-4 w-4" /> Original function</CardTitle>
               </CardHeader>
               <CardContent className="h-64 min-w-0">
                 <MeasuredChartFrame className="h-full w-full min-w-0">
                   {({ width, height }) => (
                   <PieChart width={width} height={height}>
-                    <Pie dataKey="count" data={data?.byType || []} nameKey="label" innerRadius={40} outerRadius={80}>
-                      {(data?.byType || []).map((_, i) => (
+                    <Pie dataKey="count" data={withFunctionLabels(data?.byOriginalFunction)} nameKey="label" innerRadius={40} outerRadius={80}>
+                      {(data?.byOriginalFunction || []).map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
@@ -371,13 +377,13 @@ export default function AnalyticsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><BarChart2 className="h-4 w-4" /> Validated / Reserved</CardTitle>
+                <CardTitle className="flex items-center gap-2"><BarChart2 className="h-4 w-4" /> Status / Reserved</CardTitle>
               </CardHeader>
               <CardContent className="h-64 grid grid-cols-2 gap-2">
                 <div className="h-full min-w-0">
                   <MeasuredChartFrame className="h-full w-full min-w-0">
                     {({ width, height }) => (
-                    <BarChart width={width} height={height} data={data?.byValidated || []}>
+                    <BarChart width={width} height={height} data={data?.byStatus || []}>
                       <XAxis dataKey="label" />
                       <YAxis />
                       <Tooltip />
@@ -408,13 +414,13 @@ export default function AnalyticsPage() {
         <TabsContent value="types" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>By Type</CardTitle>
-              <CardDescription>Distribution of component types</CardDescription>
+              <CardTitle>By original function</CardTitle>
+              <CardDescription>What the pieces were in their previous life</CardDescription>
             </CardHeader>
             <CardContent className="h-80 min-w-0">
               <MeasuredChartFrame className="h-full w-full min-w-0">
                 {({ width, height }) => (
-                <BarChart width={width} height={height} data={data?.byType || []}>
+                <BarChart width={width} height={height} data={withFunctionLabels(data?.byOriginalFunction)}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" />
                   <YAxis />

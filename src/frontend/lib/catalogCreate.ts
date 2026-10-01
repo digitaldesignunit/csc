@@ -1,4 +1,4 @@
-import type { ComponentLocation } from '@/generated/CatalogSharedTypes'
+import type { GeoLocation } from '@/generated/CatalogSharedTypes'
 
 export const COMPONENT_TYPES = [
   'panel',
@@ -240,7 +240,7 @@ export async function buildCreateIdentityPayload(
     form.assembly,
   )
 
-  const location: ComponentLocation = {
+  const location: GeoLocation = {
     lat: form.lat,
     lon: form.lon,
   }

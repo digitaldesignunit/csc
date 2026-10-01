@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
-import type { SnapshotGeometry, SnapshotPointCloud } from '@/generated/CatalogModels'
+import type { Geometry, PointCloud } from '@/generated/CatalogSharedTypes'
 
 export const DEFAULT_POINT_CLOUD_COLOR = 0x888888
 /** Screen-space point size (pixels) when sizeAttenuation is false. */
@@ -28,11 +28,11 @@ function vertexColorsFromSnapshot(
 }
 
 export function snapshotPointCloudsFromGeometry(
-  geometry: SnapshotGeometry,
-): SnapshotPointCloud[] {
+  geometry: Geometry,
+): PointCloud[] {
   const pointClouds = geometry.point_clouds
   if (!Array.isArray(pointClouds)) return []
-  return (pointClouds as SnapshotPointCloud[]).filter((pc) => (
+  return (pointClouds as PointCloud[]).filter((pc) => (
     Array.isArray(pc?.points)
     && pc.points.length > 0
     && pc.points.every((pt) => Array.isArray(pt) && pt.length >= 3)
@@ -76,7 +76,7 @@ function buildPointsObject(
 }
 
 export function buildPointCloudThreeGroup(
-  pointCloud: SnapshotPointCloud,
+  pointCloud: PointCloud,
   name: string,
   defaultColor: number = DEFAULT_POINT_CLOUD_COLOR,
 ): THREE.Group | null {
@@ -146,7 +146,7 @@ export function buildPointCloudGroupFromPlyBuffer(
 
 export function buildPointCloudGroupsFromSnapshot(
   snapshotId: string,
-  geometry: SnapshotGeometry,
+  geometry: Geometry,
 ): THREE.Group[] {
   return snapshotPointCloudsFromGeometry(geometry)
     .map((pc, index) => buildPointCloudThreeGroup(

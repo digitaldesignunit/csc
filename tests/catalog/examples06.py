@@ -104,7 +104,7 @@ _SNAPSHOT = {
                           'y': [0, 1, 0], 'z': [0, 0, 1]},
             'fit': {'method': 'obb',
                     'source': {'kind': 'meshes', 'index': 0,
-                               'resolution': 'detailed'},
+                               'resolution': 'original'},
                     'n_points': 184220, 'rms_mm': 2.1, 'max_mm': 14.7,
                     'p95_mm': 6.3, 'spec_version': 1, 'computed_at': T1},
             'deviation_maps': None,

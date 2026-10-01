@@ -523,7 +523,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             inputs={[
               { label: 'Type', description: 'Component type filter (identity.type, e.g., "beam", "slab", "column")' },
               { label: 'Material', description: 'Material type filter (identity.material, e.g., "concrete", "steel", "wood")' },
-              { label: 'Dataset', description: 'Dataset name filter (identity.dataset, e.g., "sas_cita_scans", "mineral_composite_sheets")' },
+              { label: 'Dataset', description: 'Dataset name filter (identity.dataset, e.g., "beyond_debris", "mineral_composite_panels")' },
               { label: 'Complexity', description: 'Complexity level filter (snapshot.complexity, 0-3, where 0=simple, 3=complex)' },
               { label: 'Fragment', description: 'Fragment status filter (snapshot.fragment, True for fragments, False for complete)' },
               { label: "MinDimensionX", description: "Minimum X dimension filter (snapshot.bbx)" },
@@ -549,7 +549,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated }: GHInte
             inputs={[
               { label: 'Type', description: 'Component type filter (e.g., "beam", "slab", "column")' },
               { label: 'Material', description: 'Material type filter (e.g., "concrete", "steel", "wood")' },
-              { label: 'Dataset', description: 'Dataset name filter (e.g., "sas_cita_scans", "mineral_composite_sheets")' },
+              { label: 'Dataset', description: 'Dataset name filter (e.g., "beyond_debris", "mineral_composite_panels")' },
               { label: 'Complexity', description: 'Complexity level filter (0-3, where 0=simple, 3=complex)' },
               { label: 'Fragment', description: 'Fragment status filter (True for fragments, False for complete)' },
               { label: 'MinDimensionX', description: 'Minimum X dimension filter (bounding box)' },

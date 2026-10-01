@@ -1,62 +1,94 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-09-08T12:50:22.047Z
-// Source: https://api.2ndchances.build/schema/catalog-shared
+// Generated on: 2026-09-30T14:46:19.242Z
+// Source: http://127.0.0.1:8000/schema/catalog-shared
 
-export type ComponentBoundingBox = number[];
-
-
-export interface ComponentExtrusion {
-  profile: ComponentPolylinePoints; // Extrusion profile points
-  height: number; // Extrusion height
+export interface Bounds {
+  min: number[];
+  max: number[];
 }
 
-export interface ComponentFrame {
-  o: number[]; // Origin point [x, y, z]
-  x: number[]; // X axis vector [x, y, z]
-  y: number[]; // Y axis vector [x, y, z]
-  z: number[]; // Z axis vector [x, y, z]
+export interface DeviationMapFace {
+  file: string;
+  width: number;
+  height: number;
+  distance: MapScale;
 }
 
-export interface ComponentGeometry {
-  meshes?: ComponentMesh[] | unknown; // Array of mesh geometries
-  extrusion?: ComponentExtrusion | unknown; // Extrusion geometry
+export interface DeviationMaps {
+  resolution_mm: number;
+  channels: string[];
+  faces: Record<string, unknown>;
 }
 
-export interface ComponentLocation {
-  lat: number; // Latitude coordinate
-  lon: number; // Longitude coordinate
+export interface Fit {
+  method: 'authored' | 'obb' | 'ransac' | 'lsq' | 'hull';
+  source?: FitSource | null;
+  n_points?: number | null;
+  inlier_ratio?: number | null;
+  rms_mm?: number | null;
+  max_mm?: number | null;
+  p95_mm?: number | null;
+  spec_version?: number | null;
+  computed_at?: string | null;
 }
 
-export interface ComponentMesh {
-  v: ComponentMeshVertices; // Mesh vertices
-  f: ComponentMeshFaces; // Mesh faces
-  c?: ComponentMeshColors | unknown; // Mesh vertex colors
+export interface FitSource {
+  kind: 'meshes' | 'point_clouds';
+  index: number;
+  resolution: 'original' | 'reduced' | 'preview';
 }
 
-export type ComponentMeshColors = number[][];
+export interface Frame {
+  o: number[];
+  x: number[];
+  y: number[];
+  z: number[];
+}
 
+export interface GeoLocation {
+  lat: number;
+  lon: number;
+}
 
-export type ComponentMeshFaces = number[][];
+export interface Geometry {
+  meshes?: Mesh[];
+  point_clouds?: PointCloud[];
+  proxies?: Proxy[];
+}
 
+export interface MapScale {
+  scale_mm: number;
+  offset_mm: number;
+}
 
-export type ComponentMeshVertices = number[][];
+export interface Mesh {
+  vertices: number[][];
+  faces: number[][];
+  colors?: number[][] | null;
+}
 
+export interface PointCloud {
+  points: number[][];
+  colors?: number[][] | null;
+}
 
-export type ComponentPolylinePoints = number[][];
+export interface Proxy {
+  primitive: 'box' | 'prism' | 'cylinder' | 'hull';
+  role: 'primary' | 'part';
+  params: Record<string, unknown>;
+  placement: Frame;
+  fit: Fit;
+  deviation_maps?: DeviationMaps | null;
+  regions?: Region[];
+}
 
+export interface Region {
+  label: string;
+  bounds: Bounds;
+  resolution_hint: 'original' | 'reduced' | 'proxy';
+  reason: 'connection' | 'damage' | 'feature' | 'other';
+  source: 'derived' | 'assigned';
+}
 
-// Shared catalog value types (frames, location, mesh geometry, etc.)
-export type ComponentType =
-  | 'panel'
-  | 'beam'
-  | 'column'
-  | 'slab'
-  | 'rubble'
-  | 'brick'
-  | 'pipe'
-  | 'profile'
-  | 'connector'
-  | 'other';
+// Shared catalog value types (frame, location, geometry, proxies)
 export type ComponentComplexity = 0 | 1 | 2 | 3;
-export type ComponentCondition = 0 | 1 | 2 | 3;
-export type ComponentManufacturedPrecision = 'exact' | 'month' | 'year' | 'unknown';

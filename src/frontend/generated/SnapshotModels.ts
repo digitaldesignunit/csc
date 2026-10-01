@@ -1,31 +1,35 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-09-08T12:50:22.135Z
-// Source: https://api.2ndchances.build/schema/snapshot-summary
+// Generated on: 2026-09-30T14:46:19.301Z
+// Source: http://127.0.0.1:8000/schema/snapshot-summary
 
 export interface SnapshotSummaryItem {
   _id: string;
   identity_id: string;
   version: number;
-  validated: boolean;
-  virtual?: boolean;
+  status: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
   is_current: boolean;
-  name?: string | unknown;
+  name?: string | null;
+  effective_from: string;
+  effective_from_precision?: 'exact' | 'day' | 'month' | 'year' | 'unknown';
+  supersedes?: string | null;
+  superseded_by?: string | null;
   created: string;
   lastmodified: string;
 }
 
 
-export interface PendingValidationSnapshotItem {
+export interface PendingSnapshotItem {
   _id: string;
   identity_id: string;
   version: number;
-  validated?: boolean;
+  status: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
   is_current: boolean;
-  name?: string | unknown;
+  name?: string | null;
   created: string;
-  catalog_number?: number | unknown;
-  type?: string | unknown;
-  material?: string | unknown;
-  live_version?: number | unknown; // Version of the identity current (live) snapshot, if any
+  catalog_number?: number | null;
+  original_function?: string | null;
+  material?: string | null;
+  dataset?: string | null;
+  live_version?: number | null; // Version of the identity's current snapshot, if any
 }
 

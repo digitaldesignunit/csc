@@ -9,8 +9,10 @@ import { generateGrasshopperPanelXML } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  isConsumedShallowRow,
+  exitSummary,
   isNonEmptyString,
+  isOutOfCirculation,
+  isPublished,
   snapshotAddedByDisplay,
   snapshotDisplayName,
 } from './componentDetailShared'
@@ -24,9 +26,7 @@ export default function ComponentDetailSummary({ catalog }: ComponentDetailSumma
   const snapshot = primarySnapshot(catalog)
   const identityId = identity._id ?? ''
   const componentName = snapshotDisplayName(snapshot)
-  const isConsumed = isConsumedShallowRow({
-    consumed_at: identity.consumed_at as string | null | undefined,
-  })
+  const outOfCirculation = isOutOfCirculation(identity)
   const reservedBy = typeof identity.reserved === 'string' ? identity.reserved.trim() : ''
   const addedBy = snapshotAddedByDisplay(snapshot)
 
@@ -110,14 +110,14 @@ export default function ComponentDetailSummary({ catalog }: ComponentDetailSumma
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        {snapshot.validated && (
+        {isPublished(snapshot) && (
           <span className="rounded-md border border-green-300 bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:border-green-700 dark:bg-green-950/50 dark:text-green-200">
-            Validated
+            Published
           </span>
         )}
-        {isConsumed && (
+        {outOfCirculation && (
           <span className="rounded-md border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
-            Consumed
+            {exitSummary(identity.exit)}
           </span>
         )}
         {reservedBy ? (

@@ -107,7 +107,7 @@ async def lifespan(app: FastAPI):
     app.mongodb_component_identities = app.mongodb['component_identities']
     app.mongodb_component_snapshots = app.mongodb['component_snapshots']
     app.mongodb_component_map_cache = app.mongodb['component_map_cache']
-    app.mongodb_component_measurements = app.mongodb['component_measurements']
+    app.mongodb_component_evidence = app.mongodb['component_evidence']
     app.mongodb_counters = app.mongodb['counters']
 
     # Create helpful indexes (idempotent)
@@ -120,6 +120,9 @@ async def lifespan(app: FastAPI):
     app.snapshot_photos_dir = get_snapshot_photos_directory()
     app.snapshot_meshes_dir = get_snapshot_meshes_directory()
     app.snapshot_point_clouds_dir = get_snapshot_point_clouds_directory()
+    # capture fixtures (decision 7.7); optional until the geometry runner
+    # (plan P5) makes it required --- without it the fixture route is 404
+    app.snapshot_capture_dir = os.getenv('SNAPSHOT_CAPTURE_DIR') or None
     app.snapshot_photo_upload_limit_bytes = (
         get_snapshot_photo_upload_limit_bytes()
     )

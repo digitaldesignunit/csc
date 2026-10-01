@@ -9,25 +9,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
-from apps.catalog.catalog_meta_vocab import (
-    ADDITIONAL_DATASETS,
-    ADDITIONAL_MATERIALS,
-    merge_additional_with_catalog,
-)
+from apps.catalog import vocab
 from apps.catalog.models import User
+from apps.catalog.read_models import catalog_row
 from .auth import get_current_active_user, require_admin
 from .catalog_common import (
     get_identities_col,
     get_snapshots_col,
     now_iso,
+    retired_until,
     validate_snapshot_and_promote,
     validate_uuid,
 )
-from .identity_filters import (
-    ConsumedFilter,
-    build_identity_match_stage,
-    merge_shallow_catalog_row,
-)
+from .identity_filters import CatalogFilters, Circulation
 from .identity_query import (
     aggregate_identities,
     build_list_pipeline,
@@ -102,9 +96,7 @@ async def list_reserved_identities(
             detail='You can only view your own reserved components',
         )
 
-    identity_match = build_identity_match_stage(
-        consumed_filter='active',
-    )
+    identity_match = CatalogFilters(status='any').identity_match()
     identity_match['reserved'] = user_id
 
     pipeline = build_list_pipeline(
@@ -125,7 +117,7 @@ async def list_reserved_identities(
         print(f'[ERROR] list_reserved_identities: {exc}')
         raise HTTPException(status_code=500, detail='Internal server error')
 
-    components = [merge_shallow_catalog_row(doc) for doc in docs]
+    components = [catalog_row(doc) for doc in docs]
     return JSONResponse(
         status_code=200,
         content={
@@ -137,66 +129,58 @@ async def list_reserved_identities(
     )
 
 
-@router.get(
-    '/identities/meta/materials',
-    summary=(
-        'Materials for dropdowns (catalog distinct + additional suggestions)'
-    ),
-)
-async def list_identity_materials(
-    request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
-    consumed_filter: ConsumedFilter = Query('active'),
-):
-    match = build_identity_match_stage(consumed_filter=consumed_filter)
-    coll = await get_identities_col(request)
-    try:
-        values = await coll.distinct('material', match)
-        content = merge_additional_with_catalog(ADDITIONAL_MATERIALS, values)
-        return JSONResponse(status_code=200, content=content)
-    except PyMongoError as exc:
-        print(f'[ERROR] list_identity_materials: {exc}')
-        raise HTTPException(status_code=500, detail='Internal server error')
+def _labelled(values, labels):
+    return [{'value': v, 'label': labels.get(v, v)} for v in values]
 
 
 @router.get(
-    '/identities/meta/types',
-    summary='Distinct component types on identities',
+    '/vocab',
+    summary='Labels of the controlled vocabularies (spec section 2)',
 )
-async def list_identity_types(
-    request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
-    consumed_filter: ConsumedFilter = Query('active'),
-):
-    match = build_identity_match_stage(consumed_filter=consumed_filter)
-    coll = await get_identities_col(request)
+async def get_vocabularies():
+    """Code vocabularies with display labels; materials: GET /materials."""
+    return JSONResponse(status_code=200, content={
+        'original_function': _labelled(vocab.ORIGINAL_FUNCTIONS,
+                                       vocab.ORIGINAL_FUNCTION_LABELS),
+        'shape_class': _labelled(vocab.SHAPE_CLASSES,
+                                 vocab.SHAPE_CLASS_LABELS),
+        'origin_kind': _labelled(vocab.ORIGIN_KINDS,
+                                 vocab.ORIGIN_KIND_LABELS),
+        'exit_kind': _labelled(vocab.EXIT_KINDS, vocab.EXIT_KIND_LABELS),
+        'status': _labelled(vocab.STATUSES, {}),
+        'precision': _labelled(vocab.PRECISIONS, {}),
+    })
+
+
+@router.get(
+    '/materials',
+    summary='The controlled materials list (spec section 2.10)',
+)
+async def list_materials(request: Request):
+    coll = request.app.mongodb['materials']
     try:
-        values = await coll.distinct('type', match)
-        return JSONResponse(
-            status_code=200, content=sorted(v for v in values if v)
-        )
+        docs = await coll.find({}).sort('label', 1).to_list(length=None)
     except PyMongoError as exc:
-        print(f'[ERROR] list_identity_types: {exc}')
+        print(f'[ERROR] list_materials: {exc}')
         raise HTTPException(status_code=500, detail='Internal server error')
+    return JSONResponse(status_code=200, content=docs)
 
 
 @router.get(
     '/identities/meta/datasets',
-    summary=(
-        'Datasets for dropdowns (catalog distinct + additional suggestions)'
-    ),
+    summary='Datasets that hold identities (dropdowns)',
 )
 async def list_identity_datasets(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
-    consumed_filter: ConsumedFilter = Query('active'),
+    circulation: Circulation = Query('active'),
 ):
-    match = build_identity_match_stage(consumed_filter=consumed_filter)
+    match = CatalogFilters(circulation=circulation).identity_match()
     coll = await get_identities_col(request)
     try:
         values = await coll.distinct('dataset', match)
-        content = merge_additional_with_catalog(ADDITIONAL_DATASETS, values)
-        return JSONResponse(status_code=200, content=content)
+        return JSONResponse(status_code=200,
+                            content=sorted(v for v in values if v))
     except PyMongoError as exc:
         print(f'[ERROR] list_identity_datasets: {exc}')
         raise HTTPException(status_code=500, detail='Internal server error')
@@ -212,10 +196,10 @@ async def reserve_identity(
     identity_id: str,
 ):
     identity = await _load_identity(request, identity_id)
-    if identity.get('consumed_at'):
+    if identity.get('exit'):
         raise HTTPException(
             status_code=409,
-            detail='Consumed identity cannot be reserved',
+            detail='A piece out of circulation cannot be reserved (I18)',
         )
 
     reserved = identity.get('reserved') or ''
@@ -312,6 +296,7 @@ async def release_identity_reservation(
 @router.get(
     '/identities/{identity_id}/validate',
     summary='Validate current snapshot (admin only)',
+    dependencies=[Depends(retired_until('P3'))],
 )
 async def validate_identity_snapshot(
     request: Request,
@@ -329,6 +314,7 @@ async def validate_identity_snapshot(
 @router.post(
     '/identities/{identity_id}/consume',
     summary='Mark identity as consumed (admin only)',
+    dependencies=[Depends(retired_until('P4'))],
 )
 async def consume_identity(
     request: Request,
@@ -378,6 +364,7 @@ async def consume_identity(
     summary=(
         'Clear consumed_at and return identity to active catalog (admin only)'
     ),
+    dependencies=[Depends(retired_until('P4'))],
 )
 async def restore_identity(
     request: Request,
@@ -414,6 +401,7 @@ async def restore_identity(
 @router.delete(
     '/identities/{identity_id}',
     summary='Delete identity, snapshots, and on-disk assets (admin only)',
+    dependencies=[Depends(retired_until('P3'))],
 )
 async def delete_identity(
     request: Request,

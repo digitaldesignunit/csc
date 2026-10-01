@@ -76,24 +76,32 @@ from apps.catalog.component_map import (
     annotate_live_payload,
     build_component_map,
     cache_doc_id,
-    is_default_map_scope,
     map_rows_project_stage,
     payload_from_cache_doc,
 )
 from apps.catalog.models import (
-    CatalogSharedTypesEnvelope,
     ComponentCount,
-    ComponentIdentity,
-    ComponentSnapshot,
-    ComponentPassport,
     CreateComponentRequest,
     CreateSnapshotRequest,
-    SnapshotSummaryItem,
-    PendingValidationSnapshotItem,
     UpdateComponentIdentityModel,
     UpdateComponentSnapshotModel,
     User,
 )
+# 0.5 models still used by the retired 0.5 write routes below (P3 / P4 / P7)
+from apps.catalog.models import ComponentIdentity as LegacyIdentity
+from apps.catalog.models import ComponentPassport as LegacyPassport
+from apps.catalog.models import ComponentSnapshot as LegacySnapshot
+from apps.catalog.read_models import (
+    CatalogRow,
+    CatalogSharedTypesEnvelope,
+    ComponentPassport,
+    PendingSnapshotItem,
+    SnapshotSummaryItem,
+    catalog_row,
+    identity_body,
+    passport_body,
+)
+from apps.catalog.documents import Evidence
 from apps.catalog.provenance import (
     DEFAULT_PROVENANCE_DEPTH,
     MAX_PROVENANCE_DEPTH,
@@ -113,16 +121,15 @@ from .catalog_common import (
     get_identities_col,
     get_snapshots_col,
     now_iso,
+    retired_until,
     validate_parent_identities,
     validate_uuid,
 )
 from .identity_filters import (
-    ConsumedFilter,
+    CatalogFilters,
     ExpandMode,
-    build_children_identity_match,
-    build_identity_match_stage,
-    build_snapshot_match_stage,
-    merge_shallow_catalog_row,
+    catalog_filters,
+    children_identity_match,
 )
 from .identity_query import (
     aggregate_identities,
@@ -164,6 +171,16 @@ async def get_catalog_shared_json_schema():
 
 
 @router.get(
+    '/schema/catalog-row',
+    summary='JSON Schema for a GET /identities row (CatalogRow)',
+)
+async def get_catalog_row_json_schema():
+    """Used by frontend `generate:models` (see `CatalogModels.ts`)."""
+    schema = CatalogRow.model_json_schema(by_alias=True)
+    return JSONResponse(status_code=200, content=schema)
+
+
+@router.get(
     '/schema/snapshot-summary',
     summary=(
         'JSON Schema for GET /identities/{id}/snapshots '
@@ -177,12 +194,12 @@ async def get_snapshot_summary_json_schema():
 
 
 @router.get(
-    '/schema/pending-validation-snapshot',
-    summary='JSON Schema for GET /snapshots/pending-validation row',
+    '/schema/pending-snapshot',
+    summary='JSON Schema for GET /snapshots/pending row',
 )
-async def get_pending_validation_snapshot_json_schema():
+async def get_pending_snapshot_json_schema():
     """Used by frontend `generate:models` (see `SnapshotModels.ts`)."""
-    schema = PendingValidationSnapshotItem.model_json_schema(by_alias=True)
+    schema = PendingSnapshotItem.model_json_schema(by_alias=True)
     return JSONResponse(status_code=200, content=schema)
 
 
@@ -343,13 +360,7 @@ async def _resolve_passport_snapshot_docs(
     else:
         current_snapshot_id = identity_doc.get('current_snapshot_id')
         if not current_snapshot_id:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    f'Identity {identity_id} has no current_snapshot_id; '
-                    'data integrity error.'
-                ),
-            )
+            return []                 # no published snapshot left (8.17)
         doc = await snapshots_col.find_one({'_id': current_snapshot_id})
         if doc is None:
             raise HTTPException(
@@ -379,22 +390,12 @@ def _passport_response(
     anonymous_public: bool = False,
 ) -> JSONResponse:
     try:
-        identity_model = ComponentIdentity.model_validate(identity_doc)
-        snapshot_models = [
-            ComponentSnapshot.model_validate(doc) for doc in snapshot_docs
-        ]
+        response_body = passport_body(identity_doc, snapshot_docs)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
             detail=f'Stored document failed Pydantic validation: {exc}',
         )
-
-    response_body = {
-        'identity': identity_model.model_dump(by_alias=True),
-        'snapshots': [
-            model.model_dump(by_alias=True) for model in snapshot_models
-        ],
-    }
     resolved_etag = etag or _compute_passport_etag(
         identity_doc,
         snapshot_docs,
@@ -413,101 +414,47 @@ def _passport_response(
     )
 
 
-def _catalog_filter_context(
-    request: Request,
-    *,
-    sortorder: Literal['asc', 'desc'],
-    comptype: str,
-    material: str,
-    dataset: str,
-    validated: int,
-    complexity: Optional[int],
-    fragment: Optional[bool],
-    reserved: Optional[str],
-    bbx_min_x: Optional[float],
-    bbx_min_y: Optional[float],
-    bbx_min_z: Optional[float],
-    bbx_max_x: Optional[float],
-    bbx_max_y: Optional[float],
-    bbx_max_z: Optional[float],
-    consumed_filter: ConsumedFilter,
-) -> Dict[str, Any]:
-    return {
-        'snapshots_collection': (
-            request.app.mongodb_component_snapshots.name
-        ),
-        'sort_order': -1 if sortorder == 'desc' else 1,
-        'identity_match': build_identity_match_stage(
-            comptype=comptype,
-            material=material,
-            dataset=dataset,
-            reserved=reserved,
-            consumed_filter=consumed_filter,
-        ),
-        'snapshot_match': build_snapshot_match_stage(
-            validated=validated,
-            complexity=complexity,
-            fragment=fragment,
-            bbx_min_x=bbx_min_x,
-            bbx_min_y=bbx_min_y,
-            bbx_min_z=bbx_min_z,
-            bbx_max_x=bbx_max_x,
-            bbx_max_y=bbx_max_y,
-            bbx_max_z=bbx_max_z,
-        ),
-    }
-
-
 def _format_list_rows(
     docs: List[Dict[str, Any]],
     expand: ExpandMode,
 ) -> List[Dict[str, Any]]:
-    if expand == 'shallow':
-        return [merge_shallow_catalog_row(doc) for doc in docs]
-
+    """Aggregation rows -> CatalogRow (shallow), {identity, snapshots}
+    (current_snapshot) or identity documents (none)."""
     rows: List[Dict[str, Any]] = []
-    for doc in docs:
-        snap = doc.get('current_snapshot') or {}
-        if expand == 'current_snapshot':
+    try:
+        for doc in docs:
+            if expand == 'shallow':
+                rows.append(catalog_row(doc))
+                continue
             identity_doc = {
                 k: v for k, v in doc.items()
                 if k not in ('current_snapshot', 'reserved_by_username')
             }
-            try:
-                identity_model = ComponentIdentity.model_validate(identity_doc)
-                snapshot_model = ComponentSnapshot.model_validate(snap)
-            except Exception as exc:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f'List row failed Pydantic validation: {exc}',
-                )
-            row = {
-                'identity': identity_model.model_dump(by_alias=True),
-                'snapshots': [
-                    snapshot_model.model_dump(by_alias=True),
-                ],
-            }
+            if expand == 'current_snapshot':
+                row = passport_body(identity_doc,
+                                    [doc.get('current_snapshot') or {}])
+            else:
+                row = identity_body(identity_doc)
             if 'reserved_by_username' in doc:
                 row['reserved_by_username'] = doc['reserved_by_username']
             rows.append(row)
-            continue
-
-        identity_doc = {
-            k: v for k, v in doc.items()
-            if k not in ('current_snapshot', 'reserved_by_username')
-        }
-        try:
-            identity_model = ComponentIdentity.model_validate(identity_doc)
-            row = identity_model.model_dump(by_alias=True)
-        except Exception as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f'Identity row failed Pydantic validation: {exc}',
-            )
-        if 'reserved_by_username' in doc:
-            row['reserved_by_username'] = doc['reserved_by_username']
-        rows.append(row)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f'List row failed Pydantic validation: {exc}',
+        )
     return rows
+
+
+def _pipelines_args(request: Request,
+                    filters: CatalogFilters) -> Dict[str, Any]:
+    return {
+        'snapshots_collection': request.app.mongodb_component_snapshots.name,
+        'identity_match': filters.identity_match(),
+        'snapshot_match': filters.snapshot_match(),
+    }
 
 
 @router.get(
@@ -518,46 +465,12 @@ def _format_list_rows(
 async def count_identities_route(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
-    comptype: str = Query(''),
-    material: str = Query(''),
-    dataset: str = Query(''),
-    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
-    complexity: Optional[int] = Query(None),
-    fragment: Optional[bool] = Query(None),
-    reserved: Optional[str] = Query(None),
-    bbx_min_x: Optional[float] = Query(None),
-    bbx_min_y: Optional[float] = Query(None),
-    bbx_min_z: Optional[float] = Query(None),
-    bbx_max_x: Optional[float] = Query(None),
-    bbx_max_y: Optional[float] = Query(None),
-    bbx_max_z: Optional[float] = Query(None),
-    consumed_filter: ConsumedFilter = Query('active'),
-    sortorder: Literal['asc', 'desc'] = Query('asc', include_in_schema=False),
+    filters: Annotated[CatalogFilters, Depends(catalog_filters)],
 ):
-    ctx = _catalog_filter_context(
-        request,
-        sortorder=sortorder,
-        comptype=comptype,
-        material=material,
-        dataset=dataset,
-        validated=validated,
-        complexity=complexity,
-        fragment=fragment,
-        reserved=reserved,
-        bbx_min_x=bbx_min_x,
-        bbx_min_y=bbx_min_y,
-        bbx_min_z=bbx_min_z,
-        bbx_max_x=bbx_max_x,
-        bbx_max_y=bbx_max_y,
-        bbx_max_z=bbx_max_z,
-        consumed_filter=consumed_filter,
-    )
     try:
         pipeline = build_count_pipeline(
-            snapshots_collection=ctx['snapshots_collection'],
-            identity_match=ctx['identity_match'],
-            snapshot_match=ctx['snapshot_match'],
-            reserved_filter=reserved,
+            **_pipelines_args(request, filters),
+            reserved_filter=filters.reserved,
             current_user_id=current_user.id,
             include_username=True,
         )
@@ -581,6 +494,7 @@ async def count_identities_route(
 async def get_identities_map(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
+    filters: Annotated[CatalogFilters, Depends(catalog_filters)],
     basis: MapBasis = Query(
         'radial_signature',
         description=(
@@ -599,21 +513,6 @@ async def get_identities_map(
             'live=recompute now'
         ),
     ),
-    comptype: str = Query(''),
-    material: str = Query(''),
-    dataset: str = Query(''),
-    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
-    complexity: Optional[int] = Query(None),
-    fragment: Optional[bool] = Query(None),
-    reserved: Optional[str] = Query(None),
-    bbx_min_x: Optional[float] = Query(None),
-    bbx_min_y: Optional[float] = Query(None),
-    bbx_min_z: Optional[float] = Query(None),
-    bbx_max_x: Optional[float] = Query(None),
-    bbx_max_y: Optional[float] = Query(None),
-    bbx_max_z: Optional[float] = Query(None),
-    consumed_filter: ConsumedFilter = Query('active'),
-    sortorder: Literal['asc', 'desc'] = Query('asc', include_in_schema=False),
 ):
     """
     Embed current-snapshot descriptors into 2D for the Component Map page.
@@ -626,34 +525,12 @@ async def get_identities_map(
     ``points``; ``displayed`` / ``total`` report coverage.
     """
     del current_user
-    default_scope = is_default_map_scope(
-        consumed_filter=consumed_filter,
-        validated=validated,
-        comptype=comptype,
-        material=material,
-        dataset=dataset,
-        complexity=complexity,
-        fragment=fragment,
-        reserved=reserved,
-        bbx_min_x=bbx_min_x,
-        bbx_min_y=bbx_min_y,
-        bbx_min_z=bbx_min_z,
-        bbx_max_x=bbx_max_x,
-        bbx_max_y=bbx_max_y,
-        bbx_max_z=bbx_max_z,
-    )
-
     cache_col = getattr(request.app, 'mongodb_component_map_cache', None)
     if cache_col is None:
         cache_col = request.app.mongodb['component_map_cache']
 
-    if source in ('auto', 'cache') and default_scope:
-        doc_id = cache_doc_id(
-            basis,
-            method,
-            consumed_filter=consumed_filter,
-            validated=validated,
-        )
+    if source in ('auto', 'cache') and filters.is_default_scope():
+        doc_id = cache_doc_id(basis, method)
         try:
             cached = await cache_col.find_one({'_id': doc_id})
         except PyMongoError as exc:
@@ -666,14 +543,9 @@ async def get_identities_map(
             )
         # Prefer a cached PCA sibling over a slow live embed.
         if method == 'umap':
-            pca_id = cache_doc_id(
-                basis,
-                'pca',
-                consumed_filter=consumed_filter,
-                validated=validated,
-            )
             try:
-                pca_cached = await cache_col.find_one({'_id': pca_id})
+                pca_cached = await cache_col.find_one(
+                    {'_id': cache_doc_id(basis, 'pca')})
             except PyMongoError:
                 pca_cached = None
             if pca_cached is not None:
@@ -694,7 +566,7 @@ async def get_identities_map(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 'source=cache only supports the default catalog scope '
-                '(active + validated, no extra filters)'
+                '(published, in circulation, no extra filters)'
             ),
         )
 
@@ -703,40 +575,20 @@ async def get_identities_map(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 'Non-default filters require source=live '
-                '(or use the default active/validated scope with cache)'
+                '(or use the default scope with cache)'
             ),
         )
 
-    ctx = _catalog_filter_context(
-        request,
-        sortorder=sortorder,
-        comptype=comptype,
-        material=material,
-        dataset=dataset,
-        validated=validated,
-        complexity=complexity,
-        fragment=fragment,
-        reserved=reserved,
-        bbx_min_x=bbx_min_x,
-        bbx_min_y=bbx_min_y,
-        bbx_min_z=bbx_min_z,
-        bbx_max_x=bbx_max_x,
-        bbx_max_y=bbx_max_y,
-        bbx_max_z=bbx_max_z,
-        consumed_filter=consumed_filter,
-    )
     try:
         pipeline = build_list_pipeline(
-            snapshots_collection=ctx['snapshots_collection'],
-            identity_match=ctx['identity_match'],
-            snapshot_match=ctx['snapshot_match'],
+            **_pipelines_args(request, filters),
             sortkey='_id',
-            sort_order=ctx['sort_order'],
+            sort_order=1,
             page=0,
             size=0,
             include_username=False,
             current_user_id=None,
-            reserved_filter=reserved,
+            reserved_filter=filters.reserved,
         )
         pipeline.append(map_rows_project_stage())
         docs = await aggregate_identities(request, pipeline)
@@ -772,10 +624,7 @@ async def get_identities_map(
 
 
 def _normalize_stats_facet_lists(items):
-    """
-    Map Mongo facet bucket rows to `{label, count}`
-    (same as ``/components/stats``).
-    """
+    """Map Mongo facet bucket rows to `{label, count}`."""
     out = []
     for it in items or []:
         label = it.get('_id')
@@ -797,49 +646,14 @@ def _normalize_stats_facet_lists(items):
 async def get_identities_stats(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
-    comptype: Optional[str] = Query(None, description='Component type filter'),
-    material: Optional[str] = Query(None, description='Material type filter'),
-    dataset: Optional[str] = Query(None, description='Dataset name filter'),
-    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
-    complexity: Optional[int] = Query(None, description='Complexity (0--3)'),
-    fragment: Optional[bool] = Query(None, description='Is fragment'),
-    bbx_min_x: Optional[float] = Query(None, description='Min X'),
-    bbx_min_y: Optional[float] = Query(None, description='Min Y'),
-    bbx_min_z: Optional[float] = Query(None, description='Min Z'),
-    bbx_max_x: Optional[float] = Query(None, description='Max X'),
-    bbx_max_y: Optional[float] = Query(None, description='Max Y'),
-    bbx_max_z: Optional[float] = Query(None, description='Max Z'),
+    filters: Annotated[CatalogFilters, Depends(catalog_filters)],
     limit_dim: int = Query(10, description='Top-N limit for long tail dims'),
-    consumed_filter: ConsumedFilter = Query('active'),
-    sortorder: Literal['asc', 'desc'] = Query('asc', include_in_schema=False),
 ):
-    """
-    Same JSON shape as ``GET /components/stats``
-    backed by ``component_identities``.
-    """
-    ctx = _catalog_filter_context(
-        request,
-        sortorder=sortorder,
-        comptype=comptype or '',
-        material=material or '',
-        dataset=dataset or '',
-        validated=validated,
-        complexity=complexity,
-        fragment=fragment,
-        reserved=None,
-        bbx_min_x=bbx_min_x,
-        bbx_min_y=bbx_min_y,
-        bbx_min_z=bbx_min_z,
-        bbx_max_x=bbx_max_x,
-        bbx_max_y=bbx_max_y,
-        bbx_max_z=bbx_max_z,
-        consumed_filter=consumed_filter,
-    )
+    """Facet counts over the filtered catalog (identity + current snapshot)."""
+    del current_user
     try:
         pipeline = build_identity_stats_pipeline(
-            snapshots_collection=ctx['snapshots_collection'],
-            identity_match=ctx['identity_match'],
-            snapshot_match=ctx['snapshot_match'],
+            **_pipelines_args(request, filters),
             limit_dim=limit_dim,
         )
         docs = await aggregate_identities(request, pipeline)
@@ -859,17 +673,17 @@ async def get_identities_stats(
 
         content = {
             'total': total,
-            'byType': _normalize_stats_facet_lists(raw.get('byType')),
+            'byOriginalFunction': _normalize_stats_facet_lists(
+                raw.get('byOriginalFunction')),
+            'byShapeClass': _normalize_stats_facet_lists(
+                raw.get('byShapeClass')),
             'byMaterial': topn(raw.get('byMaterial')),
             'byDataset': topn(raw.get('byDataset')),
             'byComplexity': _normalize_stats_facet_lists(
                 raw.get('byComplexity')
             ),
-            'byValidated': _normalize_stats_facet_lists(
-                raw.get('byValidated')
-            ),
+            'byStatus': _normalize_stats_facet_lists(raw.get('byStatus')),
             'byFragment': _normalize_stats_facet_lists(raw.get('byFragment')),
-            'byAssembly': _normalize_stats_facet_lists(raw.get('byAssembly')),
             'reserved': _normalize_stats_facet_lists(raw.get('reserved')),
             'descriptorsKeys': topn(raw.get('descriptorsKeys')),
             'createdMonthly': _normalize_stats_facet_lists(
@@ -896,63 +710,30 @@ async def get_identities_stats(
 async def list_identities_route(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
+    filters: Annotated[CatalogFilters, Depends(catalog_filters)],
     page: int = Query(0, description='Page number (0=get all, 1+=paginated)'),
     size: int = Query(0, description='Page size (0=get all)'),
     sortkey: str = Query('_id', description='Sort key'),
     sortorder: Literal['asc', 'desc'] = Query('asc'),
-    comptype: str = Query(''),
-    material: str = Query(''),
-    dataset: str = Query(''),
-    validated: int = Query(1, description='1=true, -1=false, 0/other=any'),
-    complexity: Optional[int] = Query(None),
-    fragment: Optional[bool] = Query(None),
-    reserved: Optional[str] = Query(None),
-    bbx_min_x: Optional[float] = Query(None),
-    bbx_min_y: Optional[float] = Query(None),
-    bbx_min_z: Optional[float] = Query(None),
-    bbx_max_x: Optional[float] = Query(None),
-    bbx_max_y: Optional[float] = Query(None),
-    bbx_max_z: Optional[float] = Query(None),
-    consumed_filter: ConsumedFilter = Query('active'),
     expand: ExpandMode = Query(
         'shallow',
         description=(
-            'shallow=legacy catalog row; '
+            'shallow=catalog row; '
             'current_snapshot=nested pair; '
             'none=identity fields only'
         ),
     ),
 ):
-    ctx = _catalog_filter_context(
-        request,
-        sortorder=sortorder,
-        comptype=comptype,
-        material=material,
-        dataset=dataset,
-        validated=validated,
-        complexity=complexity,
-        fragment=fragment,
-        reserved=reserved,
-        bbx_min_x=bbx_min_x,
-        bbx_min_y=bbx_min_y,
-        bbx_min_z=bbx_min_z,
-        bbx_max_x=bbx_max_x,
-        bbx_max_y=bbx_max_y,
-        bbx_max_z=bbx_max_z,
-        consumed_filter=consumed_filter,
-    )
     try:
         pipeline = build_list_pipeline(
-            snapshots_collection=ctx['snapshots_collection'],
-            identity_match=ctx['identity_match'],
-            snapshot_match=ctx['snapshot_match'],
+            **_pipelines_args(request, filters),
             sortkey=sortkey,
-            sort_order=ctx['sort_order'],
+            sort_order=-1 if sortorder == 'desc' else 1,
             page=page,
             size=size,
             include_username=True,
             current_user_id=current_user.id,
-            reserved_filter=reserved,
+            reserved_filter=filters.reserved,
         )
         docs = await aggregate_identities(request, pipeline)
     except PyMongoError as exc:
@@ -979,8 +760,9 @@ async def list_identities_route(
 @router.post(
     '/identities',
     summary='Create identity and version-0 snapshot',
-    response_model=ComponentPassport,
+    response_model=LegacyPassport,
     response_model_by_alias=True,
+    dependencies=[Depends(retired_until('P7'))],
     status_code=status.HTTP_201_CREATED,
 )
 async def create_identity(
@@ -1050,7 +832,7 @@ async def create_identity(
     snapshot_doc['etag'] = compute_snapshot_etag(snapshot_doc)
 
     try:
-        snapshot_model = ComponentSnapshot.model_validate(snapshot_doc)
+        snapshot_model = LegacySnapshot.model_validate(snapshot_doc)
     except Exception as exc:
         raise HTTPException(
             status_code=400,
@@ -1077,7 +859,7 @@ async def create_identity(
     }
 
     try:
-        identity_model = ComponentIdentity.model_validate(identity_doc)
+        identity_model = LegacyIdentity.model_validate(identity_doc)
     except Exception as exc:
         raise HTTPException(
             status_code=400,
@@ -1160,8 +942,9 @@ async def _resolve_snapshot_name(
 @router.post(
     '/identities/{identity_id}/snapshots',
     summary='Create new snapshot version for an existing identity',
-    response_model=ComponentPassport,
+    response_model=LegacyPassport,
     response_model_by_alias=True,
+    dependencies=[Depends(retired_until('P7'))],
     status_code=status.HTTP_201_CREATED,
 )
 async def create_snapshot(
@@ -1257,7 +1040,7 @@ async def create_snapshot(
     snapshot_doc['etag'] = compute_snapshot_etag(snapshot_doc)
 
     try:
-        snapshot_model = ComponentSnapshot.model_validate(snapshot_doc)
+        snapshot_model = LegacySnapshot.model_validate(snapshot_doc)
     except Exception as exc:
         raise HTTPException(
             status_code=400,
@@ -1309,7 +1092,7 @@ async def create_snapshot(
             )
 
         identity_doc = {**identity_doc, **identity_update}
-    identity_insert = ComponentIdentity.model_validate(
+    identity_insert = LegacyIdentity.model_validate(
         identity_doc
     ).model_dump(by_alias=True)
 
@@ -1332,9 +1115,8 @@ async def list_identity_children(
     """
     Reverse lookup of ``parent_identities``.
 
-    Returns shallow catalog rows (same shape as
-    ``GET /identities?expand=shallow``), including consumed and unvalidated
-    children. Anonymous callers who can read a public parent only see
+    Returns catalog rows (same shape as ``GET /identities?expand=shallow``),
+    including exited and unpublished children. Anonymous callers who can read a public parent only see
     public children.
     """
     validate_uuid(identity_id, label='identity id')
@@ -1345,7 +1127,7 @@ async def list_identity_children(
         projection={'_id': 1, 'is_public': 1},
     )
 
-    identity_match = build_children_identity_match(
+    identity_match = children_identity_match(
         identity_id,
         public_only=current_user is None,
     )
@@ -1380,7 +1162,13 @@ async def list_identity_children(
         )
     )
 
-    content = [merge_shallow_catalog_row(doc) for doc in docs]
+    try:
+        content = [catalog_row(doc) for doc in docs]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Child row failed Pydantic validation: {exc}',
+        )
     anonymous_public = (
         current_user is None and identity_allows_anonymous_read(identity_doc)
     )
@@ -1401,8 +1189,8 @@ _IDENTITY_LINEAGE_PROJECTION = {
     '_id': 1,
     'parent_identities': 1,
     'catalog_number': 1,
-    'type': 1,
-    'consumed_at': 1,
+    'original_function': 1,
+    'exit': 1,
     'is_public': 1,
     'current_snapshot_id': 1,
 }
@@ -1411,8 +1199,8 @@ _SNAPSHOT_LINEAGE_PROJECTION = {
     '_id': 1,
     'identity_id': 1,
     'version': 1,
-    'virtual': 1,
-    'validated': 1,
+    'status': 1,
+    'superseded_by': 1,
     'name': 1,
 }
 
@@ -1554,6 +1342,63 @@ async def get_identity_provenance(
     )
 
 
+_ACTOR_PRIVATE = ('email',)
+_ACTOR_NAMED = ('name', 'orcid')
+
+
+def _project_actor(actor: Dict[str, Any], anonymous: bool) -> Dict[str, Any]:
+    """Spec 3.3.1: anonymous readers see the organization only; e-mail
+    addresses are left out of every list response."""
+    hidden = _ACTOR_PRIVATE + (_ACTOR_NAMED if anonymous else ())
+    return {k: (None if k in hidden else v) for k, v in actor.items()}
+
+
+@router.get(
+    '/identities/{identity_id}/evidence',
+    summary='Published evidence of an identity (read-only until plan P6)',
+)
+async def list_identity_evidence(
+    request: Request,
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
+    identity_id: str,
+    method: Optional[str] = Query(None, description='e.g. reinforcement_layout'),
+):
+    """
+    Published, non-superseded evidence records of one identity (e.g. the
+    reinforcement layout the viewer draws). Creation, moderation, the fold
+    and attachments arrive with plan P6.
+    """
+    validate_uuid(identity_id, label='identity id')
+    await ensure_identity_read_access(
+        request, identity_id, current_user, projection={'_id': 1,
+                                                        'is_public': 1})
+    query: Dict[str, Any] = {'identity_id': identity_id,
+                             'status': 'published', 'superseded_by': None}
+    if method:
+        query['method'] = method
+    try:
+        docs = await request.app.mongodb_component_evidence.find(query) \
+            .sort('observed_at', 1).to_list(length=None)
+    except PyMongoError as exc:
+        print(f'[ERROR] list_identity_evidence DB error: {exc}')
+        raise HTTPException(status_code=500, detail='Internal server error')
+    anonymous = current_user is None
+    items = []
+    for doc in docs:
+        try:
+            body = Evidence.model_validate(doc).model_dump(
+                by_alias=True, mode='json')
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f'Evidence failed Pydantic validation: {exc}',
+            )
+        body['performed_by'] = [_project_actor(a, anonymous)
+                                for a in body.get('performed_by') or []]
+        items.append(body)
+    return JSONResponse(status_code=200, content=items)
+
+
 @router.get(
     '/identities/{identity_id}/snapshots',
     summary='List snapshot versions for an identity (summary rows)',
@@ -1581,9 +1426,12 @@ async def list_identity_snapshots(
         '_id': 1,
         'identity_id': 1,
         'version': 1,
-        'validated': 1,
-        'virtual': 1,
+        'status': 1,
         'name': 1,
+        'effective_from': 1,
+        'effective_from_precision': 1,
+        'supersedes': 1,
+        'superseded_by': 1,
         'created': 1,
         'lastmodified': 1,
     }
@@ -1625,8 +1473,9 @@ async def list_identity_snapshots(
 @router.patch(
     '/identities/{identity_id}',
     summary='PATCH identity metadata (admin only)',
-    response_model=ComponentIdentity,
+    response_model=LegacyIdentity,
     response_model_by_alias=True,
+    dependencies=[Depends(retired_until('P4'))],
 )
 async def patch_identity(
     request: Request,
@@ -1684,7 +1533,7 @@ async def patch_identity(
         )
 
     try:
-        identity_model = ComponentIdentity.model_validate(updated_doc)
+        identity_model = LegacyIdentity.model_validate(updated_doc)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -1706,7 +1555,7 @@ async def get_identity(
     expand: ExpandMode = Query(
         'shallow',
         description=(
-            'shallow=legacy catalog row; '
+            'shallow=catalog row; '
             'current_snapshot={identity,snapshots[]}; none=identity only'
         ),
     ),
@@ -1733,7 +1582,7 @@ async def get_identity(
 
     if expand == 'none':
         try:
-            model = ComponentIdentity.model_validate(identity_doc)
+            body = identity_body(identity_doc)
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
@@ -1741,7 +1590,7 @@ async def get_identity(
             )
         return JSONResponse(
             status_code=200,
-            content=model.model_dump(by_alias=True),
+            content=body,
             headers={
                 'Cache-Control': (
                     public_cache_control()
@@ -1753,11 +1602,9 @@ async def get_identity(
 
     snapshots = await get_snapshots_col(request)
     current_snapshot_id = identity_doc.get('current_snapshot_id')
-    if not current_snapshot_id:
-        raise HTTPException(
-            status_code=500,
-            detail=f'Identity {identity_id} has no current_snapshot_id',
-        )
+    if not current_snapshot_id:              # no published snapshot (8.17)
+        return _passport_response(identity_doc, [],
+                                  anonymous_public=anonymous_public)
     snapshot_doc = await snapshots.find_one({'_id': current_snapshot_id})
     if snapshot_doc is None:
         raise HTTPException(
@@ -1841,8 +1688,9 @@ async def get_identity_passport(
 @router.patch(
     '/identities/{identity_id}/current-snapshot',
     summary='PATCH current snapshot metadata (admin only)',
-    response_model=ComponentSnapshot,
+    response_model=LegacySnapshot,
     response_model_by_alias=True,
+    dependencies=[Depends(retired_until('P3'))],
 )
 async def patch_current_snapshot(
     request: Request,
@@ -1919,7 +1767,7 @@ async def patch_current_snapshot(
         )
 
     try:
-        snapshot_model = ComponentSnapshot.model_validate(updated_doc)
+        snapshot_model = LegacySnapshot.model_validate(updated_doc)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
