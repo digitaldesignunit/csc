@@ -24,8 +24,11 @@ archived, nothing left unmapped. `invoke rehearse` / `dev-migrated` default to 2
 applies the untracked mapping when present. 8.29 (navigation shell, closes O3); nothing open. P2 committed. **P2b built (branch `v-0.6.0.0-P2b`, 2026-10-01):** the
 navigation shell of 8.29 (`components/ui/sidebar.tsx`, `components/layout/AppSidebar.tsx`,
 `TopBar.tsx`, entries in `lib/navigation.ts`, Recent in `lib/recentComponents.ts`); the old
-`Sidebar` / `Header` / `AppMenu` / `UserItem` / `ThemeToggle` are gone. **Next:** user check of the
-signed-in shell, then P3.
+`Sidebar` / `Header` / `AppMenu` / `UserItem` / `ThemeToggle` are gone. **P3 in progress (branch `v-0.6.0.0-P3`):** part 1 of 5
+done --- `api/access.py` (visibility rule on every read / list / map / graph route, 401 "not public" /
+403 "no access" instead of 404, `require(action, ...)` for writes, geometry of published snapshots
+frozen with 409), `GET /users/me`, `/datasets` routes, file write routes closed; table-driven
+`tests/api/test_permissions_routes.py`. **Next:** part 2, the snapshot lifecycle (section 7.1).
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.
