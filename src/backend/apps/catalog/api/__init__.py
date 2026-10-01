@@ -8,6 +8,7 @@ from .identity_workflows import router as identity_workflows_router
 from .identities import router as identities_router
 from .snapshots import router as snapshots_router
 from .users import router as users_router
+from .datasets import router as datasets_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix='/auth', tags=['auth'])
@@ -19,3 +20,4 @@ api_router.include_router(identity_workflows_router, tags=['identities'])
 api_router.include_router(identities_router, tags=['identities'])
 api_router.include_router(snapshots_router, tags=['snapshots'])
 api_router.include_router(users_router, tags=['users'])
+api_router.include_router(datasets_router, tags=['datasets'])
