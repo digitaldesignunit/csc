@@ -167,7 +167,7 @@ def step_1b(ctx: Context) -> Report:
 _SNAPSHOT_DEFAULTS = {
     'supersedes': None, 'superseded_by': None,
     'status_changed_by_user_id': None, 'status_changed_at': None,
-    'capture': None, 'properties': {}, 'properties_version': 1,
+    'status_history': [], 'capture': None, 'properties': {}, 'properties_version': 1,
     'photo_count': 0, 'notes': None,
 }
 _IDENTITY_DEFAULTS = {

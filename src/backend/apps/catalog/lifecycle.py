@@ -86,7 +86,7 @@ SNAPSHOT_DERIVED: FrozenSet[str] = frozenset({
     'descriptors', 'properties', 'properties_version', 'frame', 'bbx',
     'mesh_ply_resolutions', 'photo_count', 'shape_class_source',
     'complexity_source', 'status', 'status_changed_by_user_id',
-    'status_changed_at', 'supersedes', 'superseded_by', 'version',
+    'status_changed_at', 'status_history', 'supersedes', 'superseded_by', 'version',
     'identity_id', 'added_by_user_id', 'added_by_username', 'etag',
     'created', 'lastmodified', '_id', 'id',
 })
@@ -102,7 +102,7 @@ EVIDENCE_FROZEN: FrozenSet[str] = frozenset({
 EVIDENCE_MUTABLE: FrozenSet[str] = frozenset({'notes', 'position.description'})
 EVIDENCE_DERIVED: FrozenSet[str] = frozenset({
     'source_tier', 'destructive', 'status', 'status_changed_by_user_id',
-    'status_changed_at', 'supersedes', 'superseded_by', 'identity_id',
+    'status_changed_at', 'status_history', 'supersedes', 'superseded_by', 'identity_id',
     'recorded_by_user_id', 'recorded_by_username', 'attachments',
     'verification', 'etag', 'created', 'lastmodified', '_id', 'id',
 })
@@ -164,7 +164,8 @@ def patch_problems(
         published = status in ('published', 'withdrawn')
         for name in names:
             top = name.split('.', 1)[0]
-            if name in SNAPSHOT_MUTABLE_METADATA or                     top in SNAPSHOT_VALID_TIME or top in SNAPSHOT_OVERRIDES:
+            if name in SNAPSHOT_MUTABLE_METADATA \
+                    or top in SNAPSHOT_VALID_TIME or top in SNAPSHOT_OVERRIDES:
                 allowed = is_moderator if published else editable
             elif top in SNAPSHOT_FROZEN:
                 if published:

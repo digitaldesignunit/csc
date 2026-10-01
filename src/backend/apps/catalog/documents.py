@@ -224,6 +224,16 @@ class PastCycle(_Block):
     exit: Exit
 
 
+class StatusChange(_Block):
+    """One status transition of a snapshot or evidence record (8.30):
+    append-only, so the timeline and the audit keep every moderation act."""
+    from_: Status = Field(alias='from')
+    to: Status
+    at: Timestamp
+    by_user_id: str
+    reason: Optional[str] = None
+
+
 class Withdrawn(_Block):
     """Record-level tombstone (section 3.1.4)."""
     at: Timestamp
@@ -501,6 +511,7 @@ class ComponentSnapshot(_Document):
     status: Status
     status_changed_by_user_id: Optional[str] = None
     status_changed_at: Optional[Timestamp] = None
+    status_history: List[StatusChange] = Field(default_factory=list)
     supersedes: Optional[str] = None
     superseded_by: Optional[str] = None
     name: Optional[str] = None
@@ -697,6 +708,7 @@ class Evidence(_Document):
     status: Status
     status_changed_by_user_id: Optional[str] = None
     status_changed_at: Optional[Timestamp] = None
+    status_history: List[StatusChange] = Field(default_factory=list)
     verification: Verification = Field(default_factory=Verification)
     supersedes: Optional[str] = None
     superseded_by: Optional[str] = None
