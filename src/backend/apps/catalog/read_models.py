@@ -170,6 +170,9 @@ class PendingSnapshotItem(BaseModel):
     live_version: Optional[int] = Field(
         default=None,
         description='Version of the identity\'s current snapshot, if any')
+    supersedes: Optional[str] = Field(
+        default=None, description='set when this corrects a published one')
+    added_by_username: Optional[str] = None
 
 
 class CatalogSharedTypesEnvelope(BaseModel):

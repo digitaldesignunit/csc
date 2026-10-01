@@ -134,18 +134,21 @@ def test_stats_vocab_materials(api, db, member_headers):
 
 
 def test_05_write_routes_are_retired(api, db, auth_headers):
+    """Writes not yet rebuilt answer 503 naming their plan phase; the ones
+    P3 replaced are gone (the lifecycle routes cover them)."""
     admin = auth_headers('admin')
     for method, path, body in (
             ('post', '/identities', panel_payload()),
-            ('post', '/identities/x/snapshots', panel_payload()),
             ('patch', '/identities/x', {'material': 'concrete'}),
-            ('patch', '/identities/x/current-snapshot', {'name': 'n'}),
             ('post', '/identities/x/consume', None),
             ('post', '/identities/x/restore', None),
-            ('delete', '/identities/x', None),
-            ('post', '/snapshots/x/validate', None),
-            ('delete', '/snapshots/x', None)):
-        response = getattr(api, method)(path, json=body, headers=admin) \
-            if body is not None else getattr(api, method)(path, headers=admin)
+            ('delete', '/identities/x', None)):
+        call = getattr(api, method)
+        response = call(path, json=body, headers=admin) if body is not None \
+            else call(path, headers=admin)
         assert response.status_code == 503, (method, path, response.text)
         assert 'plan P' in response.json()['detail']
+    for method, path in (('patch', '/identities/x/current-snapshot'),
+                         ('post', '/snapshots/x/validate')):
+        response = getattr(api, method)(path, json={}, headers=admin)
+        assert response.status_code in (404, 405), (method, path)

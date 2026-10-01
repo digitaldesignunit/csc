@@ -74,6 +74,20 @@ def _reset_reservation(value=''):
     return reset
 
 
+def _set_draft(status):
+    def reset(world):
+        world['db']['component_snapshots'].update_one(
+            {'_id': DRAFT}, {'$set': {'status': status}})
+    return reset
+
+
+def _republish_v1(world):
+    world['db']['component_snapshots'].update_one(
+        {'_id': sid('beam', 1)}, {'$set': {'status': 'published'}})
+    world['db']['component_identities'].update_one(
+        {'_id': iid('beam')}, {'$set': {'current_snapshot_id': sid('beam', 1)}})
+
+
 def _expect(anonymous, user, contributor, reviewer, moderator,
             other_moderator, admin):
     return dict(zip(VIEWERS, (anonymous, user, contributor, reviewer,
@@ -123,6 +137,21 @@ ROWS = [
                                headers=h),
      _expect(401, 403, 403, 403, 200, 403, 200),
      _reset_reservation('someone-else')),
+    # --- the snapshot lifecycle (7.1) ------------------------------------
+    ('submit a draft: its author',
+     lambda api, h: api.post(f'/snapshots/{DRAFT}/submit', headers=h),
+     _expect(401, 403, 200, 403, 403, 403, 200), _set_draft('draft')),
+    ('publish a pending snapshot: moderator(D)',
+     lambda api, h: api.post(f'/snapshots/{DRAFT}/publish', headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), _set_draft('pending')),
+    ('withdraw a published snapshot: moderator(D)',
+     lambda api, h: api.post(f'/snapshots/{sid("beam", 1)}/withdraw',
+                             json={'reason': 'test'}, headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), _republish_v1),
+    ('edit a draft: its author, moderator(D)',
+     lambda api, h: api.patch(f'/snapshots/{DRAFT}', json={'notes': 'n'},
+                              headers=h),
+     _expect(401, 403, 200, 403, 200, 403, 200), _set_draft('draft')),
     # --- datasets (7.7) --------------------------------------------------
     ('edit dataset name / visibility: moderator(D)',
      lambda api, h: api.patch('/datasets/dbu_zirkus',

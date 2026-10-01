@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-09-30T14:46:19.242Z
+// Generated on: 2026-10-01T19:18:13.794Z
 // Source: http://127.0.0.1:8000/schema/catalog-shared
 
 export interface Bounds {

@@ -58,8 +58,8 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pymongo.errors import PyMongoError
 
-from apps.catalog.models import ComponentPassport as LegacyPassport
 from apps.catalog.models import User
+from apps.catalog.permissions import dataset_roles
 from apps.catalog.read_models import (
     ComponentSnapshot,
     PendingSnapshotItem,
@@ -79,8 +79,8 @@ from apps.catalog.geometry_mesh_export import (
     normalize_mesh_format,
 )
 
-from .auth import get_current_active_user, get_optional_current_user, require_admin
-from .access import require_snapshot_file_write
+from .auth import get_current_active_user, get_optional_current_user
+from .access import load_datasets, require_snapshot_file_write, viewer_of
 from .public_access import ensure_snapshot_read_access
 from .catalog_common import (
     compute_snapshot_etag,
@@ -88,8 +88,6 @@ from .catalog_common import (
     get_snapshots_col,
     not_modified_response,
     now_iso,
-    retired_until,
-    validate_snapshot_and_promote,
     validate_uuid,
 )
 from .snapshot_images import (
@@ -240,20 +238,21 @@ async def _sync_photo_count(request: Request, snapshot_id: str) -> int:
 
 @router.get(
     '/snapshots/pending',
-    summary='Moderation queue: snapshots with status pending',
-    response_model=List[PendingSnapshotItem],
-    response_model_by_alias=True,
+    summary='Moderation queue: pending snapshots of the caller\'s datasets',
 )
 async def list_pending_snapshots(
     request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
 ):
     """
-    All snapshots with ``status == pending``, newest first, with identity
-    context. (Per-dataset moderators: plan P3.)
+    Snapshots with ``status == pending`` in the datasets the caller
+    moderates (admin: all), oldest first --- the order they arrived.
     """
     snapshots = await get_snapshots_col(request)
     identities = await get_identities_col(request)
+    viewer = viewer_of(current_user)
+    moderated = {d.id for d in (await load_datasets(request)).values()
+                 if 'moderator' in dataset_roles(viewer, d)}
 
     try:
         pending_docs = await snapshots.find(
@@ -265,8 +264,10 @@ async def list_pending_snapshots(
                 'status': 1,
                 'name': 1,
                 'created': 1,
+                'supersedes': 1,
+                'added_by_username': 1,
             },
-        ).sort('created', -1).to_list(length=None)
+        ).sort('created', 1).to_list(length=None)
     except PyMongoError as exc:
         print(f'[ERROR] list_pending_snapshots: {exc}')
         raise HTTPException(status_code=500, detail='Internal server error')
@@ -288,7 +289,7 @@ async def list_pending_snapshots(
                 'dataset': 1,
             },
         )
-        if identity_doc is None:
+        if identity_doc is None or identity_doc.get('dataset') not in moderated:
             continue
 
         current_snapshot_id = identity_doc.get('current_snapshot_id')
@@ -323,112 +324,6 @@ async def list_pending_snapshots(
             )
 
     return JSONResponse(status_code=200, content=items)
-
-
-@router.post(
-    '/snapshots/{snapshot_id}/validate',
-    summary='Validate snapshot and promote to live (admin only)',
-    response_model=LegacyPassport,
-    response_model_by_alias=True,
-    dependencies=[Depends(retired_until('P3'))],
-)
-async def validate_snapshot_route(
-    request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
-    snapshot_id: str,
-):
-    """Mark snapshot validated and set ``current_snapshot_id`` to it."""
-    identity_doc, snapshot_doc = await validate_snapshot_and_promote(
-        request,
-        snapshot_id,
-    )
-
-    from .identities import _passport_response
-
-    return _passport_response(
-        identity_doc,
-        [snapshot_doc],
-    )
-
-
-@router.delete(
-    '/snapshots/{snapshot_id}',
-    summary='Reject and delete a pending snapshot (admin only)',
-    dependencies=[Depends(retired_until('P3'))],
-)
-async def delete_pending_snapshot(
-    request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
-    snapshot_id: str,
-):
-    """
-    Remove an unvalidated snapshot that is not the identity's live version.
-
-    Use ``DELETE /identities/{id}`` when rejecting a brand-new (v0) component.
-    """
-    validate_uuid(snapshot_id, label='snapshot id')
-
-    snapshots = await get_snapshots_col(request)
-    identities = await get_identities_col(request)
-
-    snapshot_doc = await snapshots.find_one({'_id': snapshot_id})
-    if snapshot_doc is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Snapshot {snapshot_id} not found',
-        )
-
-    if snapshot_doc.get('validated', False):
-        raise HTTPException(
-            status_code=409,
-            detail='Cannot delete a validated snapshot',
-        )
-
-    identity_id = snapshot_doc.get('identity_id')
-    if not identity_id:
-        raise HTTPException(
-            status_code=500,
-            detail=f'Snapshot {snapshot_id} has no identity_id',
-        )
-
-    identity_doc = await identities.find_one({'_id': identity_id})
-    if identity_doc is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Identity {identity_id} not found',
-        )
-
-    if identity_doc.get('current_snapshot_id') == snapshot_id:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                'Cannot delete the live snapshot. For a new unvalidated '
-                'component (v0), delete the identity instead.'
-            ),
-        )
-
-    _delete_snapshot_disk_assets(request, snapshot_id)
-
-    try:
-        result = await snapshots.delete_one({'_id': snapshot_id})
-    except PyMongoError as exc:
-        print(f'[ERROR] delete_pending_snapshot DB: {exc}')
-        raise HTTPException(status_code=500, detail='Internal server error')
-
-    if result.deleted_count == 0:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Snapshot {snapshot_id} not found',
-        )
-
-    return JSONResponse(
-        status_code=200,
-        content={
-            'ok': True,
-            'snapshot_id': snapshot_id,
-            'identity_id': identity_id,
-        },
-    )
 
 
 @router.get(
@@ -973,7 +868,8 @@ async def get_snapshot_capture_fixture(
     if relative.startswith('capture/'):
         relative = relative[len('capture/'):]
     path = os.path.normpath(os.path.join(root, relative)) if root else ''
-    if not root or not path.startswith(os.path.normpath(root))             or not os.path.isfile(path):
+    if not root or not path.startswith(os.path.normpath(root)) \
+            or not os.path.isfile(path):
         raise HTTPException(status_code=404, detail='Fixture file not found')
     etag = _mesh_etag(path)
     if request.headers.get('if-none-match') == etag:

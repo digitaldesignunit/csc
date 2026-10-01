@@ -6,6 +6,7 @@ from .ghinterface import router as ghinterface_router
 from .idtransmission import router as idtransmission_router
 from .identity_workflows import router as identity_workflows_router
 from .identities import router as identities_router
+from .snapshot_lifecycle import router as snapshot_lifecycle_router
 from .snapshots import router as snapshots_router
 from .users import router as users_router
 from .datasets import router as datasets_router
@@ -18,6 +19,9 @@ api_router.include_router(ghinterface_router, tags=['ghinterface'])
 api_router.include_router(idtransmission_router, tags=['idtransmission'])
 api_router.include_router(identity_workflows_router, tags=['identities'])
 api_router.include_router(identities_router, tags=['identities'])
+# before the snapshots router: /snapshots/{sid} must not catch the
+# lifecycle verbs
+api_router.include_router(snapshot_lifecycle_router, tags=['snapshots'])
 api_router.include_router(snapshots_router, tags=['snapshots'])
 api_router.include_router(users_router, tags=['users'])
 api_router.include_router(datasets_router, tags=['datasets'])

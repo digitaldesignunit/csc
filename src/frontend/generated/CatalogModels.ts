@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-09-30T14:46:19.278Z
+// Generated on: 2026-10-01T19:18:13.827Z
 // Source: http://127.0.0.1:8000/schema/catalog-compose
 
 import type {
@@ -76,6 +76,7 @@ export interface ComponentSnapshot {
   status: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
   status_changed_by_user_id?: string | null;
   status_changed_at?: string | null;
+  status_history?: StatusChange[];
   supersedes?: string | null;
   superseded_by?: string | null;
   name?: string | null;
@@ -169,6 +170,14 @@ export interface PropertyValue {
   evidence_ids?: string[];
   inherited_from?: string[] | null;
   derived_at: string;
+}
+
+export interface StatusChange {
+  from: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
+  to: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
+  at: string;
+  by_user_id: string;
+  reason?: string | null;
 }
 
 export interface Withdrawn {
