@@ -28,7 +28,13 @@ navigation shell of 8.29 (`components/ui/sidebar.tsx`, `components/layout/AppSid
 done --- `api/access.py` (visibility rule on every read / list / map / graph route, 401 "not public" /
 403 "no access" instead of 404, `require(action, ...)` for writes, geometry of published snapshots
 frozen with 409), `GET /users/me`, `/datasets` routes, file write routes closed; table-driven
-`tests/api/test_permissions_routes.py`. **Next:** part 2, the snapshot lifecycle (section 7.1).
+`tests/api/test_permissions_routes.py`. Part 2 done --- `api/snapshot_lifecycle.py`: create-as-draft,
+supersede, submit (+ `?publish=1&promote=1`), recall, resubmit, publish, reject, promote, withdraw /
+reinstate, `PATCH /snapshots/{sid}` per field (8.3), delete of never-published records; one in flight
+(I3b), valid time in order (I3), `status_history` (8.30); the queue `GET /snapshots/pending` lists the
+caller's moderated datasets; the 0.5 validate / delete-as-reject / current-snapshot PATCH routes are
+gone. Not yet: publishing a child's first snapshot does not set the parents' `exit` (I18, plan P4).
+**Next:** part 3, withdrawal, purge and the `/id` resolver.
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.

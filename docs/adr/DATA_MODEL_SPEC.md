@@ -534,6 +534,7 @@ Migration: `created_by_user_id` = the `added_by_user_id` of the identity's v0 (s
   "status": "draft" | "pending" | "published" | "rejected" | "withdrawn",   // REPLACES validated; same lifecycle as evidence (section 3.3.3, I15)
                                              // CPR: `published` = the tier visible to all actors (Art 76(2)(e)); never hard-deleted (Art 75(2)(i)) --- section 10.4
   "status_changed_by_user_id": "uuid" | null, "status_changed_at": "..." | null,
+  "status_history": [ { "from": "pending", "to": "rejected", "at": "...", "by_user_id": "uuid", "reason": "..." | null } ],   // NEW 8.30, append-only, server only
   "supersedes": "uuid" | null, "superseded_by": "uuid" | null,   // NEW section 3.2.2 --- corrections, same semantics as evidence section 3.3.4
   "name": "...",
 
@@ -1351,10 +1352,11 @@ POST   /identities/{id}/snapshots                  contributor(D): always create
 POST   /snapshots/{sid}/supersede                  contributor(D): body = corrected snapshot; inherits effective_from (section 3.2.2)
 POST   /snapshots/{sid}/submit                     author: draft --> pending      (replaces implicit pending on create); ?publish=1&promote=1 for moderators
 POST   /snapshots/{sid}/recall                     author: pending --> draft (8.18)
+POST   /snapshots/{sid}/resubmit                   author: rejected --> draft (I15; one in flight, I3b)
 POST   /snapshots/{sid}/publish                    moderator(D): pending --> published (+ ?promote=1 to set current_snapshot_id; replaces /validate)
 POST   /snapshots/{sid}/reject                     moderator(D): pending --> rejected (+ reason; replaces DELETE-as-reject)
 POST   /snapshots/{sid}/promote                    moderator(D): set current_snapshot_id to this published, non-superseded snapshot
-POST   /snapshots/{sid}/withdraw                   moderator(D): published --> withdrawn (+ reason, replacement?); the current one falls back to the latest published or null (section 3.1.4, 8.17)
+POST   /snapshots/{sid}/withdraw                   moderator(D): published --> withdrawn (+ reason, replacement_id?); the current one falls back to replacement_id, else the latest live one (published, non-superseded), else null (section 3.1.4, 8.17)
 POST   /snapshots/{sid}/reinstate                  moderator(D): withdrawn --> published
 DELETE /snapshots/{sid}                            author or moderator(D), only draft|pending|rejected (hard delete + files)
 GET    /snapshots/pending                          moderation queue (replaces /pending-validation), filtered to the caller's moderated datasets
