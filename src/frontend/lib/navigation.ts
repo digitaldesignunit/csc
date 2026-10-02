@@ -9,6 +9,7 @@ import {
   BookOpen,
   Bookmark,
   ChartColumn,
+  Database,
   Inbox,
   LayoutDashboard,
   LayoutGrid,
@@ -24,7 +25,7 @@ import {
 export type NavViewer = {
   signedIn: boolean
   isAdmin: boolean
-  /** Moderates at least one dataset; known from P3 on (false until then). */
+  /** Moderates at least one dataset (`GET /users/me`). */
   isModerator: boolean
 }
 
@@ -80,7 +81,16 @@ export const NAV_ENTRIES: NavEntry[] = [
     group: 'moderation',
     visible: (v) => v.isAdmin || v.isModerator,
   },
-  { id: 'users', label: 'Users', href: '/admin/users', icon: Users, group: 'admin', visible: (v) => v.isAdmin },
+  {
+    // moderators manage their datasets' members here; admin all datasets
+    id: 'datasets',
+    label: 'Datasets',
+    href: '/admin/datasets',
+    icon: Database,
+    group: 'moderation',
+    visible: (v) => v.isAdmin || v.isModerator,
+  },
+  { id: 'users', label: 'Users and invitations', href: '/admin/users', icon: Users, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'logs', label: 'Backend logs', href: '/admin/logs', icon: ScrollText, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'gh', label: 'GH Interface', href: '/gh-interface', icon: Workflow, group: 'tools', visible: signedIn },
   {

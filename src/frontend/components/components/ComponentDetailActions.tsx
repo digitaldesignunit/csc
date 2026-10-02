@@ -9,14 +9,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import ComponentSnapshotGeometryDownload from './ComponentSnapshotGeometryDownload'
 import { toast } from 'sonner'
 import { ExtendedUser, isOutOfCirculation } from './componentDetailShared'
+import IdentityModerationActions from '@/components/moderation/IdentityModerationActions'
+import { useMe } from '@/lib/me'
 
 type ComponentDetailActionsProps = {
   catalog: CatalogComponent
 }
 
 /**
- * Download, locate and reserve. Moderation, exit, withdrawal and editing
- * return with their 0.6 routes (plan P3 / P4 / P7); the 0.5 ones are retired.
+ * Download, locate, reserve / release, and for moderator(D) the
+ * withdrawal of the whole component (plan P3). Exit and editing return with
+ * plan P4 / P7.
  */
 export default function ComponentDetailActions({ catalog }: ComponentDetailActionsProps) {
   const { identity } = catalog
@@ -25,6 +28,9 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
   const reservedBy = typeof identity.reserved === 'string' ? identity.reserved : ''
 
   const { data: session } = useSession()
+  const { moderates } = useMe()
+  const canRelease = (userId: string | undefined) =>
+    !!reservedBy && (userId === reservedBy || moderates(identity.dataset))
 
   const handleReserveComponent = async () => {
     try {
@@ -99,7 +105,7 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
             <TooltipTrigger asChild>
               <div className="flex-1 min-w-[8rem]">
                 {reservedBy ? (
-                  currentUserId === reservedBy ? (
+                  canRelease(currentUserId) ? (
                     <Button
                       variant="destructive"
                       className="h-8 w-full text-xs"
@@ -122,8 +128,10 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
             </TooltipTrigger>
             <TooltipContent>
               {reservedBy
-                ? currentUserId === reservedBy
-                  ? 'Release this component'
+                ? canRelease(currentUserId)
+                  ? currentUserId === reservedBy
+                    ? 'Release this component'
+                    : 'Release this reservation (moderator)'
                   : 'Reserved by another user'
                 : 'Reserve for your project'}
             </TooltipContent>
@@ -131,6 +139,11 @@ export default function ComponentDetailActions({ catalog }: ComponentDetailActio
         </TooltipProvider>}
       </div>
 
+      <IdentityModerationActions
+        identityId={identityId}
+        dataset={identity.dataset}
+        withdrawn={Boolean(identity.withdrawn)}
+      />
     </div>
   )
 }

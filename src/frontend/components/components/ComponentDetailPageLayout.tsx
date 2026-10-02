@@ -95,6 +95,7 @@ export default function ComponentDetailPageLayout({
             snapshots={snapshots}
             activeSnapshotId={activeSnapshotId}
             liveSnapshotId={liveSnapshotId}
+            dataset={catalog.identity.dataset}
           />
           <ComponentDetailMetadataTabs catalog={catalog} mode="all" />
         </CardContent>

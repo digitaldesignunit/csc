@@ -59,6 +59,8 @@ import {
 } from '@/components/ui/sidebar'
 import { isEntryActive, visibleNav, type NavViewer } from '@/lib/navigation'
 import { useRecentComponents } from '@/lib/recentComponents'
+import { useMe } from '@/lib/me'
+import { backendJson } from '@/lib/backend'
 import { cn, resolveStatic } from '@/lib/utils'
 
 type SessionUser = {
@@ -120,11 +122,37 @@ function Brand({ betaBannerText }: { betaBannerText?: string }) {
   )
 }
 
+/** Pending snapshots in the caller's moderated datasets (the queue badge). */
+function usePendingCount(enabled: boolean): number {
+  const pathname = usePathname()
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (!enabled) {
+      setCount(0)
+      return
+    }
+    let cancelled = false
+    const load = () => {
+      backendJson<unknown[]>('/snapshots/pending')
+        .then((rows) => { if (!cancelled) setCount(Array.isArray(rows) ? rows.length : 0) })
+        .catch(() => { if (!cancelled) setCount(0) })
+    }
+    load()
+    const timer = window.setInterval(load, 60_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [enabled, pathname])
+  return count
+}
+
 function NavGroups({ viewer }: { viewer: NavViewer }) {
   const pathname = usePathname() ?? '/'
   const search = useSearchParams() ?? new URLSearchParams()
   const close = useCloseSheet()
   const groups = visibleNav(viewer)
+  const pending = usePendingCount(viewer.isAdmin || viewer.isModerator)
   return (
     <>
       {groups.map((group, index) => (
@@ -149,6 +177,14 @@ function NavGroups({ viewer }: { viewer: NavViewer }) {
                         <Link href={entry.href} onClick={close}>
                           <Icon />
                           <span>{entry.label}</span>
+                          {entry.id === 'queue' && pending > 0 ? (
+                            <span
+                              className="sidebar-extra ml-auto rounded-full bg-sidebar-primary px-1.5 text-[10px] font-semibold leading-4 text-sidebar-primary-foreground"
+                              aria-label={`${pending} pending`}
+                            >
+                              {pending}
+                            </span>
+                          ) : null}
                         </Link>
                       )}
                     </SidebarMenuButton>
@@ -330,11 +366,13 @@ function AccountMenu() {
 
 export default function AppSidebar({ betaBannerText }: { betaBannerText?: string }) {
   const { data: session } = useSession()
+  const { moderatesAny } = useMe()
   const signedIn = Boolean(session?.user) && !(session as { error?: string } | null)?.error
+  const isAdmin = signedIn && (session?.user as SessionUser | undefined)?.role === 'admin'
   const viewer: NavViewer = {
     signedIn,
-    isAdmin: signedIn && (session?.user as SessionUser | undefined)?.role === 'admin',
-    isModerator: false, // P3: from the memberships in the session
+    isAdmin,
+    isModerator: signedIn && moderatesAny,
   }
   return (
     <Sidebar>

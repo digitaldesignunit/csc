@@ -6,12 +6,15 @@ import { Clock, History } from 'lucide-react'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { Badge } from '@/components/ui/badge'
 import { formatTimestamp } from '@/lib/utils'
+import SnapshotLifecycleActions from '@/components/moderation/SnapshotLifecycleActions'
 
 type ComponentSnapshotVersionListProps = {
   identityId: string
   snapshots: SnapshotSummaryItem[]
   activeSnapshotId: string
   liveSnapshotId: string
+  /** The identity's dataset: decides who sees moderation buttons. */
+  dataset?: string | null
 }
 
 function versionHref(identityId: string, row: SnapshotSummaryItem): string {
@@ -24,14 +27,17 @@ function versionHref(identityId: string, row: SnapshotSummaryItem): string {
 }
 
 /**
- * The snapshot versions of one identity, each with its status and the date
- * its state began (valid time). Moderation controls return in plan P3.
+ * The snapshot versions of one identity, each with its status, the date
+ * its state began (valid time) and the lifecycle buttons the caller may use
+ * (author: submit / recall / delete; moderator(D): publish / reject /
+ * make current / withdraw / reinstate).
  */
 export default function ComponentSnapshotVersionList({
   identityId,
   snapshots,
   activeSnapshotId,
   liveSnapshotId,
+  dataset,
 }: ComponentSnapshotVersionListProps) {
   const hasPendingUpdate = snapshots.some(
     (row) => row.status === 'pending' && !row.is_current,
@@ -113,6 +119,9 @@ export default function ComponentSnapshotVersionList({
                 >
                   <Clock className="h-3 w-3 shrink-0" />
                   <span>since {formatTimestamp(row.effective_from)}</span>
+                </div>
+                <div className="basis-full empty:hidden">
+                  <SnapshotLifecycleActions snapshot={row} dataset={dataset} />
                 </div>
               </div>
             </li>
