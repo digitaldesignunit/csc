@@ -143,7 +143,7 @@ class, proxies --- listed as expected-missing); the web app browses the migrated
 keyboard and screen-reader navigation work; the collapsed state survives a reload without a
 jump.
 
-### P3 --- Datasets, permissions, lifecycle --- size L
+### P3 --- Datasets, permissions, lifecycle --- size L --- **built 2026-10-02, awaiting user review**
 - Unpublished identity (8.9): derived state; creator + `moderator(D)` edit metadata and see it;
   evidence publish refused until the identity is published (I26); queue groups evidence with v0.
 - `datasets` routes and memberships (section 3.6, section 7.7); `GET /users/me` with global role + roles per

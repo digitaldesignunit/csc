@@ -43,8 +43,16 @@ URL. Open to grill: O4 (email setup review). Part 4 done --- `api/invitations.py
 `/auth/register` with `code` (verified at once, roles granted) and `CSC_OPEN_REGISTRATION_DOMAINS`,
 `GET /users` filters + memberships (8.21), `GET /users/search` (admin), rules `invite`,
 `revoke_invitation`, `search_users`, verification split into `self_attest` / `review_verification`
-without the admin shortcut (8.12; the evidence routes use them in P6). **Next:** part 5, the web side
-of P3.
+without the admin shortcut (8.12; the evidence routes use them in P6). Part 5 (web) done ---
+`lib/me.tsx` (`useMe`, roles per dataset from `/users/me`), `lib/backend.ts`; sidebar: Moderation for
+dataset moderators with the queue count, Datasets, "Users and invitations"; queue with publish / reject;
+lifecycle buttons on the version list; withdraw / reinstate component with "duplicate of"; component page
+notices (not public, no access, withdrawn, removed, no current state) and the members' withdrawal banner;
+`/id/[uuid]`; scanners and the id box take a link; `/admin/datasets` (+ `[did]`: settings, members by email,
+admin account search, invitations); `/admin/users` with URL filters, memberships and an invitations tab;
+registration with `?code=`. Fixed on the way: the web sign-in matched usernames by exact case (8.28 now
+holds there too); killed preview / test runs left 200--700 MB temp folders each (now swept at the next
+start). **P3 is complete pending the user's review. Next:** P4 (provenance, lineage, materials).
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.
