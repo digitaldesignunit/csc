@@ -179,6 +179,8 @@ jump.
 reviewer, moderator, other-dataset moderator, admin}.
 
 ### P4 --- Provenance, lineage, materials --- size M
+- `change_log` first (8.36, spec section 3.8, I30): one write helper used by every route that
+  changes a record, retrofitted onto the P3 PATCH / lifecycle routes; `?as_of=`, `/changes`.
 - Split / merge exit derived from published children (8.8): set on the child's first publish (needs
   `moderator` of child and parent datasets), `at` = earliest child `effective_from`, cleared when the last
   published child is withdrawn; tests for draft / rejected / withdrawn children and cross-dataset cuts.
@@ -187,7 +189,10 @@ reviewer, moderator, other-dataset moderator, admin}.
   `origin.at` (8.19).
 - Lineage inheritance (section 3.1.2): copy-on-create, recursive propagation on parent PATCH, detach on
   child PATCH, re-inherit, merge unanimity (I17).
-- `materials` collection + routes (section 2.10, section 7.7); `material_class` derivation + override (I25).
+- `materials` collection + routes (section 2.10, section 7.7); `material_class` derivation + override (I25); delete / merge / retire (8.35).
+- DIN SPEC 91484 / DGNB fields (8.38): origin `position_in_work`, `connection_types`,
+  `detachability`, `construction_method`; identity `manufacturer`, `connection_features`,
+  `material_separability`; section 2.11 vocabularies.
 - Web: origin / exit forms and cards, lineage view with inherited markers, circulation filter,
   materials in `/admin`, "cut from..." entry point of the snapshot form (7.5).
 

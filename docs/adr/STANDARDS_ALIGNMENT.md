@@ -30,9 +30,10 @@ does not exist yet.
 | **EN 15804+A2 (EPD core rules)** | Its 13 core + 6 additional indicators equal CPR Annex II; environmental quantities are to carry its indicator codes. | Prepared |
 | **EN 12504-2:2021 (rebound number)**; US: ASTM C805 | Rebound tests store every reading, the impact direction, hammer type and calibration; the server recomputes the median and the discard rule. A rebound number is never stored as a strength. | Implemented in 0.6 (evidence, phase P6) |
 | **EN 12504-1:2019 (cored specimens)**, **EN 12390-3:2019 (compressive strength)**, machine per **EN 12390-4**; US: ASTM C42, C39 | Core tests record sampling, specimen preparation and testing separately, with both dates; the server recomputes F / A and the length-to-diameter class. | Implemented in 0.6 (P6) |
-| **EN 13791 (in-situ compressive strength assessment)** | Strengths derived from rebound or cores are stored as derived results naming their conversion model, separate from measured values. | Implemented in 0.6 (P6) |
+| **EN 13791:2019 (in-situ compressive strength assessment)** with the German national annex **DIN EN 13791/A20:2022-04** | Strengths derived from rebound or cores are stored as derived results naming their conversion model, separate from measured values. | Implemented in 0.6 (P6) |
 | **ISO/IEC 17025 (testing laboratories)** | A result can be marked *accredited* only if a performing lab carries an accreditation whose scope covers the test standard, valid at the test date. | Implemented in 0.6 (P6) |
-| **DIN SPEC 91484:2023 (recording reusable building products, pre-demolition audit)** | National reference for the record of a reusable product. | Cross-check pending |
+| **DIN SPEC 91484:2023 (recording reusable building products, pre-demolition audit)** | National reference for the record of a reusable product. Cross-checked 2026-10-02: dimensions, quantity, photos, condition, function, construction year, production year, documents, expert reports, JSON exchange, access control and mobile use are covered; connection type, dismantlability (DGNB classes), location within the source building, construction method and manufacturer are added in 0.6 (decision 8.38); a reuse verdict and a pollutant record are postponed. | Aligned (0.6), partly postponed |
+| **DGNB Building Resource Passport v1.3** | Detachability and material separability classes and connection words are taken from it. | Implemented in 0.6 (vocabulary) |
 
 ## Data and interoperability standards
 

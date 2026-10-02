@@ -26,7 +26,7 @@ landscape section 10.6.
 |---|---|
 | 1 | Conceptual model --- the entities and the four rules that bind them |
 | 2 | Vocabularies --- every controlled list, with authority and extension policy |
-| 3 | Documents --- field-by-field for each collection (identities, snapshots, evidence, datasets, users, materials), plus on-disk companions |
+| 3 | Documents --- field-by-field for each collection (identities, snapshots, evidence, datasets, users, materials, change log), plus on-disk companions |
 | 4 | Derivations --- the pure functions that compute derived fields |
 | 5 | Invariants --- what the backend must reject |
 | 6 | Type x representation matrix |
@@ -160,7 +160,7 @@ made in design tools outside CSC (decision 7.11) and is never recorded here.
 
 Future instrumental methods are one `EvidenceMethodSpec` each (section 4.5): ultrasonic pulse
 velocity (EN 12504-4), carbonation depth by phenolphthalein (EN 14630), cover meter / rebar
-scanning (BS 1881-204), half-cell potential (ASTM C876), pull-off (EN 1542), chloride content,
+scanning (prEN 12504-5:2023, draft; BS 1881-204), half-cell potential (ASTM C876), pull-off (EN 1542), chloride content,
 moisture, weighing, dimensional survey, hardness / Windsor probe, timber moisture and grading,
 steel coupon tensile tests. Several are non-destructive and repeatable; several produce a depth
 profile rather than a scalar --- the envelope must hold scalar, multi-reading and small-series
@@ -289,7 +289,8 @@ tar), 17 02 04* (treated wood), 17 06 05* (asbestos), 17 01 06*, 17 06 03*, ... 
 (PAH test, treatment class, asbestos survey). `material_class` is the non-hazardous default until
 such evidence exists; the evidence quantities that switch it are **deferred** (additive, 6.8).
 
-**Storage:** a `materials` collection `{_id, label, group, default_class, uniclass, notes}`,
+**Storage:** a `materials` collection `{_id, label, group, default_class, uniclass, notes,
+retired, merged_into}` (lifecycle: decision 8.35),
 seeded from code (`vocab.py`), extendable by admin via `/admin` --- every entry must carry a
 `default_class`. This ends the merge-vocab pattern entirely (section 2 extension policy).
 
@@ -336,6 +337,33 @@ judgement, noted in the table --- all are overridable (`material_class_source: a
 Multi-material pieces (Annex IV 1.2(e) "main materials", plural) --> `secondary_materials[]`,
 **deferred** (additive, 6.8). Until then `material` is the main material.
 
+### 2.11 Connections and circularity classes (decision 8.38)
+
+From the DGNB Building Resource Passport v1.3 (June 2026, sheet 5-Circularity), the scale DIN
+SPEC 91484 names for connection type and dismantlability. CSC stores the class, never DGNB's
+example factor (that depends on the DGNB circularity standard).
+
+`dgnb_class` (detachability and material separability alike):
+
+| value | detachability (DGNB) | material separability (DGNB) |
+|---|---|---|
+| `optimised` | loose / click connection, very low effort, no tools, removable without damage | no tools, easily accessible, mono-material, fully circular |
+| `improved` | inserted / plugged / screwed in, low effort, simple tools, removable without damage | with tools, additional effort, accessible without damage |
+| `standard` | permanently installed (nail / bolt), medium effort, standard tools, mainly removable | tools / chemicals, accessible with damage, almost fully circular |
+| `limited` | permanently installed (soldering, foam, sealing), high effort, special tools | very complex, time-consuming separation |
+| `problematic` | permanently installed (adhesive / welded), extremely complex, special tools | not economically feasible, inaccessible |
+| `not_assessable` | assessment not possible, or cannot be dismantled | assessment not possible, or not separable by origin |
+
+`connection_type` (multi-valued): DGNB's connection words `loose`, `click`, `inserted`,
+`plugged`, `screwed`, `nailed`, `bolted`, `soldered`, `foamed`, `sealed`, `adhesive`, `welded`,
+plus `cast_in` (monolithic concrete) and `grouted`, which DGNB lacks, and `other`, `unknown`.
+
+`construction_method` (DIN SPEC 91484 Table 1): `monolithic` | `prefabricated` | `mixed` | `unknown`.
+
+Postponed (user, 8.38): a reuse verdict, using DGNB's material recovery potential scale (reuse,
+closed-loop recycling, ..., disposal) --- the DIN SPEC 91484 "potential reutilization
+possibility".
+
 ## 3. Documents
 
 Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC strings with `Z`;
@@ -354,6 +382,9 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
   "material": "concrete",                    // section 2.10 --- FK --> materials; controlled, admin-extensible
   "material_class": "17 01 01", "material_class_source": "derived" | "assigned",   // section 2.10 --- EU List of Waste ch. 17
   "trade_name": "..." | null,                  // section 2.10 --- brand / product name (e.g. "Corian")
+  "manufacturer": "..." | null,                // free text (DIN SPEC 91484 Table 2); inheritable (8.38)
+  "connection_features": "..." | null,         // anchors, cast-in plates, holes on the piece itself (8.38); not inherited
+  "material_separability": { "class": "<dgnb_class>", "assessed_by": [ /* actor */ ], "note": "..." | null } | null,   // section 2.11; inheritable
                                              // CPR: "main materials used" --- Annex IV 1.2(e); input to product family (Annex VII)
   "dataset": "beyond_debris",                // FK --> datasets._id (section 3.6); no longer a free string
   "manufactured_at": "...", "manufactured_precision": "year",
@@ -364,7 +395,11 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
     "kind": "deinstallation" | "demolition" | "offcut" | "surplus" | "unknown",   // section 2.8
     "at": "..." | null, "at_precision": "day",
     "place": { "name": "...", "address": "...", "location": { "lat": ..., "lon": ... } | null } | null,
-    "construction_work": { "name": "...", "identifier": "..." | null, "year_built": 1968 | null, "use": "..." | null } | null,
+    "construction_work": { "name": "...", "identifier": "..." | null, "year_built": 1968 | null, "use": "..." | null,
+                           "construction_method": "monolithic" | "prefabricated" | "mixed" | "unknown" | null } | null,
+    "position_in_work": "..." | null,         // where in the works, e.g. "3rd floor, axis B/4, slab S12" (8.38)
+    "connection_types": ["bolted", "grouted"], // section 2.11 (8.38)
+    "detachability": { "class": "<dgnb_class>", "assessed_by": [ /* actor */ ], "note": "..." | null } | null,   // section 2.11
     "method": "..." | null,
     "performed_by": [ /* actor section 3.3.1 */ ],
     "notes": "..." | null
@@ -406,7 +441,8 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
 ```
 
 Removed: `type`, `salvage_source`, `salvaged_at`, `consumed_at`; `material` becomes an FK.
-Added: `original_function`, `material_class(+_source)`, `trade_name`, `origin`, `exit`,
+Added: `original_function`, `material_class(+_source)`, `trade_name`, `manufacturer`,
+`connection_features`, `material_separability`, `origin`, `exit`,
 `past_cycles`, `inherited_fields`, `inherited_from`, `withdrawn`, `properties`,
 `properties_version`, `created_by_user_id`.
 
@@ -423,6 +459,9 @@ mixed an organisation, an address, a place and a stray note in one string.
 | `at` / `at_precision` | when the piece left its previous context (deinstalled, recovered from demolition, cut off, taken from stock). Precision per section 2.7; `year` is legitimate (CE mark carries the year only, CPR Art 18(2)(a)) | all |
 | `place` | where that happened: `name`, postal `address`, optional `location` | all |
 | `construction_work` | the **works** it left --- never the company (that is `performed_by`). CPR Art 3 sense: "buildings and civil engineering works ... including ... roads, bridges, tunnels". `name` (e.g. "Lichtwiese Campus Infrastructure --- pedestrian bridge"), `use` (e.g. "pedestrian bridge"), `year_built`; `identifier` is free-form now, intended for a digital-building-logbook or cadastral id (EPBD, section 10.6) | `deinstallation`, `demolition` only (I16) |
+| `position_in_work` | where in the works the piece sat (floor, axis, element mark); a drawing goes in as an `archival_document` (8.38) | `deinstallation`, `demolition` |
+| `connection_types` | how it was fixed in the works (section 2.11) | `deinstallation`, `demolition` |
+| `detachability` | DGNB class of how it could be released from the works, with who assessed it (section 2.11) | `deinstallation`, `demolition` |
 | `method` | free text: how it was deinstalled / recovered --- the Art 21(3) "process of deinstalling" | all; expected for `deinstallation` |
 | `performed_by` | actors (section 3.3.1): deinstaller, demolition contractor, fabricator that produced the offcut, stockist | all |
 | `notes` | anything that fits nowhere else | all |
@@ -435,18 +474,23 @@ mixed an organisation, an address, a place and a stray note in one string.
 #### 3.1.2 Lineage inheritance (split / merge children)
 
 A cut does not change a piece's past. The **inheritable fields** --- `origin`,
-`manufactured_at` + `manufactured_precision` (one unit), `material`, `trade_name`,
-`original_function` --- are
+`manufactured_at` + `manufactured_precision` (one unit), `material` + `material_class` +
+`material_class_source` (one unit, decision 8.32), `trade_name`, `manufacturer`,
+`material_separability` (8.38), `original_function` --- are
 materialized on the child by the **server**, never copied by clients. `dataset` is not inheritable.
 
 - **Create** with `parent_identities`: each inheritable field *absent* from the payload is copied
   from the parent; its name goes into `inherited_fields`, the parent id into `inherited_from`.
   A field present in the payload is the child's own (not listed).
 - **Parent PATCH** of an inheritable field: propagates to every descendant (recursive, breadth-
-  first down `parent_identities`) whose `inherited_fields` still lists it, in the same request.
+  first down `parent_identities`) whose `inherited_fields` still lists it, in the same request ---
+  across datasets, with no role needed in the child's dataset; each child's timeline records
+  "<field> changed by parent CSC-<n>" (decision 8.31).
 - **Child PATCH** of a listed field: removes it from `inherited_fields` --- the child now owns it.
   (Re-inheriting = PATCH `inherited_fields` to add it back; server re-copies.)
-- **Merge** (>1 parent): a field is inherited only if all parents hold equal values; otherwise it
+- **Merge** (>1 parent): a field is inherited only if all parents hold equal values (`origin`:
+  equal `kind`, `at` + precision, `place`, `construction_work`; actors united, notes joined ---
+  decision 8.33); otherwise it
   stays unset (`origin.kind: unknown`, `manufactured_precision: unknown`) and must be assigned.
   `inherited_from` is then the first parent.
 - Same pattern as property inheritance (section 4.4, decision 2.4) and `shape_class_source`: flat,
@@ -469,6 +513,12 @@ exists (split, recycled) with one that exists elsewhere (installed, returned).
   Withdrawing a child's *snapshot* does not: a child counts once it has ever been published (a
   `published` or `withdrawn` snapshot, the 8.9 test), because the cut happened. A client-set `split` without catalogued children is
   legal ("cut up, pieces not recorded") and is never touched by this rule.
+- **Which parents can be cut (decision 8.34)**: published, not withdrawn, and either in
+  circulation or already split / merged. `installed` / `returned` / `lost` parents re-enter
+  first; `recycled` / `disposed`, withdrawn and unpublished parents are refused (409). Checked at
+  child create and again at the child's first publish. A hand-set `split` accepts children and
+  becomes server-derived with the first published child (`at` = the earlier date); no other
+  authored exit is ever overwritten.
 - **Everything else is authored**: `POST /identities/{id}/exit` (`moderator(D)`, section 7.0) with the block.
   `construction_work` only for `kind == installed` (I18).
 - **Re-entry** (an `installed` or `returned` piece comes back, e.g. from a temporary pavilion):
@@ -1002,6 +1052,40 @@ role** (`user` / `admin`), **account state** (enabled, disabled, email unverifie
 listed in a second tab with the same dataset filter and their state (open, used, expired,
 revoked). No bulk actions in 0.6.
 
+### 3.8 `change_log` (NEW collection --- decision 8.36)
+
+Append-only history of every authored or server-maintained field change on identities,
+snapshots and evidence (EN 18221 archiving; DIN SPEC 91484 traceability). Status changes keep
+their own `status_history` (8.30); derived fields (`properties`, `frame`, proxies, descriptors,
+`shape_class` unless assigned) are never logged.
+
+```jsonc
+{
+  "_id": "uuid",
+  "record_kind": "identity" | "snapshot" | "evidence",
+  "record_id": "uuid",
+  "identity_id": "uuid",                       // for timeline queries
+  "at": "...",
+  "by_user_id": "uuid" | null,                 // null for server and migration writes
+  "cause": "patch" | "inherited_from_parent" | "material_merge" | "exit" | "reenter"
+         | "withdraw" | "reinstate" | "migration",
+  "source_record_id": "uuid" | null,           // the parent (inherited_from_parent), the merged material, ...
+  "changes": [ { "path": "origin.at", "old": "...", "new": "..." } ]
+}
+```
+
+- Written in the same request as the change; a write that changes nothing writes no entry.
+- **Point in time:** `GET /identities/{id}?as_of=<date>` (and the same on snapshots and evidence)
+  = the current document with every later entry rolled back. Rolled-back derived fields are
+  omitted, not recomputed.
+- **Access:** members of D and `admin` read the entries (`GET /identities/{id}/changes`); the
+  timeline outside D shows "metadata changed (date)" only --- old values may name people.
+- **Redaction** (`POST /actors/redact`, section 3.1.4) also blanks the person's `name`, `email`,
+  `orcid` inside `old` / `new` values.
+- **Purge** (section 3.1.4) deletes the record's entries with the record.
+- Migration steps write `cause: migration` entries; history before 0.6 does not exist.
+- Indexes: `(record_id, at)`, `(identity_id, at)`.
+
 ## 4. Derivations
 
 All are pure functions in `apps/catalog/`, unit-tested without a database, invoked from routes
@@ -1279,7 +1363,7 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 | I13 | Frozen fields (section 3.3.4) of a `published` evidence record cannot be changed by PATCH; the only path is a superseding record. |
 | I14 | `supersedes` must reference a `published` record of the same `identity_id` and same `method`; a record can be superseded at most once (no forks), and at most one `draft` / `pending` record may name it in `supersedes` at a time (8.16). |
 | I15 | `status` transitions (snapshots and evidence): `draft-->pending`, `pending-->draft` (author recall, 8.18), `pending-->published\|rejected`, `rejected-->draft` (resubmit), `published-->withdrawn` (`moderator(D)`, reason required), `withdrawn-->published` (`moderator(D)` reinstate). Hard delete only from `draft\|pending\|rejected`. Evidence additionally leaves the default set via supersession. |
-| I16 | `origin.construction_work != null` => `origin.kind in {deinstallation, demolition}`. |
+| I16 | `origin.construction_work`, `position_in_work`, `connection_types`, `detachability` non-empty => `origin.kind in {deinstallation, demolition}` (8.38). |
 | I17 | `inherited_fields` and `inherited_from` are server-maintained: never accepted from a client except `inherited_fields` additions (re-inherit). `inherited_fields != []` => `inherited_from in parent_identities`. |
 | I18 | A server-set `exit` (`recorded_by_user_id == null`, kind `split` / `merged`) exists iff the identity has >= 1 non-withdrawn child that has ever been published (a `published` or `withdrawn` snapshot); `exit.at` = the earliest such child's first `effective_from` (8.8). `exit.construction_work` non-null => `exit.kind == installed`. `exit.kind in {split, merged, recycled, disposed}` => `reenter` rejected. `reserved` non-empty => `exit == null`. `past_cycles` never client-writable. |
 | I19 | Identity hard `DELETE` only if no snapshot or evidence of it ever reached `published` (server checks `status` history: any `published`/`withdrawn` record => 409). `?purge=1` overrides, admin only, leaves a purge stub. `withdrawn.duplicate_of` must reference a non-withdrawn identity != self (no chains: re-point to the terminal). |
@@ -1293,6 +1377,7 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 | I27 | `verification.state in {reviewed, accredited}` => `verification.by.user_id` is set, differs from `recorded_by_user_id` and from every `performed_by[].user_id`; `accredited` => `verification.note` non-empty. `self_attested` => some `performed_by[].user_id == recorded_by_user_id` (decision 8.12). |
 | I28 | No evidence is created on a withdrawn identity (409, naming `duplicate_of` if set). On an identity with a terminal `exit` (`split`, `merged`, `recycled`, `disposed`), evidence needs `observed_at <= exit.at` (8.16). |
 | I29 | `users.username` is lowercase and unique (decision 8.28); registration lowercases it and sign-in compares lowercase. |
+| I30 | Every change to an authored or server-maintained field of an identity, snapshot or evidence record writes one `change_log` entry in the same request; entries are never updated or deleted except by redaction (names blanked) and purge (section 3.8, decision 8.36). |
 
 ---
 
@@ -1394,6 +1479,8 @@ PATCH  /snapshots/{sid}                           per-field permission (section 
 GET    /snapshots/{sid}/proxies/{i}/faces/{face}   deviation map PNG
 GET    /snapshots/{sid}/capture/fixtures/{i}.ply   fixture mesh (section 3.2.3); visibility of the snapshot
 POST   /snapshots/{sid}/proxies/recompute          moderator(D); runs section 4.3 for one snapshot
+GET    /identities/{id}/changes                    member(D) / admin: change_log entries of the identity, its snapshots and evidence (section 3.8)
+GET    /identities/{id}?as_of=<date>               the record as of a date (section 3.8); same for /snapshots/{sid}, /evidence/{eid}
 GET    /identities/{id}/timeline                   merged: past_cycles, origin, snapshot states + corrections, evidence, exit
 POST   /identities/{id}/exit                       moderator(D); body = exit block (replaces POST /consume)
 DELETE /identities/{id}/exit                       moderator(D); undo a mistaken exit (replaces /unconsume); not for server-set split/merge while children exist
@@ -1544,7 +1631,9 @@ GET    /users                                      admin: + memberships per user
 PATCH  /identities/{id}                            moderator(D) for metadata; changing `dataset` needs moderator of both (section 7.0)
 GET    /materials                                  public: the controlled list (section 2.10)
 POST   /materials                                  admin; `default_class` required (I25)
-PATCH  /materials/{mid}                            admin; label, group, default_class, uniclass, notes (_id immutable); re-derives material_class
+PATCH  /materials/{mid}                            admin; label, group, default_class, uniclass, notes, retired (_id immutable); re-derives material_class
+DELETE /materials/{mid}                            admin; only while unreferenced (withdrawn identities count), else 409 + count (8.35)
+POST   /materials/{mid}/merge                      admin; body {into}; moves every identity, re-derives derived classes, leaves an alias {_id, merged_into} (8.35)
 POST   /actors/redact                              admin; GDPR redaction (section 3.1.4)
 POST   /invitations                                admin | moderator(D): body = {emails: [...], dataset?, roles[], expires_days?}; mails one code per address (8.14)
 GET    /invitations                                admin: all; moderator(D): D's; ?status=open|used|expired|revoked
@@ -1698,9 +1787,13 @@ Consequences, and how CSC absorbs them:
   (`CSC-000042`) --- human-facing, monotonic, never recycled, already on the QR label.
 - **Batch or serial number** <-> `identity._id` (UUID); a `snapshot.quantity > 1` batch is the one
   case where several physical items share a type.
-- **Persistent unique identifier + data carrier** (Art 77(1)(a--c), 79(1) --> ESPR Art 12: identifiers
-  per ISO/IEC 15459, data carrier per ISO/IEC 15459 too) --- CSC's UUID is *persistent* but not
-  ISO/IEC 15459. **Decided (6.9):** the data carrier (QR/NFC tag) keeps encoding the **raw
+- **Persistent unique identifier + data carrier** (Art 77(1)(a--c), 79(1) --> ESPR Art 10(1)(c),
+  Annex III: identifier and carrier per ISO/IEC 15459-1..6 until harmonised standards are cited;
+  since Decision 2026/1736, EN 18219 (five identifier schemes, two of them --- `did:web` and DOI
+  --- without an issuing agency) and EN 18220 (the carrier encodes an EN 18219 identifier)) ---
+  CSC's UUID is *persistent* but follows none of these schemes. **Decided (8.37):** tags keep the UUID; when
+  an EN 18219 identifier is needed, each published identity gets a DOI (scheme 5) in
+  `identifiers[]`, not a `did:web` (domain-bound). **Decided (6.9):** the data carrier (QR/NFC tag) keeps encoding the **raw
   UUID** --- host-independent by construction; no domain can be guaranteed forever. Resolvability
   is a *server* capability, not a label property: the permanent route `/id/{uuid}` (section 7.5).
   Moving hosts = DNS / redirect, never relabelling. ESPR compatibility later = (a) an
@@ -1772,7 +1865,7 @@ of how directly it binds:
 | instrument | status (Sep 2026) | what it fixes | CSC consequence |
 |---|---|---|---|
 | **ESPR --- Reg. (EU) 2024/1781**, Arts 9--15 + Annex III | in force; DPP registry to be set up by the Commission by **19 Jul 2026** (Art 13); product-group delegated acts pending | the DPP *framework*: data requirements, unique product / operator / facility identifiers (Art 12), registry (Art 13), web portal (Art 14). CPR Art 79 applies these to construction products | `identifiers[]` (section 10.2) must hold an ESPR-registry-issued identifier once it exists; the QR on the piece is the ESPR data carrier |
-| **EN 182xx family --- CEN/CLC JTC 24** ("Digital product passport: framework and system", standardisation request M/604) | first six published **27 May 2026**, cited in the OJ **15 Jul 2026** (Implementing Decision (EU) 2026/1736); two still to be cited | EN 18216 data exchange protocols ; **EN 18219 unique identifiers** ; **EN 18220 data carriers** (optical 2D, RFID, NFC) ; **EN 18221 data storage, archiving, persistence** ; **EN 18222 APIs for passport lifecycle management and searchability** ; EN 18223 system interoperability ; EN 18239 access rights, security, confidentiality ; EN 18246 data authentication, reliability, integrity | these are the *technical* targets for section 10.4: identifier syntax (18219), QR payload (18220), retention (18221 --- the 25-year rule made concrete), the API surface an export must speak (18222), tombstones + hashes (18246). **Obtain 18219/18220/18221/18222 before implementing `identifiers[]` and the export.** |
+| **EN 182xx family --- CEN/CLC JTC 24** ("Digital product passport: framework and system", standardisation request M/604) | first six published **27 May 2026**, cited in the OJ **15 Jul 2026** (Implementing Decision (EU) 2026/1736); two still to be cited | EN 18216 data exchange protocols ; **EN 18219 unique identifiers** ; **EN 18220 data carriers** (optical 2D, RFID, NFC) ; **EN 18221 data storage, archiving, persistence** ; **EN 18222 APIs for passport lifecycle management and searchability** ; EN 18223 system interoperability ; EN 18239 access rights, security, confidentiality ; EN 18246 data authentication, reliability, integrity | these are the *technical* targets for section 10.4: identifier syntax (18219), QR payload (18220), archiving (18221: every change archived, point-in-time retrieval, a backup service provider; the 25 years come from CPR Art 75(2)(i)), the API surface an export must speak (18222), tombstones + hashes (18246). **Obtain 18219/18220/18221/18222 before implementing `identifiers[]` and the export.** |
 | **CIRPASS-2** (Digital Europe, May 2024 -- Apr 2027) | running; 13 lighthouse pilots, one of them **construction, led by Cobuilder** | the reference pilot for a construction DPP; will produce the de-facto data model the delegated act inherits | watch item; the pilot's construction data model (Cobuilder's "Define"/bSDD-based dictionary) is the likeliest shape of Recital 92's "common data dictionary" |
 | **EN 15804+A2** (EPD core rules) | established | the 13 core + 6 additional environmental indicators | **CPR Annex II (a)--(m) = the 13 core, (n)--(s) = the 6 additional --- a 1:1 match.** The `env_*` quantities (section 10.3) should carry EN 15804 indicator codes (GWP-total, GWP-fossil, GWP-biogenic, GWP-luluc, ODP, AP, EP-freshwater, EP-marine, EP-terrestrial, POCP, ADP-minerals&metals, ADP-fossil, WDP; PM, IRP, ETP-fw, HTP-c, HTP-nc, SQP) as their `unit`-adjacent identifier. Used products: modules from the latest deinstallation only (Art 3(53), Recital 36). Data source candidates: Oekobaudat (`docs/adr/FUTURE.md`), ISO 22057 EPD data templates |
 | **EPBD --- Dir. (EU) 2024/1275** | renovation-passport schemes by **29 May 2026** (Annex VIII); digital building logbooks where available; whole-life-carbon disclosure per EN 15978 / Level(s) 1.2 | the *building-side* twin of the product passport: what the piece is deinstalled *from* and installed *into* | `origin.construction_work.identifier` / `exit.construction_work.identifier` (section 3.1.1) should be able to carry a building identifier that a digital building logbook would recognise; a design's WLC (computed outside CSC, 7.11) needs each component's `env_*` |
@@ -1802,7 +1895,8 @@ All payload models: `extra = "forbid"`. Server recomputes and cross-checks marke
 ### A.0 Domain notes (from the retired 0.5 measurements draft)
 
 Why the two reference payloads look the way they do. The standards define what a result is;
-the schema stores enough to re-check it.
+the schema stores enough to re-check it. Checked against the full texts on 2026-10-02
+(`SOURCE_CHECK_2026-10-02.md`); the payload changes that check calls for are open topic O17.
 
 **Rebound hammer (EN 12504-2:2021; ASTM C805; interpretation EN 13791).**
 
@@ -1817,12 +1911,17 @@ the schema stores enough to re-check it.
   hammers that report a **Q-value**. Q and R are different quantities and are never aggregated
   together.
 - **Surface state** changes the number: ground vs. as found, dry / damp / wet, carbonation depth,
-  member age, surface temperature. **Calibration:** anvil check, date, correction factor, serial.
-- **The rebound number is not a strength.** Converting R or Q to compressive strength needs a
-  correlation (manufacturer curve, EN 13791 comparative testing, or a site-specific curve
-  calibrated against cores) and is a +-20--30 % estimate. Raw and converted values are different
-  facts with different confidence (rule 3, section 1); the conversion is a `derived[]` result
-  with its model named.
+  member age, surface temperature (hammer use 0--50 deg C). The member must be >= 100 mm thick
+  and firmly fixed; smaller pieces only if firmly supported. **Calibration:** five anvil readings
+  before and after each series, within +-3 of the manufacturer value.
+- **The rebound number is not a strength** (EN 12504-2, note 2). EN 13791:2019 converts it only
+  through a correlation with cores taken at the same test locations (>= 8, better 10 pairs;
+  extrapolation <= 4 MPa; a single-location estimate is the lower 5 % prediction bound). Without
+  cores, the German national annex (DIN EN 13791/A20:2022-04, NA.8.5) assigns only a strength
+  *class* from the median R or Q, N-type hammer, not on fire / frost / chemically attacked
+  surfaces, not with carbonation > 5 mm unless ground off. Raw and converted values are
+  different facts (rule 3, section 1); the conversion is a `derived[]` result with its model
+  named.
 
 **Drilled core in compression (EN 12504-1:2019, EN 12390-3:2019, machine EN 12390-4, assessment
 EN 13791; ASTM C42/C42M, C39/C39M).** Three acts at different times:
@@ -1830,12 +1929,18 @@ EN 13791; ASTM C42/C42M, C39/C39M).** Three acts at different times:
 1. **Sampling** --- the core is drilled out of the piece: diameter (typically 50 / 100 / 150 mm),
    position, orientation to the casting direction, wet / dry drilling, date.
 2. **Specimen preparation** --- measured diameter, lengths as drilled and prepared, end
-   preparation (ground / capped / sawn), length-to-diameter ratio (a 2:1 core lies in
-   1.95--2.05; 1:1 cores take a different correction), mass, density, moisture conditioning,
-   reinforcement in the core (normally rejected or flagged), visible defects.
+   preparation (ground / capped / sawn), length-to-diameter ratio (2:1 class 1.95--2.05, 1:1
+   class 0.90--1.10), estimated maximum aggregate size, mass, density, storage (sealed or
+   water), visible defects. A bar in or near the core axis rejects the core (redrill); a
+   transverse bar is recorded (diameter, position in mm) and assessed separately.
 3. **Testing** --- loading rate 0.6 +- 0.2 MPa/s, maximum load F, cross-section A_c,
-   f_c = F / A_c, failure type (satisfactory / unsatisfactory per EN 12390-3; ASTM C39 has six
+   f_c = F / A_c to 0.1 MPa with A_c from the mean diameter, failure type (unsatisfactory
+   patterns are recorded by the letter of the closest figure in EN 12390-3; ASTM C39 has six
    fracture types), test date, age at test.
+4. **In-situ strength** (EN 13791:2019) --- f_c,is is the 2:1-core equivalent; 1:1 cores x core
+   length factor 0.82 (normal concrete). Diameter >= 75 mm, >= 50 mm only if impractical (then
+   1:1 and three cores per location). In Germany (A20, NA.7) a 1:1 core of 50--150 mm equals a
+   water-stored 150 mm cube, a 2:1 core of 75--150 mm a 150 x 300 mm cylinder.
 
 Consequences: the record carries both times --- `sampled_at` (when the *component* was in the
 sampled state; SOSA `phenomenonTime`) and `observed_at` (when the number was produced;
@@ -1933,7 +2038,7 @@ Validation: `len(readings) >= 9` when standard is EN 12504-2 (`>= 10` for ASTM);
 
 ```jsonc
 // archival_document
-{ "document": { "title": "...", "date": "1968-03", "kind": "drawing" | "spec" | "report" | "photo" | "other", "reference": "..." },
+{ "document": { "title": "...", "date": "1968-03", "kind": "drawing" | "spec" | "report" | "photo" | "ce_marking" | "ue_mark" | "type_plate" | "declaration_of_performance" | "other", "reference": "..." },
   "claim": { "text": "B225", "interpretation": "..." } }
 // summary: {concrete_class, range: ["B225"], claimed}  or  {compressive_strength, range:[18,28], MPa, claimed}
 
@@ -2012,7 +2117,7 @@ beam's prism has z along the beam, its `frame` has x along the beam.
   <https://cirpass2.eu/>, <https://cobuilder.com/en/digital-product-passport-dpp/eu-funded-project-digital-product-passports/>.
 - Directive (EU) 2024/1275 (EPBD recast) --- renovation passports (Annex VIII), digital building
   logbooks, whole-life carbon --- <https://eur-lex.europa.eu/eli/dir/2024/1275/oj/eng>.
-- EN 15804:2012+A2:2019 --- core rules for EPDs of construction products; its 13+6 indicators are
+- EN 15804:2012+A2:2019 + AC:2021 (DIN EN 15804:2022-03) --- core rules for EPDs of construction products; its 13+6 indicators are
   CPR Annex II. Level(s) framework (EC JRC), indicators 1.2, 2.1, 2.4.
 - Regulation (EU) 2023/1542 (batteries) --- the first mandatory DPP (Feb 2027), reference
   implementation only.
@@ -2030,7 +2135,7 @@ beam's prism has z along the beam, its `frame` has x along the beam.
   BS EN 12504-2 text (PDF) ---
   <https://eclass.duth.gr/modules/document/file.php/TMB300/BS%20EN%2012504-2%20rebound%20number.pdf>.
   US equivalent ASTM C805.
-- EN 12504-1:2019, *Cored specimens --- taking, examining and testing in compression* ---
+- EN 12504-1:2019 + AC:2020 (DIN EN 12504-1:2021-02), *Cored specimens --- taking, examining and testing in compression* ---
   <https://standards.iteh.ai/catalog/standards/cen/15314b4e-ac55-43b3-8f57-602c7b877f16/en-12504-1-2019>;
   OENORM EN 12504-1:2019 preview (PDF) ---
   <https://webstore.ansi.org/preview-pages/ON/preview_ONORM+EN+12504-1_2019.pdf>.
@@ -2038,7 +2143,7 @@ beam's prism has z along the beam, its `frame` has x along the beam.
 - EN 12390-3:2019, *Compressive strength of test specimens* ---
   <https://standards.iteh.ai/catalog/standards/cen/7eb738ef-44af-436c-ab8e-e6561571302c/en-12390-3-2019>;
   machine per EN 12390-4. US equivalent ASTM C39/C39M.
-- EN 13791, *Assessment of in-situ compressive strength in structures and precast concrete
+- EN 13791:2019 (DIN EN 13791:2020-02) with the German national annex DIN EN 13791/A20:2022-04, *Assessment of in-situ compressive strength in structures and precast concrete
   components*; BRMCA draft guide to EN 13791 clause 9, assessment using comparative testing (PDF) ---
   <https://brmca.org.uk/documents/01_DRAFT_BRMCA_GUIDE_EN_13791_Clause_9_Assessment_using_comparative_testing_v200123.pdf>.
 - W3C/OGC Semantic Sensor Network Ontology (SSN/SOSA: `sosa:Observation`, `sosa:Sampling`,
@@ -2046,21 +2151,26 @@ beam's prism has z along the beam, its `frame` has x along the beam.
   *SOSA: A lightweight ontology for sensors, observations, samples, and actuators* (PDF) ---
   <https://www.maxime-lefrancois.info/docs/Janowicz-JWS-SOSA.pdf>. With W3C PROV-O, the shape of
   the evidence envelope (section 3.3, A.0).
+- DGNB, *Building Resource Passport* v1.3 (June 2026): accompanying manual, Excel template and
+  examples (`reference/pdf/dgnb-building-resource-passport-*`) --- detachability, material
+  separability and material recovery classes (section 2.11).
 - DIN SPEC 91484:2023-09 --- recording of reusable building products (pre-demolition audit,
   two-stage preliminary / detailed inspection) ---
   <https://www.dinmedia.de/en/technical-rule/din-spec-91484/371235753>; overview by the
   Bayerische Ingenieurekammer ---
   <https://www.bayika.de/de/aktuelles/meldungen/2023-08-18_DIN-SPEC-91484-Neuer-Standard-zur-erneuten-Verwendung-von-Bauprodukten.php>.
-  To be cross-checked against section 3.1, Appendix A and section 10.3 once obtained; its
-  companion for conformity / quality assessment is unverified and not to be cited until checked.
+  Cross-checked 2026-10-02 (`SOURCE_CHECK_2026-10-02.md`): its stage 1 / 2 data fields CSC lacks
+  are open topic O16. Free download (DIN Media account).
 - Also referenced, not separately sourced: IFC 4.3.2 (ISO 16739-1, buildingSMART) element class
   names (section 2.1); UCUM unit codes (section 2.6); ISO 8601 timestamps; ORCID and ROR
   identifiers (section 3.3.1); ISO/IEC 17025 lab accreditation (section 3.3.1); ISO/IEC 15459
   identifiers (section 10.2); Regulation (EU) 2016/679 (GDPR) Arts 6, 17 (sections 3.1.4, 3.3.1,
   10.4); EN 771-4 (AAC units, section 2.10); EN 15978, ISO 22057 (section 10.6); future evidence
   methods EN 12504-4, EN 14630, BS 1881-204, ASTM C876, EN 1542 (section 2.5).
-- Source check 2026-10-02: CPR spot-checked against the local PDF (Art 3(53), 77(1), 79, 80,
-  Annex II); Implementing Decision (EU) 2026/1736 confirmed via CEN-CENELEC and secondary sources
-  --- it cites EN 18216, 18219, 18220, 18221, 18222, 18223 (presumption of conformity with ESPR
-  Arts 10--11); EN 18239 and EN 18246 not yet cited. EUR-Lex refuses scripted access, so ESPR,
-  WFD and EPBD articles are not re-checked against their text.
+- Source check 2026-10-02 against the full texts in `reference/pdf/` (untracked): CPR, ESPR,
+  WFD (2008 text), EPBD, EN 12504-1/-2, prEN 12504-5:2023 (covermeters, draft), EN 12390-3,
+  EN 13791 + A20, EN 15804, EN 18219/18220/18221/18222:2026, ISO/IEC 15459-1..6, DIN SPEC 91484.
+  Findings and corrections: `docs/adr/SOURCE_CHECK_2026-10-02.md`. Implementing Decision (EU)
+  2026/1736 of 14 July 2026 (OJ 15.7.2026, in force that day) read in full: it cites EN 18216, 18219, 18220,
+  18221, 18222, 18223 (presumption of conformity with ESPR Arts 10--11); EN 18239 and EN 18246
+  not yet cited.

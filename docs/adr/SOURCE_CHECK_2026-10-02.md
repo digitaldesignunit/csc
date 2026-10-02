@@ -15,6 +15,23 @@ into `DATA_MODEL_SPEC.md`; each becomes a spec fix or an open topic to grill.
 - EN 15804+A2 (+AC:2021): 13 core + 6 additional indicators = CPR Annex II (a)--(s).
 - CPR Art 75(2)(i): 25 years after the last product of the type --- from the CPR, not EN 18221.
 - ISO/IEC 15459: identities need a registered issuing agency (15459-2); a UUID is not one.
+- ESPR 2024/1781: Art 13(1) registry "by 19 July 2026"; Art 14 public web portal; Art 10(1)(c) +
+  Annex III second paragraph: data carrier **and** unique product identifier comply with
+  ISO/IEC 15459-1 to -6 "until the references of harmonised standards are published" --- since
+  Decision 2026/1736 that is EN 18219 / EN 18220. Art 12(4)(b): a delegated act will set rules
+  for operators creating their own identifiers without an issuing agency. Art 10(1)(e):
+  customer personal data only with explicit consent (GDPR Art 6).
+- WFD 2008/98/EC (2008 text, not consolidated): Art 3(13) re-use = products "that are not waste"
+  used again for the same purpose; Art 5 by-product conditions; Art 6 end-of-waste conditions.
+  The 2018/851 amendments are not in the file; the readings in spec 2.8 hold for the 2008 text.
+- EPBD 2024/1275: Art 2(41) digital building logbook; Art 12 renovation passports "by 29 May
+  2026" on the Annex VIII framework; Art 7 life-cycle GWP disclosure from 2028 / 2030.
+- `reference/pdf/` file notes: `EU_2000_532_EC*.pdf` are copies of the WFD (same checksum), so
+  the List of Waste itself is not there (its codes were verified against the AVV on 2026-09-28);
+  `EU_2024_679*.pdf` is the GDPR, Regulation (EU) **2016**/679; Decision 2026/1736 (added later) read in
+  full: adopted 14 July 2026, OJ 15.7.2026, in force on publication; Annex lists EN 18216, 18219,
+  18220, 18221, 18222, 18223 (all :2026); presumption of conformity with ESPR Arts 10 and 11 via
+  ESPR Art 41(2).
 
 ## Spec corrections (fix in A.1 / A.2 / 10.x)
 
@@ -54,10 +71,16 @@ into `DATA_MODEL_SPEC.md`; each becomes a spec fix or an open topic to grill.
 8. **10.6, EN 18221 row**: 18221 does not set 25 years. It requires every change of a passport to
    be archived, point-in-time retrieval for authorised actors, a backup service provider, OAIS
    (ISO 14721) as guidance. EN 18222 has `ReadDPPVersionByIdAndDate`.
-9. **10.2**: "data carrier per ISO/IEC 15459" --> carriers are EN 18220; identifiers must follow
-   one of the five EN 18219 schemes.
+9. **10.2**: ESPR Annex III names ISO/IEC 15459 for identifier and carrier only until harmonised
+   standards are cited; since 2026/1736 the presumption runs through EN 18219 (five identifier
+   schemes, two without issuing agency) and EN 18220 (the carrier encodes an EN 18219 identifier).
 10. **2.5**: cover meter --> cite prEN 12504-5:2023 (draft, electromagnetic covermeters) instead of
     BS 1881-204; also the basis for `reinforcement_layout` with `basis: scan`.
+11. **A.4 `basis: scan`** (prEN 12504-5, 7.2): report items are covermeter make / type and last
+    calibration, site calibration, measured covers, bar size *assumed or known*, estimated
+    accuracy (under ideal conditions better than 20 % for size and cover when neither is known),
+    bar spacing. A.4 has none of these: add `instrument`, `diameter_known: bool`, `cover_mm` per
+    bar, `accuracy_note`.
 
 ## New open topics (to log as O13--O16 and grill)
 
@@ -79,7 +102,10 @@ into `DATA_MODEL_SPEC.md`; each becomes a spec fix or an open topic to grill.
   type plate, DoP) for `archival_document`. Tool requirements: PDF summary export, completeness
   indicator. Which are 0.6 (breaking) vs. deferred (additive)?
 
-## Not yet read
+## Coverage
 
-prEN 12504-5 beyond its structure; EN 18222 in detail; ESPR, WFD, Decision 2026/1736 (not in
-`reference/pdf/`).
+Read in full or in the relevant clauses: EN 12504-1, -2, prEN 12504-5, EN 12390-3, EN 13791 +
+A20, EN 15804, EN 18219--18222, ISO/IEC 15459-1..6, DIN SPEC 91484, CPR, ESPR, WFD, EPBD.
+GDPR not re-read (Arts 6 and 17 are cited only by number). EN 18222: every passport holder
+must offer `ReadDPPById`, `ReadDPPByProductId`, `ReadDPPIdsByProductIds`; version-by-date reads
+are "should" --- relevant only once the deferred passport export is built.
