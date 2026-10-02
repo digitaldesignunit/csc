@@ -5,6 +5,11 @@ the Concrete Element Reuse Ontology (CERO, `https://w3id.org/cero`, repository
 `RUB-Informatik-im-Bauwesen/crc1683-ontologies`, Chair of Computing in Engineering, Ruhr
 University Bochum, CC BY 4.0)? Open topic O18.
 
+**Decided (8.39, 8.44, 2026-10-02):** translate, never adopt. A JSON-LD view and a CERO exporter
+read mapping columns on the vocabulary rows; four CERO-listed quantities become rows
+(`exposure_class`, `chloride_content`, `elastic_modulus`, `crack_width`); exports land in P10
+(0.6.1, after cutover). Spec section 7.8.
+
 ## What CERO is (version 0.1, repository last changed 2026-01-28)
 
 - A **property dictionary** in the ISO 23386 style (`isoprops`): 53 properties, each with a

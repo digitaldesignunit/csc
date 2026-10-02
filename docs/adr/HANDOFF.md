@@ -72,8 +72,10 @@ Web: provenance card with the DIN SPEC / DGNB fields, inherited markers and earl
 dialog per inheritance unit ("from the parents" tick); circulation actions (exit, undo, re-enter);
 "Cut a piece from it" (authored box, submit + publish for moderators); change history on the
 component page; `/admin/materials`; the viewer draws box proxies. Checked in the browser on the
-261001 rehearsal copy. **Next:** user review of P4; then grill O15, O17, O18 (exports) and O10
-before P6, and start P5.
+261001 rehearsal copy. Grilled the same day: 8.40 (EN methods only), 8.41 (payload corrections,
+German strength class read by the user), 8.42 (core-to-rebound pairs; test regions later), 8.43
+(points and grids picked in the web viewer), 8.44 (exports: JSON-LD + CERO + PDF in P10, 0.6.1).
+**Next:** P5 (geometry runner). Still open: O11 before P8; O4, O12 before P9.
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.

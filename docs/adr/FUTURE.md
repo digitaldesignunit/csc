@@ -49,6 +49,12 @@ gap.
   component catalog could offer that few tools do.
 - **Batch entry:** a coring campaign yields 6--12 cores across several pieces in one day. CSV or
   lab-report import, a spreadsheet-style entry sheet (both excluded from 0.6, decision 7.1).
+- **EN 13791 test regions** --- group similar pieces of one concrete into a test region and
+  derive its characteristic in-situ strength and the site correlation from the paired
+  rebound / core records (8.42). Regions are a later judgment over stored records, so nothing
+  is lost by waiting.
+- **ASTM variants** of rebound (C805) and cores (C42, C39) as additional methods with their own
+  rules, once a user outside Europe needs them and the texts are at hand (8.40).
 - **Grasshopper evidence components** (create / add / fetch evidence), after the web form.
 - **Further evidence methods** (UPV, carbonation, cover meter, half-cell, pull-off, moisture,
   timber grading, steel coupons) --- one `EvidenceMethodSpec` each, list in spec section 2.5.

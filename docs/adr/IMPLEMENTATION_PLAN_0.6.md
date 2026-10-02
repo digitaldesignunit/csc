@@ -247,10 +247,15 @@ complexity; the user has signed off the tuning tables and the frame report.
 - 8.16: evidence create on a withdrawn identity / after a terminal exit --> 409 (I28); one open
   correction per record (I14).
 - Migrations 6b and 6d re-run with the real models in the rehearsal.
+- Quantity rows `exposure_class`, `chloride_content`, `elastic_modulus`, `crack_width` (8.44) and
+  the mapping columns per vocabulary row (QUDT unit, CERO / bSDD / IFC property; spec section 7.8)
+  --- data for the P10 exports.
 - Web: evidence form from the component page (7.1: fan-out, repeat-from-last, apply-to-several),
   "?" popovers from the backend descriptions, per-observation inspection photos (7.4), position
-  picking on the viewer, evidence moderation + reviewer queue, properties card (range + n),
-  condition badge (7.9), timeline.
+  picking on the viewer for meshes, point clouds and authored proxies, and the grid tool for
+  rebound impact points and test-location layouts (8.43), the core-to-rebound pairing (8.42),
+  evidence moderation + reviewer queue, properties card (range + n), condition badge (7.9),
+  timeline.
 
 **Done when:** fold unit tests cover tier precedence, derived results, verification, inheritance
 and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> moderate --> verify" works.
@@ -273,6 +278,21 @@ and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> m
 - **Done when:** the DDU aggregation and robot-scan definitions run end-to-end against a staging
   backend.
 
+### P10 --- Exports (0.6.1, after cutover) --- size M
+
+Decisions 8.39, 8.44; spec section 7.8. Additive: no data change, so it follows the cutover (6.8).
+- JSON-LD context `/context/v1.jsonld` and `?format=jsonld` on the component read, from the
+  mapping columns (P6 adds them).
+- CERO exporter (Turtle / JSON-LD): conservative bound per property, link back to the record.
+- PDF passport summary with ReportLab (`/identities/{id}/export/pdf`) and a "Download passport
+  (PDF)" button. First check: a ReportLab wheel within the glibc-2.17 ceiling for Python 3.13
+  (`constraints.txt`); no system libraries.
+- Visibility tests: public tier vs. members, as the component read.
+
+**Done when:** the three exports of a ZirKuS beam and a cut piece validate (JSON-LD expands with
+a standard processor, the CERO Turtle parses, the PDF opens); a public viewer's PDF shows no
+member-only data.
+
 ### P9 --- Cutover --- size M
 1. Freeze writes on production (0.5.1.0); take the cutover dump + assets backup.
 2. `invoke rehearse` on that dump --> clean report (the abort guards catch drift since 260916).
@@ -292,7 +312,7 @@ and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> m
 
 ```
 P0 --(independent, first)
-P1 -> P2 -> P3 -> P4 -> P5 -> P6 -> P7 -> P8 -> P9
+P1 -> P2 -> P3 -> P4 -> P5 -> P6 -> P7 -> P8 -> P9 -> P10 (0.6.1, after cutover)
             (P4 needs P3's permissions; P5 needs P4's original_function for the column rule;
              P6's reinforcement layout needs P5's capture/stored-coordinate handling)
 ```

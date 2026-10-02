@@ -35,6 +35,9 @@ into `DATA_MODEL_SPEC.md`; each becomes a spec fix or an open topic to grill.
 
 ## Spec corrections (fix in A.1 / A.2 / 10.x)
 
+Items 1--7 and 11 are worked into Appendix A by decision 8.41; items 8--10 were fixed on
+2026-10-02.
+
 1. **A.1 anvil check** (12504-2, 7.1.2 / 7.3): five readings on the reference anvil *before and
    after* the test series, each within +-3 of the manufacturer value; 2021 recommends a second,
    softer anvil. The payload holds one `anvil_check`; needs `before` / `after` (+ optional second

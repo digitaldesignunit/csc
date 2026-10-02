@@ -197,12 +197,16 @@ context is that snapshot into `snapshot.properties`).
 | `rebar_spec` | --- | categorical | identity | destructive, archival, ndt, heuristic |
 | `concrete_class` | --- | categorical | identity | destructive, archival, ndt, heuristic |
 | `cover_depth` | `mm` | scalar | identity | ndt, destructive, archival |
+| `exposure_class` | --- | categorical (EN 206: X0, XC1--XC4, XD1--XD3, XS1--XS3, XF1--XF4, XA1--XA3) | identity | archival, heuristic --- decision 8.44 |
+| `chloride_content` | `%` (by mass of cement) | scalar | identity | destructive, archival --- decision 8.44 |
+| `elastic_modulus` | `GPa` | scalar | identity | destructive, archival, heuristic --- decision 8.44 |
 | `mass` | `kg` | scalar | **snapshot** | destructive, ndt, heuristic |
 | `carbonation_depth` | `mm` | scalar | snapshot | destructive, ndt, visual |
 | `spalling` | --- | ordinal 0--3, severity | snapshot | visual, ndt --- applies to mineral |
 | `cracking` | --- | ordinal 0--3, severity | snapshot | visual, ndt --- applies to mineral, polymer, bio-based, bituminous |
 | `corrosion` | --- | ordinal 0--3, severity | snapshot | visual, ndt --- applies to metal, reinforced mineral |
 | `moisture_content` | `%` | scalar | snapshot | ndt, destructive |
+| `crack_width` | `mm` | scalar | snapshot | visual, ndt --- the widest crack, crack gauge or microscope (decision 8.44); `cracking` stays the severity |
 | `condition_grade` | --- | ordinal 0--3, **3 = good** | snapshot | visual --- **overall visual grade, any material** (decision 7.9): 3 good, 2 average, 1 poor, 0 unusable as is. The wizard's optional inspection step records only this. |
 
 **Findings vs. overall grade (decision 7.9).** Findings (`spalling`, `cracking`, `corrosion`) are
@@ -1602,8 +1606,16 @@ document a finding and belong to the evidence record; **snapshot photos** stay a
 impression of the component, independent of its geometric representation. The camera / gallery
 capture of the add-component wizard is reused.
 
-**Position.** `kind: none` + `description` is always enough (section 3.3.2); optionally the user picks a
-point on the 3D viewer (tap or click), which sets `position.snapshot_id` and `position.point`.
+**Position (decision 8.43).** `kind: none` + `description` is always enough (section 3.3.2);
+optionally the user picks a point on the 3D viewer (tap or click), which sets
+`position.snapshot_id` and `position.point` --- in the browser, without CAD software or
+Grasshopper. Picking works on every representation the viewer draws: a mesh (ray hit), a point
+cloud (nearest point within a screen tolerance) and an authored proxy (ray hit on the box /
+prism). The **grid tool** lays a regular grid on a picked face: origin, two in-plane
+directions, rows x columns and spacing, all in the snapshot's stored coordinates. It serves two
+uses: the impact points of one rebound test area (A.1 `test_area.grid`, one reading per point)
+and a set of test locations across a member (one record per point, the fan-out shortcut). The
+viewer warns when a point falls closer to an edge than `min_edge_distance_mm`.
 
 **Snapshots (decision 7.5).** One snapshot form --- the add-component wizard's details + photos
 steps; geometry = an authored box from L x W x H --- reached from four places:
@@ -1649,6 +1661,39 @@ POST   /auth/register                              body + code? --- open domain:
 
 The `/admin` web area gains dataset CRUD and a per-dataset member / role editor (decision 6.5),
 the materials list, and invitations (8.14; also from the member editor).
+
+### 7.8 Exports (decisions 8.39, 8.44; after cutover, plan P10)
+
+```
+GET    /context/v1.jsonld                          public: the JSON-LD context (SOSA/SSN, PROV-O, BOT, QUDT, IFC, bSDD)
+GET    /identities/{id}/compose?format=jsonld      the passport as JSON-LD: the same JSON plus @context, @id, @type
+GET    /identities/{id}/export/cero                CERO (Turtle; ?format=jsonld): one value per CERO property
+GET    /identities/{id}/export/pdf                 the human-readable passport summary (DIN SPEC 91484 section 8)
+```
+
+All three read what the component read returns for the caller (section 3.6): the public tier for
+a public viewer, people named in evidence only for members (8.13). The storage is unchanged ---
+ontologies sit at the boundary (`ONTOLOGIES.md`).
+
+- **Mapping columns.** Each vocabulary row names its counterparts: a quantity its QUDT unit,
+  CERO property and bSDD / IFC property where one exists; `original_function` its IFC class;
+  identity --> `bot:Element`, `construction_work` --> `bot:Building`, an evidence record -->
+  `sosa:Observation` (a core: `sosa:Sample`), actors --> `prov:Agent`. The JSON-LD context and
+  the CERO exporter both read these columns; a new ontology is a new column (and, where its
+  shape differs, an exporter).
+- **CERO.** One literal per CERO property on the element: the conservative bound of the folded
+  range (as the CPR projection, section 10.3), the unit of the CERO property; provenance stays
+  behind a link to the CSC record (`rdfs:seeAlso` to `/id/{uuid}`). Lossy by design.
+- **PDF** (at most two pages, English): header (catalog number, name, QR code of `/id/{uuid}`,
+  dataset, issue date, snapshot version); identity (original function, material and waste
+  class, trade name, manufacturer, manufactured); origin and DGNB items (kind, date, place,
+  works with construction method and year built, position, connections, detachability,
+  material separability); current state (preview image, dimensions, shape class, mass,
+  condition grade); the folded properties (quantity, range, unit, n, source, verification);
+  the evidence list (method, date, result, verification, attachment names); lineage and
+  circulation (parents, children, exit, earlier cycles); footer (links to the JSON, JSON-LD
+  and CERO editions, last change and number of change-log entries, generation time).
+  Generated server-side with ReportLab.
 
 ## 8. Migration from 0.5
 
@@ -1904,8 +1949,9 @@ Why the two reference payloads look the way they do. The standards define what a
 the schema stores enough to re-check it. Checked against the full texts on 2026-10-02
 (`SOURCE_CHECK_2026-10-02.md`); the payload changes that check calls for are open topic O17.
 
-**Rebound hammer (EN 12504-2:2021; ASTM C805; interpretation EN 13791).**
+**Rebound hammer (EN 12504-2:2021; interpretation EN 13791).**
 
+- EN methods only in 0.6; the ASTM variants (C805, C42, C39) are a later, additive method (8.40).
 - A result belongs to a **test location**, not to one impact: at least 9 valid readings, impacts
   >= 25 mm apart and >= 25 mm from any edge.
 - The reported value is the **median, as a whole number**. If more than 20 % of the readings
@@ -1930,7 +1976,7 @@ the schema stores enough to re-check it. Checked against the full texts on 2026-
   named.
 
 **Drilled core in compression (EN 12504-1:2019, EN 12390-3:2019, machine EN 12390-4, assessment
-EN 13791; ASTM C42/C42M, C39/C39M).** Three acts at different times:
+EN 13791).** Three acts at different times:
 
 1. **Sampling** --- the core is drilled out of the piece: diameter (typically 50 / 100 / 150 mm),
    position, orientation to the casting direction, wet / dry drilling, date.
@@ -1941,8 +1987,8 @@ EN 13791; ASTM C42/C42M, C39/C39M).** Three acts at different times:
    transverse bar is recorded (diameter, position in mm) and assessed separately.
 3. **Testing** --- loading rate 0.6 +- 0.2 MPa/s, maximum load F, cross-section A_c,
    f_c = F / A_c to 0.1 MPa with A_c from the mean diameter, failure type (unsatisfactory
-   patterns are recorded by the letter of the closest figure in EN 12390-3; ASTM C39 has six
-   fracture types), test date, age at test.
+   patterns are recorded by the letter of the closest figure in EN 12390-3), test date, age at
+   test.
 4. **In-situ strength** (EN 13791:2019) --- f_c,is is the 2:1-core equivalent; 1:1 cores x core
    length factor 0.82 (normal concrete). Diameter >= 75 mm, >= 50 mm only if impractical (then
    1:1 and three cores per location). In Germany (A20, NA.7) a 1:1 core of 50--150 mm equals a
@@ -1960,7 +2006,7 @@ observation on the sample whose ultimate feature of interest is still the identi
 follows W3C PROV-O (entity / activity / agent). UCUM for units, ORCID for persons, ROR for
 institutions make it machine-resolvable at no cost.
 
-### A.1 `rebound_hammer` (EN 12504-2:2021 / ASTM C805)
+### A.1 `rebound_hammer` (EN 12504-2:2021)
 
 ```jsonc
 {
@@ -1969,39 +2015,73 @@ institutions make it machine-resolvable at no cost.
     "manufacturer": "...", "model": "...", "serial": "...",
     "impact_energy_nm": 2.207,
     "last_calibration_at": "2026-01-15",
-    "anvil_check": { "performed_at": "...", "value": 80, "expected": 80, "correction_factor": 1.0 } | null
+    "anvil_check": {                                     // 5 readings each, within +-3 of `expected` (12504-2, 7.1.2 / 7.3)
+      "expected": 80,
+      "before": { "performed_at": "...", "readings": [80, 81, 79, 80, 80] },
+      "after":  { "performed_at": "...", "readings": [80, 80, 79, 81, 80] } | null,
+      "second_anvil": { "expected": 62, "readings": [...] } | null,   // the softer anvil 12504-2:2021 recommends
+      "correction_factor": 1.0
+    } | null
   },
   "test_area": {
     "label": "TA-1",
     "surface_preparation": "ground" | "as_found",
     "surface_condition": "dry" | "damp" | "wet",
     "carbonation_depth_mm": null, "surface_temperature_c": 14.0,
-    "min_spacing_mm": 25, "min_edge_distance_mm": 25
+    "min_spacing_mm": 25, "min_edge_distance_mm": 25,
+    "grid": {                                          // optional, decision 8.43: the impact points
+      "origin": [x,y,z], "u": [1,0,0], "v": [0,1,0],    // first point and unit directions on the face (stored coordinates of position.snapshot_id)
+      "rows": 3, "cols": 3, "spacing_mm": 30
+    } | null,
+    "member_thickness_mm": 180,
+    "support": "fixed_in_structure" | "clamped" | "loose"   // < 100 mm or loose: only if firmly supported (12504-2, 6.1)
   },
   "impact_direction": "horizontal" | "vertically_down" | "vertically_up" | "inclined",
   "impact_angle_deg": null,
   "readings": [44, 42, 41, 45, 43, 42, 40, 44, 43],      // all, in order
   "reading_unit": "1" | "Q",
   "rejected_reading_indices": [],                          // flagged, never deleted
-  "outlier_policy": "en_12504_2" | "astm_c805" | "none",
+  "outlier_policy": "en_12504_2" | "none",
   "set_discarded": false,                                  // server: EN rule >20% deviate >25% from median
   "n_valid": 9,
   "median": 43,                                            // server-computed, whole number
-  "direction_correction_applied": false
+  "direction_correction_applied": false,
+  "deviations": null                                      // deviations from the standard (mandatory report item)
 }
 ```
 
-Validation: `len(readings) >= 9` when standard is EN 12504-2 (`>= 10` for ASTM); `median` and
+Validation: `len(readings) >= 9` (EN 12504-2); `median` and
 `set_discarded` recomputed server-side and must match; `reading_unit == "Q"` <=>
 `hammer_type in {Q_N, Q_L}`; `summary.quantity` = `rebound_number` or `q_value` accordingly;
-**never** a strength. Strength estimates go in `derived[]` with a named model.
+**never** a strength. Strength estimates go in `derived[]` with a named model. `anvil_check`
+readings outside +-3 of `expected` --> warning on the record. `support: loose` with
+`member_thickness_mm < 100` --> warning (the standard asks for a firm support). With a
+`grid`: `rows x cols == len(readings)`, `readings[i]` belongs to grid point i (row by row),
+`spacing_mm >= min_spacing_mm`, `u` and `v` orthogonal unit vectors, `position.kind: region`
+with `position.point` = the grid centre; the server derives the points, the client never sends
+them.
 
-### A.2 `core_compression` (EN 12504-1:2019, EN 12390-3:2019 / ASTM C42, C39)
+**Rebound-derived strength (`derived[]`, decision 8.41).** Two model kinds:
+
+- `din_en_13791_a20_na6` (R, N-type hammer) / `din_en_13791_a20_na7` (Q): quantity
+  `concrete_class`, the **class the user reads from the German annex table** for the median;
+  the model's `note` names the table row. The server keeps no table values (DIN copyright) and
+  checks only the conditions: hammer N or Q_N, `carbonation_depth_mm <= 5` (or
+  `surface_preparation: ground`), median present, no `set_discarded`. Fire / frost / chemical
+  attack are the user's declaration (`deviations` or a visual inspection).
+- `en_13791_correlation`: quantity `compressive_strength_in_situ`, the lower 5 % prediction bound
+  of a site correlation from >= 8 rebound / core pairs at the same locations, extrapolation
+  <= 4 MPa. A pair is a core whose `sampling.paired_rebound_id` names the rebound record taken at
+  its drill spot (decision 8.42). The correlation itself is made outside CSC in 0.6;
+  `model.reference` names it and the report is an attachment.
+
+### A.2 `core_compression` (EN 12504-1:2019, EN 12390-3:2019)
 
 ```jsonc
 {
   "sampling": {
     "cored_at": "...",                                      // --> envelope sampled_at
+    "paired_rebound_id": "uuid" | null,                    // decision 8.42: the rebound record taken at this drill spot
     "drill_diameter_mm": 100, "drilling_method": "wet" | "dry",
     "orientation_vs_casting": "perpendicular" | "parallel" | "unknown",
     "operator": { /* actor */ } | null,
@@ -2013,10 +2093,14 @@ Validation: `len(readings) >= 9` when standard is EN 12504-2 (`>= 10` for ASTM);
     "length_as_drilled_mm": 215.0, "length_prepared_mm": 199.2,
     "end_preparation": "ground" | "capped" | "sawn" | "none",
     "length_diameter_ratio": 2.0,                         // server-computed
-    "ld_class": "2:1" | "1:1" | "other",                  // server: 2:1 iff 1.95--2.05
+    "ld_class": "2:1" | "1:1" | "other",                  // server: 2:1 iff 1.95--2.05, 1:1 iff 0.90--1.10
     "mass_g": 3712.0, "density_kg_m3": 2382.0,
-    "moisture_condition": "as_received" | "water_saturated" | "air_dried",
-    "reinforcement_present": false, "reinforcement_note": null,
+    "max_aggregate_size_mm": 16,                          // estimated; d / Dmax < 3 biases the result
+    "storage": "sealed" | "water",                        // EN 12504-1: sealed container, or water >= 48 h at 20 +- 2 deg C
+    "reinforcement": [                                    // empty = none seen
+      { "orientation": "transverse" | "longitudinal", "diameter_mm": 10, "position_mm": 45 }
+    ],
+    "valid_for_strength": true,                           // server: false with a longitudinal bar (redrill)
     "defects_note": null
   },
   "test": {
@@ -2024,21 +2108,28 @@ Validation: `len(readings) >= 9` when standard is EN 12504-2 (`>= 10` for ASTM);
     "machine": { "manufacturer": "...", "model": "...", "serial": "...", "class": "EN 12390-4", "last_calibration_at": "..." },
     "loading_rate_mpa_s": 0.6,                            // warn outside 0.4--0.8
     "max_load_kn": 298.4, "cross_section_area_mm2": 7791.0,
-    "failure_type": "satisfactory" | "unsatisfactory", "failure_type_code": null,
+    "failure_type": "satisfactory" | "unsatisfactory",
+    "failure_type_code": null,                            // letter of the closest unsatisfactory pattern, EN 12390-3 Fig 2 / 4
     "age_at_test_days": 7
   },
   "result": {
     "fc_core_mpa": 38.3,                                  // server: F/A within 1 %
     "ld_correction_applied": false,
-    "fc_is_cyl_mpa": 38.3 | null, "fc_is_cube_mpa": null,
-    "conversion_basis": "EN 13791" | null
-  }
+    "fc_is_cyl_mpa": 38.3 | null,                         // server: 2:1 core = f_c,is; 1:1 core x 0.82 (normal concrete)
+    "fc_is_cube_mpa": null,                               // server: German NA.7 --- 1:1 core 50--150 mm = water-stored 150 mm cube
+    "conversion_basis": "EN 13791:2019 + DIN EN 13791/A20:2022-04" | null
+  },
+  "deviations": null                                      // deviations from the standard (mandatory report item)
 }
 ```
 
 `summary` = `{compressive_strength, fc_core_mpa, MPa, measured}`. In-situ conversions go in
-`derived[]`. `reinforcement_present: true` --> UI warning, not rejection. Context resolves at
-`sampled_at`.
+`derived[]`. A longitudinal bar makes the core invalid for strength: the record stays (the
+core was taken), `valid_for_strength: false`, and the fold skips it; a transverse bar is
+recorded and the result kept. `paired_rebound_id`: same identity, method `rebound_hammer`,
+its `observed_at` not after `cored_at`, not `set_discarded`; one core per rebound record.
+Diameter < 75 mm --> warning (EN 13791: only when larger cores are
+impractical, then 1:1 and three cores per location). Context resolves at `sampled_at`.
 
 ### A.3 Non-instrumental kinds
 
@@ -2067,8 +2158,15 @@ Validation: `len(readings) >= 9` when standard is EN 12504-2 (`>= 10` for ASTM);
 {
   "basis": "drawing" | "scan" | "exposed",            // --> source tier: archival | ndt | visual
   "document": { "title": "...", "date": "1974-05", "reference": "..." } | null,   // for basis == drawing; the drawing itself is an attachment (7.3)
+  "instrument": {                                     // basis == scan (prEN 12504-5, 7.2)
+    "kind": "covermeter" | "radar" | "other", "manufacturer": "...", "model": "...",
+    "last_calibration_at": "...", "site_calibration": "..." | null
+  } | null,
+  "accuracy_note": null,                               // e.g. "size and cover +-20 %, neither known"
   "bars": [
     { "spec": "BSt III", "diameter_mm": 8,
+      "diameter_known": true,                          // scan: known from a drawing / exposure, or assumed
+      "cover_mm": null,                                // scan: measured cover
       "points": [[x,y,z], ...] }                        // open centreline polyline, in the stored coordinates of position.snapshot_id
   ]
 }
