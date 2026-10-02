@@ -150,8 +150,15 @@ async def get_vocabularies():
         'status': _labelled(vocab.STATUSES, {}),
         'precision': _labelled(vocab.PRECISIONS, {}),
         'dgnb_class': _labelled(vocab.DGNB_CLASSES, vocab.DGNB_CLASS_LABELS),
-        'connection_type': _labelled(vocab.CONNECTION_TYPES, {}),
-        'construction_method': _labelled(vocab.CONSTRUCTION_METHODS, {}),
+        'connection_type': _labelled(vocab.CONNECTION_TYPES,
+                                     vocab.CONNECTION_TYPE_LABELS),
+        'construction_method': _labelled(vocab.CONSTRUCTION_METHODS,
+                                         vocab.CONSTRUCTION_METHOD_LABELS),
+        'material_group': _labelled(vocab.MATERIAL_GROUPS, {}),
+        'inherit_unit': _labelled(vocab.INHERITABLE_FIELDS,
+                                  vocab.INHERIT_UNIT_LABELS),
+        'change_cause': _labelled(vocab.CHANGE_CAUSES,
+                                  vocab.CHANGE_CAUSE_LABELS),
     })
 
 

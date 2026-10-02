@@ -275,6 +275,8 @@ def test_change_log_and_as_of(world):
     assert latest['cause'] == 'patch'
     assert latest['changes'] == [{'path': 'manufacturer', 'old': None,
                                   'new': 'Acme'}]
+    moderator = db['users'].find_one({'_id': world['moderator_id']})
+    assert latest['by_username'] == moderator['username']
     assert api.get(f'/identities/{BEAM}/changes',
                    headers=world['outsider']).status_code in (401, 403)
     then = api.get(f'/identities/{BEAM}',

@@ -144,6 +144,17 @@ ChangeCause = Literal[
     'withdraw', 'reinstate', 'migration', 'derived_exit',
 ]
 CHANGE_CAUSES: Tuple[str, ...] = get_args(ChangeCause)
+CHANGE_CAUSE_LABELS: Dict[str, str] = {
+    'patch': 'Edited',
+    'inherited_from_parent': 'Taken over from a parent',
+    'material_merge': 'Material merged',
+    'exit': 'Circulation changed',
+    'reenter': 'Re-entered circulation',
+    'withdraw': 'Withdrawn',
+    'reinstate': 'Reinstated',
+    'migration': 'Migration',
+    'derived_exit': 'Cut into pieces',
+}
 
 # MODERATION AND VERIFICATION (section 3.3.3) ---------------------------------
 Status = Literal['draft', 'pending', 'published', 'rejected', 'withdrawn']
@@ -412,10 +423,24 @@ ConnectionType = Literal[
     'grouted', 'other', 'unknown',
 ]
 CONNECTION_TYPES: Tuple[str, ...] = get_args(ConnectionType)
+CONNECTION_TYPE_LABELS: Dict[str, str] = {
+    'loose': 'Loose', 'click': 'Click', 'inserted': 'Inserted',
+    'plugged': 'Plugged', 'screwed': 'Screwed', 'nailed': 'Nailed',
+    'bolted': 'Bolted', 'soldered': 'Soldered', 'foamed': 'Foamed',
+    'sealed': 'Sealed', 'adhesive': 'Adhesive', 'welded': 'Welded',
+    'cast_in': 'Cast in', 'grouted': 'Grouted', 'other': 'Other',
+    'unknown': 'Unknown',
+}
 # DIN SPEC 91484 Table 1
 ConstructionMethod = Literal['monolithic', 'prefabricated', 'mixed',
                              'unknown']
 CONSTRUCTION_METHODS: Tuple[str, ...] = get_args(ConstructionMethod)
+CONSTRUCTION_METHOD_LABELS: Dict[str, str] = {
+    'monolithic': 'Monolithic (cast in place)',
+    'prefabricated': 'Prefabricated',
+    'mixed': 'Mixed',
+    'unknown': 'Unknown',
+}
 
 
 # INHERITANCE (section 3.1.2) -------------------------------------------------
@@ -432,6 +457,15 @@ INHERIT_UNITS: Dict[str, Tuple[str, ...]] = {
     'original_function': ('original_function',),
 }
 INHERITABLE_FIELDS: Tuple[str, ...] = tuple(INHERIT_UNITS)
+INHERIT_UNIT_LABELS: Dict[str, str] = {
+    'origin': 'Origin',
+    'manufactured_at': 'Manufactured',
+    'material': 'Material and waste class',
+    'trade_name': 'Trade name',
+    'manufacturer': 'Manufacturer',
+    'material_separability': 'Material separability',
+    'original_function': 'Original function',
+}
 # what a merge compares to decide whether the parents agree on `origin`
 # (8.33); actors are united and notes joined
 ORIGIN_IDENTIFYING_KEYS: Tuple[str, ...] = (

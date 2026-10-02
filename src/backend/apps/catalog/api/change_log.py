@@ -8,6 +8,7 @@ The change log at the API (data model spec section 3.8, I30; decision
 * ``GET /identities/{id}/changes`` --- members of D and admin: the entries
   of the identity, its snapshots and its evidence, newest first
 * ``as_of_body(...)`` --- the record as it was at a date (``?as_of=``)
+* ``GET /schema/lineage`` --- codegen: change-log entries and materials
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
@@ -18,8 +19,10 @@ from typing import Annotated, Any, Dict, List, Optional
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 # LOCAL IMPORTS ---------------------------------------------------------------
+from apps.catalog.documents import ChangeLogEntry, Material
 from apps.catalog.history import as_of, diff
 from apps.catalog.models import User
 from apps.catalog.permissions import dataset_roles
@@ -99,4 +102,29 @@ async def list_changes(
     entries = await request.app.mongodb_change_log.find(
         {'identity_id': identity_id}).sort('at', -1).limit(limit).to_list(
         length=None)
+    user_ids = {e['by_user_id'] for e in entries if e.get('by_user_id')}
+    names = {u['_id']: u.get('username') for u in
+             await request.app.mongodb_users.find(
+                 {'_id': {'$in': list(user_ids)}},
+                 {'username': 1}).to_list(length=None)}
+    for entry in entries:
+        entry['by_username'] = names.get(entry.get('by_user_id'))
     return JSONResponse(status_code=200, content=entries)
+
+
+# CODEGEN ---------------------------------------------------------------------
+class ChangeLogEntryView(ChangeLogEntry):
+    """An entry as ``GET /identities/{id}/changes`` lists it."""
+    by_username: Optional[str] = None
+
+
+class LineageTypesEnvelope(BaseModel):
+    """Codegen only: change-log entries and materials (``/schema/lineage``
+    --> frontend ``LineageModels.ts``)."""
+    change: ChangeLogEntryView
+    material: Material
+
+
+@router.get('/schema/lineage', include_in_schema=False)
+async def get_lineage_json_schema():
+    return LineageTypesEnvelope.model_json_schema(by_alias=True)
