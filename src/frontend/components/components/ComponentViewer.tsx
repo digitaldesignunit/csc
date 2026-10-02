@@ -225,12 +225,27 @@ function snapshotMeshesFromGeometry(geometry: Geometry): Mesh[] {
 /** A prism proxy's shape: profile in xy, extruded along z, centred on z = 0. */
 type PrismShape = { profile: number[][]; height: number }
 
-/** Prism proxies of a snapshot (an authored L x W x H box or a GH extrusion). */
+/** A box proxy as the prism of its xy rectangle (App. B: centred, z up). */
+function boxAsPrism(params: { size?: number[] }): PrismShape | null {
+  const [sx, sy, sz] = params?.size ?? []
+  if (![sx, sy, sz].every((v) => typeof v === 'number' && v > 0)) return null
+  const hx = sx / 2
+  const hy = sy / 2
+  return { profile: [[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]], height: sz }
+}
+
+/** Prism and box proxies of a snapshot (an authored L x W x H box or a GH extrusion). */
 function snapshotPrismsFromGeometry(geometry: Geometry): PrismShape[] {
   return (geometry.proxies ?? [])
-    .filter((proxy) => proxy.primitive === 'prism')
-    .map((proxy) => proxy.params as PrismShape)
-    .filter((prism) => Array.isArray(prism?.profile) && typeof prism.height === 'number')
+    .map((proxy) =>
+      proxy.primitive === 'box'
+        ? boxAsPrism(proxy.params as { size?: number[] })
+        : proxy.primitive === 'prism'
+          ? (proxy.params as PrismShape)
+          : null,
+    )
+    .filter((prism): prism is PrismShape =>
+      !!prism && Array.isArray(prism.profile) && typeof prism.height === 'number')
 }
 
 function vertexColorsFromSnapshot(

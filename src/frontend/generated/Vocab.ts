@@ -1,5 +1,5 @@
 // Auto-generated from backend GET /vocab
-// Generated on: 2026-10-02T06:59:34.886Z
+// Generated on: 2026-10-02T13:41:52.772Z
 // Source: http://127.0.0.1:8000/vocab
 
 export type OriginalFunction = 'IfcBeam' | 'IfcColumn' | 'IfcSlab' | 'IfcPlate' | 'IfcWall' | 'IfcMember' | 'IfcPipeSegment' | 'IfcFooting' | 'IfcDiscreteAccessory' | 'IfcBuildingElementPart' | 'IfcBuildingElementProxy' | 'CscDebris'
@@ -63,6 +63,79 @@ export const PRECISION_LABELS: Record<Precision, string> = {
   "month": "month",
   "year": "year",
   "unknown": "unknown",
+}
+
+export type DgnbClass = 'optimised' | 'improved' | 'standard' | 'limited' | 'problematic' | 'not_assessable'
+export const DGNB_CLASS_LABELS: Record<DgnbClass, string> = {
+  "optimised": "Optimised",
+  "improved": "Improved",
+  "standard": "Standard",
+  "limited": "Limited",
+  "problematic": "Problematic",
+  "not_assessable": "Assessment not possible",
+}
+
+export type ConnectionType = 'loose' | 'click' | 'inserted' | 'plugged' | 'screwed' | 'nailed' | 'bolted' | 'soldered' | 'foamed' | 'sealed' | 'adhesive' | 'welded' | 'cast_in' | 'grouted' | 'other' | 'unknown'
+export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
+  "loose": "Loose",
+  "click": "Click",
+  "inserted": "Inserted",
+  "plugged": "Plugged",
+  "screwed": "Screwed",
+  "nailed": "Nailed",
+  "bolted": "Bolted",
+  "soldered": "Soldered",
+  "foamed": "Foamed",
+  "sealed": "Sealed",
+  "adhesive": "Adhesive",
+  "welded": "Welded",
+  "cast_in": "Cast in",
+  "grouted": "Grouted",
+  "other": "Other",
+  "unknown": "Unknown",
+}
+
+export type ConstructionMethod = 'monolithic' | 'prefabricated' | 'mixed' | 'unknown'
+export const CONSTRUCTION_METHOD_LABELS: Record<ConstructionMethod, string> = {
+  "monolithic": "Monolithic (cast in place)",
+  "prefabricated": "Prefabricated",
+  "mixed": "Mixed",
+  "unknown": "Unknown",
+}
+
+export type MaterialGroup = 'mineral' | 'metal' | 'bio-based' | 'polymer' | 'bituminous' | 'insulation' | 'other'
+export const MATERIAL_GROUP_LABELS: Record<MaterialGroup, string> = {
+  "mineral": "mineral",
+  "metal": "metal",
+  "bio-based": "bio-based",
+  "polymer": "polymer",
+  "bituminous": "bituminous",
+  "insulation": "insulation",
+  "other": "other",
+}
+
+export type InheritUnit = 'origin' | 'manufactured_at' | 'material' | 'trade_name' | 'manufacturer' | 'material_separability' | 'original_function'
+export const INHERIT_UNIT_LABELS: Record<InheritUnit, string> = {
+  "origin": "Origin",
+  "manufactured_at": "Manufactured",
+  "material": "Material and waste class",
+  "trade_name": "Trade name",
+  "manufacturer": "Manufacturer",
+  "material_separability": "Material separability",
+  "original_function": "Original function",
+}
+
+export type ChangeCause = 'patch' | 'inherited_from_parent' | 'material_merge' | 'exit' | 'reenter' | 'withdraw' | 'reinstate' | 'migration' | 'derived_exit'
+export const CHANGE_CAUSE_LABELS: Record<ChangeCause, string> = {
+  "patch": "Edited",
+  "inherited_from_parent": "Taken over from a parent",
+  "material_merge": "Material merged",
+  "exit": "Circulation changed",
+  "reenter": "Re-entered circulation",
+  "withdraw": "Withdrawn",
+  "reinstate": "Reinstated",
+  "migration": "Migration",
+  "derived_exit": "Cut into pieces",
 }
 
 /** Display label of a vocabulary value; unknown values pass through. */

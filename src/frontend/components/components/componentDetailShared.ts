@@ -45,11 +45,21 @@ export function isOutOfCirculation(row: { exit?: Exit | null }): boolean {
   return row.exit !== undefined && row.exit !== null
 }
 
-/** "Split on 29.04.2026" --- the exit kind and date, for badges and banners. */
+/** A date as precisely as it is known: "2019", "05.2019", "12.05.2019". */
+export function formatDateAtPrecision(value: string, precision?: string | null): string {
+  const [y, m, d] = value.slice(0, 10).split('-')
+  if (precision === 'year') return y
+  if (precision === 'month') return `${m}.${y}`
+  if (precision === 'unknown') return `${d}.${m}.${y} (uncertain)`
+  if (precision === 'day' || /T00:00:00/.test(value)) return `${d}.${m}.${y}`
+  return formatTimestamp(value)
+}
+
+/** "Split (29.04.2026)" --- the exit kind and date, for badges and banners. */
 export function exitSummary(exit: Exit | null | undefined): string {
   if (!exit) return ''
   const kind = vocabLabel(EXIT_KIND_LABELS, exit.kind)
-  const at = exit.at ? formatTimestamp(String(exit.at)) : ''
+  const at = exit.at ? formatDateAtPrecision(String(exit.at), exit.at_precision) : ''
   return at ? `${kind} (${at})` : kind
 }
 

@@ -8,6 +8,7 @@ import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import ComponentChangeHistory from '@/components/lineage/ComponentChangeHistory'
 import ComponentDetailActions from './ComponentDetailActions'
 import ComponentDetailLocationPanel from './ComponentDetailLocationPanel'
 import ComponentDetailMetadataTabs from './ComponentDetailMetadataTabs'
@@ -98,6 +99,11 @@ export default function ComponentDetailPageLayout({
             dataset={catalog.identity.dataset}
           />
           <ComponentDetailMetadataTabs catalog={catalog} mode="all" />
+          <ComponentChangeHistory
+            identityId={identityId}
+            dataset={identity.dataset}
+            versions={Object.fromEntries(snapshots.map((s) => [String(s._id), s.version]))}
+          />
         </CardContent>
       </Card>
     </div>

@@ -1,7 +1,7 @@
 /**
  * The navigation shell's entries (decision 8.29): one list with the rules
  * for who sees what, so later phases only add entries (P3: moderators,
- * users and invitations, datasets; P7: add component, drafts).
+ * users and invitations, datasets; P4: materials; P7: add component, drafts).
  */
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -12,6 +12,7 @@ import {
   Database,
   Inbox,
   LayoutDashboard,
+  Layers,
   LayoutGrid,
   ScanQrCode,
   ScrollText,
@@ -91,6 +92,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     visible: (v) => v.isAdmin || v.isModerator,
   },
   { id: 'users', label: 'Users and invitations', href: '/admin/users', icon: Users, group: 'admin', visible: (v) => v.isAdmin },
+  { id: 'materials', label: 'Materials', href: '/admin/materials', icon: Layers, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'logs', label: 'Backend logs', href: '/admin/logs', icon: ScrollText, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'gh', label: 'GH Interface', href: '/gh-interface', icon: Workflow, group: 'tools', visible: signedIn },
   {

@@ -23,6 +23,7 @@ import {
   SHAPE_CLASS_LABELS,
   vocabLabel,
 } from '@/generated/Vocab'
+import InheritedMark from '@/components/lineage/InheritedMark'
 import {
   exitSummary,
   isNonEmptyString,
@@ -98,15 +99,20 @@ function CatalogMetadataPanel({ catalog }: { catalog: CatalogComponent }) {
         <ValueChip tone="primary">
           {vocabLabel(ORIGINAL_FUNCTION_LABELS, identity.original_function)}
         </ValueChip>
+        <InheritedMark identity={identity} unit="original_function" />
       </MetadataRow>
       <MetadataRow label="Material">
         <ValueChip tone="secondary">
           {identity.material}
           {identity.trade_name ? ` (${identity.trade_name})` : ''}
         </ValueChip>
+        <InheritedMark identity={identity} unit="material" />
       </MetadataRow>
       <MetadataRow label="Waste class (LoW)">
-        <ValueChip tone="muted">{identity.material_class}</ValueChip>
+        <ValueChip tone="muted">
+          {identity.material_class}
+          {identity.material_class_source === 'assigned' ? ' (set by hand)' : ''}
+        </ValueChip>
       </MetadataRow>
       {snapshot.shape_class && (
         <MetadataRow label="Shape class">

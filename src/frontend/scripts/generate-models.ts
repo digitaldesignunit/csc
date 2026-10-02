@@ -12,6 +12,7 @@
  * - `/schema/snapshot-summary` --> `SnapshotSummaryItem` in `SnapshotModels.ts`
  * - `/schema/pending-snapshot` --> `PendingSnapshotItem` in `SnapshotModels.ts`
  * - `/schema/access` --> `AccessModels.ts` (me, datasets, invitations, users, tombstones)
+ * - `/schema/lineage` --> `LineageModels.ts` (change-log entries, materials)
  */
 
 import fs from 'fs'
@@ -131,6 +132,9 @@ async function run() {
     // access, datasets, invitations, users, tombstones (plan P3)
     await generateModel('/schema/access', 'AccessTypesEnvelope', 'AccessModels.ts')
 
+    // change log and materials (plan P4)
+    await generateModel('/schema/lineage', 'LineageTypesEnvelope', 'LineageModels.ts')
+
     await generateVocab()
 
     const indexFile = path.join(OUTPUT_DIR, 'index.ts')
@@ -139,6 +143,7 @@ export * from './CatalogSharedTypes';
 export * from './CatalogModels';
 export * from './SnapshotModels';
 export * from './AccessModels';
+export * from './LineageModels';
 export * from './Vocab';
 export * from './catalogExtras';
 `

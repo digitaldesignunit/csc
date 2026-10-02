@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-02T06:59:34.811Z
+// Generated on: 2026-10-02T13:41:52.716Z
 // Source: http://127.0.0.1:8000/schema/catalog-compose
 
 import type {
@@ -40,6 +40,12 @@ export interface Capture {
   fixtures?: Fixture[];
 }
 
+export interface CircularityClass {
+  class: 'optimised' | 'improved' | 'standard' | 'limited' | 'problematic' | 'not_assessable';
+  assessed_by?: Actor[];
+  note?: string | null;
+}
+
 export interface ComponentIdentity {
   _id: string;
   catalog_number: number;
@@ -48,6 +54,9 @@ export interface ComponentIdentity {
   material_class: string;
   material_class_source?: 'derived' | 'assigned';
   trade_name?: string | null;
+  manufacturer?: string | null;
+  connection_features?: string | null;
+  material_separability?: CircularityClass | null;
   dataset: string; // FK -> datasets._id (I20)
   manufactured_at?: string | null;
   manufactured_precision?: 'exact' | 'day' | 'month' | 'year' | 'unknown';
@@ -112,6 +121,7 @@ export interface ConstructionWork {
   identifier?: string | null;
   year_built?: number | null;
   use?: string | null;
+  construction_method?: 'monolithic' | 'prefabricated' | 'mixed' | 'unknown' | null;
 }
 
 export interface CoordinateSystem {
@@ -126,6 +136,8 @@ export interface Exit {
   construction_work?: ConstructionWork | null;
   notes?: string | null;
   recorded_by_user_id?: string | null;
+  manual_at?: string | null;
+  manual_by_user_id?: string | null;
 }
 
 export interface Fixture {
@@ -145,6 +157,9 @@ export interface Origin {
   at_precision?: 'exact' | 'day' | 'month' | 'year' | 'unknown';
   place?: Place | null;
   construction_work?: ConstructionWork | null;
+  position_in_work?: string | null;
+  connection_types?: ('loose' | 'click' | 'inserted' | 'plugged' | 'screwed' | 'nailed' | 'bolted' | 'soldered' | 'foamed' | 'sealed' | 'adhesive' | 'welded' | 'cast_in' | 'grouted' | 'other' | 'unknown')[];
+  detachability?: CircularityClass | null;
   method?: string | null;
   performed_by?: Actor[];
   notes?: string | null;
