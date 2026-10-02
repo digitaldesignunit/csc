@@ -27,6 +27,11 @@ def get_db_connectionstring() -> str:
     return os.environ['MONGODB_URI']
 
 
+def get_database_name() -> str:
+    """The MongoDB database (MONGODB_DB, default ``csc``)."""
+    return os.environ.get('MONGODB_DB') or 'csc'
+
+
 def get_cors_origins() -> list:
     """
     Read CORS origins from environment variable FASTAPI_CORS_ORIGINS
@@ -57,6 +62,16 @@ def get_snapshot_meshes_directory() -> str:
 def get_snapshot_point_clouds_directory() -> str:
     """PLY point clouds: point_clouds/<snapshot_id>/<index>.ply."""
     return sanitize_path(os.environ['SNAPSHOT_POINT_CLOUDS_DIR'])
+
+
+def get_snapshot_proxies_directory() -> str:
+    """Deviation maps: proxies/<snapshot_id>/<proxy_index>/<face_id>.png."""
+    return sanitize_path(os.environ['SNAPSHOT_PROXIES_DIR'])
+
+
+def get_snapshot_capture_directory() -> str:
+    """Capture fixtures: capture/<snapshot_id>/fixtures/<i>.ply."""
+    return sanitize_path(os.environ['SNAPSHOT_CAPTURE_DIR'])
 
 
 def get_snapshot_photo_upload_limit_bytes() -> int:

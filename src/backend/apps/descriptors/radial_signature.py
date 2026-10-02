@@ -77,6 +77,12 @@ def get_profile_from_component(
     extrusion = geometry.get("extrusion") or {}
     if extrusions:
         extrusion = extrusions[0]
+    elif not extrusion:
+        for proxy in geometry.get("proxies") or []:
+            if proxy.get("primitive") == "prism" and (
+                    proxy.get("fit") or {}).get("method") == "authored":
+                extrusion = proxy.get("params") or {}
+                break
     profile = extrusion.get("profile")
     if not profile:
         return None, "no extrusion profile"
@@ -88,7 +94,14 @@ def get_profile_from_component(
 
 
 def is_rest_aligned(component: Dict) -> bool:
-    """Return True if `component`'s outline should be rest-position aligned."""
+    """Return True if `component`'s outline should be rest-position aligned.
+
+    0.6 documents carry a ``shape_class``; planar pieces are the ones whose
+    silhouette is rotated to a canonical rest position. 0.5 documents (and
+    the tests that still build them) select by component ``type``.
+    """
+    if component.get("shape_class") is not None:
+        return component["shape_class"] == "planar"
     ctype = component.get("type") or component.get("componenttype")
     return ctype in REST_ALIGNED_COMPONENT_TYPES
 

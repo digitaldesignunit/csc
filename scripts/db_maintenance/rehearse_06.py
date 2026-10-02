@@ -42,6 +42,8 @@ from apps.catalog.migration06.steps import (  # noqa: E402
     Context,
     run,
 )
+from apps.catalog.geometry_runner import derive_and_store_sync  # noqa: E402
+from apps.catalog.geometry_stages import Env, stale_stages  # noqa: E402
 
 _COLLECTIONS = {
     'identities': 'component_identities',
@@ -72,6 +74,118 @@ def _copy_fixture_sources(db, assets: Path, meshes: Path) -> int:
             shutil.copytree(source, meshes / snap['_id'] / '1')
             copied += 1
     return copied
+
+
+def _axis_order(old: dict, new: dict) -> tuple:
+    """For each new frame axis x / y / z: which old axis it follows."""
+    import numpy as np
+    old_axes = np.array([old['x'], old['y'], old['z']], dtype=float)
+    new_axes = np.array([new['x'], new['y'], new['z']], dtype=float)
+    return tuple(int(np.abs(old_axes @ axis).argmax()) for axis in new_axes)
+
+
+def _run_runner_steps(db, assets, workdir, stages_filter, tuning_path,
+                      frame_report_path):
+    """Steps 5, 7 and 8 of the spec (section 8.1): the geometry runner on
+    the migrated database, in a throwaway storage folder."""
+    import time
+    from collections import Counter, defaultdict
+    identities = {i['_id']: i for i in db['component_identities'].find({})}
+    snapshots = db['component_snapshots']
+    old_frames = {s['_id']: s.get('pca_frame')
+                  for s in snapshots.find({}, {'pca_frame': 1})}
+    env = Env(meshes_dir=str(assets / 'meshes') if assets else None,
+              point_clouds_dir=str(assets / 'pointclouds') if assets else None,
+              preview_dir=str(workdir / 'previews'),
+              log=lambda m: None)
+    proxies_root = str(workdir / 'proxies')
+
+    def sweep(title, stages, force):
+        began, ran, errors = time.time(), 0, Counter()
+        for snap in snapshots.find({}).sort('_id', 1):
+            identity = identities[snap['identity_id']]
+            if not force and not stale_stages(snap, identity, env, stages):
+                continue
+            outcome = derive_and_store_sync(
+                snapshots, snap, identity, env, proxies_root, stages,
+                force=force)
+            ran += 1
+            for stage, message in outcome.errors.items():
+                errors[(stage, message[:90])] += 1
+        print(f'{title}: {ran} snapshots, {time.time() - began:.0f} s, '
+              f'{sum(errors.values())} stage errors')
+        for (stage, message), n in errors.most_common(8):
+            print(f'    {n:4d} x {stage}: {message}')
+        return errors
+
+    print('\nstep 5  main_geometry.py --stages frame,shape_class --recompute')
+    errors = sweep('frame + shape class', ['frame', 'shape_class'], True)
+    changed = defaultdict(Counter)
+    order_changes, upside_down = [], []
+    for snap in snapshots.find({}, {'frame': 1, 'identity_id': 1}):
+        old, new = old_frames.get(snap['_id']), snap.get('frame')
+        dataset = identities[snap['identity_id']]['dataset']
+        if new and new['z'][2] < 0:
+            upside_down.append((dataset, snap['_id'], new['z'][2]))
+        if not old or not new:
+            continue
+        order = _axis_order(old, new)
+        changed[dataset]['same' if order == (0, 1, 2) else 'changed'] += 1
+        if order != (0, 1, 2):
+            order_changes.append((dataset, snap['_id'], order))
+    print('frame report (axis order against the 0.5 pca_frame):')
+    for dataset in sorted(changed):
+        print(f'  {dataset:28s} {dict(changed[dataset])}')
+    print(f'canonical z against the stored z (z . Z < 0): '
+          f'{len(upside_down)} snapshots')
+    lines = ['FRAME REPORT', '',
+             f'axis order changed against the 0.5 pca_frame: '
+             f'{len(order_changes)}']
+    lines += [f'  {d:28s} {i}  new x/y/z follow old axes {o}'
+              for d, i, o in sorted(order_changes)]
+    lines += ['', f'canonical z against the stored z (z . Z < 0): '
+                  f'{len(upside_down)}']
+    lines += [f'  {d:28s} {i}  z . Z = {z:.3f}'
+              for d, i, z in sorted(upside_down)]
+    frame_report_path.parent.mkdir(parents=True, exist_ok=True)
+    frame_report_path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    print(f'frame report: {frame_report_path}')
+    print('\nstep 7  main_geometry.py --stages proxies,descriptors,'
+          'complexity,previews --recompute')
+    errors += sweep('proxies, descriptors, complexity, previews',
+                    ['proxies', 'descriptors', 'complexity', 'previews'],
+                    True)
+    print('\nstep 8  after tuning: an ordinary sweep (nothing may be stale)')
+    sweep('sweep', list(stages_filter), False)
+    left = [s['_id'] for s in snapshots.find({})
+            if stale_stages(s, identities[s['identity_id']], env,
+                            list(stages_filter))]
+    print(f'stale snapshots after step 8: {len(left)}')
+    if left:
+        errors[('stale after step 8', 'sweep did not converge')] += len(left)
+    summary = defaultdict(lambda: defaultdict(Counter))
+    for snap in snapshots.find({}):
+        dataset = identities[snap['identity_id']]['dataset']
+        row = summary[dataset]
+        row['shape_class'][snap.get('shape_class')] += 1
+        primary = [p for p in snap['geometry'].get('proxies') or []
+                   if p.get('role') == 'primary']
+        row['primary'][(primary[0]['primitive'] + '/'
+                        + primary[0]['fit']['method']) if primary
+                       else None] += 1
+        row['complexity'][snap.get('complexity')] += 1
+    print('\nderived, per dataset')
+    for dataset in sorted(summary):
+        print(f'  {dataset}')
+        for key, counter in summary[dataset].items():
+            print(f'    {key:12s} {dict(sorted(counter.items(), key=str))}')
+    sys.path.insert(0, str(_REPO / 'scripts' / 'dev'))
+    from tune_geometry import collect, report
+    text = report(collect(snapshots.find({}), identities))
+    tuning_path.parent.mkdir(parents=True, exist_ok=True)
+    tuning_path.write_text(text + '\n', encoding='utf-8')
+    print(f'\ntuning tables (shape class, complexity): {tuning_path}')
+    return errors
 
 
 def _report(db) -> None:
@@ -115,6 +229,8 @@ def main() -> int:
                         help='asset folder of the dump (meshes/...)')
     parser.add_argument('--limit', type=int, default=5,
                         help='violations printed per invariant')
+    parser.add_argument('--no-runner', action='store_true',
+                        help='skip steps 5, 7, 8 (the geometry runner)')
     parser.add_argument('--mapping', type=Path,
                         help='also run step 11b with this (untracked) '
                              'mapping file after the cutover steps')
@@ -171,6 +287,14 @@ def main() -> int:
         if files:
             fixtures = sorted(capture.glob('*/fixtures/0.ply'))
             print(f'fixture files: {len(fixtures)}')
+        runner_errors = None
+        if not args.no_runner:
+            runner_errors = _run_runner_steps(
+                db, args.assets, workdir, ['frame', 'shape_class', 'proxies',
+                                           'descriptors', 'complexity',
+                                           'previews'],
+                _REPO / '.dev' / f'tuning_{dump.name}.txt',
+                _REPO / '.dev' / f'frame_report_{dump.name}.txt')
 
         corpus = Corpus(**{attr: list(db[name].find({}))
                            for attr, name in _COLLECTIONS.items()})
@@ -190,7 +314,8 @@ def main() -> int:
               f'{len(violations) - errors} warnings')
         _report(db)
         client.close()
-        return 0 if idempotent and not errors else 1
+        bad = bool(runner_errors)
+        return 0 if idempotent and not errors and not bad else 1
     finally:
         server.stop()
         shutil.rmtree(workdir, ignore_errors=True)

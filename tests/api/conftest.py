@@ -63,6 +63,8 @@ def backend_env(mongod, tmp_path_factory):
         'SNAPSHOT_PHOTOS_DIR': str(root / 'photos'),
         'SNAPSHOT_MESHES_DIR': str(root / 'meshes'),
         'SNAPSHOT_POINT_CLOUDS_DIR': str(root / 'point_clouds'),
+        'SNAPSHOT_PROXIES_DIR': str(root / 'proxies'),
+        'SNAPSHOT_CAPTURE_DIR': str(root / 'capture'),
         'GH_XML_CACHE_DIR': str(root / 'ghxml'),
         'FASTAPI_CORS_ORIGINS': 'http://localhost:3000',
         'CLIENT_LOG_PATH': str(root / 'logs' / 'client_versions.log'),

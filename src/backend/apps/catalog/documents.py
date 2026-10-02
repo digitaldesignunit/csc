@@ -439,11 +439,25 @@ class MapScale(_Block):
     offset_mm: float
 
 
+_MAP_FILE = re.compile(
+    r'^proxies/[A-Za-z0-9-]{1,64}/\d{1,3}/[A-Za-z0-9_+-]{1,32}\.png$')
+
+
 class DeviationMapFace(_Block):
     file: str
     width: int = Field(gt=0)
     height: int = Field(gt=0)
     distance: MapScale
+
+    @field_validator('file')
+    @classmethod
+    def _named_by_the_server(cls, value: str) -> str:
+        """``proxies/<snapshot_id>/<proxy index>/<face_id>.png``, nothing
+        else: the file is joined below the storage root when it is served."""
+        if not _MAP_FILE.match(value):
+            raise ValueError('a deviation map file is named '
+                             'proxies/<snapshot id>/<index>/<face>.png')
+        return value
 
 
 class DeviationMaps(_Block):
@@ -529,6 +543,26 @@ class Capture(_Block):
     fixtures: List[Fixture] = Field(default_factory=list)
 
 
+class StageStamp(_Block):
+    """What a geometry-runner stage last did (spec section 4.3): its
+    version, a fingerprint of its inputs and the error it ended with."""
+    version: int
+    input: str
+    at: Timestamp
+    error: Optional[str] = None
+
+
+class Derivation(_Block):
+    """The stamp of each geometry-runner stage (a named block, not a free
+    dict, so that the generated frontend types keep ``StageStamp``)."""
+    frame: Optional[StageStamp] = None
+    shape_class: Optional[StageStamp] = None
+    proxies: Optional[StageStamp] = None
+    descriptors: Optional[StageStamp] = None
+    complexity: Optional[StageStamp] = None
+    previews: Optional[StageStamp] = None
+
+
 class ComponentSnapshot(_Document):
     """``component_snapshots``: one recorded state of a component."""
     id: str = Field(alias='_id')
@@ -554,6 +588,7 @@ class ComponentSnapshot(_Document):
     bbx: Optional[Vec3] = None
     complexity: Optional[Grade] = None
     complexity_source: Optional[ValueSource] = None
+    derivation: Derivation = Field(default_factory=Derivation)
     fragment: bool = False
     color: Optional[Rgb] = None
     location: Optional[GeoLocation] = None

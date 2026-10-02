@@ -206,14 +206,18 @@ def rehearse(c, dump='261001', assets='', mapping=''):
     'dump': 'dump folder name in mongodb_collections_local (default 261001)',
     'port': 'backend port (default 8000)',
     'mongo_port': 'throwaway mongod port (default 27018)',
+    'derive': 'geometry-runner stages to run (default '
+              'frame,shape_class,proxies,complexity); "none" skips them',
 })
-def dev_migrated(c, dump='261001', port=8000, mongo_port=27018):
+def dev_migrated(c, dump='261001', port=8000, mongo_port=27018,
+                 derive='frame,shape_class,proxies,complexity'):
     """
     Serve a migrated copy of a dump (throwaway mongod) for frontend work.
     """
+    flags = ' --no-derive' if derive == 'none' else f' --derive-stages {derive}'
     with chdir(REPO_DIR):
         c.run(f'{sys.executable} scripts/dev/serve_migrated.py --dump {dump} '
-              f'--port {port} --mongo-port {mongo_port}', pty=False)
+              f'--port {port} --mongo-port {mongo_port}{flags}', pty=False)
 
 
 @task(help={

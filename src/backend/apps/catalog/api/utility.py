@@ -57,28 +57,16 @@ async def get_fastapi_log(
     return _read_last_log_lines('fastapi.log', lines)
 
 
-@router.get('/previewgen_log',
-            response_description='Get PreviewGen Cronjob log',
+@router.get('/geometry_log',
+            response_description='Get Geometry Runner Cronjob log',
             response_class=PlainTextResponse)
-async def get_previewgen_log(
+async def get_geometry_cronjob_log(
     request: Request,
     _admin_user: Annotated[User, Depends(require_admin)],
     lines: Annotated[int, Query(ge=1, le=5000)] = 200,
 ):
     del request, _admin_user
-    return _read_last_log_lines('previewgen_cronjob.log', lines)
-
-
-@router.get('/descriptors_simple_log',
-            response_description='Get Descriptors Simple Cronjob log',
-            response_class=PlainTextResponse)
-async def get_descriptors_simple_cronjob_log(
-    request: Request,
-    _admin_user: Annotated[User, Depends(require_admin)],
-    lines: Annotated[int, Query(ge=1, le=5000)] = 200,
-):
-    del request, _admin_user
-    return _read_last_log_lines('descriptors_simple_cronjob.log', lines)
+    return _read_last_log_lines('geometry_cronjob.log', lines)
 
 
 @router.get('/component_map_log',

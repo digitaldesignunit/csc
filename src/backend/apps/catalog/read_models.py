@@ -27,19 +27,6 @@ from apps.catalog.documents import (
 from apps.catalog.vocab import Precision, ShapeClass, Status
 
 
-# P2 SHIM (removed with migration step 5, plan P5) ----------------------------
-def snapshot_for_read(doc: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Until the geometry runner writes ``frame`` (step 5), a migrated snapshot
-    still carries the 0.5 ``pca_frame``: serve that as ``frame`` so viewers
-    and GH keep their canonical orientation.
-    """
-    pca = doc.get('pca_frame')
-    if not doc.get('frame') and isinstance(pca, dict):
-        doc = {**doc, 'frame': {k: pca[k] for k in ('o', 'x', 'y', 'z')}}
-    return doc
-
-
 # PASSPORT --------------------------------------------------------------------
 class ComponentPassport(BaseModel):
     """``GET /identities/{id}/compose``: one identity and its snapshots."""
@@ -53,8 +40,18 @@ def identity_body(doc: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def snapshot_body(doc: Dict[str, Any]) -> Dict[str, Any]:
-    return ComponentSnapshot.model_validate(snapshot_for_read(doc)) \
+    body = ComponentSnapshot.model_validate(doc) \
         .model_dump(by_alias=True, mode='json')
+    # a stage error is operational: the stored text stays on the document
+    # (and in the runner's log); readers only see that a stage failed
+    stamps = {stage: stamp
+              for stage, stamp in (body.get('derivation') or {}).items()
+              if stamp}
+    for stamp in stamps.values():
+        if stamp.get('error'):
+            stamp['error'] = 'failed'
+    body['derivation'] = stamps
+    return body
 
 
 def passport_body(identity_doc: Dict[str, Any],
@@ -106,7 +103,7 @@ class CatalogRow(BaseModel):
 
 def catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
     """An aggregation row (identity + ``current_snapshot``) -> CatalogRow."""
-    snap = snapshot_for_read(doc.get('current_snapshot') or {})
+    snap = doc.get('current_snapshot') or {}
     row = {
         '_id': doc['_id'],
         'catalog_number': doc.get('catalog_number'),
@@ -151,8 +148,21 @@ class SnapshotSummaryItem(BaseModel):
     added_by_user_id: Optional[str] = None
     added_by_username: Optional[str] = None
     status_changed_at: Optional[str] = None
+    geometry_failed: bool = False
     created: str
     lastmodified: str
+
+
+GEOMETRY_STAGES = ('frame', 'shape_class', 'proxies')
+
+
+def geometry_failed(doc: Dict[str, Any]) -> bool:
+    """True when frame, class or proxy could not be derived: the frame, size,
+    class and proxies the snapshot shows are those of an earlier geometry
+    (decision 8.60). The text of the error is never part of this."""
+    derivation = doc.get('derivation') or {}
+    return any((derivation.get(stage) or {}).get('error')
+               for stage in GEOMETRY_STAGES)
 
 
 class PendingSnapshotItem(BaseModel):

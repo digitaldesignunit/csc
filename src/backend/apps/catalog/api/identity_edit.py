@@ -75,6 +75,7 @@ from .access import (
 from .auth import get_current_active_user
 from .catalog_common import allocate_catalog_number, now_iso, validate_uuid
 from .change_log import log_change
+from .geometry_hooks import derive_sync_identity
 
 router = APIRouter()
 
@@ -514,6 +515,10 @@ async def patch_identity(
         return JSONResponse(status_code=200, content=identity_body(identity))
     await propagate_from(request, written, changed_units(identity, written),
                          user_id=current_user.id)
+    if written.get('original_function') != identity.get('original_function'):
+        # the column rule of the frame reads the function (7.10); the
+        # descendants that inherit it follow in the next sweep
+        await derive_sync_identity(request, identity_id)
     return JSONResponse(status_code=200, content=identity_body(written))
 
 

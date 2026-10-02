@@ -14,6 +14,14 @@ from support import iid, panel_payload, seed_05_catalog, sid
 def _migrated(db):
     seed_05_catalog(db)
     run(Context(db=db, files=False, log=lambda _m: None), CUTOVER_STEPS)
+    # migration steps 5: the runner derives frame + shape class (spec 8.1)
+    from apps.catalog.geometry_runner import derive_and_store_sync
+    from apps.catalog.geometry_stages import Env
+    identities = {i['_id']: i for i in db['component_identities'].find({})}
+    for snap in list(db['component_snapshots'].find({})):
+        derive_and_store_sync(
+            db['component_snapshots'], snap, identities[snap['identity_id']],
+            Env(), None, ['frame', 'shape_class'], force=True)
 
 
 def test_list_filters_and_rows(api, db, member_headers):
@@ -28,8 +36,8 @@ def test_list_filters_and_rows(api, db, member_headers):
     assert beam['original_function'] == 'IfcBeam'
     assert beam['origin']['kind'] == 'deinstallation'
     assert beam['status'] == 'published' and beam['version'] == 1
-    assert beam['frame'] == {'o': [0.0, 0.0, 0.0], 'x': [1.0, 0.0, 0.0],
-                             'y': [0.0, 1.0, 0.0], 'z': [0.0, 0.0, 1.0]}
+    assert set(beam['frame']) == {'o', 'x', 'y', 'z'}     # derived (step 5)
+    assert len(beam['bbx']) == 3 and beam['shape_class'] is not None
     for gone in ('type', 'consumed_at', 'validated', 'condition', 'pca_frame'):
         assert gone not in beam
 

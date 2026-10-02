@@ -15,6 +15,7 @@ from .invitations import router as invitations_router
 from .identity_edit import router as identity_edit_router
 from .materials import router as materials_router
 from .change_log import router as change_log_router
+from .geometry_remote import router as geometry_remote_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix='/auth', tags=['auth'])
@@ -26,6 +27,7 @@ api_router.include_router(identity_workflows_router, tags=['identities'])
 api_router.include_router(identity_edit_router, tags=['identities'])
 api_router.include_router(change_log_router, tags=['identities'])
 api_router.include_router(materials_router, tags=['materials'])
+api_router.include_router(geometry_remote_router, tags=['geometry runner'])
 api_router.include_router(identities_router, tags=['identities'])
 # before the snapshots router: /snapshots/{sid} must not catch the
 # lifecycle verbs

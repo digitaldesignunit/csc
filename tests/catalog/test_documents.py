@@ -291,3 +291,17 @@ def test_material_default_class_never_hazardous():
     doc = ex.material()
     doc['default_class'] = '17 06 05*'
     _invalid(Material, doc, 'hazardous')
+
+
+def test_a_deviation_map_file_is_named_by_the_server():
+    from pydantic import ValidationError
+
+    from apps.catalog.documents import DeviationMapFace
+    scale = {'scale_mm': 0.01, 'offset_mm': -1.0}
+    good = 'proxies/11111111-1111-1111-1111-111111111111/0/+z.png'
+    assert DeviationMapFace(file=good, width=2, height=2, distance=scale)
+    for bad in ('../x.png', 'proxies/../x/0/+z.png',
+                'proxies/abc/0/../../../etc.png', '/etc/passwd',
+                'proxies/abc/0/+z.txt', 'meshes/abc/0/+z.png'):
+        with pytest.raises(ValidationError):
+            DeviationMapFace(file=bad, width=2, height=2, distance=scale)

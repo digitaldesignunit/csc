@@ -118,6 +118,7 @@ ANONYMOUS_READ_METHODS: Tuple[str, ...] = ('GET', 'HEAD')
 _UPDATE_HINT: Dict[str, str] = {
     'gh-userobjects': 'update the Grasshopper UserObjects via CSC_Update',
     'web': 'reload the page to get the current web app',
+    'geometry-runner': 'update the geometry runner (main_geometry.py --remote)',
 }
 
 

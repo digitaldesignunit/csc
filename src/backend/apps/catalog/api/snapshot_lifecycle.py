@@ -17,6 +17,7 @@ points at a published, non-superseded snapshot or is null (I3b, 8.17).
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
+import asyncio
 import uuid
 from datetime import datetime
 from typing import Annotated, Any, Dict, List, Optional
@@ -57,6 +58,12 @@ from .auth import get_current_active_user
 from .identity_lifecycle import PurgeBody, purge_snapshot_record
 from .catalog_common import compute_snapshot_etag, now_iso, validate_uuid
 from .change_log import log_change
+from .geometry_hooks import (
+    derive_sync,
+    fitted_map_files,
+    recompute_all_stages,
+    remove_map_files,
+)
 from .identity_edit import check_cut_allowed, sync_parent_exits
 
 router = APIRouter()
@@ -194,6 +201,8 @@ new_snapshot_doc = _new_snapshot   # identity_edit builds v0 with it
 
 async def _insert(request: Request, doc: dict) -> JSONResponse:
     await request.app.mongodb_component_snapshots.insert_one(doc)
+    # frame + shape class at once, so the draft is usable (decision 6.14)
+    doc = await derive_sync(request, doc['_id']) or doc
     return JSONResponse(status_code=201, content=snapshot_body(doc))
 
 
@@ -414,6 +423,8 @@ async def submit_snapshot(
     action = _transition_or_409(snapshot, 'pending')
     await require(request, current_user, action, identity=identity,
                   snapshot=snapshot)
+    # the frame and the class are current when it goes to review (6.14)
+    snapshot = await derive_sync(request, snapshot_id) or snapshot
     pending = await _change_status(request, current_user, snapshot, 'pending')
     if publish and await _can(request, current_user, 'publish', identity,
                               pending):
@@ -606,8 +617,18 @@ async def patch_snapshot(
             updated[key] = value
     for key in ('shape_class', 'complexity'):
         if key in body:
-            updated[f'{key}_source'] = 'assigned' \
-                if body[key] is not None else None
+            # a value is an override; null returns it to derived (8.55): the
+            # source says derived, the old value stays until the stage
+            # recomputes it, and the stage's stamp goes so that it does
+            if body[key] is not None:
+                updated[f'{key}_source'] = 'assigned'
+            else:
+                updated[key] = snapshot.get(key)
+                updated[f'{key}_source'] = 'derived' \
+                    if snapshot.get(key) is not None else None
+            derivation = dict(updated.get('derivation') or {})
+            derivation.pop(key, None)
+            updated['derivation'] = derivation
     if 'geometry' in body:
         _check_client_geometry(SnapshotDraftBody.model_validate(
             {'geometry': body['geometry']}))
@@ -621,6 +642,15 @@ async def patch_snapshot(
     await log_change(request, 'snapshot', snapshot, updated,
                      by_user_id=current_user.id, cause='patch',
                      at=updated['lastmodified'])
+    if 'geometry' in body:
+        # the old fit is gone with the old geometry: its maps too
+        await asyncio.to_thread(
+            remove_map_files, request.app.snapshot_proxies_dir,
+            fitted_map_files(snapshot))
+    if 'geometry' in body or 'shape_class' in body:
+        # frame and class follow at once (spec 4.3, stage 1: every draft
+        # geometry write; 8.55: a cleared override is recomputed)
+        updated = await derive_sync(request, snapshot['_id']) or updated
     if 'effective_from' in body and snapshot.get('status') in EVER_PUBLISHED \
             and identity.get('parent_identities'):
         # a cut's date moves the parents' exit with it (8.8)
@@ -628,6 +658,24 @@ async def patch_snapshot(
                                 user_id=current_user.id,
                                 source=identity['_id'])
     return _ok(updated)
+
+
+@router.post('/snapshots/{snapshot_id}/proxies/recompute',
+             summary='Recompute every derived field of one snapshot '
+                     '(moderator(D))')
+async def recompute_geometry(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    snapshot_id: str,
+):
+    """Runs all stages of the geometry runner (spec section 4.3) on the
+    snapshot, stale or not: frame, shape class (unless assigned), proxies
+    and deviation maps, descriptors, complexity (unless assigned) and the
+    preview. Overrides stay. Works while the snapshot is a draft too."""
+    snapshot, identity = await _load(request, snapshot_id)
+    await require(request, current_user, 'override_derived',
+                  identity=identity, snapshot=snapshot)
+    return _ok(await recompute_all_stages(request, snapshot_id) or snapshot)
 
 
 @router.delete('/snapshots/{snapshot_id}',

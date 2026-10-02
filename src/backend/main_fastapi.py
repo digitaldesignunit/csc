@@ -35,10 +35,13 @@ from csc_version import CSC_VERSION
 from utility import (
     get_cors_origins,
     get_db_connectionstring,
+    get_database_name,
     get_snapshot_preview_directory,
     get_snapshot_photos_directory,
     get_snapshot_meshes_directory,
     get_snapshot_point_clouds_directory,
+    get_snapshot_proxies_directory,
+    get_snapshot_capture_directory,
     get_snapshot_photo_upload_limit_bytes,
     get_snapshot_photo_max_output_bytes,
     get_snapshot_photo_max_long_edge_px,
@@ -61,9 +64,19 @@ _REQUIRED_ENV = [
     'SNAPSHOT_PHOTOS_DIR',
     'SNAPSHOT_MESHES_DIR',
     'SNAPSHOT_POINT_CLOUDS_DIR',
+    'SNAPSHOT_PROXIES_DIR',
+    'SNAPSHOT_CAPTURE_DIR',
     'GH_XML_CACHE_DIR',
     'FASTAPI_CORS_ORIGINS',
 ]
+
+# a bad CSC_GEOMETRY_HEAVY_STAGES fails here, not at the first recompute
+from apps.catalog.geometry_stages import heavy_stages_where  # noqa: E402
+try:
+    heavy_stages_where()
+except ValueError as _exc:
+    print(f'[ERROR] {_exc}')
+    sys.exit(1)
 
 _missing = [v for v in _REQUIRED_ENV if not os.getenv(v)]
 if _missing:
@@ -104,7 +117,7 @@ async def lifespan(app: FastAPI):
     await app.mongodb_client.aconnect()
     await app.mongodb_client.admin.command('ping')
 
-    app.mongodb = app.mongodb_client['csc']
+    app.mongodb = app.mongodb_client[get_database_name()]
     app.mongodb_users = app.mongodb['users']
     app.mongodb_component_id_transmission = app.mongodb[
         'component_id_transmission'
@@ -136,9 +149,10 @@ async def lifespan(app: FastAPI):
     app.snapshot_photos_dir = get_snapshot_photos_directory()
     app.snapshot_meshes_dir = get_snapshot_meshes_directory()
     app.snapshot_point_clouds_dir = get_snapshot_point_clouds_directory()
-    # capture fixtures (decision 7.7); optional until the geometry runner
-    # (plan P5) makes it required --- without it the fixture route is 404
-    app.snapshot_capture_dir = os.getenv('SNAPSHOT_CAPTURE_DIR') or None
+    # deviation maps (proxies/<snapshot_id>/<i>/<face>.png, spec 3.5) and
+    # capture fixtures (decision 7.7), both written by the geometry runner
+    app.snapshot_proxies_dir = get_snapshot_proxies_directory()
+    app.snapshot_capture_dir = get_snapshot_capture_directory()
     app.snapshot_photo_upload_limit_bytes = (
         get_snapshot_photo_upload_limit_bytes()
     )
@@ -152,6 +166,8 @@ async def lifespan(app: FastAPI):
     os.makedirs(app.snapshot_photos_dir, exist_ok=True)
     os.makedirs(app.snapshot_meshes_dir, exist_ok=True)
     os.makedirs(app.snapshot_point_clouds_dir, exist_ok=True)
+    os.makedirs(app.snapshot_proxies_dir, exist_ok=True)
+    os.makedirs(app.snapshot_capture_dir, exist_ok=True)
     app.gh_xml_cache_dir = get_gh_xml_cache_directory()
     app.geometry_upload_limit_bytes = get_geometry_upload_limit_bytes()
     print(

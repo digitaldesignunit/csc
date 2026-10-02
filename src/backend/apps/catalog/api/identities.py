@@ -90,6 +90,7 @@ from apps.catalog.read_models import (
     PendingSnapshotItem,
     SnapshotSummaryItem,
     catalog_row,
+    geometry_failed,
     identity_body,
     passport_body,
 )
@@ -1148,6 +1149,7 @@ async def list_identity_snapshots(
         'added_by_user_id': 1,
         'added_by_username': 1,
         'status_changed_at': 1,
+        'derivation': 1,
         'created': 1,
         'lastmodified': 1,
     }
@@ -1172,6 +1174,7 @@ async def list_identity_snapshots(
         row = {
             **doc,
             'is_current': doc.get('_id') == current_snapshot_id,
+            'geometry_failed': geometry_failed(doc),
         }
         try:
             items.append(

@@ -1,8 +1,10 @@
 """Serve a migrated copy of a local dump for frontend work (`invoke dev-migrated`).
 
 Starts a throwaway ``mongod``, loads ``mongodb_collections_local/<dump>``,
-runs the 0.6 migration, builds the component-map cache, adds a local admin
-account and serves the backend on it with ``src/backend/dev.env``. The asset
+runs the 0.6 migration, derives frame, shape class, proxies (with deviation
+maps) and complexity with the geometry runner (steps 5 and 7 of the spec;
+``--no-derive`` skips it, the web app then has no frames), builds the
+component-map cache, adds a local admin account and serves the backend on it with ``src/backend/dev.env``. The asset
 folders are only read: step 6c moves the gripper meshes out of a temporary
 copy into a temporary ``SNAPSHOT_CAPTURE_DIR``. Your usual database is not
 touched; everything is gone when the script stops (Ctrl+C).
@@ -60,6 +62,12 @@ def main() -> int:
                         help='backend port (default 8000)')
     parser.add_argument('--mongo-port', type=int, default=27018,
                         help='throwaway mongod port (default 27018)')
+    parser.add_argument('--no-derive', action='store_true',
+                        help='do not run the geometry runner')
+    parser.add_argument('--derive-stages',
+                        default='frame,shape_class,proxies,complexity',
+                        help='stages of the geometry runner to run (the '
+                             'descriptors and previews take much longer)')
     args = parser.parse_args()
 
     from mongod import ThrowawayMongod, find_mongod, sweep_stale_dirs
@@ -108,24 +116,50 @@ def main() -> int:
                             mapping.read_text(encoding='utf-8'))), ['11b'])
             print('step 11b applied (.dev/reattribute_06.json)')
 
+        proxies = work / 'proxies'
+        if not args.no_derive:
+            from apps.catalog.geometry_runner import derive_and_store_sync
+            from apps.catalog.geometry_stages import Env
+            stages = [s for s in args.derive_stages.split(',') if s]
+            runner_env = Env(
+                meshes_dir=env.get('SNAPSHOT_MESHES_DIR'),
+                point_clouds_dir=env.get('SNAPSHOT_POINT_CLOUDS_DIR'),
+                preview_dir=env.get('SNAPSHOT_PREVIEW_DIR')
+                if 'previews' in stages else None)
+            identities = {i['_id']: i
+                          for i in db['component_identities'].find({})}
+            todo = list(db['component_snapshots'].find({}))
+            print(f'geometry runner ({", ".join(stages)}) on {len(todo)} '
+                  f'snapshots...')
+            for n, snap in enumerate(todo, 1):
+                derive_and_store_sync(
+                    db['component_snapshots'], snap,
+                    identities[snap['identity_id']], runner_env, str(proxies),
+                    stages, force=True)
+                if n % 100 == 0:
+                    print(f'  {n} / {len(todo)}')
+
         password = secrets.token_urlsafe(12)
         db['users'].insert_one({
             '_id': str(uuid.uuid4()), 'username': 'dev-admin',
             'email': 'dev-admin@example.org', 'full_name': 'Dev Admin',
             'hashed_password': get_password_hash(password), 'role': 'admin',
             'disabled': False, 'email_verified': True})
-        (dev / 'dev-migrated-credentials.txt').write_text(
+        # a second instance (another --port) never overwrites the first's files
+        tag = '' if args.port == 8000 else f'-{args.port}'
+        (dev / f'dev-migrated-credentials{tag}.txt').write_text(
             f'dev-admin\n{password}\n', encoding='utf-8')
         mongo_uri = f'{server.uri}/csc'
-        (dev / 'migrated.json').write_text(json.dumps(
+        (dev / f'migrated{tag}.json').write_text(json.dumps(
             {'mongo_uri': mongo_uri, 'backend': f'http://127.0.0.1:{args.port}'
              }), encoding='utf-8')
         print(f'mongo {mongo_uri}; login dev-admin '
-              f'(password in .dev/dev-migrated-credentials.txt)')
+              f'(password in .dev/dev-migrated-credentials{tag}.txt)')
         client.close()
 
         env['MONGODB_URI'] = mongo_uri
         env['SNAPSHOT_CAPTURE_DIR'] = str(capture)
+        env['SNAPSHOT_PROXIES_DIR'] = str(proxies)
         env.setdefault('JWT_SECRET', 'dev-migrated-only')
         env.setdefault('SMTP_PASSWORD', 'dev')
         os.environ.update(env)

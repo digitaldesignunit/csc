@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -12,6 +10,8 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import Response
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
+
+from apps.catalog.etag import compute_snapshot_etag  # noqa: F401 (re-export)
 
 
 def not_modified_response(etag: str, **extra_headers: str) -> Response:
@@ -43,18 +43,6 @@ def retired_until(phase: str):
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-
-
-def compute_snapshot_etag(snapshot_doc: Dict[str, Any]) -> str:
-    """sha256 over canonical snapshot JSON, excluding etag and lastmodified."""
-    payload = {
-        k: v for k, v in snapshot_doc.items()
-        if k not in ('etag', 'lastmodified')
-    }
-    serialized = json.dumps(
-        payload, sort_keys=True, separators=(',', ':'), default=str
-    )
-    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
 
 
 def resolve_new_component_name(
