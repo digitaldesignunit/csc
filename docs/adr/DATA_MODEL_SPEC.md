@@ -413,7 +413,8 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
     "at": "...", "at_precision": "day",
     "construction_work": { /* as origin */ } | null,
     "notes": "..." | null,
-    "recorded_by_user_id": "uuid" | null     // server-set; null when set by the server (split/merge)
+    "recorded_by_user_id": "uuid" | null,    // server-set; null when set by the server (split/merge)
+    "manual_at": "..." | null, "manual_by_user_id": "uuid" | null   // a hand-set split the server took over keeps its date and author (8.34)
   } | null,
   "past_cycles": [ { "origin": { ... }, "exit": { ... } } ],   // section 3.1.3; append-only, server-written on re-entry
   "withdrawn": { "at": "...", "by_user_id": "uuid", "reason": "...", "duplicate_of": "uuid" | null } | null,   // section 3.1.4 --- record-level tombstone
@@ -1083,7 +1084,9 @@ their own `status_history` (8.30); derived fields (`properties`, `frame`, proxie
 - **Redaction** (`POST /actors/redact`, section 3.1.4) also blanks the person's `name`, `email`,
   `orcid` inside `old` / `new` values.
 - **Purge** (section 3.1.4) deletes the record's entries with the record.
-- Migration steps write `cause: migration` entries; history before 0.6 does not exist.
+- The migration writes no entries: history starts at cutover (`cause: migration` is for later
+  data-repair scripts). `reserved` is not logged --- a booking, not a fact about the piece;
+  `current_snapshot_id` is (promote / fallback, cause `patch`).
 - Indexes: `(record_id, at)`, `(identity_id, at)`.
 
 ## 4. Derivations
@@ -1482,7 +1485,10 @@ POST   /snapshots/{sid}/proxies/recompute          moderator(D); runs section 4.
 GET    /identities/{id}/changes                    member(D) / admin: change_log entries of the identity, its snapshots and evidence (section 3.8)
 GET    /identities/{id}?as_of=<date>               the record as of a date (section 3.8); same for /snapshots/{sid}, /evidence/{eid}
 GET    /identities/{id}/timeline                   merged: past_cycles, origin, snapshot states + corrections, evidence, exit
-POST   /identities/{id}/exit                       moderator(D); body = exit block (replaces POST /consume)
+POST   /identities                                 contributor(D), + read access to each parent and the cut rules of 8.34: identity + v0 draft; a child
+                                                  inherits every unit it does not state (section 3.1.2); a merge whose parents disagree on material /
+                                                  original_function needs them stated (422). Replaces the 0.5 create.
+POST   /identities/{id}/exit                       moderator(D); body = exit block (replaces POST /consume); `merged` is server-only
 DELETE /identities/{id}/exit                       moderator(D); undo a mistaken exit (replaces /unconsume); not for server-set split/merge while children exist
 POST   /identities/{id}/reenter                    moderator(D); body = new origin; archives {origin, exit} to past_cycles (section 3.1.3)
 POST   /identities/{id}/withdraw                   moderator(D); body = {reason, duplicate_of?} (section 3.1.4)

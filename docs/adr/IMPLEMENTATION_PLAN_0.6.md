@@ -178,7 +178,7 @@ jump.
 **Done when:** a table-driven route test covers every section 7.0 row x {anonymous, user, contributor,
 reviewer, moderator, other-dataset moderator, admin}.
 
-### P4 --- Provenance, lineage, materials --- size M
+### P4 --- Provenance, lineage, materials --- size M --- **part 1 (backend) built 2026-10-02**
 - `change_log` first (8.36, spec section 3.8, I30): one write helper used by every route that
   changes a record, retrofitted onto the P3 PATCH / lifecycle routes; `?as_of=`, `/changes`.
 - Split / merge exit derived from published children (8.8): set on the child's first publish (needs
@@ -188,7 +188,8 @@ reviewer, moderator, other-dataset moderator, admin}.
   (server-set split / merge: first bullet); after re-entry the next snapshot defaults to the new
   `origin.at` (8.19).
 - Lineage inheritance (section 3.1.2): copy-on-create, recursive propagation on parent PATCH, detach on
-  child PATCH, re-inherit, merge unanimity (I17).
+  child PATCH, re-inherit, merge unanimity (I17). The 0.6 `POST /identities` (identity + v0 draft)
+  lands here because a cut needs it; P7 adds the new-component web form on top.
 - `materials` collection + routes (section 2.10, section 7.7); `material_class` derivation + override (I25); delete / merge / retire (8.35).
 - DIN SPEC 91484 / DGNB fields (8.38): origin `position_in_work`, `connection_types`,
   `detachability`, `construction_method`; identity `manufacturer`, `connection_features`,
