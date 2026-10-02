@@ -5,7 +5,7 @@ import ComponentViewer from '@/components/components/ComponentViewer'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot, type CatalogShallowRow } from '@/generated/catalogExtras'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
-import { exitSummary, isOutOfCirculation, isPublished } from '@/components/components/componentDetailShared'
+import { exitSummary, geometryFailed, isOutOfCirculation, isPublished } from '@/components/components/componentDetailShared'
 import { Archive, Package } from 'lucide-react'
 import Link from 'next/link'
 import RecordRecentComponent from '@/components/layout/RecordRecentComponent'
@@ -146,6 +146,19 @@ export default async function ComponentDetailPage({
             {isConsumed ? 'Component out of circulation' : 'Component Details'}
           </h1>
         </div>
+
+        {geometryFailed(snapshot) && (
+          <div
+            role="status"
+            className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100"
+          >
+            <p className="font-medium">The geometry of this version could not be processed.</p>
+            <p className="mt-1 text-sm opacity-90">
+              Orientation, size, shape class and proxies shown here still describe the
+              previous geometry. The maintainers can see the cause.
+            </p>
+          </div>
+        )}
 
         {catalog.identity.withdrawn && (
           <div

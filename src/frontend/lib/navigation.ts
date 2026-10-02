@@ -17,6 +17,7 @@ import {
   ScanQrCode,
   ScrollText,
   Send,
+  TriangleAlert,
   Users,
   Waypoints,
   Workflow,
@@ -93,6 +94,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   },
   { id: 'users', label: 'Users and invitations', href: '/admin/users', icon: Users, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'materials', label: 'Materials', href: '/admin/materials', icon: Layers, group: 'admin', visible: (v) => v.isAdmin },
+  { id: 'geometry', label: 'Geometry failures', href: '/admin/geometry', icon: TriangleAlert, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'logs', label: 'Backend logs', href: '/admin/logs', icon: ScrollText, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'gh', label: 'GH Interface', href: '/gh-interface', icon: Workflow, group: 'tools', visible: signedIn },
   {

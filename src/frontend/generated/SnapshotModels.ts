@@ -16,6 +16,7 @@ export interface SnapshotSummaryItem {
   added_by_user_id?: string | null;
   added_by_username?: string | null;
   status_changed_at?: string | null;
+  geometry_failed?: boolean;
   created: string;
   lastmodified: string;
 }

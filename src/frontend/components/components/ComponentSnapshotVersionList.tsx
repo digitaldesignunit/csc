@@ -111,6 +111,15 @@ export default function ComponentSnapshotVersionList({
                       Corrected
                     </Badge>
                   )}
+                  {row.geometry_failed && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] border-red-400 text-red-800 dark:text-red-200"
+                      title="The geometry of this version could not be processed; orientation, size, class and proxies describe an earlier geometry."
+                    >
+                      Geometry not processed
+                    </Badge>
+                  )}
                 </Link>
 
                 <div

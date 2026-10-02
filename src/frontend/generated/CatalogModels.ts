@@ -78,6 +78,22 @@ export interface ComponentIdentity {
   lastmodified: string;
 }
 
+export interface Derivation {
+  frame?: StageStamp | null;
+  shape_class?: StageStamp | null;
+  proxies?: StageStamp | null;
+  descriptors?: StageStamp | null;
+  complexity?: StageStamp | null;
+  previews?: StageStamp | null;
+}
+
+export interface StageStamp {
+  version: number;
+  input: string;
+  at: string;
+  error?: string | null;
+}
+
 export interface ComponentSnapshot {
   _id: string;
   identity_id: string;
@@ -102,6 +118,7 @@ export interface ComponentSnapshot {
   bbx?: number[] | null;
   complexity?: number | null;
   complexity_source?: 'derived' | 'assigned' | null;
+  derivation?: Derivation;
   fragment?: boolean;
   color?: number[] | null;
   location?: GeoLocation | null;

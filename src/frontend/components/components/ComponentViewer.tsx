@@ -32,6 +32,11 @@ import {
   type ReinforcementBar,
 } from '@/lib/reinforcementGeometry'
 import ComponentViewerSkeleton from './ComponentViewerSkeleton'
+import ProxyOverlay, {
+  useDeviationMaps,
+  type ProxyDisplay,
+} from '@/components/viewer/ProxyOverlay'
+import type { ProxyDoc } from '@/lib/proxyOverlay'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ViewerMenu, MenuSection, MenuSubsection, MenuDivider, SegmentedControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
 
@@ -93,6 +98,31 @@ function Turntable({
   })
 
   return <group ref={groupRef}>{children}</group>
+}
+
+type FrameDoc = { o: number[]; x: number[]; y: number[]; z: number[] }
+
+/**
+ * The snapshot's `frame` as a transform of the scene (decision 7.10): stored
+ * coordinates map to the canonical orientation (x longest, z shortest; a
+ * standing column has z as its length). The geometry in the scene already
+ * has Rhino Z-up turned to three's Y-up, so the transform is conjugated by
+ * that turn. Stored geometry is never changed; this only moves the view.
+ */
+function canonicalSceneMatrix(frame: FrameDoc | null | undefined): THREE.Matrix4 {
+  if (!frame) return new THREE.Matrix4()
+  const x = new THREE.Vector3(...frame.x)
+  const y = new THREE.Vector3(...frame.y)
+  const z = new THREE.Vector3(...frame.z)
+  const origin = new THREE.Vector3(...frame.o)
+  // world -> frame: rows are the axes, translation -R^T o (metres in the scene)
+  const toFrame = new THREE.Matrix4().makeBasis(x, y, z).transpose()
+  const shift = origin.clone().applyMatrix4(
+    new THREE.Matrix4().extractRotation(toFrame),
+  ).multiplyScalar(-scale)
+  toFrame.setPosition(shift)
+  const turn = new THREE.Matrix4().makeRotationX(-Math.PI / 2)
+  return turn.clone().multiply(toFrame).multiply(turn.clone().invert())
 }
 
 // Simple in-memory cache for external geometry with ETag support
@@ -1011,6 +1041,33 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     [snapshotGeometry],
   )
 
+  const [orientation, setOrientation] = useState<'stored' | 'canonical'>('stored')
+  const [proxyDisplay, setProxyDisplay] = useState<ProxyDisplay>('off')
+  const [proxyRange, setProxyRange] = useState<number | null>(null)
+  const snapshotFrame = (snapshot as { frame?: FrameDoc | null }).frame ?? null
+  const orientationMatrix = useMemo(
+    () => (orientation === 'canonical' ? canonicalSceneMatrix(snapshotFrame) : new THREE.Matrix4()),
+    [orientation, snapshotFrame],
+  )
+  const primaryProxyIndex = useMemo(() => {
+    const proxies = snapshotGeometry.proxies ?? []
+    const primary = proxies.findIndex((proxy) => proxy.role === 'primary')
+    return primary >= 0 ? primary : proxies.length > 0 ? 0 : -1
+  }, [snapshotGeometry])
+  const overlayProxy = primaryProxyIndex >= 0
+    ? (snapshotGeometry.proxies ?? [])[primaryProxyIndex]
+    : null
+  const deviationFaces = (overlayProxy?.deviation_maps as
+    | { faces?: Record<string, { distance: { scale_mm: number; offset_mm: number } }> }
+    | null
+    | undefined)?.faces
+  const { maps: deviationMaps, error: deviationError } = useDeviationMaps(
+    snapshot._id,
+    primaryProxyIndex,
+    deviationFaces,
+    proxyDisplay !== 'off' && proxyDisplay !== 'outline',
+  )
+
   const canRenderViewport =
     snapshotMeshes.length > 0
     || snapshotPrisms.length > 0
@@ -1461,6 +1518,82 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     )
   }
 
+  if (snapshotFrame) {
+    if (displayBlocks.length > 0) {
+      displayBlocks.push(<MenuDivider key="divider-orientation" />)
+    }
+    displayBlocks.push(
+      <MenuSubsection key="orientation" title="Orientation">
+        <SegmentedControl
+          id="orientationSelect"
+          label="Show"
+          value={orientation}
+          onValueChange={(value) => setOrientation(value as 'stored' | 'canonical')}
+          options={[
+            { value: 'stored', label: 'As stored' },
+            { value: 'canonical', label: 'Canonical' },
+          ]}
+        />
+        <p className="text-xs text-muted-foreground">
+          {snapshot.bbx && snapshot.bbx[2] > snapshot.bbx[0]
+            ? 'Canonical: a standing column, its length along z'
+            : 'Canonical: longest side along x, shortest along z'}
+          {snapshot.bbx
+            ? ` (${snapshot.bbx.map((v: number) => Math.round(v)).join(' x ')} mm)`
+            : ''}
+          . The stored geometry is never turned.
+        </p>
+      </MenuSubsection>,
+    )
+  }
+
+  if (overlayProxy) {
+    const fit = overlayProxy.fit
+    const hasMaps = !!deviationFaces && Object.keys(deviationFaces).length > 0
+    const options: { value: ProxyDisplay; label: string }[] = [
+      { value: 'off', label: 'Off' },
+      { value: 'outline', label: 'Outline' },
+      ...(hasMaps
+        ? [
+            { value: 'distance' as const, label: 'Distance' },
+            { value: 'normal_deviation' as const, label: 'Normal' },
+            { value: 'occupancy' as const, label: 'Points' },
+          ]
+        : []),
+    ]
+    const unit = proxyDisplay === 'distance' ? 'mm' : proxyDisplay === 'normal_deviation' ? 'deg' : 'points'
+    if (displayBlocks.length > 0) {
+      displayBlocks.push(<MenuDivider key="divider-proxy" />)
+    }
+    displayBlocks.push(
+      <MenuSubsection key="proxy-overlay" title="Proxy overlay">
+        <SegmentedControl
+          id="proxyDisplaySelect"
+          label="Overlay"
+          value={proxyDisplay}
+          onValueChange={(value) => setProxyDisplay(value as ProxyDisplay)}
+          options={options}
+        />
+        <p className="text-xs text-muted-foreground">
+          {overlayProxy.primitive} ({fit.method})
+          {fit.p95_mm != null
+            ? `: p95 ${fit.p95_mm.toFixed(1)} mm, max ${(fit.max_mm ?? 0).toFixed(1)} mm`
+            : ''}
+        </p>
+        {proxyRange != null && proxyDisplay !== 'off' && proxyDisplay !== 'outline' && (
+          <p className="text-xs text-muted-foreground">
+            {proxyDisplay === 'distance'
+              ? `Blue inside the proxy, red outside, white on it; full colour at +/-${proxyRange.toFixed(1)} ${unit}.`
+              : `Scale 0 to ${proxyRange.toFixed(proxyDisplay === 'occupancy' ? 0 : 1)} ${unit}.`}
+          </p>
+        )}
+        {deviationError && (
+          <p className="text-xs text-destructive">Deviation maps unavailable ({deviationError}).</p>
+        )}
+      </MenuSubsection>,
+    )
+  }
+
   if (hasOverlays) {
     if (displayBlocks.length > 0) {
       displayBlocks.push(<MenuDivider key="divider-overlays" />)
@@ -1592,6 +1725,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
           >
             <FitCameraController fitRef={fitCameraRef} />
             <Turntable enabled={turntableEnabled}>
+              <group matrixAutoUpdate={false} matrix={orientationMatrix}>
               <VisualizeComponent
                 catalog={catalog}
                 meshGeometryMode={meshGeometryMode}
@@ -1608,6 +1742,15 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
               <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
               <CaptureFixtures fixtures={fixtureGroups} visible={showFixtures} />
               <ReinforcementBars bars={reinforcementBars} visible={showReinforcement} />
+              {overlayProxy && (
+                <ProxyOverlay
+                  proxy={overlayProxy as unknown as ProxyDoc}
+                  display={proxyDisplay}
+                  maps={deviationMaps}
+                  onRange={setProxyRange}
+                />
+              )}
+              </group>
             </Turntable>
           </Bounds>
 

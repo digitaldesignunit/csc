@@ -9,13 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
-type LogKey = 'fastapi_log' | 'previewgen_log' | 'descriptors_simple_log' | 'component_map_log'
+type LogKey = 'fastapi_log' | 'geometry_log' | 'component_map_log'
 type LogState = Record<LogKey, string>
 
 const EMPTY_LOGS: LogState = {
   fastapi_log: '',
-  previewgen_log: '',
-  descriptors_simple_log: '',
+  geometry_log: '',
   component_map_log: '',
 }
 
@@ -26,14 +25,9 @@ const LOG_ENDPOINTS: Array<{ key: LogKey; title: string; description: string }> 
     description: 'Backend API runtime log.',
   },
   {
-    key: 'previewgen_log',
-    title: 'Preview Generator Log',
-    description: 'Preview generator cronjob log.',
-  },
-  {
-    key: 'descriptors_simple_log',
-    title: 'Simple Descriptors',
-    description: 'Simple descriptors cronjob log.',
+    key: 'geometry_log',
+    title: 'Geometry Runner',
+    description: 'Geometry runner cronjob log (frame, shape class, proxies, descriptors, complexity, previews).',
   },
   {
     key: 'component_map_log',
@@ -161,8 +155,7 @@ export default function AdminLogsPage() {
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as LogKey)}>
         <TabsList className="h-auto flex-wrap gap-1.5">
           <TabsTrigger value="fastapi_log">FastAPI</TabsTrigger>
-          <TabsTrigger value="previewgen_log">PreviewGen</TabsTrigger>
-          <TabsTrigger value="descriptors_simple_log">Simple Descriptors</TabsTrigger>
+          <TabsTrigger value="geometry_log">Geometry Runner</TabsTrigger>
           <TabsTrigger value="component_map_log">Component Map</TabsTrigger>
         </TabsList>
 

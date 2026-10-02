@@ -63,6 +63,16 @@ export function exitSummary(exit: Exit | null | undefined): string {
   return at ? `${kind} (${at})` : kind
 }
 
+/**
+ * True when frame, class or proxy of the snapshot could not be derived
+ * (decision 8.60): what it shows is that of an earlier geometry. The stamps
+ * only say `failed`; the text stays with the dataset's maintainers.
+ */
+export function geometryFailed(snapshot: { derivation?: unknown }): boolean {
+  const stamps = (snapshot.derivation ?? {}) as Record<string, { error?: string | null } | null>
+  return ['frame', 'shape_class', 'proxies'].some((stage) => !!stamps[stage]?.error)
+}
+
 /** Published is the only status listed by default (spec 3.3.3). */
 export function isPublished(snapshot: { status?: string | null }): boolean {
   return snapshot.status === 'published'
