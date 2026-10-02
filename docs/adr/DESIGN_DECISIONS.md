@@ -200,6 +200,6 @@ O1 closed by 8.23, O2 by 8.24, O3 by 8.29, O5 by 8.31, O6 by 8.32, O7 by 8.33, O
 Decisions 1.1--8.30 are settled; 0.5.1.0 is released (8.5); P1 is done. Every review gap of
 2026-09-29 is closed (8.7--8.13, 8.15--8.17); 8.14 adds invitations; the document review of
 2026-09-30 closed three more (8.18 recall, 8.19 archived cycles, 8.20 member editor); 8.21 admin user list filters; 8.22--8.29 from the P2 preview (test accounts, detail levels, owners,
-moderators, the `beyond_debris` rename, no names in committed files, lowercase usernames, navigation shell); 8.30 status history. P0--P3 of `docs/adr/IMPLEMENTATION_PLAN_0.6.md` are done;
-open topics O4--O18 above; O15, O17, O18 before P4 (see HANDOFF.md). Glossary:
+moderators, the `beyond_debris` rename, no names in committed files, lowercase usernames, navigation shell); 8.30 status history. P0--P3 of `docs/adr/IMPLEMENTATION_PLAN_0.6.md` are done, P4 is built
+(8.31--8.39) and awaits review; open topics O4, O10--O12, O15, O17, O18 above (see HANDOFF.md). Glossary:
 `CONTEXT.md` at the repo root.

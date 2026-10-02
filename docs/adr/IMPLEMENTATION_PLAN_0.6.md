@@ -178,7 +178,7 @@ jump.
 **Done when:** a table-driven route test covers every section 7.0 row x {anonymous, user, contributor,
 reviewer, moderator, other-dataset moderator, admin}.
 
-### P4 --- Provenance, lineage, materials --- size M --- **part 1 (backend) built 2026-10-02**
+### P4 --- Provenance, lineage, materials --- size M --- **built 2026-10-02 (backend + web), in review**
 - `change_log` first (8.36, spec section 3.8, I30): one write helper used by every route that
   changes a record, retrofitted onto the P3 PATCH / lifecycle routes; `?as_of=`, `/changes`.
 - Split / merge exit derived from published children (8.8): set on the child's first publish (needs
@@ -195,7 +195,11 @@ reviewer, moderator, other-dataset moderator, admin}.
   `detachability`, `construction_method`; identity `manufacturer`, `connection_features`,
   `material_separability`; section 2.11 vocabularies.
 - Web: origin / exit forms and cards, lineage view with inherited markers, circulation filter,
-  materials in `/admin`, "cut from..." entry point of the snapshot form (7.5).
+  materials in `/admin`, "cut from..." entry point of the snapshot form (7.5). Built as: the
+  provenance card (inherited markers, earlier cycles) with an edit dialog per inheritance unit;
+  exit / undo / re-entry for moderator(D); "Cut a piece from it" on the component page (an
+  authored box; the full snapshot form with photos and the tag-scan entry stays P7); the change
+  history (members); `/admin/materials`. The circulation filter is the P2 one (in / out).
 
 **Done when:** propagation tests over a 3-generation lineage incl. a merge; I16--I18, I25 checked by
 `check_invariants` on the rehearsal DB.

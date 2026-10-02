@@ -59,8 +59,21 @@ spec (Appendix A.0, section 2.5, Sources), the 0.5 plan archived (`docs/adr/arch
 in `docs/adr/FUTURE.md`, and `docs/adr/STANDARDS_ALIGNMENT.md` lists what the model follows. Source
 check against the full texts in `reference/pdf/`: findings in
 `docs/adr/SOURCE_CHECK_2026-10-02.md` (factual fixes applied to spec 2.5, 10.2, 10.6, A.0,
-Sources; payload changes are O17). Open topics O4--O17 in `DESIGN_DECISIONS.md`. **Next:** grill
-O5--O17, then P4 (provenance, lineage, materials).
+Sources; payload changes are O17). Open topics O4--O17 in `DESIGN_DECISIONS.md`; O5--O9, O13,
+O14, O16 grilled into 8.31--8.39.
+
+**2026-10-02, P4 built (branch `v-0.6.0.0-P4`).** Backend: `api/identity_edit.py` (0.6
+`POST /identities` with inheritance, `PATCH /identities/{id}` with detach / re-inherit /
+propagation, exit / undo / re-entry, `sync_parent_exits` --- the parents' split / merged now follows
+published children, closing the P3 "not yet"), `api/materials.py` (delete / merge / retire),
+`api/change_log.py` (`/identities/{id}/changes` with usernames, `?as_of=`, `/schema/lineage`),
+pure `lineage.py` and `history.py`; the 0.5 consume / restore / create / PATCH routes are gone.
+Web: provenance card with the DIN SPEC / DGNB fields, inherited markers and earlier cycles; edit
+dialog per inheritance unit ("from the parents" tick); circulation actions (exit, undo, re-enter);
+"Cut a piece from it" (authored box, submit + publish for moderators); change history on the
+component page; `/admin/materials`; the viewer draws box proxies. Checked in the browser on the
+261001 rehearsal copy. **Next:** user review of P4; then grill O15, O17, O18 (exports) and O10
+before P6, and start P5.
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.
