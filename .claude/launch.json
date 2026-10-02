@@ -4,13 +4,31 @@
     {
       "name": "backend-migrated",
       "runtimeExecutable": "C:\\Users\\EFESTWIN\\miniconda3\\envs\\csc\\python.exe",
-      "runtimeArgs": ["-m", "invoke", "dev-migrated"],
+      "runtimeArgs": [
+        "-m",
+        "invoke",
+        "dev-migrated"
+      ],
       "port": 8000
     },
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "src/frontend", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "src/frontend",
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "frontend-migrated",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set MONGODB_URI=mongodb://127.0.0.1:27018/csc&& set FASTAPI_URL=http://127.0.0.1:8000&& npm --prefix src/frontend run dev"
+      ],
       "port": 3000
     }
   ]

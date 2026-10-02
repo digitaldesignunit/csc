@@ -62,7 +62,7 @@ def main() -> int:
                         help='throwaway mongod port (default 27018)')
     args = parser.parse_args()
 
-    from mongod import ThrowawayMongod, find_mongod
+    from mongod import ThrowawayMongod, find_mongod, sweep_stale_dirs
     from pymongo import MongoClient
     from support import load_dump
 
@@ -75,7 +75,9 @@ def main() -> int:
     server = ThrowawayMongod(binary, port=args.mongo_port).start()
     dev = _REPO / '.dev'
     dev.mkdir(exist_ok=True)
+    sweep_stale_dirs('csc-dev-migrated-')
     work = Path(tempfile.mkdtemp(prefix='csc-dev-migrated-'))
+    (work / 'owner.pid').write_text(str(os.getpid()), encoding='ascii')
     env = _dev_env()
     try:
         client = MongoClient(server.uri)
