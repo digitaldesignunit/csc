@@ -169,7 +169,11 @@ original drawing --> `basis: drawing` (step 6d). The 2024-07-24 deinstallation a
 
 ### Open --- to grill
 
-None. O1 closed by 8.23, O2 by 8.24, O3 by 8.29.
+O1 closed by 8.23, O2 by 8.24, O3 by 8.29.
+
+| # | Topic | Context |
+|---|---|---|
+| O4 | **Review the email setup** (user 2026-10-01). Invitations, member notices and verification mails keep the current SMTP setup (`SMTP_*`, `SMTP_FROM_EMAIL`) for now. To review later: the sender address and name per mail type, what happens to replies and auto-replies (out-of-office, bounces) sent to the noreply address, a reply-to for invitations (the inviting moderator?), bounce handling for invitations to mistyped addresses, delivery to non-TU domains (SPF / DKIM / DMARC of the sending domain), and mail templates (language, footer, imprint link). | P3 part 4 sends invitations (8.14) and "added to dataset" notices (8.20) through the existing mailer used for verification since 0.5. |
 
 ---
 

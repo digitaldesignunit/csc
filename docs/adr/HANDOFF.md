@@ -38,7 +38,13 @@ Part 3 done --- `api/identity_lifecycle.py`: withdraw / reinstate (with `duplica
 re-pointed), delete of never-published pieces, purge with 410 stubs (`purged_records`), `GET /id/{uuid}`;
 tombstones outside D on every JSON read (`TombstoneHit`, 200), files of withdrawn records members-only (403).
 Left for part 5 (web): the `/id/[uuid]` page, tombstone / "not public" / "no access" pages, scanners taking a
-URL. **Next:** part 4, invitations, the member editor by email, the admin user list, verification split.
+URL. Open to grill: O4 (email setup review). Part 4 done --- `api/invitations.py` (`POST/GET/DELETE
+/invitations`, `POST /datasets/{did}/members` by email: existing account added + notified, else invited),
+`/auth/register` with `code` (verified at once, roles granted) and `CSC_OPEN_REGISTRATION_DOMAINS`,
+`GET /users` filters + memberships (8.21), `GET /users/search` (admin), rules `invite`,
+`revoke_invitation`, `search_users`, verification split into `self_attest` / `review_verification`
+without the admin shortcut (8.12; the evidence routes use them in P6). **Next:** part 5, the web side
+of P3.
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.

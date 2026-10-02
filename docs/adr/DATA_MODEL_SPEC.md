@@ -974,6 +974,10 @@ included), with the verification email as in 0.5. Every other address needs an *
 mail carries `/auth/register?code=...`; registering with a code requires the invited address,
 which then counts as verified. A code is single-use; a batch is a list of addresses, one
 invitation each. There are no open codes. Index: `code_sha256` (unique), `email`.
+An invitation also carries `revoked_by_user_id`; the account made from it carries
+`invitation_id` (the admin list's "invited" filter, 8.21). `POST /invitations` reports an
+address that already has an account as `exists` instead of inviting it (add it with the member
+editor). A code is compared case-insensitively.
 
 **Adding people to a dataset (decision 8.20).** The member editor takes an **email address** and
 the roles. An existing account is added at once and notified by mail ("added to dataset X as
