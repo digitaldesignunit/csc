@@ -648,6 +648,9 @@ Migration: `created_by_user_id` = the `added_by_user_id` of the identity's v0 (s
   "bbx": [X, Y, Z],                            // DERIVED: box extents along frame x / y / z (not sorted by PCA variance)
                                                // `iframe` REMOVED (7.11): only designs gave it meaning
   "complexity": 2, "complexity_source": "derived" | "assigned",   // 0--3 ordinal, DERIVED + overridable (6.15)
+  "derivation": {                              // DERIVED: what each runner stage last did (section 4.3, decision 8.46); keys frame | shape_class | proxies | descriptors | complexity | previews
+    "proxies": { "version": 1, "input": "<fingerprint of what the stage read>", "at": "...", "error": null }
+  },
   "fragment": false,                         // `assembly` REMOVED (never true; = shape_class composite) --- 6.13
                                                // `condition` REMOVED --- visual state is evidence (section 2.6, section 8 step 6b)
   "color": [r,g,b], "location": {"lat":...,"lon":...},
@@ -966,8 +969,9 @@ pipeline removes the EXIF GPS block, owner / artist and body serial number, and 
 capture time (`DateTimeOriginal`) and camera make / model. Where a piece is stays the snapshot's
 chosen `location`, never the photo's GPS.
 
-New env vars: `SNAPSHOT_PROXIES_DIR`, `SNAPSHOT_CAPTURE_DIR`, `EVIDENCE_ATTACHMENTS_DIR`
-(+ upload limit), added to `_REQUIRED_ENV`.
+New env vars: `SNAPSHOT_PROXIES_DIR` (the `proxies/` folder above) and `SNAPSHOT_CAPTURE_DIR`
+(the `capture/` folder), both required since P5; `EVIDENCE_ATTACHMENTS_DIR` (+ upload limit)
+follows with P6, added to `_REQUIRED_ENV`.
 
 ---
 
@@ -1145,22 +1149,32 @@ resolve_snapshot_at(snapshots, at) -> Context
 
 Inputs: the frame's box extents (`bbx`, section 4.3 stage 1) sorted `e1 >= e2 >= e3` and
 `descriptors.{boxscore, spherescore, linescore, planescore}` --- computed in stage 1 from the same hull and box as the frame (decision 8.7), so always present. Sorting makes the
-class independent of the frame's axis order, so the column rule of stage 1 (which reads the
-class) cannot loop: stage 1 runs with the current class (none on a new snapshot --> the default
-lying convention), stage 2 derives the class, and stage 1 re-runs only if the class became
-`linear` on an `IfcColumn`.
+class independent of the frame's axis order. Stage 1 does not read the class: the column rule
+uses the box's elongation (decision 8.52), so frame and class never wait on each other.
 
 ```
-if boxscore > T_IRREGULAR:                  irregular       # hull << OBB: pocketed, blobby
-elif e1/e2 >= T_LINEAR:                     linear
-elif e2/e3 >= T_PLANAR:                     planar
+linear_ok = e1/e2 >= T_LINEAR
+planar_ok = e2/e3 >= T_PLANAR
+if linear_ok and planar_ok:                 linear if e1/e2 >= e2/e3 else planar   # the stronger elongation wins (8.58)
+elif linear_ok:                             linear          # elongation first (decision 8.56)
+elif planar_ok:                             planar
+elif boxscore > T_IRREGULAR:                irregular       # hull << OBB: pocketed, blobby
 else:                                       block
 ```
 
-Initial thresholds `T_LINEAR = 4`, `T_PLANAR = 4`, `T_IRREGULAR = 25` --- **to be tuned against
-the 701 snapshots of dump 260916 before freezing**; the tuning script and its confusion table are part of the
-deliverable. `composite` is never produced. Stored with `shape_class_source: "derived"`; a user
-override writes `"assigned"` and is not overwritten by recompute.
+Elongation is tested before the hull score (decision 8.56): a clearly elongated or flat piece
+is linear or planar even when its hull is uneven (zirkus timber, aggregations); only the
+remaining compact pieces can be irregular. A piece that passes both tests takes the class of
+its stronger elongation (decision 8.58): a long thin strip (e1/e2 3.3, e2/e3 25) is planar, a
+batten or board (e1/e2 20, e2/e3 5) linear.
+
+**Thresholds, frozen 2026-10-02 on dump 261001 (decision 8.59):** `T_LINEAR = 3`,
+`T_PLANAR = 3`, `T_IRREGULAR = 25`. The tuning script and its tables
+(`scripts/dev/tune_geometry.py`) stay part of the deliverable; a change of thresholds is a
+version bump of the stage. `composite` is never produced. Stored with `shape_class_source: "derived"`; a user
+override writes `"assigned"` and is not overwritten by recompute. Setting the override to
+`null` returns it to derived: the source becomes `"derived"` and the stage recomputes
+(decision 8.55; same rule for `complexity`, and as for `material_class`, I25).
 
 ### 4.2b Complexity --- `complexity.py` (decision 6.15)
 
@@ -1168,8 +1182,10 @@ Ordinal 0--3 (0 simple, 1 normal, 2 complex, 3 very complex). Inputs: primary-pr
 `p95_mm / e1` (how far the piece departs from its proxy), `boxscore` (hull concavity), and
 `shape_class == composite` => >= 2. Thresholds tuned by the same script as section 4.2 against the
 **71 `beyond_debris` (0.5: `sas_cita_scans`) ratings, which are authored per element** (user) --- the only genuine labels;
-confusion table part of the deliverable. `complexity_source: derived | assigned`; assigned is never
-overwritten.
+confusion table part of the deliverable. **Frozen 2026-10-02 (decision 8.59):** residual
+`p95_mm / e1` thresholds `0.005 / 0.05 / 0.12`, `boxscore` thresholds `5 / 15 / 45` (on 261001:
+44 of 71 authored ratings exact, 71 of 71 within one level). `complexity_source: derived |
+assigned`; assigned is never overwritten.
 
 ### 4.3 Proxy fitting --- `proxies/registry.py` + `proxies/specs.py`
 
@@ -1192,7 +1208,7 @@ nothing derived. `/utility/compute-snapshot-orientation` and client-sent `bbx` /
 
 | # | stage | reads | writes | cost | when |
 |---|---|---|---|---|---|
-| 1 | `frame` | source geometry, `shape_class`, identity `original_function` | `frame`, `bbx` (no proxy --- decision 7.10); the four hull scores `boxscore`, `spherescore`, `linescore`, `planescore` from the same hull + box (8.7) | cheap | **synchronous** on every source-geometry write to a draft (create, PLY upload/replace) and on submit; again when `original_function` or `shape_class` changes |
+| 1 | `frame` | source geometry, identity `original_function` (decision 8.52) | `frame`, `bbx` (no proxy --- decision 7.10); the four hull scores `boxscore`, `spherescore`, `linescore`, `planescore` from the same hull + box (8.7) | cheap | **synchronous** on every source-geometry write to a draft (create, supersede, PLY upload / replace / delete, geometry PATCH) and on submit; again when `original_function` changes |
 | 2 | `shape_class` | stage 1 extents + scores | `shape_class` (unless `assigned`) | cheap | synchronous, right after 1 |
 | 3 | `proxies` | source + `shape_class` | fitted primary/part proxies, residuals, `deviation_maps` | expensive | async runner |
 | 4 | `descriptors` | source + `frame` (radial section, rest alignment) | the expensive descriptors: radial signatures, HKS (8.6) | expensive | async runner |
@@ -1200,8 +1216,12 @@ nothing derived. `/utility/compute-snapshot-orientation` and client-sent `bbx` /
 | 6 | `previews` | source / proxies | `previews/<sid>.webp` | medium | async runner |
 
 Each stage is idempotent and stores, next to its output, its `*_VERSION` **and a fingerprint of
-its inputs** (decision 8.7) --- e.g. for `proxies`: source-geometry etag, `shape_class`,
-`shape_class_source`. A stage is stale when either differs; the cron sweeps everything stale. So
+its inputs** (decision 8.7) as the **stage stamp** `derivation.<stage> = {version, input, at,
+error}` (decision 8.46) --- e.g. for `proxies`: the source geometry, `shape_class`,
+`shape_class_source` and the frame. The source part is the digest of the inline geometry and, per
+chosen PLY file, its path, size and modification time (decision 8.47). A stage is stale when its
+stamp is missing or either differs; the cron sweeps everything stale (`main_geometry.py`; the same
+stages also run off the server through the API, decisions 8.45 and 8.51). So
 any change of an upstream result --- a recompute, a moderator override of `shape_class`, an
 `original_function` change that flips the column rule --- makes stages 3--5 of that snapshot
 stale and they rerun; no stage order can loop. Authored proxies are never refitted but still feed stage 1--2 (frame
@@ -1216,8 +1236,10 @@ descriptors and the shape class. It is **not a proxy**:
    Edge-aligned for box-like pieces; vertex PCA is not used (it lands on diagonals when two
    extents are similar or vertex density is uneven).
 2. Axes by extent: **longest --> x, middle --> y, shortest --> z** (lying on its largest face);
-   **`shape_class == linear` and `original_function == IfcColumn`: longest --> z, middle --> x,
-   shortest --> y** (standing). Same rule as the add-component wizard's `canonicalizeBoxAxesMm`.
+   **`original_function == IfcColumn` and longest >= 2 x middle extent: longest --> z, middle -->
+   x, shortest --> y** (standing; decision 8.52 --- elongation from this stage's own box, not the
+   shape class, so a misclassified column still stands and a short column fragment lies). Same
+   axis order as the add-component wizard's `canonicalizeBoxAxesMm`.
 3. **Signs and ties (decision 8.15): the valid frame closest to the stored coordinates.**
    Candidates are the OBB axes assigned by step 2, where extents within
    `max(2 % of the larger, 3 mm)` of each other count as tied and may swap, with either sign per
@@ -1226,8 +1248,14 @@ descriptors and the shape class. It is **not a proxy**:
    OBB's angle about the long axis is taken as trimesh returns it (deterministic on the same
    input). Re-runs give the same frame; signs are not intrinsic (a rescan in another pose may
    differ by a 180 degree flip). `frame.o` = box centre; `bbx` = extents along x / y / z.
+4. **Never upside down against the input (decision 8.53).** Before step 3's `trace(R)`: when the
+   canonical z of a candidate lies within 60 degrees of the stored z axis (|z . Z| >= 0.5), only
+   candidates with `z . Z > 0` are valid --- the piece keeps the input's up direction. Step 3
+   then decides among the rest. The frame report (rehearsal, tuning tables) lists every snapshot
+   whose canonical z points against stored z (`z . Z < 0`) and every axis-order change against
+   0.5, for review.
 
-Recomputed when `original_function` or `shape_class` changes.
+Recomputed when `original_function` changes (no longer on a `shape_class` change, 8.52).
 
 **The frame is a transform, never a re-orientation** (user; the reason 0.5 introduced
 `pca_frame`). Stored geometry keeps the coordinates it was uploaded in, whatever produced them ---
@@ -1242,8 +1270,10 @@ later assigned override (additive).
 Proxy fitting per snapshot (stage 3):
 
 1. Load highest-resolution source (`detailed.ply` > `reduced.ply` > inline mesh > cloud PLY >
-   inline cloud), same priority as descriptors --- over **all** component meshes / clouds, never
-   `capture` markers or fixtures (section 3.2.3).
+   inline cloud), same priority as descriptors --- over **all** component meshes (else all
+   clouds, else the authored proxies; a mesh and a cloud of one scan are one state, decision
+   8.47), never `capture` markers or fixtures (section 3.2.3). Residuals, deviation maps and the
+   HKS sample use a seeded surface sample of this source (decisions 8.48, 8.6).
 2. Fit per spec --- **no new dependency** (decision 6.11; numpy, scipy, trimesh, shapely only):
    - `box`: `obb` = the frame's box (stage 1), optional `lsq` refine.
    - `prism`, planar shape class: the frame's shortest axis = thickness direction; project
@@ -1256,12 +1286,12 @@ Proxy fitting per snapshot (stage 3):
    - `hull`: `trimesh` convex hull, deterministic.
    Rejected: Open3D (heavy wheel + system GL libs on shared hosting, two functions used),
    `pyransac3d` (unmaintained).
-3. Residuals: signed distance of every source point to the proxy surface --> `rms/p95/max`,
-   `inlier_ratio` at a tolerance from the spec.
+3. Residuals: signed distance of the surface sample (50 000 points, seeded) to the proxy surface
+   --> `rms/p95/max`, `inlier_ratio` at a tolerance from the spec (3 mm; decision 8.48).
 4. Deviation maps: transform points into the proxy's placement; for each face, orthographic
    projection onto the face plane, regular grid at `resolution_mm`; per cell aggregate mean signed
    distance, mean angle between point normal and face normal, and occupancy count --> three 16-bit
-   channels. Cylinder lateral face unrolls to (theta, z). Hull faces are triangles, one map each is
+   channels of one RGB PNG (layout and units: decision 8.49). Cylinder lateral face unrolls to (theta, z). Hull faces are triangles, one map each is
    too many --- **hull uses a single spherical (theta, phi) map** of concavity depth instead.
 5. Write `fit` and `deviation_maps`. The frame (`frame`, `bbx`) is stage 1's and is never
    rewritten from a proxy.
@@ -1451,7 +1481,7 @@ role)`; the frontend merely hides controls. `admin` passes every check. D = the 
 | upload / replace / delete geometry files and photos | as "edit an unpublished record", **only while the snapshot is not `published`** (freeze rules: decision 6.6) |
 | evidence attachments | unpublished record: as "edit an unpublished record"; published: `contributor(D)` adds, `moderator(D)` removes with reason, tombstone entry kept (decision 7.3) |
 | publish / reject / withdraw / reinstate (snapshot, evidence) | `moderator(D)`; publishing a child's **first** snapshot also ends its parents (split / merge, 8.8), so it needs `moderator` of every parent's dataset as well --- otherwise it waits in that dataset's queue |
-| promote `current_snapshot_id`; `effective_from`, `shape_class` overrides | `moderator(D)` |
+| promote `current_snapshot_id`; `effective_from`, `shape_class` overrides; recompute a snapshot's derived fields | `moderator(D)` |
 | PATCH identity metadata (`origin`, `material`, `original_function`, `is_public`, ...) | `moderator(D)`; while the identity is unpublished also its creator (8.9) |
 | `exit`, `reenter`, `withdraw` identity | `moderator(D)` |
 | move identity D1 --> D2 | `moderator(D1) and moderator(D2)` |
@@ -1483,9 +1513,14 @@ GET    /snapshots/pending                          moderation queue (replaces /p
 PATCH  /snapshots/{sid}                           per-field permission (section 3.2.2): draft --> author / moderator(D), pending --> moderator(D), everything but derived fields;
                                                   published --> moderator(D): mutable metadata, effective_from(+precision), shape_class / complexity override;
                                                   frozen field on a published snapshot --> 409 pointing at /supersede. Replaces PATCH /identities/{id}/current-snapshot
-GET    /snapshots/{sid}/proxies/{i}/faces/{face}   deviation map PNG
+GET    /snapshots/{sid}/proxies/{i}/faces/{face}   deviation map PNG (16-bit RGB, decision 8.49); same visibility as the snapshot
+GET    /snapshots/{sid}/proxies/{i}/mesh           the proxy as PLY / OBJ in stored coordinates (every primitive)
 GET    /snapshots/{sid}/capture/fixtures/{i}.ply   fixture mesh (section 3.2.3); visibility of the snapshot
-POST   /snapshots/{sid}/proxies/recompute          moderator(D); runs section 4.3 for one snapshot
+POST   /snapshots/{sid}/proxies/recompute          moderator(D); runs every stage of section 4.3 on one snapshot, stale or not
+GET    /geometry/stale | /geometry/work/{sid}      admin: the geometry runner off the server (decisions 8.45, 8.51)
+POST   /geometry/results/{sid}                     admin: a worker's derived fields + files; 409 when the inputs changed
+GET    /geometry/failed                            admin: snapshots with a failed frame / class / proxy stage, stage and stored error text (decisions 8.60, 8.61); web /admin/geometry
+GET    /identities/{id}/snapshots                  version list; each row carries `geometry_failed` (a frame, class or proxy stage failed --- a flag, never the text; 8.60)
 GET    /identities/{id}/changes                    member(D) / admin: change_log entries of the identity, its snapshots and evidence (section 3.8)
 GET    /identities/{id}?as_of=<date>               the record as of a date (section 3.8); same for /snapshots/{sid}, /evidence/{eid}
 GET    /identities/{id}/timeline                   merged: past_cycles, origin, snapshot states + corrections, evidence, exit
@@ -1756,7 +1791,7 @@ until memberships are assigned), idempotent, 70 fixture files.
 | 17 | 9b | `migrate_complexity_source.py` | 11a | `beyond_debris` (71): keep value, `complexity_source: assigned`. All others (630, batch defaults): `complexity_source: derived`, value recomputed by stage 5 of `main_geometry.py`. |
 | 18 | 5 | `main_geometry.py --stages frame,shape_class --recompute` | 3, 4, 6c | every snapshot gets `frame` + `bbx` by the 7.10 rule (min-volume box, axis convention); `pca_frame` and `bbx_origin` `$unset`. Replaces the planned `migrate_obb_to_box_proxy.py` --- the frame is no longer a proxy. Prints, per dataset, how many frames changed axis order vs. 0.5 (expected: diagonal cases, columns). **Must run after 4 (authored prisms), 6c (gripper leaves `geometry`) and 3 (column rule reads `original_function`).** |
 | 19 | 7 | `main_geometry.py --stages proxies,descriptors,complexity,previews --recompute` | 5, 9b | fits, residuals, deviation maps, descriptors (frame-aligned, version bump), complexity, previews (6.14). |
-| 20 | 8 | `main_geometry.py --stages shape_class,frame --recompute` | 7 + threshold tuning | after threshold tuning: recompute `shape_class`; where it changed, the frame (column rule, 7.10) and --- by fingerprint (8.7) --- stages 3--5 rerun. An ordinary recompute, no special pass. |
+| 20 | 8 | `main_geometry.py --stages shape_class,frame --recompute` | 7 + threshold tuning | after threshold tuning: recompute `shape_class`; where it changed, stages 3--5 rerun by fingerprint (8.7); the frame does not depend on the class (8.52). An ordinary recompute, no special pass. |
 | 21 | 13 | `migrate_archive_designs.py` | --- | decision 7.11: export the whole `designs` collection to `designs_archive_<yymmdd>.json` next to the cutover dump, verify the document count, then drop the collection. |
 | 21b | 15 | (in `migrate_06.py`) | --- | decision 8.28: lowercase every `users.username` and the copies `added_by_username` (snapshots) and `recorded_by_username` (evidence); aborts, naming them, if two accounts would share a name. 261001: 10 of 31 accounts, no clash. |
 | 22 | 14 | `migrate_strip_photo_gps.py` | --- | decision 7.13: re-save every stored snapshot photo without GPS / owner / serial (orientation, capture time, make / model kept); prints how many files carried GPS (260916 assets: 3 of 8). Independent of 0.6 --- can run as soon as the upload pipeline strips too. |

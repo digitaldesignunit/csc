@@ -192,6 +192,14 @@ _Avoid_: raw scan (the uploader may have cleaned it), detailed, full resolution
 **Deviation map**:
 An image per proxy face recording how far the real surface departs from the proxy.
 
+**Geometry runner**:
+The server-side process that derives everything computed from a snapshot's geometry --- frame, shape class, proxies and deviation maps, descriptors, complexity, previews --- in a fixed order of stages. The cheap stages also run when a draft is saved; the rest run in a periodic sweep, on the server or on another machine through the API.
+_Avoid_: descriptor cron, preview cron, batch job
+
+**Stage stamp**:
+What one stage of the geometry runner recorded on a snapshot when it last ran: its version, a fingerprint of what it read, and the error it ended with. A stage is stale when its stamp is missing or differs from the current version or inputs.
+_Avoid_: derivation status, cache key
+
 **Material**:
 The generic material a component is mainly made of, from a controlled list (concrete, fired clay, mineral composite, ...).
 _Avoid_: brand names (those are the trade name)

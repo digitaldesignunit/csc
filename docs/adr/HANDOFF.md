@@ -75,7 +75,24 @@ component page; `/admin/materials`; the viewer draws box proxies. Checked in the
 261001 rehearsal copy. Grilled the same day: 8.40 (EN methods only), 8.41 (payload corrections,
 German strength class read by the user), 8.42 (core-to-rebound pairs; test regions later), 8.43
 (points and grids picked in the web viewer), 8.44 (exports: JSON-LD + CERO + PDF in P10, 0.6.1).
-**Next:** P5 (geometry runner). Still open: O11 before P8; O4, O12 before P9.
+**2026-10-02, P5 built (branch `v-0.6.0.0-P5`).** The geometry runner: `main_geometry.py` with the
+stages frame --> shape class --> proxies (+ deviation maps) --> descriptors (radial, HKS) --> complexity
+--> previews, each stamped on the snapshot (`derivation`, 8.46) so a changed input reruns its
+dependents; frame and class also run in the API on every draft geometry write, submit, override and
+function change (`api/geometry_hooks.py`); one cron (`geometry_cronjob.ini`) replaces the descriptor
+and preview crons; `--remote <url>` runs it off the server through admin-only routes (8.45, 8.51);
+deviation-map and proxy-mesh routes; `POST /snapshots/{sid}/proxies/recompute`. Web: stored /
+canonical orientation and a proxy overlay (outline, distance, normal, points) in the viewer. Rehearsal
+on dump 261001 (`invoke rehearse`, now with steps 5, 7, 8): 701 / 701 snapshots derived, 0 stage
+errors, 0 invariant errors; the frame changed axis order against the 0.5 `pca_frame` on 23 snapshots
+(5 `beyond_debris`, 8 `dbu_zirkus`, 8 `ddu_build_with_debris`, 1 each `schoenes_neues_feld` and
+`spa_example_data`). Build decisions 8.46--8.51 are marked "to confirm". **Open before P5 is
+accepted:** the user signs off the tuning tables (`.dev/tuning_261001.txt`: shape class and
+complexity against the 71 authored `beyond_debris` ratings) and the frame report; the thresholds in
+`shape_class.py` and `complexity.py` are still the initial guesses and are frozen after that sign-off
+(a change is a `*_VERSION` bump). Left for P7: the add-component wizard still calls
+`/utility/compute-snapshot-orientation` and `orientation.py` (6.14: they go with the wizard).
+**Next:** P6 (evidence). Still open: O11 before P8; O4, O12 before P9.
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.

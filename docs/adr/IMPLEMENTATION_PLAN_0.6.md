@@ -204,7 +204,7 @@ reviewer, moderator, other-dataset moderator, admin}.
 **Done when:** propagation tests over a 3-generation lineage incl. a merge; I16--I18, I25 checked by
 `check_invariants` on the rehearsal DB.
 
-### P5 --- Geometry runner --- size XL
+### P5 --- Geometry runner --- size XL --- **built 2026-10-02 (backend + web), in review**
 - `capture` block and fixture files (section 3.2.3, `SNAPSHOT_CAPTURE_DIR`); derivations never read
   markers / fixtures (I23).
 - `main_geometry.py` (section 4.3) with stages frame --> shape_class --> proxies --> descriptors -->
@@ -228,9 +228,28 @@ reviewer, moderator, other-dataset moderator, admin}.
   order vs. 0.5 `pca_frame`.
 - Web: viewer shows canonical vs. stored orientation, proxy + deviation-map overlay; GH-facing
   `frame` semantics unchanged for `ApplyFrame`.
+- **Off the server (8.45, 8.51):** `main_geometry.py --remote <url>` pulls stale snapshots through
+  admin-only routes, computes locally and uploads; the server refuses a result whose inputs changed
+  (409) and recomputes the stamps itself.
+
+Built as (decisions 8.46--8.51): `apps/catalog/{frame,shape_class,complexity,geometry_source,
+geometry_stages,geometry_runner,remote_runner}.py`, `apps/catalog/proxies/` (`primitives`,
+`sampling`, `robust`, `specs`, `registry`, `fit`, `deviation`, `png16`), `apps/descriptors/hks.py`
+(grid derived once by `scripts/dev/derive_hks_grid.py` on the 238 mesh folders of 260916, 238 / 238
+fitted), `main_geometry.py` (cron `geometry_cronjob.ini`, replaces the descriptor and preview
+crons), `api/geometry_hooks.py` (stages 1--2 on every draft geometry write, submit, override and
+function change; `POST /snapshots/{sid}/proxies/recompute`), `api/geometry_remote.py`, the deviation
+map and proxy mesh routes, `derivation` stamps on the snapshot. The 0.5 `pca_frame` shim in
+`read_models.py` is gone. Rehearsal (`invoke rehearse`) now runs steps 5, 7 and 8 and writes the
+tuning tables (`scripts/dev/tune_geometry.py` --> `.dev/tuning_<dump>.txt`); `invoke dev-migrated`
+derives frame, class, proxies and complexity. Web: orientation toggle (stored / canonical) and a
+proxy overlay (outline, distance, normal deviation, points) in `ComponentViewer`, the maps decoded
+in the browser (`lib/png16.ts`). The thresholds in `shape_class.py` and `complexity.py` are still
+the initial guesses until the tables are signed off.
 
 **Done when:** every rehearsed snapshot has frame, bbx, shape class, proxies, descriptors,
-complexity; the user has signed off the tuning tables and the frame report.
+complexity; the user has signed off the tuning tables and the frame report. *(First half met on
+dump 261001; the sign-off is open.)*
 
 ### P6 --- Evidence --- size XL
 - `component_evidence` + method registry (section 4.5) with the seven methods (A.1--A.4); payload

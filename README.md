@@ -405,15 +405,15 @@ The entries, ready to paste into `crontab -e`, are in `uberspaceconfig/crontab/`
 
 | job | schedule | what |
 |---|---|---|
-| `previewgen_cronjob.ini` | every 5 min | renders missing component previews |
-| `descriptors_simple_cronjob.ini` | every 5 min (`flock`) | computes missing geometric descriptors |
+| `geometry_cronjob.ini` | every 5 min (`flock`, `--limit 25`) | geometry runner: frame, shape class, proxies + deviation maps, descriptors, complexity, previews of every snapshot whose derivation is stale. With `CSC_GEOMETRY_HEAVY_STAGES=remote` it runs only frame and shape class, and the rest runs on a worker elsewhere (`main_geometry.py --remote <url> --user <admin>`, password in `CSC_API_PASSWORD`); the recompute route then only marks the heavy stages stale |
 | `component_map_cronjob.ini` | every 6 h (`flock`) | precomputes PCA / UMAP layouts for the component map |
 | `usermaintenance_cronjob.ini` | daily 2:00 | removes unverified accounts older than 7 days |
 | `geometrymaintenance_cronjob.ini` | daily 3:00 | removes geometry folders without a component |
 
 Each line starts with `source ~/.bash_profile &&` so the job sees the backend's
 environment variables. To run a job by hand:
-`~/csc/current/venv/bin/python ~/csc/current/backend/main_previewgen.py`.
+`~/csc/current/venv/bin/python ~/csc/current/backend/main_geometry.py --snapshot <id>`
+(`--help` lists the stages and `--recompute`).
 
 ## OpenAPI Model Generation
 
