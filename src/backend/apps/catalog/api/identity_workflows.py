@@ -14,12 +14,11 @@ from apps.catalog.models import User, normalize_username
 from apps.catalog.api.access import (
     and_match, require, viewer_of, visible_identity_match)
 from apps.catalog.read_models import catalog_row
-from .auth import get_current_active_user, require_admin
+from .auth import get_current_active_user
 from .catalog_common import (
     get_identities_col,
     get_snapshots_col,
     now_iso,
-    retired_until,
     validate_uuid,
 )
 from .identity_filters import CatalogFilters, Circulation
@@ -150,21 +149,10 @@ async def get_vocabularies():
         'exit_kind': _labelled(vocab.EXIT_KINDS, vocab.EXIT_KIND_LABELS),
         'status': _labelled(vocab.STATUSES, {}),
         'precision': _labelled(vocab.PRECISIONS, {}),
+        'dgnb_class': _labelled(vocab.DGNB_CLASSES, vocab.DGNB_CLASS_LABELS),
+        'connection_type': _labelled(vocab.CONNECTION_TYPES, {}),
+        'construction_method': _labelled(vocab.CONSTRUCTION_METHODS, {}),
     })
-
-
-@router.get(
-    '/materials',
-    summary='The controlled materials list (spec section 2.10)',
-)
-async def list_materials(request: Request):
-    coll = request.app.mongodb['materials']
-    try:
-        docs = await coll.find({}).sort('label', 1).to_list(length=None)
-    except PyMongoError as exc:
-        print(f'[ERROR] list_materials: {exc}')
-        raise HTTPException(status_code=500, detail='Internal server error')
-    return JSONResponse(status_code=200, content=docs)
 
 
 @router.get(
@@ -290,93 +278,6 @@ async def release_identity_reservation(
         status_code=200,
         content={
             'message': 'Component released successfully',
-            'identity_id': identity_id,
-        },
-    )
-
-
-@router.post(
-    '/identities/{identity_id}/consume',
-    summary='Mark identity as consumed (admin only)',
-    dependencies=[Depends(retired_until('P4'))],
-)
-async def consume_identity(
-    request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
-    identity_id: str,
-):
-    """
-    Set ``consumed_at`` (replaces legacy archive move).
-    Geometry is unchanged.
-    """
-    identity = await _load_identity(request, identity_id)
-    if identity.get('consumed_at'):
-        raise HTTPException(
-            status_code=409,
-            detail='Identity is already consumed',
-        )
-
-    identities = await get_identities_col(request)
-    now = now_iso()
-    try:
-        await identities.update_one(
-            {'_id': identity_id},
-            {
-                '$set': {
-                    'consumed_at': now,
-                    'reserved': '',
-                    'lastmodified': now,
-                },
-            },
-        )
-    except PyMongoError as exc:
-        print(f'[ERROR] consume_identity: {exc}')
-        raise HTTPException(status_code=500, detail='Internal server error')
-
-    return JSONResponse(
-        status_code=200,
-        content={
-            'message': 'Identity marked as consumed',
-            'identity_id': identity_id,
-            'consumed_at': now,
-        },
-    )
-
-
-@router.post(
-    '/identities/{identity_id}/restore',
-    summary=(
-        'Clear consumed_at and return identity to active catalog (admin only)'
-    ),
-    dependencies=[Depends(retired_until('P4'))],
-)
-async def restore_identity(
-    request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
-    identity_id: str,
-):
-    identity = await _load_identity(request, identity_id)
-    if not identity.get('consumed_at'):
-        raise HTTPException(
-            status_code=409,
-            detail='Identity is not consumed',
-        )
-
-    identities = await get_identities_col(request)
-    now = now_iso()
-    try:
-        await identities.update_one(
-            {'_id': identity_id},
-            {'$set': {'consumed_at': None, 'lastmodified': now}},
-        )
-    except PyMongoError as exc:
-        print(f'[ERROR] restore_identity: {exc}')
-        raise HTTPException(status_code=500, detail='Internal server error')
-
-    return JSONResponse(
-        status_code=200,
-        content={
-            'message': 'Identity restored to active catalog',
             'identity_id': identity_id,
         },
     )

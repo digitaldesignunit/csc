@@ -179,7 +179,8 @@ def test_inheritance_lists_equal_fields_and_overwrites_manufacture():
                  manufactured_precision='exact', original_function='IfcSlab')
     update = m.inheritance_for(child, [parent])
     assert update['inherited_fields'] == ['origin', 'manufactured_at', 'material',
-                                          'trade_name']
+                                          'trade_name', 'manufacturer',
+                                          'material_separability']
     assert (update['manufactured_at'], update['manufactured_precision']) == \
         (None, 'unknown')
     assert update['inherited_from'] == 'p'

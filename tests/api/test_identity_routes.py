@@ -134,20 +134,15 @@ def test_stats_vocab_materials(api, db, member_headers):
 
 
 def test_05_write_routes_are_retired(api, db, auth_headers):
-    """Writes not yet rebuilt answer 503 naming their plan phase; the ones
-    P3 replaced are gone (the lifecycle routes cover them)."""
+    """The 0.5 write routes are gone: P3 and P4 replaced them (the
+    lifecycle, exit and 0.6 create / PATCH routes cover them); a 0.5
+    create body is refused by the 0.6 route."""
     admin = auth_headers('admin')
-    for method, path, body in (
-            ('post', '/identities', panel_payload()),
-            ('patch', '/identities/x', {'material': 'concrete'}),
-            ('post', '/identities/x/consume', None),
-            ('post', '/identities/x/restore', None)):
-        call = getattr(api, method)
-        response = call(path, json=body, headers=admin) if body is not None \
-            else call(path, headers=admin)
-        assert response.status_code == 503, (method, path, response.text)
-        assert 'plan P' in response.json()['detail']
+    assert api.post('/identities', json=panel_payload(),
+                    headers=admin).status_code == 422
     for method, path in (('patch', '/identities/x/current-snapshot'),
-                         ('post', '/snapshots/x/validate')):
+                         ('post', '/snapshots/x/validate'),
+                         ('post', '/identities/x/consume'),
+                         ('post', '/identities/x/restore')):
         response = getattr(api, method)(path, json={}, headers=admin)
         assert response.status_code in (404, 405), (method, path)

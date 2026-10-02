@@ -25,6 +25,7 @@ from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pymongo import ReturnDocument
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.documents import (
@@ -55,6 +56,8 @@ from .access import (
 from .auth import get_current_active_user
 from .identity_lifecycle import PurgeBody, purge_snapshot_record
 from .catalog_common import compute_snapshot_etag, now_iso, validate_uuid
+from .change_log import log_change
+from .identity_edit import check_cut_allowed, sync_parent_exits
 
 router = APIRouter()
 
@@ -186,6 +189,9 @@ def _new_snapshot(body: SnapshotDraftBody, *, identity_id: str, version: int,
     return _validated(doc)
 
 
+new_snapshot_doc = _new_snapshot   # identity_edit builds v0 with it
+
+
 async def _insert(request: Request, doc: dict) -> JSONResponse:
     await request.app.mongodb_component_snapshots.insert_one(doc)
     return JSONResponse(status_code=201, content=snapshot_body(doc))
@@ -215,11 +221,20 @@ async def _change_status(request: Request, user: User, snapshot: dict,
 
 
 async def _set_current(request: Request, identity_id: str,
-                       snapshot_id: Optional[str]) -> None:
-    await request.app.mongodb_component_identities.update_one(
-        {'_id': identity_id},
-        {'$set': {'current_snapshot_id': snapshot_id,
-                  'lastmodified': now_iso()}})
+                       snapshot_id: Optional[str],
+                       user_id: Optional[str] = None) -> None:
+    """Point the identity at its current state; logged (I30)."""
+    now = now_iso()
+    before = await request.app.mongodb_component_identities \
+        .find_one_and_update(
+            {'_id': identity_id},
+            {'$set': {'current_snapshot_id': snapshot_id,
+                      'lastmodified': now}},
+            return_document=ReturnDocument.BEFORE)
+    if before is not None:
+        await log_change(request, 'identity', before,
+                         {**before, 'current_snapshot_id': snapshot_id},
+                         by_user_id=user_id, cause='patch', at=now)
 
 
 async def _can(request: Request, user: User, action: str,
@@ -262,11 +277,13 @@ async def _publish(request: Request, user: User, snapshot: dict,
     first = not any(s.get('status') in EVER_PUBLISHED
                     for s in await _snapshots_of(request, identity['_id']))
     parents = []
+    parent_docs = []
     if first:
         for pid in identity.get('parent_identities') or []:
             parent = await request.app.mongodb_component_identities.find_one(
-                {'_id': pid}, {'dataset': 1})
+                {'_id': pid})
             if parent is not None:
+                parent_docs.append(parent)
                 parents.append(await dataset_of(request, parent['dataset']))
     target = Target(dataset=await dataset_of(request, identity.get('dataset')),
                     kind='snapshot', status=snapshot.get('status'),
@@ -274,6 +291,8 @@ async def _publish(request: Request, user: User, snapshot: dict,
                     parent_datasets=tuple(parents))
     if not can(viewer, 'publish', target):
         raise deny_write(viewer, 'publish')
+    # the parents may have changed since the cut was recorded (8.34)
+    await check_cut_allowed(request, parent_docs)
     _ensure_monotonic(snapshot, await _snapshots_of(request, identity['_id']))
 
     predecessor = None
@@ -295,10 +314,15 @@ async def _publish(request: Request, user: User, snapshot: dict,
                       'lastmodified': now_iso()}})
         if current == predecessor['_id']:
             current = published['_id']
-            await _set_current(request, identity['_id'], current)
+            await _set_current(request, identity['_id'], current, user.id)
     if promote or not current:
         # I3b: a current snapshot exists whenever a live one does
-        await _set_current(request, identity['_id'], published['_id'])
+        await _set_current(request, identity['_id'], published['_id'],
+                           user.id)
+    if first and parent_docs:
+        # the cut takes effect: the parents leave circulation (8.8)
+        await sync_parent_exits(request, [p['_id'] for p in parent_docs],
+                                user_id=user.id, source=identity['_id'])
     return published
 
 
@@ -329,10 +353,20 @@ async def create_snapshot(
     snapshots = await _snapshots_of(request, identity_id)
     _ensure_nothing_in_flight(snapshots)
     version = max((s['version'] for s in snapshots), default=-1) + 1
+    effective_from = body.effective_from
+    precision = body.effective_from_precision
+    origin = identity.get('origin') or {}
+    if effective_from is None and identity.get('past_cycles') \
+            and origin.get('at') and not any(
+                _ts(s['effective_from']) >= _ts(origin['at'])
+                for s in _live(snapshots)):
+        # the first state after a re-entry starts with it (8.19)
+        effective_from = origin['at']
+        precision = precision or origin.get('at_precision') or 'exact'
     doc = _new_snapshot(
         body, identity_id=identity_id, version=version, user=current_user,
-        effective_from=body.effective_from or now_iso(),
-        precision=body.effective_from_precision or 'exact')
+        effective_from=effective_from or now_iso(),
+        precision=precision or 'exact')
     return await _insert(request, doc)
 
 
@@ -463,7 +497,8 @@ async def promote_snapshot(
         raise HTTPException(
             status_code=409,
             detail='Only a published, uncorrected snapshot becomes current.')
-    await _set_current(request, identity['_id'], snapshot['_id'])
+    await _set_current(request, identity['_id'], snapshot['_id'],
+                       current_user.id)
     return _ok(snapshot)
 
 
@@ -497,7 +532,8 @@ async def withdraw_snapshot(
     if identity.get('current_snapshot_id') == snapshot['_id'] or replacement:
         fallback = replacement or (remaining[-1] if remaining else None)
         await _set_current(request, identity['_id'],
-                           fallback['_id'] if fallback else None)
+                           fallback['_id'] if fallback else None,
+                           current_user.id)
     return _ok(withdrawn)
 
 
@@ -516,7 +552,8 @@ async def reinstate_snapshot(
                                      'published')
     if not identity.get('current_snapshot_id') \
             and not published.get('superseded_by'):
-        await _set_current(request, identity['_id'], published['_id'])
+        await _set_current(request, identity['_id'], published['_id'],
+                           current_user.id)
     return _ok(published)
 
 
@@ -581,6 +618,15 @@ async def patch_snapshot(
                           await _snapshots_of(request, identity['_id']))
     await request.app.mongodb_component_snapshots.replace_one(
         {'_id': snapshot['_id']}, updated)
+    await log_change(request, 'snapshot', snapshot, updated,
+                     by_user_id=current_user.id, cause='patch',
+                     at=updated['lastmodified'])
+    if 'effective_from' in body and snapshot.get('status') in EVER_PUBLISHED \
+            and identity.get('parent_identities'):
+        # a cut's date moves the parents' exit with it (8.8)
+        await sync_parent_exits(request, identity['parent_identities'],
+                                user_id=current_user.id,
+                                source=identity['_id'])
     return _ok(updated)
 
 

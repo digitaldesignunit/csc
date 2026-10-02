@@ -62,7 +62,8 @@ def test_every_step_on_a_small_05_database(db, tmp_path):
     assert ids[iid('stone')]['exit']['kind'] == 'installed'
     # lineage: the grandchild inherits everything through its parent
     assert ids[iid('cut2')]['inherited_fields'] == [
-        'origin', 'manufactured_at', 'material', 'trade_name', 'original_function']
+        'origin', 'manufactured_at', 'material', 'trade_name', 'manufacturer',
+        'material_separability', 'original_function']
     assert ids[iid('cut2')]['manufactured_precision'] == 'unknown'
     assert ids[iid('cut2')]['origin']['kind'] == 'offcut'
     # effective_from: Corian at the offcut date, children at the cut

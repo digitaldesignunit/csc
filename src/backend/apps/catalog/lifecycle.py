@@ -111,6 +111,7 @@ EVIDENCE_DERIVED: FrozenSet[str] = frozenset({
 # unpublished, 8.9); everything else is server-maintained or has its own route.
 IDENTITY_METADATA: FrozenSet[str] = frozenset({
     'original_function', 'material', 'material_class', 'trade_name',
+    'manufacturer', 'connection_features', 'material_separability',
     'manufactured_at', 'manufactured_precision', 'origin', 'is_public',
     # inherited_fields: adding a field back (re-inherit) only, I17
     'attributes', 'inherited_fields',

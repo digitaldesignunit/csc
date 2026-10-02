@@ -138,6 +138,13 @@ TERMINAL_EXIT_KINDS: Tuple[str, ...] = (
 # set by the server from published children (decision 8.8)
 SERVER_SET_EXIT_KINDS: Tuple[str, ...] = ('split', 'merged')
 
+# CHANGE LOG (section 3.8, decision 8.36) -------------------------------------
+ChangeCause = Literal[
+    'patch', 'inherited_from_parent', 'material_merge', 'exit', 'reenter',
+    'withdraw', 'reinstate', 'migration', 'derived_exit',
+]
+CHANGE_CAUSES: Tuple[str, ...] = get_args(ChangeCause)
+
 # MODERATION AND VERIFICATION (section 3.3.3) ---------------------------------
 Status = Literal['draft', 'pending', 'published', 'rejected', 'withdrawn']
 STATUSES: Tuple[str, ...] = get_args(Status)
@@ -382,12 +389,54 @@ MATERIAL_SEED_BY_ID: Dict[str, MaterialSeed] = {
 }
 
 
+# CONNECTIONS AND CIRCULARITY CLASSES (section 2.11, decision 8.38) ----------
+# DGNB Building Resource Passport v1.3: the class only, never DGNB's example
+# factor (that depends on the DGNB circularity standard)
+DgnbClass = Literal[
+    'optimised', 'improved', 'standard', 'limited', 'problematic',
+    'not_assessable',
+]
+DGNB_CLASSES: Tuple[str, ...] = get_args(DgnbClass)
+DGNB_CLASS_LABELS: Dict[str, str] = {
+    'optimised': 'Optimised',
+    'improved': 'Improved',
+    'standard': 'Standard',
+    'limited': 'Limited',
+    'problematic': 'Problematic',
+    'not_assessable': 'Assessment not possible',
+}
+# DGNB's connection words, plus cast_in / grouted for concrete
+ConnectionType = Literal[
+    'loose', 'click', 'inserted', 'plugged', 'screwed', 'nailed', 'bolted',
+    'soldered', 'foamed', 'sealed', 'adhesive', 'welded', 'cast_in',
+    'grouted', 'other', 'unknown',
+]
+CONNECTION_TYPES: Tuple[str, ...] = get_args(ConnectionType)
+# DIN SPEC 91484 Table 1
+ConstructionMethod = Literal['monolithic', 'prefabricated', 'mixed',
+                             'unknown']
+CONSTRUCTION_METHODS: Tuple[str, ...] = get_args(ConstructionMethod)
+
+
 # INHERITANCE (section 3.1.2) -------------------------------------------------
-# fields a child copies from its parent unless it states its own (6.2, 6.10)
-INHERITABLE_FIELDS: Tuple[str, ...] = (
-    'origin',
-    'manufactured_at',        # together with manufactured_precision
-    'material',
-    'trade_name',
-    'original_function',
+# units a child copies from its parent unless it states its own (6.2, 6.10);
+# a unit is listed in `inherited_fields` by its name and moves as a whole
+# (8.32, 8.38)
+INHERIT_UNITS: Dict[str, Tuple[str, ...]] = {
+    'origin': ('origin',),
+    'manufactured_at': ('manufactured_at', 'manufactured_precision'),
+    'material': ('material', 'material_class', 'material_class_source'),
+    'trade_name': ('trade_name',),
+    'manufacturer': ('manufacturer',),
+    'material_separability': ('material_separability',),
+    'original_function': ('original_function',),
+}
+INHERITABLE_FIELDS: Tuple[str, ...] = tuple(INHERIT_UNITS)
+# what a merge compares to decide whether the parents agree on `origin`
+# (8.33); actors are united and notes joined
+ORIGIN_IDENTIFYING_KEYS: Tuple[str, ...] = (
+    'kind', 'at', 'at_precision', 'place', 'construction_work',
 )
+# exit kinds a cut may start from: the parent is in circulation (no exit)
+# or already ended by a cut (8.34)
+CUTTABLE_EXIT_KINDS: Tuple[str, ...] = ('split', 'merged')

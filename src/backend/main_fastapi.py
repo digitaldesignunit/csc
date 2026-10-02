@@ -23,7 +23,10 @@ from apps.catalog.client_header import (
     configure_client_log,
     parse_min_versions,
 )
-from apps.catalog.api.catalog_common import ensure_catalog_number_counter
+from apps.catalog.api.catalog_common import (
+    ensure_catalog_number_counter,
+    seed_materials,
+)
 from apps.catalog.api.access import TombstoneHit
 from csc_version import CSC_VERSION
 
@@ -114,6 +117,8 @@ async def lifespan(app: FastAPI):
     app.mongodb_datasets = app.mongodb['datasets']
     app.mongodb_purged_records = app.mongodb['purged_records']
     app.mongodb_invitations = app.mongodb['invitations']
+    app.mongodb_materials = app.mongodb['materials']
+    app.mongodb_change_log = app.mongodb['change_log']
 
     # Create helpful indexes (idempotent)
     await app.mongodb_users.create_index('email', unique=True)
@@ -121,6 +126,9 @@ async def lifespan(app: FastAPI):
     await app.mongodb_datasets.create_index('members.user_id')
     await app.mongodb_invitations.create_index('code_sha256', unique=True)
     await app.mongodb_invitations.create_index('email')
+    await app.mongodb_change_log.create_index([('record_id', 1), ('at', 1)])
+    await app.mongodb_change_log.create_index([('identity_id', 1), ('at', -1)])
+    await seed_materials(app.mongodb_materials)
     await ensure_catalog_number_counter(app.mongodb)
 
     # --- Directories ---------------------------------------------------------

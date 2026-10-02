@@ -30,7 +30,7 @@ def _ids(violations, severity='error'):
 def test_every_invariant_id_is_registered_once():
     ids = [inv.id for inv in INVARIANTS]
     assert len(ids) == len(set(ids))
-    expected = {f'I{n}' for n in range(1, 30)} | {'I3b'}
+    expected = {f'I{n}' for n in range(1, 31)} | {'I3b'}
     assert set(ids) == expected
     for inv in INVARIANTS:
         assert inv.kind in ('document', 'corpus', 'route', 'dropped')

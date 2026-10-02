@@ -38,6 +38,7 @@ from apps.catalog.documents import (
     Evidence,
     Material,
 )
+from apps.catalog.lineage import expected_unit, unit_values
 from apps.catalog.vocab import (
     EVER_PUBLISHED_STATUSES,
     OPEN_STATUSES,
@@ -221,22 +222,26 @@ def check_i21(corpus: Corpus) -> Iterable[Violation]:
 
 
 def check_i17(corpus: Corpus) -> Iterable[Violation]:
-    """An inherited field equals the parent's (the server propagates)."""
+    """An inherited unit equals what the parents give (the server
+    propagates, 8.31); merged parents must still agree on it (8.33)."""
     by_id = {i['_id']: i for i in corpus.identities}
     for child in corpus.identities:
-        parent = by_id.get(child.get('inherited_from'))
-        if child.get('inherited_fields') and parent is None:
+        if not child.get('inherited_fields'):
+            continue
+        parents = [by_id[p] for p in child.get('parent_identities') or []
+                   if p in by_id]
+        if by_id.get(child.get('inherited_from')) is None or not parents:
             yield _v('I17', IDENTITIES, child,
                      'inherited_from names an unknown identity')
             continue
-        for name in child.get('inherited_fields') or []:
-            fields = (name,)
-            if name == 'manufactured_at':
-                fields = (name, 'manufactured_precision')
-            for f in fields:
-                if child.get(f) != parent.get(f):
-                    yield _v('I17', IDENTITIES, child,
-                             f'inherited {f} differs from the parent')
+        for unit in child['inherited_fields']:
+            agree, values = expected_unit(unit, parents)
+            if not agree:
+                yield _v('I17', IDENTITIES, child,
+                         f'inherits {unit} but its parents disagree')
+            elif unit_values(child, unit) != values:
+                yield _v('I17', IDENTITIES, child,
+                         f'inherited {unit} differs from the parents')
 
 
 def check_i18(corpus: Corpus) -> Iterable[Violation]:
@@ -269,6 +274,8 @@ def check_i18(corpus: Corpus) -> Iterable[Violation]:
                      'merged exit without a published child')
         elif server_set:
             earliest = min(first_published(c) for c in live)
+            if exit_.get('manual_at'):          # a hand-set split, 8.34
+                earliest = min(earliest, _when(exit_['manual_at']))
             if _when(exit_['at']) != earliest:
                 yield _v('I18', IDENTITIES, identity,
                          'exit.at is not the earliest child effective_from')
@@ -310,6 +317,8 @@ def check_i25(corpus: Corpus) -> Iterable[Violation]:
     materials = {m['_id']: m for m in corpus.materials}
     for identity in corpus.identities:
         material = materials.get(identity.get('material'))
+        if material is not None and material.get('merged_into'):
+            material = materials.get(material['merged_into'])   # 8.35
         derived = identity.get('material_class_source', 'derived') \
             == 'derived'
         if material is None:
@@ -392,8 +401,9 @@ INVARIANTS: Tuple[Invariant, ...] = (
     Invariant('I14', 'evidence supersession: same identity and method, '
               'no forks', 'corpus', check_i14),
     Invariant('I15', 'status transitions', 'route'),
-    Invariant('I16', 'origin.construction_work only for deinstallation / '
-              'demolition', 'document'),
+    Invariant('I16', 'construction work, position, connections, '
+              'detachability only for deinstallation / demolition',
+              'document'),
     Invariant('I17', 'inherited fields server-maintained, equal to the '
               'parent', 'corpus', check_i17),
     Invariant('I18', 'exit rules; server-set split / merged from '
@@ -420,6 +430,8 @@ INVARIANTS: Tuple[Invariant, ...] = (
               'terminal exit', 'corpus', check_i28),
     Invariant('I29', 'usernames lowercase and unique', 'corpus',
               check_i29),
+    Invariant('I30', 'every field change writes one change_log entry',
+              'route'),
 )
 INVARIANT_BY_ID: Dict[str, Invariant] = {inv.id: inv for inv in INVARIANTS}
 

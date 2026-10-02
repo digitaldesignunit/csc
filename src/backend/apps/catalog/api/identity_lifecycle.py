@@ -34,6 +34,8 @@ from .access import (
 )
 from .auth import get_current_active_user, get_optional_current_user
 from .catalog_common import now_iso, validate_uuid
+from .change_log import log_change
+from .identity_edit import sync_parent_exits
 
 router = APIRouter()
 
@@ -127,17 +129,30 @@ async def withdraw_identity(
                    f'canonical piece; give duplicate_of so they follow '
                    f'(I19).')
     now = now_iso()
+    withdrawn = {'at': now, 'by_user_id': current_user.id,
+                 'reason': body.reason, 'duplicate_of': duplicate_of}
     await request.app.mongodb_component_identities.update_one(
         {'_id': identity_id},
-        {'$set': {'withdrawn': {'at': now, 'by_user_id': current_user.id,
-                                'reason': body.reason,
-                                'duplicate_of': duplicate_of},
-                  'reserved': '', 'lastmodified': now}})
+        {'$set': {'withdrawn': withdrawn, 'reserved': '',
+                  'lastmodified': now}})
+    await log_change(request, 'identity', identity,
+                     {**identity, 'withdrawn': withdrawn},
+                     by_user_id=current_user.id, cause='withdraw', at=now)
     if followers:
-        await request.app.mongodb_component_identities.update_many(
-            {'withdrawn.duplicate_of': identity_id},
-            {'$set': {'withdrawn.duplicate_of': duplicate_of,
-                      'lastmodified': now}})
+        async for follower in request.app.mongodb_component_identities.find(
+                {'withdrawn.duplicate_of': identity_id}):
+            repointed = {**follower['withdrawn'], 'duplicate_of': duplicate_of}
+            await request.app.mongodb_component_identities.update_one(
+                {'_id': follower['_id']},
+                {'$set': {'withdrawn': repointed, 'lastmodified': now}})
+            await log_change(request, 'identity', follower,
+                             {**follower, 'withdrawn': repointed},
+                             by_user_id=current_user.id, cause='withdraw',
+                             source_record_id=identity_id, at=now)
+    if identity.get('parent_identities'):
+        # a cut recorded by mistake: the parents return to circulation (8.8)
+        await sync_parent_exits(request, identity['parent_identities'],
+                                user_id=current_user.id, source=identity_id)
     return JSONResponse(status_code=200, content={
         'ok': True, 'identity_id': identity_id, 'withdrawn_at': now,
         'duplicate_of': duplicate_of, 'followers_repointed': followers})
@@ -156,9 +171,16 @@ async def reinstate_identity(
                   identity=identity)
     if not identity.get('withdrawn'):
         raise HTTPException(status_code=409, detail='Not withdrawn.')
+    now = now_iso()
     await request.app.mongodb_component_identities.update_one(
         {'_id': identity_id},
-        {'$set': {'withdrawn': None, 'lastmodified': now_iso()}})
+        {'$set': {'withdrawn': None, 'lastmodified': now}})
+    await log_change(request, 'identity', identity,
+                     {**identity, 'withdrawn': None},
+                     by_user_id=current_user.id, cause='reinstate', at=now)
+    if identity.get('parent_identities'):
+        await sync_parent_exits(request, identity['parent_identities'],
+                                user_id=current_user.id, source=identity_id)
     return JSONResponse(status_code=200, content={
         'ok': True, 'identity_id': identity_id})
 
@@ -219,10 +241,16 @@ async def delete_identity(
     await db.mongodb_component_evidence.delete_many(
         {'identity_id': identity_id})
     await db.mongodb_component_identities.delete_one({'_id': identity_id})
+    # purge removes the history with the record (8.36)
+    await db.mongodb_change_log.delete_many({'identity_id': identity_id})
     if purge:
         await _stubs(request, current_user,
                      [identity_id, *(s['_id'] for s in snapshots),
                       *(e['_id'] for e in evidence)], reason)
+        if identity.get('parent_identities'):
+            await sync_parent_exits(request, identity['parent_identities'],
+                                    user_id=current_user.id,
+                                    source=identity_id)
     return JSONResponse(status_code=200, content={
         'ok': True, 'identity_id': identity_id, 'purged': purge,
         'snapshots': len(snapshots), 'evidence': len(evidence)})
@@ -249,7 +277,12 @@ async def purge_snapshot_record(request: Request, user: User,
         {'_id': snapshot['_id']})
     await request.app.mongodb_component_snapshots.update_many(
         {'superseded_by': snapshot['_id']}, {'$set': {'superseded_by': None}})
+    await request.app.mongodb_change_log.delete_many(
+        {'record_id': snapshot['_id']})
     await _stubs(request, user, [snapshot['_id']], body.reason)
+    if identity.get('parent_identities'):
+        await sync_parent_exits(request, identity['parent_identities'],
+                                user_id=user.id, source=identity['_id'])
     return JSONResponse(status_code=200, content={
         'ok': True, 'snapshot_id': snapshot['_id'], 'purged': True})
 

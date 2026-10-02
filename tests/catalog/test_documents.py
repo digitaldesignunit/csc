@@ -61,7 +61,7 @@ def test_timestamps_are_iso_utc():
 def test_i16_construction_work_only_for_deinstallation_or_demolition():
     doc = ex.identity()
     doc['origin']['kind'] = 'offcut'
-    _invalid(ComponentIdentity, doc, 'construction_work')
+    _invalid(ComponentIdentity, doc, 'deinstallation / demolition')
 
 
 def test_i18_exit_construction_work_only_for_installed():

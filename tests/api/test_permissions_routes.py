@@ -93,6 +93,19 @@ def _reinstate_beam(world):
         {'_id': iid('beam')}, {'$set': {'withdrawn': None}})
 
 
+def _clear_exit(world):
+    world['db']['component_identities'].update_one(
+        {'_id': iid('beam')}, {'$set': {'exit': None, 'withdrawn': None}})
+
+
+def _drop_test_material(world):
+    world['db']['materials'].delete_one({'_id': 'test_material'})
+
+
+MESH = {'vertices': [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        'faces': [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]}
+
+
 def _expect(anonymous, user, contributor, reviewer, moderator,
             other_moderator, admin):
     return dict(zip(VIEWERS, (anonymous, user, contributor, reviewer,
@@ -189,6 +202,28 @@ ROWS = [
     ('the caller and their roles',
      lambda api, h: api.get('/users/me', headers=h),
      _expect(401, 200, 200, 200, 200, 200, 200), None),
+    # --- provenance, lineage, materials (P4) -----------------------------
+    ('edit component metadata: moderator(D)',
+     lambda api, h: api.patch(f'/identities/{iid("beam")}',
+                              json={'trade_name': 'x'}, headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), None),
+    ('take a component out of circulation: moderator(D)',
+     lambda api, h: api.post(f'/identities/{iid("beam")}/exit', json={
+         'kind': 'lost', 'at': '2026-07-01T00:00:00Z'}, headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), _clear_exit),
+    ('record a cut from a component: contributor(D) who reads the parent',
+     lambda api, h: api.post('/identities', json={
+         'dataset': 'dbu_zirkus', 'parent_identities': [iid('beam')],
+         'snapshot': {'geometry': {'meshes': [MESH]}}}, headers=h),
+     _expect(401, 403, 201, 403, 403, 403, 201), _clear_exit),
+    ('read the change log: members of D',
+     lambda api, h: api.get(f'/identities/{iid("beam")}/changes', headers=h),
+     _expect(401, 403, 200, 200, 200, 403, 200), None),
+    ('add a material: admin',
+     lambda api, h: api.post('/materials', json={
+         '_id': 'test_material', 'label': 'Test', 'group': 'other',
+         'default_class': '17 09 04'}, headers=h),
+     _expect(401, 403, 403, 403, 403, 403, 201), _drop_test_material),
 ]
 
 

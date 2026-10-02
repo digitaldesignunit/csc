@@ -12,6 +12,9 @@ from .snapshots import router as snapshots_router
 from .users import router as users_router
 from .datasets import router as datasets_router
 from .invitations import router as invitations_router
+from .identity_edit import router as identity_edit_router
+from .materials import router as materials_router
+from .change_log import router as change_log_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix='/auth', tags=['auth'])
@@ -20,6 +23,9 @@ api_router.include_router(utility_router, tags=['utility'])
 api_router.include_router(ghinterface_router, tags=['ghinterface'])
 api_router.include_router(idtransmission_router, tags=['idtransmission'])
 api_router.include_router(identity_workflows_router, tags=['identities'])
+api_router.include_router(identity_edit_router, tags=['identities'])
+api_router.include_router(change_log_router, tags=['identities'])
+api_router.include_router(materials_router, tags=['materials'])
 api_router.include_router(identities_router, tags=['identities'])
 # before the snapshots router: /snapshots/{sid} must not catch the
 # lifecycle verbs

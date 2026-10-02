@@ -54,12 +54,10 @@ snapshot preview/photo file routes in `snapshots.py`.
 import asyncio
 import hashlib
 import json
-import uuid
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from fastapi import (
     APIRouter,
-    Body,
     Depends,
     HTTPException,
     Query,
@@ -83,13 +81,8 @@ from apps.catalog.models import (
     ComponentCount,
     CreateComponentRequest,
     CreateSnapshotRequest,
-    UpdateComponentIdentityModel,
     User,
 )
-# 0.5 models still used by the retired 0.5 write routes below (P3 / P4 / P7)
-from apps.catalog.models import ComponentIdentity as LegacyIdentity
-from apps.catalog.models import ComponentPassport as LegacyPassport
-from apps.catalog.models import ComponentSnapshot as LegacySnapshot
 from apps.catalog.read_models import (
     CatalogRow,
     CatalogSharedTypesEnvelope,
@@ -101,8 +94,10 @@ from apps.catalog.read_models import (
     passport_body,
 )
 from apps.catalog.documents import Evidence
+from apps.catalog.permissions import dataset_roles
 from apps.catalog.api.access import (
     and_match,
+    dataset_of,
     deny_read,
     viewer_of,
     visible_identity_ids,
@@ -114,22 +109,16 @@ from apps.catalog.provenance import (
     MAX_PROVENANCE_DEPTH,
     build_provenance_graph,
 )
-from .auth import get_current_active_user, get_optional_current_user, require_admin
+from .auth import get_current_active_user, get_optional_current_user
 from .public_access import (
     ensure_identity_read_access,
     identity_allows_anonymous_read,
     public_cache_control,
 )
 from .catalog_common import (
-    allocate_catalog_number,
-    compute_snapshot_etag,
     not_modified_response,
-    resolve_new_component_name,
     get_identities_col,
     get_snapshots_col,
-    now_iso,
-    retired_until,
-    validate_parent_identities,
     validate_uuid,
 )
 from .identity_filters import (
@@ -782,149 +771,6 @@ async def list_identities_route(
     )
 
 
-@router.post(
-    '/identities',
-    summary='Create identity and version-0 snapshot',
-    response_model=LegacyPassport,
-    response_model_by_alias=True,
-    dependencies=[Depends(retired_until('P7'))],
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_identity(
-    request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
-    payload: CreateComponentRequest = Body(...),
-):
-    """Allocate catalog_number, insert identity + v0 snapshot, wire current."""
-    identity_id = payload.id or str(uuid.uuid4())
-    validate_uuid(identity_id, label='identity id')
-
-    identities = await get_identities_col(request)
-    snapshots = await get_snapshots_col(request)
-
-    if await identities.find_one({'_id': identity_id}, {'_id': 1}):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f'Identity {identity_id} already exists',
-        )
-
-    await validate_parent_identities(
-        request,
-        payload.parent_identities,
-        self_id=identity_id,
-    )
-
-    geometry = payload.geometry.model_dump()
-    if payload.marker_points and not geometry.get('marker_points'):
-        geometry['marker_points'] = payload.marker_points
-
-    catalog_number = await allocate_catalog_number(request)
-    resolved_name = resolve_new_component_name(payload.name, catalog_number)
-
-    now = now_iso()
-    snapshot_id = str(uuid.uuid4())
-    snapshot_doc: Dict[str, Any] = {
-        '_id': snapshot_id,
-        'identity_id': identity_id,
-        'version': 0,
-        'virtual': False,
-        'name': resolved_name,
-        'geometry': geometry,
-        'descriptors': payload.descriptors or {},
-        'bbx': list(payload.bbx),
-        'bbx_origin': payload.bbx_origin,
-        'complexity': payload.complexity,
-        'fragment': payload.fragment,
-        'assembly': payload.assembly,
-        'condition': payload.condition,
-        'color': payload.color,
-        'location': (
-            payload.location.model_dump()
-            if payload.location is not None
-            else {'lat': 0.0, 'lon': 0.0}
-        ),
-        'processes': payload.processes or {},
-        'iframe': payload.iframe.model_dump(),
-        'pca_frame': payload.pca_frame.model_dump(),
-        'validated': payload.validated,
-        'added_by_user_id': current_user.id,
-        'added_by_username': current_user.username,
-        'notes': payload.notes,
-        'quantity': payload.quantity,
-        'created': now,
-        'lastmodified': now,
-    }
-    snapshot_doc['etag'] = compute_snapshot_etag(snapshot_doc)
-
-    try:
-        snapshot_model = LegacySnapshot.model_validate(snapshot_doc)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f'Invalid snapshot payload: {exc}',
-        )
-
-    identity_doc: Dict[str, Any] = {
-        '_id': identity_id,
-        'catalog_number': catalog_number,
-        'type': payload.componenttype,
-        'material': payload.material,
-        'dataset': payload.dataset,
-        'manufactured_at': payload.manufactured_at,
-        'manufactured_precision': payload.manufactured_precision,
-        'salvage_source': payload.salvage_source,
-        'salvaged_at': payload.salvaged_at,
-        'reserved': payload.reserved or '',
-        'attributes': payload.attributes or {},
-        'parent_identities': payload.parent_identities,
-        'consumed_at': None,
-        'current_snapshot_id': snapshot_id,
-        'created': now,
-        'lastmodified': now,
-    }
-
-    try:
-        identity_model = LegacyIdentity.model_validate(identity_doc)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f'Invalid identity payload: {exc}',
-        )
-
-    snapshot_insert = snapshot_model.model_dump(by_alias=True)
-    identity_insert = identity_model.model_dump(by_alias=True)
-
-    try:
-        await snapshots.insert_one(snapshot_insert)
-    except PyMongoError as exc:
-        print(f'[ERROR] create_identity snapshot insert: {exc}')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Internal server error',
-        )
-
-    try:
-        await identities.insert_one(identity_insert)
-    except PyMongoError as exc:
-        await snapshots.delete_one({'_id': snapshot_id})
-        print(f'[ERROR] create_identity identity insert: {exc}')
-        if 'duplicate key' in str(exc).lower():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f'Identity {identity_id} already exists',
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Internal server error',
-        )
-
-    return _passport_response(
-        identity_insert,
-        [snapshot_insert],
-        status_code=status.HTTP_201_CREATED,
-    )
-
-
 async def _next_snapshot_version(
     snapshots,
     identity_id: str,
@@ -1342,78 +1188,20 @@ async def list_identity_snapshots(
     return JSONResponse(status_code=200, content=items)
 
 
-@router.patch(
-    '/identities/{identity_id}',
-    summary='PATCH identity metadata (admin only)',
-    response_model=LegacyIdentity,
-    response_model_by_alias=True,
-    dependencies=[Depends(retired_until('P4'))],
-)
-async def patch_identity(
-    request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
-    identity_id: str,
-    payload: UpdateComponentIdentityModel = Body(...),
-):
-    """Partial update of identity-side fields only."""
-    validate_uuid(identity_id, label='identity id')
-
-    identities = await get_identities_col(request)
-    existing = await identities.find_one({'_id': identity_id})
-    if existing is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Identity {identity_id} not found',
-        )
-
-    update_data: Dict[str, Any] = payload.model_dump(
-        by_alias=True,
-        exclude_unset=True,
-    )
-    if not update_data:
-        raise HTTPException(
-            status_code=400,
-            detail='No updatable fields provided',
-        )
-
-    if 'parent_identities' in update_data:
-        await validate_parent_identities(
-            request,
-            update_data.get('parent_identities'),
-            self_id=identity_id,
-        )
-
-    update_data['lastmodified'] = now_iso()
-
-    try:
-        await identities.update_one(
-            {'_id': identity_id},
-            {'$set': update_data},
-        )
-    except PyMongoError as exc:
-        print(f'[ERROR] patch_identity DB error: {exc}')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Internal server error',
-        )
-
-    updated_doc = await identities.find_one({'_id': identity_id})
-    if updated_doc is None:
-        raise HTTPException(
-            status_code=500,
-            detail='Identity missing after update',
-        )
-
-    try:
-        identity_model = LegacyIdentity.model_validate(updated_doc)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f'Updated identity failed Pydantic validation: {exc}',
-        )
-
-    body = identity_model.model_dump(by_alias=True)
-    return JSONResponse(status_code=200, content=body)
+async def _identity_as_of(request: Request, user: Optional[User],
+                          identity_id: str, at: str) -> JSONResponse:
+    """Old values may name people: members of D and admin only (8.36)."""
+    from .change_log import as_of_body
+    doc = await (await get_identities_col(request)).find_one(
+        {'_id': identity_id})
+    viewer = viewer_of(user)
+    dataset = await dataset_of(request, doc.get('dataset'))
+    if not dataset_roles(viewer, dataset):
+        raise HTTPException(status_code=403,
+                            detail='Earlier versions are for members of the '
+                                   'dataset.')
+    return JSONResponse(status_code=200,
+                        content=await as_of_body(request, 'identity', doc, at))
 
 
 @router.get(
@@ -1431,10 +1219,16 @@ async def get_identity(
             'current_snapshot={identity,snapshots[]}; none=identity only'
         ),
     ),
+    as_of: Optional[str] = Query(
+        None, description='the identity as it was at this ISO date '
+                          '(members of D and admin; section 3.8)'),
 ):
     validate_uuid(identity_id, label='identity id')
 
     await ensure_identity_read_access(request, identity_id, current_user)
+    if as_of is not None:
+        return await _identity_as_of(request, current_user, identity_id,
+                                     as_of)
 
     if expand == 'shallow':
         row = await shallow_row_for_identity(request, identity_id)

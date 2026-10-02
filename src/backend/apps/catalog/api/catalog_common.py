@@ -238,3 +238,18 @@ async def validate_snapshot_and_promote(
         identity_doc = {**identity_doc, **identity_update}
 
     return identity_doc, snapshot_doc
+
+
+async def seed_materials(collection) -> int:
+    """Seed the ``materials`` collection from code when it is empty (spec
+    section 2.10); an admin-edited list is never overwritten. Returns how
+    many were inserted."""
+    from apps.catalog.vocab import MATERIAL_SEED
+    if await collection.count_documents({}, limit=1):
+        return 0
+    docs = [{'_id': m.id, 'label': m.label, 'group': m.group,
+             'default_class': m.default_class, 'uniclass': m.uniclass,
+             'notes': m.notes, 'retired': False, 'merged_into': None}
+            for m in MATERIAL_SEED]
+    await collection.insert_many(docs)
+    return len(docs)

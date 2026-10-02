@@ -15,7 +15,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 # LOCAL IMPORTS ---------------------------------------------------------------
-from apps.catalog.vocab import INHERITABLE_FIELDS, MATERIAL_SEED_BY_ID
+from apps.catalog.lineage import expected_unit, unit_values
+from apps.catalog.vocab import INHERIT_UNITS, MATERIAL_SEED_BY_ID
 
 
 class MigrationAbort(Exception):
@@ -393,30 +394,22 @@ def exit_for(identity: dict, children_first_effective_from: Optional[str]
 
 
 # STEP 10b: lineage inheritance (decision 6.2) --------------------------------
-def _field_value(doc: dict, field: str) -> Any:
-    if field == 'manufactured_at':
-        return (doc.get('manufactured_at'),
-                doc.get('manufactured_precision') or 'unknown')
-    return doc.get(field)
-
-
 def inheritance_for(child: dict, parents: Sequence[dict]) -> dict:
-    """``$set`` for one child: every inheritable field equal across the
-    parents and the child is listed; ``manufactured_at`` always comes from
-    the parents (0.5 GH wrote the child's creation time into it)."""
+    """``$set`` for one child: every inheritance unit the parents agree on
+    (``lineage.expected_unit``, 8.32, 8.33) and the child holds is listed;
+    ``manufactured_at`` always comes from the parents (0.5 GH wrote the
+    child's creation time into it)."""
     update: Dict[str, Any] = {}
     inherited: List[str] = []
-    for field in INHERITABLE_FIELDS:
-        values = [_field_value(p, field) for p in parents]
-        unanimous = all(v == values[0] for v in values)
-        if not unanimous:
+    for unit in INHERIT_UNITS:
+        agree, values = expected_unit(unit, parents)
+        if not agree:
             continue
-        if field == 'manufactured_at':
-            update['manufactured_at'], update['manufactured_precision'] = \
-                values[0]
-            inherited.append(field)
-        elif _field_value(child, field) == values[0]:
-            inherited.append(field)
+        if unit == 'manufactured_at':
+            update.update(values)
+            inherited.append(unit)
+        elif unit_values(child, unit) == values:
+            inherited.append(unit)
     update['inherited_fields'] = inherited
     update['inherited_from'] = parents[0]['_id'] if inherited else None
     return update

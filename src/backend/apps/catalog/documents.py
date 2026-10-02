@@ -44,7 +44,11 @@ from apps.catalog.vocab import (
     ActorKind,
     ActorRole,
     CaptureMethod,
+    ChangeCause,
+    ConnectionType,
+    ConstructionMethod,
     DatasetRole,
+    DgnbClass,
     EvidenceMethod,
     ExitKind,
     FitMethod,
@@ -180,6 +184,15 @@ class ConstructionWork(_Block):
     identifier: Optional[str] = None
     year_built: Optional[int] = None
     use: Optional[str] = None
+    construction_method: Optional[ConstructionMethod] = None
+
+
+class CircularityClass(_Block):
+    """A DGNB Building Resource Passport class with who assessed it
+    (section 2.11, decision 8.38)."""
+    class_: DgnbClass = Field(alias='class')
+    assessed_by: List[Actor] = Field(default_factory=list)
+    note: Optional[str] = None
 
 
 class Origin(_Block):
@@ -189,16 +202,22 @@ class Origin(_Block):
     at_precision: Precision = 'unknown'
     place: Optional[Place] = None
     construction_work: Optional[ConstructionWork] = None
+    position_in_work: Optional[str] = None
+    connection_types: List[ConnectionType] = Field(default_factory=list)
+    detachability: Optional[CircularityClass] = None
     method: Optional[str] = None
     performed_by: List[Actor] = Field(default_factory=list)
     notes: Optional[str] = None
 
     @model_validator(mode='after')
     def _construction_work_kind(self) -> 'Origin':
-        if self.construction_work is not None \
+        about_the_works = (self.construction_work, self.position_in_work,
+                           self.connection_types, self.detachability)
+        if any(about_the_works) \
                 and self.kind not in ORIGIN_KINDS_WITH_CONSTRUCTION_WORK:
-            raise ValueError('origin.construction_work only for '
-                             'deinstallation / demolition (I16)')
+            raise ValueError('construction work, position, connections and '
+                             'detachability only for deinstallation / '
+                             'demolition (I16)')
         return self
 
 
@@ -210,6 +229,10 @@ class Exit(_Block):
     construction_work: Optional[ConstructionWork] = None
     notes: Optional[str] = None
     recorded_by_user_id: Optional[str] = None
+    # a hand-set split taken over by the server keeps its date and author,
+    # and falls back to them when its last child goes (8.34)
+    manual_at: Optional[Timestamp] = None
+    manual_by_user_id: Optional[str] = None
 
     @model_validator(mode='after')
     def _construction_work_kind(self) -> 'Exit':
@@ -263,6 +286,9 @@ class ComponentIdentity(_Document):
     material_class: LowCode
     material_class_source: ValueSource = 'derived'
     trade_name: Optional[str] = None
+    manufacturer: Optional[str] = None
+    connection_features: Optional[str] = None
+    material_separability: Optional[CircularityClass] = None
     dataset: str = Field(description='FK -> datasets._id (I20)')
     manufactured_at: Optional[Timestamp] = None
     manufactured_precision: Precision = 'unknown'
@@ -831,6 +857,10 @@ class Material(_Document):
     default_class: LowCode
     uniclass: Optional[str] = None
     notes: Optional[str] = None
+    # hidden from forms, kept by the pieces using it (8.35)
+    retired: bool = False
+    # a merged material stays as an alias of its target (8.35)
+    merged_into: Optional[str] = None
 
     @field_validator('default_class')
     @classmethod
@@ -863,6 +893,26 @@ class Invitation(_Document):
         if self.roles and not self.dataset:
             raise ValueError('roles are granted in a dataset')
         return self
+
+
+class FieldChange(_Block):
+    path: str
+    old: Any = None
+    new: Any = None
+
+
+class ChangeLogEntry(_Document):
+    """``change_log``: one write to an identity, snapshot or evidence
+    record (section 3.8, decision 8.36, I30); append-only."""
+    id: str = Field(alias='_id')
+    record_kind: str = Field(pattern='^(identity|snapshot|evidence)$')
+    record_id: str
+    identity_id: str
+    at: Timestamp
+    by_user_id: Optional[str] = None
+    cause: ChangeCause
+    source_record_id: Optional[str] = None
+    changes: List[FieldChange] = Field(min_length=1)
 
 
 class PurgeStub(_Document):
