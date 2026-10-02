@@ -113,11 +113,14 @@ async def lifespan(app: FastAPI):
     app.mongodb_counters = app.mongodb['counters']
     app.mongodb_datasets = app.mongodb['datasets']
     app.mongodb_purged_records = app.mongodb['purged_records']
+    app.mongodb_invitations = app.mongodb['invitations']
 
     # Create helpful indexes (idempotent)
     await app.mongodb_users.create_index('email', unique=True)
     await app.mongodb_users.create_index('username', unique=True)
     await app.mongodb_datasets.create_index('members.user_id')
+    await app.mongodb_invitations.create_index('code_sha256', unique=True)
+    await app.mongodb_invitations.create_index('email')
     await ensure_catalog_number_counter(app.mongodb)
 
     # --- Directories ---------------------------------------------------------

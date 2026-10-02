@@ -23,6 +23,7 @@ environment=
     SMTP_FROM_NAME="Catalog of Second Chances",
     SMTP_DEV_MODE="false",
     FRONTEND_URL="https://2ndchances.build",
+    CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de",
     GH_XML_CACHE_DIR="/home/ddu/csc/current/backend/static/ghxml",
     FASTAPI_CORS_ORIGINS="https://yourdomain.com,http://localhost:3000",
     GEOMETRY_UPLOAD_LIMIT_MB="250",

@@ -752,7 +752,8 @@ class Evidence(_Document):
         """I27: who may hold which verification state (decision 8.12)."""
         state = self.verification.state
         performers = {a.user_id for a in self.performed_by if a.user_id}
-        if state == 'self_attested' and                 self.recorded_by_user_id not in performers:
+        if (state == 'self_attested'
+                and self.recorded_by_user_id not in performers):
             raise ValueError('self_attested needs the recorder among '
                              'performed_by (I27)')
         if state not in ('reviewed', 'accredited'):
@@ -839,6 +840,29 @@ class Material(_Document):
             raise ValueError(
                 'a default class is never a hazardous (*) entry')
         return value
+
+
+class Invitation(_Document):
+    """``invitations``: one email-bound, single-use registration code
+    (section 3.7, decision 8.14); only the code's sha256 is stored."""
+    id: str = Field(alias='_id')
+    email: str
+    code_sha256: str
+    dataset: Optional[str] = None
+    roles: List[DatasetRole] = Field(default_factory=list)
+    created_by_user_id: str
+    created: Timestamp
+    expires_at: Timestamp
+    used_at: Optional[Timestamp] = None
+    used_by_user_id: Optional[str] = None
+    revoked_at: Optional[Timestamp] = None
+    revoked_by_user_id: Optional[str] = None
+
+    @model_validator(mode='after')
+    def _roles_need_a_dataset(self) -> 'Invitation':
+        if self.roles and not self.dataset:
+            raise ValueError('roles are granted in a dataset')
+        return self
 
 
 class PurgeStub(_Document):

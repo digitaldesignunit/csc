@@ -88,6 +88,8 @@ class RegisterPayload(BaseModel):
     email: EmailStr
     # max_length=72 matches bcrypt's hard truncation limit, also prevents DoS
     password: str = Field(min_length=8, max_length=72)
+    # an invitation code (8.14): required outside the open domains
+    code: Optional[str] = Field(None, max_length=64)
 
     @field_validator('username')
     @classmethod

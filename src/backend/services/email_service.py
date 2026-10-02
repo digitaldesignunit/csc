@@ -222,3 +222,110 @@ def send_verification_resent_email(
         verification_token,
         dev_mode
     )
+
+
+# INVITATIONS AND MEMBERSHIP NOTICES (decisions 8.14, 8.20) -------------------
+
+def send_mail(config: Dict[str, str], to_email: str, subject: str,
+              text: str, html: str) -> bool:
+    """Send one plain-text + HTML mail; in dev mode print it instead."""
+    if config.get('dev_mode'):
+        print('\n' + '=' * 80)
+        print(f'DEV MODE: mail not sent via SMTP --- To: {to_email}')
+        print(f'Subject: {subject}')
+        print('-' * 80)
+        print(text)
+        print('=' * 80 + '\n')
+        return True
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = (
+            f"{config.get('from_name', 'CSC')} <{config['from_email']}>"
+        )
+        msg['To'] = to_email
+        msg.attach(MIMEText(text, 'plain'))
+        msg.attach(MIMEText(html, 'html'))
+        smtp_port = int(config.get('smtp_port', 587))
+        with smtplib.SMTP(config['smtp_host'], smtp_port) as server:
+            server.starttls()
+            server.login(config['smtp_user'], config['smtp_password'])
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        print(f'[EMAIL] Error sending "{subject}" to {to_email}: {str(e)}')
+        return False
+
+
+def _simple_html(title: str, paragraphs, link_url=None,
+                 link_label=None) -> str:
+    body = ''.join(f'<p>{p}</p>' for p in paragraphs)
+    button = ''
+    if link_url:
+        button = (
+            '<div style="text-align: center; margin: 30px 0;">'
+            f'<a href="{link_url}" style="background-color: #2563eb; '
+            'color: white; padding: 12px 30px; text-decoration: none; '
+            'border-radius: 5px; display: inline-block; font-weight: bold;">'
+            f'{link_label}</a></div>'
+            f'<p style="word-break: break-all; font-size: 14px;">{link_url}'
+            '</p>')
+    return (
+        '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>'
+        '<body style="font-family: Arial, sans-serif; line-height: 1.6; '
+        'color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">'
+        f'<h1 style="color: #2563eb;">{title}</h1>{body}{button}'
+        '<hr style="border: none; border-top: 1px solid #e0e0e0;">'
+        '<p style="font-size: 12px; color: #666;">This is an automated '
+        'message from the Catalog of Second Chances.<br>Please do not reply '
+        'to this email.</p></body></html>')
+
+
+def _role_phrase(dataset_name, roles) -> str:
+    if not dataset_name:
+        return ''
+    roles_text = ', '.join(roles) if roles else 'member'
+    return f' to the dataset "{dataset_name}" as {roles_text}'
+
+
+def send_invitation_email(config: Dict[str, str], to_email: str, code: str,
+                          inviter_name: str, dataset_name, roles,
+                          expires_at: str) -> bool:
+    """Mail the single-use registration link of an invitation (8.14)."""
+    frontend_url = config.get('frontend_url', 'http://localhost:3000')
+    url = f'{frontend_url}/auth/register?code={code}'
+    invited = _role_phrase(dataset_name, roles)
+    lines = [
+        'Hello,',
+        f'{inviter_name} has invited you to the Catalog of Second '
+        f'Chances{invited}.',
+        'Register with this email address using the link below. The link '
+        f'works once and expires on {expires_at[:10]}.',
+        'If you did not expect this invitation, please ignore this email.',
+    ]
+    text = '\n\n'.join(lines[:3] + [url] + lines[3:]) + (
+        '\n\n---\nThis is an automated message from the Catalog of Second '
+        'Chances.\nPlease do not reply to this email.\n')
+    html = _simple_html('You are invited', lines, url, 'Register')
+    return send_mail(config, to_email,
+                     'Invitation - Catalog of Second Chances', text, html)
+
+
+def send_member_added_email(config: Dict[str, str], to_email: str,
+                            full_name: str, dataset_name: str, roles,
+                            by_name: str) -> bool:
+    """Tell an existing account it was added to a dataset (8.20)."""
+    frontend_url = config.get('frontend_url', 'http://localhost:3000')
+    lines = [
+        f'Hello {full_name},',
+        f'{by_name} added you{_role_phrase(dataset_name, roles)} in the '
+        'Catalog of Second Chances.',
+    ]
+    text = '\n\n'.join(lines + [frontend_url]) + (
+        '\n\n---\nThis is an automated message from the Catalog of Second '
+        'Chances.\nPlease do not reply to this email.\n')
+    html = _simple_html('Added to a dataset', lines, frontend_url,
+                        'Open the catalog')
+    return send_mail(config, to_email,
+                     'Added to a dataset - Catalog of Second Chances',
+                     text, html)

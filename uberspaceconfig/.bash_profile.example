@@ -36,6 +36,7 @@ export SMTP_PASSWORD="your-mailbox-password"
 export SMTP_FROM_EMAIL="noreply@2ndchances.build"
 export SMTP_FROM_NAME="Catalog of Second Chances"
 export FRONTEND_URL="https://2ndchances.build"
+export CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de"
 
 # Filesystem paths
 # shipped with each release (grasshopper_userobjects_xml)

@@ -2,7 +2,7 @@
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from datetime import datetime, timedelta, timezone
-import re
+import os
 from typing import Annotated, Optional
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
@@ -36,8 +36,20 @@ oauth2_scheme_optional = OAuth2PasswordBearer(
     auto_error=False,
 )
 
-# Only allow @*.tu-darmstadt.de emails (at registration; optional at login)
-TU_REGEX = re.compile(r'^[^@]+@([^.]+\.)*tu-darmstadt\.de$', re.IGNORECASE)
+
+def open_registration_domains() -> list:
+    """CSC_OPEN_REGISTRATION_DOMAINS (comma-separated, default
+    tu-darmstadt.de): self-registration without invitation (8.14)."""
+    raw = os.getenv('CSC_OPEN_REGISTRATION_DOMAINS', 'tu-darmstadt.de')
+    return [d.strip().lower().lstrip('.') for d in raw.split(',')
+            if d.strip()]
+
+
+def is_open_domain(email: str) -> bool:
+    """The address's domain is an open domain or one of its subdomains."""
+    domain = email.rsplit('@', 1)[-1].lower()
+    return any(domain == d or domain.endswith('.' + d)
+               for d in open_registration_domains())
 
 
 # HELPERS ---------------------------------------------------------------------
@@ -239,7 +251,7 @@ async def login_for_access_token(
 @router.post('/register',
              response_model=UserPublic,
              status_code=201,
-             summary='Register new user (@*.tu-darmstadt.de)')
+             summary='Register (open domains, or with an invitation code)')
 @limiter.limit('5/minute')
 async def register_user(
     request: Request,
@@ -251,14 +263,36 @@ async def register_user(
     email = payload.email.strip().lower()
     password = payload.password
 
-    if not TU_REGEX.match(email):
-        raise HTTPException(400, 'Email must be @*.tu-darmstadt.de')
+    # late import: invitations depends on this module's auth dependencies
+    from apps.catalog.api.invitations import grant_invitation, redeem
+
+    invitation = None
+    if payload.code:
+        # the code proves the address received it: verified at once (8.14)
+        invitation = await redeem(request, payload.code, email)
+    elif not is_open_domain(email):
+        raise HTTPException(
+            400, 'Registration with this address needs an invitation; '
+                 'ask a dataset moderator to invite you.')
 
     # prevent duplicates
     if await users.find_one({'$or': [{'email': email},
                                      {'username': username}]}):
         raise HTTPException(status.HTTP_409_CONFLICT,
                             'User with this email or username already exists')
+
+    if invitation is not None:
+        new_id = str(__import__('uuid').uuid4())
+        doc = {
+            '_id': new_id, 'username': username, 'full_name': full_name,
+            'email': email, 'hashed_password': get_password_hash(password),
+            'disabled': False, 'role': 'user', 'email_verified': True,
+            'verification_token': None, 'verification_token_expires': None,
+            'invitation_id': invitation['_id'],
+        }
+        await users.insert_one(doc)
+        await grant_invitation(request, invitation, new_id)
+        return User(**doc)
 
     # Generate verification token
     verification_token = generate_verification_token()
