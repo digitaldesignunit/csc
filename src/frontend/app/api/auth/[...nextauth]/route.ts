@@ -145,11 +145,12 @@ async function authorizeUser(credentials?: { identifier: string; password: strin
     return null
   }
 
-  // 3) Find user by username OR email
+  // 3) Find user by username OR email; both are stored lowercase, so any
+  // case signs in (decision 8.28)
   let user: WithId<DBUser> | null = null
   try {
     user = await usersColl.findOne({
-      $or: [{ username: identifier }, { email: lowerEmail }],
+      $or: [{ username: identifier.toLowerCase() }, { email: lowerEmail }],
       disabled: { $ne: true },
     })
   } catch (err: unknown) {
