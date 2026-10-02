@@ -170,6 +170,18 @@ ROWS = [
      lambda api, h: api.put('/datasets/dbu_zirkus/members/u-alice',
                             json={'roles': ['contributor']}, headers=h),
      _expect(401, 403, 403, 403, 200, 403, 200), None),
+    ('invite into D: moderator(D)',
+     lambda api, h: api.post('/invitations', json={
+         'emails': ['guest@partner.example'], 'dataset': 'dbu_zirkus',
+         'roles': ['contributor']}, headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), None),
+    ('add a person to D by email: moderator(D)',
+     lambda api, h: api.post('/datasets/dbu_zirkus/members', json={
+         'email': 'alice@example.org', 'roles': ['reviewer']}, headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), None),
+    ('search users: admin',
+     lambda api, h: api.get('/users/search', params={'q': 'al'}, headers=h),
+     _expect(401, 403, 403, 403, 403, 403, 200), None),
     ('create a dataset: admin',
      lambda api, h: api.post('/datasets', json={
          '_id': f'new_{len(h)}', 'name': 'New'}, headers=h),
