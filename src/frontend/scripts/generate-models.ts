@@ -11,6 +11,7 @@
  * - `/schema/catalog-row` --> `CatalogRow` in `CatalogModels.ts` (list rows)
  * - `/schema/snapshot-summary` --> `SnapshotSummaryItem` in `SnapshotModels.ts`
  * - `/schema/pending-snapshot` --> `PendingSnapshotItem` in `SnapshotModels.ts`
+ * - `/schema/access` --> `AccessModels.ts` (me, datasets, invitations, users, tombstones)
  */
 
 import fs from 'fs'
@@ -127,6 +128,9 @@ async function run() {
       'SnapshotModels.ts',
     )
 
+    // access, datasets, invitations, users, tombstones (plan P3)
+    await generateModel('/schema/access', 'AccessTypesEnvelope', 'AccessModels.ts')
+
     await generateVocab()
 
     const indexFile = path.join(OUTPUT_DIR, 'index.ts')
@@ -134,6 +138,7 @@ async function run() {
 export * from './CatalogSharedTypes';
 export * from './CatalogModels';
 export * from './SnapshotModels';
+export * from './AccessModels';
 export * from './Vocab';
 export * from './catalogExtras';
 `
@@ -367,7 +372,8 @@ function getTypeScriptType(
 
   if (schema.type === 'array') {
     const itemType = getTypeScriptType((schema.items as Schema) ?? {}, $defs, genOpts)
-    return `${itemType}[]`
+    // a union item needs parentheses: ('a' | 'b')[], not 'a' | 'b'[]
+    return itemType.includes('|') ? `(${itemType})[]` : `${itemType}[]`
   }
 
   if (schema.type === 'object') {

@@ -294,3 +294,31 @@ async def put_dataset_member(
     return await _dataset_view(request, current_user,
                                await _dataset_or_404(request, did),
                                with_members=True)
+
+
+# CODEGEN ---------------------------------------------------------------------
+class AccessTypesEnvelope(BaseModel):
+    """Codegen only: the types of the access, dataset, invitation and user
+    routes (``/schema/access`` --> frontend ``AccessModels.ts``)."""
+    me: Me
+    dataset: DatasetView
+    tombstone: 'Tombstone'
+    invitation: 'InvitationView'
+    invite_result: 'InviteResult'
+    member_result: 'MemberByEmailResult'
+    admin_user: 'AdminUserRow'
+    user_hit: 'UserHit'
+
+
+@router.get('/schema/access', include_in_schema=False)
+async def get_access_json_schema():
+    from apps.catalog.read_models import Tombstone
+    from .invitations import (InvitationView, InviteResult,
+                              MemberByEmailResult)
+    from .users import AdminUserRow, UserHit
+    AccessTypesEnvelope.model_rebuild(_types_namespace={
+        'Tombstone': Tombstone, 'InvitationView': InvitationView,
+        'InviteResult': InviteResult,
+        'MemberByEmailResult': MemberByEmailResult,
+        'AdminUserRow': AdminUserRow, 'UserHit': UserHit})
+    return AccessTypesEnvelope.model_json_schema(by_alias=True)

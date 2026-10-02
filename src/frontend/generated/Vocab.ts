@@ -1,5 +1,5 @@
 // Auto-generated from backend GET /vocab
-// Generated on: 2026-10-01T19:18:13.855Z
+// Generated on: 2026-10-02T06:59:34.886Z
 // Source: http://127.0.0.1:8000/vocab
 
 export type OriginalFunction = 'IfcBeam' | 'IfcColumn' | 'IfcSlab' | 'IfcPlate' | 'IfcWall' | 'IfcMember' | 'IfcPipeSegment' | 'IfcFooting' | 'IfcDiscreteAccessory' | 'IfcBuildingElementPart' | 'IfcBuildingElementProxy' | 'CscDebris'

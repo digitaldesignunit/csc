@@ -1300,6 +1300,8 @@ async def list_identity_snapshots(
         'supersedes': 1,
         'superseded_by': 1,
         'added_by_user_id': 1,
+        'added_by_username': 1,
+        'status_changed_at': 1,
         'created': 1,
         'lastmodified': 1,
     }

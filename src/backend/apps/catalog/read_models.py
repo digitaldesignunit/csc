@@ -9,7 +9,7 @@ until their phase rebuilds them (P3 / P4 / P7).
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from pydantic import BaseModel, ConfigDict, Field
@@ -148,6 +148,9 @@ class SnapshotSummaryItem(BaseModel):
     effective_from_precision: Precision = 'exact'
     supersedes: Optional[str] = None
     superseded_by: Optional[str] = None
+    added_by_user_id: Optional[str] = None
+    added_by_username: Optional[str] = None
+    status_changed_at: Optional[str] = None
     created: str
     lastmodified: str
 
@@ -173,6 +176,22 @@ class PendingSnapshotItem(BaseModel):
     supersedes: Optional[str] = Field(
         default=None, description='set when this corrects a published one')
     added_by_username: Optional[str] = None
+
+
+class Tombstone(BaseModel):
+    """A withdrawn record seen from outside its dataset (8.17): 200 with
+    this body instead of the record."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str = Field(alias='_id')
+    kind: Literal['identity', 'snapshot', 'evidence']
+    status: Literal['withdrawn']
+    withdrawn_at: Optional[str] = None
+    version: Optional[int] = None
+    catalog_number: Optional[int] = None
+    identity_id: Optional[str] = None
+    current_snapshot_id: Optional[str] = None
+    duplicate_of: Optional[str] = None
 
 
 class CatalogSharedTypesEnvelope(BaseModel):

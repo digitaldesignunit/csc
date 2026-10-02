@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-01T19:18:13.827Z
+// Generated on: 2026-10-02T06:59:34.811Z
 // Source: http://127.0.0.1:8000/schema/catalog-compose
 
 import type {
@@ -162,7 +162,7 @@ export interface Place {
 }
 
 export interface PropertyValue {
-  range: number | string[];
+  range: (number | string)[];
   unit?: string | null;
   confidence: number;
   source: 'destructive' | 'ndt' | 'archival' | 'visual' | 'heuristic' | 'inherited';

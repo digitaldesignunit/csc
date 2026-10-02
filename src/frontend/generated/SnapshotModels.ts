@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-01T19:18:13.845Z
+// Generated on: 2026-10-02T06:59:34.846Z
 // Source: http://127.0.0.1:8000/schema/snapshot-summary
 
 export interface SnapshotSummaryItem {
@@ -13,6 +13,9 @@ export interface SnapshotSummaryItem {
   effective_from_precision?: 'exact' | 'day' | 'month' | 'year' | 'unknown';
   supersedes?: string | null;
   superseded_by?: string | null;
+  added_by_user_id?: string | null;
+  added_by_username?: string | null;
+  status_changed_at?: string | null;
   created: string;
   lastmodified: string;
 }
