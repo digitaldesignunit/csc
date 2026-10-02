@@ -5,15 +5,17 @@ import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Search } from 'lucide-react'
+import { uuidFromScan } from '@/lib/scanIds'
 
 export default function ComponentUuidNavigator() {
   const router = useRouter()
   const [uuid, setUuid] = useState('')
 
   const handleNavigate = () => {
-    const trimmedUuid = uuid.trim()
-    if (trimmedUuid) {
-      router.push(`/components/${trimmedUuid}`)
+    // a bare id or any link ending in one (spec section 7.5)
+    const id = uuidFromScan(uuid) ?? uuid.trim()
+    if (id) {
+      router.push(`/components/${id}`)
     }
   }
 
@@ -31,7 +33,7 @@ export default function ComponentUuidNavigator() {
           <Input
             id="component-uuid"
             type="text"
-            placeholder="Paste component UUID..."
+            placeholder="Paste a component id or link..."
             className="h-9 bg-background placeholder:text-xs border-primary/40 focus-visible:ring-primary/40"
             value={uuid}
             onChange={(e) => setUuid(e.target.value)}

@@ -9,6 +9,9 @@ import { exitSummary, isOutOfCirculation, isPublished } from '@/components/compo
 import { Archive, Package } from 'lucide-react'
 import Link from 'next/link'
 import RecordRecentComponent from '@/components/layout/RecordRecentComponent'
+import ComponentAccessNotice from '@/components/components/ComponentAccessNotice'
+import { isTombstone } from '@/lib/backend'
+import { formatTimestamp } from '@/lib/utils'
 import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 
@@ -52,11 +55,18 @@ export default async function ComponentDetailPage({
 
   const res = passportRes
 
+  // a piece the viewer cannot see is explained, not hidden (8.11, 8.17)
   if (res.status === 401) {
     const callback = requestedSnapshotId
       ? `/components/${component_id}?snapshots=${encodeURIComponent(requestedSnapshotId)}`
       : `/components/${component_id}`
-    redirect(`/auth/signin?callbackUrl=${encodeURIComponent(callback)}`)
+    return <ComponentAccessNotice kind="not-public" callbackUrl={callback} />
+  }
+  if (res.status === 403) {
+    return <ComponentAccessNotice kind="no-access" />
+  }
+  if (res.status === 410) {
+    return <ComponentAccessNotice kind="purged" />
   }
   if (res.status === 404) {
     notFound()
@@ -68,7 +78,28 @@ export default async function ComponentDetailPage({
     )
   }
 
-  const catalog = (await res.json()) as CatalogComponent
+  const body = (await res.json()) as unknown
+  if (isTombstone(body)) {
+    if (body.duplicate_of) {
+      redirect(`/components/${encodeURIComponent(body.duplicate_of)}`)
+    }
+    return (
+      <ComponentAccessNotice
+        kind="withdrawn"
+        withdrawnAt={body.withdrawn_at}
+        catalogNumber={body.catalog_number}
+      />
+    )
+  }
+  const catalog = body as CatalogComponent
+  if (!catalog.snapshots?.length) {
+    return (
+      <ComponentAccessNotice
+        kind="no-current-state"
+        catalogNumber={catalog.identity.catalog_number}
+      />
+    )
+  }
   const snapshot = primarySnapshot(catalog)
   let snapshots: SnapshotSummaryItem[] = []
   if (snapshotsRes.ok) {
@@ -115,6 +146,20 @@ export default async function ComponentDetailPage({
             {isConsumed ? 'Component out of circulation' : 'Component Details'}
           </h1>
         </div>
+
+        {catalog.identity.withdrawn && (
+          <div
+            role="status"
+            className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100"
+          >
+            <p className="font-medium">
+              Withdrawn on {formatTimestamp(catalog.identity.withdrawn.at)}: {catalog.identity.withdrawn.reason}
+            </p>
+            <p className="mt-1 text-sm opacity-90">
+              Only members of its dataset see this record; everyone else sees that it was withdrawn.
+            </p>
+          </div>
+        )}
 
         {isConsumed && (
           <div
