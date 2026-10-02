@@ -93,8 +93,8 @@ Threads merged into one spec:
 | `docs/adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1--P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; Q1--Q3 decided |
 | `docs/adr/HANDOFF.md` | this file |
 | `AGENTS.md`, `docs/agents/` | agent-skill config: GitHub issues, triage labels, domain-doc rules (2026-09-29) |
-| `future_implementation/MEASUREMENTS_SPEC.md` | original measurement spec --- superseded, kept for domain research and standards sources. Gitignored. |
-| `future_implementation/IMPLEMENTATION_PLAN_V0-5+.md` | older plan; its 0.5.0.2 moderator section is **superseded by 6.5** |
+| `docs/adr/FUTURE.md` | loose ideas beyond 0.6 (LCA, IFC, similarity search, analytics, GH); nothing decided |
+| `docs/adr/archive/IMPLEMENTATION_PLAN_0.5.md` | archived 0.5.x plan; its 0.5.0.2 moderator section is **superseded by 6.5**, open items moved to `FUTURE.md` |
 | `reference/pdf/Bernhard_HYBREP.pdf`, `reference/pdf/CPR_2024_3110.pdf` | sources. Gitignored. |
 | `mongodb_collections_local/260916/` | newest local dump (identities, snapshots, map cache --- **no designs**) |
 | `D:\01_PROJECT_WORKDATA\260916_CSC_ASSETS` | files for that dump (meshes, point clouds, photos, previews) |

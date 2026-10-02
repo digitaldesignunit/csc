@@ -12,7 +12,10 @@ change are wrong by default.
 
 ---
 
-## 1. Evidence system (supersedes parts of MEASUREMENTS_SPEC.md)
+## 1. Evidence system (supersedes parts of the 0.5 measurements draft)
+
+"Spec section" numbers in 1.x point at that draft (2026-09-09), retired 2026-10-02; what it held
+that still matters is in `DATA_MODEL_SPEC.md` (section 2.5, Appendix A.0, Sources).
 
 | # | Decision | Consequence |
 |---|---|---|

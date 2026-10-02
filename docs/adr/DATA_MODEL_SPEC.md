@@ -4,8 +4,9 @@
 `docs/adr/DESIGN_DECISIONS.md`). Draft 4 2026-09-28 (consistency pass, 8.1--8.6), draft 3
 2026-09-24 (7.x), draft 2 2026-09-23 (6.x), first draft
 2026-09-12. Glossary: `CONTEXT.md` (repo root) --- field names follow its terms. Supersedes
-`future_implementation/MEASUREMENTS_SPEC.md` (kept for its domain research and sources). Nothing
-here is open; items marked **deferred** are out of 0.6 by the triage rule (6.8).
+the 0.5 measurements draft (2026-09-09, retired 2026-10-02): its domain research is Appendix A.0,
+its standards in section 2.5 and the Sources list. Loose ideas beyond 0.6: `docs/adr/FUTURE.md`.
+Nothing here is open; items marked **deferred** are out of 0.6 by the triage rule (6.8).
 **Precedent:** the hybrid-representation ideas here --- proxies that keep their deviation from
 the scan, `{range, confidence, source}` property descriptors, resolution following design
 relevance --- follow M. Bernhard, *HYBREP: A Hybrid Representation Framework for Computational
@@ -33,7 +34,7 @@ landscape section 10.6.
 | 8 | Migration from 0.5 |
 | 9 | Decided questions (index into the decision log) |
 | 10 | CPR 2024/3110 & DPP alignment |
-| A | Evidence payloads: rebound hammer, core compression, non-instrumental kinds, reinforcement layout |
+| A | Evidence payloads: domain notes, rebound hammer, core compression, non-instrumental kinds, reinforcement layout |
 | B | Proxy primitive definitions: params, faces, UV |
 
 ---
@@ -157,8 +158,13 @@ made in design tools outside CSC (decision 7.11) and is never recorded here.
 | `manufacturer_datasheet` | `archival` | no | A.3 |
 | `reinforcement_layout` | by `basis`: `drawing` --> `archival`, `scan` --> `ndt`, `exposed` --> `visual` | --- | A.4 (decision 7.8) |
 
-Future instrumental methods (UPV EN 12504-4, carbonation EN 14630, cover meter, half-cell,
-pull-off, moisture) are one `EvidenceMethodSpec` each (section 4.5).
+Future instrumental methods are one `EvidenceMethodSpec` each (section 4.5): ultrasonic pulse
+velocity (EN 12504-4), carbonation depth by phenolphthalein (EN 14630), cover meter / rebar
+scanning (BS 1881-204), half-cell potential (ASTM C876), pull-off (EN 1542), chloride content,
+moisture, weighing, dimensional survey, hardness / Windsor probe, timber moisture and grading,
+steel coupon tensile tests. Several are non-destructive and repeatable; several produce a depth
+profile rather than a scalar --- the envelope must hold scalar, multi-reading and small-series
+results without a new collection per method.
 
 Tier base confidences (policy constants, `vocab.py`):
 
@@ -1768,7 +1774,7 @@ of how directly it binds:
 | **ESPR --- Reg. (EU) 2024/1781**, Arts 9--15 + Annex III | in force; DPP registry to be set up by the Commission by **19 Jul 2026** (Art 13); product-group delegated acts pending | the DPP *framework*: data requirements, unique product / operator / facility identifiers (Art 12), registry (Art 13), web portal (Art 14). CPR Art 79 applies these to construction products | `identifiers[]` (section 10.2) must hold an ESPR-registry-issued identifier once it exists; the QR on the piece is the ESPR data carrier |
 | **EN 182xx family --- CEN/CLC JTC 24** ("Digital product passport: framework and system", standardisation request M/604) | first six published **27 May 2026**, cited in the OJ **15 Jul 2026** (Implementing Decision (EU) 2026/1736); two still to be cited | EN 18216 data exchange protocols ; **EN 18219 unique identifiers** ; **EN 18220 data carriers** (optical 2D, RFID, NFC) ; **EN 18221 data storage, archiving, persistence** ; **EN 18222 APIs for passport lifecycle management and searchability** ; EN 18223 system interoperability ; EN 18239 access rights, security, confidentiality ; EN 18246 data authentication, reliability, integrity | these are the *technical* targets for section 10.4: identifier syntax (18219), QR payload (18220), retention (18221 --- the 25-year rule made concrete), the API surface an export must speak (18222), tombstones + hashes (18246). **Obtain 18219/18220/18221/18222 before implementing `identifiers[]` and the export.** |
 | **CIRPASS-2** (Digital Europe, May 2024 -- Apr 2027) | running; 13 lighthouse pilots, one of them **construction, led by Cobuilder** | the reference pilot for a construction DPP; will produce the de-facto data model the delegated act inherits | watch item; the pilot's construction data model (Cobuilder's "Define"/bSDD-based dictionary) is the likeliest shape of Recital 92's "common data dictionary" |
-| **EN 15804+A2** (EPD core rules) | established | the 13 core + 6 additional environmental indicators | **CPR Annex II (a)--(m) = the 13 core, (n)--(s) = the 6 additional --- a 1:1 match.** The `env_*` quantities (section 10.3) should carry EN 15804 indicator codes (GWP-total, GWP-fossil, GWP-biogenic, GWP-luluc, ODP, AP, EP-freshwater, EP-marine, EP-terrestrial, POCP, ADP-minerals&metals, ADP-fossil, WDP; PM, IRP, ETP-fw, HTP-c, HTP-nc, SQP) as their `unit`-adjacent identifier. Used products: modules from the latest deinstallation only (Art 3(53), Recital 36). Data source candidates: Oekobaudat (already in `FUTURE.md`), ISO 22057 EPD data templates |
+| **EN 15804+A2** (EPD core rules) | established | the 13 core + 6 additional environmental indicators | **CPR Annex II (a)--(m) = the 13 core, (n)--(s) = the 6 additional --- a 1:1 match.** The `env_*` quantities (section 10.3) should carry EN 15804 indicator codes (GWP-total, GWP-fossil, GWP-biogenic, GWP-luluc, ODP, AP, EP-freshwater, EP-marine, EP-terrestrial, POCP, ADP-minerals&metals, ADP-fossil, WDP; PM, IRP, ETP-fw, HTP-c, HTP-nc, SQP) as their `unit`-adjacent identifier. Used products: modules from the latest deinstallation only (Art 3(53), Recital 36). Data source candidates: Oekobaudat (`docs/adr/FUTURE.md`), ISO 22057 EPD data templates |
 | **EPBD --- Dir. (EU) 2024/1275** | renovation-passport schemes by **29 May 2026** (Annex VIII); digital building logbooks where available; whole-life-carbon disclosure per EN 15978 / Level(s) 1.2 | the *building-side* twin of the product passport: what the piece is deinstalled *from* and installed *into* | `origin.construction_work.identifier` / `exit.construction_work.identifier` (section 3.1.1) should be able to carry a building identifier that a digital building logbook would recognise; a design's WLC (computed outside CSC, 7.11) needs each component's `env_*` |
 | **Level(s)** (EU building sustainability framework) | established, voluntary | indicator 1.2 life-cycle GWP, 2.1 bill of quantities/materials, 2.4 design for deconstruction & reuse | CSC components are exactly Level(s) 2.4's input; a GH definition over fetched catalog data could produce a 2.1 bill of materials (designs are not stored in CSC, 7.11) |
 | **Battery Reg. (EU) 2023/1542** | battery passport mandatory **Feb 2027** | the first live DPP --- the working reference for registry, access tiers, QR resolution | implementation patterns only; no data overlap |
@@ -1791,6 +1797,56 @@ as the early signal for that dictionary.
 ## Appendix A --- Evidence payloads
 
 All payload models: `extra = "forbid"`. Server recomputes and cross-checks marked fields.
+
+### A.0 Domain notes (from the retired 0.5 measurements draft)
+
+Why the two reference payloads look the way they do. The standards define what a result is;
+the schema stores enough to re-check it.
+
+**Rebound hammer (EN 12504-2:2021; ASTM C805; interpretation EN 13791).**
+
+- A result belongs to a **test location**, not to one impact: at least 9 valid readings, impacts
+  >= 25 mm apart and >= 25 mm from any edge.
+- The reported value is the **median, as a whole number**. If more than 20 % of the readings
+  deviate by more than 25 % from the median, the whole set is discarded. The rule is only
+  auditable if every reading survives, so rejected readings are flagged, never deleted.
+- **Impact direction** (horizontal, vertically down / up, inclined) needs a correction; store the
+  raw direction and whether the correction was applied.
+- **Hammer type:** N (2.207 Nm), L (0.735 Nm), NR / LR (recording), and energy-based digital
+  hammers that report a **Q-value**. Q and R are different quantities and are never aggregated
+  together.
+- **Surface state** changes the number: ground vs. as found, dry / damp / wet, carbonation depth,
+  member age, surface temperature. **Calibration:** anvil check, date, correction factor, serial.
+- **The rebound number is not a strength.** Converting R or Q to compressive strength needs a
+  correlation (manufacturer curve, EN 13791 comparative testing, or a site-specific curve
+  calibrated against cores) and is a +-20--30 % estimate. Raw and converted values are different
+  facts with different confidence (rule 3, section 1); the conversion is a `derived[]` result
+  with its model named.
+
+**Drilled core in compression (EN 12504-1:2019, EN 12390-3:2019, machine EN 12390-4, assessment
+EN 13791; ASTM C42/C42M, C39/C39M).** Three acts at different times:
+
+1. **Sampling** --- the core is drilled out of the piece: diameter (typically 50 / 100 / 150 mm),
+   position, orientation to the casting direction, wet / dry drilling, date.
+2. **Specimen preparation** --- measured diameter, lengths as drilled and prepared, end
+   preparation (ground / capped / sawn), length-to-diameter ratio (a 2:1 core lies in
+   1.95--2.05; 1:1 cores take a different correction), mass, density, moisture conditioning,
+   reinforcement in the core (normally rejected or flagged), visible defects.
+3. **Testing** --- loading rate 0.6 +- 0.2 MPa/s, maximum load F, cross-section A_c,
+   f_c = F / A_c, failure type (satisfactory / unsatisfactory per EN 12390-3; ASTM C39 has six
+   fracture types), test date, age at test.
+
+Consequences: the record carries both times --- `sampled_at` (when the *component* was in the
+sampled state; SOSA `phenomenonTime`) and `observed_at` (when the number was produced;
+`resultTime`) --- and context resolves at `sampled_at` (section 4.1). Hand-entered lab data
+fails most often by transcription, hence the server recomputing F / A and the l/d class. Coring
+is destructive; the record is the event and no snapshot is created (decision 1.5).
+
+**Data-model alignment.** The envelope follows the *shape* of W3C/OGC SOSA/SSN, not its RDF:
+the identity is the feature of interest, a core is a `sosa:Sample`, crushing it is an
+observation on the sample whose ultimate feature of interest is still the identity. Attribution
+follows W3C PROV-O (entity / activity / agent). UCUM for units, ORCID for persons, ROR for
+institutions make it machine-resolvable at no cost.
 
 ### A.1 `rebound_hammer` (EN 12504-2:2021 / ASTM C805)
 
@@ -1967,9 +2023,32 @@ beam's prism has z along the beam, its `frame` has x along the beam.
 - Commission Decision 2000/532/EC (List of Waste) as amended by Decision 2014/955/EU, chapter 17;
   verified 2026-09-28 against its verbatim German transposition, Abfallverzeichnis-Verordnung
   (AVV), Anlage --- <https://www.gesetze-im-internet.de/avv/anlage.html>.
-- EN 12504-2:2021, EN 12504-1:2019, EN 12390-3:2019, EN 13791; ASTM C805, C42/C42M, C39/C39M ---
-  see `MEASUREMENTS_SPEC.md` section 3 and its source list.
-- W3C/OGC SOSA/SSN (`sosa:Observation`, `sosa:Sampling`, `phenomenonTime` / `resultTime`) and
-  W3C PROV-O --- the shape of the evidence envelope (section 3.3).
-- DIN SPEC 91484:2023-09 --- recording of reusable building products (pre-demolition audit); to be
-  cross-checked against section 3.1 and section 10.3 once obtained.
+- EN 12504-2:2021, *Testing concrete in structures --- Part 2: Non-destructive testing ---
+  Determination of rebound number* ---
+  <https://standards.iteh.ai/catalog/standards/cen/70c293c6-822f-42bc-8438-3f555fd5709f/en-12504-2-2021>;
+  BS EN 12504-2 text (PDF) ---
+  <https://eclass.duth.gr/modules/document/file.php/TMB300/BS%20EN%2012504-2%20rebound%20number.pdf>.
+  US equivalent ASTM C805.
+- EN 12504-1:2019, *Cored specimens --- taking, examining and testing in compression* ---
+  <https://standards.iteh.ai/catalog/standards/cen/15314b4e-ac55-43b3-8f57-602c7b877f16/en-12504-1-2019>;
+  OENORM EN 12504-1:2019 preview (PDF) ---
+  <https://webstore.ansi.org/preview-pages/ON/preview_ONORM+EN+12504-1_2019.pdf>.
+  US equivalent ASTM C42/C42M.
+- EN 12390-3:2019, *Compressive strength of test specimens* ---
+  <https://standards.iteh.ai/catalog/standards/cen/7eb738ef-44af-436c-ab8e-e6561571302c/en-12390-3-2019>;
+  machine per EN 12390-4. US equivalent ASTM C39/C39M.
+- EN 13791, *Assessment of in-situ compressive strength in structures and precast concrete
+  components*; BRMCA draft guide to EN 13791 clause 9, assessment using comparative testing (PDF) ---
+  <https://brmca.org.uk/documents/01_DRAFT_BRMCA_GUIDE_EN_13791_Clause_9_Assessment_using_comparative_testing_v200123.pdf>.
+- W3C/OGC Semantic Sensor Network Ontology (SSN/SOSA: `sosa:Observation`, `sosa:Sampling`,
+  `phenomenonTime` / `resultTime`) --- <https://www.w3.org/TR/vocab-ssn/>; K. Janowicz et al.,
+  *SOSA: A lightweight ontology for sensors, observations, samples, and actuators* (PDF) ---
+  <https://www.maxime-lefrancois.info/docs/Janowicz-JWS-SOSA.pdf>. With W3C PROV-O, the shape of
+  the evidence envelope (section 3.3, A.0).
+- DIN SPEC 91484:2023-09 --- recording of reusable building products (pre-demolition audit,
+  two-stage preliminary / detailed inspection) ---
+  <https://www.dinmedia.de/en/technical-rule/din-spec-91484/371235753>; overview by the
+  Bayerische Ingenieurekammer ---
+  <https://www.bayika.de/de/aktuelles/meldungen/2023-08-18_DIN-SPEC-91484-Neuer-Standard-zur-erneuten-Verwendung-von-Bauprodukten.php>.
+  To be cross-checked against section 3.1, Appendix A and section 10.3 once obtained; its
+  companion for conformity / quality assessment is unverified and not to be cited until checked.
