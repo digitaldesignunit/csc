@@ -155,6 +155,8 @@ class Target:
     parent_datasets: Tuple[Dataset, ...] = field(default_factory=tuple)
     # destination of a dataset move
     destination: Optional[Dataset] = None
+    # evidence: users among performed_by (four eyes, 8.12)
+    performer_ids: Tuple[str, ...] = field(default_factory=tuple)
 
 
 Rule = Callable[[Viewer, Roles, Target], bool]
@@ -262,6 +264,26 @@ def _nobody(viewer: Viewer, roles: Roles, target: Target) -> bool:
     return False
 
 
+def _self_attest(viewer: Viewer, roles: Roles, target: Target) -> bool:
+    """The recorder's own claim, only when they performed it (8.12)."""
+    return (_author(viewer, roles, target)
+            and viewer.user_id in target.performer_ids)
+
+
+def _review_verification(viewer: Viewer, roles: Roles,
+                         target: Target) -> bool:
+    """reviewer(D) who is neither the recorder nor a performer --- four
+    eyes, admin included (8.12, I27)."""
+    return ('reviewer' in roles and not _author(viewer, roles, target)
+            and viewer.user_id not in target.performer_ids)
+
+
+def _revoke_invitation(viewer: Viewer, roles: Roles,
+                       target: Target) -> bool:
+    """Its creator or moderator(D) (8.14)."""
+    return _author_or_moderator(viewer, roles, target)
+
+
 RULES: Dict[str, Rule] = {
     # creating
     'create_identity': _create,
@@ -292,7 +314,9 @@ RULES: Dict[str, Rule] = {
     'edit_valid_time': _role('moderator'),
     # shape_class / complexity / material_class overrides
     'override_derived': _role('moderator'),
-    'set_verification': _role('reviewer'),
+    # verification (8.12): never by the admin shortcut alone
+    'self_attest': _self_attest,
+    'review_verification': _review_verification,
     # identity lifecycle
     'patch_identity': _patch_identity,
     'delete_identity': _delete_identity,
@@ -306,6 +330,9 @@ RULES: Dict[str, Rule] = {
     # datasets
     'manage_members': _role('moderator'),
     'edit_dataset': _role('moderator'),
+    # invitations (8.14): into D by moderator(D); without a dataset admin
+    'invite': _role('moderator'),
+    'revoke_invitation': _revoke_invitation,
     # admin only (the admin shortcut in `can` grants them)
     'create_dataset': _nobody,
     'purge': _nobody,
@@ -313,7 +340,12 @@ RULES: Dict[str, Rule] = {
     'manage_users': _nobody,
     'manage_materials': _nobody,
     'read_logs': _nobody,
+    'search_users': _nobody,              # 8.20
 }
+
+# actions the admin shortcut does not grant: they depend on who the caller
+# is, not on what they may do (8.12, I27)
+NO_ADMIN_SHORTCUT = frozenset({'self_attest', 'review_verification'})
 
 
 def can(viewer: Viewer, action: str, target: Target) -> bool:
@@ -321,7 +353,7 @@ def can(viewer: Viewer, action: str, target: Target) -> bool:
     rule = RULES.get(action)
     if rule is None:
         raise KeyError(f'unknown action: {action!r}')
-    if viewer.is_admin:
+    if viewer.is_admin and action not in NO_ADMIN_SHORTCUT:
         return True
     if not viewer.logged_in:
         return False
