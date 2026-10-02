@@ -52,7 +52,15 @@ notices (not public, no access, withdrawn, removed, no current state) and the me
 admin account search, invitations); `/admin/users` with URL filters, memberships and an invitations tab;
 registration with `?code=`. Fixed on the way: the web sign-in matched usernames by exact case (8.28 now
 holds there too); killed preview / test runs left 200--700 MB temp folders each (now swept at the next
-start). **P3 is complete pending the user's review. Next:** P4 (provenance, lineage, materials).
+start). **P3 is done (accepted 2026-10-02).**
+
+**2026-10-02, before P4 (branch `v-0.6.0.0-P4`):** the 0.5 measurements draft is retired into the
+spec (Appendix A.0, section 2.5, Sources), the 0.5 plan archived (`docs/adr/archive/`), loose ideas
+in `docs/adr/FUTURE.md`, and `docs/adr/STANDARDS_ALIGNMENT.md` lists what the model follows. Source
+check: EN 18246 was wrongly called "cited" (fixed); paywalled standards still to verify (see the
+source-check note under Sources). Open topics O5--O12 in `DESIGN_DECISIONS.md` --- the P4 ones
+(O5--O9) are grilled before P4 starts. **Next:** grill O5--O9, then P4 (provenance, lineage,
+materials).
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.

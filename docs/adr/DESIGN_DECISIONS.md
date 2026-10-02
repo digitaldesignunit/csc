@@ -177,6 +177,14 @@ O1 closed by 8.23, O2 by 8.24, O3 by 8.29.
 | # | Topic | Context |
 |---|---|---|
 | O4 | **Review the email setup** (user 2026-10-01). Invitations, member notices and verification mails keep the current SMTP setup (`SMTP_*`, `SMTP_FROM_EMAIL`) for now. To review later: the sender address and name per mail type, what happens to replies and auto-replies (out-of-office, bounces) sent to the noreply address, a reply-to for invitations (the inviting moderator?), bounce handling for invitations to mistyped addresses, delivery to non-TU domains (SPF / DKIM / DMARC of the sending domain), and mail templates (language, footer, imprint link). | P3 part 4 sends invitations (8.14) and "added to dataset" notices (8.20) through the existing mailer used for verification since 0.5. |
+| O5 | **Inherited fields across datasets** (review 2026-10-02, before P4). A parent PATCH propagates to every descendant that still inherits the field (section 3.1.2) --- also into children in another dataset, whose moderators did not make the change. 8.8 asks for moderators of both datasets when a cut ends a parent; propagation asks for none. | 44 `ddu_aggregations` children were cut from `mineral_composite_panels`; a material fix on a panel would rewrite them. |
+| O6 | **Does `material_class` travel with `material`?** It is not in the inheritable set. A parent with an assigned class (roof tile 17 01 03) passes `fired_clay` to its child, whose class is then re-derived as 17 01 02. | Section 2.10, 3.1.2, I25. |
+| O7 | **What "equal" means for a merge.** A merged child inherits a field only if all parents hold equal values (I17). For `origin` that compares the whole block --- two pieces from the same building and day differ by a note or an actor list and the child gets `origin.kind: unknown`. | Section 3.1.2. |
+| O8 | **Cutting from a piece that is not in circulation.** Undefined: a child of a parent that is installed, returned, lost, recycled, disposed, withdrawn, unpublished, or carries a hand-set `split`; whether publishing the child overwrites an authored `exit`; whether a hand-set `split` becomes server-derived once children are catalogued. | Section 3.1.3, I18, 8.8. |
+| O9 | **Materials lifecycle.** `/materials` has create and PATCH but no delete or merge: a mistyped or duplicate admin entry stays forever, and identities using it cannot be moved in one step. | Section 2.10, 7.7. |
+| O10 | **ASTM variants in 0.6.** A.1 / A.2 accept `astm_c805` and ASTM C42 / C39 alongside the EN methods. Users are in Germany; verifying the ASTM rules needs three more paid standards. EN only in 0.6, ASTM as an additive method later? | Appendix A; source check 2026-10-02. |
+| O11 | **Where P8 runs end to end.** P8 is done "against a staging backend"; none exists. A local `invoke dev-migrated` backend reached from Rhino on the same machine, or a staging release on the server? | Plan P8. |
+| O12 | **Cutover runbook.** P9 lists the steps but not: the length of the write freeze and who is told when, the rollback if a step fails on production (cutover dump + previous release), and the moment old UserObjects are refused (`CSC_MIN_CLIENT_VERSIONS`) relative to teaching dates. | Plan P9, 8.5, 8.11. |
 
 ---
 
@@ -185,6 +193,6 @@ O1 closed by 8.23, O2 by 8.24, O3 by 8.29.
 Decisions 1.1--8.30 are settled; 0.5.1.0 is released (8.5); P1 is done. Every review gap of
 2026-09-29 is closed (8.7--8.13, 8.15--8.17); 8.14 adds invitations; the document review of
 2026-09-30 closed three more (8.18 recall, 8.19 archived cycles, 8.20 member editor); 8.21 admin user list filters; 8.22--8.29 from the P2 preview (test accounts, detail levels, owners,
-moderators, the `beyond_debris` rename, no names in committed files, lowercase usernames, navigation shell). P2 of `docs/adr/IMPLEMENTATION_PLAN_0.6.md` is in progress
-(see HANDOFF.md). Glossary:
+moderators, the `beyond_debris` rename, no names in committed files, lowercase usernames, navigation shell); 8.30 status history. P0--P3 of `docs/adr/IMPLEMENTATION_PLAN_0.6.md` are done;
+open topics O4--O12 above, O5--O9 before P4 (see HANDOFF.md). Glossary:
 `CONTEXT.md` at the repo root.

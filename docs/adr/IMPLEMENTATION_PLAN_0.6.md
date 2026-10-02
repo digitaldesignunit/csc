@@ -1,8 +1,8 @@
 # Implementation plan --- CSC 0.5.1.0 and 0.6.0.0
 
-**Status:** draft 3, 2026-09-30 --- accepted by the user with the changes in section 5. Implements `docs/adr/DATA_MODEL_SPEC.md` (draft 5) and the
-decisions in `docs/adr/DESIGN_DECISIONS.md` (1.1--8.22). Terms follow `CONTEXT.md`.
-**Branches:** P0 on `v-0.5.1.0`; P1--P9 on `v-0.6.0.0`.
+**Status:** draft 3, 2026-09-30 --- accepted by the user with the changes in section 5; P0--P3 done (2026-10-02). Implements `docs/adr/DATA_MODEL_SPEC.md` (draft 5) and the
+decisions in `docs/adr/DESIGN_DECISIONS.md` (1.1--8.30). Terms follow `CONTEXT.md`.
+**Branches:** P0 on `v-0.5.1.0`; P1--P9 on `v-0.6.0.0`, each phase on its own `v-0.6.0.0-P<n>` branch (P2b, P3, P4, ...).
 **Sizes** are relative (S < M < L < XL), not durations.
 
 ---
@@ -114,12 +114,12 @@ run on the 0.5 dump lists exactly the P2 work (plus nulls, now in step 1c).
 **Done when:** models validate hand-written examples of every section 3 document; predicate tables fully
 covered; header tests (missing / old / exempt) pass.
 
-### P2 --- Migrations and rehearsal --- size XL
+### P2 --- Migrations and rehearsal --- size XL --- **done**
 - Every section 8.1 script except the runner steps (5, 7, 8), in run order, each idempotent with
   `--dry-run` and its abort guards: 1, 1b, 1c, 9, 2, 11, 12, 3, 10, 10c, 10b, 6, 6c, 6d, 6b, 4, 9b,
   13, 14, 11b. Mapping logic as pure functions with unit tests (the step 10 table, the 37 / 5 / 1
   exit split, marker classification by position in 6c).
-- `invoke rehearse`: load 260916, run all, `check_invariants`, print the per-dataset report.
+- `invoke rehearse`: load the newest dump (261001 since 2026-10-01), run all, `check_invariants`, print the per-dataset report.
 - 6c needs the ddu source OBJs for marker labels; without them the position rule applies.
 - **Read-only frontend catch-up:** regenerate models; lists, filters, detail page, viewer and
   map work on migrated data (`original_function`, `material` + class + trade name, `origin`,
@@ -129,7 +129,7 @@ covered; header tests (missing / old / exempt) pass.
 **Done when:** rehearsal runs clean except the invariants owned by later phases (frame, shape
 class, proxies --- listed as expected-missing); the web app browses the migrated 260916 data.
 
-### P2b --- Navigation shell --- size S --- **built 2026-10-01, awaiting user check**
+### P2b --- Navigation shell --- size S --- **done** (built 2026-10-01)
 - Decision 8.29 on its own branch: the shadcn/ui `Sidebar` primitive restyled for CSC; one entry
   list with visibility rules (signed out / user / moderator / admin); brand, groups, Recent,
   account menu; icon rail with tooltips, `Ctrl/Cmd+B`, cookie-remembered state, rail default
@@ -143,7 +143,7 @@ class, proxies --- listed as expected-missing); the web app browses the migrated
 keyboard and screen-reader navigation work; the collapsed state survives a reload without a
 jump.
 
-### P3 --- Datasets, permissions, lifecycle --- size L --- **built 2026-10-02, awaiting user review**
+### P3 --- Datasets, permissions, lifecycle --- size L --- **done** (accepted 2026-10-02)
 - Unpublished identity (8.9): derived state; creator + `moderator(D)` edit metadata and see it;
   evidence publish refused until the identity is published (I26); queue groups evidence with v0.
 - `datasets` routes and memberships (section 3.6, section 7.7); `GET /users/me` with global role + roles per

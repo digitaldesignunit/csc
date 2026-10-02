@@ -1,4 +1,4 @@
-# CSC Data Model Specification --- v0.6 (draft 4)
+# CSC Data Model Specification --- v0.6 (draft 5)
 
 **Status:** draft 5, 2026-09-30 --- review gaps closed (decisions 1.1--8.22,
 `docs/adr/DESIGN_DECISIONS.md`). Draft 4 2026-09-28 (consistency pass, 8.1--8.6), draft 3
@@ -1528,7 +1528,7 @@ All four: `draft` --> photos --> `submit`; for a moderator, submit also publishe
 scanning app or import; source apps and formats; server-side processing of uploads).
 
 Not in 0.6: spreadsheet-style entry sheet, CSV / lab-report import, GH evidence
-components. There is no campaign entity (decision 7.2): the study is the dataset, the occasion is
+components (one exception: `ReinforcementLayout` + generic `AddEvidence`, decision 7.8). There is no campaign entity (decision 7.2): the study is the dataset, the occasion is
 stated by each record.
 
 ### 7.7 Datasets, materials, administration (decisions 6.4, 6.5, 6.10)
@@ -1788,7 +1788,8 @@ alignment into obligation, and starts the Art 80 clocks (system live +6 months, 
 
 **Practical reading for CSC:** the identifier, data-carrier, persistence and API standards now
 exist as ENs; the construction-specific data dictionary does not. So: build to EN 18219/18220/
-18221/18222/18246 now (they are stable and cited), keep the field vocabulary IFC/EN 15804/UCUM-
+18221/18222 now (stable and cited; presumption of conformity with ESPR Arts 10--11), follow
+EN 18246 once it is cited (not cited as of 2026-10-02), keep the field vocabulary IFC/EN 15804/UCUM-
 based so it can be mapped when the dictionary lands, and treat the CIRPASS-2 construction pilot
 as the early signal for that dictionary.
 
@@ -2052,3 +2053,14 @@ beam's prism has z along the beam, its `frame` has x along the beam.
   <https://www.bayika.de/de/aktuelles/meldungen/2023-08-18_DIN-SPEC-91484-Neuer-Standard-zur-erneuten-Verwendung-von-Bauprodukten.php>.
   To be cross-checked against section 3.1, Appendix A and section 10.3 once obtained; its
   companion for conformity / quality assessment is unverified and not to be cited until checked.
+- Also referenced, not separately sourced: IFC 4.3.2 (ISO 16739-1, buildingSMART) element class
+  names (section 2.1); UCUM unit codes (section 2.6); ISO 8601 timestamps; ORCID and ROR
+  identifiers (section 3.3.1); ISO/IEC 17025 lab accreditation (section 3.3.1); ISO/IEC 15459
+  identifiers (section 10.2); Regulation (EU) 2016/679 (GDPR) Arts 6, 17 (sections 3.1.4, 3.3.1,
+  10.4); EN 771-4 (AAC units, section 2.10); EN 15978, ISO 22057 (section 10.6); future evidence
+  methods EN 12504-4, EN 14630, BS 1881-204, ASTM C876, EN 1542 (section 2.5).
+- Source check 2026-10-02: CPR spot-checked against the local PDF (Art 3(53), 77(1), 79, 80,
+  Annex II); Implementing Decision (EU) 2026/1736 confirmed via CEN-CENELEC and secondary sources
+  --- it cites EN 18216, 18219, 18220, 18221, 18222, 18223 (presumption of conformity with ESPR
+  Arts 10--11); EN 18239 and EN 18246 not yet cited. EUR-Lex refuses scripted access, so ESPR,
+  WFD and EPBD articles are not re-checked against their text.
