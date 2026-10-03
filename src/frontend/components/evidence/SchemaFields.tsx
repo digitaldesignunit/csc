@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 
 import { Field, NativeSelect, NumberList } from '@/components/evidence/controls'
-import Help from '@/components/evidence/Help'
+import Help from '@/components/ui/help'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'

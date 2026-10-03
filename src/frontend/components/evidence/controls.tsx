@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 
-import Help from '@/components/evidence/Help'
+import Help from '@/components/ui/help'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

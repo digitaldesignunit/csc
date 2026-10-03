@@ -6,14 +6,10 @@ import { decodePng16 } from '@/lib/png16'
 import {
   channelRange,
   faceTexture,
-  placementMatrix,
-  proxyFaceGeometries,
   type FaceMap,
   type MapChannel,
-  type ProxyDoc,
 } from '@/lib/proxyOverlay'
-
-const SCALE = 0.001
+import type { ProxyShape } from '@/lib/proxyShape'
 
 export type ProxyDisplay = 'off' | 'outline' | MapChannel
 
@@ -92,7 +88,8 @@ export function useDeviationMaps(
 }
 
 type Props = {
-  proxy: ProxyDoc
+  /** The faces and placement shared with the solid (``useProxyShape``). */
+  shape: ProxyShape
   display: ProxyDisplay
   maps: Record<string, FaceMap> | null
   /** Called with the colour range (mm, degrees or points) in use. */
@@ -104,9 +101,8 @@ type Props = {
  * or its faces coloured by one channel of the deviation maps. Meant to sit
  * inside the viewer's component group.
  */
-export default function ProxyOverlay({ proxy, display, maps, onRange }: Props) {
-  const faces = useMemo(() => proxyFaceGeometries(proxy), [proxy])
-  const matrix = useMemo(() => placementMatrix(proxy.placement), [proxy])
+export default function ProxyOverlay({ shape, display, maps, onRange }: Props) {
+  const { faces, edges } = shape
   const channel: MapChannel | null =
     display === 'off' || display === 'outline' ? null : display
   const range = useMemo(
@@ -116,12 +112,6 @@ export default function ProxyOverlay({ proxy, display, maps, onRange }: Props) {
   useEffect(() => {
     onRange?.(channel && maps ? range : null)
   }, [onRange, channel, maps, range])
-  const edges = useMemo(
-    () => Object.fromEntries(
-      Object.entries(faces).map(([face, geometry]) => [face, new THREE.EdgesGeometry(geometry, 30)]),
-    ),
-    [faces],
-  )
   const textures = useMemo(() => {
     if (!maps || !channel) return {}
     return Object.fromEntries(
@@ -130,39 +120,33 @@ export default function ProxyOverlay({ proxy, display, maps, onRange }: Props) {
   }, [maps, channel, range])
 
   useEffect(() => () => {
-    Object.values(faces).forEach((geometry) => geometry.dispose())
-    Object.values(edges).forEach((geometry) => geometry.dispose())
-  }, [faces, edges])
-  useEffect(() => () => {
     Object.values(textures).forEach((texture) => (texture as THREE.Texture).dispose())
   }, [textures])
 
   if (display === 'off') return null
   return (
-    <group scale={[SCALE, SCALE, SCALE]} rotation={[-Math.PI / 2, 0, 0]}>
-      <group matrixAutoUpdate={false} matrix={matrix}>
-        {Object.entries(faces).map(([face, geometry]) => {
-          const texture = (textures as Record<string, THREE.Texture>)[face]
-          return (
-            <group key={face}>
-              {texture && (
-                <mesh geometry={geometry}>
-                  <meshBasicMaterial
-                    map={texture}
-                    transparent
-                    side={THREE.DoubleSide}
-                    polygonOffset
-                    polygonOffsetFactor={-1}
-                  />
-                </mesh>
-              )}
-              <lineSegments geometry={edges[face]}>
-                <lineBasicMaterial color={0x2563eb} />
-              </lineSegments>
-            </group>
-          )
-        })}
-      </group>
+    <group matrixAutoUpdate={false} matrix={shape.matrix}>
+      {Object.entries(faces).map(([face, geometry]) => {
+        const texture = (textures as Record<string, THREE.Texture>)[face]
+        return (
+          <group key={face}>
+            {texture && (
+              <mesh geometry={geometry}>
+                <meshBasicMaterial
+                  map={texture}
+                  transparent
+                  side={THREE.DoubleSide}
+                  polygonOffset
+                  polygonOffsetFactor={-1}
+                />
+              </mesh>
+            )}
+            <lineSegments geometry={edges[face]}>
+              <lineBasicMaterial color={0x2563eb} />
+            </lineSegments>
+          </group>
+        )
+      })}
     </group>
   )
 }

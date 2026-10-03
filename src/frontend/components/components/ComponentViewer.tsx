@@ -41,8 +41,11 @@ import PickLayer from '@/components/viewer/PickLayer'
 import type { PickHit } from '@/lib/evidence/pick'
 import { publishedMarks } from '@/lib/evidence/marks'
 import type { ProxyDoc } from '@/lib/proxyOverlay'
+import type { ProxyShape } from '@/lib/proxyShape'
+import ProxySolid from '@/components/viewer/ProxySolid'
+import { useProxyShape } from '@/components/viewer/useProxyShape'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { ViewerMenu, MenuSection, MenuSubsection, MenuDivider, SegmentedControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
+import { ViewerMenu, MenuSection, MenuSubsection, MenuDivider, InfoLine, SegmentedControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
 
 // Scale factor for converting units to meters in THREE
 const scale = 0.001
@@ -146,6 +149,24 @@ const externalMeshCache = new Map<string, CachedMeshGeometry>()
 const externalPointCloudCache = new Map<string, CachedPointCloudGeometry>()
 
 // Helpers
+
+/** What each deviation overlay shows (explained behind a "?", not in the panel). */
+const OVERLAY_HELP: Record<Exclude<ProxyDisplay, 'off' | 'outline'>, string> = {
+  distance: 'Signed distance from the scan to the proxy surface. Blue: the scan lies inside the proxy. '
+    + 'Red: outside. White: on the surface. Full colour at the scale value shown.',
+  normal_deviation: 'Mean angle between the scan surface direction and the proxy face. '
+    + 'Light: parallel to the face. Dark: turned away from it, up to the scale value shown.',
+  occupancy: 'Number of scan points in each cell of the face. Light: few. Dark: many, '
+    + 'on a log scale up to the value shown.',
+}
+
+/** A hull measures the depth of the scan below its surface, never negative. */
+const HULL_DISTANCE_HELP = 'Depth of the scan below the hull surface (the concavity), never negative, '
+  + 'so the map shows red only. White: on the hull. Full colour at the scale value shown.'
+
+function overlayHelp(display: keyof typeof OVERLAY_HELP, primitive: string): string {
+  return display === 'distance' && primitive === 'hull' ? HULL_DISTANCE_HELP : OVERLAY_HELP[display]
+}
 
 /**
  * Detail levels (decision 8.23): the proxy, the preview stored in the
@@ -254,32 +275,6 @@ type PrimitiveDrawBuffers = {
 function snapshotMeshesFromGeometry(geometry: Geometry): Mesh[] {
   const meshes = geometry.meshes
   return Array.isArray(meshes) ? (meshes as Mesh[]) : []
-}
-
-/** A prism proxy's shape: profile in xy, extruded along z, centred on z = 0. */
-type PrismShape = { profile: number[][]; height: number }
-
-/** A box proxy as the prism of its xy rectangle (App. B: centred, z up). */
-function boxAsPrism(params: { size?: number[] }): PrismShape | null {
-  const [sx, sy, sz] = params?.size ?? []
-  if (![sx, sy, sz].every((v) => typeof v === 'number' && v > 0)) return null
-  const hx = sx / 2
-  const hy = sy / 2
-  return { profile: [[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]], height: sz }
-}
-
-/** Prism and box proxies of a snapshot (an authored L x W x H box or a GH extrusion). */
-function snapshotPrismsFromGeometry(geometry: Geometry): PrismShape[] {
-  return (geometry.proxies ?? [])
-    .map((proxy) =>
-      proxy.primitive === 'box'
-        ? boxAsPrism(proxy.params as { size?: number[] })
-        : proxy.primitive === 'prism'
-          ? (proxy.params as PrismShape)
-          : null,
-    )
-    .filter((prism): prism is PrismShape =>
-      !!prism && Array.isArray(prism.profile) && typeof prism.height === 'number')
 }
 
 function vertexColorsFromSnapshot(
@@ -567,59 +562,6 @@ async function loadExternalPointClouds(
     message: 'No original point cloud stored for this snapshot',
   }
 }
-
-/**
- * Extrusion from API `{ profile: [x,y][], height }` (+ material RGB).
- */
-const ExtrusionVisualization = React.memo(
-  ({
-    profile,
-    height,
-    colorRgb,
-  }: {
-    profile: number[][]
-    height: number
-    colorRgb: [number, number, number]
-  }) => {
-    const pline_shape = useMemo(() => {
-      const shape = new THREE.Shape()
-      if (!profile?.length) return shape
-      shape.moveTo(profile[0][0] * scale, profile[0][1] * scale)
-      profile.forEach((p, i) => {
-        if (i > 0) shape.lineTo(p[0] * scale, p[1] * scale)
-      })
-      return shape
-    }, [profile])
-
-    const extrude_geometry = useMemo(() => {
-      if (!profile?.length || !height) {
-        return new THREE.ExtrudeGeometry(new THREE.Shape())
-      }
-      const extrudeSettings = { steps: 2, depth: height * scale, bevelEnabled: false }
-      const g = new THREE.ExtrudeGeometry(pline_shape, extrudeSettings)
-      g.translate(0, 0, -height * scale * 0.5)
-      g.rotateX(-Math.PI / 2)
-      // Indexed extrusion + shared vertices smear normals at cap/side edges.
-      const geom = g.index !== null ? g.toNonIndexed() : g
-      geom.computeVertexNormals()
-      return geom
-    }, [pline_shape, profile, height])
-
-    const colorHex = rgbToHex(colorRgb[0], colorRgb[1], colorRgb[2])
-    const edge_geometry = useMemo(() => new THREE.EdgesGeometry(extrude_geometry), [extrude_geometry])
-    const edge_material = useMemo(() => new THREE.LineBasicMaterial({ color: 0x000000 }), [])
-
-    return (
-      <>
-        <mesh visible geometry={extrude_geometry}>
-          <meshStandardMaterial color={new THREE.Color(colorHex)} />
-        </mesh>
-        <lineSegments geometry={edge_geometry} material={edge_material} />
-      </>
-    )
-  },
-)
-ExtrusionVisualization.displayName = 'ExtrusionVisualization'
 
 /**
  * MarkerPoints - renders marker points as red dots
@@ -924,6 +866,9 @@ type VisualizeProps = {
   isLoadingExternalPointClouds?: boolean
   meshGeometryError?: string | null
   showEdges: boolean
+  /** The primary proxy, as the solid and the overlay draw it (8.85). */
+  proxyShape: ProxyShape | null
+  showProxyMesh: boolean
 }
 
 function snapshotPrismRgb(snap: ComponentSnapshot): [number, number, number] {
@@ -938,23 +883,22 @@ function snapshotPrismRgb(snap: ComponentSnapshot): [number, number, number] {
 function VisualizeComponent(props: VisualizeProps) {
   const snapshot = primarySnapshot(props.catalog)
   const sg = snapshot.geometry
-  const ext = snapshotPrismsFromGeometry(sg)[0]
   const primitiveDraws = snapshotMeshesToDrawBuffers(snapshotMeshesFromGeometry(sg))
   const pointClouds = snapshotPointCloudsFromGeometry(sg)
 
-  const hasExtrusion =
-    !!ext?.profile?.length && typeof ext.height === 'number' && Number.isFinite(ext.height)
   const hasMeshes = primitiveDraws.length > 0
   const hasPointClouds = pointClouds.length > 0
 
   // the proxy stands in when there is nothing else, or when chosen (8.23)
-  if (hasExtrusion && (props.meshGeometryMode === 'proxy' || !hasMeshes)) {
+  if (props.proxyShape && (props.meshGeometryMode === 'proxy' || !hasMeshes)) {
+    const [r, g, b] = snapshotPrismRgb(snapshot)
     return (
       <>
-        <ExtrusionVisualization
-          profile={ext!.profile}
-          height={ext!.height}
-          colorRgb={snapshotPrismRgb(snapshot)}
+        <ProxySolid
+          shape={props.proxyShape}
+          color={rgbToHex(r, g, b)}
+          showMesh={props.showProxyMesh}
+          showEdges={props.showEdges}
         />
         <PointCloudVisualization
           pointClouds={pointClouds}
@@ -1051,10 +995,6 @@ export default function ComponentViewer({
     () => snapshotMeshesFromGeometry(snapshotGeometry),
     [snapshotGeometry],
   )
-  const snapshotPrisms = useMemo(
-    () => snapshotPrismsFromGeometry(snapshotGeometry),
-    [snapshotGeometry],
-  )
   const snapshotPointClouds = useMemo(
     () => snapshotPointCloudsFromGeometry(snapshotGeometry),
     [snapshotGeometry],
@@ -1076,6 +1016,7 @@ export default function ComponentViewer({
   const overlayProxy = primaryProxyIndex >= 0
     ? (snapshotGeometry.proxies ?? [])[primaryProxyIndex]
     : null
+  const proxyShape = useProxyShape(overlayProxy as unknown as ProxyDoc | null)
   const deviationFaces = (overlayProxy?.deviation_maps as
     | { faces?: Record<string, { distance: { scale_mm: number; offset_mm: number } }> }
     | null
@@ -1089,7 +1030,7 @@ export default function ComponentViewer({
 
   const canRenderViewport =
     snapshotMeshes.length > 0
-    || snapshotPrisms.length > 0
+    || proxyShape !== null
     || snapshotPointClouds.length > 0
 
   // picking starts on the reduced mesh where one exists: cleaner faces than the
@@ -1108,6 +1049,7 @@ export default function ComponentViewer({
   const [meshGeometryError, setMeshGeometryError] = useState<string | null>(null)
   const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
   const [showEdges, setShowEdges] = useState<boolean>(true)
+  const [showProxyMesh, setShowProxyMesh] = useState<boolean>(true)
   const [showGrid, setShowGrid] = useState<boolean>(true)
   const [turntableEnabled, setTurntableEnabled] = useState<boolean>(false)
   const fitCameraRef = useRef<(() => void) | null>(null)
@@ -1415,7 +1357,7 @@ export default function ComponentViewer({
     Object.values(snapshotRouting?.mesh_ply_resolutions ?? {}).flat(),
   )
   const meshDetailLevels: GeometryMode[] = [
-    ...(snapshotPrisms.length > 0 ? ['proxy' as const] : []),
+    ...(proxyShape ? ['proxy' as const] : []),
     'preview',
     ...(storedMeshFiles.has('reduced') ? ['reduced' as const] : []),
     ...(storedMeshFiles.has('detailed') ? ['original' as const] : []),
@@ -1444,19 +1386,39 @@ export default function ComponentViewer({
 
   const displayBlocks: React.ReactNode[] = []
 
-  if (isProxyOnly && primaryProxy) {
+  // the proxy is the mesh shown when it is chosen, or when nothing else is stored
+  const showingProxy = proxyShape !== null && (meshGeometryMode === 'proxy' || !hasMultipleMeshes)
+  const proxyCheckboxes = (
+    <>
+      <CheckboxControl
+        id="toggle-edges"
+        label="Show edges"
+        checked={showEdges}
+        onChange={(checked) => setShowEdges(checked)}
+      />
+      <CheckboxControl
+        id="toggle-proxy-mesh"
+        label="Show mesh"
+        checked={showProxyMesh}
+        onChange={(checked) => setShowProxyMesh(checked)}
+      />
+    </>
+  )
+
+  if (showingProxy && !hasMultipleMeshes && primaryProxy) {
     displayBlocks.push(
       <MenuSubsection key="proxy" title="Proxy">
         <p className="text-xs text-muted-foreground">
           Showing: {primaryProxy.primitive} proxy ({primaryProxy.fit.method})
         </p>
+        {proxyCheckboxes}
       </MenuSubsection>,
     )
   }
 
   if (hasMultipleMeshes) {
     displayBlocks.push(
-      <MenuSubsection key="meshes" title={meshCount > 1 ? `Meshes (${meshCount})` : 'Mesh'}>
+      <MenuSubsection key="meshes" title={meshCount > 1 && !showingProxy ? `Meshes (${meshCount})` : 'Mesh'}>
         {meshDetailOptions.length > 1 ? (
           <SegmentedControl
             id="meshGeometryModeSelect"
@@ -1468,42 +1430,46 @@ export default function ComponentViewer({
         ) : (
           <p className="text-xs text-muted-foreground">Detail: Preview</p>
         )}
-        <CheckboxControl
-          id="toggle-edges"
-          label="Show edges"
-          checked={showEdges}
-          onChange={(checked) => setShowEdges(checked)}
-        />
-        {meshCount > 1 ? (
+        {showingProxy ? proxyCheckboxes : (
           <>
             <CheckboxControl
-              id="toggle-all-meshes"
-              label="Show all"
-              checked={allMeshesVisible}
-              onChange={toggleAllMeshes}
+              id="toggle-edges"
+              label="Show edges"
+              checked={showEdges}
+              onChange={(checked) => setShowEdges(checked)}
             />
-            <ScrollableCheckboxList
-              items={Array.from({ length: meshCount }, (_, i) => i).map((index: number) => ({
-                id: String(index),
-                label: meshLabel(index),
-                checked: visibleMeshes[index] || false,
-              }))}
-              onToggle={(id) => toggleMeshVisibility(Number(id))}
-            />
+            {meshCount > 1 ? (
+              <>
+                <CheckboxControl
+                  id="toggle-all-meshes"
+                  label="Show all"
+                  checked={allMeshesVisible}
+                  onChange={toggleAllMeshes}
+                />
+                <ScrollableCheckboxList
+                  items={Array.from({ length: meshCount }, (_, i) => i).map((index: number) => ({
+                    id: String(index),
+                    label: meshLabel(index),
+                    checked: visibleMeshes[index] || false,
+                  }))}
+                  onToggle={(id) => toggleMeshVisibility(Number(id))}
+                />
+              </>
+            ) : (
+              <CheckboxControl
+                id="toggle-mesh-0"
+                label="Show mesh"
+                checked={visibleMeshes[0] ?? false}
+                onChange={(checked) => {
+                  setVisibleMeshes((prev) => {
+                    const next = [...prev]
+                    next[0] = checked
+                    return next
+                  })
+                }}
+              />
+            )}
           </>
-        ) : (
-          <CheckboxControl
-            id="toggle-mesh-0"
-            label="Show mesh"
-            checked={visibleMeshes[0] ?? false}
-            onChange={(checked) => {
-              setVisibleMeshes((prev) => {
-                const next = [...prev]
-                next[0] = checked
-                return next
-              })
-            }}
-          />
         )}
       </MenuSubsection>,
     )
@@ -1566,7 +1532,13 @@ export default function ComponentViewer({
       displayBlocks.push(<MenuDivider key="divider-orientation" />)
     }
     displayBlocks.push(
-      <MenuSubsection key="orientation" title="Orientation">
+      <MenuSubsection
+        key="orientation"
+        title="Orientation"
+        help={`${snapshot.bbx && snapshot.bbx[2] > snapshot.bbx[0]
+          ? 'Canonical: a standing column, its length along z.'
+          : 'Canonical: longest side along x, shortest along z.'} As stored: the geometry as it was captured. The stored geometry is never turned; this only changes the view.`}
+      >
         <SegmentedControl
           id="orientationSelect"
           label="Show"
@@ -1577,20 +1549,16 @@ export default function ComponentViewer({
             { value: 'canonical', label: 'Canonical' },
           ]}
         />
-        <p className="text-xs text-muted-foreground">
-          {snapshot.bbx && snapshot.bbx[2] > snapshot.bbx[0]
-            ? 'Canonical: a standing column, its length along z'
-            : 'Canonical: longest side along x, shortest along z'}
-          {snapshot.bbx
-            ? ` (${snapshot.bbx.map((v: number) => Math.round(v)).join(' x ')} mm)`
-            : ''}
-          . The stored geometry is never turned.
-        </p>
+        {snapshot.bbx && (
+          <p className="text-xs text-muted-foreground">
+            {snapshot.bbx.map((v: number) => Math.round(v)).join(' x ')} mm
+          </p>
+        )}
       </MenuSubsection>,
     )
   }
 
-  if (overlayProxy) {
+  if (overlayProxy && proxyShape) {
     const fit = overlayProxy.fit
     const hasMaps = !!deviationFaces && Object.keys(deviationFaces).length > 0
     const options: { value: ProxyDisplay; label: string }[] = [
@@ -1617,18 +1585,23 @@ export default function ComponentViewer({
           onValueChange={(value) => setProxyDisplay(value as ProxyDisplay)}
           options={options}
         />
-        <p className="text-xs text-muted-foreground">
+        <InfoLine
+          label="Proxy fit"
+          help={'The proxy is the simple shape fitted to the scan. The word in brackets names the fitting method. '
+            + 'p95: 95 % of the scan points lie within this distance of the proxy surface. '
+            + 'max: the distance of the farthest scan point.'}
+        >
           {overlayProxy.primitive} ({fit.method})
           {fit.p95_mm != null
             ? `: p95 ${fit.p95_mm.toFixed(1)} mm, max ${(fit.max_mm ?? 0).toFixed(1)} mm`
             : ''}
-        </p>
+        </InfoLine>
         {proxyRange != null && proxyDisplay !== 'off' && proxyDisplay !== 'outline' && (
-          <p className="text-xs text-muted-foreground">
+          <InfoLine label="Colour scale" help={overlayHelp(proxyDisplay, overlayProxy.primitive)}>
             {proxyDisplay === 'distance'
-              ? `Blue inside the proxy, red outside, white on it; full colour at +/-${proxyRange.toFixed(1)} ${unit}.`
-              : `Scale 0 to ${proxyRange.toFixed(proxyDisplay === 'occupancy' ? 0 : 1)} ${unit}.`}
-          </p>
+              ? `Scale +/-${proxyRange.toFixed(1)} ${unit}`
+              : `Scale 0 to ${proxyRange.toFixed(proxyDisplay === 'occupancy' ? 0 : 1)} ${unit}`}
+          </InfoLine>
         )}
         {deviationError && (
           <p className="text-xs text-destructive">Deviation maps unavailable ({deviationError}).</p>
@@ -1792,6 +1765,8 @@ export default function ComponentViewer({
                 isLoadingExternalPointClouds={isLoadingExternalPointClouds}
                 meshGeometryError={meshGeometryError}
                 showEdges={showEdges}
+                proxyShape={proxyShape}
+                showProxyMesh={showProxyMesh}
               />
               {/* overlays are context, not the component: never a pick target (8.43) */}
               <group userData={{ noPick: true }}>
@@ -1803,10 +1778,10 @@ export default function ComponentViewer({
                 <EvidenceMarks marks={evidenceMarks} snapshotId={snapshotIdForOverlays} />
               )}
               <EvidenceMarks marks={marks} snapshotId={snapshotIdForOverlays} />
-              {overlayProxy && (
+              {proxyShape && (
                 <group userData={{ noPick: true }}>
                   <ProxyOverlay
-                    proxy={overlayProxy as unknown as ProxyDoc}
+                    shape={proxyShape}
                     display={proxyDisplay}
                     maps={deviationMaps}
                     onRange={setProxyRange}

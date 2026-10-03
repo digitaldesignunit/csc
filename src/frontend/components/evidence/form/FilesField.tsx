@@ -9,7 +9,7 @@
 import { useRef, useState } from 'react'
 import { FileText, Paperclip, X } from 'lucide-react'
 
-import Help from '@/components/evidence/Help'
+import Help from '@/components/ui/help'
 import { Button } from '@/components/ui/button'
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENT_TEXT, fileProblem } from '@/lib/evidence/photos'
 

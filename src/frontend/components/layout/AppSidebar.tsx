@@ -58,12 +58,13 @@ import {
   useIsRail,
 } from '@/components/ui/sidebar'
 import { isEntryActive, visibleNav, type NavViewer } from '@/lib/navigation'
-import { useRecentComponents } from '@/lib/recentComponents'
+import { forgetRecentComponents, useRecentComponents, useRecentUserId } from '@/lib/recentComponents'
 import { useMe } from '@/lib/me'
 import { backendJson } from '@/lib/backend'
 import { cn, resolveStatic } from '@/lib/utils'
 
 type SessionUser = {
+  id?: string | null
   name?: string | null
   email?: string | null
   username?: string | null
@@ -206,7 +207,7 @@ function NavGroups({ viewer }: { viewer: NavViewer }) {
 }
 
 function Recent() {
-  const { items, remove, clear } = useRecentComponents()
+  const { items, remove, clear } = useRecentComponents(useRecentUserId())
   const close = useCloseSheet()
   const isRail = useIsRail()
   const pathname = usePathname() ?? '/'
@@ -358,7 +359,12 @@ function AccountMenu() {
             {user && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => signOut()}>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    forgetRecentComponents(user.id)
+                    void signOut()
+                  }}
+                >
                   <LogOut /> Sign out
                 </DropdownMenuItem>
               </>
