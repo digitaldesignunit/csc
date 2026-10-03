@@ -871,10 +871,12 @@ for a robot scan, the coordinate system named by `capture.coordinate_system`, se
 the canonical `frame`. `kind: "none"` + `description` must always be sufficient.
 
 When the snapshot is later corrected in new coordinates, the record keeps its `snapshot_id` and
-point; the viewer draws it only on that snapshot. The correction dialog warns "N evidence
-records are positioned on the previous version" and offers to supersede each with a re-placed
-point (a reinforcement layout: re-imported bars). No transform between versions is stored in 0.6
-(decision 8.16).
+point; the viewer draws it only on that snapshot. When a correction changes the geometry, the
+correction dialog warns "N evidence records are positioned on the previous version" and lists
+them, each linked to its own correction in the evidence form, where the point is picked again
+(a reinforcement layout: re-imported bars); there is no bulk re-placing tool in 0.6 (decision
+8.87). A correction that keeps the geometry keeps the coordinates and warns nothing. No transform
+between versions is stored in 0.6 (decision 8.16).
 
 #### 3.3.3 Moderation vs. verification
 
@@ -1612,7 +1614,9 @@ GET /id/{uuid}      frontend route AND API route, permanent --- never renamed, n
 - `Accept: application/json` --> 302 to `/identities/{uuid}/compose` (the passport).
 - Withdrawn with `duplicate_of` --> **301** to `/id/{duplicate_of}`; withdrawn without --> the
   tombstone page / JSON (members of D: the full record, 8.17); `current_snapshot_id == null` -->
-  the component page with "no current state"; purged --> **410**; unknown --> 404.
+  the component page with "no current state"; purged --> **410**; unknown --> 404 --- except for a
+  signed-in caller with `contributor` in some dataset: the page "this tag is not in the catalog
+  yet" with *New component* and *Cut from pieces* (the snapshot form, section 7.6; decision 8.87).
 - Visibility rules (section 3.6) apply after the redirect. A piece the viewer cannot see does
   **not** hide behind a 404 (decision 8.11) --- whoever scans a tag holds the piece: anonymous -->
   a page "this component is not public" with a sign-in link (callback to the piece); logged in
@@ -1657,13 +1661,15 @@ uses: the impact points of one rebound test area (A.1 `test_area.grid`, one read
 and a set of test locations across a member (one record per point, the fan-out shortcut). The
 viewer warns when a point falls closer to an edge than `min_edge_distance_mm`.
 
-**Snapshots (decision 7.5).** One snapshot form --- the add-component wizard's details + photos
-steps; geometry = an authored box from L x W x H --- reached from four places:
+**Snapshots (decisions 7.5, 8.87).** One snapshot form with four modes --- steps details -->
+size (an authored box from L x W x H) --> photos --> optional visual inspection (7.9, new
+component only) --> submit; it replaces the 0.5 add-component wizard (reused parts: photo
+capture, location, dimension inputs) --- reached from four places:
 
 | entry point | reached from | creates |
 |---|---|---|
-| new component | scan an unused tag | identity + v0 |
-| cut from ... | scan an unused tag, then the parent's tag(s) | child identity; server inherits (section 3.1.2); publishing its v0 sets the parents' `exit` split / merged (section 3.1.3, 8.8) |
+| new component | scan an unused tag (`/id/{uuid}`, section 7.5); `/add-component` | identity + v0 |
+| cut from ... | scan an unused tag, then the parent's tag(s); "Cut a piece from it" on the parent's page | child identity; server inherits (section 3.1.2); publishing its v0 sets the parents' `exit` split / merged (section 3.1.3, 8.8) |
 | record new state | component page | next version, `effective_from` = now unless set; only for a changed **shape** --- damage without shape change is evidence |
 | correct | a published snapshot | superseding snapshot (section 3.2.2), prefilled, geometry kept unless dimensions are re-entered, same `effective_from` |
 

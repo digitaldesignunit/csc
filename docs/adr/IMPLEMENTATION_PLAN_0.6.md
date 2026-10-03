@@ -302,12 +302,28 @@ moderation queue lists evidence, `/admin/review` is the verification queue. No b
 and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> moderate --> verify" works.
 
 ### P7 --- Web completion --- size M
-- Snapshot form's remaining entry points (new component, record new state, correct --- 7.5; the
-  correct dialog warns about evidence positioned on the previous version, 8.16),
-  wizard's optional inspection step (7.9), edit form reduced to mutable metadata.
-- Every remaining 0.5 consumer of removed fields gone (`type`, `extrusions`, `condition`,
-  `consumed*`, `validated`, `iframe`, `pca_frame`); client header `web/0.6.0.0`.
-- Full walkthrough checklist (appendix of this plan, written during P3--P6).
+Decisions 7.5, 7.9, 8.16, 8.87; spec sections 3.3.2, 7.5, 7.6.
+- One `SnapshotForm`, four modes (8.87 a): new component, cut (the P4 dialog folds in), record new
+  state (only a changed shape; damage is evidence), correct (prefilled, geometry kept unless the
+  size is entered again, same `effective_from`). Steps: details --> size (authored box) --> photos
+  --> optional visual inspection (new component, through the P6 evidence form) --> submit (a
+  moderator's submit also publishes and promotes). `/add-component` reopens on it; the 0.5 wizard
+  and `lib/catalogCreate.ts` are deleted.
+- Scan path (8.87 b): `/id/{uuid}` for an unknown id offers a signed-in contributor *New
+  component* and *Cut from pieces* (scan the parent tags next); the scanners (identify, locate,
+  transmit) lead there.
+- Correct dialog (8.87 c): when the geometry changes, it lists the positioned evidence, each
+  linked to its correction in the evidence form.
+- Edit page `/components/[id]/edit`: the snapshot's mutable metadata (name, notes, location,
+  colour) by the per-field rules of section 3.2.2.
+- 0.5 leftovers (8.87 d): web consumers of removed fields gone (`type`, `extrusions`,
+  `condition`, `consumed*`, `validated`, `iframe`, `pca_frame`); `/utility/compute-snapshot-
+  orientation` and `orientation.py` removed; client header `web/0.6.0.0` (`package.json`).
+- The full walkthrough (appendix A of this plan) passes on phone and desktop.
+
+**Done when:** every item of appendix A works in the in-app browser on the migrated 261001 copy,
+at phone and desktop width; tsc, eslint, `npm test` and the backend suite are green; no 0.5 field
+is read or written by the web app.
 
 ### P8 --- GH bridge --- size L
 - Header `gh-userobjects/0.6.0.0`; builders `Actor`, `Origin`, `IdentityMetadata`,
@@ -368,3 +384,59 @@ P1 -> P2 -> P3 -> P4 -> P5 -> P6 -> P7 -> P8 -> P9 -> P10 (0.6.1, after cutover)
 - **Release naming:** the pre-work release is **0.5.1.0** on `v-0.5.1.0` (formerly "0.5.0.1");
   the full evidence system is 0.6.0.0 on `v-0.6.0.0`.
 - **Server work** on Uberspace is done by the user from terse step-by-step instructions.
+
+---
+
+## Appendix A --- Full walkthrough (acceptance of P7, rerun before cutover)
+
+Run on `invoke dev-migrated` (dump 261001) with the frontend, once at phone width (375 px) and
+once at desktop width. Accounts: `dev-admin` plus one account each for contributor, reviewer and
+moderator of one dataset (four eyes needs two people). Tick every line; a failure is a finding
+for the review session.
+
+**Access and navigation (P3, 8.29, 8.86)**
+1. Anonymous: a public component shows the public tier; a non-public one says "not public" with a
+   sign-in link; no Recent list; nothing recorded in Recent.
+2. Sign in as contributor: sidebar shows the contributor's groups only; Recent fills while
+   browsing; sign out --> Recent gone and hidden; session expiry --> the same.
+3. A withdrawn component: members see the record with the banner, others the tombstone; a
+   duplicate redirects to its canonical piece.
+
+**Scan and create (P7, 7.5, 8.87)**
+4. Scan (or paste) a tag that is not in the catalog --> *New component* --> details, size, photos,
+   optional inspection --> submit; as contributor it is pending, as moderator published and
+   current.
+5. Scan an unused tag --> *Cut from pieces* --> scan the parent tag --> size --> submit; after
+   publish the parent shows "Split", the child its inherited fields with markers.
+6. On a component page: *Cut a piece from it* opens the same form in cut mode.
+7. *Record new state* (changed shape) --> new version, `effective_from` today unless set.
+8. *Correct* a published snapshot --> prefilled; with a new size the dialog lists the positioned
+   evidence and links each to its correction; without a new size no warning.
+9. Edit page: name, notes, location, colour of the current snapshot.
+
+**Moderation (P3)**
+10. Moderation queue: publish, reject with a reason, resubmit by the author; withdraw and
+    reinstate a snapshot; make another version current.
+
+**Provenance and circulation (P4)**
+11. Edit provenance (DIN SPEC / DGNB fields); on a child untick and re-tick "From the parents".
+12. Take out of circulation (installed), undo, re-enter with a new origin --> earlier cycle shown.
+13. Change history lists the edits with sub-fields; `/admin/materials`: add, edit, retire, delete
+    an unused one, merge.
+
+**Geometry (P5, 8.52, 8.53, 8.60, 8.85)**
+14. A ZIRKUS beam lies, a ZIRKUS column stands, a rubble piece is not upside down (canonical vs
+    as stored).
+15. Proxy detail for a box, a prism, a cylinder and a hull; the solid, outline and distance
+    overlay coincide in both orientations; "?" popovers open by tap and by hover.
+16. A snapshot with a failed stage shows the notice; `/admin/geometry` lists it; Retry runs.
+
+**Evidence (P6)**
+17. Three rebound areas in one submission, one with a grid on a picked face; server median and
+    discard rule shown before submit; repeat-from-my-last-record prefills the instrument.
+18. A core paired to a rebound record; an attachment; a file over 25 MB refused.
+19. A visual inspection with photos per observation; the condition badge updates after publish.
+20. Publish as moderator, review as a second person (four eyes); the properties card shows the
+    folded range, n and confidence; the timeline shows cycles, snapshots and evidence.
+21. GDPR removal of an attachment: the name is blank on the record and in the change history.
+
