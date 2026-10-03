@@ -1559,9 +1559,10 @@ POST   /evidence/{eid}/reject                      moderator(D): pending --> rej
 POST   /evidence/{eid}/supersede                   contributor(D): body = full new record; server links supersedes/superseded_by on publish; new record enters as pending; 409 if a correction of eid is already open (I14)
 PUT    /evidence/{eid}/verification                recorder (self_attested) | reviewer(D), four eyes (8.12): set state/note; server sets by/at; I22, I27 checked; recomputes properties
 GET    /evidence                                   cross-catalog; ?dataset= ?method= ?quantity= ?min= ?max= ?status= ?verification=
+                                                  ?recorded_by=me ?order=newest|oldest ?limit= (repeat-from-my-last-record, 7.6; decision 8.83)
 GET    /evidence/pending                           moderation queue, filtered to the caller's moderated datasets
 GET    /evidence/methods                           registry introspection
-POST   /evidence/attachments                       multipart: one file + record_ids[] --- attaches one upload to several records (one stored copy per record, 7.3)
+POST   /evidence/attachments                       multipart: one file + record_ids[] --- attaches one upload to several records (one stored copy per record, 7.3); max 25 MB per file, else 413 (8.82)
 GET    /evidence/{eid}/attachments[/{index}]       list: visibility of the record; download: signed in + visibility of the record (anonymous --> 401, 8.13)
 DELETE /evidence/{eid}/attachments/{index}         unpublished: author; published: moderator(D) + reason --> tombstone entry, file deleted
 GET    /schema/evidence  /schema/create-evidence   codegen

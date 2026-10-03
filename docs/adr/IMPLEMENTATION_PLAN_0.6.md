@@ -251,7 +251,7 @@ the initial guesses until the tables are signed off.
 complexity; the user has signed off the tuning tables and the frame report. *(First half met on
 dump 261001; the sign-off is open.)*
 
-### P6 --- Evidence --- size XL --- **part 1 (backend) built 2026-10-02, in review; part 2 (web) after the next go**
+### P6 --- Evidence --- size XL --- **part 1 (backend) committed; part 2 (web) built 2026-10-03, in review**
 - `component_evidence` + method registry (section 4.5) with the seven methods (A.1--A.4); payload
   validation incl. server-recomputed fields (rebound median / discard rule, core F/A, l/d class).
 - Routes (section 7.2): create, bulk (all-or-nothing), lifecycle, supersede, verification (I22;
@@ -286,6 +286,17 @@ recompute, hooked into the snapshot lifecycle and the identity writes); quantity
 columns in `vocab.py`; migration steps 6b / 6d through the registry and a new `fold` step;
 `check_invariants` I8 and I11; `GET /identities/{id}/compose?include=evidence`; models regenerated
 (`EvidenceModels.ts`, `EvidenceCreateModels.ts`). Part 2 (the web) is the bullet "Web" above.
+
+Built as, part 2 (decisions 8.72--8.81, to confirm): route `/components/{id}/evidence/new`
+(`?correct=<id>` for a correction) with `components/evidence/form/` (the form, per-method editors, the
+request builder `state.ts`), the schema renderer `components/evidence/SchemaFields.tsx` and the "?"
+`Help.tsx`, `lib/evidence/` (registry types and calls, schema helpers, layout hints, grid math, picking,
+marks, display formats); the viewer gains `PickLayer`, `EvidenceMarks` and the `picking` / `marks` /
+`fill` props (`components/components/ComponentViewer.tsx`) and the position picker dialog
+(`PositionPickerDialog.tsx`: point, grid, test locations, edge warning); the component page gets
+`ComponentEvidenceSection` (properties card, records, evidence timeline) and the condition badge;
+`components/moderation/` gets `EvidenceLifecycleActions`, `VerificationPanel`, `EvidenceQueue`; the
+moderation queue lists evidence, `/admin/review` is the verification queue. No backend change.
 
 **Done when:** fold unit tests cover tier precedence, derived results, verification, inheritance
 and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> moderate --> verify" works.
