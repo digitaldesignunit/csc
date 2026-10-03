@@ -61,10 +61,17 @@ _IDENTITY = {
     'reserved': '',
     'is_public': False,
     'current_snapshot_id': SNAPSHOT_ID,
+    # the fold of the one published, accredited core record below (4.4):
+    # 38.3 +- 1.2 (expanded), destructive 0.90 x factor 1.00
     'properties': {
         'compressive_strength': {
-            'range': [36.2, 40.1], 'unit': 'MPa', 'confidence': 0.95,
-            'source': 'destructive', 'n': 4, 'evidence_ids': [EVIDENCE_ID],
+            'range': [37.1, 39.5], 'unit': 'MPa', 'confidence': 0.9,
+            'source': 'destructive', 'n': 1, 'evidence_ids': [EVIDENCE_ID],
+            'inherited_from': None, 'derived_at': T1,
+        },
+        'compressive_strength_in_situ': {
+            'range': [38.3, 38.3], 'unit': 'MPa', 'confidence': 0.9,
+            'source': 'destructive', 'n': 1, 'evidence_ids': [EVIDENCE_ID],
             'inherited_from': None, 'derived_at': T1,
         },
     },
@@ -118,10 +125,8 @@ _SNAPSHOT = {
     },
     'descriptors': {'boxscore': 1.2, 'spherescore': 70.1,
                     'linescore': 12.0, 'planescore': 3.4},
-    'properties': {
-        'spalling': {'range': [1, 2], 'confidence': 0.35, 'source': 'visual',
-                     'n': 2, 'evidence_ids': [], 'derived_at': T1},
-    },
+    # no snapshot-scoped quantity has evidence: the core's are identity-scoped
+    'properties': {},
     'properties_version': 1,
     'frame': {'o': [3000, 150, 225], 'x': [1, 0, 0], 'y': [0, 1, 0],
               'z': [0, 0, 1]},
@@ -183,7 +188,32 @@ _EVIDENCE = {
                  'unit': 'MPa', 'kind': 'derived',
                  'model': {'kind': 'en_13791', 'reference': 'EN 13791:2019',
                            'note': None}}],
-    'payload': {},
+    'payload': {
+        'sampling': {'cored_at': '2026-02-20T11:00:00Z',
+                     'paired_rebound_id': None, 'drill_diameter_mm': 100,
+                     'drilling_method': 'wet',
+                     'orientation_vs_casting': None, 'operator': None,
+                     'hole_repaired': False},
+        'specimen': {'label': 'C-03', 'measured_diameter_mm': 99.6,
+                     'length_as_drilled_mm': 215.0,
+                     'length_prepared_mm': 199.2,
+                     'end_preparation': 'ground',
+                     'length_diameter_ratio': 2.0, 'ld_class': '2:1',
+                     'mass_g': 3712.0, 'density_kg_m3': 2382.0,
+                     'max_aggregate_size_mm': 16, 'storage': 'water',
+                     'reinforcement': [], 'valid_for_strength': True,
+                     'defects_note': None},
+        'test': {'tested_at': T1, 'machine': None,
+                 'loading_rate_mpa_s': 0.6, 'max_load_kn': 298.4,
+                 'cross_section_area_mm2': 7791.0,
+                 'failure_type': 'satisfactory', 'failure_type_code': None,
+                 'age_at_test_days': 7},
+        'result': {'fc_core_mpa': 38.3, 'ld_correction_applied': False,
+                   'fc_is_cyl_mpa': 38.3, 'fc_is_cube_mpa': None,
+                   'conversion_basis': 'EN 13791:2019 + DIN EN 13791/A20:'
+                                       '2022-04'},
+        'deviations': None,
+    },
     'destructive': True,
     'attachments': [{
         'index': 0, 'name': 'Pruefbericht_2026-117.pdf',

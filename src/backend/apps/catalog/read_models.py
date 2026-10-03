@@ -32,6 +32,9 @@ class ComponentPassport(BaseModel):
     """``GET /identities/{id}/compose``: one identity and its snapshots."""
     identity: ComponentIdentity
     snapshots: List[ComponentSnapshot]
+    # only with ?include=evidence (spec 7.2): the published evidence, as the
+    # caller sees it (the shape of GET /evidence/{id})
+    evidence: Optional[List[Dict[str, Any]]] = None
 
 
 def identity_body(doc: Dict[str, Any]) -> Dict[str, Any]:

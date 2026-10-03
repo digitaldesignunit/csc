@@ -240,6 +240,10 @@ async def delete_identity(
         {'identity_id': identity_id})
     await db.mongodb_component_evidence.delete_many(
         {'identity_id': identity_id})
+    from apps.catalog.evidence.files import remove_record_files
+    for record in evidence:                  # attachments go with the record
+        remove_record_files(request.app.evidence_attachments_dir,
+                            record['_id'])
     await db.mongodb_component_identities.delete_one({'_id': identity_id})
     # purge removes the history with the record (8.36)
     await db.mongodb_change_log.delete_many({'identity_id': identity_id})

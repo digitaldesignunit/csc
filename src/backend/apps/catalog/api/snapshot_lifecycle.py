@@ -58,6 +58,7 @@ from .auth import get_current_active_user
 from .identity_lifecycle import PurgeBody, purge_snapshot_record
 from .catalog_common import compute_snapshot_etag, now_iso, validate_uuid
 from .change_log import log_change
+from .evidence_fold import recompute_properties
 from .geometry_hooks import (
     derive_sync,
     fitted_map_files,
@@ -332,6 +333,8 @@ async def _publish(request: Request, user: User, snapshot: dict,
         # the cut takes effect: the parents leave circulation (8.8)
         await sync_parent_exits(request, [p['_id'] for p in parent_docs],
                                 user_id=user.id, source=identity['_id'])
+    # a new live state moves the as-of windows of the evidence (4.4)
+    await recompute_properties(request, identity['_id'])
     return published
 
 
@@ -545,6 +548,7 @@ async def withdraw_snapshot(
         await _set_current(request, identity['_id'],
                            fallback['_id'] if fallback else None,
                            current_user.id)
+    await recompute_properties(request, identity['_id'])
     return _ok(withdrawn)
 
 
@@ -565,6 +569,7 @@ async def reinstate_snapshot(
             and not published.get('superseded_by'):
         await _set_current(request, identity['_id'], published['_id'],
                            current_user.id)
+    await recompute_properties(request, identity['_id'])
     return _ok(published)
 
 
@@ -657,6 +662,11 @@ async def patch_snapshot(
         await sync_parent_exits(request, identity['parent_identities'],
                                 user_id=current_user.id,
                                 source=identity['_id'])
+    if 'effective_from' in body and snapshot.get('status') in EVER_PUBLISHED:
+        # it moves the windows the evidence resolves into (4.4)
+        await recompute_properties(request, identity['_id'])
+        updated = await request.app.mongodb_component_snapshots.find_one(
+            {'_id': snapshot['_id']}) or updated
     return _ok(updated)
 
 

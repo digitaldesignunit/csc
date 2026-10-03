@@ -206,3 +206,74 @@ def test_i29_usernames_lowercase_and_unique():
     messages = sorted(v.message for v in check_i29(corpus))
     assert messages == ['username is not lowercase',
                         'username is not unique once lowercased']
+
+
+def test_i8_evidence_validates_against_its_method():
+    corpus = _corpus()
+    corpus.evidence[0]['payload']['result']['fc_core_mpa'] = 99.0
+    found = [v for v in check_all(corpus) if v.invariant == 'I8']
+    assert found and 'fc_core_mpa' in found[0].message
+    corpus = _corpus()
+    corpus.evidence[0]['payload'] = {}
+    assert 'I8' in _ids(check_all(corpus))
+    corpus = _corpus()
+    corpus.evidence[0]['payload']['surprise'] = 1
+    assert 'I8' in _ids(check_all(corpus))
+
+
+def test_i8_a_core_pairs_with_one_existing_rebound_record_8_42():
+    corpus = _corpus()
+    corpus.evidence[0]['payload']['sampling']['paired_rebound_id'] = 'nope'
+    assert 'I8' in _ids(check_all(corpus))
+    # a real rebound record, paired once
+    rebound = ex.evidence()
+    rebound.update({
+        '_id': 'r1', 'method': 'rebound_hammer', 'source_tier': 'ndt',
+        'destructive': False, 'sampled_at': None,
+        'sampled_at_precision': None, 'standard': None,
+        'observed_at': '2026-02-19T09:00:00Z', 'derived': [],
+        'verification': {'state': 'unverified', 'by': None, 'at': None,
+                         'note': None},
+        'summary': {'quantity': 'rebound_number', 'value': 43,
+                    'range': None, 'unit': '1', 'unit_entered': None,
+                    'kind': 'measured', 'uncertainty': None},
+        'payload': {
+            'instrument': {'hammer_type': 'N'},
+            'test_area': {'surface_preparation': 'ground',
+                          'surface_condition': 'dry'},
+            'impact_direction': 'horizontal',
+            'readings': [44, 42, 41, 45, 43, 42, 40, 44, 43],
+            'reading_unit': '1', 'median': 43, 'n_valid': 9,
+            'set_discarded': False}})
+    corpus = _corpus()
+    corpus.evidence[0]['payload']['sampling']['paired_rebound_id'] = 'r1'
+    corpus.evidence.append(rebound)
+    assert 'I8' not in _ids(check_all(corpus))
+    second = ex.evidence()
+    second.update({'_id': 'c2', 'status': 'draft'})
+    second['payload']['sampling']['paired_rebound_id'] = 'r1'
+    corpus.evidence.append(second)
+    found = [v for v in check_all(corpus) if v.invariant == 'I8']
+    assert found and 'one core per rebound' in found[0].message
+
+
+def test_i11_properties_are_the_fold_of_the_evidence():
+    corpus = _corpus()
+    assert 'I11' not in _ids(check_all(corpus))
+    corpus.identities[0]['properties']['compressive_strength'][
+        'range'] = [10.0, 11.0]
+    assert _ids(check_all(corpus)) == {'I11'}
+    corpus = _corpus()
+    corpus.identities[0]['properties'] = {}          # not recomputed
+    assert _ids(check_all(corpus)) == {'I11'}
+    corpus = _corpus()
+    corpus.snapshots[0]['properties'] = {
+        'spalling': {'range': [1, 2], 'confidence': 0.35, 'source': 'visual',
+                     'n': 2, 'evidence_ids': [],
+                     'derived_at': '2026-02-27T14:30:00Z'}}
+    found = [v for v in check_all(corpus) if v.invariant == 'I11']
+    assert found and found[0].collection == 'component_snapshots'
+    # a withdrawn record leaves the fold: its properties must go too
+    corpus = _corpus()
+    corpus.evidence[0]['status'] = 'withdrawn'
+    assert 'I11' in _ids(check_all(corpus))

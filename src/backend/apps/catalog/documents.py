@@ -12,8 +12,11 @@ error message names its invariant id, e.g. "(I4)" (spec section 5).
 Invariants that span documents are checked by ``invariants.py`` and by the
 routes.
 
-Evidence ``payload`` stays an untyped dict until the method registry lands
-(spec section 4.5, plan P6).
+Evidence ``payload`` is an untyped dict here: the method registry
+(``apps/catalog/evidence/``, spec section 4.5) validates it against the
+method's model, recomputes its server fields and checks the derived results
+before a record is stored, and ``check_invariants`` (I8) does the same over a
+stored database.
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
@@ -144,16 +147,33 @@ class Accreditation(_Block):
 
 class Actor(_Block):
     """A person or organization credited with an act."""
-    kind: ActorKind
-    user_id: Optional[str] = None
-    name: Optional[str] = None
-    organization: Optional[str] = None
-    organization_ror: Optional[str] = None
-    orcid: Optional[str] = None
-    email: Optional[str] = None
-    role: Optional[ActorRole] = None
-    accreditation: Optional[Accreditation] = None
-    redacted_at: Optional[Timestamp] = None
+    kind: ActorKind = Field(
+        description='user: an account of this catalog; person or '
+                    'organization: someone without one')
+    user_id: Optional[str] = Field(
+        None, description='The account, for kind user')
+    name: Optional[str] = Field(
+        None, description='Name of a person; shown to signed-in users only')
+    organization: Optional[str] = Field(
+        None, description='The organization (a laboratory, a contractor); '
+                          'shown to everyone')
+    organization_ror: Optional[str] = Field(
+        None, description='ROR identifier of the organization')
+    orcid: Optional[str] = Field(
+        None, description='ORCID of a person; shown to signed-in users only')
+    email: Optional[str] = Field(
+        None, description='E-mail address; shown to admins and moderators '
+                          'of the dataset only, never in lists')
+    role: Optional[ActorRole] = Field(
+        None, description='What the actor did: operator, supervisor, '
+                          'laboratory, client or witness')
+    accreditation: Optional[Accreditation] = Field(
+        None, description='The accreditation of a laboratory, typed in; '
+                          '"accredited" evidence needs one that covers the '
+                          'standard (I22)')
+    redacted_at: Optional[Timestamp] = Field(
+        None, description='Set when the personal data was redacted '
+                          '(GDPR Art 17)')
 
     @model_validator(mode='after')
     def _named(self) -> 'Actor':
@@ -666,6 +686,10 @@ def _check_result(quantity: str, value: Any, range_: Any,
         if not all(isinstance(v, str) for v in items):
             raise ValueError(
                 f'{quantity}: categorical values are strings (I6)')
+        if spec.values is not None and any(
+                v not in spec.values for v in items):
+            raise ValueError(f'{quantity}: values are {list(spec.values)} '
+                             f'(I6)')
     elif spec.kind == 'ordinal':
         low, high = ORDINAL_RANGE
         if not all(isinstance(v, int) and not isinstance(v, bool)

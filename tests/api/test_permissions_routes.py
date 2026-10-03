@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import pytest
 
+import os
+
 from apps.catalog.migration06.steps import CUTOVER_STEPS, Context, run
+from evidence_samples import PDF, claim_body, person, rebound_body
 from support import iid, seed_05_catalog, sid
 
 VIEWERS = ('anonymous', 'user', 'contributor', 'reviewer', 'moderator',
@@ -27,6 +30,7 @@ PLY = (b'ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\n'
        b'0 0 0\n1 0 0\n0 1 0\n3 0 1 2\n')
 
 DRAFT = 'b8f2d6a4-0c1e-4b6f-9a2d-3e5f7a9c1b2d'
+EV = {}                       # evidence ids of the current `world`
 
 
 @pytest.fixture
@@ -49,7 +53,25 @@ def world(api, db, auth_headers, member_headers):
              'added_by_user_id': ids['contributor'], 'supersedes': None,
              'superseded_by': None}
     db['component_snapshots'].insert_one(draft)
+    _make_evidence(api, headers, ids, db)
     return {'headers': headers, 'ids': ids, 'db': db, 'api': api}
+
+
+def _make_evidence(api, headers, ids, db):
+    """Two records of the contributor on the beam: a published claim and a
+    draft rebound record the contributor performed."""
+    c, m = headers['contributor'], headers['moderator']
+    pub = api.post(f'/identities/{iid("beam")}/evidence', json=claim_body(),
+                   headers=c).json()['_id']
+    api.post(f'/evidence/{pub}/submit', headers=c)
+    api.post(f'/evidence/{pub}/publish', headers=m)
+    draft = api.post(
+        f'/identities/{iid("beam")}/evidence',
+        json=rebound_body(observed_at='2026-07-01T10:00:00Z',
+                          performed_by=[person(ids['contributor'])]),
+        headers=c).json()['_id']
+    EV.update(pub=pub, draft=draft, draft_doc=db['component_evidence'].find_one(
+        {'_id': draft}))
 
 
 def _check(world, name, call, expected, before=None):
@@ -102,8 +124,60 @@ def _drop_test_material(world):
     world['db']['materials'].delete_one({'_id': 'test_material'})
 
 
+def _ev(status, **fields):
+    """Put the draft evidence record into a state."""
+    def reset(world):
+        db = world['db']['component_evidence']
+        if db.find_one({'_id': EV['draft']}) is None:     # a row deleted it
+            import copy
+            db.insert_one(copy.deepcopy(EV['draft_doc']))
+        db.update_one({'_id': EV['draft']}, {'$set': {
+            'status': status, 'verification': {
+                'state': 'unverified', 'by': None, 'at': None,
+                'note': None}, **fields}})
+        db.delete_many({'supersedes': {'$ne': None}})
+        db.update_one({'_id': EV['pub']}, {'$set': {
+            'status': 'published', 'superseded_by': None}})
+    return reset
+
+
+def _drop_new_evidence(world):
+    world['db']['component_evidence'].delete_many(
+        {'_id': {'$nin': [EV['pub'], EV['draft']]},
+         'method': {'$ne': 'reinforcement_layout'}})
+    _ev('draft')(world)
+
+
+def _with_attachment(status='draft'):
+    def reset(world):
+        _ev(status)(world)
+        root = os.environ['EVIDENCE_ATTACHMENTS_DIR']
+        for key in ('draft', 'pub'):
+            os.makedirs(os.path.join(root, EV[key]), exist_ok=True)
+            with open(os.path.join(root, EV[key], '0.pdf'), 'wb') as handle:
+                handle.write(PDF)
+            world['db']['component_evidence'].update_one(
+                {'_id': EV[key]}, {'$set': {'attachments': [{
+                    'index': 0, 'name': 'r.pdf',
+                    'media_type': 'application/pdf', 'size': len(PDF),
+                    'sha256': 'a' * 64, 'uploaded_by_user_id': 'u',
+                    'uploaded_at': '2026-07-02T00:00:00Z',
+                    'removed': None}]}})
+    return reset
+
+
+def _no_attachments(world):
+    _ev('draft')(world)
+    world['db']['component_evidence'].update_many(
+        {'_id': {'$in': [EV['draft'], EV['pub']]}},
+        {'$set': {'attachments': []}})
+
+
 MESH = {'vertices': [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]],
         'faces': [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]}
+
+
+_restore_draft = _ev('draft')
 
 
 def _expect(anonymous, user, contributor, reviewer, moderator,
@@ -224,6 +298,124 @@ ROWS = [
          '_id': 'test_material', 'label': 'Test', 'group': 'other',
          'default_class': '17 09 04'}, headers=h),
      _expect(401, 403, 403, 403, 403, 403, 201), _drop_test_material),
+    # --- evidence (P6): reads --------------------------------------------
+    ('read a published evidence record of a members-only dataset',
+     lambda api, h: api.get(f'/evidence/{EV["pub"]}', headers=h),
+     _expect(401, 403, 200, 200, 200, 403, 200), None),
+    ('read a draft evidence record: author and moderator(D) only',
+     lambda api, h: api.get(f'/evidence/{EV["draft"]}', headers=h),
+     _expect(401, 403, 200, 403, 200, 403, 200), _ev('draft')),
+    ('read a pending evidence record: reviewer(D) too (7.0)',
+     lambda api, h: api.get(f'/evidence/{EV["draft"]}', headers=h),
+     _expect(401, 403, 200, 200, 200, 403, 200), _ev('pending')),
+    ('read the evidence of a component',
+     lambda api, h: api.get(f'/identities/{iid("beam")}/evidence',
+                            headers=h),
+     _expect(401, 403, 200, 200, 200, 403, 200), None),
+    ('read the folded properties of a component',
+     lambda api, h: api.get(f'/identities/{iid("beam")}/properties',
+                            headers=h),
+     _expect(401, 403, 200, 200, 200, 403, 200), None),
+    ('read the timeline of a component',
+     lambda api, h: api.get(f'/identities/{iid("beam")}/timeline',
+                            headers=h),
+     _expect(401, 403, 200, 200, 200, 403, 200), None),
+    ('read the evidence methods: public',
+     lambda api, h: api.get('/evidence/methods', headers=h),
+     _expect(200, 200, 200, 200, 200, 200, 200), None),
+    ('read the evidence moderation queue: any signed-in user, filtered',
+     lambda api, h: api.get('/evidence/pending', headers=h),
+     _expect(401, 200, 200, 200, 200, 200, 200), None),
+    # --- evidence: writes ------------------------------------------------
+    ('create evidence: contributor(D)',
+     lambda api, h: api.post(f'/identities/{iid("beam")}/evidence',
+                             json=claim_body(), headers=h),
+     _expect(401, 403, 201, 403, 403, 403, 201), _drop_new_evidence),
+    ('create evidence in bulk: contributor(D) of every target',
+     lambda api, h: api.post('/evidence/bulk', json={'records': [
+         {**claim_body(), 'identity_id': iid('beam')}]}, headers=h),
+     _expect(401, 403, 201, 403, 403, 403, 201), _drop_new_evidence),
+    ('submit a draft evidence record: its author',
+     lambda api, h: api.post(f'/evidence/{EV["draft"]}/submit', headers=h),
+     _expect(401, 403, 200, 403, 403, 403, 200), _ev('draft')),
+    ('recall a pending evidence record: its author',
+     lambda api, h: api.post(f'/evidence/{EV["draft"]}/recall', headers=h),
+     _expect(401, 403, 200, 403, 403, 403, 200), _ev('pending')),
+    ('publish a pending evidence record: moderator(D)',
+     lambda api, h: api.post(f'/evidence/{EV["draft"]}/publish', headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), _ev('pending')),
+    ('reject a pending evidence record: moderator(D)',
+     lambda api, h: api.post(f'/evidence/{EV["draft"]}/reject',
+                             json={'reason': 'x'}, headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), _ev('pending')),
+    ('withdraw a published evidence record: moderator(D)',
+     lambda api, h: api.post(f'/evidence/{EV["pub"]}/withdraw',
+                             json={'reason': 'x'}, headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), _ev('draft')),
+    ('reinstate a withdrawn evidence record: moderator(D)',
+     lambda api, h: api.post(f'/evidence/{EV["pub"]}/reinstate', headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200),
+     lambda world: (_ev('draft')(world),
+                    world['db']['component_evidence'].update_one(
+                        {'_id': EV['pub']}, {'$set': {
+                            'status': 'withdrawn'}}))),
+    ('supersede a published evidence record: contributor(D)',
+     lambda api, h: api.post(f'/evidence/{EV["pub"]}/supersede',
+                             json=claim_body(), headers=h),
+     _expect(401, 403, 201, 403, 403, 403, 201), _ev('draft')),
+    ('edit a draft evidence record: its author, moderator(D)',
+     lambda api, h: api.patch(f'/evidence/{EV["draft"]}',
+                              json={'notes': 'n'}, headers=h),
+     _expect(401, 403, 200, 403, 200, 403, 200), _ev('draft')),
+    ('edit a pending evidence record: moderator(D)',
+     lambda api, h: api.patch(f'/evidence/{EV["draft"]}',
+                              json={'notes': 'n'}, headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), _ev('pending')),
+    ('edit the notes of a published evidence record: moderator(D)',
+     lambda api, h: api.patch(f'/evidence/{EV["pub"]}', json={'notes': 'n'},
+                              headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), None),
+    ('delete a draft evidence record: its author, moderator(D)',
+     lambda api, h: api.delete(f'/evidence/{EV["draft"]}', headers=h),
+     _expect(401, 403, 200, 403, 200, 403, 200),
+     _restore_draft),
+    # --- evidence: verification (8.12, I27) ------------------------------
+    ('set reviewed: reviewer(D) or admin, not the recorder or a performer',
+     lambda api, h: api.put(f'/evidence/{EV["draft"]}/verification',
+                            json={'state': 'reviewed'}, headers=h),
+     _expect(401, 403, 403, 200, 403, 403, 200), _ev('pending')),
+    ('self-attest: the recorder who performed it, never the admin shortcut',
+     lambda api, h: api.put(f'/evidence/{EV["draft"]}/verification',
+                            json={'state': 'self_attested'}, headers=h),
+     _expect(401, 403, 200, 403, 403, 403, 403), _ev('pending')),
+    # --- evidence: attachments (7.3, 8.13) -------------------------------
+    ('attach a file to a draft evidence record: its author, moderator(D)',
+     lambda api, h: api.post(
+         '/evidence/attachments', data={'record_ids': [EV['draft']]},
+         files={'file': ('r.pdf', PDF, 'application/pdf')}, headers=h),
+     _expect(401, 403, 201, 403, 201, 403, 201), _no_attachments),
+    ('attach a file to a published evidence record: contributor(D)',
+     lambda api, h: api.post(
+         '/evidence/attachments', data={'record_ids': [EV['pub']]},
+         files={'file': ('r.pdf', PDF, 'application/pdf')}, headers=h),
+     _expect(401, 403, 201, 403, 201, 403, 201), _no_attachments),
+    ('download an attachment: signed in, with access to the record',
+     lambda api, h: api.get(f'/evidence/{EV["pub"]}/attachments/0',
+                            headers=h),
+     _expect(401, 403, 200, 200, 200, 403, 200), _with_attachment()),
+    ('remove an attachment of a published record: moderator(D)',
+     lambda api, h: api.delete(f'/evidence/{EV["pub"]}/attachments/0',
+                               params={'reason': 'x'}, headers=h),
+     _expect(401, 403, 403, 403, 200, 403, 200), _with_attachment()),
+    ('remove an attachment of a draft: its author, moderator(D)',
+     lambda api, h: api.delete(f'/evidence/{EV["draft"]}/attachments/0',
+                               headers=h),
+     _expect(401, 403, 200, 403, 200, 403, 200), _with_attachment()),
+    # --- redaction (3.1.4) -----------------------------------------------
+    ('redact an actor: admin',
+     lambda api, h: api.post('/actors/redact', json={
+         'name': 'nobody', 'dry_run': True}, headers=h),
+     _expect(401, 403, 403, 403, 403, 403, 200), None),
 ]
 
 

@@ -47,6 +47,10 @@ export SNAPSHOT_MESHES_DIR="/home/ddu/html/csc_assets/meshes"
 export SNAPSHOT_POINT_CLOUDS_DIR="/home/ddu/html/csc_assets/pointclouds"
 export SNAPSHOT_PROXIES_DIR="/home/ddu/html/csc_assets/proxies"
 export SNAPSHOT_CAPTURE_DIR="/home/ddu/html/csc_assets/capture"
+# evidence attachments (lab reports, inspection photos); served only to
+# signed-in users through the API, so keep it out of the web root
+export EVIDENCE_ATTACHMENTS_DIR="/home/ddu/csc_assets_private/evidence"
+export EVIDENCE_UPLOAD_LIMIT_MB=25
 # where proxies, descriptors, complexity and previews run: server | remote
 # (remote = a worker elsewhere, `main_geometry.py --remote`; then this
 # server's cron and recompute route do only frame and shape class)

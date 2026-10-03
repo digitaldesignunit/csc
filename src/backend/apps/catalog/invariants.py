@@ -38,7 +38,18 @@ from apps.catalog.documents import (
     Evidence,
     Material,
 )
+from apps.catalog.evidence.registry import RESULT_FIELDS, prepare_record
+from apps.catalog.evidence.types import EvidenceInvalid, PairingFacts
 from apps.catalog.lineage import expected_unit, unit_values
+from apps.catalog.properties import (
+    contexts_for,
+    fold,
+    foldable,
+    quantities_of_scope,
+    same_properties,
+    snapshot_inputs,
+)
+from apps.catalog.timeline import live_snapshots
 from apps.catalog.vocab import (
     EVER_PUBLISHED_STATUSES,
     OPEN_STATUSES,
@@ -166,6 +177,81 @@ def check_i3b(corpus: Corpus) -> Iterable[Violation]:
                 or snap.get('identity_id') != identity['_id']:
             yield _v('I3b', IDENTITIES, identity,
                      'current_snapshot_id is not a published snapshot of it')
+
+
+def _paired_id(record: dict) -> Optional[str]:
+    return (((record.get('payload') or {}).get('sampling') or {})
+            .get('paired_rebound_id')) if record.get(
+        'method') == 'core_compression' else None
+
+
+def check_i8(corpus: Corpus) -> Iterable[Violation]:
+    """Every evidence record validates against its method (spec 4.5): the
+    payload model, the values the server recomputes (median, F / A, l/d
+    class, grid points ...), the derived results' conditions, and the
+    pairing of a core to its rebound record (8.42)."""
+    by_id = {r['_id']: r for r in corpus.evidence}
+    pairs: Dict[str, List[str]] = defaultdict(list)
+    for record in corpus.evidence:
+        pid = _paired_id(record)
+        if pid and record.get('status') not in ('rejected', 'withdrawn') \
+                and not record.get('superseded_by'):
+            pairs[pid].append(record['_id'])
+    for record in corpus.evidence:
+        pid = _paired_id(record)
+        facts = None
+        if pid:
+            facts = PairingFacts(
+                identity_id=record.get('identity_id'),
+                rebound=by_id.get(pid),
+                other_pairs=[i for i in pairs.get(pid, [])
+                             if i not in (record['_id'],
+                                          record.get('supersedes'))])
+        try:
+            prepare_record({k: record.get(k) for k in RESULT_FIELDS},
+                           pairing=facts)
+        except EvidenceInvalid as exc:
+            for problem in exc.problems:
+                yield _v('I8', EVIDENCE, record,
+                         f'{problem.path}: {problem.message}')
+
+
+def check_i11(corpus: Corpus) -> Iterable[Violation]:
+    """``properties`` is what the fold says (spec 4.4): recomputed from the
+    published evidence and the parents' stored properties, it equals the
+    stored block of every identity and snapshot (``derived_at`` aside)."""
+    grouped = _by_identity(corpus)
+    records: Dict[str, List[dict]] = defaultdict(list)
+    for record in corpus.evidence:
+        records[record.get('identity_id')].append(record)
+    stored = {i['_id']: i.get('properties') or {} for i in corpus.identities}
+    now = '1970-01-01T00:00:00Z'
+    for identity in corpus.identities:
+        iid = identity['_id']
+        parents = [{'_id': p, 'properties': stored[p]}
+                   for p in identity.get('parent_identities') or []
+                   if p in stored]
+        expected = fold(quantities_of_scope('identity'),
+                        foldable(records.get(iid, [])),
+                        parents_of=lambda parents=parents: parents,
+                        now=now).properties
+        if not same_properties(stored[iid], expected):
+            yield _v('I11', IDENTITIES, identity,
+                     'properties differ from the fold of the published '
+                     'evidence (recompute)')
+        snaps = grouped.get(iid, [])
+        live = {s['_id'] for s in live_snapshots(snaps)}
+        published = foldable(records.get(iid, []))
+        contexts = contexts_for(identity, snaps, published)
+        for snap in snaps:
+            want = fold(quantities_of_scope('snapshot'),
+                        snapshot_inputs(published, contexts, snap['_id']),
+                        now=now).properties \
+                if snap['_id'] in live else {}
+            if not same_properties(snap.get('properties') or {}, want):
+                yield _v('I11', SNAPSHOTS, snap,
+                         'properties differ from the fold of the '
+                         'evidence that resolves to it (recompute)')
 
 
 def check_i9(corpus: Corpus) -> Iterable[Violation]:
@@ -390,11 +476,14 @@ INVARIANTS: Tuple[Invariant, ...] = (
     Invariant('I6', 'summary has value or range fitting its quantity',
               'document'),
     Invariant('I7', 'one result per quantity per record', 'document'),
-    Invariant('I8', 'payload validates against its method (P6)', 'route'),
+    Invariant('I8', 'payload validates against its method, server '
+              'fields recomputed, pairing', 'corpus', check_i8),
     Invariant('I9', 'position.snapshot_id belongs to the identity',
               'corpus', check_i9),
     Invariant('I10', 'observed_at >= sampled_at', 'document'),
-    Invariant('I11', 'properties never accepted from a client', 'route'),
+    Invariant('I11', 'properties are the fold of the published '
+              'evidence; never accepted from a client', 'corpus',
+              check_i11),
     Invariant('I12', 'dropped (6.13)', 'dropped'),
     Invariant('I13', 'frozen evidence fields change only by supersession',
               'route'),

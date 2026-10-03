@@ -74,6 +74,19 @@ def get_snapshot_capture_directory() -> str:
     return sanitize_path(os.environ['SNAPSHOT_CAPTURE_DIR'])
 
 
+def get_evidence_attachments_directory() -> str:
+    """Evidence attachments: evidence/<evidence_id>/<index>.<ext>."""
+    return sanitize_path(os.environ['EVIDENCE_ATTACHMENTS_DIR'])
+
+
+def get_evidence_upload_limit_bytes() -> int:
+    """Largest evidence attachment accepted (EVIDENCE_UPLOAD_LIMIT_MB)."""
+    mb = int(os.getenv('EVIDENCE_UPLOAD_LIMIT_MB', '25'))
+    if mb < 1:
+        raise ValueError('EVIDENCE_UPLOAD_LIMIT_MB must be >= 1')
+    return mb * 1024 * 1024
+
+
 def get_snapshot_photo_upload_limit_bytes() -> int:
     mb = int(os.getenv('SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB', '10'))
     return mb * 1024 * 1024

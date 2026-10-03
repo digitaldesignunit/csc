@@ -29,6 +29,19 @@ from pymongo import ReplaceOne, UpdateMany, UpdateOne
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.documents import Capture, Evidence, Exit, Origin, Proxy
+from apps.catalog.etag import compute_snapshot_etag
+from apps.catalog.evidence.registry import RESULT_FIELDS, prepare_record
+from apps.catalog.evidence.types import EvidenceInvalid
+from apps.catalog.properties import (
+    PROPERTIES_VERSION,
+    contexts_for,
+    fold,
+    keep_derived_at,
+    quantities_of_scope,
+    same_properties,
+    snapshot_inputs,
+)
+from apps.catalog.timeline import live_snapshots
 from apps.catalog.vocab import DATASET_ROLES
 from apps.catalog.migration06.mappings import (
     ATTRIBUTE_KEYS,
@@ -110,6 +123,19 @@ def _check(model, block: dict, what: str) -> None:
         model.model_validate(block)
     except ValidationError as exc:
         raise MigrationAbort(f'{what}: {exc.errors()[0]["msg"]}') from exc
+
+
+def _real_evidence(record: dict, what: str) -> dict:
+    """A record a step builds, through the method registry (spec 4.5) and
+    the Evidence model: the record the routes would store, or an abort
+    naming what is wrong (plan P6: the migration uses the real models)."""
+    try:
+        prepared = prepare_record({k: record.get(k) for k in RESULT_FIELDS})
+    except EvidenceInvalid as exc:
+        raise MigrationAbort(f'{what}: {exc}') from exc
+    out = {**record, **prepared.fields}
+    _check(Evidence, out, what)
+    return out
 
 
 def _snapshots_by_identity(ctx: Context,
@@ -531,8 +557,8 @@ def step_6d(ctx: Context) -> Report:
     coll = ctx.db[SNAPSHOTS]
     evidence_ops, snap_ops = [], []
     for snap in coll.find({'geometry.reinforcements.0': {'$exists': True}}):
-        record = reinforcement_evidence(snap)
-        _check(Evidence, record, f'layout from snapshot {snap["_id"]}')
+        record = _real_evidence(reinforcement_evidence(snap),
+                                f'layout from snapshot {snap["_id"]}')
         evidence_ops.append(ReplaceOne({'_id': record['_id']}, record,
                                        upsert=True))
     for snap in coll.find({'geometry.reinforcements': {'$exists': True}},
@@ -562,14 +588,72 @@ def step_6b(ctx: Context) -> Report:
     for snap in snaps:
         if snap.get('condition') is not None \
                 and datasets.get(snap['identity_id']) in chosen:
-            record = condition_evidence(snap)
-            _check(Evidence, record, f'grade of snapshot {snap["_id"]}')
+            record = _real_evidence(condition_evidence(snap),
+                                    f'grade of snapshot {snap["_id"]}')
             evidence_ops.append(ReplaceOne({'_id': record['_id']}, record,
                                            upsert=True))
         snap_ops.append(UpdateOne({'_id': snap['_id']},
                                   {'$unset': {'condition': ''}}))
     return {'inspections': _write(ctx, EVIDENCE, evidence_ops),
             'snapshots': _write(ctx, SNAPSHOTS, snap_ops)}
+
+
+# STEP fold --- properties from the migrated evidence (spec 4.4) --------------
+def step_fold(ctx: Context) -> Report:
+    """``identity.properties`` and ``snapshot.properties`` from the published
+    evidence the earlier steps made (6b, 6d), children after their parents.
+    The routes keep both current from here on; the migration starts them.
+    Idempotent: a property set that says the same is left alone."""
+    identities = list(ctx.db[IDENTITIES].find({}))
+    by_identity: Dict[str, List[dict]] = defaultdict(list)
+    for record in ctx.db[EVIDENCE].find(
+            {'status': 'published', 'superseded_by': None}):
+        by_identity[record['identity_id']].append(record)
+    snapshots = _snapshots_by_identity(ctx)
+    properties: Dict[str, dict] = {}
+    changed_identities, changed_snapshots = 0, 0
+    id_ops, snap_ops = [], []
+    for identity in lineage_order(identities):
+        iid = identity['_id']
+        records = by_identity.get(iid, [])
+        parents = [{'_id': pid, 'properties': properties[pid]}
+                   for pid in identity.get('parent_identities') or []
+                   if pid in properties]
+        result = fold(quantities_of_scope('identity'), records,
+                      parents_of=lambda parents=parents: parents,
+                      now=ctx.now)
+        old = identity.get('properties') or {}
+        new = old if same_properties(old, result.properties) \
+            else keep_derived_at(old, result.properties)
+        properties[iid] = new
+        if new is not old:
+            changed_identities += 1
+            id_ops.append(UpdateOne({'_id': iid}, {'$set': {
+                'properties': new, 'properties_version': PROPERTIES_VERSION,
+                'lastmodified': ctx.now}}))
+        snaps = snapshots.get(iid, [])
+        contexts = contexts_for(identity, snaps, records)
+        live = {s['_id'] for s in live_snapshots(snaps)}
+        for snap in snaps:
+            result = fold(quantities_of_scope('snapshot'),
+                          snapshot_inputs(records, contexts, snap['_id']),
+                          now=ctx.now) if snap['_id'] in live else None
+            old = snap.get('properties') or {}
+            value = result.properties if result else {}
+            if same_properties(old, value):
+                continue
+            value = keep_derived_at(old, value)
+            changed_snapshots += 1
+            doc = {**snap, 'properties': value,
+                   'properties_version': PROPERTIES_VERSION}
+            snap_ops.append(UpdateOne({'_id': snap['_id']}, {'$set': {
+                'properties': value,
+                'properties_version': PROPERTIES_VERSION,
+                'etag': compute_snapshot_etag(doc),
+                'lastmodified': ctx.now}}))
+    _write(ctx, IDENTITIES, id_ops)
+    _write(ctx, SNAPSHOTS, snap_ops)
+    return {'identities': changed_identities, 'snapshots': changed_snapshots}
 
 
 # STEP 4 --- extrusions -> authored prisms ------------------------------------
@@ -831,6 +915,8 @@ STEPS: Tuple[Step, ...] = (
          'db', step_6d),
     Step('6b', 'condition -> visual_inspection evidence', ('2',), 'db',
          step_6b),
+    Step('fold', 'properties from the evidence (spec 4.4)',
+         ('1b', '10b', '10c', '6b', '6d'), 'db', step_fold),
     Step('4', 'extrusions -> authored prism proxies', (), 'db', step_4),
     Step('9b', 'complexity_source', ('11a',), 'db', step_9b),
     Step('5', 'frame + shape class (main_geometry.py)', ('3', '4', '6c'),

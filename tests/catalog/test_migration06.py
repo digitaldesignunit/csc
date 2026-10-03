@@ -234,7 +234,8 @@ def test_reinforcement_layout_record():
     assert record['source_tier'] == 'archival'
     assert record['summary']['range'] == [8, 12]
     assert record['position']['snapshot_id'] == 's1'
-    assert record['observed_at'] == '2026-05-19T00:00:00Z'
+    assert record['observed_at'] == snap['created']
+    assert record['observed_at_precision'] == 'day'
     assert record['_id'] == m.reinforcement_evidence(snap)['_id']   # stable id
 
 

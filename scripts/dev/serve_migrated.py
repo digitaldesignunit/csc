@@ -160,6 +160,7 @@ def main() -> int:
         env['MONGODB_URI'] = mongo_uri
         env['SNAPSHOT_CAPTURE_DIR'] = str(capture)
         env['SNAPSHOT_PROXIES_DIR'] = str(proxies)
+        env['EVIDENCE_ATTACHMENTS_DIR'] = str(work / 'evidence')
         env.setdefault('JWT_SECRET', 'dev-migrated-only')
         env.setdefault('SMTP_PASSWORD', 'dev')
         os.environ.update(env)

@@ -290,6 +290,7 @@ def deny_write(viewer: Viewer, action: str) -> HTTPException:
 async def require(request: Request, user: Optional[User], action: str, *,
                   identity: Optional[Dict[str, Any]] = None,
                   snapshot: Optional[Dict[str, Any]] = None,
+                  evidence: Optional[Dict[str, Any]] = None,
                   dataset: Optional[Dataset] = None) -> Viewer:
     """
     Section 7.0 for one action: builds the ``Target`` from the documents
@@ -299,6 +300,8 @@ async def require(request: Request, user: Optional[User], action: str, *,
     viewer = viewer_of(user)
     if snapshot is not None and identity is None:
         identity = await load_identity(request, str(snapshot['identity_id']))
+    if evidence is not None and identity is None:
+        identity = await load_identity(request, str(evidence['identity_id']))
     if dataset is None:
         dataset = await dataset_of(request, (identity or {}).get('dataset'))
     readable = True
@@ -308,9 +311,16 @@ async def require(request: Request, user: Optional[User], action: str, *,
         published = await identity_ever_published(request, identity)
         if not readable and not viewer.is_admin:
             raise deny_read(viewer)
+    performers: tuple = ()
     if snapshot is not None:
         kind, status_, author = ('snapshot', snapshot.get('status'),
                                  snapshot.get('added_by_user_id'))
+    elif evidence is not None:
+        kind, status_, author = ('evidence', evidence.get('status'),
+                                 evidence.get('recorded_by_user_id'))
+        performers = tuple(a['user_id'] for a in
+                           evidence.get('performed_by') or []
+                           if a.get('user_id'))
     elif identity is not None:
         kind, status_, author = ('identity', None,
                                  identity.get('created_by_user_id'))
@@ -320,7 +330,7 @@ async def require(request: Request, user: Optional[User], action: str, *,
         dataset=dataset, kind=kind, status=status_, author_id=author,
         identity_published=published,
         reserved_by=(identity or {}).get('reserved') or None,
-        readable=readable)
+        readable=readable, performer_ids=performers)
     if not can(viewer, action, target):
         raise deny_write(viewer, action)
     return viewer

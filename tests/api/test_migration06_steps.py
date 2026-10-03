@@ -83,6 +83,24 @@ def test_every_step_on_a_small_05_database(db, tmp_path):
     methods = sorted(e['method'] for e in db['component_evidence'].find({}))
     assert methods == ['reinforcement_layout', 'visual_inspection', 'visual_inspection']
     assert all('condition' not in s for s in snaps.values())
+    # the records went through the real method models (plan P6): defaults
+    # filled in as the routes would store them
+    layout = db['component_evidence'].find_one(
+        {'method': 'reinforcement_layout'})
+    assert layout['payload']['bars'][0]['diameter_known'] is True
+    assert layout['source_tier'] == 'archival'
+    assert layout['summary']['range'] == [8, 8]
+    # the fold step (spec 4.4): the properties start from the migrated
+    # evidence; a piece with none keeps an empty block
+    rebar = ids[iid('beam')]['properties']['rebar_diameter']
+    assert (rebar['range'], rebar['source'], rebar['n']) == (
+        [8, 8], 'archival', 1)
+    assert rebar['evidence_ids'] == [layout['_id']]
+    assert ids[iid('panel')]['properties'] == {}
+    feld_props = [snaps[sid('feld', v)]['properties'] for v in (0, 1)]
+    assert [list(p) for p in feld_props] == [['condition_grade']] * 2
+    assert [p['condition_grade']['range'] for p in feld_props] == [[1, 1],
+                                                                   [2, 2]]
     # proxies, statuses, datasets, materials
     assert snaps[sid('panel', 0)]['geometry']['proxies'][0]['fit'] == {'method': 'authored'}
     assert {s['status'] for s in snaps.values()} == {'published'}

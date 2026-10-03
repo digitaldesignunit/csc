@@ -94,7 +94,6 @@ from apps.catalog.read_models import (
     identity_body,
     passport_body,
 )
-from apps.catalog.documents import Evidence
 from apps.catalog.permissions import dataset_roles
 from apps.catalog.api.access import (
     and_match,
@@ -385,6 +384,7 @@ def _passport_response(
     etag: Optional[str] = None,
     status_code: int = status.HTTP_200_OK,
     anonymous_public: bool = False,
+    evidence: Optional[List[dict]] = None,
 ) -> JSONResponse:
     try:
         response_body = passport_body(identity_doc, snapshot_docs)
@@ -393,6 +393,8 @@ def _passport_response(
             status_code=500,
             detail=f'Stored document failed Pydantic validation: {exc}',
         )
+    if evidence is not None:               # ?include=evidence (7.2)
+        response_body['evidence'] = evidence
     resolved_etag = etag or _compute_passport_etag(
         identity_doc,
         snapshot_docs,
@@ -1056,63 +1058,6 @@ async def get_identity_provenance(
     )
 
 
-_ACTOR_PRIVATE = ('email',)
-_ACTOR_NAMED = ('name', 'orcid')
-
-
-def _project_actor(actor: Dict[str, Any], anonymous: bool) -> Dict[str, Any]:
-    """Spec 3.3.1: anonymous readers see the organization only; e-mail
-    addresses are left out of every list response."""
-    hidden = _ACTOR_PRIVATE + (_ACTOR_NAMED if anonymous else ())
-    return {k: (None if k in hidden else v) for k, v in actor.items()}
-
-
-@router.get(
-    '/identities/{identity_id}/evidence',
-    summary='Published evidence of an identity (read-only until plan P6)',
-)
-async def list_identity_evidence(
-    request: Request,
-    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
-    identity_id: str,
-    method: Optional[str] = Query(None, description='e.g. reinforcement_layout'),
-):
-    """
-    Published, non-superseded evidence records of one identity (e.g. the
-    reinforcement layout the viewer draws). Creation, moderation, the fold
-    and attachments arrive with plan P6.
-    """
-    validate_uuid(identity_id, label='identity id')
-    await ensure_identity_read_access(
-        request, identity_id, current_user, projection={'_id': 1,
-                                                        'is_public': 1})
-    query: Dict[str, Any] = {'identity_id': identity_id,
-                             'status': 'published', 'superseded_by': None}
-    if method:
-        query['method'] = method
-    try:
-        docs = await request.app.mongodb_component_evidence.find(query) \
-            .sort('observed_at', 1).to_list(length=None)
-    except PyMongoError as exc:
-        print(f'[ERROR] list_identity_evidence DB error: {exc}')
-        raise HTTPException(status_code=500, detail='Internal server error')
-    anonymous = current_user is None
-    items = []
-    for doc in docs:
-        try:
-            body = Evidence.model_validate(doc).model_dump(
-                by_alias=True, mode='json')
-        except Exception as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f'Evidence failed Pydantic validation: {exc}',
-            )
-        body['performed_by'] = [_project_actor(a, anonymous)
-                                for a in body.get('performed_by') or []]
-        items.append(body)
-    return JSONResponse(status_code=200, content=items)
-
-
 @router.get(
     '/identities/{identity_id}/snapshots',
     summary='List snapshot versions for an identity (summary rows)',
@@ -1308,6 +1253,14 @@ async def get_identity_passport(
             'snapshot UUIDs (comma-separated).'
         ),
     ),
+    include: Optional[str] = Query(
+        default=None,
+        description=(
+            'evidence: add the published, non-superseded evidence records '
+            'as the caller sees them (the identity block already carries '
+            'the folded properties).'
+        ),
+    ),
 ):
     """
     Return ``{identity, snapshots[]}``.
@@ -1346,6 +1299,16 @@ async def get_identity_passport(
         raise deny_read(viewer_of(current_user))
     snapshot_docs = visible
     etag = _compute_passport_etag(identity_doc, snapshot_docs)
+    evidence = None
+    if 'evidence' in {part.strip() for part in (include or '').split(',')}:
+        from .evidence_service import published_bodies
+        evidence = await published_bodies(request, current_user,
+                                          identity_doc)
+        # the evidence and what the caller may see of its people change the
+        # representation: they belong in the ETag
+        etag = hashlib.sha256('::'.join([etag, *(
+            f'{e["_id"]}:{e.get("etag")}:{e.get("lastmodified")}'
+            for e in evidence)]).encode('utf-8')).hexdigest()
 
     if_none_match = request.headers.get('if-none-match')
     if if_none_match and if_none_match == etag:
@@ -1356,4 +1319,5 @@ async def get_identity_passport(
         snapshot_docs,
         etag=etag,
         anonymous_public=anonymous_public,
+        evidence=evidence,
     )

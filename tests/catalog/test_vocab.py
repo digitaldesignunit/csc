@@ -78,3 +78,47 @@ def test_exit_kinds():
     assert set(vocab.SERVER_SET_EXIT_KINDS) <= set(vocab.TERMINAL_EXIT_KINDS)
     terminal = set(vocab.TERMINAL_EXIT_KINDS)
     assert not {'installed', 'returned', 'lost'} & terminal
+
+
+def test_evidence_labels_cover_their_vocabularies():
+    assert set(vocab.EVIDENCE_METHOD_LABELS) == set(vocab.EVIDENCE_METHODS)
+    assert set(vocab.SOURCE_TIER_LABELS) == set(vocab.SOURCE_TIERS) | {
+        'inherited'}
+    assert set(vocab.VERIFICATION_STATE_LABELS) == set(
+        vocab.VERIFICATION_STATES)
+    assert set(vocab.QUANTITY_LABELS) == set(vocab.QUANTITY_BY_NAME)
+
+
+def test_decision_8_44_rows_and_mapping_columns():
+    for name in ('exposure_class', 'chloride_content', 'elastic_modulus',
+                 'crack_width'):
+        assert name in vocab.QUANTITY_BY_NAME
+    assert vocab.QUANTITY_BY_NAME['exposure_class'].values == \
+        vocab.EXPOSURE_CLASSES and len(vocab.EXPOSURE_CLASSES) == 18
+    assert vocab.QUANTITY_BY_NAME['chloride_content'].unit == '%'
+    assert vocab.QUANTITY_BY_NAME['elastic_modulus'].unit == 'GPa'
+    crack = vocab.QUANTITY_BY_NAME['crack_width']
+    assert (crack.unit, crack.scope) == ('mm', 'snapshot')
+    assert crack.ranking == ('visual', 'ndt')
+    # mapping columns exist where one counterpart is known; a QUDT unit is
+    # named for every scalar
+    for q in vocab.QUANTITIES:
+        if q.kind == 'scalar':
+            assert q.qudt_unit and q.qudt_unit.startswith('unit:'), q.name
+    assert vocab.QUANTITY_BY_NAME['elastic_modulus'].cero == 'youngModulus'
+    assert vocab.ORIGINAL_FUNCTION_IFC_CLASS['IfcBeam'] == 'IfcBeam'
+    assert vocab.ORIGINAL_FUNCTION_IFC_CLASS['CscDebris'] is None
+    assert vocab.EVIDENCE_METHOD_SOSA_TYPE['core_compression'] == \
+        'sosa:Sample'
+    assert vocab.EVIDENCE_METHOD_SOSA_TYPE['rebound_hammer'] == \
+        'sosa:Observation'
+
+
+def test_decision_8_70_g_ifc_names_for_exposure_class_and_cover():
+    """Checked against the IFC documentation (Pset_ConcreteElementGeneral
+    has ExposureClass, IfcLabel, and ConcreteCover, IfcPositiveLengthMeasure)."""
+    exposure = vocab.QUANTITY_BY_NAME['exposure_class']
+    cover = vocab.QUANTITY_BY_NAME['cover_depth']
+    assert exposure.ifc_property == 'Pset_ConcreteElementGeneral.ExposureClass'
+    assert cover.ifc_property == 'Pset_ConcreteElementGeneral.ConcreteCover'
+    assert (exposure.bsdd, cover.bsdd) == ('ExposureClass', 'ConcreteCover')

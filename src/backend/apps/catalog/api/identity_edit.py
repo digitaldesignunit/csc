@@ -75,6 +75,7 @@ from .access import (
 from .auth import get_current_active_user
 from .catalog_common import allocate_catalog_number, now_iso, validate_uuid
 from .change_log import log_change
+from .evidence_fold import recompute_properties
 from .geometry_hooks import derive_sync_identity
 
 router = APIRouter()
@@ -201,6 +202,11 @@ async def _write(request: Request, before: Dict[str, Any],
     if result.matched_count == 0:
         raise HTTPException(status_code=409,
                             detail='The component changed meanwhile; reload.')
+    if any(not _same(before.get(key), after.get(key))
+           for key in ('exit', 'past_cycles', 'origin')):
+        # an exit, a re-entry or a new origin moves where the evidence
+        # resolves (8.10, 8.19)
+        await recompute_properties(request, after['_id'])
     return after
 
 
@@ -422,6 +428,10 @@ async def create_identity(
     except Exception:
         await identities.delete_one({'_id': identity_id})
         raise
+    if parents:
+        # a quantity the child has no evidence for is inherited (4.4)
+        await recompute_properties(request, identity_id)
+        doc = await identities.find_one({'_id': identity_id}) or doc
     return JSONResponse(status_code=201, content={
         'identity': identity_body(doc), 'snapshot': snapshot_body(snapshot)})
 

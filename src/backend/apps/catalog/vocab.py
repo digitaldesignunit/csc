@@ -237,6 +237,30 @@ METHOD_TIER: Dict[str, Optional[str]] = {
 }
 DESTRUCTIVE_METHODS: Tuple[str, ...] = ('core_compression',)
 
+EVIDENCE_METHOD_LABELS: Dict[str, str] = {
+    'rebound_hammer': 'Rebound hammer',
+    'core_compression': 'Core in compression',
+    'archival_document': 'Archival document',
+    'visual_inspection': 'Visual inspection',
+    'era_heuristic': 'Rule of thumb (era, region, typology)',
+    'manufacturer_datasheet': 'Manufacturer datasheet',
+    'reinforcement_layout': 'Reinforcement layout',
+}
+SOURCE_TIER_LABELS: Dict[str, str] = {
+    'destructive': 'Destructive test',
+    'ndt': 'Non-destructive test',
+    'archival': 'Archival document',
+    'visual': 'Visual inspection',
+    'heuristic': 'Estimate',
+    'inherited': 'Inherited from a parent',
+}
+VERIFICATION_STATE_LABELS: Dict[str, str] = {
+    'unverified': 'Unverified',
+    'self_attested': 'Self-attested',
+    'reviewed': 'Reviewed',
+    'accredited': 'Accredited',
+}
+
 ReinforcementBasis = Literal['drawing', 'scan', 'exposed']
 REINFORCEMENT_BASIS_TIER: Dict[str, str] = {
     'drawing': 'archival',
@@ -274,29 +298,78 @@ class Quantity:
     ordinal_direction: Optional[str] = None
     # material groups a visual finding applies to; None = any material
     applies_to: Optional[Tuple[str, ...]] = None
+    # categorical only: the closed value list, where the quantity has one
+    values: Optional[Tuple[str, ...]] = None
+    # MAPPING COLUMNS (spec section 7.8, decision 8.44): the counterpart in
+    # each ontology, where one exists; None = none known. Data for the
+    # exports of plan P10; nothing reads them yet.
+    qudt_unit: Optional[str] = None        # QUDT unit, e.g. 'unit:MegaPA'
+    cero: Optional[str] = None             # CERO property (local name)
+    ifc_property: Optional[str] = None     # IFC property set + property
+    bsdd: Optional[str] = None             # bSDD property code (IFC 4.3)
 
+
+# EN 206 exposure classes (decision 8.44)
+EXPOSURE_CLASSES: Tuple[str, ...] = (
+    'X0', 'XC1', 'XC2', 'XC3', 'XC4', 'XD1', 'XD2', 'XD3', 'XS1', 'XS2',
+    'XS3', 'XF1', 'XF2', 'XF3', 'XF4', 'XA1', 'XA2', 'XA3',
+)
 
 QUANTITIES: Tuple[Quantity, ...] = (
     Quantity('compressive_strength', 'MPa', 'scalar', 'identity',
-             ('destructive', 'ndt', 'archival', 'visual', 'heuristic')),
+             ('destructive', 'ndt', 'archival', 'visual', 'heuristic'),
+             qudt_unit='unit:MegaPA', cero='compressiveStrength',
+             ifc_property='Pset_MaterialConcrete.CompressiveStrength',
+             bsdd='CompressiveStrength'),
     Quantity('compressive_strength_in_situ', 'MPa', 'scalar', 'identity',
-             ('destructive', 'ndt', 'archival', 'heuristic')),
-    Quantity('rebound_number', '1', 'scalar', 'identity', ('ndt',)),
-    Quantity('q_value', '1', 'scalar', 'identity', ('ndt',)),
+             ('destructive', 'ndt', 'archival', 'heuristic'),
+             qudt_unit='unit:MegaPA', cero='concreteCompressiveStrength',
+             ifc_property='Pset_MaterialConcrete.CompressiveStrength',
+             bsdd='CompressiveStrength'),
+    Quantity('rebound_number', '1', 'scalar', 'identity', ('ndt',),
+             qudt_unit='unit:UNITLESS'),
+    Quantity('q_value', '1', 'scalar', 'identity', ('ndt',),
+             qudt_unit='unit:UNITLESS'),
     Quantity('density', 'kg/m3', 'scalar', 'identity',
-             ('destructive', 'ndt', 'archival', 'heuristic')),
+             ('destructive', 'ndt', 'archival', 'heuristic'),
+             qudt_unit='unit:KiloGM-PER-M3', cero='density',
+             ifc_property='Pset_MaterialCommon.MassDensity',
+             bsdd='MassDensity'),
     Quantity('rebar_diameter', 'mm', 'scalar', 'identity',
-             ('destructive', 'ndt', 'archival', 'visual', 'heuristic')),
+             ('destructive', 'ndt', 'archival', 'visual', 'heuristic'),
+             qudt_unit='unit:MilliM',
+             ifc_property='IfcReinforcingBar.NominalDiameter'),
     Quantity('rebar_spec', None, 'categorical', 'identity',
              ('destructive', 'archival', 'ndt', 'heuristic')),
     Quantity('concrete_class', None, 'categorical', 'identity',
-             ('destructive', 'archival', 'ndt', 'heuristic')),
+             ('destructive', 'archival', 'ndt', 'heuristic'),
+             ifc_property='Pset_ConcreteElementGeneral.StrengthClass',
+             bsdd='StrengthClass'),
     Quantity('cover_depth', 'mm', 'scalar', 'identity',
-             ('ndt', 'destructive', 'archival')),
+             ('ndt', 'destructive', 'archival'),
+             qudt_unit='unit:MilliM', cero='concreteCover',
+             ifc_property='Pset_ConcreteElementGeneral.ConcreteCover',
+             bsdd='ConcreteCover'),
+    # decision 8.44: four rows the CERO check found missing
+    Quantity('exposure_class', None, 'categorical', 'identity',
+             ('archival', 'heuristic'), values=EXPOSURE_CLASSES,
+             cero='exposureClass',
+             ifc_property='Pset_ConcreteElementGeneral.ExposureClass',
+             bsdd='ExposureClass'),
+    Quantity('chloride_content', '%', 'scalar', 'identity',
+             ('destructive', 'archival'), qudt_unit='unit:PERCENT',
+             cero='chlorideContent'),
+    Quantity('elastic_modulus', 'GPa', 'scalar', 'identity',
+             ('destructive', 'archival', 'heuristic'),
+             qudt_unit='unit:GigaPA', cero='youngModulus',
+             ifc_property='Pset_MaterialMechanical.YoungModulus',
+             bsdd='YoungModulus'),
     Quantity('mass', 'kg', 'scalar', 'snapshot',
-             ('destructive', 'ndt', 'heuristic')),
+             ('destructive', 'ndt', 'heuristic'), qudt_unit='unit:KiloGM',
+             cero='weight'),
     Quantity('carbonation_depth', 'mm', 'scalar', 'snapshot',
-             ('destructive', 'ndt', 'visual')),
+             ('destructive', 'ndt', 'visual'), qudt_unit='unit:MilliM',
+             cero='carbonationDepth'),
     Quantity('spalling', None, 'ordinal', 'snapshot', ('visual', 'ndt'),
              ordinal_direction='severity', applies_to=('mineral',)),
     Quantity('cracking', None, 'ordinal', 'snapshot', ('visual', 'ndt'),
@@ -307,11 +380,36 @@ QUANTITIES: Tuple[Quantity, ...] = (
     Quantity('corrosion', None, 'ordinal', 'snapshot', ('visual', 'ndt'),
              ordinal_direction='severity', applies_to=('metal', 'mineral')),
     Quantity('moisture_content', '%', 'scalar', 'snapshot',
-             ('ndt', 'destructive')),
+             ('ndt', 'destructive'), qudt_unit='unit:PERCENT'),
+    # decision 8.44: the widest crack; `cracking` stays the severity
+    Quantity('crack_width', 'mm', 'scalar', 'snapshot', ('visual', 'ndt'),
+             qudt_unit='unit:MilliM', cero='crackWidth'),
     Quantity('condition_grade', None, 'ordinal', 'snapshot', ('visual',),
              ordinal_direction='grade'),
 )
 QUANTITY_BY_NAME: Dict[str, Quantity] = {q.name: q for q in QUANTITIES}
+QUANTITY_LABELS: Dict[str, str] = {
+    'compressive_strength': 'Compressive strength',
+    'compressive_strength_in_situ': 'In-situ compressive strength',
+    'rebound_number': 'Rebound number R',
+    'q_value': 'Q-value',
+    'density': 'Density',
+    'rebar_diameter': 'Rebar diameter',
+    'rebar_spec': 'Rebar steel grade',
+    'concrete_class': 'Concrete strength class',
+    'cover_depth': 'Concrete cover',
+    'exposure_class': 'Exposure class',
+    'chloride_content': 'Chloride content',
+    'elastic_modulus': 'Elastic modulus',
+    'mass': 'Mass',
+    'carbonation_depth': 'Carbonation depth',
+    'spalling': 'Spalling',
+    'cracking': 'Cracking',
+    'corrosion': 'Corrosion',
+    'moisture_content': 'Moisture content',
+    'crack_width': 'Widest crack',
+    'condition_grade': 'Condition grade',
+}
 ORDINAL_RANGE: Tuple[int, int] = (0, 3)
 
 CONDITION_GRADE_LABELS: Dict[int, str] = {
@@ -319,6 +417,21 @@ CONDITION_GRADE_LABELS: Dict[int, str] = {
     2: 'Average',
     1: 'Poor',
     0: 'Unusable as is',
+}
+
+
+# MAPPING COLUMNS OF THE OTHER VOCABULARIES (spec section 7.8) ----------------
+# original_function IS an IFC class name; CscDebris is a CSC extension and has
+# no IFC counterpart
+ORIGINAL_FUNCTION_IFC_CLASS: Dict[str, Optional[str]] = {
+    value: (None if value == 'CscDebris' else value)
+    for value in ORIGINAL_FUNCTIONS
+}
+# an evidence record is a sosa:Observation; a core is also a sosa:Sample
+EVIDENCE_METHOD_SOSA_TYPE: Dict[str, str] = {
+    method: 'sosa:Sample' if method == 'core_compression'
+    else 'sosa:Observation'
+    for method in EVIDENCE_METHODS
 }
 
 

@@ -471,7 +471,9 @@ def _evidence_envelope(step: str, snapshot: dict, *, method: str,
                        source_tier: str, summary: dict, payload: dict,
                        description: str,
                        performed_by: List[dict]) -> dict:
-    observed = day_of(snapshot['created'])
+    # the full timestamp, precision day: a grade given when v1 was created
+    # must resolve to v1, not to the state before it (4.1)
+    observed = snapshot['created']
     return {
         '_id': migration_id(step, snapshot['_id']),
         'identity_id': snapshot['identity_id'],

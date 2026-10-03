@@ -159,6 +159,14 @@ async def get_vocabularies():
                                   vocab.INHERIT_UNIT_LABELS),
         'change_cause': _labelled(vocab.CHANGE_CAUSES,
                                   vocab.CHANGE_CAUSE_LABELS),
+        'evidence_method': _labelled(vocab.EVIDENCE_METHODS,
+                                     vocab.EVIDENCE_METHOD_LABELS),
+        'source_tier': _labelled(vocab.SOURCE_TIERS + ('inherited',),
+                                 vocab.SOURCE_TIER_LABELS),
+        'verification_state': _labelled(vocab.VERIFICATION_STATES,
+                                        vocab.VERIFICATION_STATE_LABELS),
+        'quantity': _labelled(tuple(vocab.QUANTITY_BY_NAME),
+                              vocab.QUANTITY_LABELS),
     })
 
 

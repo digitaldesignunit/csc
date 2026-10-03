@@ -42,6 +42,8 @@ from utility import (
     get_snapshot_point_clouds_directory,
     get_snapshot_proxies_directory,
     get_snapshot_capture_directory,
+    get_evidence_attachments_directory,
+    get_evidence_upload_limit_bytes,
     get_snapshot_photo_upload_limit_bytes,
     get_snapshot_photo_max_output_bytes,
     get_snapshot_photo_max_long_edge_px,
@@ -66,6 +68,7 @@ _REQUIRED_ENV = [
     'SNAPSHOT_POINT_CLOUDS_DIR',
     'SNAPSHOT_PROXIES_DIR',
     'SNAPSHOT_CAPTURE_DIR',
+    'EVIDENCE_ATTACHMENTS_DIR',
     'GH_XML_CACHE_DIR',
     'FASTAPI_CORS_ORIGINS',
 ]
@@ -141,6 +144,12 @@ async def lifespan(app: FastAPI):
     await app.mongodb_invitations.create_index('email')
     await app.mongodb_change_log.create_index([('record_id', 1), ('at', 1)])
     await app.mongodb_change_log.create_index([('identity_id', 1), ('at', -1)])
+    await app.mongodb_component_evidence.create_index('identity_id')
+    await app.mongodb_component_evidence.create_index(
+        [('status', 1), ('method', 1)])
+    await app.mongodb_component_evidence.create_index('supersedes')
+    await app.mongodb_component_evidence.create_index(
+        'payload.sampling.paired_rebound_id', sparse=True)
     await seed_materials(app.mongodb_materials)
     await ensure_catalog_number_counter(app.mongodb)
 
@@ -153,6 +162,9 @@ async def lifespan(app: FastAPI):
     # capture fixtures (decision 7.7), both written by the geometry runner
     app.snapshot_proxies_dir = get_snapshot_proxies_directory()
     app.snapshot_capture_dir = get_snapshot_capture_directory()
+    # evidence attachments (evidence/<id>/<index>.<ext>, spec 3.5, 7.3)
+    app.evidence_attachments_dir = get_evidence_attachments_directory()
+    app.evidence_upload_limit_bytes = get_evidence_upload_limit_bytes()
     app.snapshot_photo_upload_limit_bytes = (
         get_snapshot_photo_upload_limit_bytes()
     )
@@ -168,6 +180,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(app.snapshot_point_clouds_dir, exist_ok=True)
     os.makedirs(app.snapshot_proxies_dir, exist_ok=True)
     os.makedirs(app.snapshot_capture_dir, exist_ok=True)
+    os.makedirs(app.evidence_attachments_dir, exist_ok=True)
     app.gh_xml_cache_dir = get_gh_xml_cache_directory()
     app.geometry_upload_limit_bytes = get_geometry_upload_limit_bytes()
     print(
