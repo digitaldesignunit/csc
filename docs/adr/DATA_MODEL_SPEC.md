@@ -1322,6 +1322,10 @@ One pure function, two call sites that differ only in the input filter and the t
 | `identity.properties` | all published, non-superseded evidence for the identity; quantities with `scope == identity` | evidence publish / withdraw / reinstate / supersede / verification change; identity creation with parents (inheritance); **a parent's `properties` changing** (recomputes every descendant that still inherits --- same propagation as section 3.1.2) |
 | `snapshot.properties` (per snapshot) | the **as-of** set: published, non-superseded evidence whose resolved context (section 4.1) is *this* snapshot --- `before_first` / `after_exit` evidence enters no snapshot (8.10); quantities with `scope == snapshot` | the same evidence events, **plus** any `effective_from` change on any snapshot of the identity (it moves the windows), plus snapshot publish / withdraw / reinstate / supersede |
 
+Both targets also recompute on an **exit, an undone exit, a re-entry and an origin change** of the
+identity: they move the context windows of section 4.1 (`after_exit`, archived cycles; 8.10,
+8.19; decision 8.70).
+
 Unpublished evidence (draft, pending, rejected) never enters the fold, so creating, rejecting or
 hard-deleting it triggers nothing.
 

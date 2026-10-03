@@ -251,7 +251,7 @@ the initial guesses until the tables are signed off.
 complexity; the user has signed off the tuning tables and the frame report. *(First half met on
 dump 261001; the sign-off is open.)*
 
-### P6 --- Evidence --- size XL
+### P6 --- Evidence --- size XL --- **part 1 (backend) built 2026-10-02, in review; part 2 (web) after the next go**
 - `component_evidence` + method registry (section 4.5) with the seven methods (A.1--A.4); payload
   validation incl. server-recomputed fields (rebound median / discard rule, core F/A, l/d class).
 - Routes (section 7.2): create, bulk (all-or-nothing), lifecycle, supersede, verification (I22;
@@ -275,6 +275,17 @@ dump 261001; the sign-off is open.)*
   rebound impact points and test-location layouts (8.43), the core-to-rebound pairing (8.42),
   evidence moderation + reviewer queue, properties card (range + n), condition badge (7.9),
   timeline.
+
+Built as, part 1 (decisions 8.62--8.69): `apps/catalog/evidence/` (`payloads`, `specs`, `registry`,
+`rebound`, `core`, `claims`, `projection`, `files`), `timeline.py` (`resolve_snapshot_at`, the merged
+timeline), `properties.py` (the fold), `units.py`, `timeutil.py`; routes in `api/evidence.py`
+(create, bulk, reads, queue, methods / quantities / schemas, properties, timeline),
+`api/evidence_lifecycle.py` (lifecycle, supersede, verification, PATCH, DELETE),
+`api/evidence_attachments.py`, `api/actors.py` (`POST /actors/redact`), `api/evidence_fold.py` (the
+recompute, hooked into the snapshot lifecycle and the identity writes); quantity rows and mapping
+columns in `vocab.py`; migration steps 6b / 6d through the registry and a new `fold` step;
+`check_invariants` I8 and I11; `GET /identities/{id}/compose?include=evidence`; models regenerated
+(`EvidenceModels.ts`, `EvidenceCreateModels.ts`). Part 2 (the web) is the bullet "Web" above.
 
 **Done when:** fold unit tests cover tier precedence, derived results, verification, inheritance
 and merges; the phone walkthrough "scan --> add 3 rebound areas --> submit --> moderate --> verify" works.
