@@ -286,16 +286,6 @@ function generateTypeScriptInterface(
       interfaceCode += '\n\n'
     }
   }
-  if (importsByFile.size) {
-    const imports = [...importsByFile.entries()]
-      .map(
-        ([file, names]) =>
-          `import type { ${[...names].sort().join(', ')} } from './${file.replace(/\.ts$/, '')}';`,
-      )
-      .join(NEWLINE)
-    interfaceCode = interfaceCode.replace(IMPORT_SLOT, `${imports}${NEWLINE}${IMPORT_SLOT}`)
-  }
-
   if (!opts.defsOnly) {
     interfaceCode += `export interface ${rootInterfaceName} {\n`
 
@@ -323,6 +313,23 @@ export type ComponentComplexity = 0 | 1 | 2 | 3;
 export type CatalogComponent = ComponentPassport
 
 `
+  }
+
+  if (importsByFile.size) {
+    // only what the file's code uses, root interface included (an unused import fails the lint)
+    const body = interfaceCode.replace(IMPORT_SLOT, '')
+    const imports = [...importsByFile.entries()]
+      .map(([file, names]) => [
+        file,
+        [...names].filter((name) => new RegExp(`\\b${name}\\b`).test(body)).sort(),
+      ] as const)
+      .filter(([, names]) => names.length > 0)
+      .map(
+        ([file, names]) =>
+          `import type { ${names.join(', ')} } from './${file.replace(/\.ts$/, '')}';`,
+      )
+      .join(NEWLINE)
+    interfaceCode = interfaceCode.replace(IMPORT_SLOT, `${imports}${NEWLINE}${IMPORT_SLOT}`)
   }
 
   let sharedImport = ''

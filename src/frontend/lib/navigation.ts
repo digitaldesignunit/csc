@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Layers,
   LayoutGrid,
+  ShieldCheck,
   ScanQrCode,
   ScrollText,
   Send,
@@ -29,6 +30,8 @@ export type NavViewer = {
   isAdmin: boolean
   /** Moderates at least one dataset (`GET /users/me`). */
   isModerator: boolean
+  /** Holds the reviewer role in at least one dataset. */
+  isReviewer: boolean
 }
 
 export type NavGroupId = 'catalog' | 'capture' | 'mywork' | 'moderation' | 'admin' | 'tools'
@@ -82,6 +85,14 @@ export const NAV_ENTRIES: NavEntry[] = [
     icon: Inbox,
     group: 'moderation',
     visible: (v) => v.isAdmin || v.isModerator,
+  },
+  {
+    id: 'review',
+    label: 'Verification queue',
+    href: '/admin/review',
+    icon: ShieldCheck,
+    group: 'moderation',
+    visible: (v) => v.isAdmin || v.isReviewer,
   },
   {
     // moderators manage their datasets' members here; admin all datasets
@@ -155,6 +166,7 @@ const EXTRA_TITLES: [RegExp, string][] = [
   [/^\/credits$/, 'Credits'],
   [/^\/imprint$/, 'Imprint'],
   [/^\/components\/[^/]+\/edit$/, 'Component'],
+  [/^\/components\/[^/]+\/evidence\/new$/, 'Add evidence'],
   [/^\/components\/(?!map$)[^/]+$/, 'Component'],
   [/^\/auth\//, 'Account'],
   [/^\/add-component/, 'Add component'],

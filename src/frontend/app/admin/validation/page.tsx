@@ -8,6 +8,7 @@ import { ExternalLink, Inbox } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import SnapshotLifecycleActions from '@/components/moderation/SnapshotLifecycleActions'
+import EvidenceQueue, { useEvidenceQueue } from '@/components/moderation/EvidenceQueue'
 import type { PendingSnapshotItem } from '@/generated/SnapshotModels'
 import { ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/generated/Vocab'
 import { backendJson } from '@/lib/backend'
@@ -30,6 +31,7 @@ export default function ModerationQueuePage() {
   const [pending, setPending] = useState<PendingSnapshotItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const evidenceQueue = useEvidenceQueue(moderatesAny)
 
   useEffect(() => {
     if (!meLoading && me && !moderatesAny) router.push('/')
@@ -57,9 +59,9 @@ export default function ModerationQueuePage() {
         <h1 className="text-xl font-bold sm:text-2xl">Moderation queue</h1>
       </div>
       <p className="text-sm text-muted-foreground">
-        Snapshots waiting in the datasets you moderate, oldest first. Publishing makes
-        a snapshot the component&apos;s current state; a rejection goes back to its
-        author with your reason.
+        Snapshots and evidence waiting in the datasets you moderate, oldest first.
+        Publishing makes a snapshot the component&apos;s current state; a rejection goes
+        back to its author with your reason.
       </p>
 
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
@@ -117,6 +119,15 @@ export default function ModerationQueuePage() {
           ))}
         </ul>
       )}
+
+      <div className="pt-4">
+        <EvidenceQueue
+          rows={evidenceQueue.rows}
+          loading={evidenceQueue.loading}
+          error={evidenceQueue.error}
+          onChanged={() => { void load(); void evidenceQueue.load() }}
+        />
+      </div>
     </div>
   )
 }

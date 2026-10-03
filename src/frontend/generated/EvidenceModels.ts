@@ -1,7 +1,7 @@
 // Auto-generated from backend OpenAPI schema
 // Generated on: 2026-10-02T21:09:59.038Z
 // Source: http://127.0.0.1:8011/schema/evidence
-import type { Accreditation, Actor, StatusChange } from './CatalogModels';
+import type { Actor, StatusChange } from './CatalogModels';
 import type { Tombstone } from './AccessModels';
 
 export interface Attachment {

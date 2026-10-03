@@ -8,6 +8,11 @@ import { CSC_CLIENT_HEADERS } from '@/lib/cscClient'
 const FASTAPI_URL = process.env.FASTAPI_URL!
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET
 const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 MB
+// one evidence attachment: the backend caps a file at 25 MB (decision 8.82)
+// and answers 413 itself; the proxy allows just above that (multipart
+// overhead) for POST /evidence/attachments only, so the backend, not the
+// proxy, is the one that refuses
+const MAX_ATTACHMENT_BODY_BYTES = 26 * 1024 * 1024
 
 // Geometry uploads (PUT/POST) must go directly to FastAPI --- not via this proxy.
 // GET downloads for the web viewer are proxied with the user's bearer token.
@@ -69,7 +74,10 @@ async function handle(
 
   // 4) Reject oversized request bodies before reading
   const contentLength = req.headers.get('content-length')
-  if (contentLength && parseInt(contentLength) > MAX_BODY_BYTES) {
+  const bodyLimit = method === 'POST' && pathname === '/evidence/attachments'
+    ? MAX_ATTACHMENT_BODY_BYTES
+    : MAX_BODY_BYTES
+  if (contentLength && parseInt(contentLength) > bodyLimit) {
     return NextResponse.json({ error: 'Request too large' }, { status: 413 })
   }
 
@@ -101,10 +109,19 @@ async function handle(
     'content-disposition',
     'etag',
     'last-modified',
+    // a download is served `nosniff`; the browser must see that header
+    'x-content-type-options',
   ]
   for (const name of pass) {
     const val = upstream.headers.get(name)
     if (val) outHeaders.set(name, val)
+  }
+
+  // the length of a body that is passed on as it came (not when the fetch
+  // decoded a compressed one: the length would then be wrong)
+  const length = upstream.headers.get('content-length')
+  if (length && !upstream.headers.get('content-encoding')) {
+    outHeaders.set('content-length', length)
   }
 
   // Note: do NOT read .text()/json(); just forward the stream/body directly.

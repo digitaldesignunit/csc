@@ -30,6 +30,16 @@
         "set MONGODB_URI=mongodb://127.0.0.1:27018/csc&& set FASTAPI_URL=http://127.0.0.1:8000&& npm --prefix src/frontend run dev"
       ],
       "port": 3000
+    },
+    {
+      "name": "frontend-migrated-3100",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set MONGODB_URI=mongodb://127.0.0.1:27018/csc&& set FASTAPI_URL=http://127.0.0.1:8000&& set NEXTAUTH_URL=http://127.0.0.1:3100&& npm --prefix src/frontend run dev -- -p 3100"
+      ],
+      "port": 3100,
+      "url": "http://127.0.0.1:3100"
     }
   ]
 }

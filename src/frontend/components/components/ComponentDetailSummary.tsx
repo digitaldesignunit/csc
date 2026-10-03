@@ -6,6 +6,7 @@ import { Check, Copy, FileText } from 'lucide-react'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
 import { generateGrasshopperPanelXML } from '@/lib/utils'
+import { conditionBadge } from '@/lib/evidence/format'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -13,6 +14,8 @@ import {
   isNonEmptyString,
   isOutOfCirculation,
   isPublished,
+  conditionBadgeClass,
+  conditionLabel,
   snapshotAddedByDisplay,
   snapshotDisplayName,
 } from './componentDetailShared'
@@ -29,6 +32,8 @@ export default function ComponentDetailSummary({ catalog }: ComponentDetailSumma
   const outOfCirculation = isOutOfCirculation(identity)
   const reservedBy = typeof identity.reserved === 'string' ? identity.reserved.trim() : ''
   const addedBy = snapshotAddedByDisplay(snapshot)
+  // decision 7.9: the folded grade, else 3 minus the worst finding
+  const condition = conditionBadge(snapshot.properties)
 
   const [copied, setCopied] = useState(false)
   const [grasshopperCopied, setGrasshopperCopied] = useState(false)
@@ -118,6 +123,20 @@ export default function ComponentDetailSummary({ catalog }: ComponentDetailSumma
         {outOfCirculation && (
           <span className="rounded-md border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
             {exitSummary(identity.exit)}
+          </span>
+        )}
+        {condition.grade !== null ? (
+          <span
+            title={condition.basis === 'grade'
+              ? 'The overall condition grade from the evidence (the lowest of the folded range)'
+              : '3 minus the worst finding severity of the inspections'}
+            className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${conditionBadgeClass(condition.grade)}`}
+          >
+            Condition {conditionLabel(condition.grade)}
+          </span>
+        ) : (
+          <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            Condition not assessed
           </span>
         )}
         {reservedBy ? (

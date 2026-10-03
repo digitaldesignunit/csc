@@ -2,6 +2,7 @@
 import ComponentDetailPageLayout from '@/components/components/ComponentDetailPageLayout'
 import ComponentDetailSnapshotBanner from '@/components/components/ComponentDetailSnapshotBanner'
 import ComponentViewer from '@/components/components/ComponentViewer'
+import ComponentEvidenceSection from '@/components/evidence/ComponentEvidenceSection'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot, type CatalogShallowRow } from '@/generated/catalogExtras'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
@@ -211,6 +212,7 @@ export default async function ComponentDetailPage({
         >
           <ComponentViewer catalog={catalog} compactDesktop />
         </ComponentDetailPageLayout>
+        <ComponentEvidenceSection catalog={catalog} />
       </div>
     </div>
   )

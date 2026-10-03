@@ -122,7 +122,7 @@ function Brand({ betaBannerText }: { betaBannerText?: string }) {
   )
 }
 
-/** Pending snapshots in the caller's moderated datasets (the queue badge). */
+/** Pending snapshots and evidence in the caller's moderated datasets (the queue badge). */
 function usePendingCount(enabled: boolean): number {
   const pathname = usePathname()
   const [count, setCount] = useState(0)
@@ -133,9 +133,15 @@ function usePendingCount(enabled: boolean): number {
     }
     let cancelled = false
     const load = () => {
-      backendJson<unknown[]>('/snapshots/pending')
-        .then((rows) => { if (!cancelled) setCount(Array.isArray(rows) ? rows.length : 0) })
-        .catch(() => { if (!cancelled) setCount(0) })
+      // pending snapshots and pending evidence of the moderated datasets
+      Promise.all([
+        backendJson<unknown[]>('/snapshots/pending').catch(() => []),
+        backendJson<unknown[]>('/evidence/pending').catch(() => []),
+      ]).then(([snapshots, evidence]) => {
+        if (cancelled) return
+        const count = (rows: unknown) => (Array.isArray(rows) ? rows.length : 0)
+        setCount(count(snapshots) + count(evidence))
+      })
     }
     load()
     const timer = window.setInterval(load, 60_000)
@@ -366,13 +372,14 @@ function AccountMenu() {
 
 export default function AppSidebar({ betaBannerText }: { betaBannerText?: string }) {
   const { data: session } = useSession()
-  const { moderatesAny } = useMe()
+  const { moderatesAny, reviewsAny } = useMe()
   const signedIn = Boolean(session?.user) && !(session as { error?: string } | null)?.error
   const isAdmin = signedIn && (session?.user as SessionUser | undefined)?.role === 'admin'
   const viewer: NavViewer = {
     signedIn,
     isAdmin,
     isModerator: signedIn && moderatesAny,
+    isReviewer: signedIn && reviewsAny,
   }
   return (
     <Sidebar>

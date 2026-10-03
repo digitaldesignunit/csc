@@ -17,6 +17,12 @@ export class BackendError extends Error {
 
 function backendErrorText(detail: unknown, status: number): string {
   if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const messages = (detail as { msg?: unknown }[])
+      .map((row) => (typeof row?.msg === 'string' ? row.msg : ''))
+      .filter(Boolean)
+    if (messages.length) return messages.join('; ')
+  }
   if (detail && typeof detail === 'object') {
     const record = detail as { message?: unknown; fields?: unknown }
     if (typeof record.message === 'string') {

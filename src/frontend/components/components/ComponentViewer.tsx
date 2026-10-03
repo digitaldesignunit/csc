@@ -36,6 +36,10 @@ import ProxyOverlay, {
   useDeviationMaps,
   type ProxyDisplay,
 } from '@/components/viewer/ProxyOverlay'
+import EvidenceMarks, { type ViewerMark } from '@/components/viewer/EvidenceMarks'
+import PickLayer from '@/components/viewer/PickLayer'
+import type { PickHit } from '@/lib/evidence/pick'
+import { publishedMarks } from '@/lib/evidence/marks'
 import type { ProxyDoc } from '@/lib/proxyOverlay'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ViewerMenu, MenuSection, MenuSubsection, MenuDivider, SegmentedControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
@@ -1016,9 +1020,24 @@ export type ComponentViewerProps = {
   catalog: CatalogComponent
   /** Shorter laptop+ viewport for the component detail L-layout. Other pages keep 50dvh. */
   compactDesktop?: boolean
+  /**
+   * Position picking (decision 8.43): a click or tap that is not a drag
+   * reports the hit in the stored coordinates of the snapshot on screen.
+   */
+  picking?: { enabled: boolean; onPick: (hit: PickHit | null) => void }
+  /** Positions drawn for the snapshot they name (stored coordinates). */
+  marks?: ViewerMark[]
+  /** Fill the parent's height (the picker dialog) instead of the page heights. */
+  fill?: boolean
 }
 
-export default function ComponentViewer({ catalog, compactDesktop = false }: ComponentViewerProps) {
+export default function ComponentViewer({
+  catalog,
+  compactDesktop = false,
+  picking,
+  marks = [],
+  fill = false,
+}: ComponentViewerProps) {
   const snapshot = primarySnapshot(catalog)
   const identityId = catalog.identity._id
 
@@ -1073,7 +1092,12 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     || snapshotPrisms.length > 0
     || snapshotPointClouds.length > 0
 
-  const [meshGeometryMode, setMeshGeometryMode] = useState<GeometryMode>('preview')
+  // picking starts on the reduced mesh where one exists: cleaner faces than the
+  // preview and far lighter than the original (decision 8.83 d)
+  const hasReducedMesh = plyPrimitiveIndicesForMode(snapshotRouting?.mesh_ply_resolutions, 'reduced').length > 0
+  const [meshGeometryMode, setMeshGeometryMode] = useState<GeometryMode>(
+    picking && hasReducedMesh ? 'reduced' : 'preview',
+  )
   const [pointCloudGeometryMode, setPointCloudGeometryMode] = useState<PointCloudGeometryMode>('preview')
   const [visibleMeshes, setVisibleMeshes] = useState<boolean[]>([])
   const [visiblePointClouds, setVisiblePointClouds] = useState<boolean[]>([])
@@ -1138,6 +1162,24 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
   // reinforcement layouts are evidence positioned on one snapshot (7.8)
   const [reinforcementBars, setReinforcementBars] = useState<ReinforcementBar[]>([])
   const [showReinforcement, setShowReinforcement] = useState<boolean>(true)
+  // positions of the published evidence on this snapshot (8.43)
+  const [evidenceMarks, setEvidenceMarks] = useState<ViewerMark[]>([])
+  const [showEvidenceMarks, setShowEvidenceMarks] = useState<boolean>(true)
+  const pickRootRef = useRef<THREE.Group>(null)
+  useEffect(() => {
+    let cancelled = false
+    setEvidenceMarks([])
+    if (!identityId || !snapshotIdForOverlays) return
+    fetch(`/api/backend/identities/${encodeURIComponent(String(identityId))}/evidence`, {
+      credentials: 'include',
+    })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((records: unknown) => {
+        if (!cancelled) setEvidenceMarks(publishedMarks(records, snapshotIdForOverlays))
+      })
+      .catch(() => { if (!cancelled) setEvidenceMarks([]) })
+    return () => { cancelled = true }
+  }, [identityId, snapshotIdForOverlays])
   useEffect(() => {
     let cancelled = false
     setReinforcementBars([])
@@ -1393,7 +1435,8 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
 
   const meshCount = activeMeshCount || primitiveMeshCount
   const pointCloudCount = activePointCloudCount || primitivePointCloudCount
-  const hasOverlays = hasMarkerPoints || hasFixtures || hasReinforcement
+  const hasEvidenceMarks = evidenceMarks.length > 0
+  const hasOverlays = hasMarkerPoints || hasFixtures || hasReinforcement || hasEvidenceMarks
 
   // items are numbered only when there is more than one (8.23)
   const meshLabel = (index: number) => `Mesh ${index + 1}`
@@ -1624,6 +1667,14 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
             onChange={(checked) => setShowReinforcement(checked)}
           />
         )}
+        {hasEvidenceMarks && (
+          <CheckboxControl
+            id="toggle-evidence-marks"
+            label={`Test positions (${evidenceMarks.length})`}
+            checked={showEvidenceMarks}
+            onChange={(checked) => setShowEvidenceMarks(checked)}
+          />
+        )}
       </MenuSubsection>,
     )
   }
@@ -1638,17 +1689,20 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
       }]
     : []
 
-  const desktopViewportClass = compactDesktop
-    ? 'h-[30dvh] sm:h-[40dvh] md:h-[50dvh] 2xl:h-[56vh]'
-    : 'h-[30dvh] sm:h-[40dvh] md:h-[50dvh]'
+  const desktopViewportClass = fill
+    ? 'h-full min-h-[16rem]'
+    : compactDesktop
+      ? 'h-[30dvh] sm:h-[40dvh] md:h-[50dvh] 2xl:h-[56vh]'
+      : 'h-[30dvh] sm:h-[40dvh] md:h-[50dvh]'
 
   return (
-    <div className="flex flex-col md:flex-row gap-2 w-full">
+    <div className={cn('flex flex-col md:flex-row gap-2 w-full', fill && 'h-full')}>
       {hasDisplayOptions && (
         <div
           className={cn(
-            'w-full md:w-64 md:flex-shrink-0 order-2 md:order-1 md:h-[50dvh]',
-            compactDesktop && '2xl:h-[56vh]',
+            'w-full md:w-64 md:flex-shrink-0 order-2 md:order-1',
+            fill ? 'hidden md:block md:h-full' : 'md:h-[50dvh]',
+            !fill && compactDesktop && '2xl:h-[56vh]',
           )}
         >
           <ViewerMenu sections={menuSections} className="h-full" />
@@ -1725,7 +1779,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
           >
             <FitCameraController fitRef={fitCameraRef} />
             <Turntable enabled={turntableEnabled}>
-              <group matrixAutoUpdate={false} matrix={orientationMatrix}>
+              <group ref={pickRootRef} matrixAutoUpdate={false} matrix={orientationMatrix}>
               <VisualizeComponent
                 catalog={catalog}
                 meshGeometryMode={meshGeometryMode}
@@ -1739,21 +1793,33 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
                 meshGeometryError={meshGeometryError}
                 showEdges={showEdges}
               />
-              <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
-              <CaptureFixtures fixtures={fixtureGroups} visible={showFixtures} />
-              <ReinforcementBars bars={reinforcementBars} visible={showReinforcement} />
+              {/* overlays are context, not the component: never a pick target (8.43) */}
+              <group userData={{ noPick: true }}>
+                <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
+                <CaptureFixtures fixtures={fixtureGroups} visible={showFixtures} />
+                <ReinforcementBars bars={reinforcementBars} visible={showReinforcement} />
+              </group>
+              {showEvidenceMarks && (
+                <EvidenceMarks marks={evidenceMarks} snapshotId={snapshotIdForOverlays} />
+              )}
+              <EvidenceMarks marks={marks} snapshotId={snapshotIdForOverlays} />
               {overlayProxy && (
-                <ProxyOverlay
-                  proxy={overlayProxy as unknown as ProxyDoc}
-                  display={proxyDisplay}
-                  maps={deviationMaps}
-                  onRange={setProxyRange}
-                />
+                <group userData={{ noPick: true }}>
+                  <ProxyOverlay
+                    proxy={overlayProxy as unknown as ProxyDoc}
+                    display={proxyDisplay}
+                    maps={deviationMaps}
+                    onRange={setProxyRange}
+                  />
+                </group>
               )}
               </group>
             </Turntable>
           </Bounds>
 
+          {picking && (
+            <PickLayer rootRef={pickRootRef} enabled={picking.enabled} onPick={picking.onPick} />
+          )}
           <axesHelper args={[0.1]} />
           {showGrid && <gridHelper args={[2, 20, 'Gray', 'Gainsboro']} />}
           <OrbitControls makeDefault />

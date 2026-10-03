@@ -21,6 +21,8 @@ type MeContextValue = {
   isAdmin: boolean
   /** Moderates at least one dataset (or is admin). */
   moderatesAny: boolean
+  /** Holds the reviewer role in at least one dataset (or is admin). */
+  reviewsAny: boolean
   moderates: (dataset: string | null | undefined) => boolean
   /** Roles in a dataset; admin holds every role implicitly. */
   rolesIn: (dataset: string | null | undefined) => DatasetRole[]
@@ -65,6 +67,7 @@ export function MeProvider({ children }: { children: React.ReactNode }) {
       refresh,
       isAdmin,
       moderatesAny: isAdmin || moderated.size > 0,
+      reviewsAny: isAdmin || (me?.memberships ?? []).some((m) => m.roles.includes('reviewer')),
       moderates: (dataset) => isAdmin || (!!dataset && moderated.has(dataset)),
       rolesIn: (dataset) => {
         if (isAdmin) return ALL_ROLES
