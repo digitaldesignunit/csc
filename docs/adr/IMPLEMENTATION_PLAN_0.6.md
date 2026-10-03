@@ -290,7 +290,7 @@ columns in `vocab.py`; migration steps 6b / 6d through the registry and a new `f
 Built as, part 2 (decisions 8.72--8.81, to confirm): route `/components/{id}/evidence/new`
 (`?correct=<id>` for a correction) with `components/evidence/form/` (the form, per-method editors, the
 request builder `state.ts`), the schema renderer `components/evidence/SchemaFields.tsx` and the "?"
-`Help.tsx`, `lib/evidence/` (registry types and calls, schema helpers, layout hints, grid math, picking,
+`components/ui/help.tsx`, `lib/evidence/` (registry types and calls, schema helpers, layout hints, grid math, picking,
 marks, display formats); the viewer gains `PickLayer`, `EvidenceMarks` and the `picking` / `marks` /
 `fill` props (`components/components/ComponentViewer.tsx`) and the position picker dialog
 (`PositionPickerDialog.tsx`: point, grid, test locations, edge warning); the component page gets
