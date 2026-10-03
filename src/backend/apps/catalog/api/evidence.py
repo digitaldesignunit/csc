@@ -17,7 +17,7 @@ attachments in ``evidence_attachments``.
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import hashlib
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -441,15 +441,30 @@ async def list_evidence(
                                                    'starts at most here'),
     status: str = Query('published'),
     verification: Optional[VerificationState] = Query(None),
+    recorded_by: Optional[Literal['me']] = Query(
+        None, description='only the records the caller recorded (signed '
+                          'in); "me" is the only value'),
+    order: Optional[Literal['newest', 'oldest']] = Query(
+        None, description='by when the record was created, newest or '
+                          'oldest first; without it: oldest observation '
+                          'first'),
     limit: int = Query(DEFAULT_PAGE, ge=1, le=MAX_PAGE),
     skip: int = Query(0, ge=0),
 ):
     """Records of every component the caller can see, oldest observation
-    first; the visibility rules of 7.0 apply per record. People appear as
-    in any list: no e-mail addresses."""
+    first (or by creation with ``order``); the visibility rules of 7.0 apply
+    per record. People appear as in any list: no e-mail addresses.
+    ``recorded_by=me`` with ``order=newest&limit=1`` is the caller's latest
+    record --- "repeat from my last record" (7.6, decision 8.83)."""
     match = _record_filters(method=method, tier=tier, quantity=quantity,
                             since=None, until=None, status=status,
                             superseded=False)
+    if recorded_by == 'me':
+        if current_user is None:
+            raise HTTPException(
+                status_code=401, headers={'WWW-Authenticate': 'Bearer'},
+                detail='Sign in to list your own records.')
+        match['recorded_by_user_id'] = current_user.id
     if verification:
         match['verification.state'] = verification
     clauses: List[Dict[str, Any]] = (
@@ -475,8 +490,9 @@ async def list_evidence(
     if clauses:
         match['$and'] = clauses
     match['identity_id'] = {'$in': ids}
-    docs = request.app.mongodb_component_evidence.find(match).sort(
-        [('observed_at', 1), ('_id', 1)])
+    sort = ([('created', -1 if order == 'newest' else 1), ('_id', 1)]
+            if order else [('observed_at', 1), ('_id', 1)])
+    docs = request.app.mongodb_component_evidence.find(match).sort(sort)
     if status == 'published':
         page = await docs.skip(skip).limit(limit).to_list(length=limit)
         owners = {d['_id']: d for d in await identities.find(

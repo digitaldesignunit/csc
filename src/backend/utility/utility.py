@@ -79,11 +79,17 @@ def get_evidence_attachments_directory() -> str:
     return sanitize_path(os.environ['EVIDENCE_ATTACHMENTS_DIR'])
 
 
+EVIDENCE_UPLOAD_MAX_MB = 25
+
+
 def get_evidence_upload_limit_bytes() -> int:
-    """Largest evidence attachment accepted (EVIDENCE_UPLOAD_LIMIT_MB)."""
-    mb = int(os.getenv('EVIDENCE_UPLOAD_LIMIT_MB', '25'))
-    if mb < 1:
-        raise ValueError('EVIDENCE_UPLOAD_LIMIT_MB must be >= 1')
+    """Largest evidence attachment accepted: 25 MB (decision 8.82); the
+    environment (EVIDENCE_UPLOAD_LIMIT_MB) may only lower it."""
+    mb = int(os.getenv('EVIDENCE_UPLOAD_LIMIT_MB',
+                       str(EVIDENCE_UPLOAD_MAX_MB)))
+    if not 1 <= mb <= EVIDENCE_UPLOAD_MAX_MB:
+        raise ValueError(
+            f'EVIDENCE_UPLOAD_LIMIT_MB must be 1 to {EVIDENCE_UPLOAD_MAX_MB}')
     return mb * 1024 * 1024
 
 
