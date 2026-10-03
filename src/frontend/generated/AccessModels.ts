@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-02T06:59:34.881Z
-// Source: http://127.0.0.1:8000/schema/access
+// Generated on: 2026-10-02T21:09:59.002Z
+// Source: http://127.0.0.1:8011/schema/access
 
 export interface AdminUserRow {
   _id: string;

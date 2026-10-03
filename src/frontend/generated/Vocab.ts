@@ -1,6 +1,6 @@
 // Auto-generated from backend GET /vocab
-// Generated on: 2026-10-02T13:41:52.772Z
-// Source: http://127.0.0.1:8000/vocab
+// Generated on: 2026-10-02T21:09:59.094Z
+// Source: http://127.0.0.1:8011/vocab
 
 export type OriginalFunction = 'IfcBeam' | 'IfcColumn' | 'IfcSlab' | 'IfcPlate' | 'IfcWall' | 'IfcMember' | 'IfcPipeSegment' | 'IfcFooting' | 'IfcDiscreteAccessory' | 'IfcBuildingElementPart' | 'IfcBuildingElementProxy' | 'CscDebris'
 export const ORIGINAL_FUNCTION_LABELS: Record<OriginalFunction, string> = {
@@ -136,6 +136,59 @@ export const CHANGE_CAUSE_LABELS: Record<ChangeCause, string> = {
   "reinstate": "Reinstated",
   "migration": "Migration",
   "derived_exit": "Cut into pieces",
+}
+
+export type EvidenceMethod = 'rebound_hammer' | 'core_compression' | 'archival_document' | 'visual_inspection' | 'era_heuristic' | 'manufacturer_datasheet' | 'reinforcement_layout'
+export const EVIDENCE_METHOD_LABELS: Record<EvidenceMethod, string> = {
+  "rebound_hammer": "Rebound hammer",
+  "core_compression": "Core in compression",
+  "archival_document": "Archival document",
+  "visual_inspection": "Visual inspection",
+  "era_heuristic": "Rule of thumb (era, region, typology)",
+  "manufacturer_datasheet": "Manufacturer datasheet",
+  "reinforcement_layout": "Reinforcement layout",
+}
+
+export type SourceTier = 'destructive' | 'ndt' | 'archival' | 'visual' | 'heuristic' | 'inherited'
+export const SOURCE_TIER_LABELS: Record<SourceTier, string> = {
+  "destructive": "Destructive test",
+  "ndt": "Non-destructive test",
+  "archival": "Archival document",
+  "visual": "Visual inspection",
+  "heuristic": "Estimate",
+  "inherited": "Inherited from a parent",
+}
+
+export type VerificationState = 'unverified' | 'self_attested' | 'reviewed' | 'accredited'
+export const VERIFICATION_STATE_LABELS: Record<VerificationState, string> = {
+  "unverified": "Unverified",
+  "self_attested": "Self-attested",
+  "reviewed": "Reviewed",
+  "accredited": "Accredited",
+}
+
+export type Quantity = 'compressive_strength' | 'compressive_strength_in_situ' | 'rebound_number' | 'q_value' | 'density' | 'rebar_diameter' | 'rebar_spec' | 'concrete_class' | 'cover_depth' | 'exposure_class' | 'chloride_content' | 'elastic_modulus' | 'mass' | 'carbonation_depth' | 'spalling' | 'cracking' | 'corrosion' | 'moisture_content' | 'crack_width' | 'condition_grade'
+export const QUANTITY_LABELS: Record<Quantity, string> = {
+  "compressive_strength": "Compressive strength",
+  "compressive_strength_in_situ": "In-situ compressive strength",
+  "rebound_number": "Rebound number R",
+  "q_value": "Q-value",
+  "density": "Density",
+  "rebar_diameter": "Rebar diameter",
+  "rebar_spec": "Rebar steel grade",
+  "concrete_class": "Concrete strength class",
+  "cover_depth": "Concrete cover",
+  "exposure_class": "Exposure class",
+  "chloride_content": "Chloride content",
+  "elastic_modulus": "Elastic modulus",
+  "mass": "Mass",
+  "carbonation_depth": "Carbonation depth",
+  "spalling": "Spalling",
+  "cracking": "Cracking",
+  "corrosion": "Corrosion",
+  "moisture_content": "Moisture content",
+  "crack_width": "Widest crack",
+  "condition_grade": "Condition grade",
 }
 
 /** Display label of a vocabulary value; unknown values pass through. */

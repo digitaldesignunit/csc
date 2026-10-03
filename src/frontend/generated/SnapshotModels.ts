@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-02T06:59:34.846Z
-// Source: http://127.0.0.1:8000/schema/snapshot-summary
+// Generated on: 2026-10-02T21:09:58.926Z
+// Source: http://127.0.0.1:8011/schema/snapshot-summary
 
 export interface SnapshotSummaryItem {
   _id: string;

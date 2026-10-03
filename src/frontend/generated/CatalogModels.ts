@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-02T13:41:52.716Z
-// Source: http://127.0.0.1:8000/schema/catalog-compose
+// Generated on: 2026-10-02T21:09:58.903Z
+// Source: http://127.0.0.1:8011/schema/catalog-compose
 
 import type {
   Frame,
@@ -17,16 +17,16 @@ export interface Accreditation {
 }
 
 export interface Actor {
-  kind: 'user' | 'person' | 'organization';
-  user_id?: string | null;
-  name?: string | null;
-  organization?: string | null;
-  organization_ror?: string | null;
-  orcid?: string | null;
-  email?: string | null;
-  role?: 'operator' | 'supervisor' | 'laboratory' | 'client' | 'witness' | null;
-  accreditation?: Accreditation | null;
-  redacted_at?: string | null;
+  kind: 'user' | 'person' | 'organization'; // user: an account of this catalog; person or organization: someone without one
+  user_id?: string | null; // The account, for kind user
+  name?: string | null; // Name of a person; shown to signed-in users only
+  organization?: string | null; // The organization (a laboratory, a contractor); shown to everyone
+  organization_ror?: string | null; // ROR identifier of the organization
+  orcid?: string | null; // ORCID of a person; shown to signed-in users only
+  email?: string | null; // E-mail address; shown to admins and moderators of the dataset only, never in lists
+  role?: 'operator' | 'supervisor' | 'laboratory' | 'client' | 'witness' | null; // What the actor did: operator, supervisor, laboratory, client or witness
+  accreditation?: Accreditation | null; // The accreditation of a laboratory, typed in; "accredited" evidence needs one that covers the standard (I22)
+  redacted_at?: string | null; // Set when the personal data was redacted (GDPR Art 17)
 }
 
 export interface Capture {
@@ -76,22 +76,6 @@ export interface ComponentIdentity {
   created_by_user_id: string;
   created: string;
   lastmodified: string;
-}
-
-export interface Derivation {
-  frame?: StageStamp | null;
-  shape_class?: StageStamp | null;
-  proxies?: StageStamp | null;
-  descriptors?: StageStamp | null;
-  complexity?: StageStamp | null;
-  previews?: StageStamp | null;
-}
-
-export interface StageStamp {
-  version: number;
-  input: string;
-  at: string;
-  error?: string | null;
 }
 
 export interface ComponentSnapshot {
@@ -144,6 +128,15 @@ export interface ConstructionWork {
 export interface CoordinateSystem {
   name: string;
   description?: string | null;
+}
+
+export interface Derivation {
+  frame?: StageStamp | null;
+  shape_class?: StageStamp | null;
+  proxies?: StageStamp | null;
+  descriptors?: StageStamp | null;
+  complexity?: StageStamp | null;
+  previews?: StageStamp | null;
 }
 
 export interface Exit {
@@ -204,6 +197,13 @@ export interface PropertyValue {
   derived_at: string;
 }
 
+export interface StageStamp {
+  version: number;
+  input: string;
+  at: string;
+  error?: string | null;
+}
+
 export interface StatusChange {
   from: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
   to: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
@@ -222,6 +222,7 @@ export interface Withdrawn {
 export interface ComponentPassport {
   identity: ComponentIdentity;
   snapshots: ComponentSnapshot[];
+  evidence?: Record<string, unknown>[] | null;
 }
 
 /** Canonical read model: `GET /identities/{id}/compose` (same JSON as the API). */

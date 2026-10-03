@@ -13,6 +13,10 @@
  * - `/schema/pending-snapshot` --> `PendingSnapshotItem` in `SnapshotModels.ts`
  * - `/schema/access` --> `AccessModels.ts` (me, datasets, invitations, users, tombstones)
  * - `/schema/lineage` --> `LineageModels.ts` (change-log entries, materials)
+ * - `/schema/evidence` --> `EvidenceModels.ts` (evidence records, properties, queue rows)
+ * - `/schema/create-evidence` --> `EvidenceCreateModels.ts` (what the evidence routes take,
+ *   and the payload of every method); a definition an earlier file already holds with the
+ *   same shape is imported from it instead of repeated
  */
 
 import fs from 'fs'
@@ -27,14 +31,18 @@ const OUTPUT_DIR = path.join(process.cwd(), 'generated')
  */
 const SHARED_DEFS_FROM_CATALOG_SHARED = new Set<string>()
 
+/** Definitions emitted so far: name --> { file, code }, to import identical ones. */
+const EMITTED_DEFS = new Map<string, { file: string; code: string }>()
+
 async function generateModel(
   schemaPath: string,
   interfaceName: string,
   outputFileName: string,
-  options?: { catalogPassport?: boolean; defsOnly?: boolean },
+  options?: { catalogPassport?: boolean; defsOnly?: boolean; dedupe?: boolean },
 ) {
   const catalogPassport = options?.catalogPassport ?? false
   const defsOnly = options?.defsOnly ?? false
+  const dedupe = options?.dedupe ?? false
   console.log(`🔍 Fetching ${interfaceName} schema from ${BACKEND_URL}${schemaPath}...`)
   const response = await fetch(`${BACKEND_URL}${schemaPath}`)
   if (!response.ok) {
@@ -47,6 +55,7 @@ async function generateModel(
   writeGeneratedModel(schema, interfaceName, schemaPath, outputFileName, {
     catalogPassport,
     defsOnly,
+    dedupe,
   })
 }
 
@@ -55,7 +64,7 @@ function writeGeneratedModel(
   rootInterfaceName: string,
   schemaPath: string,
   outputFileName: string,
-  opts: { catalogPassport: boolean; defsOnly: boolean },
+  opts: { catalogPassport: boolean; defsOnly: boolean; dedupe: boolean },
 ) {
   if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true })
@@ -66,7 +75,7 @@ function writeGeneratedModel(
     schema,
     rootInterfaceName,
     schemaPath,
-    opts,
+    { ...opts, fileName: outputFileName },
   )
   const outFile = path.join(OUTPUT_DIR, outputFileName)
   fs.writeFileSync(outFile, typescriptCode)
@@ -93,7 +102,7 @@ async function appendModelFromSchema(
     schema,
     interfaceName,
     schemaPath,
-    { catalogPassport: false, defsOnly: false },
+    { catalogPassport: false, defsOnly: false, dedupe: false, fileName: outputFileName },
   )
   // only the root interface: its defs already live in the file appended to
   const rootStart = typescriptBlock.indexOf(`export interface ${interfaceName} {`)
@@ -135,6 +144,17 @@ async function run() {
     // change log and materials (plan P4)
     await generateModel('/schema/lineage', 'LineageTypesEnvelope', 'LineageModels.ts')
 
+    // evidence: what the routes serve and take, and every method's payload (plan P6)
+    await generateModel('/schema/evidence', 'EvidenceTypesEnvelope', 'EvidenceModels.ts', {
+      dedupe: true,
+    })
+    await generateModel(
+      '/schema/create-evidence',
+      'EvidenceInputEnvelope',
+      'EvidenceCreateModels.ts',
+      { dedupe: true },
+    )
+
     await generateVocab()
 
     const indexFile = path.join(OUTPUT_DIR, 'index.ts')
@@ -144,6 +164,8 @@ export * from './CatalogModels';
 export * from './SnapshotModels';
 export * from './AccessModels';
 export * from './LineageModels';
+export * from './EvidenceModels';
+export * from './EvidenceCreateModels';
 export * from './Vocab';
 export * from './catalogExtras';
 `
@@ -212,7 +234,7 @@ function generateTypeScriptInterface(
   schema: Record<string, unknown>,
   rootInterfaceName: string,
   schemaPath: string,
-  opts: { catalogPassport: boolean; defsOnly: boolean },
+  opts: { catalogPassport: boolean; defsOnly: boolean; dedupe?: boolean; fileName?: string },
 ): string {
   const { properties, required = [], $defs } = schema as {
     properties: Record<string, unknown>
@@ -238,19 +260,40 @@ function generateTypeScriptInterface(
   interfaceCode += `
 `
 
+  const importsByFile = new Map<string, Set<string>>()
   if ($defs) {
     for (const [defName, defSchema] of Object.entries($defs)) {
       if (opts.catalogPassport && SHARED_DEFS_FROM_CATALOG_SHARED.has(defName)) {
         continue
       }
-      interfaceCode += generateNestedInterface(
+      const code = generateNestedInterface(
         defName,
         defSchema as Record<string, unknown>,
         $defs,
         opts,
       )
+      const earlier = EMITTED_DEFS.get(defName)
+      if (opts.dedupe && earlier && earlier.file !== opts.fileName && earlier.code === code) {
+        // the same definition lives in an earlier file: import it
+        if (!importsByFile.has(earlier.file)) importsByFile.set(earlier.file, new Set())
+        importsByFile.get(earlier.file)!.add(defName)
+        continue
+      }
+      if (!earlier && opts.fileName) {
+        EMITTED_DEFS.set(defName, { file: opts.fileName, code })
+      }
+      interfaceCode += code
       interfaceCode += '\n\n'
     }
+  }
+  if (importsByFile.size) {
+    const imports = [...importsByFile.entries()]
+      .map(
+        ([file, names]) =>
+          `import type { ${[...names].sort().join(', ')} } from './${file.replace(/\.ts$/, '')}';`,
+      )
+      .join(NEWLINE)
+    interfaceCode = interfaceCode.replace(IMPORT_SLOT, `${imports}${NEWLINE}${IMPORT_SLOT}`)
   }
 
   if (!opts.defsOnly) {
