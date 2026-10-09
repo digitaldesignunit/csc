@@ -661,6 +661,12 @@ pieces get one from their primitive) and how the PCA / UMAP layouts behave on it
   memory (4 workers with the geometry libraries) and consider `workers = 2`.
 - Viewer: a piece without scan (authored proxy only) offers no overlay; say "No scan: overlays need a mesh or point
   cloud" instead of an empty menu.
+- Frontend bundle (blocking for the next release): since 0.6.0.0 `app/gh-interface/page.tsx` reads
+  `public/gh-interface` at run time, so Next's file tracing already puts `public/gh-interface` into the standalone
+  output; `package_release.sh` then runs `cp -a "$fe/public" "$bundle/public"` into the existing folder and nests
+  it as `public/public/`. Only the traced screenshots are served; `/logo/` and `/backgroundmeshes/` answer 404. Copy
+  the contents (`mkdir -p "$bundle/public" && cp -a "$fe/public/." "$bundle/public/"`) and fail the packaging when
+  `public/logo/ddu_logo_black.png` is missing from the bundle. Patched by hand on the server on 2026-10-09.
 
 **Other review findings of 2026-10-07/08 (non-blocking):**
 - Geometry cache (8.122 f, review note 2): a frame-only cut uploads the cached `descriptors` dict with the frame stamp,
