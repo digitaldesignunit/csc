@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { signOut } from 'next-auth/react'
+import { PASSWORD_CHANGED_PARAM, PASSWORD_CHANGED_VALUE } from '@/lib/password'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -51,6 +53,12 @@ export default function ChangePasswordSection() {
         setCurrentPassword('')
         setNewPassword('')
         setConfirmPassword('')
+        // the change signs every token out, this one too (decision 8.124 a):
+        // the sign-in page says so
+        await signOut({
+          callbackUrl: `/auth/signin?${PASSWORD_CHANGED_PARAM}=${PASSWORD_CHANGED_VALUE}`,
+          redirect: true,
+        })
       } else {
         setStatus({
           type: 'error',
@@ -66,20 +74,17 @@ export default function ChangePasswordSection() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center gap-3">
-          <KeyRound className="h-5 w-5 text-primary" />
-          <div>
-            <CardTitle>Change Password</CardTitle>
-            <CardDescription>Update your account password</CardDescription>
-          </div>
-        </div>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <KeyRound className="h-4 w-4 text-primary" aria-hidden />
+          Password
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5 max-w-sm">
           {/* Current password */}
           <div className="space-y-2">
-            <Label htmlFor="current-password">Current Password</Label>
+            <Label htmlFor="current-password">Current password</Label>
             <div className="relative">
               <Input
                 id="current-password"
@@ -105,7 +110,7 @@ export default function ChangePasswordSection() {
 
           {/* New password */}
           <div className="space-y-2">
-            <Label htmlFor="new-password">New Password</Label>
+            <Label htmlFor="new-password">New password</Label>
             <div className="relative">
               <Input
                 id="new-password"
@@ -138,7 +143,7 @@ export default function ChangePasswordSection() {
 
           {/* Confirm new password */}
           <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirm New Password</Label>
+            <Label htmlFor="confirm-password">Repeat the new password</Label>
             <div className="relative">
               <Input
                 id="confirm-password"
@@ -194,7 +199,7 @@ export default function ChangePasswordSection() {
                 Updating...
               </span>
             ) : (
-              'Update Password'
+              'Change password'
             )}
           </Button>
         </form>

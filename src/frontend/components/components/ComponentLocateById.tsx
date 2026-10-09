@@ -1,12 +1,15 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
-import { Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
-import { Button } from '@/components/ui/button'
-import { CardContent, CardHeader } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import React, { useState, useRef } from 'react'
+import { RotateCcw } from 'lucide-react'
+
+import ScanCamera from '@/components/qr/ScanCamera'
+import { type QRScannerRef } from '@/components/qr/QRScanner'
+import UnknownTagLink from '@/components/snapshot/UnknownTagLink'
 import { Badge } from '@/components/ui/badge'
-import QRScanner, { QRScannerRef } from '@/components/qr/QRScanner'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { uuidFromScan } from '@/lib/scanIds'
 
 interface Props {
   presetReferenceID?: string
@@ -14,207 +17,144 @@ interface Props {
 
 type ScanStatus = 'neutral' | 'ok' | 'bad'
 
+/**
+ * Scan mode "Locate": set the id of a digital piece as the reference, then
+ * scan physical tags until one matches.
+ */
 const ComponentLocateById: React.FC<Props> = ({ presetReferenceID }) => {
-  const config = {
-    aspectRatio: 1,
-    fps: 10,
-    qrbox: { width: 300, height: 300 },
-    rememberLastUsedCamera: true,
-    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-  }
-
-  const [referenceID, setReferenceID] = useState(presetReferenceID || '')
+  const preset = uuidFromScan(presetReferenceID) ?? (presetReferenceID?.trim() || '')
+  const [referenceID, setReferenceID] = useState(preset)
   const [currentID, setCurrentID] = useState('')
-  const [inputReferenceID, setInputReferenceID] = useState('')
-  const [comparisonResult, setComparisonResult] = useState('')
+  const [typed, setTyped] = useState('')
   const [isScanning, setIsScanning] = useState(false)
-  const [status, setStatus] = useState<ScanStatus>('neutral')
+  const [status, setStatus] = useState<ScanStatus>(preset ? 'ok' : 'neutral')
 
   const qrScannerRef = useRef<QRScannerRef | null>(null)
-  const elementId = 'reader'
-  const cameraContainerId = 'cameracontainer'
 
-  const MSG_MATCH = 'IDs Match!'
-  const MSG_MISMATCH = 'Does not match the Reference ID!'
-  const MSG_REF_SCANNED = 'Reference ID set.\nStart scan for comparison.'
-  const MSG_CAMERA_FEED =
-    'Camera Feed Placeholder.\n\nTo start comparing IDs,\neither scan or type an ID as reference.'
-
-  // Handle preset reference ID
-  useEffect(() => {
-    if (presetReferenceID && presetReferenceID === referenceID && !comparisonResult) {
-      setStatus('ok')
-      setComparisonResult(MSG_REF_SCANNED)
-    }
-  }, [presetReferenceID, referenceID, comparisonResult])
-
-  const startScanningForReference = () => {
-    document.getElementById(elementId)?.scrollIntoView()
-    if (!referenceID && !isScanning && qrScannerRef.current) {
+  const startScanning = () => {
+    if (!isScanning && qrScannerRef.current) {
       setIsScanning(true)
-      qrScannerRef.current.startScanning()
-    }
-  }
-
-  const startScanningForComparison = () => {
-    document.getElementById(elementId)?.scrollIntoView()
-    if (referenceID && !isScanning && qrScannerRef.current) {
-      setIsScanning(true)
-      qrScannerRef.current.startScanning()
+      void qrScannerRef.current.startScanning()
     }
   }
 
   const stopScanning = () => {
     if (qrScannerRef.current) {
-      qrScannerRef.current.stopScanning()
+      void qrScannerRef.current.stopScanning()
       setIsScanning(false)
     }
   }
 
-  const handleQRScanSuccess = (decodedText: string) => {
+  /** A scanned or pasted id: the reference first, then the ones to compare. */
+  const take = (text: string, scanned: boolean) => {
+    const id = uuidFromScan(text) ?? text.trim()
+    if (!id) return
     if (!referenceID) {
-      // Scanning for reference
-      setReferenceID(decodedText)
+      setReferenceID(id)
       setStatus('ok')
-      setComparisonResult(MSG_REF_SCANNED)
-      stopScanning()
-    } else {
-      // Scanning for comparison
-      const match = decodedText === referenceID
-      setCurrentID(decodedText)
-      setStatus(match ? 'ok' : 'bad')
-      setComparisonResult(match ? MSG_MATCH : MSG_MISMATCH)
-      if (match) stopScanning()
+      if (scanned) stopScanning()
+      return
     }
+    const match = id.toLowerCase() === referenceID.toLowerCase()
+    setCurrentID(id)
+    setStatus(match ? 'ok' : 'bad')
+    if (match && scanned) stopScanning()
   }
 
-  const handleQRScanError = (error: string) => {
-    console.error('QR scan error:', error)
-    setStatus('bad')
-    setIsScanning(false)
-  }
-
-  const resetScanner = () => {
+  const reset = () => {
     if (isScanning) stopScanning()
     setReferenceID('')
-    setComparisonResult('')
     setCurrentID('')
-    setInputReferenceID('')
+    setTyped('')
     setStatus('neutral')
   }
 
-  const handleSetInputReferenceID = () => {
-    if (!inputReferenceID.trim()) return
-    setReferenceID(inputReferenceID.trim())
-    setComparisonResult(MSG_REF_SCANNED)
-    setStatus('ok')
-  }
-
-  // theme-friendly classes
-  const borderClass =
-    status === 'ok'
-      ? 'border-green-500'
-      : status === 'bad'
+  const matched = Boolean(referenceID && currentID) && status === 'ok'
+  const borderClass = status === 'ok' && matched
+    ? 'border-green-500'
+    : status === 'bad'
       ? 'border-destructive'
       : 'border-border'
-
-  const currentBadgeClass =
-    status === 'ok'
-      ? 'bg-green-500 text-white'
-      : status === 'bad'
-      ? 'bg-destructive text-destructive-foreground'
-      : 'bg-muted text-muted-foreground'
-
-  const refBadgeClass =
-    referenceID
-      ? 'bg-primary text-primary-foreground'
-      : 'bg-muted text-muted-foreground'
+  const message = !referenceID
+    ? 'Scan or paste the id of the piece you look for.'
+    : 'Tap to start the camera and scan tags until one matches.'
 
   return (
-    <div className="flex flex-col items-center">
-      <CardHeader className="relative w-full max-w-sm p-1">
-        {/* Set Reference ID Interface */}
-        {!referenceID && !isScanning && (
-          <div className="flex w-full max-w-sm flex-col gap-2 pb-4">
-            {/* input ABOVE the button */}
-            <Input
-              id="inputFieldReferenceID"
-              placeholder="Reference ID"
-              value={inputReferenceID}
-              onChange={(e) => setInputReferenceID(e.target.value)}
-            />
-            <Button variant="outline" onClick={handleSetInputReferenceID}>
-              Set Ref. ID
-            </Button>
-          </div>
-        )}
-
-        {/* Display Reference and Current ID */}
-        <div className="w-full grid grid-cols-2 gap-y-3 items-center">
-          <div className="flex justify-start min-w-0 w-20">
-            <span className="text-sm font-medium text-foreground">Ref. ID:</span>
-          </div>
-          <div className="flex justify-end items-center">
-            <Badge variant="secondary" className={`no-wrap flex-shrink-0 ${refBadgeClass}`}>
-              {referenceID || 'Not set'}
-            </Badge>
-          </div>
-
-          <div className="flex justify-start min-w-0 w-20">
-            <span className="text-sm font-medium text-foreground">Cur. ID:</span>
-          </div>
-          <div className="flex justify-end items-center">
-            <Badge variant="secondary" className={`no-wrap flex-shrink-0 ${currentBadgeClass}`}>
-              {currentID || 'Not set'}
-            </Badge>
-          </div>
-        </div>
-      </CardHeader>
-
-      {/* QR Code Scanner Canvas */}
-      <CardContent
-        id={cameraContainerId}
-        className={`mt-4 p-0 relative w-full max-w-[500px] h-[500px] border-8 rounded-xl ${borderClass} bg-card`}
-      >
-        <QRScanner
-          ref={qrScannerRef}
-          elementId={elementId}
-          onScanSuccess={handleQRScanSuccess}
-          onScanError={handleQRScanError}
-          config={config}
-        />
-        {!isScanning && (
-          <div className="absolute inset-0 bg-muted/60 flex items-center justify-center text-center rounded">
-            <span className="whitespace-pre-wrap text-sm text-muted-foreground">
-              {comparisonResult ? comparisonResult : MSG_CAMERA_FEED}
-            </span>
-          </div>
-        )}
-      </CardContent>
-
-      <div className="m-4 flex flex-col items-center space-y-3">
-        {!referenceID && (
-          <Button onClick={startScanningForReference} variant="outline" className="w-[200px]">
-            Start QR Code Scan
-          </Button>
-        )}
-        {referenceID && !isScanning && (
-          <Button onClick={startScanningForComparison} variant="outline" className="w-[200px]">
-            Start QR Code Scan
-          </Button>
-        )}
-        {isScanning && (
-          <Button onClick={stopScanning} variant="outline" className="w-[200px]">
-            Stop Scanning
-          </Button>
-        )}
-        {!isScanning && (
-          <Button onClick={resetScanner} variant="destructive" className="w-[200px]">
-            Reset
-          </Button>
-        )}
+    <div className="flex flex-col items-center gap-3">
+      <div className="grid w-full max-w-[420px] grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 text-sm">
+        <span className="font-medium">Looking for</span>
+        <Badge
+          variant="secondary"
+          className={`min-w-0 justify-self-end break-all ${referenceID ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+        >
+          {referenceID || 'not set'}
+        </Badge>
+        <span className="font-medium">Scanned</span>
+        <Badge
+          variant="secondary"
+          className={`min-w-0 justify-self-end break-all ${
+            matched ? 'bg-green-500 text-white' : status === 'bad' ? 'bg-destructive text-destructive-foreground' : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          {currentID || 'nothing yet'}
+        </Badge>
       </div>
+
+      {matched && (
+        <p className="text-sm font-medium text-green-700 dark:text-green-300" role="status">
+          This is the piece you look for.
+        </p>
+      )}
+      {status === 'bad' && (
+        <p className="text-sm text-destructive" role="status">
+          This is not the piece you look for.
+        </p>
+      )}
+
+      <ScanCamera
+        scannerRef={qrScannerRef}
+        elementId="locate-reader"
+        onScanSuccess={(text) => take(text, true)}
+        onScanError={() => {
+          setStatus('bad')
+          setIsScanning(false)
+        }}
+        isScanning={isScanning}
+        onStart={startScanning}
+        onStop={stopScanning}
+        borderClass={borderClass}
+        message={message}
+        // with a reference from a link the camera has a purpose at once
+        autoStart
+      >
+        {(referenceID || currentID) && !isScanning && (
+          <Button type="button" variant="ghost" size="sm" onClick={reset} className="gap-1.5">
+            <RotateCcw className="h-4 w-4" aria-hidden />
+            Start over
+          </Button>
+        )}
+      </ScanCamera>
+
+      <form
+        className="flex w-full max-w-[420px] gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          take(typed, false)
+          setTyped('')
+        }}
+      >
+        <Input
+          aria-label={referenceID ? 'Paste an id to compare' : 'Paste the id you look for'}
+          placeholder={referenceID ? 'or paste an id to compare' : 'or paste the id you look for'}
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+        />
+        <Button type="submit" variant="outline" disabled={!typed.trim()}>
+          {referenceID ? 'Compare' : 'Set'}
+        </Button>
+      </form>
+
+      <UnknownTagLink id={referenceID} className="w-full max-w-[420px] text-center text-xs text-muted-foreground" />
     </div>
   )
 }

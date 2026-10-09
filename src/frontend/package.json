@@ -1,12 +1,13 @@
 {
   "name": "csc-frontend",
-  "version": "0.5.1.0",
+  "version": "0.6.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "tsx --test \"lib/**/*.test.ts\"",
     "generate:models": "tsx scripts/generate-models.ts"
   },
   "dependencies": {
@@ -34,10 +35,10 @@
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.539.0",
     "mongodb": "^5.9.2",
-    "next": "^16.3.6",
+    "next": "^16.3.8",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
-    "npm": "^11.17.0",
+    "npm": "^12.2.0",
     "radix-ui": "^1.5.0",
     "react": "19.2.8",
     "react-day-picker": "^10.0.1",
@@ -57,9 +58,9 @@
     "@types/react-dom": "19.2.5",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.39.2",
-    "eslint-config-next": "^16.3.6",
+    "eslint-config-next": "^16.3.8",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-hooks": "7.0.1",
     "openapi-typescript-codegen": "^0.29.0",
     "postcss": "^8.5.6",
     "shadcn": "^4.7.0",
@@ -71,7 +72,8 @@
   },
   "overrides": {
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.5"
+    "@types/react-dom": "19.2.5",
+    "eslint-plugin-react-hooks": "$eslint-plugin-react-hooks"
   },
   "allowScripts": {
     "bcrypt@6.0.0": true,

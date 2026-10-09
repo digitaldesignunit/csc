@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,9 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  // an invitation link carries ?code=... (decision 8.14)
+  const searchParams = useSearchParams();
+  const [code, setCode] = useState(searchParams.get("code") ?? "");
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const router = useRouter();
 
@@ -51,12 +55,17 @@ export default function RegisterPage() {
         full_name: fullName.trim(),
         email: email.trim(),
         password,
+        ...(code.trim() ? { code: code.trim() } : {}),
       }),
     });
 
     const data = await res.json();
     if (!res.ok) {
-      setError(data.error || "Registration failed. Please try again.");
+      const detail = typeof data.detail === "string" ? data.detail : data.error;
+      setError(detail || "Registration failed. Please try again.");
+    } else if (code.trim()) {
+      // the invitation proved the address: no verification mail
+      router.push("/auth/signin");
     } else {
       router.push("/auth/verification-pending");
     }
@@ -82,35 +91,7 @@ export default function RegisterPage() {
             
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="gap-1 flex flex-col">
-                <Label htmlFor="username">Username</Label>
-                <Input 
-                  id="username" 
-                  value={username} 
-                  onChange={(e) => setUsername(e.target.value)} 
-                  onFocus={() => setFocusedField('username')}
-                  onBlur={() => setFocusedField(null)}
-                  placeholder={focusedField === 'username' ? '' : 're-usevelt'}
-                  className="backdrop-blur placeholder:opacity-40"
-                />
-              </div>
-
-              <div className="gap-1 flex flex-col">
-                <Label htmlFor="fullName">Full Name</Label>
-                <Input 
-                  id="fullName" 
-                  value={fullName} 
-                  onChange={(e) => setFullName(e.target.value)} 
-                  onFocus={() => setFocusedField('fullName')}
-                  onBlur={() => setFocusedField(null)}
-                  placeholder={focusedField === 'fullName' ? '' : 'Franklin Re-Usevelt'}
-                  className="backdrop-blur placeholder:opacity-40"
-                />
-              </div>
-
-              <div className="gap-1 flex flex-col">
-                <Label htmlFor="email">
-                  E-Mail (<span className="text-red-600">must be @*.tu-darmstadt.de!</span>)
-                </Label>
+                <Label htmlFor="email">E-mail</Label>
                 <Input
                   id="email"
                   type="email"
@@ -119,6 +100,56 @@ export default function RegisterPage() {
                   onFocus={() => setFocusedField('email')}
                   onBlur={() => setFocusedField(null)}
                   placeholder={focusedField === 'email' ? '' : 'franklin.re-usevelt@stud.tu-darmstadt.de'}
+                  className="backdrop-blur placeholder:opacity-40"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {code
+                    ? "Use the address the invitation was sent to."
+                    : "The address decides the way: a TU Darmstadt address registers directly."}
+                </p>
+              </div>
+
+              <div className="gap-1 flex flex-col">
+                <Label htmlFor="code">Invitation code {code ? "" : "(for addresses outside TU Darmstadt)"}</Label>
+                <Input
+                  id="code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="backdrop-blur font-mono"
+                />
+              </div>
+
+              <div className="gap-1 flex flex-col">
+                <Label htmlFor="username">Username</Label>
+                <Input 
+                  id="username" 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                  onFocus={() => setFocusedField('username')}
+                  onBlur={() => setFocusedField(null)}
+                  placeholder={focusedField === 'username' ? '' : 're-usevelt'}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="backdrop-blur placeholder:opacity-40"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Lowercase; you can sign in with any case.
+                </p>
+              </div>
+
+              <div className="gap-1 flex flex-col">
+                <Label htmlFor="fullName">Full name</Label>
+                <Input 
+                  id="fullName" 
+                  value={fullName} 
+                  onChange={(e) => setFullName(e.target.value)} 
+                  onFocus={() => setFocusedField('fullName')}
+                  onBlur={() => setFocusedField(null)}
+                  placeholder={focusedField === 'fullName' ? '' : 'Franklin Re-Usevelt'}
                   className="backdrop-blur placeholder:opacity-40"
                 />
               </div>
@@ -137,14 +168,9 @@ export default function RegisterPage() {
                 />
               </div>
 
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md backdrop-blur">
-                <p className="text-sm text-amber-800 dark:text-amber-200">
-                  <strong>Security Notice:</strong> This is research and development software. 
-                  While we follow security best practices and properly hash passwords, we cannot 
-                  guarantee complete safety. Please use a unique password that you don&apos;t use 
-                  elsewhere.
-                </p>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Research software: use a password you use nowhere else.
+              </p>
 
               <Button type="submit" className="w-full">Register</Button>
             </form>

@@ -6,11 +6,18 @@
  * All schemas are fetched from `FASTAPI_URL` (override with env when generating
  * against a local backend), e.g. `FASTAPI_URL=http://127.0.0.1:8000 npm run generate:models`.
  *
- * - `/schema/catalog-shared` --> `CatalogSharedTypes.ts` (frames, location, design mesh types)
- * - `/schema/design` --> `DesignModel`
+ * - `/schema/catalog-shared` --> `CatalogSharedTypes.ts` (frames, location, mesh types)
  * - `/schema/catalog-compose` --> `CatalogModels` (passport body with snapshots[])
+ * - `/schema/catalog-row` --> `CatalogRow` in `CatalogModels.ts` (list rows)
  * - `/schema/snapshot-summary` --> `SnapshotSummaryItem` in `SnapshotModels.ts`
- * - `/schema/pending-validation-snapshot` --> `PendingValidationSnapshotItem` in `SnapshotModels.ts`
+ * - `/schema/pending-snapshot` --> `PendingSnapshotItem` in `SnapshotModels.ts`
+ * - `/schema/my-snapshot` --> `MySnapshotItem` in `SnapshotModels.ts`
+ * - `/schema/access` --> `AccessModels.ts` (me, datasets, invitations, users, tombstones)
+ * - `/schema/lineage` --> `LineageModels.ts` (change-log entries, materials)
+ * - `/schema/evidence` --> `EvidenceModels.ts` (evidence records, properties, queue rows)
+ * - `/schema/create-evidence` --> `EvidenceCreateModels.ts` (what the evidence routes take,
+ *   and the payload of every method); a definition an earlier file already holds with the
+ *   same shape is imported from it instead of repeated
  */
 
 import fs from 'fs'
@@ -19,21 +26,24 @@ import path from 'path'
 const BACKEND_URL = process.env.FASTAPI_URL || 'https://api.2ndchances.build'
 const OUTPUT_DIR = path.join(process.cwd(), 'generated')
 
-/** Reuse shared defs from `CatalogSharedTypes.ts` in passport/design outputs. */
-const SHARED_DEFS_FROM_CATALOG_SHARED = new Set([
-  'ComponentBoundingBox',
-  'ComponentFrame',
-  'ComponentLocation',
-])
+/**
+ * Defs generated into `CatalogSharedTypes.ts`; the passport output imports
+ * them instead of repeating them. Filled while generating the shared file.
+ */
+const SHARED_DEFS_FROM_CATALOG_SHARED = new Set<string>()
+
+/** Definitions emitted so far: name --> { file, code }, to import identical ones. */
+const EMITTED_DEFS = new Map<string, { file: string; code: string }>()
 
 async function generateModel(
   schemaPath: string,
   interfaceName: string,
   outputFileName: string,
-  options?: { catalogPassport?: boolean; defsOnly?: boolean },
+  options?: { catalogPassport?: boolean; defsOnly?: boolean; dedupe?: boolean },
 ) {
   const catalogPassport = options?.catalogPassport ?? false
   const defsOnly = options?.defsOnly ?? false
+  const dedupe = options?.dedupe ?? false
   console.log(`🔍 Fetching ${interfaceName} schema from ${BACKEND_URL}${schemaPath}...`)
   const response = await fetch(`${BACKEND_URL}${schemaPath}`)
   if (!response.ok) {
@@ -46,6 +56,7 @@ async function generateModel(
   writeGeneratedModel(schema, interfaceName, schemaPath, outputFileName, {
     catalogPassport,
     defsOnly,
+    dedupe,
   })
 }
 
@@ -54,7 +65,7 @@ function writeGeneratedModel(
   rootInterfaceName: string,
   schemaPath: string,
   outputFileName: string,
-  opts: { catalogPassport: boolean; defsOnly: boolean },
+  opts: { catalogPassport: boolean; defsOnly: boolean; dedupe: boolean },
 ) {
   if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true })
@@ -65,7 +76,7 @@ function writeGeneratedModel(
     schema,
     rootInterfaceName,
     schemaPath,
-    opts,
+    { ...opts, fileName: outputFileName },
   )
   const outFile = path.join(OUTPUT_DIR, outputFileName)
   fs.writeFileSync(outFile, typescriptCode)
@@ -92,12 +103,11 @@ async function appendModelFromSchema(
     schema,
     interfaceName,
     schemaPath,
-    { catalogPassport: false, defsOnly: false },
+    { catalogPassport: false, defsOnly: false, dedupe: false, fileName: outputFileName },
   )
-  const interfaceOnly = typescriptBlock.replace(
-    /^[\s\S]*?export interface /,
-    'export interface ',
-  )
+  // only the root interface: its defs already live in the file appended to
+  const rootStart = typescriptBlock.indexOf(`export interface ${interfaceName} {`)
+  const interfaceOnly = typescriptBlock.slice(rootStart)
   fs.appendFileSync(outFile, `\n${interfaceOnly}`)
   console.log(`📝 Appended ${interfaceName} to ${outFile}`)
 }
@@ -111,11 +121,11 @@ async function run() {
       { defsOnly: true },
     )
 
-    await generateModel('/schema/design', 'DesignModel', 'DesignModel.ts')
-
     await generateModel('/schema/catalog-compose', 'ComponentPassport', 'CatalogModels.ts', {
       catalogPassport: true,
     })
+
+    await appendModelFromSchema('/schema/catalog-row', 'CatalogRow', 'CatalogModels.ts')
 
     await generateModel(
       '/schema/snapshot-summary',
@@ -124,17 +134,42 @@ async function run() {
     )
 
     await appendModelFromSchema(
-      '/schema/pending-validation-snapshot',
-      'PendingValidationSnapshotItem',
+      '/schema/pending-snapshot',
+      'PendingSnapshotItem',
       'SnapshotModels.ts',
     )
+
+    await appendModelFromSchema('/schema/my-snapshot', 'MySnapshotItem', 'SnapshotModels.ts')
+
+    // access, datasets, invitations, users, tombstones (plan P3)
+    await generateModel('/schema/access', 'AccessTypesEnvelope', 'AccessModels.ts')
+
+    // change log and materials (plan P4)
+    await generateModel('/schema/lineage', 'LineageTypesEnvelope', 'LineageModels.ts')
+
+    // evidence: what the routes serve and take, and every method's payload (plan P6)
+    await generateModel('/schema/evidence', 'EvidenceTypesEnvelope', 'EvidenceModels.ts', {
+      dedupe: true,
+    })
+    await generateModel(
+      '/schema/create-evidence',
+      'EvidenceInputEnvelope',
+      'EvidenceCreateModels.ts',
+      { dedupe: true },
+    )
+
+    await generateVocab()
 
     const indexFile = path.join(OUTPUT_DIR, 'index.ts')
     const indexContent = `// Auto-generated models from backend OpenAPI schema
 export * from './CatalogSharedTypes';
-export * from './DesignModel';
 export * from './CatalogModels';
 export * from './SnapshotModels';
+export * from './AccessModels';
+export * from './LineageModels';
+export * from './EvidenceModels';
+export * from './EvidenceCreateModels';
+export * from './Vocab';
 export * from './catalogExtras';
 `
     fs.writeFileSync(indexFile, indexContent)
@@ -145,6 +180,45 @@ export * from './catalogExtras';
     console.error('❌ Error generating models:', error)
     process.exit(1)
   }
+}
+
+const NEWLINE = String.fromCharCode(10)
+
+/** `GET /vocab` --> `Vocab.ts`: value lists + display labels (spec section 2). */
+async function generateVocab() {
+  console.log(`Fetching vocabularies from ${BACKEND_URL}/vocab...`)
+  const response = await fetch(`${BACKEND_URL}/vocab`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch /vocab: ${response.status} ${response.statusText}`)
+  }
+  const vocab = (await response.json()) as Record<string, { value: string; label: string }[]>
+  let code = `// Auto-generated from backend GET /vocab
+// Generated on: ${new Date().toISOString()}
+// Source: ${BACKEND_URL}/vocab
+
+`
+  for (const [name, entries] of Object.entries(vocab)) {
+    const typeName = name.replace(/(^|_)(\w)/g, (_m, _u, c: string) => c.toUpperCase())
+    const values = entries.map((e) => `'${e.value}'`).join(' | ')
+    const labels = entries.map((e) => `  ${JSON.stringify(e.value)}: ${JSON.stringify(e.label)},`)
+    code += [
+      `export type ${typeName} = ${values}`,
+      `export const ${name.toUpperCase()}_LABELS: Record<${typeName}, string> = {`,
+      ...labels,
+      '}',
+      '',
+      '',
+    ].join(NEWLINE)
+  }
+  code += `/** Display label of a vocabulary value; unknown values pass through. */
+export function vocabLabel(labels: Record<string, string>, value?: string | null): string {
+  if (!value) return ''
+  return labels[value] ?? value
+}
+`
+  const outFile = path.join(OUTPUT_DIR, 'Vocab.ts')
+  fs.writeFileSync(outFile, code)
+  console.log(`Generated ${outFile}`)
 }
 
 type Schema = Record<string, unknown> & {
@@ -159,21 +233,11 @@ type Schema = Record<string, unknown> & {
   allOf?: Schema[]
 }
 
-const SHARED_DESIGN_DEFS = new Set([
-  'ComponentExtrusion',
-  'ComponentGeometry',
-  'ComponentMesh',
-  'ComponentMeshColors',
-  'ComponentMeshFaces',
-  'ComponentMeshVertices',
-  'ComponentPolylinePoints',
-])
-
 function generateTypeScriptInterface(
   schema: Record<string, unknown>,
   rootInterfaceName: string,
   schemaPath: string,
-  opts: { catalogPassport: boolean; defsOnly: boolean },
+  opts: { catalogPassport: boolean; defsOnly: boolean; dedupe?: boolean; fileName?: string },
 ): string {
   const { properties, required = [], $defs } = schema as {
     properties: Record<string, unknown>
@@ -186,43 +250,45 @@ function generateTypeScriptInterface(
 // Source: ${BACKEND_URL}${schemaPath}
 `
 
-  if (rootInterfaceName === 'DesignModel') {
-    interfaceCode += `
-import { ComponentGeometry } from './CatalogSharedTypes';
-`
+  if (opts.defsOnly && $defs) {
+    for (const defName of Object.keys($defs)) {
+      SHARED_DEFS_FROM_CATALOG_SHARED.add(defName)
+    }
   }
 
-  if (opts.catalogPassport) {
-    interfaceCode += `
-import type {
-  ComponentBoundingBox,
-  ComponentFrame,
-  ComponentLocation,
-} from './CatalogSharedTypes';
-`
-  }
+  // replaced by the shared-type import once the body is known (below)
+  const IMPORT_SLOT = '/*__SHARED_IMPORTS__*/'
+  interfaceCode += IMPORT_SLOT
 
   interfaceCode += `
 `
 
+  const importsByFile = new Map<string, Set<string>>()
   if ($defs) {
     for (const [defName, defSchema] of Object.entries($defs)) {
-      if (rootInterfaceName === 'DesignModel' && SHARED_DESIGN_DEFS.has(defName)) {
-        continue
-      }
       if (opts.catalogPassport && SHARED_DEFS_FROM_CATALOG_SHARED.has(defName)) {
         continue
       }
-      interfaceCode += generateNestedInterface(
+      const code = generateNestedInterface(
         defName,
         defSchema as Record<string, unknown>,
         $defs,
         opts,
       )
+      const earlier = EMITTED_DEFS.get(defName)
+      if (opts.dedupe && earlier && earlier.file !== opts.fileName && earlier.code === code) {
+        // the same definition lives in an earlier file: import it
+        if (!importsByFile.has(earlier.file)) importsByFile.set(earlier.file, new Set())
+        importsByFile.get(earlier.file)!.add(defName)
+        continue
+      }
+      if (!earlier && opts.fileName) {
+        EMITTED_DEFS.set(defName, { file: opts.fileName, code })
+      }
+      interfaceCode += code
       interfaceCode += '\n\n'
     }
   }
-
   if (!opts.defsOnly) {
     interfaceCode += `export interface ${rootInterfaceName} {\n`
 
@@ -240,21 +306,8 @@ import type {
   }
 
   if (opts.defsOnly) {
-    interfaceCode += `// Shared catalog value types (frames, location, design mesh geometry, etc.)
-export type ComponentType =
-  | 'panel'
-  | 'beam'
-  | 'column'
-  | 'slab'
-  | 'rubble'
-  | 'brick'
-  | 'pipe'
-  | 'profile'
-  | 'connector'
-  | 'other';
+    interfaceCode += `// Shared catalog value types (frame, location, geometry, proxies)
 export type ComponentComplexity = 0 | 1 | 2 | 3;
-export type ComponentCondition = 0 | 1 | 2 | 3;
-export type ComponentManufacturedPrecision = 'exact' | 'month' | 'year' | 'unknown';
 `
   }
 
@@ -265,7 +318,41 @@ export type CatalogComponent = ComponentPassport
 `
   }
 
-  return interfaceCode
+  if (importsByFile.size) {
+    // only what the file's code uses, root interface included (an unused import fails the lint)
+    const body = interfaceCode.replace(IMPORT_SLOT, '')
+    const imports = [...importsByFile.entries()]
+      .map(([file, names]) => [
+        file,
+        [...names].filter((name) => new RegExp(`\\b${name}\\b`).test(body)).sort(),
+      ] as const)
+      .filter(([, names]) => names.length > 0)
+      .map(
+        ([file, names]) =>
+          `import type { ${names.join(', ')} } from './${file.replace(/\.ts$/, '')}';`,
+      )
+      .join(NEWLINE)
+    interfaceCode = interfaceCode.replace(IMPORT_SLOT, `${imports}${NEWLINE}${IMPORT_SLOT}`)
+  }
+
+  let sharedImport = ''
+  if (opts.catalogPassport && $defs) {
+    const body = interfaceCode.replace(IMPORT_SLOT, '')
+    const shared = Object.keys($defs)
+      .filter((name) => SHARED_DEFS_FROM_CATALOG_SHARED.has(name))
+      .filter((name) => new RegExp(`\\b${name}\\b`).test(body))
+      .sort()
+    if (shared.length) {
+      sharedImport = [
+        '',
+        'import type {',
+        ...shared.map((name) => `  ${name},`),
+        "} from './CatalogSharedTypes';",
+        '',
+      ].join(NEWLINE)
+    }
+  }
+  return interfaceCode.replace(IMPORT_SLOT, sharedImport)
 }
 
 function generateNestedInterface(
@@ -337,9 +424,14 @@ function getTypeScriptType(
     return 'boolean'
   }
 
+  if (schema.type === 'null') {
+    return 'null'
+  }
+
   if (schema.type === 'array') {
     const itemType = getTypeScriptType((schema.items as Schema) ?? {}, $defs, genOpts)
-    return `${itemType}[]`
+    // a union item needs parentheses: ('a' | 'b')[], not 'a' | 'b'[]
+    return itemType.includes('|') ? `(${itemType})[]` : `${itemType}[]`
   }
 
   if (schema.type === 'object') {

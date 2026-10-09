@@ -1,0 +1,52 @@
+{
+  "_about": "One pinned list for the Grasshopper (Rhino 8, CPython 3.9) environments (decision 8.95 3). `invoke gh-headers` writes the '# venv:' and '# r:' header of each listed component from it; numpy is the same version in both environments because one Rhino session runs one interpreter. charset_normalizer is listed, unpinned, by every listed component (both environments): without it the environment often does not resolve and hangs (an empty pin writes the bare name). Components not listed keep their own header.",
+  "envs": {
+    "DDU_CSC": {
+      "requests": "2.32.5",
+      "numpy": "2.0.2"
+    },
+    "DDU_CSC_MATCH": {
+      "numpy": "2.0.2",
+      "scipy": "1.13.1",
+      "scikit-learn": "1.6.1",
+      "trimesh": "4.12.2",
+      "networkx": "3.2.1"
+    }
+  },
+  "extras": {
+    "d2p-core-py": "0.1.2",
+    "charset_normalizer": ""
+  },
+  "components": {
+    "Session": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
+    "CreateComponentIdentity": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "CreateComponentSnapshot": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "AddComponentIdentity": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
+    "AddComponentSnapshot": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
+    "AddEvidence": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
+    "Actor": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "Origin": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "IdentityMetadata": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "SnapshotMetadata": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "Capture": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "ReinforcementLayout": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "DisassembleComponent": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "FilterComponents": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "FetchFilteredComponents": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
+    "FetchReducedGeometry": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
+    "FetchOriginalGeometry": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
+    "ApplyFrame": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy", "scipy", "trimesh", "networkx"]},
+    "ComputeFrame": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy", "scipy", "trimesh", "networkx"]},
+    "ComputePCA": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy", "scipy", "scikit-learn"]},
+    "ComputeTSNE": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy", "scipy", "scikit-learn"]},
+    "ComputePCAOrientation": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy", "scipy", "scikit-learn"]},
+    "AssignmentPoints": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy", "scipy"]},
+    "RadialSignature": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy"]},
+    "VisualizeEmbedding": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy"]},
+    "BakeComponents": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "SyncWithRhinoDoc": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
+    "PassportToD2P": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy", "d2p-core-py"]},
+    "ReadFromD2P": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy", "d2p-core-py"]},
+    "ViewCaptureToFile": {"env": "DDU_CSC", "needs": ["charset_normalizer"]}
+  }
+}

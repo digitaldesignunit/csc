@@ -1,9 +1,9 @@
 #! python3
 # -*- coding: utf-8 -*-
 # venv: DDU_CSC
-print('ENV OK!')
 # r: charset_normalizer
-# r: requests
+# r: numpy==2.0.2
+print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -20,643 +20,349 @@ ghenv.Component.NickName = 'DisassembleComponent'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Parses passport JSON ({identity, snapshots[]}) and outputs individual '
-    'fields as Grasshopper-native types. Reconstructs geometry, bounding '
-    'boxes, PCA frames, and metadata from the identity/snapshot pair. '
-    'Point clouds prefer the full PLY via Session cache, then the inline '
-    'preview.'
+    'Parses component passport JSON ({identity, snapshots[]}) and outputs individual '
+    'fields as Grasshopper-native types: the preview geometry (meshes, '
+    'point clouds, authored shapes), the frame and the box on it, the '
+    'condition grade, the origin (and whether the piece is still in '
+    'place), the pieces left of a batch and the capture markers. Geometry is in '
+    'the stored coordinates of the piece, moved by its client-side '
+    'csc_placement when it has one.'
 )
+
+# CSC LIBRARY (decision 8.111) ----------------------------------------------
+CSC_GH_MINIMUM = '261005'
+LIBRARY_PROBLEM = None
+try:
+    import csc_gh
+    csc_gh.require(CSC_GH_MINIMUM)
+    from csc_gh.read import (authored_only, box_of, capture_markers, condition_grade, drawable_proxies, load_passport, parts, placement_of)  # NOQA
+    from csc_gh.rhino import (inline_cloud_to_rhino, inline_mesh_to_rhino, placement_transform, plane_from_frame, proxy_to_rhino)  # NOQA
+except ImportError:
+    LIBRARY_PROBLEM = (
+        'CSC library 261005 too old or missing: run CSC_Update, '
+        'then restart Rhino')
+
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('IdentityID', 'IdentityID',
+     'Identity ID (GUID)'),
+    ('Name', 'Name',
+     'Snapshot name (e.g. My Component 01)'),
+    ('OriginalFunction', 'OriginalFunction',
+     'Original function (IFC class, e.g. IfcBeam)'),
+    ('Material', 'Material',
+     'Component material (id)'),
+    ('Color', 'Color',
+     'Snapshot color as System.Drawing.Color'),
+    ('Location', 'Location',
+     'Snapshot location as Point3d (X=latitude, Y=longitude, Z=0)'),
+    ('BoundingBox', 'BoundingBox',
+     'The box of the piece on its frame (extents bbx), as a '
+     'Rhino.Geometry.Box in the stored coordinates'),
+    ('Frame', 'Frame',
+     'The frame of the piece as a plane (centre of the box, canonical '
+     'axes) in the stored coordinates'),
+    ('Descriptors', 'Descriptors',
+     'Snapshot descriptors/metadata as JSON string'),
+    ('Geometry', 'Geometry',
+     'Geometry of the piece: Rhino geometry objects (meshes, point '
+     'clouds, authored shapes). Point clouds prefer the full PLY when '
+     'Session is signed in, else the inline preview.'),
+    ('CaptureMarkers', 'CaptureMarkers',
+     'Capture markers as Point3d objects (a scanning rig is not part of '
+     'the geometry)'),
+    ('Capture', 'Capture',
+     'Capture block as JSON (method, device, coordinate system, markers '
+     'with label and role, fixtures)'),
+    ('Attributes', 'Attributes',
+     'Identity attributes as JSON string'),
+    ('ConditionGrade', 'ConditionGrade',
+     'Overall condition grade (0=unusable as is, 1=poor, 2=average, '
+     '3=good) from the evidence; empty when not assessed'),
+    ('ManufacturedAt', 'ManufacturedAt',
+     'Component manufacturing date as ISO-8601 UTC timestamp'),
+    ('ManufacturedPrecision', 'ManufacturedPrecision',
+     'Precision qualifier for ManufacturedAt (exact, day, month, year, '
+     'unknown)'),
+    ('Origin', 'Origin',
+     'Origin block as JSON (kind, date, place, construction work, '
+     'method, who ...)'),
+    ('ParentIdentities', 'ParentIdentities',
+     'Parent identity IDs (GUIDs) this identity was cut from'),
+    ('Planned', 'Planned',
+     'True while the piece is still in place: identified in its works, '
+     'not yet deinstalled'),
+    ('Remaining', 'Remaining',
+     'Pieces left in a batch (recorded quantity minus the pieces drawn); '
+     'empty for a piece that is not a batch'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) == 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
 
 
 class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260908
+    Version: 261005a
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
         super().__init__()
-        # initialize props
         self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
 
     def _addRemark(self, msg: str = ''):
-        """Add a remark message to the component."""
         rml = self.Component.RuntimeMessageLevel.Remark
         self.AddRuntimeMessage(rml, msg)
 
     def _addWarning(self, msg: str = ''):
-        """Add a warning message to the component."""
         rml = self.Component.RuntimeMessageLevel.Warning
         self.AddRuntimeMessage(rml, msg)
 
     def _addError(self, msg: str = ''):
-        """Add an error message to the component."""
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the library is missing or
+        too old, or the outputs were just updated (says why)."""
+        if LIBRARY_PROBLEM:
+            self._addError(LIBRARY_PROBLEM)
+            return True
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
-        # Initialize input param descriptions
         self.InputParams[0].Description = (
-            'Passport JSON ({identity, snapshots[]}) fetched from the server.'
+            'Component passport JSON ({identity, snapshots[]}) fetched from the server.'
         )
-        # Initialize output param descriptions
-        i = 0
-        if self.OutputParams[0].Name == 'out':
-            i += 1
-        self.OutputParams[0+i].Description = (
-            'Identity ID (GUID)'
-        )
-        self.OutputParams[1+i].Description = (
-            'Snapshot name (e.g. My Component 01)'
-        )
-        self.OutputParams[2+i].Description = (
-            'Component type (panel, beam, slab, etc.)'
-        )
-        self.OutputParams[3+i].Description = (
-            'Component material'
-        )
-        self.OutputParams[4+i].Description = (
-            'Snapshot color as System.Drawing.Color'
-        )
-        self.OutputParams[5+i].Description = (
-            'Snapshot location as Point3d (X=latitude, Y=longitude, Z=0)'
-        )
-        self.OutputParams[6+i].Description = (
-            'Snapshot bounding box as Rhino.Geometry.BoundingBox'
-        )
-        self.OutputParams[7+i].Description = (
-            'Snapshot PCA frame at world origin as Rhino.Geometry.Plane'
-        )
-        self.OutputParams[8+i].Description = (
-            'Snapshot descriptors/metadata as JSON string'
-        )
-        self.OutputParams[9+i].Description = (
-            'Rhino geometry objects (extrusions, meshes, point clouds). '
-            'Point clouds prefer full PLY when Session is signed in, '
-            'else the inline preview.'
-        )
-        self.OutputParams[10+i].Description = (
-            'Marker points as list of Point3d objects'
-        )
-        self.OutputParams[11+i].Description = (
-            'Identity attributes as JSON string'
-        )
-        self.OutputParams[12+i].Description = (
-            'Snapshot condition grade (0=destroyed/retired, 1=poor, '
-            '2=average, 3=good)'
-        )
-        self.OutputParams[13+i].Description = (
-            'Component manufacturing date as ISO-8601 UTC timestamp'
-        )
-        self.OutputParams[14+i].Description = (
-            'Precision qualifier for ManufacturedAt (exact, month, year, '
-            'unknown)'
-        )
-        self.OutputParams[15+i].Description = (
-            'Component salvage source (e.g. building name, site)'
-        )
-        self.OutputParams[16+i].Description = (
-            'Component salvage date as ISO-8601 UTC timestamp'
-        )
-        self.OutputParams[17+i].Description = (
-            'Parent identity IDs (GUIDs) this identity was derived from'
-        )
-        if len(self.OutputParams) > 18 + i:
-            self.OutputParams[18+i].Description = (
-                'Reinforcement JSON strings ({spec, diameter, points}) in '
-                'iframe space; one per bar, same format as CreateReinforcement'
-            )
-
-    def ComponentExtrusions(
-            self,
-            geometry: dict) -> list[Rhino.Geometry.Extrusion]:
-        """Create capped extrusions from geometry.extrusions list."""
-        extrusions = []
-        tol = Rhino.RhinoMath.SqrtEpsilon
-        for extr in geometry.get('extrusions', []) or []:
-            profile = extr.get('profile') or []
-            if len(profile) < 3:
-                continue
-
-            pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0)
-                   for pt in profile]
-            # Stored profiles are open; drop a duplicate closing vertex
-            if len(pts) >= 2 and pts[0].DistanceTo(pts[-1]) <= tol:
-                pts = pts[:-1]
-            if len(pts) < 3:
-                continue
-
-            pl = Rhino.Geometry.Polyline()
-            pl.AddRange(pts)
-            if not pl.IsClosed:
-                pl.Add(pl[0])
-
-            height = float(extr.get('height', 0))
-            if height <= 0:
-                continue
-
-            cxt = Rhino.Geometry.Extrusion.Create(
-                pl.ToPolylineCurve(),
-                Rhino.Geometry.Plane.WorldXY,
-                height,
-                True)
-            if cxt is None:
-                continue
-
-            # move extrusion downwards half material
-            # thickness to center it at the origin
-            cxt.Translate(Rhino.Geometry.Vector3d(0, 0, height * -0.5))
-            extrusions.append(cxt)
-        return extrusions
-
-    def ComponentMeshes(
-            self,
-            geometry: dict,
-            snapshot_color,
-            identity_id: str) -> list[Rhino.Geometry.Mesh]:
-        """Create multiple meshes from geometry.meshes field."""
-        meshes = []
-        for idx, mesh_data in enumerate(geometry.get('meshes', []) or []):
-            mesh = Rhino.Geometry.Mesh()
-            vl = mesh_data['vertices']
-            fl = mesh_data['faces']
-            [mesh.Vertices.Add(*v) for v in vl]
-            [mesh.Faces.AddFace(*f) for f in fl]
-            # Try to get mesh-specific colors first
-            cl = mesh_data.get('colors')
-            if cl:
-                [mesh.VertexColors.Add(
-                    System.Drawing.Color.FromArgb(*c)) for c in cl]
-            else:
-                # Fallback: use snapshot color for all vertices
-                try:
-                    component_color = System.Drawing.Color.FromArgb(
-                        255, *snapshot_color)
-                    for _ in range(len(vl)):
-                        mesh.VertexColors.Add(component_color)
-                except (KeyError, TypeError):
-                    # If even snapshot color fails, use a default gray
-                    default_color = System.Drawing.Color.Gray
-                    for _ in range(len(vl)):
-                        mesh.VertexColors.Add(default_color)
-                    self._addWarning(
-                        f'Mesh {idx} in identity {identity_id} '
-                        f'using default gray color')
-            mesh.RebuildNormals()
-            mesh.UnifyNormals()
-            mesh.Compact()
-            meshes.append(mesh)
-        return meshes
+        self._check_outputs()
+        if LIBRARY_PROBLEM is None:
+            csc_gh.dev_reload(globals())
 
     def get_auth_core_from_sticky(self):
         """Return Session AuthCore when signed in; None otherwise."""
         return sc.sticky.get('CSC_AuthCore')
 
-    def build_inline_point_cloud(self, pc_data):
-        """Build a Rhino point cloud from one inline SnapshotPointCloud."""
-        if not isinstance(pc_data, dict):
-            return None
-        pts = pc_data.get('points', []) or []
-        if not pts:
-            return None
-        cloud = Rhino.Geometry.PointCloud()
-        colors = pc_data.get('colors')
-        if colors and len(colors) == len(pts):
-            for p, c in zip(pts, colors):
-                cloud.Add(
-                    Rhino.Geometry.Point3d(p[0], p[1], p[2]),
-                    System.Drawing.Color.FromArgb(*c))
-        else:
-            for p in pts:
-                cloud.Add(Rhino.Geometry.Point3d(p[0], p[1], p[2]))
-        return cloud if cloud.Count > 0 else None
-
-    def fetch_snapshot_point_clouds(self, auth_core, snapshot):
-        """
-        Prefer full point-cloud PLY via Session cache, then inline preview.
-
-        Returns a list of (cloud, primitive_index) tuples so
-        csc_point_cloud_index stays aligned with snapshot.geometry.
-        """
+    def fetch_snapshot_point_clouds(self, auth_core, snapshot,
+                                    identity_id=None):
+        """Prefer the full point-cloud PLY via the Session cache, then the
+        inline preview; ``[(cloud, primitive index)]``."""
         geometry = snapshot.get('geometry', {}) or {}
-        inline_pcs = geometry.get('point_clouds', []) or []
+        inline_clouds = geometry.get('point_clouds', []) or []
         snapshot_id = snapshot.get('_id')
         results = []
-        for i in range(len(inline_pcs)):
+        for index, entry in enumerate(inline_clouds):
             cloud = None
             if auth_core and snapshot_id:
                 try:
                     cloud = auth_core.cached_get_snapshot_point_cloud(
-                        snapshot_id, i)
-                except Exception as e:
-                    self._addWarning(
-                        'Point cloud PLY fetch failed '
-                        f'for index {i}: {str(e)}')
+                        snapshot_id, index)
+                except Exception as error:
+                    self._addWarning('Point cloud PLY fetch failed '
+                                     f'for index {index}: {error}')
             if cloud is None:
-                cloud = self.build_inline_point_cloud(inline_pcs[i])
+                cloud = inline_cloud_to_rhino(entry)
             if cloud is not None:
-                results.append((cloud, i))
+                results.append((cloud, index))
             else:
                 self._addWarning(
-                    f'Point cloud {i} is invalid or empty')
+                    f'Point cloud {index} of identity {identity_id} dropped: '
+                    'empty, not valid, not finite or wider than 10 km')
         return results
 
-    def ComponentReinforcementJson(
-            self,
-            geometry: dict,
-            identity_id: str,
-            xform: Rhino.Geometry.Transform) -> list[str]:
-        """Parse geometry.reinforcements into CreateReinforcement JSON strings."""
-        json_strings = []
-        for idx, bar in enumerate(geometry.get('reinforcements', []) or []):
-            if not isinstance(bar, dict):
-                self._addWarning(
-                    f'Reinforcement {idx} in identity {identity_id}: '
-                    'expected object'
-                )
-                continue
-
-            spec = str(bar.get('spec', '')).strip()
-            if not spec:
-                self._addWarning(
-                    f'Reinforcement {idx} in identity {identity_id}: '
-                    'missing spec'
-                )
-                continue
-
-            try:
-                diameter = float(bar.get('diameter', 0))
-            except (TypeError, ValueError):
-                self._addWarning(
-                    f'Reinforcement {idx} in identity {identity_id}: '
-                    'invalid diameter'
-                )
-                continue
-            if diameter <= 0:
-                self._addWarning(
-                    f'Reinforcement {idx} in identity {identity_id}: '
-                    'diameter must be > 0'
-                )
-                continue
-
-            points = bar.get('points') or []
-            if not isinstance(points, list) or len(points) < 2:
-                self._addWarning(
-                    f'Reinforcement {idx} in identity {identity_id}: '
-                    'needs at least 2 points'
-                )
-                continue
-
-            iframe_points = []
-            valid = True
-            for pt in points:
-                if (not isinstance(pt, (list, tuple))
-                        or len(pt) != 3):
-                    self._addWarning(
-                        f'Reinforcement {idx} in identity {identity_id}: '
-                        f'invalid point {pt}'
-                    )
-                    valid = False
-                    break
-                point = Rhino.Geometry.Point3d(
-                    float(pt[0]), float(pt[1]), float(pt[2]))
-                point.Transform(xform)
-                iframe_points.append([point.X, point.Y, point.Z])
-            if not valid or len(iframe_points) < 2:
-                continue
-
-            json_strings.append(json.dumps({
-                'spec': spec,
-                'diameter': diameter,
-                'points': iframe_points,
-            }))
-        return json_strings
-
-    def ComponentColor(self, snapshot: dict) -> System.Drawing.Color:
+    def snapshot_geometry(self, auth_core, snapshot, identity_id):
+        """``[(rhino geometry, kind, index)]`` of a snapshot."""
+        geometry = snapshot.get('geometry', {}) or {}
         color = snapshot.get('color') or [110, 110, 110]
-        return System.Drawing.Color.FromArgb(255, *color)
+        items = []
+        for index, entry in enumerate(geometry.get('meshes', []) or []):
+            mesh = inline_mesh_to_rhino(entry, color)
+            if mesh is None:
+                self._addWarning(
+                    f'Mesh {index} of identity {identity_id} dropped: '
+                    'empty, not valid, not finite or wider than 10 km')
+                continue
+            items.append((mesh, 'mesh', index))
+        for cloud, index in self.fetch_snapshot_point_clouds(
+                auth_core, snapshot, identity_id):
+            items.append((cloud, 'point_cloud', index))
+        if authored_only(snapshot):
+            for index, proxy in drawable_proxies(snapshot):
+                if (proxy.get('fit') or {}).get('method') != 'authored':
+                    continue
+                shape = proxy_to_rhino(proxy)
+                if shape is None:
+                    self._addWarning(
+                        f'Proxy {index} of identity {identity_id} dropped: '
+                        'cannot be drawn, not valid, not finite or wider '
+                        'than 10 km')
+                    continue
+                items.append((shape, 'proxy', index))
+        return items
 
-    def ComponentBoundingBox(
-            self,
-            snapshot: dict) -> Rhino.Geometry.BoundingBox:
-        xtx = snapshot['bbx'][0]
-        xty = snapshot['bbx'][1]
-        xtz = snapshot['bbx'][2]
-
-        # Get bbx_origin (center of bounding box in PCA space)
-        bbx_origin = snapshot.get('bbx_origin', [0.0, 0.0, 0.0])
-
-        # Create bounding box at bbx_origin in PCA space
-        bbx = Rhino.Geometry.BoundingBox(
-            bbx_origin[0] - xtx * 0.5,
-            bbx_origin[1] - xty * 0.5,
-            bbx_origin[2] - xtz * 0.5,
-            bbx_origin[0] + xtx * 0.5,
-            bbx_origin[1] + xty * 0.5,
-            bbx_origin[2] + xtz * 0.5
-        )
-
-        # Convert bounding box to Box for transformation
-        bbx = Rhino.Geometry.Box(bbx)
-
-        # Transform from PCA space back to original component space
+    def RunScript(self, ComponentPassport: Grasshopper.DataTree[object]):
+        if self._stop():
+            return empty_outputs()
+        names = ('IdentityID', 'Name', 'OriginalFunction', 'Material', 'Color',
+                 'Location', 'BoundingBox', 'Frame', 'Descriptors',
+                 'Geometry', 'CaptureMarkers', 'Capture',
+                 'Attributes', 'ConditionGrade', 'ManufacturedAt',
+                 'ManufacturedPrecision', 'Origin', 'ParentIdentities',
+                 'Planned', 'Remaining')
+        trees = {n: Grasshopper.DataTree[System.Object]() for n in names}
+        __Results = tuple(trees[n] for n in names)
         try:
-            pca_frame = snapshot.get('pca_frame', {})
-            if pca_frame:
-                # Create PCA frame plane at world origin
-                pca_origin = Rhino.Geometry.Point3d(
-                    *pca_frame.get('o', [0, 0, 0]))
-                pca_x = Rhino.Geometry.Vector3d(
-                    *pca_frame.get('x', [1, 0, 0]))
-                pca_y = Rhino.Geometry.Vector3d(
-                    *pca_frame.get('y', [0, 1, 0]))
-
-                pca_plane = Rhino.Geometry.Plane(pca_origin, pca_x, pca_y)
-
-                # Create forward transform (from PCA space to original space)
-                pca_transform = (
-                    Rhino.Geometry.Transform.PlaneToPlane(
-                        Rhino.Geometry.Plane.WorldXY, pca_plane))
-
-                bbx.Transform(pca_transform)
-
-        except (KeyError, TypeError, ValueError) as e:
-            # If PCA frame is missing or invalid, use bounding box as-is
-            self._addWarning(f'Could not apply PCA frame transform: {str(e)}')
-
-        return bbx
-
-    def ComponentPCAPlane(self, snapshot: dict) -> Rhino.Geometry.Plane:
-        """Get PCA plane at world origin from snapshot data."""
-        try:
-            pca_frame = snapshot.get('pca_frame', {})
-            if pca_frame:
-                pca_x = Rhino.Geometry.Vector3d(
-                    *pca_frame.get('x', [1, 0, 0]))
-                pca_y = Rhino.Geometry.Vector3d(
-                    *pca_frame.get('y', [0, 1, 0]))
-                return Rhino.Geometry.Plane(
-                    Rhino.Geometry.Point3d.Origin, pca_x, pca_y)
-            else:
-                return Rhino.Geometry.Plane.WorldXY
-        except (KeyError, TypeError, ValueError):
-            return Rhino.Geometry.Plane.WorldXY
-
-    def RunScript(self, ComponentData: Grasshopper.DataTree[str]):
-        # set up output trees and results tuple
-        ID = Grasshopper.DataTree[System.Object]()
-        Name = Grasshopper.DataTree[System.Object]()
-        Type = Grasshopper.DataTree[System.Object]()
-        Material = Grasshopper.DataTree[System.Object]()
-        Color = Grasshopper.DataTree[System.Object]()
-        Location = Grasshopper.DataTree[System.Object]()
-        BoundingBox = Grasshopper.DataTree[System.Object]()
-        PCAFrame = Grasshopper.DataTree[System.Object]()
-        Descriptors = Grasshopper.DataTree[System.Object]()
-        PrimitiveGeometry = Grasshopper.DataTree[System.Object]()
-        MarkerPoints = Grasshopper.DataTree[System.Object]()
-        Attributes = Grasshopper.DataTree[System.Object]()
-        Condition = Grasshopper.DataTree[System.Object]()
-        ManufacturedAt = Grasshopper.DataTree[System.Object]()
-        ManufacturedPrecision = Grasshopper.DataTree[System.Object]()
-        SalvageSource = Grasshopper.DataTree[System.Object]()
-        SalvagedAt = Grasshopper.DataTree[System.Object]()
-        ParentComponent = Grasshopper.DataTree[System.Object]()
-        ReinforcementJson = Grasshopper.DataTree[System.Object]()
-        __Results = (
-            ID,
-            Name,
-            Type,
-            Material,
-            Color,
-            Location,
-            BoundingBox,
-            PCAFrame,
-            Descriptors,
-            PrimitiveGeometry,
-            MarkerPoints,
-            Attributes,
-            Condition,
-            ManufacturedAt,
-            ManufacturedPrecision,
-            SalvageSource,
-            SalvagedAt,
-            ParentComponent,
-            ReinforcementJson)
-        try:
-            # Validate input
-            if not ComponentData or ComponentData.DataCount == 0:
-                msg = ('Input ComponentData failed to collect Data')
-                self._addWarning(msg)
-                self.Component.Message = msg
+            if not ComponentPassport or ComponentPassport.DataCount == 0:
+                self._addWarning(
+                    'Input parameter ComponentPassport failed to collect data')
                 return __Results
 
-            self.Component.Message = 'Disassembling components...'
             auth_core = self.get_auth_core_from_sticky()
 
-            # loop over all branches
-            for i in range(ComponentData.BranchCount):
-                ghp = ComponentData.Paths[i]
-                for j, comp in enumerate(ComponentData.Branches[i]):
+            for i in range(ComponentPassport.BranchCount):
+                ghp = ComponentPassport.Paths[i]
+                for comp in ComponentPassport.Branches[i]:
                     try:
-                        passport = json.loads(comp)
-                        identity = passport.get('identity') or {}
-                        snapshots = passport.get('snapshots') or []
-                        snapshot = (
-                            snapshots[0] if snapshots else {}
-                        )
+                        passport = load_passport(comp)
+                        identity, snapshot = parts(passport)
                         if not identity or not snapshot:
-                            self._addWarning(
-                                'Passport JSON missing identity/snapshots, '
-                                'skipping entry')
+                            self._addWarning('Component passport JSON missing identity/'
+                                             'snapshots, skipping entry')
                             continue
-
                         identity_id = identity.get('_id')
+                        trees['IdentityID'].Add(identity_id, ghp)
+                        trees['Name'].Add(snapshot.get('name'), ghp)
+                        trees['OriginalFunction'].Add(
+                            identity.get('original_function'), ghp)
+                        trees['Material'].Add(identity.get('material'), ghp)
+                        rgb_value = snapshot.get('color') or [110, 110, 110]
+                        trees['Color'].Add(System.Drawing.Color.FromArgb(
+                            255, *rgb_value), ghp)
+                        place = snapshot.get('location') or {}
+                        if 'lat' in place and 'lon' in place:
+                            trees['Location'].Add(Rhino.Geometry.Point3d(
+                                place['lat'], place['lon'], 0.0), ghp)
+                        else:
+                            trees['Location'].Add(
+                                Rhino.Geometry.Point3d(0.0, 0.0, 0.0), ghp)
 
-                        # add directly available metadata to the
-                        # respective datatrees
-                        ID.Add(identity_id, ghp)
-                        Name.Add(snapshot.get('name'), ghp)
-                        Type.Add(identity.get('type'), ghp)
-                        Material.Add(identity.get('material'), ghp)
+                        # the client-side placement of the piece, if any
+                        placed = placement_of(passport)
+                        xform = placement_transform(placed) if placed \
+                            else Rhino.Geometry.Transform.Identity
 
-                        # create system color from snapshot rgb values
-                        color = self.ComponentColor(snapshot)
-                        Color.Add(color, ghp)
-
-                        # process location data
-                        try:
-                            location_data = snapshot.get('location', {}) or {}
-                            if ('lat' in location_data and
-                                    'lon' in location_data):
-                                location_point = Rhino.Geometry.Point3d(
-                                    location_data['lat'],
-                                    location_data['lon'],
-                                    0.0
-                                )
+                        for geom, kind, index in self.snapshot_geometry(
+                                auth_core, snapshot, identity_id):
+                            geom.Transform(xform)
+                            geom.SetUserString('csc_component', comp)
+                            if kind == 'mesh':
+                                geom.SetUserString('csc_mesh_index',
+                                                   str(index))
+                            elif kind == 'point_cloud':
+                                geom.SetUserString('csc_point_cloud_index',
+                                                   str(index))
                             else:
-                                location_point = Rhino.Geometry.Point3d(
-                                    0.0, 0.0, 0.0)
-                        except (KeyError, TypeError):
-                            location_point = Rhino.Geometry.Point3d(
-                                0.0, 0.0, 0.0)
-                        Location.Add(location_point, ghp)
+                                geom.SetUserString('csc_proxy_index',
+                                                   str(index))
+                            trees['Geometry'].Add(geom, ghp)
 
-                        # process insertion frame
-                        try:
-                            iframe = snapshot['iframe']
-                            iplane = Rhino.Geometry.Plane(
-                                Rhino.Geometry.Point3d(*iframe['o']),
-                                Rhino.Geometry.Vector3d(*iframe['x']),
-                                Rhino.Geometry.Vector3d(*iframe['y']),
-                            )
-                        except (KeyError, TypeError):
-                            iplane = Rhino.Geometry.Plane.WorldXY
+                        # the frame and the box on it
+                        box = box_of(snapshot)
+                        if box:
+                            frame, size = box
+                            plane = plane_from_frame(frame)
+                            shape = Rhino.Geometry.Box(
+                                plane,
+                                Rhino.Geometry.Interval(-size[0] / 2,
+                                                        size[0] / 2),
+                                Rhino.Geometry.Interval(-size[1] / 2,
+                                                        size[1] / 2),
+                                Rhino.Geometry.Interval(-size[2] / 2,
+                                                        size[2] / 2))
+                            shape.Transform(xform)
+                            plane.Transform(xform)
+                            trees['BoundingBox'].Add(shape, ghp)
+                            trees['Frame'].Add(plane, ghp)
+                        else:
+                            self._addWarning(
+                                f'Identity {identity_id}: the snapshot has no '
+                                'frame yet (geometry still being processed?)')
 
-                        xform = Rhino.Geometry.Transform.PlaneToPlane(
-                            Rhino.Geometry.Plane.WorldXY,
-                            iplane)
+                        trees['Descriptors'].Add(json.dumps(
+                            snapshot.get('descriptors', {}) or {}), ghp)
 
-                        # treat geometry block in a special way because
-                        # it may hold multiple representations
-                        geometry = snapshot.get('geometry', {}) or {}
-                        for key in sorted(geometry.keys()):
-                            if key == 'extrusions':
-                                for xtr in self.ComponentExtrusions(geometry):
-                                    # transform to iframe
-                                    xtr.Transform(xform)
-                                    # set user string
-                                    xtr.SetUserString('csc_component', comp)
-                                    # add to datatree
-                                    PrimitiveGeometry.Add(xtr, ghp)
-                            elif key == 'meshes':
-                                # Handle multiple meshes
-                                meshes = self.ComponentMeshes(
-                                    geometry,
-                                    snapshot.get('color'),
-                                    identity_id)
-                                for mesh_idx, mesh in enumerate(meshes):
-                                    # transform to iframe
-                                    mesh.Transform(xform)
-                                    # set user string with mesh index
-                                    mesh.SetUserString('csc_component', comp)
-                                    mesh.SetUserString('csc_mesh_index',
-                                                       str(mesh_idx))
-                                    # add to datatree
-                                    PrimitiveGeometry.Add(mesh, ghp)
-                            elif key == 'point_clouds':
-                                clouds = self.fetch_snapshot_point_clouds(
-                                    auth_core, snapshot)
-                                for cloud, cloud_idx in clouds:
-                                    cloud.Transform(xform)
-                                    cloud.SetUserString(
-                                        'csc_component', comp)
-                                    cloud.SetUserString(
-                                        'csc_point_cloud_index',
-                                        str(cloud_idx))
-                                    PrimitiveGeometry.Add(cloud, ghp)
-                            elif key in ('marker_points', 'reinforcements'):
-                                # handled separately below
-                                continue
-                            else:
-                                msg = (f'Missing implementation for geometry '
-                                       f'of type \'{key}\'!')
-                                self._addWarning(msg)
+                        for label, role, point in capture_markers(snapshot):
+                            marker = Rhino.Geometry.Point3d(*point)
+                            marker.Transform(xform)
+                            trees['CaptureMarkers'].Add(marker, ghp)
+                        if snapshot.get('capture'):
+                            trees['Capture'].Add(json.dumps(
+                                snapshot['capture']), ghp)
 
-                        # construct boundingbox
-                        bbx = self.ComponentBoundingBox(snapshot)
-
-                        # apply iframe transform
-                        bbx.Transform(xform)
-                        BoundingBox.Add(bbx, ghp)
-
-                        # get PCA plane at world origin
-                        pca_plane = self.ComponentPCAPlane(snapshot)
-                        # apply iframe transform to PCA plane
-                        pca_plane.Transform(xform)
-                        PCAFrame.Add(pca_plane, ghp)
-
-                        # add descriptors
-                        descriptors = snapshot.get('descriptors', {}) or {}
-                        Descriptors.Add(json.dumps(descriptors), ghp)
-
-                        # process marker points (now nested under geometry)
-                        try:
-                            marker_points_data = geometry.get(
-                                'marker_points', []) or []
-                            marker_points_list = []
-                            for point_data in marker_points_data:
-                                if (isinstance(point_data, list) and
-                                        len(point_data) >= 3):
-                                    marker_point = Rhino.Geometry.Point3d(
-                                        point_data[0],
-                                        point_data[1],
-                                        point_data[2]
-                                    )
-                                    # apply iframe transform to marker point
-                                    marker_point.Transform(xform)
-                                    marker_points_list.append(marker_point)
-                        except (KeyError, TypeError, IndexError):
-                            # If no marker points or invalid format, add empty
-                            # list
-                            marker_points_list = []
-                        if marker_points_list:
-                            MarkerPoints.AddRange(marker_points_list, ghp)
-
-                        for bar_json in self.ComponentReinforcementJson(
-                                geometry, identity_id, xform):
-                            ReinforcementJson.Add(bar_json, ghp)
-
-                        # process attributes (identity-level)
-                        attributes = identity.get('attributes', {}) or {}
-                        Attributes.Add(json.dumps(attributes), ghp)
-
-                        # snapshot-level state
-                        if snapshot.get('condition') is not None:
-                            Condition.Add(snapshot['condition'], ghp)
-
-                        # identity-level provenance
+                        trees['Attributes'].Add(json.dumps(
+                            identity.get('attributes', {}) or {}), ghp)
+                        grade = condition_grade(snapshot)
+                        if grade is not None:
+                            trees['ConditionGrade'].Add(grade, ghp)
                         if identity.get('manufactured_at') is not None:
-                            ManufacturedAt.Add(
+                            trees['ManufacturedAt'].Add(
                                 identity['manufactured_at'], ghp)
                         if identity.get('manufactured_precision') is not None:
-                            ManufacturedPrecision.Add(
+                            trees['ManufacturedPrecision'].Add(
                                 identity['manufactured_precision'], ghp)
-                        if identity.get('salvage_source') is not None:
-                            SalvageSource.Add(identity['salvage_source'], ghp)
-                        if identity.get('salvaged_at') is not None:
-                            SalvagedAt.Add(identity['salvaged_at'], ghp)
-                        parent_identities = identity.get('parent_identities')
-                        if parent_identities:
-                            ParentComponent.AddRange(parent_identities, ghp)
+                        if identity.get('origin'):
+                            trees['Origin'].Add(json.dumps(
+                                identity['origin']), ghp)
+                        for parent in identity.get('parent_identities') or []:
+                            trees['ParentIdentities'].Add(parent, ghp)
+                        trees['Planned'].Add(bool(
+                            (identity.get('origin') or {}).get('planned')),
+                            ghp)
+                        if identity.get('remaining') is not None:
+                            trees['Remaining'].Add(
+                                int(identity['remaining']), ghp)
 
-                    except json.JSONDecodeError as e:
-                        msg = f'Failed to parse passport data: {str(e)}'
-                        self._addError(msg)
-                    except Exception as e:
-                        msg = f'Error processing component: {str(e)}'
-                        self._addError(msg)
+                    except Exception as error:
+                        self._addError(
+                            f'Error processing component: {error}')
 
-            # Update success message
-            total_components = sum(
-                len(branch) for branch in ComponentData.Branches
-            )
-            self.Component.Message = (
-                f'Disassembled {total_components} component(s)'
-            )
-            self._addRemark(
-                f'Successfully disassembled {total_components} components'
-            )
-
-            # return output trees
             return __Results
 
-        except Exception as e:
-            msg = f'Unexpected error during disassembly: {str(e)}'
-            self._addError(msg)
+        except Exception as error:
+            self._addError(f'Unexpected error during disassembly: {error}')
             return __Results

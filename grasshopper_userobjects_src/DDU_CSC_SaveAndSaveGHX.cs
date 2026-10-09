@@ -31,9 +31,9 @@ public class Script_Instance : GH_ScriptInstance
         Reflect(object obj)
         Reflect(object obj, string method_name)
 
-    Author: Max Eschenbach
+    Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 261009
     */
     #endregion
 

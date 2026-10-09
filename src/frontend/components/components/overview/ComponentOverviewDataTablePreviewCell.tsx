@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/sheet'
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import ComponentPreviewImage from '../ComponentPreviewImage'
+import InPlaceBadge from '../InPlaceBadge'
+import { isInPlace } from '../componentDetailShared'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -48,7 +50,9 @@ export default function ComponentOverviewDataTablePreviewCell({
       ? component_data.name
       : 'Unnamed component'
 
+  // a row that says it has no preview does not ask for one (no 404 per row)
   const snapshotThumbId =
+    component_data.has_preview !== false &&
     typeof component_data.current_snapshot_id === 'string' &&
     component_data.current_snapshot_id.trim().length > 0
       ? component_data.current_snapshot_id
@@ -136,11 +140,12 @@ export default function ComponentOverviewDataTablePreviewCell({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        {isInPlace(component_data) && <InPlaceBadge />}
       </div>
 
       <SheetContent side="bottom" className="sm:max-w-none">
         <SheetHeader>
-          <SheetTitle className="text-center text-base">Component Preview</SheetTitle>
+          <SheetTitle className="text-center text-base">Preview</SheetTitle>
           <SheetDescription>
             <span className="block text-center text-sm font-semibold">{compName}</span>
             <span className="block text-center text-xs font-bold">{compId}</span>
@@ -155,16 +160,16 @@ export default function ComponentOverviewDataTablePreviewCell({
         <SheetFooter className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
           <Link href={detailHref} className="w-full sm:w-[200px]">
             <Button variant="outline" className="h-8 w-full">
-              Open Detail Page
+              Open the component
             </Button>
           </Link>
 
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href={`/locate-by-id?reference_id=${compId}`} className="w-full sm:w-[200px]">
+                <Link href={`/scan?mode=locate&reference_id=${compId}`} className="w-full sm:w-[200px]">
                   <Button variant="outline" className="h-8 w-full">
-                    Locate by ID
+                    Locate
                   </Button>
                 </Link>
               </TooltipTrigger>
@@ -176,7 +181,7 @@ export default function ComponentOverviewDataTablePreviewCell({
 
           <SheetClose asChild className="w-full sm:w-[200px]">
             <Button variant="outline" className="h-8 w-full">
-              Close Preview
+              Close
             </Button>
           </SheetClose>
         </SheetFooter>

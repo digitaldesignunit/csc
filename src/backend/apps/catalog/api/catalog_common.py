@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -12,6 +10,8 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import Response
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
+
+from apps.catalog.etag import compute_snapshot_etag  # noqa: F401 (re-export)
 
 
 def not_modified_response(etag: str, **extra_headers: str) -> Response:
@@ -26,20 +26,23 @@ def not_modified_response(etag: str, **extra_headers: str) -> Response:
     return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
 
 
+def retired_until(phase: str):
+    """
+    Dependency for a 0.5 write route whose 0.6 replacement lands in plan
+    ``phase``: it would write 0.5-shaped documents into a migrated
+    database, so it answers 503 until then (plan P2, read-only catch-up).
+    """
+    async def _retired() -> None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(f'This 0.5 write route is retired during the 0.6 '
+                    f'migration; its replacement lands in plan {phase}.'),
+        )
+    return _retired
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-
-
-def compute_snapshot_etag(snapshot_doc: Dict[str, Any]) -> str:
-    """sha256 over canonical snapshot JSON, excluding etag and lastmodified."""
-    payload = {
-        k: v for k, v in snapshot_doc.items()
-        if k not in ('etag', 'lastmodified')
-    }
-    serialized = json.dumps(
-        payload, sort_keys=True, separators=(',', ':'), default=str
-    )
-    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
 
 
 def resolve_new_component_name(
@@ -223,3 +226,18 @@ async def validate_snapshot_and_promote(
         identity_doc = {**identity_doc, **identity_update}
 
     return identity_doc, snapshot_doc
+
+
+async def seed_materials(collection) -> int:
+    """Seed the ``materials`` collection from code when it is empty (spec
+    section 2.10); an admin-edited list is never overwritten. Returns how
+    many were inserted."""
+    from apps.catalog.vocab import MATERIAL_SEED
+    if await collection.count_documents({}, limit=1):
+        return 0
+    docs = [{'_id': m.id, 'label': m.label, 'group': m.group,
+             'default_class': m.default_class, 'uniclass': m.uniclass,
+             'notes': m.notes, 'retired': False, 'merged_into': None}
+            for m in MATERIAL_SEED]
+    await collection.insert_many(docs)
+    return len(docs)

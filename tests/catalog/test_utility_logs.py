@@ -8,8 +8,7 @@ from apps.catalog.api import utility as utility_mod
 def test_log_routes_are_registered():
     paths = {getattr(route, 'path', None) for route in utility_mod.router.routes}
     assert '/fastapi_log' in paths
-    assert '/previewgen_log' in paths
-    assert '/descriptors_simple_log' in paths
+    assert '/geometry_log' in paths
     assert '/component_map_log' in paths
 
 

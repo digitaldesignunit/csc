@@ -1,10 +1,9 @@
 #! python3
 # -*- coding: utf-8 -*-
-# venv: DDU_CSC
-print('ENV OK!')
+# venv: DDU_CSC_MATCH
 # r: charset_normalizer
-# r: requests
-# r: numpy
+# r: numpy==2.0.2
+print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
@@ -207,13 +206,49 @@ def _compute_radial_signature(profile, num_rays: int,
         P_rest, directions)
     return distances, tangents, centroid, angle_deg
 
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('Distances', 'Distances',
+     'Tree of distances from the centroid to the first boundary intersection for each ray. One branch per input curve.'),
+    ('Tangents', 'Tangents',
+     'Tree of unit tangent vectors of the boundary at each ray hit, expressed in world coordinates on the curve plane.'),
+    ('IntersectionPoints', 'IntersectionPoints',
+     'Tree of intersection points in world coordinates, one branch per input curve. Useful for visualising the signature.'),
+    ('Rays', 'Rays',
+     'Tree of rays (as Lines) in world coordinates, one branch per input curve. Useful for visualisation.'),
+    ('RestPositionCurve', 'RestPositionCurve',
+     'Input curves transformed into their rest position: centroid at world origin, canonical rest axes aligned with World XY. This is exactly the geometry the signature is computed on.'),
+    ('RestPositionFrame', 'RestPositionFrame',
+     'List of rest-position planes, one per input curve. Origin is the centroid on the input curve plane; X/Y are aligned with the canonical orientation used by the signature.'),
+    ('RestPositionAngle', 'RestPositionAngle',
+     'List of rotation angles (degrees) applied to reach rest position, one per input curve.'),
+    ('RestPositionTransform', 'RestPositionTransform',
+     'Transform mapping world coordinates into the rest frame (origin at centroid; World XY only if RestPositionAlign is True). Apply to any other geometry to see it in the same frame as the rest curve.'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
+
 
 class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 261005
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
@@ -233,6 +268,28 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
     def _addError(self, msg: str = ''):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the outputs were just
+        updated (says why)."""
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
 
     def BeforeRunScript(self):
         """Describe inputs & outputs."""
@@ -255,43 +312,7 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
             'over [0, pi). Default 180 (1 degree steps). Must be >= 1.'
         )
         # Output descriptions -- skip the hidden "out" param if present.
-        i = 1 if self.OutputParams[0].Name == 'out' else 0
-        self.OutputParams[0 + i].Description = (
-            'Tree of distances from the centroid to the first boundary '
-            'intersection for each ray. One branch per input curve.'
-        )
-        self.OutputParams[1 + i].Description = (
-            'Tree of unit tangent vectors of the boundary at each ray '
-            'hit, expressed in world coordinates on the curve plane.'
-        )
-        self.OutputParams[2 + i].Description = (
-            'Tree of intersection points in world coordinates, one '
-            'branch per input curve. Useful for visualising the signature.'
-        )
-        self.OutputParams[3 + i].Description = (
-            'Tree of rays (as Lines) in world coordinates, one branch '
-            'per input curve. Useful for visualisation.'
-        )
-        self.OutputParams[4 + i].Description = (
-            'Input curves transformed into their rest position: centroid '
-            'at world origin, canonical rest axes aligned with World XY. '
-            'This is exactly the geometry the signature is computed on.'
-        )
-        self.OutputParams[5 + i].Description = (
-            'List of rest-position planes, one per input curve. Origin '
-            'is the centroid on the input curve plane; X/Y are aligned '
-            'with the canonical orientation used by the signature.'
-        )
-        self.OutputParams[6 + i].Description = (
-            'List of rotation angles (degrees) applied to reach rest '
-            'position, one per input curve.'
-        )
-        self.OutputParams[7 + i].Description = (
-            'Transform mapping world coordinates into the rest frame '
-            '(origin at centroid; World XY only if RestPositionAlign is '
-            'True). Apply to any other geometry to see it in the same '
-            'frame as the rest curve.'
-        )
+        self._check_outputs()
 
     def _curve_to_polyline_and_plane(self, curve):
         """Return (polyline_points_3d, curve_plane) or (None, None).
@@ -391,13 +412,15 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
         return v
 
     def RunScript(self,
-            Curves: System.Collections.Generic.List[object],
+            Curves: list[object],
             Resolution: int,
             RestPositionAlign: bool,
             NumAngles: int):
         # Keep list-access behavior by default. If the current input list
         # (which may represent one incoming branch) has multiple curves,
         # switch to explicit tree output keyed by run count + item index.
+        if self._stop():
+            return empty_outputs()
         multi_input = bool(Curves) and len(Curves) > 1
         if multi_input:
             Distances = Grasshopper.DataTree[System.Object]()
@@ -435,7 +458,6 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
         if not Curves:
             msg = 'No curves provided'
             self._addWarning(msg)
-            self.Component.Message = msg
             return __Results
 
         try:
@@ -461,7 +483,6 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
                 f'{NumAngles}')
             return __Results
 
-        self.Component.Message = f'N={Resolution}'
 
         successes = 0
         rc = self.Component.RunCount - 1
@@ -617,10 +638,7 @@ class CSC_RadialSignature(Grasshopper.Kernel.GH_ScriptInstance):
 
         if successes == 0:
             self._addWarning('No curves produced a valid signature')
-            self.Component.Message = 'no output'
         else:
-            self.Component.Message = (
-                f'N = {Resolution}')
             self._addRemark(
                 f'Computed radial signature for {successes} curve(s) '
                 f'at resolution N={Resolution}'

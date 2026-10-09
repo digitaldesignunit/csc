@@ -42,6 +42,8 @@ class User(BaseModel):
     email_verified: bool = False
     verification_token: Optional[str] = None
     verification_token_expires: Optional[datetime] = None
+    # a token issued before this moment is refused (8.124 a)
+    password_changed_at: Optional[datetime] = None
 
     class Config:
         populate_by_name = True
@@ -76,12 +78,25 @@ def _check_password_bytes(v: str) -> str:
     return v
 
 
+def normalize_username(value: str) -> str:
+    """Usernames are stored lowercase and unique; every lookup by
+    username goes through this, so login ignores case (decision 8.28)."""
+    return value.strip().lower()
+
+
 class RegisterPayload(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     full_name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     # max_length=72 matches bcrypt's hard truncation limit, also prevents DoS
     password: str = Field(min_length=8, max_length=72)
+    # an invitation code (8.14): required outside the open domains
+    code: Optional[str] = Field(None, max_length=64)
+
+    @field_validator('username')
+    @classmethod
+    def _lowercase(cls, v: str) -> str:
+        return normalize_username(v)
 
     @field_validator('password')
     @classmethod
@@ -91,6 +106,22 @@ class RegisterPayload(BaseModel):
 
 class ChangePasswordPayload(BaseModel):
     current_password: str = Field(min_length=1, max_length=72)
+    new_password: str = Field(min_length=8, max_length=72)
+
+    @field_validator('new_password')
+    @classmethod
+    def _new_password_fits_bcrypt(cls, v: str) -> str:
+        return _check_password_bytes(v)
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    """The single-use token of the mail and the new password (the same
+    rules as registration and change-password, 8.124 a)."""
+    token: str = Field(min_length=16, max_length=200)
     new_password: str = Field(min_length=8, max_length=72)
 
     @field_validator('new_password')
@@ -1037,247 +1068,6 @@ class UpdateComponentIdentityModel(BaseModel):
         populate_by_name = True
 
 
-class ComputeSnapshotOrientationRequest(BaseModel):
-    """Request body for wizard PCA / OBB computation."""
-
-    geometry: SnapshotGeometry
-    assembly: bool = False
-
-
-class ComputeSnapshotOrientationResponse(BaseModel):
-    """Orientation metadata derived from inline snapshot geometry."""
-
-    bbx: ComponentBoundingBox
-    bbx_origin: List[float]
-    pca_frame: ComponentFrame
-
-
-class CreateComponentRequest(BaseModel):
-    """Create a new identity plus its version-0 snapshot (ADR-014 #2)."""
-
-    id: Optional[str] = Field(
-        default=None,
-        alias='_id',
-        description='Optional identity UUID; server generates if omitted',
-    )
-    name: Optional[str] = Field(
-        default=None,
-        description=(
-            'Display name; omit or leave empty to auto-generate '
-            'from catalog number (e.g. Component #1234)'
-        ),
-    )
-    componenttype: str = Field(alias='type')
-    material: str
-    dataset: str
-    complexity: int
-    fragment: bool
-    assembly: bool
-    geometry: SnapshotGeometry
-    color: Optional[List[int]] = Field(default=[110, 110, 110])
-    bbx: ComponentBoundingBox
-    bbx_origin: List[float]
-    location: Optional[ComponentLocation] = Field(
-        default_factory=lambda: ComponentLocation(lat=0.0, lon=0.0)
-    )
-    descriptors: Optional[Dict] = Field(default_factory=dict)
-    processes: Optional[Dict] = Field(default_factory=dict)
-    iframe: ComponentFrame
-    pca_frame: ComponentFrame
-    validated: bool = False
-    condition: Optional[int] = None
-    manufactured_at: Optional[str] = None
-    manufactured_precision: Optional[str] = None
-    salvage_source: Optional[str] = None
-    salvaged_at: Optional[str] = None
-    reserved: str = ''
-    attributes: Optional[Dict] = Field(default_factory=dict)
-    parent_identities: Optional[List[str]] = None
-    notes: Optional[str] = Field(
-        default=None,
-        max_length=5000,
-        description='Optional notes stored on the initial snapshot',
-    )
-    quantity: int = Field(
-        default=1,
-        ge=1,
-        le=999_999,
-        description='Count of identical items (initial snapshot)',
-    )
-    marker_points: Optional[List[List[float]]] = Field(
-        default=None,
-        description=(
-            'Optional marker points merged into geometry.marker_points '
-            'when not already set on geometry'
-        ),
-    )
-
-    @field_validator('componenttype')
-    @classmethod
-    def _validate_componenttype(cls, v: str) -> str:
-        if v not in ALLOWED_COMPONENT_TYPES:
-            raise ValueError(
-                f'type must be one of {ALLOWED_COMPONENT_TYPES}'
-            )
-        return v
-
-    @field_validator('complexity')
-    @classmethod
-    def _validate_complexity(cls, v: int) -> int:
-        if v not in ALLOWED_COMPLEXITY_LEVELS:
-            raise ValueError(
-                f'complexity must be one of {ALLOWED_COMPLEXITY_LEVELS}'
-            )
-        return v
-
-    @field_validator('condition')
-    @classmethod
-    def _validate_condition(cls, v: Optional[int]) -> Optional[int]:
-        if v is None:
-            return v
-        if v not in ALLOWED_CONDITION_VALUES:
-            raise ValueError(
-                f'condition must be one of {ALLOWED_CONDITION_VALUES}'
-            )
-        return v
-
-    @field_validator('manufactured_precision')
-    @classmethod
-    def _validate_manufactured_precision(
-        cls, v: Optional[str]
-    ) -> Optional[str]:
-        if v is None:
-            return v
-        if v not in ALLOWED_MANUFACTURED_PRECISIONS:
-            raise ValueError(
-                'manufactured_precision must be one of '
-                f'{ALLOWED_MANUFACTURED_PRECISIONS}'
-            )
-        return v
-
-    @field_validator('salvage_source')
-    @classmethod
-    def _normalize_salvage_source(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        v = v.strip()
-        return v or None
-
-    @field_validator('parent_identities')
-    @classmethod
-    def _validate_parent_identities(
-        cls, v: Optional[List[str]]
-    ) -> Optional[List[str]]:
-        if v is None:
-            return None
-        if len(v) == 0:
-            return None
-        for item in v:
-            try:
-                uuid.UUID(str(item))
-            except (ValueError, AttributeError, TypeError):
-                raise ValueError(
-                    'parent_identities entries must be valid UUID strings'
-                )
-        return [str(item) for item in v]
-
-    @field_validator('notes')
-    @classmethod
-    def _normalize_create_notes(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return None
-        v = v.strip()
-        return v or None
-
-    class Config:
-        extra = 'ignore'
-        populate_by_name = True
-
-
-class CreateSnapshotRequest(BaseModel):
-    """Create a new real snapshot version for an existing identity."""
-
-    id: Optional[str] = Field(
-        default=None,
-        alias='_id',
-        description='Optional snapshot UUID; server generates if omitted',
-    )
-    name: Optional[str] = Field(
-        default=None,
-        description=(
-            'Display name for this snapshot state; omit to inherit the '
-            'current snapshot name'
-        ),
-    )
-    complexity: int
-    fragment: bool
-    assembly: bool
-    geometry: SnapshotGeometry
-    color: Optional[List[int]] = Field(default=[110, 110, 110])
-    bbx: ComponentBoundingBox
-    bbx_origin: List[float]
-    location: Optional[ComponentLocation] = Field(
-        default_factory=lambda: ComponentLocation(lat=0.0, lon=0.0)
-    )
-    descriptors: Optional[Dict] = Field(default_factory=dict)
-    processes: Optional[Dict] = Field(default_factory=dict)
-    iframe: ComponentFrame
-    pca_frame: ComponentFrame
-    validated: bool = False
-    virtual: bool = False
-    condition: Optional[int] = None
-    notes: Optional[str] = Field(
-        default=None,
-        max_length=5000,
-        description='Optional notes stored on the new snapshot',
-    )
-    quantity: int = Field(
-        default=1,
-        ge=1,
-        le=999_999,
-        description='Count of identical items for this snapshot state',
-    )
-    marker_points: Optional[List[List[float]]] = Field(
-        default=None,
-        description=(
-            'Optional marker points merged into geometry.marker_points '
-            'when not already set on geometry'
-        ),
-    )
-
-    @field_validator('complexity')
-    @classmethod
-    def _validate_complexity(cls, v: int) -> int:
-        if v not in ALLOWED_COMPLEXITY_LEVELS:
-            raise ValueError(
-                f'complexity must be one of {ALLOWED_COMPLEXITY_LEVELS}'
-            )
-        return v
-
-    @field_validator('condition')
-    @classmethod
-    def _validate_condition(cls, v: Optional[int]) -> Optional[int]:
-        if v is None:
-            return v
-        if v not in ALLOWED_CONDITION_VALUES:
-            raise ValueError(
-                f'condition must be one of {ALLOWED_CONDITION_VALUES}'
-            )
-        return v
-
-    @field_validator('notes')
-    @classmethod
-    def _normalize_snapshot_notes(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        v = v.strip()
-        return v or None
-
-    class Config:
-        extra = 'ignore'
-        populate_by_name = True
-
-
 class UpdateComponentSnapshotModel(BaseModel):
     """PATCH payload for the current snapshot of an identity.
 
@@ -1323,206 +1113,6 @@ class UpdateComponentSnapshotModel(BaseModel):
             return v
         v = v.strip()
         return v or None
-
-    class Config:
-        extra = "ignore"
-        populate_by_name = True
-
-
-# DESIGNS ---------------------------------------------------------------------
-
-class DesignInsertionFrame(BaseModel):
-    """Insertion frame defining component orientation in design space."""
-    o: List[float] = Field(
-        description="Origin point as [x, y, z] coordinates"
-    )
-    x: List[float] = Field(
-        description="X-axis vector as [x, y, z] coordinates"
-    )
-    y: List[float] = Field(
-        description="Y-axis vector as [x, y, z] coordinates"
-    )
-    z: List[float] = Field(
-        description="Z-axis vector as [x, y, z] coordinates"
-    )
-
-
-class DesignComponent(BaseModel):
-    """Snapshot reference with its insertion frame in the design."""
-    snapshot: str = Field(
-        description=(
-            "Snapshot ID (GUID) reference - a specific catalog version, "
-            "not the identity's current snapshot"
-        )
-    )
-    iframe: DesignInsertionFrame = Field(
-        description=(
-            "Insertion frame defining snapshot placement in design space"
-        )
-    )
-
-
-class DesignAdditionalGeometry(BaseModel):
-    """Design-scoped additional geometry item (static meshes)."""
-    id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()),
-        alias="_id",
-        description=(
-            "Globally unique identifier for this additional geometry item"
-        )
-    )
-    name: Optional[str] = Field(
-        None, description="Optional human-readable name"
-    )
-    iframe: DesignInsertionFrame = Field(
-        description="Insertion frame defining geometry orientation"
-    )
-    geometry: ComponentGeometry = Field(
-        description="Geometry data with one or more meshes."
-    )
-
-
-class DesignModel(BaseModel):
-    # globally unique ID (GUID stored in Mongo as _id)
-    id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()),
-        alias="_id",
-        description="Globally unique design identifier (GUID)"
-    )
-    # name and description
-    name: Optional[str] = Field(
-        None,
-        description="Human readable design name (optional)"
-    )
-    description: Optional[str] = Field(
-        None,
-        description="Design description (optional)"
-    )
-    # creator
-    creator: str = Field(
-        description="UUID of user who created this design"
-    )
-    # timestamps
-    created: str = Field(
-        description="ISO timestamp when design was created"
-    )
-    lastmodified: str = Field(
-        description="ISO timestamp when design was last modified"
-    )
-    # snapshot placements and respective insertion frames
-    components: List[DesignComponent] = Field(
-        description="List of snapshot placements and their insertion frames"
-    )
-    # additional geometry (design-scoped)
-    additional_geometry: List[DesignAdditionalGeometry] = Field(
-        default_factory=list,
-        description=(
-            "List of additional static meshes embedded in the design. "
-            "Always present; may be empty."
-        )
-    )
-
-    class Config:
-        extra = "ignore"
-        populate_by_name = True
-        schema_extra = {
-            "example": {
-                "_id": "550e8400-e29b-41d4-a716-446655440000",
-                "name": "Design A",
-                "description": "One of many beautiful designs",
-                "creator": "550e8400-e29b-41d4-a716-446655440002",
-                "created": "2024-01-15T10:30:00Z",
-                "lastmodified": "2024-01-15T10:30:00Z",
-                "components": [
-                    {
-                        "snapshot": "550e8400-e29b-41d4-a716-446655440010",
-                        "iframe": {
-                            "o": [0.0, 0.0, 0.0],
-                            "x": [1.0, 0.0, 0.0],
-                            "y": [0.0, 1.0, 0.0],
-                            "z": [0.0, 0.0, 1.0]
-                        }
-                    },
-                    {
-                        "snapshot": "550e8400-e29b-41d4-a716-446655440011",
-                        "iframe": {
-                            "o": [100.0, 0.0, 0.0],
-                            "x": [1.0, 0.0, 0.0],
-                            "y": [0.0, 1.0, 0.0],
-                            "z": [0.0, 0.0, 1.0]
-                        }
-                    }
-                ],
-                "additional_geometry": [
-                    {
-                        "id": "550e8400-e29b-41d4-a716-446655440099",
-                        "name": "connector A",
-                        "iframe": {
-                            "o": [0.0, 0.0, 0.0],
-                            "x": [1.0, 0.0, 0.0],
-                            "y": [0.0, 1.0, 0.0],
-                            "z": [0.0, 0.0, 1.0]
-                        },
-                        "geometry": {
-                            "meshes": [
-                                {
-                                    "v": [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
-                                    "f": [[0, 1, 2]]
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        }
-
-
-class CreateDesignRequest(BaseModel):
-    """Request model for creating a new design."""
-    id: str = Field(
-        alias="_id",
-        description="Design ID (UUID provided by client)"
-    )
-    name: Optional[str] = Field(
-        None,
-        description="Human readable design name (optional)"
-    )
-    description: Optional[str] = Field(
-        None,
-        description="Design description (optional)"
-    )
-    components: List[DesignComponent] = Field(
-        description="List of snapshot placements and their insertion frames"
-    )
-    additional_geometry: List[DesignAdditionalGeometry] = Field(
-        default_factory=list,
-        description=(
-            "List of additional static meshes embedded in the design. "
-            "Always present; may be empty."
-        )
-    )
-
-
-class UpdateDesignModel(BaseModel):
-    """Model for updating an existing design."""
-    name: Optional[str] = Field(
-        None,
-        description="Human readable design name (optional)"
-    )
-    description: Optional[str] = Field(
-        None,
-        description="Design description (optional)"
-    )
-    components: Optional[List[DesignComponent]] = Field(
-        None,
-        description="List of snapshot placements and their insertion frames"
-    )
-    additional_geometry: Optional[List[DesignAdditionalGeometry]] = Field(
-        None,
-        description=(
-            "List of additional static meshes embedded in the design"
-        )
-    )
 
     class Config:
         extra = "ignore"

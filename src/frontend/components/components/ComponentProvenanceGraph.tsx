@@ -6,7 +6,6 @@ import {
   Background,
   Controls,
   Handle,
-  MiniMap,
   Position,
   ReactFlow,
   type Edge,
@@ -21,13 +20,12 @@ import type {
   ProvenanceIdentityNode,
   ProvenanceSnapshotNode,
 } from '@/generated/catalogExtras'
-import { isConsumedShallowRow } from './componentDetailShared'
 import { cn } from '@/lib/utils'
 
 type IdentityData = {
   identityId: string
   name: string | null
-  consumed: boolean
+  exited: boolean
   isRoot: boolean
 }
 
@@ -35,7 +33,8 @@ type SnapshotData = {
   snapshotId: string
   identityId: string
   version: number
-  virtual: boolean
+  superseded: boolean
+  status: string
   isCurrent: boolean
   name: string | null
 }
@@ -56,7 +55,7 @@ function IdentityProvenanceNode({ data }: NodeProps<IdentityFlowNode>) {
     <div
       className={cn(
         'h-full w-full rounded-md border px-2 py-1.5 shadow-sm',
-        data.consumed
+        data.exited
           ? 'border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100'
           : 'border-green-300 bg-green-100 text-green-900 dark:border-green-700 dark:bg-green-950/50 dark:text-green-100',
         data.isRoot && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
@@ -69,7 +68,7 @@ function IdentityProvenanceNode({ data }: NodeProps<IdentityFlowNode>) {
           aria-hidden="true"
           className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-black/10 font-sans text-[9px] font-bold leading-none dark:bg-white/15"
         >
-          {data.consumed ? 'C' : 'A'}
+          {data.exited ? 'E' : 'A'}
         </span>
         <span className="truncate text-[10px] font-semibold">
           {data.isRoot ? 'This identity' : data.name || 'Identity'}
@@ -88,7 +87,7 @@ function SnapshotProvenanceNode({ data }: NodeProps<SnapshotFlowNode>) {
       <p className="text-[10px] font-semibold">
         Snapshot v{data.version}
         {data.isCurrent ? ' · live' : ''}
-        {data.virtual ? ' · virtual' : ''}
+        {data.superseded ? ' · corrected' : data.status !== 'published' ? ` · ${data.status}` : ''}
       </p>
       <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
         {data.name || data.snapshotId}
@@ -150,7 +149,7 @@ async function layoutGraph(graph: ProvenanceGraph): Promise<{
         data: {
           identityId: identity.identity_id,
           name: identity.name ?? null,
-          consumed: isConsumedShallowRow({ consumed_at: identity.consumed_at }),
+          exited: Boolean(identity.exit_kind),
           isRoot: identity.is_root,
         },
         style: { width: IDENTITY_WIDTH, height: IDENTITY_HEIGHT },
@@ -165,7 +164,8 @@ async function layoutGraph(graph: ProvenanceGraph): Promise<{
         snapshotId: snapshot.snapshot_id,
         identityId: snapshot.identity_id,
         version: snapshot.version,
-        virtual: Boolean(snapshot.virtual),
+        superseded: snapshot.superseded,
+        status: snapshot.status,
         isCurrent: snapshot.is_current,
         name: typeof snapshot.name === 'string' ? snapshot.name : null,
       },
@@ -197,6 +197,17 @@ export default function ComponentProvenanceGraph({
   const [nodes, setNodes] = useState<FlowNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [layoutError, setLayoutError] = useState<string | null>(null)
+  // the controls and the minimap follow the app's theme (a class on <html>)
+  const [dark, setDark] = useState(false)
+
+  useEffect(() => {
+    const root = document.documentElement
+    const update = () => setDark(root.classList.contains('dark'))
+    update()
+    const observer = new MutationObserver(update)
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -250,6 +261,7 @@ export default function ComponentProvenanceGraph({
           )
         }}
         fitView
+        colorMode={dark ? 'dark' : 'light'}
         minZoom={0.15}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -258,7 +270,6 @@ export default function ComponentProvenanceGraph({
       >
         <Background />
         <Controls />
-        <MiniMap pannable zoomable />
       </ReactFlow>
     </div>
   )

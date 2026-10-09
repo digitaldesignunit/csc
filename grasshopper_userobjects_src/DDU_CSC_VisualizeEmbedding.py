@@ -1,10 +1,9 @@
 #! python3
 # -*- coding: utf-8 -*-
-# venv: DDU_CSC
-print('ENV OK!')
+# venv: DDU_CSC_MATCH
 # r: charset_normalizer
-# r: requests
-# r: numpy
+# r: numpy==2.0.2
+print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
@@ -131,13 +130,41 @@ def _branch_anchor(geometries) -> Rhino.Geometry.Point3d:
         )
     return union.Center
 
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('LayoutGeometry', 'LayoutGeometry',
+     'Input geometry translated from its bounding-box centre to the corresponding embedding point in world coordinates.'),
+    ('LayoutPoints', 'LayoutPoints',
+     'Embedding points in world coordinates, one per datapoint. For 1D embeddings Y = Z = 0; for 2D embeddings Z = 0.'),
+    ('Colors', 'Colors',
+     'Per-datapoint RGB colour derived from embedding dimensions 4, 5 and 6 (if present), each normalised to [0, 255]. Missing channels default to 128 (mid-grey), so low-dimensional embeddings still produce a usable colour output.'),
+    ('XForm', 'XForm',
+     'The translation transform applied to each input geometry (useful to transform additional geometry into the same layout).'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
+
 
 class CSC_VisualizeEmbedding(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 261005
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
@@ -157,6 +184,28 @@ class CSC_VisualizeEmbedding(Grasshopper.Kernel.GH_ScriptInstance):
     def _addError(self, msg: str = ''):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
+
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the outputs were just
+        updated (says why)."""
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
 
     def BeforeRunScript(self):
         """Describe inputs & outputs."""
@@ -181,25 +230,7 @@ class CSC_VisualizeEmbedding(Grasshopper.Kernel.GH_ScriptInstance):
         )
 
         # Output descriptions -- skip the hidden "out" param if present.
-        i = 1 if self.OutputParams[0].Name == 'out' else 0
-        self.OutputParams[0 + i].Description = (
-            'Input geometry translated from its bounding-box centre to the '
-            'corresponding embedding point in world coordinates.'
-        )
-        self.OutputParams[1 + i].Description = (
-            'Embedding points in world coordinates, one per datapoint. '
-            'For 1D embeddings Y = Z = 0; for 2D embeddings Z = 0.'
-        )
-        self.OutputParams[2 + i].Description = (
-            'Per-datapoint RGB colour derived from embedding dimensions '
-            '4, 5 and 6 (if present), each normalised to [0, 255]. Missing '
-            'channels default to 128 (mid-grey), so low-dimensional '
-            'embeddings still produce a usable colour output.'
-        )
-        self.OutputParams[3 + i].Description = (
-            'The translation transform applied to each input geometry '
-            '(useful to transform additional geometry into the same layout).'
-        )
+        self._check_outputs()
 
     def RunScript(self,
             EmbeddedData: Grasshopper.DataTree[float],
@@ -207,25 +238,24 @@ class CSC_VisualizeEmbedding(Grasshopper.Kernel.GH_ScriptInstance):
             ScaleFactor: float):
 
         # init outputs
+        if self._stop():
+            return empty_outputs()
         LayoutGeometry = Grasshopper.DataTree[System.Object]()
         LayoutPoints = Grasshopper.DataTree[System.Object]()
         Colors = Grasshopper.DataTree[System.Object]()
         XForm = Grasshopper.DataTree[System.Object]()
         __Results = (LayoutGeometry, LayoutPoints, Colors, XForm)
 
-        self.Component.Message = None
 
         # input validation
         if EmbeddedData is None or EmbeddedData.DataCount == 0:
             msg = 'EmbeddedData failed to collect data!'
             self._addWarning(msg)
-            self.Component.Message = msg
             return __Results
 
         if Geometry is None or Geometry.DataCount == 0:
             msg = 'Geometry failed to collect data!'
             self._addWarning(msg)
-            self.Component.Message = msg
             return __Results
 
         if ScaleFactor is None:
@@ -256,7 +286,7 @@ class CSC_VisualizeEmbedding(Grasshopper.Kernel.GH_ScriptInstance):
         dims = [len(b) for b in branches]
         n_dims = max(dims) if dims else 0
         if n_dims < 1:
-            self._addError('EmbeddedData branches are empty')
+            self._addWarning('EmbeddedData branches are empty')
             return __Results
         if min(dims) != n_dims:
             self._addWarning(
@@ -368,7 +398,6 @@ class CSC_VisualizeEmbedding(Grasshopper.Kernel.GH_ScriptInstance):
 
         if successes == 0:
             self._addWarning('No datapoints produced valid output')
-            self.Component.Message = 'no output'
         else:
             parts = ['']
             if dims_pos == 1:
@@ -379,9 +408,8 @@ class CSC_VisualizeEmbedding(Grasshopper.Kernel.GH_ScriptInstance):
                 parts = ['3D layout']
             if dims_col > 0:
                 parts.append(f'+{dims_col}ch colour')
-                self.Component.Message = ' | '.join(parts)
             else:
-                self.Component.Message = parts[0]
+                pass
             self._addRemark(
                 f'Placed {successes} geometry object(s) using '
                 f'{dims_pos} position dim(s) and {dims_col} colour dim(s) '

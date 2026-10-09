@@ -84,8 +84,8 @@ def build_provenance_graph(
                 'identity_id': ident_id,
                 'catalog_number': ident.get('catalog_number'),
                 'name': _current_snapshot_name(ident, snaps),
-                'type': ident.get('type'),
-                'consumed_at': ident.get('consumed_at'),
+                'original_function': ident.get('original_function'),
+                'exit_kind': (ident.get('exit') or {}).get('kind'),
                 'is_root': ident_id == root_identity_id,
             }
         )
@@ -113,8 +113,8 @@ def build_provenance_graph(
                     'snapshot_id': snapshot_id,
                     'identity_id': ident_id,
                     'version': int(snap.get('version') or 0),
-                    'virtual': bool(snap.get('virtual')),
-                    'validated': bool(snap.get('validated')),
+                    'status': snap.get('status'),
+                    'superseded': bool(snap.get('superseded_by')),
                     'is_current': snapshot_id == current_id,
                     'name': snap.get('name'),
                 }

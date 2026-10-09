@@ -1,17 +1,61 @@
 name: CI
 
-# Every PR and push, and as the first stage of every release (release.yml).
+# Guards what goes live (decision 8.114): pull requests to main, every release
+# (release.yml calls this workflow) and manual runs. No run per push. The wider
+# suite (tests/catalog, tests/grasshopper, slow tests) runs locally:
+# `invoke test-all`, and `invoke test-release` before tagging.
+#
+# On a pull request the frontend and backend jobs run only when their paths
+# changed; a release and a manual run always run every job. A skipped job
+# counts as passed for a required check.
 
 on:
   pull_request:
-  push:
-    branches: [main, 'v-*']
+    branches: [main]
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.result.outputs.backend }}
+      frontend: ${{ steps.result.outputs.frontend }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            backend:
+              - 'src/backend/**'
+              - 'tests/api/**'
+              - 'tests/conftest.py'
+              - 'requirements-dev.txt'
+              - 'pytest.ini'
+            frontend:
+              - 'src/frontend/**'
+      - id: result
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            echo "backend=${{ steps.filter.outputs.backend }}" >> "$GITHUB_OUTPUT"
+            echo "frontend=${{ steps.filter.outputs.frontend }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          fi
+
   versions:
     name: Versions agree
     runs-on: ubuntu-latest
@@ -24,6 +68,8 @@ jobs:
 
   backend:
     name: Backend tests
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     services:
       mongodb:
@@ -45,8 +91,9 @@ jobs:
             src/backend/requirements.txt
             src/backend/constraints.txt
       - run: pip install -r requirements-dev.txt
-      # csc_sheetscan (local tool, heavy dependencies) is tested locally only
-      - run: python -m pytest tests -q --ignore=tests/csc_sheetscan
+      # the route tests only (decision 8.114); every xdist worker gets its own
+      # database on the service container
+      - run: python -m pytest tests/api -q -n auto
       - name: Backend installs on Uberspace 7 without compiling
         run: python -m invoke check-server-wheels
 
@@ -66,6 +113,8 @@ jobs:
 
   frontend:
     name: Frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -80,6 +129,7 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run lint
+      - run: npm test
       - run: npm run build
 
   grasshopper:

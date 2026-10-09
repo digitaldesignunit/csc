@@ -20,7 +20,7 @@ Mass-weighted pooling reduces sensitivity to non-uniform sampling density.
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-from typing import Tuple
+from typing import Optional, Tuple
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import numpy as np
@@ -160,7 +160,8 @@ def lap_eigendecomp(
     n_eigs: int = 128,
     sigma: float = 1e-8,
     tol: float = 0.0,
-    max_disconnected: int = 10
+    max_disconnected: int = 10,
+    v0: Optional[np.ndarray] = None
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Solve L phi = lambda M phi for the smallest eigenpairs.
@@ -176,6 +177,8 @@ def lap_eigendecomp(
         sigma: shift-invert parameter for eigenvalue solver
         tol: convergence tolerance (0 = machine precision)
         max_disconnected: maximum number of near-zero eigenvalues to skip
+        v0: ARPACK's starting vector; without one it draws a random one, so
+            two runs differ in the last digits (HKS passes a seeded vector)
 
     Returns:
         evals: (n_eigs,) positive eigenvalues, ascending order
@@ -200,7 +203,7 @@ def lap_eigendecomp(
     k = min(n_eigs + max_disconnected, L.shape[0] - 2)
 
     try:
-        evals, evecs = sla.eigsh(L, k=k, M=M, sigma=sigma, tol=tol)
+        evals, evecs = sla.eigsh(L, k=k, M=M, sigma=sigma, tol=tol, v0=v0)
     except sla.ArpackNoConvergence as e:
         raise RuntimeError(f'Eigendecomposition failed to converge: {e}')
 

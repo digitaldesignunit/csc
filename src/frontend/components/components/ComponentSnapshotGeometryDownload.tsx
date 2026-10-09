@@ -22,16 +22,20 @@ import {
 
 type Props = {
   catalog: CatalogComponent
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
 const GROUP_ORDER: GeometryDownloadItem['group'][] = [
-  'mesh_file',
-  'mesh_primitive',
-  'extrusion',
+  'original',
+  'reduced',
+  'preview',
+  'proxy',
   'point_cloud',
 ]
 
-export default function ComponentSnapshotGeometryDownload({ catalog }: Props) {
+/** The geometry files of the state on screen, as a dialog opened from the Actions menu (8.118). */
+export default function ComponentSnapshotGeometryDownload({ catalog, open, onOpenChange }: Props) {
   const { identity } = catalog
   const snapshot = primarySnapshot(catalog)
   const snapshotId = String(snapshot._id ?? identity.current_snapshot_id ?? '')
@@ -51,7 +55,6 @@ export default function ComponentSnapshotGeometryDownload({ catalog }: Props) {
     return map
   }, [items])
 
-  const [open, setOpen] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -73,21 +76,7 @@ export default function ComponentSnapshotGeometryDownload({ catalog }: Props) {
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-8 w-full text-xs"
-        onClick={() => {
-          setError(null)
-          setOpen(true)
-        }}
-      >
-        <Download className="mr-1.5 h-3.5 w-3.5" />
-        Download geometry
-      </Button>
-
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Download geometry</DialogTitle>

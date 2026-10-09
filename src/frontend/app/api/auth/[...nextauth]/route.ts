@@ -5,6 +5,7 @@ import NextAuth, { type AuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { MongoClient, type Collection, type WithId } from 'mongodb'
 import { CSC_CLIENT_HEADERS } from '@/lib/cscClient'
+import { forwardedFor } from '@/lib/clientAddress'
 import bcrypt from 'bcryptjs'
 import type { JWT } from 'next-auth/jwt'
 import type { Session } from 'next-auth'
@@ -105,7 +106,10 @@ function decodeJwtExpMs(token: string): number | undefined {
 }
 
 // Credentials authorize (Mongo + bcrypt), then exchange for FastAPI token
-async function authorizeUser(credentials?: { identifier: string; password: string }): Promise<AuthorizedUserPayload | null> {
+async function authorizeUser(
+  credentials?: { identifier: string; password: string },
+  request?: { headers?: Record<string, string | string[] | undefined> },
+): Promise<AuthorizedUserPayload | null> {
   if (!credentials) {
     console.error('[NextAuth][Auth] No credentials payload received')
     return null
@@ -145,11 +149,12 @@ async function authorizeUser(credentials?: { identifier: string; password: strin
     return null
   }
 
-  // 3) Find user by username OR email
+  // 3) Find user by username OR email; both are stored lowercase, so any
+  // case signs in (decision 8.28)
   let user: WithId<DBUser> | null = null
   try {
     user = await usersColl.findOne({
-      $or: [{ username: identifier }, { email: lowerEmail }],
+      $or: [{ username: identifier.toLowerCase() }, { email: lowerEmail }],
       disabled: { $ne: true },
     })
   } catch (err: unknown) {
@@ -199,6 +204,8 @@ async function authorizeUser(credentials?: { identifier: string; password: strin
         'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'application/json',
         ...CSC_CLIENT_HEADERS,
+        // the visitor's address, for the backend's login limit
+        ...forwardedFor(request?.headers ?? {}),
       },
       body,
       cache: 'no-store',

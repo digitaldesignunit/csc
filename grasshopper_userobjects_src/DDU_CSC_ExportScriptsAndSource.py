@@ -44,7 +44,7 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach (based on a Python Script by Anders Holden Deleuran)  # NOQA
     License: MIT License
-    Version: 260908
+    Version: 261005
     """
 
     def __init__(self):
@@ -687,6 +687,14 @@ class ExportScriptsAndSource(Grasshopper.Kernel.GH_ScriptInstance):
         # Iterate the canvas and get to the GHPython components
         grasshopper_document = ghenv.Component.OnPingDocument()  # type: ignore[reportUnedfinedVariable] # NOQA
         gh_dir = os.path.dirname(grasshopper_document.FilePath)
+
+        # Verify folders
+        all_folders = list(UserObjFolders) + list(XMLFolders) + list(SourceFolders)
+        for i, folder in enumerate(all_folders):
+            expanded_folder = os.path.normpath(os.path.abspath(os.path.join(gh_dir, self._expand_path(folder))))
+            if not os.path.isdir(expanded_folder):
+                # self._addWarning(f'Folder not found: {expanded_folder}!')
+                self._addWarning(f'Folder not found: "{expanded_folder}" !')
 
         usrobjpaths = [
             os.path.normpath(os.path.abspath(

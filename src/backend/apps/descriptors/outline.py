@@ -50,8 +50,10 @@ from shapely import MultiPoint, Polygon, concave_hull
 from apps.descriptors import radial_signature as rs
 from apps.descriptors.geometry import (
     apply_pca_frame_to_points,
+    apply_pca_frame_transform,
+    create_mesh_from_extrusion,
     first_extrusion,
-    load_extrusion_mesh_for_descriptor,
+    frame_of,
     load_snapshot_point_cloud_points,
     load_snapshot_surface_mesh,
 )
@@ -540,12 +542,20 @@ def _build_extrusion_mesh(
     extrusion: Dict,
     pca_frame: Optional[Dict[str, List[float]]],
 ) -> trimesh.Trimesh:
-    """Sweep an extrusion into a PCA-aligned mesh to cut."""
-    return load_extrusion_mesh_for_descriptor(
-        profile=extrusion['profile'],
-        height=extrusion['height'],
-        pca_frame=pca_frame,
-    )
+    """Sweep an extrusion into a frame-aligned mesh to cut.
+
+    An authored prism (0.6) carries a ``placement`` into the stored
+    coordinates, applied before the frame.
+    """
+    mesh = create_mesh_from_extrusion(
+        extrusion['profile'], extrusion['height'])
+    placement = extrusion.get('placement')
+    if placement is not None:
+        from apps.catalog.proxies.primitives import placement_matrix
+        mesh.apply_transform(placement_matrix(placement))
+    if pca_frame is not None:
+        mesh = apply_pca_frame_transform(mesh, pca_frame)
+    return mesh
 
 
 def outline_from_component(
@@ -592,7 +602,7 @@ def outline_from_component(
     """
     policy = policy if policy is not None else policy_for(component)
     geometry = component.get('geometry') or {}
-    pca_frame = component.get('pca_frame')
+    pca_frame = frame_of(component)
     snapshot_id = str(component.get('_id', '<unknown>'))
     last_reason: Optional[str] = None
     _ = mesh

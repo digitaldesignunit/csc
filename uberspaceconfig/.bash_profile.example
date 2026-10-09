@@ -35,15 +35,31 @@ export SMTP_USER="noreply@2ndchances.build"
 export SMTP_PASSWORD="your-mailbox-password"
 export SMTP_FROM_EMAIL="noreply@2ndchances.build"
 export SMTP_FROM_NAME="Catalog of Second Chances"
+# where a reply to a verification or password-reset mail goes (the support
+# address); the mails themselves are sent from the noreply mailbox. Optional.
+export SMTP_REPLY_TO="support@2ndchances.build"
 export FRONTEND_URL="https://2ndchances.build"
+export CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de"
 
 # Filesystem paths
 # shipped with each release (grasshopper_userobjects_xml)
 export GH_XML_CACHE_DIR="/home/ddu/csc/current/backend/static/ghxml"
-export SNAPSHOT_PREVIEW_DIR="/home/ddu/html/csc_assets/snapshot_previews"
-export SNAPSHOT_PHOTOS_DIR="/home/ddu/html/csc_assets/snapshot_photos"
-export SNAPSHOT_MESHES_DIR="/home/ddu/html/csc_assets/meshes"
-export SNAPSHOT_POINT_CLOUDS_DIR="/home/ddu/html/csc_assets/pointclouds"
+# the catalogue files are private (decision 8.125): outside the web root, served
+# only by the API to the people who may see the piece
+export SNAPSHOT_PREVIEW_DIR="/home/ddu/csc_assets_private/snapshot_previews"
+export SNAPSHOT_PHOTOS_DIR="/home/ddu/csc_assets_private/snapshot_photos"
+export SNAPSHOT_MESHES_DIR="/home/ddu/csc_assets_private/meshes"
+export SNAPSHOT_POINT_CLOUDS_DIR="/home/ddu/csc_assets_private/pointclouds"
+export SNAPSHOT_PROXIES_DIR="/home/ddu/csc_assets_private/proxies"
+export SNAPSHOT_CAPTURE_DIR="/home/ddu/csc_assets_private/capture"
+# evidence attachments (lab reports, inspection photos); served only to
+# signed-in users through the API
+export EVIDENCE_ATTACHMENTS_DIR="/home/ddu/csc_assets_private/evidence"
+export EVIDENCE_UPLOAD_LIMIT_MB=25
+# where proxies, descriptors, complexity and previews run: server | remote
+# (remote = a worker elsewhere, `main_geometry.py --remote`; then this
+# server's cron and recompute route do only frame and shape class)
+export CSC_GEOMETRY_HEAVY_STAGES="server"
 
 # Snapshot upload limits (optional; defaults in utility.py)
 export SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB=10

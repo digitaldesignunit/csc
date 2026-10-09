@@ -6,6 +6,16 @@
 -c src/backend/constraints.txt
 
 pytest>=8
+pytest-xdist>=3
 coverage
 flake8
 invoke>=2
+
+# the Grasshopper client's own dependency, imported by the components that
+# tests/grasshopper runs outside Rhino (the server itself uses httpx)
+requests
+
+# validation of the JSON-LD and Turtle exports (tests/api, plan P10); the server
+# writes both without an RDF library
+pyld
+rdflib

@@ -1,9 +1,10 @@
 #! python3
 # -*- coding: utf-8 -*-
 # venv: DDU_CSC
-print('ENV OK!')
 # r: charset_normalizer
-# r: requests
+# r: requests==2.32.5
+# r: numpy==2.0.2
+print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -27,27 +28,75 @@ ghenv.Component.Description = (  # NOQA
     'Fetches the reduced (catalog default) snapshot geometry as binary PLY '
     'from the CSC API, with ETag caching.\n'
     'Input can be:\n'
-    '- Geometry carrying the \'csc_component\' passport userstring\n'
-    '- A passport JSON string ({identity, snapshots[]})\n'
+    '- Geometry carrying the \'csc_component\' user text\n'
+    '- A component passport JSON string ({identity, snapshots[]})\n'
     '- A raw identity_id (resolves the current snapshot)\n'
     '- A raw snapshot_id\n\n'
-    'Falls back to the inline snapshot geometry (primitive meshes) when no '
+    'Falls back to the inline snapshot geometry (preview meshes) when no '
     'reduced PLY is available. Point clouds have no reduced PLY; the inline '
-    'preview (at most 5000 points) is returned instead.'
+    'preview (at most 5000 points) is returned instead. A piece that has '
+    'only an authored shape (a box or prism, no scan) is built from its '
+    'parameters.'
 )
+
+
+# CSC LIBRARY (decision 8.111) ----------------------------------------------
+CSC_GH_MINIMUM = '261005'
+LIBRARY_PROBLEM = None
+try:
+    import csc_gh
+    csc_gh.require(CSC_GH_MINIMUM)
+    from csc_gh.read import (authored_only, drawable_proxies, placement_of)  # NOQA
+    from csc_gh.rhino import (placement_transform, proxy_to_rhino)  # NOQA
+except ImportError:
+    LIBRARY_PROBLEM = (
+        'CSC library 261005 too old or missing: run CSC_Update, '
+        'then restart Rhino')
+
+
+
+# the file names of the server are detailed / reduced; the levels are named
+# Original / Reduced / Preview (decision 8.23)
+LEVEL_NAMES = {'detailed': 'original', 'reduced': 'reduced'}
+
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('GeometryData', 'GeometryData',
+     'Fetched reduced geometry as Rhino meshes and point clouds (one object per snapshot primitive)'),
+    ('GeometrySource', 'GeometrySource',
+     'Per-primitive source: reduced (mesh PLY), preview (inline fallback, including point-cloud previews) or authored (a shape built from its parameters)'),
+    ('SnapshotID', 'SnapshotID',
+     'Snapshot ID that was processed'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
 
 
 class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260908
+    Version: 261005
     """
 
     # Resolution preference chain (reduced only; inline fallback otherwise)
     resolution_chain = ['reduced']
     # Point clouds have no reduced PLY; always use the inline preview.
     fetch_point_cloud_ply = False
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
@@ -72,31 +121,45 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the library is missing or
+        too old, or the outputs were just updated (says why)."""
+        if LIBRARY_PROBLEM:
+            self._addError(LIBRARY_PROBLEM)
+            return True
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
         self.InputParams[0].Description = (
             'Input can be:\n'
-            '- Geometry with the \'csc_component\' passport userstring\n'
-            '- A passport JSON string ({identity, snapshots[]})\n'
+            '- Geometry with the \'csc_component\' user text\n'
+            '- A component passport JSON string ({identity, snapshots[]})\n'
             '- A raw identity_id (resolves current snapshot)\n'
             '- A raw snapshot_id'
         )
         # Initialize output param descriptions
-        i = 0
-        if self.OutputParams[0].Name == 'out':
-            i += 1
-        self.OutputParams[0+i].Description = (
-            'Fetched reduced geometry as Rhino meshes and point clouds '
-            '(one object per snapshot primitive)'
-        )
-        self.OutputParams[1+i].Description = (
-            'Per-primitive source: reduced (mesh PLY) or primitive '
-            '(inline fallback, including point-cloud previews)'
-        )
-        self.OutputParams[2+i].Description = (
-            'Snapshot ID that was processed'
-        )
+        self._check_outputs()
+        if LIBRARY_PROBLEM is None:
+            csc_gh.dev_reload(globals())
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -104,8 +167,7 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         if auth_core is None:
             msg = ('No authentication found. Please use CSC_Session component '
                    'first.')
-            self._addError(msg)
-            self.Component.Message = msg
+            self._addWarning(msg)
             return None
         return auth_core
 
@@ -151,7 +213,9 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             if resp.status_code == 200:
                 return auth_core.normalize_passport_output(resp.json())
         except Exception as e:
-            self._addWarning(f'Identity passport fetch failed: {str(e)}')
+            self._addWarning(
+                'Fetching the component passport of the identity failed: '
+                f'{str(e)}')
         return None
 
     def fetch_passport_by_snapshot(self, auth_core, snapshot_id):
@@ -237,20 +301,26 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         mesh.Compact()
         return mesh
 
-    def iframe_xform(self, snapshot):
-        """Build the world->iframe transform from the snapshot iframe."""
-        iframe = snapshot.get('iframe')
-        if not iframe:
-            return None
-        try:
-            plane = rg.Plane(
-                rg.Point3d(*iframe['o']),
-                rg.Vector3d(*iframe['x']),
-                rg.Vector3d(*iframe['y']),
-            )
-            return rg.Transform.PlaneToPlane(rg.Plane.WorldXY, plane)
-        except (KeyError, TypeError):
-            return None
+    def placement_xform(self, passport):
+        """The client-side placement of the piece (csc_placement, set by
+        TransformComponent) as a transform of the stored geometry."""
+        placed = placement_of(passport)
+        return placement_transform(placed) if placed else None
+
+    def fetch_authored_proxies(self, snapshot):
+        """Authored shapes of a piece that has no mesh and no point cloud
+        (a web-authored box, a migrated extrusion), built from the proxy
+        parameters and placement; ``[(geometry, 'authored', index)]``."""
+        results = []
+        if not authored_only(snapshot):
+            return results
+        for index, proxy in drawable_proxies(snapshot):
+            if (proxy.get('fit') or {}).get('method') != 'authored':
+                continue
+            shape = proxy_to_rhino(proxy)
+            if shape is not None:
+                results.append((shape, 'authored', index))
+        return results
 
     def fetch_primitive_meshes(self, auth_core, snapshot):
         """
@@ -277,11 +347,11 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     )
                     if m is not None:
                         mesh = m
-                        source = resolution
+                        source = LEVEL_NAMES.get(resolution, resolution)
                         break
             if mesh is None:
                 mesh = self.build_inline_mesh(inline_meshes[i], default_color)
-                source = 'primitive'
+                source = 'preview'
             if mesh is not None:
                 results.append((mesh, source))
         return results
@@ -326,21 +396,21 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     cloud = auth_core.cached_get_snapshot_point_cloud(
                         snapshot_id, i)
                     if cloud is not None:
-                        source = 'detailed'
+                        source = 'original'
                 except Exception as e:
                     self._addWarning(
                         'Point cloud PLY fetch failed '
                         f'for index {i}: {str(e)}')
             if cloud is None:
                 cloud = self.build_inline_point_cloud(inline_pcs[i])
-                source = 'primitive'
+                source = 'preview'
             if cloud is not None:
                 results.append((cloud, source))
         return results
 
     def collect_fetched_geometry(self, auth_core, snapshot):
         """
-        Return meshes then point clouds as
+        Return meshes, then point clouds, then authored shapes as
         (geometry, source, kind, index) tuples.
         """
         items = []
@@ -350,6 +420,8 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         for i, (cloud, source) in enumerate(
                 self.fetch_primitive_point_clouds(auth_core, snapshot)):
             items.append((cloud, source, 'point_cloud', i))
+        for shape, source, index in self.fetch_authored_proxies(snapshot):
+            items.append((shape, source, 'proxy', index))
         return items
 
     def select_fetched_geometry(self, Input, input_is_geometry, items):
@@ -372,6 +444,17 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                 ]
                 return filtered or items
             return items
+        raw = Input.GetUserString('csc_proxy_index')
+        if raw:
+            try:
+                idx = int(raw)
+            except (TypeError, ValueError):
+                return items
+            filtered = [
+                item for item in items
+                if item[2] == 'proxy' and item[3] == idx
+            ]
+            return filtered or items
         raw = Input.GetUserString('csc_mesh_index')
         if raw:
             try:
@@ -387,24 +470,24 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
 
     def RunScript(self, Input):
         # Get AuthCore instance from sticky storage
+        if self._stop():
+            return empty_outputs()
         auth_core = self.get_auth_core_from_sticky()
         if auth_core is None:
-            return
+            return empty_outputs()
 
         # Check if authentication is valid
         if not auth_core.is_valid():
             msg = ('Authentication expired. Please use CSC_Session '
                    'component to refresh.')
-            self._addError(msg)
-            self.Component.Message = msg
-            return
+            self._addWarning(msg)
+            return empty_outputs()
 
         # Input validation
         if not Input:
             msg = 'Please provide input data.'
             self._addWarning(msg)
-            self.Component.Message = msg
-            return
+            return empty_outputs()
 
         # Set up outputs
         GeometryData = System.Collections.Generic.List[System.Object]()
@@ -413,7 +496,6 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         __Results = (GeometryData, GeometrySource, SnapshotID)
 
         try:
-            self.Component.Message = 'Processing input...'
 
             passport, input_is_geometry = self.resolve_passport(
                 auth_core, Input)
@@ -421,28 +503,22 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             if not passport or not snapshot:
                 msg = 'Could not resolve a snapshot from input.'
                 self._addError(msg)
-                self.Component.Message = msg
                 return __Results
             snapshot_id = snapshot.get('_id')
             if not snapshot_id or not auth_core.validate_uuid(snapshot_id):
                 msg = f'Snapshot ID <{snapshot_id}> is not a valid UUID!'
                 self._addError(msg)
-                self.Component.Message = msg
                 return __Results
 
-            self.Component.Message = (
-                f'Fetching reduced geometry for snapshot {snapshot_id}...'
-            )
 
             items = self.collect_fetched_geometry(auth_core, snapshot)
             if not items:
                 msg = f'No geometry available for snapshot {snapshot_id}'
-                self._addError(msg)
-                self.Component.Message = msg
+                self._addWarning(msg)
                 return __Results
 
-            # Apply the iframe transform to position geometry in the document
-            xform = self.iframe_xform(snapshot)
+            # Position the geometry by the piece's client-side placement
+            xform = self.placement_xform(passport)
             if xform is not None:
                 for geom, _source, _kind, _idx in items:
                     geom.Transform(xform)
@@ -453,6 +529,8 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
                     geom.SetUserString('csc_component', passport_json)
                     if kind == 'mesh':
                         geom.SetUserString('csc_mesh_index', str(idx))
+                    elif kind == 'proxy':
+                        geom.SetUserString('csc_proxy_index', str(idx))
                     else:
                         geom.SetUserString(
                             'csc_point_cloud_index', str(idx))
@@ -470,10 +548,6 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             pc_count = sum(
                 1 for _g, _s, kind, _i in selected
                 if kind == 'point_cloud')
-            self.Component.Message = (
-                f'Fetched reduced geometry ({mesh_count} mesh(es), '
-                f'{pc_count} point cloud(s)) for {snapshot_id}'
-            )
             self._addRemark(
                 f'Fetched reduced geometry ({mesh_count} mesh(es), '
                 f'{pc_count} point cloud(s)) for snapshot {snapshot_id}'
@@ -484,21 +558,17 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         except requests.exceptions.ConnectionError as e:
             msg = 'Cannot connect to server. Please check your connection.'
             self._addError(msg + f'\nFull Error: {str(e)}')
-            self.Component.Message = msg
 
         except requests.exceptions.Timeout as e:
             msg = 'Request timeout. Server may be slow.'
             self._addError(msg + f'\nFull Error: {str(e)}')
-            self.Component.Message = msg
 
         except requests.exceptions.RequestException as e:
             msg = f'Request error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
 
         except Exception as e:
             msg = f'Unexpected error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
 
         return __Results

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { CSC_CLIENT_HEADERS } from '@/lib/cscClient'
+import { forwardedFor } from '@/lib/clientAddress'
 
 const FASTAPI_URL = process.env.FASTAPI_URL!
 
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
   try {
     const upstream = await fetch(
       `${FASTAPI_URL}/auth/verify-email?token=${encodeURIComponent(token || '')}`,
-      { method: 'GET', headers: CSC_CLIENT_HEADERS }
+      { method: 'GET', headers: { ...CSC_CLIENT_HEADERS, ...forwardedFor(req.headers) } }
     )
 
     const contentType = upstream.headers.get('content-type')

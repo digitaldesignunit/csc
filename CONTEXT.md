@@ -39,23 +39,30 @@ _Avoid_: part (parts belong to the component)
 A labelled reference point in a capture --- fixed on the capture rig, or stuck on the component.
 _Avoid_: marker point
 
+**Component passport**:
+A component identity together with its snapshots, as it is read and exported (`/compose`; the human-readable PDF summary) --- always about one component, never about a building.
+_Avoid_: passport (unqualified), component data, building passport (the DGNB / EPBD building level)
+
+**Current snapshot**:
+The published snapshot a component page and the component passport show by default; set by a moderator, and falls back to the latest published one when it is withdrawn.
+
 **State change**:
 The component physically changed (cut, weathered, repaired); recorded as a new snapshot that starts later.
 _Avoid_: update, edit
 
 **Correction**:
-A recorded fact was wrong; recorded as a new record that supersedes the wrong one, which stays retrievable.
+A recorded fact was wrong; recorded as a new record that supersedes the wrong one, which stays retrievable. Any version can be corrected; the correction keeps that version's place. Filling a capture field that was left empty is not a correction.
 _Avoid_: edit, fix, overwrite
 
 **Draft**:
-A record its author is still preparing --- editable, and visible only to the author and the dataset's moderators; submitting it hands it to moderation.
+A record its author is still preparing --- editable, and visible only to the author and the dataset's moderators; submitting it hands it to moderation, and the author can recall it until a moderator acts.
 
 **Publishing**:
 The moderation act that makes a record visible in the catalog and lets it count.
 _Avoid_: validation, approval
 
 **Withdrawal**:
-Marking a published record as not belonging in the catalog (wrong, duplicate); it stays retrievable as a tombstone.
+Marking a published record as not belonging in the catalog (wrong, duplicate, a problem in a photo); the dataset still sees it in full, everyone else only a tombstone.
 _Avoid_: deletion, exit (exit is physical)
 
 **Duplicate**:
@@ -68,8 +75,16 @@ How a component entered circulation: deinstallation, demolition, offcut, surplus
 _Avoid_: salvage, source
 
 **Deinstallation**:
-Removal of a component from a construction work in which it had been installed (the CPR sense).
+Removal of a component from a construction work in which it had been installed (the CPR sense). Also the recorded act that turns a planned origin into a real one.
 _Avoid_: salvage, dismantling, demolition (demolition output was not individually deinstalled)
+
+**In place**:
+A component identified in a construction work and not yet deinstalled; its origin is planned. It is in circulation and can be reserved.
+_Avoid_: installed (that is an exit), standing, in situ (kept for in-situ testing)
+
+**Planned origin**:
+An origin whose event has not happened yet; its date is the planned date or open.
+_Avoid_: future origin
 
 **Offcut**:
 Residue of a fabrication process, never installed --- e.g. the Corian panels.
@@ -81,7 +96,7 @@ _Avoid_: offcut
 
 **Construction work**:
 A building or civil-engineering work a component was deinstalled from or installed into --- never the company involved.
-_Avoid_: site, project, building (too narrow: bridges and roads count)
+_Avoid_: site, project, building (too narrow: bridges and roads count), component mine (say: a construction work with components in place)
 
 **Exit**:
 How a component left circulation: split, merged, installed, recycled, disposed, returned, or lost.
@@ -98,7 +113,19 @@ A user's hold on a component in circulation, signalling that they intend to use 
 An installed, returned or lost component coming back with a new origin; the previous origin--exit cycle is archived.
 
 **Lineage**:
-The split and merge relations between identities. Children inherit their parents' past --- origin, material, manufacture date, original function --- unless they state their own.
+The split and merge relations between identities. Children inherit their parents' past --- origin, material, trade name, manufacture date, original function --- unless they state their own.
+
+**Batch**:
+One identity standing for several homogeneous pieces --- same type, material and nominal size --- whose snapshot quantity is greater than one (the CPR word).
+_Avoid_: lot, stack, group
+
+**Draw**:
+Taking one or more pieces out of a batch as a child identity; the batch stays in circulation until nothing remains.
+_Avoid_: cut, split (a cut changes shape), take
+
+**Remaining**:
+The pieces of a batch not yet drawn; derived, never entered.
+_Avoid_: stock, available
 
 ### Evidence and properties
 
@@ -117,6 +144,10 @@ Evidence without an instrument --- an archival document, a visual inspection, an
 A file that belongs to one evidence record and documents it --- a lab report, an inspection photo of one finding. One file may be attached to several records.
 _Avoid_: document (unqualified), photo (unqualified)
 
+**Document**:
+Archival evidence without a claimed value --- a plan, an element passport, a report, or a link to one --- that documents a component and never enters the fold.
+_Avoid_: file, attachment (the attachment is the file itself)
+
 **Reinforcement layout**:
 Evidence stating where the reinforcement bars inside a component run, with their grade and diameter, and on what basis (drawing, scan, exposed bars).
 _Avoid_: reinforcements (as snapshot geometry)
@@ -125,7 +156,7 @@ _Avoid_: reinforcements (as snapshot geometry)
 A test that damages the component, such as drilling a core; the test itself is the event, and no new snapshot is recorded for the hole.
 
 **Verification**:
-Confirmation by someone competent (a reviewer, or an accredited body) that evidence is what it claims to be; independent of publishing.
+Confirmation that evidence is what it claims to be; independent of publishing. The recorder may self-attest their own work; `reviewed` and `accredited` need a second person, never the recorder or a performer.
 _Avoid_: validation
 
 **Condition grade**:
@@ -167,8 +198,35 @@ _Avoid_: PCA frame, orientation; frame for any other coordinate system (a proxy 
 A simple primitive (box, prism, cylinder, hull) standing in for a snapshot's shape, together with how far the real shape deviates from it.
 _Avoid_: extrusion; bounding box (the frame's box is not a proxy)
 
+**Primitive**:
+The shape type of a proxy --- box, prism, cylinder or hull.
+_Avoid_: primitive for the small mesh stored in the snapshot (that is the *preview*)
+
+**Detail level**:
+Which version of a snapshot's geometry is shown or used: *proxy*, *preview*, *reduced* or *original*.
+_Avoid_: LOD, resolution (in the interface), "PLY mesh", numbered names ("Mesh 1") when there is only one
+
+**Preview**:
+The small copy of a mesh or point cloud stored in the snapshot record itself; the reduced and original versions are files next to it.
+_Avoid_: primitive, inline mesh, catalog primitive
+
+**Reduced**:
+A mesh file with fewer faces made from the original, for fast display.
+
+**Original**:
+The mesh or point cloud as uploaded to the catalog, never reduced by it; the reduced version and the preview are made from it. A detail level only --- never a field name or section heading, so *origin* keeps its own meaning. Stored on disk as `detailed.ply` until a later rename.
+_Avoid_: raw scan (the uploader may have cleaned it), detailed, full resolution
+
 **Deviation map**:
 An image per proxy face recording how far the real surface departs from the proxy.
+
+**Geometry runner**:
+The server-side process that derives everything computed from a snapshot's geometry --- frame, shape class, proxies and deviation maps, descriptors, complexity, previews --- in a fixed order of stages. The cheap stages also run when a draft is saved; the rest run in a periodic sweep, on the server or on another machine through the API.
+_Avoid_: descriptor cron, preview cron, batch job
+
+**Stage stamp**:
+What one stage of the geometry runner recorded on a snapshot when it last ran: its version, a fingerprint of what it read, and the error it ended with. A stage is stale when its stamp is missing or differs from the current version or inputs.
+_Avoid_: derivation status, cache key
 
 **Material**:
 The generic material a component is mainly made of, from a controlled list (concrete, fired clay, mineral composite, ...).
@@ -184,14 +242,18 @@ _Avoid_: material
 ### People and permissions
 
 **Dataset**:
-The unit of membership, permission and visibility --- in practice one project or study (ZirKuS, SAS CITA scans). Every identity belongs to exactly one.
+The unit of membership, permission and visibility --- in practice one project or study (ZirKuS, Beyond Debris). Every identity belongs to exactly one.
 _Avoid_: campaign (the study is the dataset; the occasion --- one day's tests --- is stated by each evidence record), collection
 
 **Contributor / Reviewer / Moderator**:
 The three dataset roles, held in any combination: a contributor adds components, snapshots and evidence; a reviewer verifies evidence; a moderator publishes, corrects and manages members.
 
 **Admin**:
-The global role that holds every privilege in every dataset.
+The global role that holds every privilege in every dataset --- except reviewing a record they recorded or performed (four eyes).
+
+**Invitation**:
+A single-use registration code bound to one email address, issued by an admin or a dataset moderator, that lets someone outside the open registration domains create an account, or pre-assigns dataset roles to someone who has no account yet.
+_Avoid_: invite code, access code
 
 **Actor**:
 A person or organization credited with an act --- who deinstalled, who drilled, who tested, who attested.

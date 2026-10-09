@@ -35,7 +35,7 @@ GitHub --> repository --> Settings --> Environments --> **New environment** `pro
   (the private key), `UBERSPACE_KNOWN_HOSTS` = contents of `csc_known_hosts`.
 - Environment variables: `UBERSPACE_HOST` = `columba.uberspace.de`,
   `UBERSPACE_USER` = `ddu`.
-- Repository variable `NEXT_PUBLIC_STATIC_BASE_URL` stays as it is (frontend build).
+- Repository variable `NEXT_PUBLIC_STATIC_BASE_URL` (frontend build): only for public UI files under `/static/`; catalogue files never use it (decision 8.125). It may be left empty.
 
 Once step 3 works, delete `csc_deploy_key` from your computer; GitHub holds
 the only copy.
@@ -137,11 +137,11 @@ From now on every release deploys this way.
 - Photo metadata (0.5.1.0 only): back up, dry run, then clean:
 
   ```bash
-  tar czf ~/snapshot_photos_$(date +%y%m%d).tgz -C ~/html/csc_assets snapshot_photos
+  tar czf ~/snapshot_photos_$(date +%y%m%d).tgz -C ~/csc_assets_private snapshot_photos
   curl -fsSL -o ~/migrate_strip_photo_gps.py \
     https://raw.githubusercontent.com/digitaldesignunit/csc/v0.5.1.0/scripts/db_maintenance/migrate_strip_photo_gps.py
   CSC_BACKEND_DIR=~/csc/current/backend ~/csc/current/venv/bin/python ~/migrate_strip_photo_gps.py \
-    --photos-dir ~/html/csc_assets/snapshot_photos --dry-run
+    --photos-dir ~/csc_assets_private/snapshot_photos --dry-run
   # then the same without --dry-run
   ```
 

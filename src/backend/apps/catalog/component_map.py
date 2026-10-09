@@ -56,51 +56,10 @@ def basis_label(basis: MapBasis) -> str:
     return BASIS_LABELS[basis]
 
 
-def cache_doc_id(
-    basis: MapBasis,
-    method: MapMethod,
-    *,
-    consumed_filter: str = 'active',
-    validated: int = 1,
-) -> str:
-    """Stable ``_id`` for a cached layout under a catalog scope."""
-    return f'{basis}:{method}:{consumed_filter}:v{int(validated)}'
-
-
-def is_default_map_scope(
-    *,
-    consumed_filter: str,
-    validated: int,
-    comptype: str = '',
-    material: str = '',
-    dataset: str = '',
-    complexity: Optional[int] = None,
-    fragment: Optional[bool] = None,
-    reserved: Optional[str] = None,
-    bbx_min_x: Optional[float] = None,
-    bbx_min_y: Optional[float] = None,
-    bbx_min_z: Optional[float] = None,
-    bbx_max_x: Optional[float] = None,
-    bbx_max_y: Optional[float] = None,
-    bbx_max_z: Optional[float] = None,
-) -> bool:
-    """True when filters match the cron-cached catalog scope."""
-    return (
-        consumed_filter == 'active'
-        and int(validated) == 1
-        and not comptype
-        and not material
-        and not dataset
-        and complexity is None
-        and fragment is None
-        and reserved is None
-        and bbx_min_x is None
-        and bbx_min_y is None
-        and bbx_min_z is None
-        and bbx_max_x is None
-        and bbx_max_y is None
-        and bbx_max_z is None
-    )
+def cache_doc_id(basis: MapBasis, method: MapMethod) -> str:
+    """Stable ``_id`` of a cached layout of the default catalog scope
+    (published current snapshots of pieces in circulation)."""
+    return f'{basis}:{method}:active:published'
 
 
 def map_rows_project_stage() -> Dict[str, Any]:
@@ -108,10 +67,15 @@ def map_rows_project_stage() -> Dict[str, Any]:
     return {
         '$project': {
             '_id': 1,
-            'type': 1,
+            'original_function': 1,
             'catalog_number': 1,
+            'dataset': 1,
+            'material': 1,
+            # a piece still in place (8.104), for the popup
+            'in_place': {'$eq': ['$origin.planned', True]},
             'name': '$current_snapshot.name',
             'color': '$current_snapshot.color',
+            'shape_class': '$current_snapshot.shape_class',
             'descriptors': '$current_snapshot.descriptors',
         },
     }
@@ -268,9 +232,14 @@ def build_component_map(
         metas.append({
             'id': identity_id,
             'name': row.get('name'),
-            'type': row.get('type'),
+            'original_function': row.get('original_function'),
             'catalog_number': row.get('catalog_number'),
+            'in_place': bool(row.get('in_place')),
             'color': row.get('color'),
+            # what the map colours by (8.118 C-2)
+            'dataset': row.get('dataset'),
+            'material': row.get('material'),
+            'shape_class': row.get('shape_class'),
         })
 
     displayed = len(vectors)
@@ -313,9 +282,13 @@ def payload_from_cache_doc(doc: Mapping[str, Any]) -> Dict[str, Any]:
                 'x': float(row.get('x', 0.0)),
                 'y': float(row.get('y', 0.0)),
                 'name': row.get('name'),
-                'type': row.get('type'),
+                'original_function': row.get('original_function'),
                 'catalog_number': row.get('catalog_number'),
+                'in_place': bool(row.get('in_place')),
                 'color': row.get('color'),
+                'dataset': row.get('dataset'),
+                'material': row.get('material'),
+                'shape_class': row.get('shape_class'),
             })
     return {
         'basis': doc['basis'],

@@ -6,6 +6,7 @@ import { Camera, ImagePlus, Loader2, Trash2, ZoomIn } from 'lucide-react'
 
 import PhotoLightboxDialog, { type PhotoLightboxItem } from '@/components/photos/PhotoLightboxDialog'
 import { Button } from '@/components/ui/button'
+import { THUMB_BOX, THUMB_IMG, thumbRow } from '@/lib/photoThumbs'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +49,8 @@ type SnapshotPhotoCaptureLiveProps = {
   maxPhotos?: number
   disabled?: boolean
   compact?: boolean
+  /** Inside the merged "Photos and location" card (8.118): a low row of thumbnails. */
+  dense?: boolean
 }
 
 export type SnapshotPhotoCaptureProps =
@@ -67,6 +70,8 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
   const maxPhotos = props.maxPhotos ?? MAX_PHOTO_SLOTS
   const disabled = props.disabled ?? false
   const compact = props.mode === 'live' ? (props.compact ?? false) : false
+  const dense = props.mode === 'live' ? (props.dense ?? false) : false
+  const rowHeight = dense ? 'h-24' : 'h-[200px] lg:h-[140px]'
 
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
@@ -217,11 +222,11 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
   }
 
   const gridClass = compact
-    ? 'flex h-[200px] lg:h-[140px] gap-1.5 overflow-hidden'
+    ? thumbRow(props.mode === 'live' ? props.indices.length : stagedItems.length)
     : 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'
 
   const thumbClass = compact
-    ? 'group relative h-full min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-muted'
+    ? THUMB_BOX
     : 'group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted'
 
   const liveTiles = useMemo(() => {
@@ -328,8 +333,8 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
       )}
 
       {props.mode === 'live' && liveTiles.length === 0 && !busy && (
-        <p className={`${compact ? 'flex h-[200px] lg:h-[140px] items-center justify-center' : 'py-6'} text-center text-sm text-muted-foreground`}>
-          No photos for this snapshot yet.
+        <p className={`${dense ? 'py-0.5 text-left' : compact ? `flex ${rowHeight} items-center justify-center text-center` : 'py-6 text-center'} text-sm text-muted-foreground`}>
+          {dense ? 'No photos yet.' : 'No photos for this snapshot yet.'}
         </p>
       )}
 
@@ -340,7 +345,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
                 <div key={item.id} className={thumbClass}>
                   <button
                     type="button"
-                    className="relative h-full w-full"
+                    className={compact ? 'relative block h-full' : 'relative h-full w-full'}
                     onClick={() => setLightboxPosition(index)}
                     aria-label={`Preview photo ${index + 1}`}
                   >
@@ -348,7 +353,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
                     <img
                       src={item.previewUrl}
                       alt={`Staged photo ${index + 1}`}
-                      className="h-full w-full object-cover"
+                      className={compact ? THUMB_IMG : 'h-full w-full object-cover'}
                     />
                   </button>
                   <Button
@@ -368,18 +373,23 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
                 <div key={index} className={thumbClass}>
                   <button
                     type="button"
-                    className="relative h-full w-full"
+                    className={compact ? 'relative block h-full' : 'relative h-full w-full'}
                     onClick={() => setLightboxPosition(position)}
                     aria-label={`View photo ${position + 1}`}
                   >
-                    <Image
-                      src={src}
-                      alt={`Snapshot photo ${index + 1}`}
-                      fill
-                      className="object-cover"
-                      unoptimized
-                      sizes={compact ? '140px' : '20vw'}
-                    />
+                    {compact ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={src} alt={`Snapshot photo ${index + 1}`} className={THUMB_IMG} />
+                    ) : (
+                      <Image
+                        src={src}
+                        alt={`Snapshot photo ${index + 1}`}
+                        fill
+                        className="object-cover"
+                        unoptimized
+                        sizes="20vw"
+                      />
+                    )}
                     <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
                       #{index}
                     </span>

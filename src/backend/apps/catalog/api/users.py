@@ -1,11 +1,16 @@
 #!/usr/bin/env python3.13
 
-from typing import Annotated, List
+import re
+from collections import defaultdict
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
 from apps.catalog.models import AdminUserUpdate, User, UserPublic
+from apps.catalog.vocab import DATASET_ROLES, DatasetRole
+from .access import load_datasets
 from .auth import require_admin, users_coll
 
 router = APIRouter()
@@ -32,26 +37,122 @@ def _user_public(doc: dict) -> UserPublic:
     return UserPublic.model_validate(doc)
 
 
+class MembershipRow(BaseModel):
+    dataset: str
+    roles: List[DatasetRole]
+
+
+class AdminUserRow(UserPublic):
+    """A row of the admin user list (8.21)."""
+    memberships: List[MembershipRow] = Field(default_factory=list)
+    invited: bool = False
+
+
+class UserHit(BaseModel):
+    id: str = Field(alias='_id')
+    username: str
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+
+    model_config = {'populate_by_name': True}
+
+
+def _memberships_by_user(datasets) -> Dict[str, List[MembershipRow]]:
+    out: Dict[str, List[MembershipRow]] = defaultdict(list)
+    for dataset in sorted(datasets, key=lambda d: d.id):
+        for member in dataset.members:
+            out[member.user_id].append(MembershipRow(
+                dataset=dataset.id,
+                roles=[r for r in DATASET_ROLES if r in member.roles]))
+    return out
+
+
 @router.get(
     '/users',
-    response_model=List[UserPublic],
-    summary='List all user accounts (admin only)',
+    response_model=List[AdminUserRow],
+    response_model_by_alias=True,
+    summary='User accounts with memberships, filterable (admin only)',
 )
 async def list_users(
+    request: Request,
     _admin_user: Annotated[User, Depends(require_admin)],
     users=Depends(users_coll),
+    q: Optional[str] = Query(None, description='text in username, name, '
+                                               'email'),
+    dataset: Optional[str] = Query(None, description='member of'),
+    dataset_role: Optional[DatasetRole] = Query(
+        None, description='holds this role (in `dataset`, else in any)'),
+    no_dataset: bool = Query(False, description='member of no dataset'),
+    role: Optional[Literal['user', 'admin']] = Query(None),
+    state: Optional[Literal['enabled', 'disabled', 'unverified']] = Query(
+        None),
+    invited: bool = Query(False, description='registered by invitation'),
 ):
+    """Filters combine (8.21); memberships come from ``datasets.members``,
+    joined here in one pass."""
+    match: Dict[str, Any] = {}
+    if q:
+        pattern = {'$regex': re.escape(q.strip()), '$options': 'i'}
+        match['$or'] = [{'username': pattern}, {'full_name': pattern},
+                        {'email': pattern}]
+    if role:
+        match['role'] = role
+    if state == 'disabled':
+        match['disabled'] = True
+    elif state == 'enabled':
+        match['disabled'] = {'$ne': True}
+        match['email_verified'] = True
+    elif state == 'unverified':
+        match['email_verified'] = {'$ne': True}
+    if invited:
+        match['invitation_id'] = {'$nin': [None, '']}
     try:
-        docs = await users.find({}, _USER_LIST_PROJECTION).sort(
-            'username', 1
-        ).to_list(length=None)
-        return [_user_public(doc) for doc in docs]
+        docs = await users.find(
+            match, {**_USER_LIST_PROJECTION, 'invitation_id': 1}).sort(
+            'username', 1).to_list(length=None)
     except PyMongoError as exc:
         print(f'[ERROR] list_users DB error: {exc}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
         )
+    memberships = _memberships_by_user((await load_datasets(request)).values())
+    rows: List[AdminUserRow] = []
+    for doc in docs:
+        mine = memberships.get(doc['_id'], [])
+        if no_dataset and mine:
+            continue
+        if dataset and not any(m.dataset == dataset for m in mine):
+            continue
+        if dataset_role and not any(
+                dataset_role in m.roles and (not dataset or m.dataset == dataset)
+                for m in mine):
+            continue
+        rows.append(AdminUserRow.model_validate({
+            **doc, 'memberships': mine,
+            'invited': bool(doc.get('invitation_id'))}))
+    return rows
+
+
+@router.get(
+    '/users/search',
+    response_model=List[UserHit],
+    response_model_by_alias=True,
+    summary='Prefix search over username, name, email (admin; 8.20)',
+)
+async def search_users(
+    _admin_user: Annotated[User, Depends(require_admin)],
+    users=Depends(users_coll),
+    q: str = Query(..., min_length=2),
+    limit: int = Query(20, ge=1, le=50),
+):
+    pattern = {'$regex': '^' + re.escape(q.strip()), '$options': 'i'}
+    docs = await users.find(
+        {'$or': [{'username': pattern}, {'full_name': pattern},
+                 {'email': pattern}]},
+        {'_id': 1, 'username': 1, 'full_name': 1, 'email': 1}).sort(
+        'username', 1).limit(limit).to_list(length=None)
+    return [UserHit.model_validate(d) for d in docs]
 
 
 @router.patch(

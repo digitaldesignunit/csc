@@ -5,6 +5,90 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0.0] - 2026-10-09
+
+The 0.6 data model: datasets and permissions, a moderated lifecycle for every
+record, provenance and lineage, server-side geometry, an evidence system for
+material properties, exports, a revised web interface and a rebuilt Grasshopper
+bridge. The design is recorded in `docs/adr/` (`DATA_MODEL_SPEC.md`, decisions
+up to 8.125 in `DESIGN_DECISIONS.md`, the phase plan in
+`IMPLEMENTATION_PLAN_0.6.md`); the glossary is `CONTEXT.md`.
+
+**Breaking.** The database is migrated once at the cutover (spec section 8,
+`scripts/db_maintenance/migrate_06.py`); 0.5 clients are refused with 426
+(`CSC_MIN_CLIENT_VERSIONS`), so Grasshopper users run `CSC_Update` (twice: the
+0.5 updater installs the 0.6 UserObjects, the new one the `csc_gh` library) and
+restart Rhino.
+
+### Added
+
+- **Datasets and memberships** with the roles contributor, reviewer and
+moderator per dataset; visibility `members` (default) or `catalog`; public
+pieces (`is_public`) for anonymous readers, who never see people (public tier).
+Invitations bound to one address, the member editor by email, the admin user
+list with filters.
+- **Lifecycle for snapshots and evidence**: draft, pending, published,
+rejected, withdrawn; recall, reinstate, purge with a 410 stub. Nobody publishes
+directly: submitting moves a record to the moderation queue for every role, and
+a moderator may publish their own record from the queue. Published claims are
+frozen; a correction is a new record that supersedes the old one and keeps its
+place in the version order. An empty capture field can be filled once.
+- **Submit and edit in the web**: My work submits own drafts, snapshots and
+evidence together (a refusal does not stop the others); a draft of evidence, or
+for a moderator a pending one, is edited in the evidence form.
+- **Change history** (`/changes`, `?as_of=`) for every record.
+- **Provenance and lineage**: origin (incl. planned and in-place pieces with
+deinstallation), exit and earlier cycles, cuts and merges with inherited fields,
+DIN SPEC 91484 / DGNB fields, a managed `materials` list with waste-code
+classes, batches with draws and the remaining quantity.
+- **Geometry runner** (`main_geometry.py`): canonical frame, shape class,
+fitted proxies (box, planar / linear prism, cylinder, hull) with deviation
+maps, descriptors incl. heat kernel signatures, complexity and previews; stage
+stamps make every result reproducible and stale on change. It also runs on
+another machine (`--remote`), with a result cache (`--cache-dir`).
+- **Evidence** (`component_evidence`): rebound hammer, cores, visual
+inspection, reinforcement layout, documents and further methods, positioned on
+the piece; verification with four eyes; attachments; a properties card folded
+from all published evidence; one timeline for versions, cycles and evidence.
+- **Exports**: component passport as JSON-LD (`compose?format=jsonld`,
+`/context/v1.jsonld`), CERO for concrete and aerated concrete pieces and a PDF passport.
+- **Web**: new component, cut, record new state and correct in one form; scan
+path for unknown tags; component page with History (list / graph), Actions
+menu and evidence; Browse as cards or table; My work; moderation tabs; the
+component map coloured by shape class, dataset, material or circulation;
+analytics; a generated reference of every Grasshopper component on the GH page.
+- **Grasshopper**: shared library `csc_gh` installed by `CSC_Update`, declared
+outputs, builders for actor, origin, metadata and capture, reinforcement
+layout and generic evidence, bake to and sync with the Rhino document, D2P
+bridge. Everything written from Grasshopper lands as a draft; completing and
+submitting it happens in the web (My work).
+- **Accounts**: password reset by mail; a password change signs out every other
+session. Failed invitation mails are shown with Resend.
+- `invoke rehearse`, `invoke dev-migrated`, `invoke test-changed / test-all /
+test-release`, `check_invariants.py`.
+
+### Changed
+
+- Snapshot files (previews, photos, meshes, point clouds, proxies, capture
+fixtures) are served only through the checked API routes; on the server they
+move out of the web root (`~/csc_assets_private/`).
+- Mails: one template with the `[CSC]` subject prefix, a `Reply-To` of the
+acting moderator for invitations and member notices, sent off the event loop.
+- Rate limits are keyed per token or per trusted client address
+(`CSC_TRUSTED_PROXIES`, `CSC_PROXY_HOPS`).
+- CI runs the API, frontend and deployment checks; the full suite runs locally
+(`invoke test-all`, decision 8.114).
+
+### Removed
+
+- Designs (archived at the cutover), the 0.5 snapshot fields (`type`,
+`extrusions`, `condition`, `validated`, `pca_frame`, ...), the 0.5 add-component
+wizard, the orientation utility route and the separate descriptor and preview
+cron jobs.
+- `API_SECRET` in the frontend environment (never read); `NEXTAUTH_SECRET` is
+independent of the backend's `JWT_SECRET`.
+
+
 ## [0.5.1.0] - 2026-09-28
 
 Pre-work for the 0.6 data model: runtime, releases and deployment, client

@@ -163,7 +163,7 @@ After generation, save to `svg/{NickName}.svg`, validate in a browser or vector 
 
 Rescanned from `grasshopper_userobjects_src/` (Python + C# script components). Descriptions are shortened from each component's `Description` field for icon generation.
 
-**Icon coverage (2026-09-08):** **49 / 49** active components have `svg/{NickName}.svg` and matching `24x24/{NickName}.png`. No missing icons.
+**Icon coverage:** every component below has `svg/{NickName}.svg` and a matching `24x24/{NickName}.png` (the P8 components got theirs on 2026-10-08; `ApplyFrame`, `FetchOriginalGeometry`, `ReinforcementLayout` and `GetComponentPassport` reuse the artwork of the names they replace).
 
 | Icon | Meaning |
 | --- | --- |
@@ -187,46 +187,49 @@ To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_i
 
 | NickName | Icon | Description (for icon generation) |
 | --- | --- | --- |
-| `CSC_Session` | yes | Authenticates with the CSC API, manages tokens, and caches identities, snapshots, and mesh PLY geometry in `scriptcontext.sticky`. |
+| `CSC_Session` | yes | Authenticates with the CSC API (server address input), keeps one connection alive, manages tokens, and caches identities, snapshots, and mesh PLY geometry in `scriptcontext.sticky`. |
 
 ### 2 Catalog Interface
 
 | NickName | Icon | Description (for icon generation) |
 | --- | --- | --- |
-| `AddComponentIdentity` | yes | POSTs a new catalog identity (+ v0 snapshot) from `CreateComponentIdentity` JSON; uploads staged PLY meshes/point clouds; may consume a pending transmitted ID. |
-| `AddComponentSnapshot` | yes | POSTs a new snapshot for an existing identity from `CreateComponentSnapshot` JSON; uploads staged PLY mesh/point-cloud files. |
-| `AddDesign` | yes | Validates design JSON and POSTs a new design (component refs + embedded geometry) to the Catalog. |
+| `AddComponentIdentity` | yes | POSTs a new component with its first state (a draft) from `CreateComponentIdentity` JSON, uploads the staged PLY files; the state stays a draft, submitted in the web (8.127); may consume a pending transmitted ID. |
+| `AddComponentSnapshot` | yes | POSTs a new state of an existing component, or with `Supersedes` a correction, from `CreateComponentSnapshot` JSON; uploads the staged PLY files; the state stays a draft, submitted in the web (8.127). |
+| `AddEvidence` | yes | POSTs evidence records (e.g. a `ReinforcementLayout`) with `/evidence/bulk`, all or none; always drafts, submitted in the web (8.127). |
 | `FetchAllComponents` | yes | GET `/identities` --- fetches all identities joined with current snapshots as passport JSON `{identity, snapshots[]}`; cached. |
 | `FetchAllSnapshots` | yes | Fetches passport JSON with every snapshot for one identity (`{identity, snapshots[]}`); input can be a UUID or passport JSON. |
 | `FetchComponents` | yes | Fetches specific catalog components by identity ID; handles missing IDs; supports cache. |
-| `FetchDesign` | yes | Fetches a design and its pinned snapshot placements; applies the design iframe to each snapshot; returns design JSON, passport data, and extra geometry. |
-| `FetchDetailedGeometry` | yes | Fetches high-fidelity snapshot geometry as binary PLY (ETag cache); falls back to reduced PLY, then inline primitive meshes. |
-| `FetchFilteredComponents` | yes | Server-side filtered catalog query (type, material, dataset, complexity, dimensions, reservation status). |
-| `FetchReducedGeometry` | yes | Fetches catalog-default reduced snapshot geometry as binary PLY (ETag cache); falls back to inline primitive meshes. |
+| `FetchFilteredComponents` | yes | Server-side filtered catalog query (original function, material, dataset, complexity, dimensions, reservation status, shape class, material class, circulation). |
+| `FetchOriginalGeometry` | yes | Fetches the original (as uploaded) snapshot geometry as binary PLY (ETag cache); falls back to reduced, then the inline preview; builds authored shapes. |
+| `FetchReducedGeometry` | yes | Fetches the reduced snapshot geometry as binary PLY (ETag cache); falls back to the inline preview; builds authored shapes from their parameters. |
 | `FetchSnapshot` | yes | Fetches passport JSON for one identity and a specific snapshot (`{identity, snapshots:[one]}`); input can be a UUID or passport JSON. |
 | `FetchTransmittedID` | yes | Returns the pending transmitted component ID for the signed-in user from the backend. |
-| `FilterComponents` | yes | Locally filters a list of passport JSON by type, material, dataset, complexity, fragment, and bounding-box size. |
+| `FilterComponents` | yes | Locally filters a list of passport JSON by original function, material, dataset, complexity, fragment, bounding-box size, shape class, and material class. |
 | `ListIdentitySnapshots` | yes | Lists all snapshots for one identity (id and name); input can be a UUID or passport JSON. |
 
 ### 3 Component Operations
 
 | NickName | Icon | Description (for icon generation) |
 | --- | --- | --- |
-| `CreateComponentIdentity` | yes | Builds `CreateComponentRequest` JSON from Rhino geometry: PCA orientation, mesh reduction, stages PLY under `pending_identity_assets/`. |
-| `CreateComponentSnapshot` | yes | Builds `CreateSnapshotRequest` JSON for an existing identity; stages PLY under `pending_snapshot_assets/`. |
-| `CreateDesign` | yes | Assembles design JSON (UUID, timestamps, component refs, optional extra meshes) without posting to the server. |
+| `CreateComponentIdentity` | yes | Builds the `IdentityCreateBody` request for a new component (or a cut) from Rhino geometry and the builder objects; reduces and stages the mesh files. |
+| `CreateComponentSnapshot` | yes | Builds the request for a new state (or a correction, `Supersedes`) of an existing component; reduces and stages the mesh files. |
 | `CreateUUID` | yes | Generates and caches UUIDs; refresh input forces a new value. |
-| `DisassembleComponent` | yes | Splits passport JSON `{identity, snapshots[]}` into Grasshopper-native outputs: metadata, descriptors, PCA frame, bbox, reconstructed geometry. |
-| `GetComponentData` | yes | Reads `csc_component` passport JSON from Rhino geometry objects. |
-| `ApplyPCAFrame` | yes | Inverse PCA transform --- aligns passport JSON or geometry to the world XY plane. |
-| `TransformComponent` | yes | Applies a Rhino transform to a snapshot insertion frame in passport JSON. |
+| `Actor` | yes | Builds one actor (person, organization, or account) as JSON for `Origin` or an evidence record. |
+| `Origin` | yes | Builds how a component entered circulation (kind, date, place, construction work, who) as JSON. |
+| `IdentityMetadata` | yes | Builds the identity fields of a new component (original function, material, trade name, origin ...) as JSON. |
+| `SnapshotMetadata` | yes | Builds the fields of one recorded state (name, fragment, quantity, colour, location, notes, start date) as JSON. |
+| `Capture` | yes | Builds how the geometry of a state was recorded (method, device, coordinate system, markers, fixtures) as JSON. |
+| `ApplyFrame` | yes | Moves a component to its canonical orientation (longest side along X, centre at the origin) with the stored frame, or a frame computed locally. |
+| `DisassembleComponent` | yes | Splits passport JSON `{identity, snapshots[]}` into Grasshopper-native outputs: metadata, condition, origin, capture, descriptors, frame, box, preview geometry. |
+| `GetComponentPassport` | yes | Reads `csc_component` passport JSON from Rhino geometry objects. |
+| `TransformComponent` | yes | Applies a Rhino transform to the client-side placement (`csc_placement`) of a snapshot in passport JSON. |
 
 ### 4 RhinoDoc Interaction
 
 | NickName | Icon | Description (for icon generation) |
 | --- | --- | --- |
-| `BakeComponents` | yes | Bakes passport entries into the Rhino document as real geometry with layers, groups, and userdata. |
-| `SyncWithRhinoDoc` | yes | Scans Rhino for `csc_component` objects and updates snapshot iframes from current object positions. |
+| `BakeComponents` | yes | Bakes passports into the Rhino document (meshes, point clouds, authored shapes, in the canonical orientation or at `csc_placement`) with a text tag per piece carrying the user text `csc_identity_id`, `csc_snapshot_id`, `csc_placement`, `csc_component`. |
+| `SyncWithRhinoDoc` | yes | Reads the baked pieces back from the Rhino document by their tags and returns passports with `csc_placement` from where the tag is now. |
 
 ### 5 Matchmaking Tools
 
@@ -250,7 +253,8 @@ To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_i
 | NickName | Icon | Description (for icon generation) |
 | --- | --- | --- |
 | `ComputePCAOrientation` | yes | PCA-based orientation for meshes/breps/extrusions; returns OBB, aligned geometry, translation, and transform. |
-| `CreateReinforcement` | yes | Builds one inline reinforcement bar JSON object (`{spec, diameter, points}`) for `CreateComponentIdentity` / `CreateComponentSnapshot`. |
+| `ComputeFrame` | yes | Computes the frame of a piece offline with the server's rules (minimum-volume box, axes by extent, column stands). |
+| `ReinforcementLayout` | yes | Builds a `reinforcement_layout` evidence record from bar centrelines, steel grades and diameters; post it with `AddEvidence`. |
 | `ExtrusionProfile` | yes | Extracts the profile curves of a Rhino extrusion. |
 | `FindLargestFlatSide` | yes | Finds the largest flat face cluster on a mesh (normal clustering + sampling heuristics for large meshes). |
 | `MaxInscribedQuad` | yes | Maximum-area inscribed quadrilateral inside closed polylines (multi-start optimization). |
@@ -269,7 +273,8 @@ To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_i
 
 | NickName | Icon | Description (for icon generation) |
 | --- | --- | --- |
-| `PassportToD2P` | yes | Converts CSC passport JSON into an in-memory D2P `GHComponent` with nested Member geometry trees and consistent layer paths. |
+| `PassportToD2P` | yes | Converts CSC passport JSON into an in-memory D2P `GHComponent` (type id from the IFC class, canonical or placed geometry, authored shapes, capture markers) with nested Member geometry trees and the convention user text. |
+| `ReadFromD2P` | yes | Reads D2P components (and tagged pieces of `BakeComponents`) in the Rhino document back into passport JSON with `csc_placement` from the component plane. |
 
 ---
 
@@ -280,10 +285,15 @@ These no longer appear in `grasshopper_userobjects_src/` or `grasshopper_userobj
 | Former NickName | Status | Icon | Replacement | Notes |
 | --- | --- | --- | --- | --- |
 | `ComposeToD2P` | renamed | **missing** | `PassportToD2P` | Same role; use `PassportToD2P.svg`. |
-| `FetchGeometry` | removed | **missing** | `FetchDetailedGeometry` / `FetchReducedGeometry` | Legacy combined geometry fetch. |
+| `FetchGeometry` | removed | **missing** | `FetchOriginalGeometry` / `FetchReducedGeometry` | Legacy combined geometry fetch. |
+| `GetComponentData` | renamed | yes | `GetComponentPassport` | Same artwork. |
 | `CSC_AddComponent` | removed | **missing** | `AddComponentIdentity` | Legacy POST of full component JSON + OBJ uploads. |
 | `CSC_CreateComponent` | removed | **missing** | `CreateComponentIdentity` | Legacy builder for complete component JSON from Rhino geometry. |
 | `CSC_ArrangeComponents` | removed | **missing** | `CreateArrangement` | Legacy grid arrangement from component bounding boxes. |
+| `FetchDetailedGeometry` | renamed | yes | `FetchOriginalGeometry` | Decision 8.23: the level is called Original. |
+| `ApplyPCAFrame` | renamed | yes | `ApplyFrame` | The frame is the server's, not a PCA (decision 7.10). |
+| `CreateReinforcement` | renamed | yes | `ReinforcementLayout` | Reinforcement is evidence now (decision 7.8). |
+| `CreateDesign`, `AddDesign`, `FetchDesign` | removed | yes | --- | Designs are not part of CSC (decision 7.11). |
 
 ---
 

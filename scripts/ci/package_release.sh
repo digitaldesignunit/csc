@@ -12,7 +12,7 @@
 #                   deploy/ (server scripts), VERSION
 # frontend zip:     csc-frontend-standalone/ (Next standalone + static + public)
 # gh zip:           "CSC Grasshopper Interface <version>"/ (UserObjects, examples,
-#                   README, LICENSE)
+#                   the library folder csc_gh, README, LICENSE)
 
 set -euo pipefail
 
@@ -60,6 +60,11 @@ case "$part" in
     mkdir -p "$stage/$name/UserObjects"
     cp "$root"/grasshopper_userobjects/*.ghuser "$stage/$name/UserObjects/"
     cp "$root"/grasshopper_release/DDU_CSC_GrasshopperInterface_Example_*.gh "$stage/$name/"
+    # the shared library (decision 8.111): a first install by hand copies this
+    # folder to %APPDATA%\McNeel\Rhinoceros\8.0\scripts\csc_gh; CSC_Update
+    # installs and updates it from the server afterwards
+    mkdir -p "$stage/$name/csc_gh"
+    cp "$root"/grasshopper_lib/csc_gh/*.py "$stage/$name/csc_gh/"
     cp "$root/README.md" "$root/LICENSE" "$stage/$name/"
     (cd "$stage" && zip -qr "$outdir/csc-gh-interface-$version.zip" "$name")
     ;;

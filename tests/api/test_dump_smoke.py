@@ -1,5 +1,5 @@
 """
-The app serves a real catalog dump (opt-in).
+The app serves a real catalog dump after the 0.6 migration (opt-in).
 
 Set CSC_DUMP_DIR to a local export folder, e.g.
 ``mongodb_collections_local/260916``. The dumps are not in the repository.
@@ -10,20 +10,26 @@ import random
 
 import pytest
 
+from apps.catalog.migration06.steps import CUTOVER_STEPS, Context, run
 from support import load_dump
 
 DUMP_DIR = os.getenv('CSC_DUMP_DIR')
-pytestmark = pytest.mark.skipif(
-    not DUMP_DIR, reason='set CSC_DUMP_DIR to run against a local dump')
+pytestmark = [
+    pytest.mark.skipif(
+        not DUMP_DIR, reason='set CSC_DUMP_DIR to run against a local dump'),
+    pytest.mark.slow,    # a migration on a real dump: `invoke test-release`
+]
 
 
-def test_real_catalog_lists_and_composes(api, db, auth_headers):
-    counts = load_dump(db, DUMP_DIR)
+def test_real_catalog_lists_and_composes(api, db, auth_headers, tmp_path):
+    counts = load_dump(db, DUMP_DIR, replace=True)
+    run(Context(db=db, files=False, archive_dir=tmp_path,
+                log=lambda _m: None), CUTOVER_STEPS)
     identities = counts['component_identities']
     admin = auth_headers('admin')
 
     listed = api.get('/identities', headers=admin, params={
-        'validated': 0, 'consumed_filter': 'all', 'expand': 'shallow'})
+        'circulation': 'all', 'status': 'any', 'expand': 'shallow'})
     assert listed.status_code == 200, listed.text[:500]
     body = listed.json()
     rows = body if isinstance(body, list) else body.get('items', [])

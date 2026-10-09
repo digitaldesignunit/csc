@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-type LineageStatus = 'active' | 'consumed' | null
+type LineageStatus = 'active' | 'exited' | null
 
 type LineageIdentity = {
   id: string
@@ -13,7 +13,7 @@ type ComponentLineageIdentityBadgesProps = {
 }
 
 const statusBadgeClass: Record<Exclude<LineageStatus, null>, string> = {
-  consumed:
+  exited:
     'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200/80 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/50',
   active:
     'border-green-300 bg-green-100 text-green-800 hover:bg-green-200/80 dark:border-green-700 dark:bg-green-950/40 dark:text-green-200 dark:hover:bg-green-900/50',
@@ -34,14 +34,14 @@ export default function ComponentLineageIdentityBadges({
     <ul className="flex max-w-full flex-wrap items-center justify-end gap-1">
       {identities.map((item) => {
         const statusClass =
-          item.status === 'consumed' || item.status === 'active'
+          item.status === 'exited' || item.status === 'active'
             ? statusBadgeClass[item.status]
             : unknownBadgeClass
         const statusLetter =
-          item.status === 'consumed' ? 'C' : item.status === 'active' ? 'A' : null
+          item.status === 'exited' ? 'E' : item.status === 'active' ? 'A' : null
         const statusLabel =
-          item.status === 'consumed'
-            ? 'consumed'
+          item.status === 'exited'
+            ? 'out of circulation'
             : item.status === 'active'
               ? 'active'
               : 'status unknown'

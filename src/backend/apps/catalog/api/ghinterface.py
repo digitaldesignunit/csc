@@ -16,8 +16,10 @@ from fastapi.responses import Response, StreamingResponse
 import httpx
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-from apps.catalog.api.auth import get_current_user
+from apps.catalog.api.auth import get_current_user, get_optional_current_user
+from apps.catalog.ghreference import build_reference, parse_source
 from apps.catalog.models import User
+from limiter import limiter, signed_in_or_ip
 from services.github_service import GitHubService
 from csc_version import release_tag
 
@@ -35,6 +37,14 @@ SRC_FETCH_CONCURRENCY = 8
 
 _repo_dir_cache: Dict[str, Tuple[float, List[dict]]] = {}
 _blob_version_cache: Dict[str, Optional[tuple]] = {}
+# the parse of a source, by blob sha (content addressed, so it never changes)
+_blob_reference_cache: Dict[str, dict] = {}
+# the user object XML of the release, by blob sha
+_blob_xml_cache: Dict[str, bytes] = {}
+
+# the two reads an anonymous visitor may make (the page's download card and
+# component reference): release information that is public on GitHub
+GH_PUBLIC_RATE = '30/minute'
 
 # UserObjects, sources and the interface ZIP are served from the GitHub release
 # this backend belongs to (tag v<CSC_VERSION>), so a deploy updates backend, web
@@ -404,8 +414,10 @@ def _compute_dir_etag(dir_path: str) -> str:
 # ROUTES ----------------------------------------------------------------------
 
 @router.get('/ghinterface/version')
+@limiter.limit(GH_PUBLIC_RATE, key_func=signed_in_or_ip)
 async def get_gh_interface_version(
-    current_user: Annotated[User, Depends(get_current_user)]
+    request: Request,
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
 ):
     """The Grasshopper interface release that belongs to this backend."""
     try:
@@ -448,6 +460,83 @@ async def get_gh_interface_version(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error'
+        )
+
+
+@router.get('/ghinterface/reference')
+@limiter.limit(GH_PUBLIC_RATE, key_func=signed_in_or_ip)
+async def get_component_reference(
+    request: Request,
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
+    channel: str = Query(default=''),
+):
+    """
+    The components of the release (a signed-in caller may name a ``?channel=``
+    branch or tag; an anonymous caller always gets the release): name,
+    nickname, subcategory, description, inputs from the ``RunScript``
+    signature with the descriptions ``BeforeRunScript`` sets, outputs from
+    ``OUTPUTS`` (decision 8.112). The sources are only parsed (``ast``), never
+    run; one that does not parse is listed under ``skipped`` with a note. A
+    parse is kept per blob sha, so a release costs one directory listing and
+    the sources it has not read yet.
+    """
+    try:
+        # an anonymous caller always gets the release this backend runs: every
+        # new ref costs up to ~50 GitHub calls on the server's token, and ref
+        # cycling by anyone could use up the quota CSC_Update needs too
+        ref = resolve_update_channel(channel if current_user is not None else '')
+        repo_url = os.environ['GITHUB_REPO_URL']
+        token = _github_token()
+        api_base = _extract_api_url(repo_url)
+
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            entries = await _list_repo_dir_cached(
+                client, api_base, token, 'grasshopper_userobjects_src', ref)
+            files = [
+                item for item in entries
+                if item.get('type') == 'file'
+                and item.get('name', '').endswith('.py')
+                and item.get('sha')
+            ]
+            semaphore = asyncio.Semaphore(SRC_FETCH_CONCURRENCY)
+            todo = [i for i in files if i['sha'] not in _blob_reference_cache]
+
+            async def read(item: dict) -> None:
+                async with semaphore:
+                    content = await _get_repo_entry_content(
+                        client, api_base, token, item, ref)
+                _blob_reference_cache[item['sha']] = parse_source(
+                    item['name'], content.decode('utf-8', 'replace'))
+
+            results = await asyncio.gather(
+                *(read(item) for item in todo), return_exceptions=True)
+            failures = [r for r in results if isinstance(r, Exception)]
+            if failures and len(failures) == len(todo):
+                raise failures[0]
+            for item, result in zip(todo, results):
+                if isinstance(result, Exception):
+                    print(f'[ERROR] component reference {item.get("name")}: '
+                          f'{result}')
+            parsed = []
+            for item in files:
+                entry = _blob_reference_cache.get(item['sha'])
+                parsed.append(entry if entry is not None else {
+                    'file': item['name'],
+                    'skipped': 'the source could not be read'})
+        body = build_reference(ref, parsed)
+        return Response(
+            json.dumps(body), media_type='application/json',
+            headers={'Cache-Control': 'public, max-age=300'})
+    except HTTPException:
+        raise
+    except httpx.HTTPError as e:
+        print(f'[ERROR] get_component_reference GitHub: {e}')
+        raise _http_exception_from_github(e)
+    except Exception as e:
+        print(f'[ERROR] get_component_reference: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
         )
 
 
@@ -660,6 +749,128 @@ async def get_src_code(
         )
 
 
+# THE SHARED LIBRARY (decision 8.111) ----------------------------------------
+# The package ``csc_gh`` (grasshopper_lib/csc_gh) is installed by CSC_Update next
+# to the UserObjects: a manifest of the files of the release with the sha256 of
+# each, and the files one by one. The client checks every file against the
+# manifest before it replaces the installed package.
+GH_LIBRARY_DIR = 'grasshopper_lib/csc_gh'
+LIBRARY_FILE_RE = re.compile(r'^[a-z][a-z_]*\.py$')
+LIBRARY_VERSION_RE = re.compile(
+    r"^__version__\s*=\s*'(\d+[a-zA-Z]?)'\s*$", re.M)
+
+
+def is_library_file(name: str) -> bool:
+    """A ``.py`` file of the package folder (no path, no hidden file)."""
+    return name == '__init__.py' or bool(LIBRARY_FILE_RE.match(name))
+
+
+def library_manifest(ref: str, files: Dict[str, bytes]) -> dict:
+    """The manifest of the library files (``{name: bytes}``): the version of
+    ``__init__.py``, and per file its size and sha256."""
+    init = files.get('__init__.py')
+    match = LIBRARY_VERSION_RE.search(init.decode('utf-8')) if init else None
+    return {
+        'ref': ref,
+        'version': match.group(1) if match else None,
+        'files': [
+            {'path': name, 'size': len(data),
+             'sha256': hashlib.sha256(data).hexdigest()}
+            for name, data in sorted(files.items())
+        ],
+    }
+
+
+async def _library_entries(
+    client: httpx.AsyncClient, api_base: str, token: Optional[str], ref: str
+) -> List[dict]:
+    entries = await _list_repo_dir_cached(
+        client, api_base, token, GH_LIBRARY_DIR, ref)
+    return [it for it in entries if it.get('type') == 'file'
+            and is_library_file(it.get('name', ''))]
+
+
+@router.get('/ghinterface/library_manifest')
+async def get_library_manifest(
+    current_user: Annotated[User, Depends(get_current_user)],
+    channel: str = Query(default=''),
+):
+    """Version and checksums of the ``csc_gh`` package of the release."""
+    try:
+        ref = resolve_update_channel(channel)
+        repo_url = os.environ['GITHUB_REPO_URL']
+        token = _github_token()
+        api_base = _extract_api_url(repo_url)
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            entries = await _library_entries(client, api_base, token, ref)
+            if not entries:
+                raise _github_path_not_found(ref, GH_LIBRARY_DIR)
+            semaphore = asyncio.Semaphore(SRC_FETCH_CONCURRENCY)
+
+            async def fetch(entry):
+                async with semaphore:
+                    return entry['name'], await _get_repo_entry_content(
+                        client, api_base, token, entry, ref)
+
+            files = dict(await asyncio.gather(*(fetch(e) for e in entries)))
+        manifest = library_manifest(ref, files)
+        if manifest['version'] is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='The library of this release has no __version__.')
+        return manifest
+    except HTTPException:
+        raise
+    except httpx.HTTPError as e:
+        print(f'[ERROR] get_library_manifest GitHub: {e}')
+        raise _http_exception_from_github(e)
+    except Exception as e:
+        print(f'[ERROR] get_library_manifest: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+
+@router.get('/ghinterface/library/{name}', response_class=Response)
+async def get_library_file(
+    name: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    channel: str = Query(default=''),
+):
+    """One file of the ``csc_gh`` package (a ``.py`` of the package folder)."""
+    if not is_library_file(name):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Library file not found')
+    try:
+        ref = resolve_update_channel(channel)
+        repo_url = os.environ['GITHUB_REPO_URL']
+        token = _github_token()
+        api_base = _extract_api_url(repo_url)
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            entries = await _library_entries(client, api_base, token, ref)
+            matches = [it for it in entries if it.get('name') == name]
+            if not matches:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail='Library file not found')
+            content = await _get_repo_entry_content(
+                client, api_base, token, matches[0], ref)
+        return Response(content, media_type='application/octet-stream')
+    except HTTPException:
+        raise
+    except httpx.HTTPError as e:
+        print(f'[ERROR] get_library_file GitHub: {e}')
+        raise _http_exception_from_github(e)
+    except Exception as e:
+        print(f'[ERROR] get_library_file: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+
+
 @router.get('/ghinterface/xml_names', response_model=List[str])
 async def list_xml_names(
     request: Request,
@@ -692,12 +903,50 @@ async def list_xml_names(
         )
 
 
+async def _release_xml(name: str) -> Response:
+    """
+    The user object XML of this backend's release, read from GitHub (an
+    anonymous caller; never another ref). The file is kept per blob sha, which
+    is content addressed.
+    """
+    ref = default_update_ref()
+    repo_url = os.environ['GITHUB_REPO_URL']
+    token = _github_token()
+    api_base = _extract_api_url(repo_url)
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        entries = await _list_repo_dir_cached(
+            client, api_base, token, 'grasshopper_userobjects_xml', ref)
+        wanted = f'{name}.xml'
+        match = next((it for it in entries
+                      if it.get('type') == 'file' and it.get('name') == wanted
+                      and it.get('sha')), None)
+        if match is None:
+            raise HTTPException(status_code=404, detail='XML not found')
+        content = _blob_xml_cache.get(match['sha'])
+        if content is None:
+            content = await _get_repo_entry_content(
+                client, api_base, token, match, ref)
+            _blob_xml_cache[match['sha']] = content
+    return Response(
+        content,
+        media_type='text/xml; charset=utf-8',
+        headers={'ETag': 'W/"' + hashlib.sha256(content).hexdigest()[:16] + '"',
+                 'Cache-Control': 'public, max-age=300'},
+    )
+
+
 @router.get('/ghinterface/xml/{name}', response_class=Response)
+@limiter.limit(GH_PUBLIC_RATE, key_func=signed_in_or_ip)
 async def get_xml(
     request: Request,
     name: str,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
 ):
+    """
+    A user object as Grasshopper XML (copy and paste into a definition). A
+    signed-in caller reads the server's XML directory; an anonymous caller
+    gets the file of the release this backend runs from GitHub, nothing else.
+    """
     try:
         if '/' in name or '\\' in name or '..' in name:
             raise HTTPException(status_code=400, detail='Invalid name')
@@ -706,6 +955,9 @@ async def get_xml(
                 status_code=400,
                 detail='Invalid component prefix',
             )
+
+        if current_user is None:
+            return await _release_xml(name)
 
         cache_dir = request.app.gh_xml_cache_dir
         path = os.path.join(cache_dir, f'{name}.xml')
@@ -727,7 +979,11 @@ async def get_xml(
         )
     except HTTPException:
         raise
+    except httpx.HTTPError as e:
+        print(f'[ERROR] get_xml GitHub: {e}')
+        raise _http_exception_from_github(e)
     except Exception as e:
+        print(f'[ERROR] get_xml: {e}')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),

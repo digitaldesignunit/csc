@@ -118,21 +118,128 @@ def _local_db(env):
     return MongoClient(uri, serverSelectionTimeoutMS=3000)['csc']
 
 
+def _pytest(c, target='tests', *, k='', parallel=True, slow=False,
+            extra='', env=None):
+    """One pytest run from the repository root. ``-n auto`` = pytest-xdist,
+    every worker with its own throwaway mongod (decision 8.114); ``slow``
+    includes the tests marked slow."""
+    flags = ' -n auto' if parallel else ''
+    flags += ' -m ""' if slow else ''
+    flags += f' -k "{k}"' if k else ''
+    with chdir(REPO_DIR):
+        return c.run(f'{sys.executable} -m pytest {target}{flags}{extra}',
+                     env=env or {}, pty=False, warn=True)
+
+
+def _tree_hash(c):
+    """The tree a run was made on: the index plus every tracked and
+    untracked change, as `git write-tree` of a temporary index."""
+    import tempfile
+    with chdir(REPO_DIR):
+        tmp = os.path.join(tempfile.gettempdir(),
+                           f'csc-index-{uuid.uuid4().hex[:8]}')
+        env = {'GIT_INDEX_FILE': tmp}
+        try:
+            c.run('git read-tree HEAD', env=env, hide=True, pty=False)
+            c.run('git add -A', env=env, hide=True, pty=False)
+            return c.run('git write-tree', env=env, hide=True,
+                         pty=False).stdout.strip()
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+
+
 @task(help={
     'k': 'only run tests matching this expression (pytest -k)',
     'dump': 'also run the dump smoke test against mongodb_collections_local/<dump>',
+    'all': 'include the tests marked slow',
+    'parallel': 'pytest-xdist, one throwaway mongod per worker (default off)',
 })
-def test(c, k='', dump=''):
+def test(c, k='', dump='', all=False, parallel=False):  # noqa: A002
     """
     Run the test suite (unit tests + route tests on a throwaway mongod).
+    Tests marked slow are left out unless --all is given.
     """
     env = {}
     if dump:
         env['CSC_DUMP_DIR'] = os.path.join(DUMPS_DIR, dump)
-    selection = f' -k "{k}"' if k else ''
+    result = _pytest(c, k=k, parallel=parallel, slow=all, env=env)
+    if result.failed:
+        sys.exit(result.return_code)
+
+
+@task(help={
+    'base': 'compare the working tree with this ref instead of HEAD',
+})
+def test_changed(c, base='HEAD'):
+    """
+    Run the tests that belong to the changed paths (tier 1).
+
+    Decision 8.114: git diff (working tree and index against HEAD or --base, plus untracked
+    files) is mapped to test folders: backend api -> tests/api, other backend
+    -> tests/catalog + tests/api, grasshopper -> tests/grasshopper, a changed
+    test -> itself, frontend -> lint + tsc + the tests next to changed lib
+    files. Nothing mapped: `pytest --lf`.
+    """
+    sys.path.insert(0, os.path.join(REPO_DIR, 'scripts', 'dev'))
+    import changed_tests
     with chdir(REPO_DIR):
-        c.run(f'{sys.executable} -m pytest tests{selection}', env=env,
-              pty=False)
+        paths = changed_tests.changed_paths(REPO_DIR, base)
+        plan = changed_tests.plan(paths)
+    print(f'{len(paths)} changed path(s) -> pytest: '
+          f'{plan.pytest_targets or "-"}; frontend: {plan.frontend}')
+    failed = False
+    if plan.empty:
+        failed = _pytest(c, '--lf', parallel=False).failed
+    else:
+        if plan.pytest_targets:
+            whole_folder = any(t in ('tests/api', 'tests/catalog')
+                               for t in plan.pytest_targets)
+            failed = _pytest(c, ' '.join(plan.pytest_targets),
+                             parallel=whole_folder).failed
+        if plan.frontend:
+            with chdir(os.path.join(REPO_DIR, 'src', 'frontend')):
+                for command in ('npx tsc --noEmit', 'npm run lint'):
+                    failed = c.run(command, pty=False, warn=True).failed                         or failed
+                if plan.frontend_tests:
+                    files = ' '.join(f'"{t}"' for t in plan.frontend_tests)
+                    failed = c.run(f'npx tsx --test {files}', pty=False,
+                                   warn=True).failed or failed
+    if failed:
+        sys.exit(1)
+
+
+@task
+def test_all(c):
+    """
+    Full suite without the slow tests, in parallel; prints the tree hash.
+
+    Tier 2 (decision 8.114): pytest -n auto (one throwaway mongod per
+    worker), then the tree it ran on (git write-tree) --- name it in the
+    report that hands a part to the review.
+    """
+    tree = _tree_hash(c)
+    result = _pytest(c)
+    print(f'tree: {tree} (git write-tree, tracked and untracked changes)')
+    if result.failed:
+        sys.exit(result.return_code)
+
+
+@task
+def test_release(c):
+    """
+    Everything including the slow tests; run once before tagging.
+
+    Tier 4 (decision 8.114): all tests including the slow ones (headless
+    Rhino with CSC_TEST_RHINO=1, a migration on a dump with CSC_DUMP_DIR, fits
+    on real PLYs). Run it once before tagging: CI does not run
+    tests/catalog.
+    """
+    tree = _tree_hash(c)
+    result = _pytest(c, slow=True)
+    print(f'tree: {tree} (git write-tree, tracked and untracked changes)')
+    if result.failed:
+        sys.exit(result.return_code)
 
 
 @task
@@ -182,6 +289,66 @@ def seed(c, dump, replace=False):
                        replace=replace)
     for collection, count in counts.items():
         print(f'{collection:28s} {count:6d}')
+
+
+@task(help={
+    'dump': 'dump folder name in mongodb_collections_local (default 261001)',
+    'assets': 'asset folder of the dump; step 6c then moves fixture files '
+              'in a temporary copy',
+    'mapping': 'also run step 11b with this untracked mapping file '
+               '(e.g. .dev/reattribute_06.json)',
+})
+def rehearse(c, dump='261001', assets='', mapping=''):
+    """
+    Rehearse the 0.6 migration on a local dump in a throwaway mongod.
+    """
+    args = f' --assets "{assets}"' if assets else ''
+    args += f' --mapping "{mapping}"' if mapping else ''
+    with chdir(REPO_DIR):
+        c.run(f'{sys.executable} scripts/db_maintenance/rehearse_06.py '
+              f'--dump {dump}{args}', pty=False)
+
+
+@task(help={
+    'dump': 'dump folder name in mongodb_collections_local (default 261001)',
+    'port': 'backend port (default 8000)',
+    'mongo_port': 'throwaway mongod port (default 27018)',
+    'derive': 'geometry-runner stages to run (default '
+              'frame,shape_class,proxies,complexity); "none" skips them',
+    'test_accounts': 'also create dev-contrib, dev-mod, dev-mod2, dev-rev '
+                     'and dev-outsider (no role); passwords in '
+                     '.dev/dev-test-accounts.json, not printed',
+    'test_dataset': 'dataset of the test accounts (default dbu_zirkus)',
+})
+def dev_migrated(c, dump='261001', port=8000, mongo_port=27018,
+                 derive='frame,shape_class,proxies,complexity',
+                 test_accounts=False, test_dataset='dbu_zirkus'):
+    """
+    Serve a migrated copy of a dump (throwaway mongod) for frontend work.
+    """
+    flags = ' --no-derive' if derive == 'none' else f' --derive-stages {derive}'
+    if test_accounts:
+        flags += f' --test-accounts --test-dataset {test_dataset}'
+    with chdir(REPO_DIR):
+        c.run(f'{sys.executable} scripts/dev/serve_migrated.py --dump {dump} '
+              f'--port {port} --mongo-port {mongo_port}{flags}', pty=False)
+
+
+@task(help={
+    'dry_run': 'report only, write nothing',
+    'files': 'move fixture PLYs in the dev.env storage dirs (step 6c)',
+})
+def migrate_local(c, dry_run=False, files=False):
+    """
+    Run the 0.6 migration on the local database from dev.env.
+    """
+    env = _read_dev_env()
+    _local_db(env)                       # refuses a non-local database
+    flags = ' --dry-run' if dry_run else ''
+    flags += '' if files else ' --no-files'
+    with chdir(REPO_DIR):
+        c.run(f'{sys.executable} scripts/db_maintenance/migrate_06.py --all '
+              f'--uri "{env["MONGODB_URI"]}"{flags}', env=env, pty=False)
 
 
 @task(help={
@@ -272,6 +439,36 @@ def bump_version(c, version, gh=False):
     with chdir(REPO_DIR):
         c.run(f'{sys.executable} scripts/ci/check_version.py', pty=False,
               warn=True)
+
+
+@task(help={'check': 'only report, write nothing'})
+def gh_headers(c, check=False):
+    """
+    Write the '# venv:' / '# r:' header of every Grasshopper component listed
+    in grasshopper_lib/envs.json (the library itself is the package
+    grasshopper_lib/csc_gh, decision 8.111; nothing is embedded).
+    """
+    sys.path.insert(0, os.path.join(REPO_DIR, 'grasshopper_lib'))
+    import headers
+    if check:
+        problems = headers.check()
+        print('\n'.join(problems) or 'headers are current')
+        if problems:
+            sys.exit(1)
+        return
+    changed = headers.sync()
+    print('changed: ' + (', '.join(changed) or 'nothing'))
+
+
+@task
+def gh_frame_fixtures(c):
+    """
+    Let the server's compute_frame (apps/catalog/frame.py) rewrite the
+    shared fixtures of the frame parity test (tests/fixtures/frame_parity).
+    """
+    with chdir(REPO_DIR):
+        c.run(f'{sys.executable} tests/grasshopper/frame_cases.py --write',
+              pty=False)
 
 
 # CONTEXT ---------------------------------------------------------------------

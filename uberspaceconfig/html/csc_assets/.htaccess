@@ -1,0 +1,12 @@
+# ~/html/csc_assets/ (decision 8.125): nothing in this folder is public.
+# The catalogue files (previews, photos, meshes, point clouds, proxies, capture
+# fixtures) live in ~/csc_assets_private/ and are served only by the API; this
+# file keeps the old location closed in case a folder is ever put back.
+# Public UI files are re-allowed in static/.htaccess.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
