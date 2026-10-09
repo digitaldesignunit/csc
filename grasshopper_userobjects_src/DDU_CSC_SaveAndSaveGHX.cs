@@ -33,7 +33,7 @@ public class Script_Instance : GH_ScriptInstance
 
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 251010
+    Version: 261009
     */
     #endregion
 
