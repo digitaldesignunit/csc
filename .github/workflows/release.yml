@@ -13,6 +13,11 @@ permissions:
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
+    # a called workflow gets at most the caller's permissions; ci.yml's
+    # `changes` job reads pull requests (path filter, decision 8.114)
+    permissions:
+      contents: read
+      pull-requests: read
 
   build:
     needs: ci
