@@ -29,8 +29,8 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.6.0.0 --- backend, web frontend and Grasshopper interface are released together
-  under one version (tag `v0.6.0.0`); the single source is the `VERSION` file.
+- **CSC**: 0.6.0.1 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.6.0.1`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
 
@@ -416,6 +416,7 @@ Then update these values and restart both services:
 | --- | --- |
 | `NEXTAUTH_URL=https://2ndchances.build` | `~/csc/frontend/.env` |
 | `FRONTEND_URL="https://2ndchances.build"` (verification email links) | `~/etc/services.d/fastapi.ini` and `~/.bash_profile` |
+| `CSC_PUBLIC_API_URL="https://api.2ndchances.build"` (optional: the API address in the links of the JSON-LD and PDF exports) | `~/etc/services.d/fastapi.ini` and `~/.bash_profile` |
 | `FASTAPI_CORS_ORIGINS` (add the new origin) | `~/etc/services.d/fastapi.ini` and `~/.bash_profile` |
 | `Access-Control-Allow-Origin` allowlist | `~/html/.htaccess` |
 

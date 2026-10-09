@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0.1] - 2026-10-09
+
+### Fixed
+
+- The component map cron (`main_component_map.py`) and every other list of
+identities without a page size failed on MongoDB Atlas' free tier with
+`QueryExceededMemoryLimitNoDiskUseAllowed` (a blocking sort is capped at
+32 MB there and `allowDiskUse` is ignored): the list sorted whole joined
+documents, with the inline meshes of the external catalogue pieces. A sort on
+an identity field now runs before the join, on the small identity documents;
+a sort on a snapshot field without a limit sorts slim states and joins the
+whole ones afterwards. The rows and their order are unchanged.
+- The links of the JSON-LD export (`@context`) and the PDF passport named the
+API with `http://` behind the Uberspace proxy. The optional
+`CSC_PUBLIC_API_URL` (for example `https://api.2ndchances.build`) now sets the
+address they use; unset, they use the request's own as before.
+
 ## [0.6.0.0] - 2026-10-09
 
 The 0.6 data model: datasets and permissions, a moderated lifecycle for every
