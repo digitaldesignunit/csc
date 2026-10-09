@@ -60,7 +60,7 @@
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.3.8",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-hooks": "7.0.1",
     "openapi-typescript-codegen": "^0.29.0",
     "postcss": "^8.5.6",
     "shadcn": "^4.7.0",
@@ -72,7 +72,8 @@
   },
   "overrides": {
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.5"
+    "@types/react-dom": "19.2.5",
+    "eslint-plugin-react-hooks": "$eslint-plugin-react-hooks"
   },
   "allowScripts": {
     "bcrypt@6.0.0": true,
