@@ -80,6 +80,16 @@ def site_base(request_base: Optional[str] = None) -> str:
     return base
 
 
+def api_base(request_base: Optional[str] = None) -> str:
+    """The public base of the API in the links of an export: the optional
+    ``CSC_PUBLIC_API_URL`` (behind the Uberspace proxy the request's own base
+    is ``http://``, the forwarded scheme is not honoured); the request's own
+    base only where it is not set (tests, local use)."""
+    import os
+    return (os.getenv('CSC_PUBLIC_API_URL') or request_base or '').strip(
+        ).rstrip('/')
+
+
 def element_iri(base: str, identity_id: str) -> str:
     return f'{base}/id/{identity_id}'
 

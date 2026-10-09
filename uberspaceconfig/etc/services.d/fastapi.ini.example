@@ -28,6 +28,10 @@ environment=
     SMTP_REPLY_TO="support@yourdomain.com",
     SMTP_DEV_MODE="false",
     FRONTEND_URL="https://2ndchances.build",
+    # the links of the exports (JSON-LD context, PDF passport) name this API
+    # address; without it they use the request's own, which is http:// behind
+    # the proxy. Optional.
+    CSC_PUBLIC_API_URL="https://api.yourdomain.com",
     CSC_TRUSTED_PROXIES="127.0.0.0/8,::1",
     CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de",
     GH_XML_CACHE_DIR="/home/ddu/csc/current/backend/static/ghxml",

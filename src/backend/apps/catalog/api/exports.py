@@ -290,7 +290,8 @@ async def export_pdf(
     pdf = await run_in_threadpool(build_pdf, PassportPdfData(
         body=body, dataset_name=dataset.name,
         material_label=(material or {}).get('label'),
-        base=_site(request), api_base=str(request.base_url).rstrip('/'),
+        base=_site(request), api_base=jsonld_export.api_base(
+            str(request.base_url)),
         generated_at=now, member=member,
         parents=relatives['parents'], children=relatives['children'],
         change_info=change_info, preview=preview))

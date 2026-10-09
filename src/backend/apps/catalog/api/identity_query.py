@@ -47,6 +47,32 @@ def _username_enrichment_stages() -> List[Dict[str, Any]]:
     ]
 
 
+# What the sort and the snapshot filters read of the current snapshot
+# (``resolve_sort_field``, ``CatalogFilters.snapshot_match``): all small. A
+# listing without a limit that sorts on a snapshot field sorts these slim
+# states and joins the whole state afterwards, so the blocking sort never
+# holds the inline meshes of the external catalogue pieces (Atlas' free tier
+# caps a blocking sort at 32 MB and ignores allowDiskUse).
+SORT_SNAPSHOT_FIELDS = (
+    'status', 'name', 'shape_class', 'complexity', 'fragment', 'bbx',
+    'color', 'effective_from', 'created', 'lastmodified',
+)
+
+
+def _current_snapshot_lookup(snapshots_collection: str, *,
+                             slim: bool = False) -> Dict[str, Any]:
+    lookup: Dict[str, Any] = {
+        'from': snapshots_collection,
+        'localField': 'current_snapshot_id',
+        'foreignField': '_id',
+        'as': 'current_snapshot',
+    }
+    if slim:
+        lookup['pipeline'] = [
+            {'$project': {name: 1 for name in SORT_SNAPSHOT_FIELDS}}]
+    return {'$lookup': lookup}
+
+
 def build_list_pipeline(
     *,
     snapshots_collection: str,
@@ -60,18 +86,22 @@ def build_list_pipeline(
     current_user_id: Optional[str],
     reserved_filter: Optional[str],
 ) -> List[Dict[str, Any]]:
-    pipeline: List[Dict[str, Any]] = [
-        {'$match': identity_match},
-        {
-            '$lookup': {
-                'from': snapshots_collection,
-                'localField': 'current_snapshot_id',
-                'foreignField': '_id',
-                'as': 'current_snapshot',
-            }
-        },
+    sort_field = resolve_sort_field(sortkey)
+    sort_stage = {'$sort': {sort_field: sort_order}}
+    # a sort on an identity field runs on the small identity documents, right
+    # after the first match (an index serves ``_id``); every later stage keeps
+    # the order. Without a limit, a sort on a snapshot field would hold the
+    # whole joined documents: sort the slim states, join the full ones after.
+    identity_sort = not sort_field.startswith('current_snapshot.')
+    slim = not identity_sort and not size > 0
+
+    pipeline: List[Dict[str, Any]] = [{'$match': identity_match}]
+    if identity_sort:
+        pipeline.append(sort_stage)
+    pipeline.extend([
+        _current_snapshot_lookup(snapshots_collection, slim=slim),
         {'$unwind': '$current_snapshot'},
-    ]
+    ])
 
     if snapshot_match:
         pipeline.append({'$match': snapshot_match})
@@ -86,8 +116,13 @@ def build_list_pipeline(
     if include_username:
         pipeline.extend(_username_enrichment_stages())
 
-    sort_field = resolve_sort_field(sortkey)
-    pipeline.append({'$sort': {sort_field: sort_order}})
+    if not identity_sort:
+        pipeline.append(sort_stage)
+    if slim:
+        pipeline.extend([
+            _current_snapshot_lookup(snapshots_collection),
+            {'$unwind': '$current_snapshot'},
+        ])
 
     if page > 0 and size > 0:
         pipeline.extend([

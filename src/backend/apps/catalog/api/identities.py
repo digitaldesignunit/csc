@@ -1473,7 +1473,7 @@ async def get_identity_passport(
         base = jsonld_export.site_base(str(request.base_url))
         document = jsonld_export.to_jsonld(
             body, base=base,
-            context_url=f'{str(request.base_url).rstrip("/")}'
+            context_url=f'{jsonld_export.api_base(str(request.base_url))}'
                         f'/context/{jsonld_export.CONTEXT_VERSION}.jsonld')
         return JSONResponse(
             status_code=status.HTTP_200_OK, content=document,

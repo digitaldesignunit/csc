@@ -39,6 +39,10 @@ export SMTP_FROM_NAME="Catalog of Second Chances"
 # address); the mails themselves are sent from the noreply mailbox. Optional.
 export SMTP_REPLY_TO="support@2ndchances.build"
 export FRONTEND_URL="https://2ndchances.build"
+# the links of the exports (JSON-LD context, PDF passport) name this API
+# address; without it they use the request's own, which is http:// behind the
+# proxy. Optional.
+export CSC_PUBLIC_API_URL="https://api.2ndchances.build"
 export CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de"
 
 # Filesystem paths

@@ -107,6 +107,40 @@ def test_the_context_is_public_cacheable_and_versioned(world):
         'If-None-Match': first.headers['etag']}).status_code == 304
 
 
+# THE PUBLIC API ADDRESS (hotfix 0.6.0.1) -----------------------------------------
+def test_the_links_of_the_exports_use_the_public_api_address_when_it_is_set(
+        world, pdf_spy, monkeypatch):
+    """Behind the proxy the request's own base is http://; CSC_PUBLIC_API_URL
+    names the address the JSON-LD context and the PDF links use."""
+    api = world['api']
+    _public(world, BEAM)
+    monkeypatch.delenv('CSC_PUBLIC_API_URL', raising=False)
+    plain = api.get(f'/identities/{BEAM}/compose',
+                    params={'format': 'jsonld'}, headers=world['m']).json()
+    assert plain['@context'] == 'http://testserver/context/v1.jsonld'
+    api.get(f'/identities/{BEAM}/export/pdf')
+    assert pdf_spy[-1].api_base == 'http://testserver'
+    monkeypatch.setenv('CSC_PUBLIC_API_URL', 'https://api.example.org/')
+    exports_api.clear_pdf_cache()
+    document = api.get(f'/identities/{BEAM}/compose',
+                       params={'format': 'jsonld'}, headers=world['m']).json()
+    assert document['@context'] == 'https://api.example.org/context/v1.jsonld'
+    assert document['@id'] == f'{SITE}/id/{BEAM}'            # the site base
+    api.get(f'/identities/{BEAM}/export/pdf')
+    assert pdf_spy[-1].api_base == 'https://api.example.org'
+
+
+def test_the_public_api_address_helper_normalises_and_falls_back(monkeypatch):
+    from apps.catalog.exports.jsonld import api_base
+    monkeypatch.delenv('CSC_PUBLIC_API_URL', raising=False)
+    assert api_base('http://testserver/') == 'http://testserver'
+    assert api_base(None) == ''
+    monkeypatch.setenv('CSC_PUBLIC_API_URL', ' https://api.example.org// ')
+    assert api_base('http://testserver/') == 'https://api.example.org'
+    monkeypatch.setenv('CSC_PUBLIC_API_URL', '')
+    assert api_base('http://testserver/') == 'http://testserver'
+
+
 # JSON-LD ---------------------------------------------------------------------
 def test_the_passport_as_json_ld_expands_with_a_standard_processor(world):
     api = world['api']
