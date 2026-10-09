@@ -22,7 +22,7 @@
       <chunks count="6">
         <chunk name="DocumentHeader">
           <items count="5">
-            <item name="DocumentID" type_name="gh_guid" type_code="9">5139b6c0-9902-478b-9251-55641f4dc6d9</item>
+            <item name="DocumentID" type_name="gh_guid" type_code="9">e4cd3b9c-d9c4-4ea1-8c2d-d0a3cd8ba960</item>
             <item name="Preview" type_name="gh_string" type_code="10">Shaded</item>
             <item name="PreviewMeshType" type_name="gh_int32" type_code="3">1</item>
             <item name="PreviewNormal" type_name="gh_drawing_color" type_code="36">
@@ -35,7 +35,7 @@
         </chunk>
         <chunk name="DefinitionProperties">
           <items count="4">
-            <item name="Date" type_name="gh_date" type_code="8">639270721470575918</item>
+            <item name="Date" type_name="gh_date" type_code="8">639271320203096762</item>
             <item name="Description" type_name="gh_string" type_code="10"></item>
             <item name="KeepOpen" type_name="gh_bool" type_code="1">false</item>
             <item name="Name" type_name="gh_string" type_code="10"></item>
@@ -110,7 +110,7 @@ Updates come from the Grasshopper release that belongs to the server. UPDATE_CHA
                     <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
                       <bitmap length="738">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAJ3SURBVEhL7ZXPSxVRFMdHMvtF1CYKCqKQCBfKfL8z9gxyIkwy7b3x5US5if6AxBaC1cIKCVe5aJPOWNso+kHQwqyFELQJosgSAl+LgvLHPBH6QVEvjtx5zLs5WEGr+sCBmXO+95wzl3vPGMY/BcmV1dXVq3T/H+M4TjmAdpJ3AEyTLIjJM4DbAA55nrdEXxd6A2tyR68s1/0lANgB4GUs6RcAEyRz8hzzPzdN04rWFZye8jDjT4aZ4F5pxhimaWZJflZJRgG0OI5T7CiVSq0gmQHwUBX5RNKT2FQ6WJ13g0Lo+uMlSSOkc5X8G8kThmGU6ZoYZQC6SH5Xdv5Jpn9tYgHZc5IvVFedejwJAK0A5mTdbnvnSGIBkkeibVmk83kK3rWK0B3MzLYG3ui+s50n69vfdu9qL0iBd+lLOV0vnfRKAcuymvTYQuTT/jFJtpCNtVz4qOuNysrKZQCg+5OYaxtal3eDc6Hr98XtftOZ4csNHad0/d/jakPXzcf7+97MuP6D0PVHIsu7wd2p7MB2Xf/bjDf3f9D3sGiZ4KCuT0K2V7ZZ9xvT7uArSdaWaixk6/Y+u9XYzdns0Nbp1sFNujYJuXjqePfqMUPOrBSot+oeqWM6VlNTs1HXJSE3G8C4OoFpPV4s4O/pWA9gWHUyUVtbu0XX6pBcCuC6WiPz5+f7ExWQOVJVVVVB8ob6kvdyS3V9hG3b2+RSKu1r27Y36Jp54gXkXY2MgWhiknwKoMeyrMMkXZLH1Qj/GsVN09ys5y0io1VGrIzauN80zQOyOFaoxADMkDwdn7QLIj8H+Uno/gg5fjJZAVyUL5OvAdC8aOL//Ao/AC79TFRjW38SAAAAAElFTkSuQmCC</bitmap>
                     </item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">1f52d940-dac1-4a92-99dd-f18cecac3115</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">df539d5d-dca6-40e2-bd3f-5def3d0cfd1f</item>
                     <item name="MarshGuids" type_name="gh_bool" type_code="1">true</item>
                     <item name="MarshInputs" type_name="gh_bool" type_code="1">false</item>
                     <item name="MarshOutputs" type_name="gh_bool" type_code="1">true</item>
@@ -152,7 +152,7 @@ Updates come from the Grasshopper release that belongs to the server. UPDATE_CHA
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of boolean values</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">6ea335f4-20f6-4dff-be20-aee92a15cbdb</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">1e6fd599-4bfb-4a47-a10f-aeb20d894289</item>
                             <item name="Name" type_name="gh_string" type_code="10">CheckForUpdates</item>
                             <item name="NickName" type_name="gh_string" type_code="10">CheckForUpdates</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -186,7 +186,7 @@ Updates come from the Grasshopper release that belongs to the server. UPDATE_CHA
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of boolean values</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">623eb9cf-e43a-4a85-842e-51b73d590142</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">b26b04fa-47cb-4482-83f3-990ae9bb8439</item>
                             <item name="Name" type_name="gh_string" type_code="10">InstallUpdates</item>
                             <item name="NickName" type_name="gh_string" type_code="10">InstallUpdates</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -220,7 +220,7 @@ Updates come from the Grasshopper release that belongs to the server. UPDATE_CHA
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
                             <item name="Description" type_name="gh_string" type_code="10">Converts to collection of text fragments</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">48609636-0d6e-41a0-b7fc-292595da9c6f</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">50ddf2b7-9fdb-4521-8720-8d7dedf902e3</item>
                             <item name="Name" type_name="gh_string" type_code="10">LocalFolder</item>
                             <item name="NickName" type_name="gh_string" type_code="10">LocalFolder</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">true</item>
@@ -254,7 +254,7 @@ Updates come from the Grasshopper release that belongs to the server. UPDATE_CHA
                           <items count="12">
                             <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">false</item>
                             <item name="Description" type_name="gh_string" type_code="10">No conversion</item>
-                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">6537c916-9952-4cee-b541-c4e014c2ca39</item>
+                            <item name="InstanceGuid" type_name="gh_guid" type_code="9">186c8241-f253-4bfd-ba07-f8efe0fa8449</item>
                             <item name="Name" type_name="gh_string" type_code="10">Status</item>
                             <item name="NickName" type_name="gh_string" type_code="10">Status</item>
                             <item name="Optional" type_name="gh_bool" type_code="1">false</item>
