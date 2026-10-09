@@ -110,7 +110,8 @@ changed `.ghuser` with ExportScriptsAndSource after part B. O12 (cutover runbook
 secret and the NextAuth secret were rotated on 2026-10-08 (printed into session tool output earlier). New on 2026-10-08, not part of the
 0.6 phases: a student's spherical harmonics descriptor may be read and integrated (8.126); findings in
 `SH_DESCRIPTOR_SOURCE_2026-10-08.md`, open topics O19--O25 to grill (O25: research pass first); no code copied before the author
-commits a licence file.
+commits a licence file. New on 2026-10-09: open topic O26, users create and moderate their own datasets
+(today `create_dataset` is admin only).
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.
