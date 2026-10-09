@@ -643,6 +643,25 @@ lint packages to 16.4. `npm audit --omit=dev`: 7 findings that predate the upgra
 brace-expansion, http-cache-semantics, source-map-js; moderate: ip-address, postcss-selector-parser); update the
 dependencies that carry them and check the server build (Uberspace 7) still works.
 
+**Component map: HKS as a basis** (user 2026-10-09): the map embeds only `radial_signature` and `scalars` today
+(`MAP_BASES`); add the heat kernel signature (8.6, stored per snapshot by the descriptors stage) as a third basis,
+selectable on the map page, with the cache cron building it; check how many published pieces carry an HKS (authored
+pieces get one from their primitive) and how the PCA / UMAP layouts behave on it.
+
+**Found on the cutover day (2026-10-09):**
+- `seed_materials` (`catalog_common.py:231`) races when several gunicorn workers start on an empty `materials`
+  collection (E11000 in the losing workers, gunicorn halts, "spawn error"); make it upsert or
+  `insert_many(ordered=False)` ignoring duplicate keys, with a test that runs it twice concurrently.
+- Server venv: `shapely` 2.2.0 ships only glibc 2.28 wheels, the deploy compiled it and failed; cap
+  `shapely<=2.1.2` in `constraints.txt` and install with `--only-binary=:all:` in `csc_release_deploy.sh`, so the
+  deploy matches `invoke check-server-wheels` and a missing wheel fails fast instead of compiling.
+- `migrate_06.py --all --dry-run` aborts at step 10 because the 11a slug rename is not applied in memory; make the
+  dry run carry the renames forward, or document that only the rehearsal checks the whole chain.
+- The import saw 3 connection resets from the server mid-run (14:35:40); check `fastapi.log` for worker restarts or
+  memory (4 workers with the geometry libraries) and consider `workers = 2`.
+- Viewer: a piece without scan (authored proxy only) offers no overlay; say "No scan: overlays need a mesh or point
+  cloud" instead of an empty menu.
+
 **Other review findings of 2026-10-07/08 (non-blocking):**
 - Geometry cache (8.122 f, review note 2): a frame-only cut uploads the cached `descriptors` dict with the frame stamp,
   so the descriptors stage looks fresh by value although it never stamped; today only a comment in `_outcome`. Strip the
