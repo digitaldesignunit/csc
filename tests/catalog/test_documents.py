@@ -61,7 +61,7 @@ def test_timestamps_are_iso_utc():
 def test_i16_construction_work_only_for_deinstallation_or_demolition():
     doc = ex.identity()
     doc['origin']['kind'] = 'offcut'
-    _invalid(ComponentIdentity, doc, 'construction_work')
+    _invalid(ComponentIdentity, doc, 'deinstallation / demolition')
 
 
 def test_i18_exit_construction_work_only_for_installed():
@@ -291,3 +291,53 @@ def test_material_default_class_never_hazardous():
     doc = ex.material()
     doc['default_class'] = '17 06 05*'
     _invalid(Material, doc, 'hazardous')
+
+
+def test_a_deviation_map_file_is_named_by_the_server():
+    from pydantic import ValidationError
+
+    from apps.catalog.documents import DeviationMapFace
+    scale = {'scale_mm': 0.01, 'offset_mm': -1.0}
+    good = 'proxies/11111111-1111-1111-1111-111111111111/0/+z.png'
+    assert DeviationMapFace(file=good, width=2, height=2, distance=scale)
+    for bad in ('../x.png', 'proxies/../x/0/+z.png',
+                'proxies/abc/0/../../../etc.png', '/etc/passwd',
+                'proxies/abc/0/+z.txt', 'meshes/abc/0/+z.png'):
+        with pytest.raises(ValidationError):
+            DeviationMapFace(file=bad, width=2, height=2, distance=scale)
+
+
+# IN PLACE AND DOCUMENTS (8.104, 8.106) ---------------------------------------
+def test_origin_planned_defaults_to_false_and_needs_a_works_kind():
+    doc = ex.identity()
+    assert ComponentIdentity.model_validate(doc).origin.planned is False
+    doc['origin'] = {'kind': 'deinstallation', 'planned': True}
+    assert ComponentIdentity.model_validate(doc).origin.planned is True
+    doc['origin'] = {'kind': 'offcut', 'planned': True}
+    with pytest.raises(ValidationError, match=r'\(I31\)'):
+        ComponentIdentity.model_validate(doc)
+
+
+def test_authored_exit_from_in_place_is_recycled_disposed_or_lost():
+    doc = ex.identity()
+    doc['origin'] = {'kind': 'deinstallation', 'planned': True}
+    for kind, fine in (('lost', True), ('recycled', True),
+                       ('installed', False), ('returned', False)):
+        doc['exit'] = {'kind': kind, 'at': '2026-06-01T00:00:00Z',
+                       'recorded_by_user_id': 'u'}
+        if fine:
+            ComponentIdentity.model_validate(doc)
+        else:
+            with pytest.raises(ValidationError, match=r'\(I31\)'):
+                ComponentIdentity.model_validate(doc)
+    # a split the server keeps from cut pieces is not an authored exit
+    doc['exit'] = {'kind': 'split', 'at': '2026-06-01T00:00:00Z',
+                   'recorded_by_user_id': None}
+    ComponentIdentity.model_validate(doc)
+
+
+def test_only_a_document_has_no_summary():
+    doc = ex.evidence()
+    doc['summary'] = None
+    with pytest.raises(ValidationError, match=r'\(I6\)'):
+        Evidence.model_validate(doc)

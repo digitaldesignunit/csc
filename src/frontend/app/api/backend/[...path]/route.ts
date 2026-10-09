@@ -4,10 +4,16 @@ export const runtime = 'nodejs'
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { CSC_CLIENT_HEADERS } from '@/lib/cscClient'
+import { forwardedFor } from '@/lib/clientAddress'
 
 const FASTAPI_URL = process.env.FASTAPI_URL!
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET
 const MAX_BODY_BYTES = 5 * 1024 * 1024 // 5 MB
+// one evidence attachment: the backend caps a file at 25 MB (decision 8.82)
+// and answers 413 itself; the proxy allows just above that (multipart
+// overhead) for POST /evidence/attachments only, so the backend, not the
+// proxy, is the one that refuses
+const MAX_ATTACHMENT_BODY_BYTES = 26 * 1024 * 1024
 
 // Geometry uploads (PUT/POST) must go directly to FastAPI --- not via this proxy.
 // GET downloads for the web viewer are proxied with the user's bearer token.
@@ -69,7 +75,10 @@ async function handle(
 
   // 4) Reject oversized request bodies before reading
   const contentLength = req.headers.get('content-length')
-  if (contentLength && parseInt(contentLength) > MAX_BODY_BYTES) {
+  const bodyLimit = method === 'POST' && pathname === '/evidence/attachments'
+    ? MAX_ATTACHMENT_BODY_BYTES
+    : MAX_BODY_BYTES
+  if (contentLength && parseInt(contentLength) > bodyLimit) {
     return NextResponse.json({ error: 'Request too large' }, { status: 413 })
   }
 
@@ -77,8 +86,11 @@ async function handle(
   const hasBody = !['GET', 'HEAD'].includes(method)
   const body = hasBody ? await req.arrayBuffer() : undefined
 
+  // the visitor's address for the backend's rate limits: the browser's own
+  // X-Forwarded-For is not on the allow-list above and never passes
   const headers = forwardableHeaders(req, {
     ...CSC_CLIENT_HEADERS,
+    ...forwardedFor(req.headers),
     ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
   })
 
@@ -101,10 +113,32 @@ async function handle(
     'content-disposition',
     'etag',
     'last-modified',
+    // a download is served `nosniff`; the browser must see that header
+    'x-content-type-options',
   ]
   for (const name of pass) {
     const val = upstream.headers.get(name)
     if (val) outHeaders.set(name, val)
+  }
+
+  // The backend varies an answer by the bearer token (who asks); the browser
+  // never sees that token, it identifies itself to this proxy by the session
+  // cookie. So the browser's cache has to key on the cookie: a body fetched
+  // signed in must not be reused after sign-out (decision 8.101).
+  const vary = (upstream.headers.get('vary') ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+    .map((v) => (v.toLowerCase() === 'authorization' ? 'Cookie' : v))
+  if (vary.length) {
+    outHeaders.set('vary', Array.from(new Set(vary)).join(', '))
+  }
+
+  // the length of a body that is passed on as it came (not when the fetch
+  // decoded a compressed one: the length would then be wrong)
+  const length = upstream.headers.get('content-length')
+  if (length && !upstream.headers.get('content-encoding')) {
+    outHeaders.set('content-length', length)
   }
 
   // Note: do NOT read .text()/json(); just forward the stream/body directly.

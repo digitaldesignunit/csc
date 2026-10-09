@@ -1,14 +1,8 @@
 #! python3
 # -*- coding: utf-8 -*-
 # venv: DDU_CSC
-print('ENV OK!')
 # r: charset_normalizer
-# r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
-# r: robust-laplacian
-# r: potpourri3d
+print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os  # NOQA
@@ -31,13 +25,35 @@ ghenv.Component.Description = (  # NOQA
     'grid/axes. Creates organized capture folders with timestamps.'
 )
 
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('Path', 'Path',
+     'Path to the captured image file'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
+
 
 class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Anders Holden Deleuran (updated 2025 by Max Benjamin Eschenbach)
     License: MIT License
-    Version: 260609
+    Version: 261005
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         super().__init__()
@@ -136,6 +152,32 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
             sc.doc = ghdoc  # NOQA
             raise Exception(f'Capture failed, check the path: {str(e)}')
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the outputs were just
+        updated (says why)."""
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
+    def BeforeRunScript(self):
+        """Perform some setup actions."""
+        self._check_outputs()
+
     def RunScript(self,
             Toggle: bool,
             Width: int,
@@ -161,6 +203,8 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
         Returns:
             Path to the captured image file
         """
+        if self._stop():
+            return empty_outputs()
         # Initialize param descriptions (this has to be done in RunScript)
         self.InputParams[0].Description = (
             'Toggle to execute the view capture operation'
@@ -187,18 +231,11 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
             'Open the captured file after creation'
         )
 
-        # Initialize output param descriptions
-        self.OutputParams[0].Description = (
-            'Path to the captured image file'
-        )
-
         # Set up output trees and results
         Path = Grasshopper.DataTree[System.Object]()
 
         if not Toggle:
-            self.Component.Message = (
-                'Ready to capture view (toggle to execute)'
-            )
+            self._state('Toggle is off')
             return Path
 
         try:
@@ -214,14 +251,12 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
             if not Height:
                 Height = 1080
 
-            self.Component.Message = 'Preparing capture...'
 
             # Create capture folder and filename
             capFolder = self.checkOrMakeFolder()
             fileName = self.makeFileName()
             path = os.path.join(capFolder, fileName + '.png')
 
-            self.Component.Message = 'Capturing view...'
 
             # Perform the capture
             captured_path = self.captureActiveViewToFile(
@@ -237,7 +272,7 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
                 os.startfile(path)
                 self._addRemark('File opened after capture')
 
-            self.Component.Message = f'View captured: {fileName}.png'
+            self._state(f'Captured {fileName}.png')
             self._addRemark(f'Successfully captured view to {captured_path}')
 
             return Path
@@ -245,5 +280,4 @@ class CSC_ViewCaptureToFile(Grasshopper.Kernel.GH_ScriptInstance):
         except Exception as e:
             msg = f'Capture failed: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
             return Path

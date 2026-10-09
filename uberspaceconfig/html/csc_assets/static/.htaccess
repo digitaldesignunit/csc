@@ -1,0 +1,10 @@
+# ~/html/csc_assets/static/ (decision 8.125): the public UI files only (the
+# Grasshopper interface images the release deploy copies here). Nothing about a
+# piece belongs in this folder.
+<IfModule mod_authz_core.c>
+    Require all granted
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Allow from all
+</IfModule>

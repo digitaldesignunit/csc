@@ -29,8 +29,8 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.5.1.0 --- backend, web frontend and Grasshopper interface are released together
-  under one version (tag `v0.5.1.0`); the single source is the `VERSION` file.
+- **CSC**: 0.6.0.0 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.6.0.0`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
 
@@ -101,16 +101,30 @@ run them from the repository root unless stated otherwise.
 MongoDB needs no terminal: it is the Windows service. The Grasshopper
 UserObjects always talk to production (`CSC_Session` has no base-URL input yet).
 
+For browser checks open the web app as `http://127.0.0.1:<port>`, not
+`localhost`: cookies do not separate by port, so a second dev server on another
+port (a throwaway `invoke dev-migrated` with `NEXT_DIST_DIR` and
+`NEXTAUTH_URL=http://127.0.0.1:<port>`) would otherwise share its NextAuth
+session with the first.
+
 ### Tests
 
 ```
-invoke test                       # unit tests + route tests on a throwaway mongod
+invoke test-changed               # tier 1, while working: the tests of the changed paths
+invoke test-all                   # tier 2, before a hand-off: everything but `slow`, -n auto; prints the tree hash
+invoke test-release               # tier 4, before tagging: everything including `slow`
+invoke test                       # plain pytest run (--all: with slow, --parallel: -n auto)
 invoke test -k auth               # a subset
 invoke test --dump 260916         # also the smoke test against a local dump
 invoke check-server-wheels        # would the backend install on Uberspace 7 without compiling?
 ```
 
-Route tests are skipped with a message if no `mongod` is found.
+Route tests are skipped with a message if no `mongod` is found. Tests marked
+`slow` (`pytest.ini`) are left out by default; `pytest -m ""` runs them too.
+`-n auto` (pytest-xdist) gives every worker its own throwaway `mongod`; against a
+shared server (`CSC_TEST_MONGODB_URI`) every worker gets its own database
+`csc_<worker>`. CI runs only `tests/api`, the frontend and the deploy checks
+(decision 8.114).
 
 ### Troubleshooting
 
@@ -167,7 +181,8 @@ two places you need to set them:
 
 **1. `~/.bash_profile`** - for the cron jobs and the deploy script: copy the
 template `uberspaceconfig/.bash_profile.example` and fill it in (MongoDB, JWT,
-SMTP, asset folders, CORS origins; optionally `GITHUB_CSC_GH_TOKEN` for higher
+SMTP with the optional `SMTP_REPLY_TO`, the support address that replies to the
+verification and password-reset mails go to, asset folders, CORS origins; optionally `GITHUB_CSC_GH_TOKEN` for higher
 GitHub rate limits in `CSC_Update`).
 
 Apply immediately by running: `source ~/.bash_profile`
@@ -184,9 +199,9 @@ gitignored; only the `.example` file is tracked).
 - Copy `.env.example` and rename it to `.env`
 - Edit `.env` and fill in the values following the comments in the file
 - Proceed in the same way with copying `.env.local.example` and renaming it to `.env.local`
-- Paste your JWT secret key into both the `NEXTAUTH_SECRET` and `API_SECRET` fields. This is odd but unfortunately necessary.
+- Set `NEXTAUTH_SECRET` to a long random value of its own: it only encrypts the NextAuth session cookie and is independent of the backend's `JWT_SECRET` (the frontend never verifies the backend token). There is no `API_SECRET`; delete it from older `.env` files.
 - Add your MongoDB credentials so that the frontend can directly authenticate with MongoDB
-- Set `NEXT_PUBLIC_STATIC_BASE_URL` to a URL served directly by Apache (e.g. `https://username.uberspace.de`). On Uberspace, Next.js runs behind a reverse proxy and serving large static files (previews, downloads) through it causes 502 timeouts. This variable redirects those requests to Apache directly. It is ignored on localhost.
+- `NEXT_PUBLIC_STATIC_BASE_URL` is optional and only for public UI files under `/static/` served by Apache. Leave it empty otherwise. Catalogue files (previews, photos, meshes, point clouds, proxies, capture fixtures) are private: they live outside the web root (`~/csc_assets_private/`) and are served only through the authenticated `/snapshots/...` routes of the API (decision 8.125). It is ignored on localhost.
 
 ## Grasshopper Interface Setup
 
@@ -212,17 +227,24 @@ push is automated.
    if the Grasshopper UserObjects changed --- then re-export the changed
    `.ghuser` / XML in Rhino). Fill in the new `CHANGELOG.md` section: it becomes
    the release notes.
-2. Open a PR into `main`; CI must pass (`.github/workflows/ci.yml`): backend
-   tests on MongoDB, server wheel check, deploy-script test, frontend type
-   check / lint / build, Grasshopper checks (a changed component needs a higher
-   `Version:` and a re-exported `.ghuser` + XML), version consistency.
-3. Merge, then tag the merge commit on `main` and push the tag:
+2. Run the whole suite once locally, including the slow tests:
+   `invoke test-release` (set `CSC_TEST_RHINO=1` for the headless Rhino tests and
+   `CSC_DUMP_DIR` for the migration on a dump). CI no longer runs `tests/catalog`,
+   `tests/grasshopper` or anything marked `slow`, so this run is the check for
+   them.
+3. Open a PR into `main`; CI must pass (`.github/workflows/ci.yml`): backend
+   route tests (`tests/api`) on MongoDB, server wheel check, deploy-script test,
+   frontend type check / lint / tests / build, Grasshopper checks (a changed
+   component needs a higher `Version:` and a re-exported `.ghuser` + XML),
+   version consistency. On a PR the frontend and backend jobs run only when
+   their paths changed; CI does not run on a push to a branch.
+4. Merge, then tag the merge commit on `main` and push the tag:
    `git tag v0.5.1.1 && git push origin v0.5.1.1`.
-4. `.github/workflows/release.yml` runs CI again, builds
+5. `.github/workflows/release.yml` runs CI again (every job, whatever changed), builds
    `csc-backend-<v>.tar.gz`, `csc-frontend-<v>.zip`, `csc-gh-interface-<v>.zip`
    and `SHA256SUMS`, and publishes GitHub Release `v<v>` (pre-release if the
    version has a `-suffix`).
-5. The deploy job waits for your approval (environment `production`), then runs
+6. The deploy job waits for your approval (environment `production`), then runs
    `csc_release_deploy.sh v<v>` on Uberspace over a restricted SSH key: download
    and verify the bundles, unpack to `~/csc/releases/<v>/`, build a venv only if
    the requirements changed, switch `~/csc/current`, restart, health-check
@@ -346,6 +368,31 @@ Uberlab guides:
 - [Uberspace Web Backends](https://manual.uberspace.de/web-backends/)
 - [Uberspace Web Domains](https://manual.uberspace.de/web-domains/)
 
+## Client addresses and rate limits
+
+The backend limits logins, registrations and the expensive exports (PDF, CERO)
+per client. A visitor reaches the backend through two hops: the Uberspace web
+proxy, then the Next.js server (`/api/backend`, `/api/auth`, `/api/register`).
+Each proxy appends the address of its peer to `X-Forwarded-For`; whatever the
+browser wrote itself stands on the left of that chain and is never believed.
+
+- Next.js (`lib/clientAddress.ts`) takes the address `CSC_PROXY_HOPS` proxies
+  from the right (default `1`, the Uberspace proxy; `0` = no proxy in front,
+  nothing is passed on) and sends it to the backend as a single-entry
+  `X-Forwarded-For`.
+- The backend (`limiter.py`) believes that header only when its peer is listed
+  in `CSC_TRUSTED_PROXIES` (default: loopback `127.0.0.0/8,::1`) and then takes
+  the rightmost entry that is not itself a trusted proxy. From any other peer
+  the header is ignored and the peer is the client. Signed-in callers of the
+  exports count per user, everyone else per address.
+- Set `FASTAPI_URL=http://127.0.0.1:8000` on the server: the backend then sees
+  the web server on loopback. If the web server reaches the backend through the
+  public API host instead, the connection comes from the web proxy and the web
+  server's own address is appended to the chain: add both to
+  `CSC_TRUSTED_PROXIES`, and check after deploying that two visitors do not
+  share a limit (the Uberspace manual does not state which headers its proxy
+  sets or from which address it connects).
+
 ## Custom domain (`2ndchances.build`)
 
 `2ndchances.build` is the canonical frontend origin; The old address `ddu.uber.space`
@@ -372,9 +419,10 @@ Then update these values and restart both services:
 | `FASTAPI_CORS_ORIGINS` (add the new origin) | `~/etc/services.d/fastapi.ini` and `~/.bash_profile` |
 | `Access-Control-Allow-Origin` allowlist | `~/html/.htaccess` |
 
-`NEXT_PUBLIC_STATIC_BASE_URL` and the `images.remotePatterns` entry in
-`next.config.ts` describe where assets are *fetched from*, not where the app is
-served, so they only change if the Apache asset host itself moves.
+`NEXT_PUBLIC_STATIC_BASE_URL` (public UI files under `/static/` only) describes
+where those files are *fetched from*, not where the app is served, so it only
+changes if the Apache static host itself moves. Catalogue files have no host:
+`next.config.ts` allows no remote images, they come through the API.
 
 Adding the domain to `FASTAPI_CORS_ORIGINS` is a safety net rather than a
 requirement: the browser only ever calls the API through the same-origin proxy
@@ -398,6 +446,24 @@ match your actual frontend domains. A plain `Header set Access-Control-Allow-Ori
 can only name a single origin, which is why the file reflects a matched origin
 instead.
 
+### Private asset files (decision 8.125)
+
+The six `SNAPSHOT_*_DIR` folders (previews, photos, meshes, point clouds,
+proxies, capture fixtures) live in `~/csc_assets_private/`, outside the web
+root, next to the evidence attachments, and are served only by the API. Two
+more `.htaccess` files keep the old location closed and the public UI files
+open:
+
+```
+[user@servername ~]$ cp ~/csc/uberspaceconfig/html/csc_assets/.htaccess ~/html/csc_assets/.htaccess
+[user@servername ~]$ cp ~/csc/uberspaceconfig/html/csc_assets/static/.htaccess ~/html/csc_assets/static/.htaccess
+```
+
+`~/html/csc_assets/.htaccess` denies everything (`Require all denied`) as a
+second guard in case a folder is ever put back; `static/.htaccess` re-allows
+the public UI files in `~/html/csc_assets/static/` (the Grasshopper interface
+images the release deploy copies there).
+
 ## Cron jobs
 
 All jobs run the active release (`~/csc/current`) and log to `~/csc/shared/logs/`.
@@ -405,15 +471,17 @@ The entries, ready to paste into `crontab -e`, are in `uberspaceconfig/crontab/`
 
 | job | schedule | what |
 |---|---|---|
-| `previewgen_cronjob.ini` | every 5 min | renders missing component previews |
-| `descriptors_simple_cronjob.ini` | every 5 min (`flock`) | computes missing geometric descriptors |
+| `geometry_cronjob.ini` | every 5 min (`flock`, `--limit 25 --sweep`) | geometry runner: frame, shape class, proxies + deviation maps, descriptors, complexity, previews of every snapshot whose derivation is stale. With `CSC_GEOMETRY_HEAVY_STAGES=remote` it runs only frame and shape class, and the rest runs on a worker elsewhere (`main_geometry.py --remote <url> --user <admin>`, password in `CSC_API_PASSWORD`); the recompute route then only marks the heavy stages stale |
 | `component_map_cronjob.ini` | every 6 h (`flock`) | precomputes PCA / UMAP layouts for the component map |
 | `usermaintenance_cronjob.ini` | daily 2:00 | removes unverified accounts older than 7 days |
 | `geometrymaintenance_cronjob.ini` | daily 3:00 | removes geometry folders without a component |
 
 Each line starts with `source ~/.bash_profile &&` so the job sees the backend's
 environment variables. To run a job by hand:
-`~/csc/current/venv/bin/python ~/csc/current/backend/main_previewgen.py`.
+`~/csc/current/venv/bin/python ~/csc/current/backend/main_geometry.py --snapshot <id>`
+(`--help` lists the stages and `--recompute`). Only the cron passes `--sweep`, which
+deletes the previews and deviation maps of snapshots that no longer exist: never
+run it against a local copy of the assets.
 
 ## OpenAPI Model Generation
 
@@ -476,7 +544,7 @@ src/frontend/
 
 See "Local development and tests" above: `invoke test` runs the Python tests;
 the frontend is checked with `npx tsc --noEmit` and `npm run lint` in
-`src/frontend`. CI runs all of it on every PR.
+`src/frontend`. CI runs the route tests and the frontend checks on a PR (see above for the rest).
 
 # Credits
 

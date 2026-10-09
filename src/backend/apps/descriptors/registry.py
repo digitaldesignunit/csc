@@ -57,6 +57,10 @@ class DescriptorContext:
     log: LoggerFn = _noop_logger
     meshes_dir: Optional[str] = None
     point_clouds_dir: Optional[str] = None
+    source: Optional[Any] = None
+    """The component geometry the runner loaded once
+    (``apps.catalog.geometry_source.Source``); None when a spec is run on
+    a bare component document."""
 
 
 ComputeFn = Callable[[DescriptorContext], Dict[str, Any]]
@@ -243,13 +247,17 @@ def compute_descriptor(
     log: LoggerFn = _noop_logger,
     meshes_dir: Optional[str] = None,
     point_clouds_dir: Optional[str] = None,
+    source: Optional[Any] = None,
+    raise_errors: bool = False,
 ) -> Dict[str, Any]:
     """Run a single spec and return its flattened output dict.
 
     On failure, returns ``{key: None, ...}`` for every output key of the
     spec so the caller can decide whether to persist the None sentinel or
-    skip writing. A spec that cannot run at all (e.g. `requires_mesh=True`
-    but mesh is None) returns an empty dict and logs a warning.
+    skip writing --- or, with ``raise_errors`` (the geometry runner), lets
+    the exception through so the stage records it. A spec that cannot run
+    at all (e.g. `requires_mesh=True` but mesh is None) returns an empty
+    dict and logs a warning.
     """
     if spec.requires_mesh and mesh is None:
         log(f'{spec.name}: mesh not available, skipping')
@@ -261,10 +269,13 @@ def compute_descriptor(
         log=log,
         meshes_dir=meshes_dir,
         point_clouds_dir=point_clouds_dir,
+        source=source,
     )
     try:
         out = spec.compute(context)
     except Exception as exc:
+        if raise_errors:
+            raise
         log(f'{spec.name}: failed ({exc})')
         return {k: None for k in spec.output_keys}
 

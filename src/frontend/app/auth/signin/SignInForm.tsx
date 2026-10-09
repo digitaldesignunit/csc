@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PASSWORD_CHANGED_PARAM, PASSWORD_CHANGED_VALUE } from '@/lib/password'
 
 function toSafePathClient(raw: string): string {
   const fallback = '/components'
@@ -33,6 +34,7 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
   const [isPending, startTransition] = useTransition()
   const [focusedField, setFocusedField] = useState<string | null>(null)
   const searchParams = useSearchParams()
+  const passwordChanged = searchParams.get(PASSWORD_CHANGED_PARAM) === PASSWORD_CHANGED_VALUE
 
   // Check for error messages in URL (from NextAuth redirects)
   useEffect(() => {
@@ -131,9 +133,14 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
     <div className="flex min-h-[70vh] md:min-h-[88vh] items-start sm:items-center justify-center p-4 pt-8 sm:pt-4">
       <Card className="w-full max-w-md bg-card/75">
         <CardHeader>
-          <CardTitle>Sign In</CardTitle>
+          <CardTitle>Sign in</CardTitle>
         </CardHeader>
         <CardContent>
+          {passwordChanged && !error && (
+            <p role="status" className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm">
+              Your password was changed. Sign in with the new one.
+            </p>
+          )}
           {error && (
             <div className="mb-4 space-y-2">
               <p className="text-sm text-destructive">{error}</p>
@@ -149,7 +156,7 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
           )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="gap-1 flex flex-col">
-              <Label htmlFor="identifier">Email or Username</Label>
+              <Label htmlFor="identifier">E-mail or username</Label>
               <Input
                 id="identifier"
                 type="text"
@@ -177,8 +184,13 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
               />
             </div>
             <Button type="submit" disabled={isPending} className="w-full">
-              {isPending ? 'Signing in...' : 'Sign In'}
+              {isPending ? 'Signing in...' : 'Sign in'}
             </Button>
+            <div className="text-center text-sm">
+              <Link href="/auth/forgot-password" className="text-primary hover:underline">
+                Forgot your password?
+              </Link>
+            </div>
           </form>
           
           <div className="mt-4 text-center text-sm text-muted-foreground">
@@ -189,6 +201,11 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
             >
               Register here
             </a>
+          </div>
+          <div className="mt-2 text-center text-sm">
+            <Link href="/components" className="text-muted-foreground underline underline-offset-4 hover:text-foreground">
+              Browse without signing in
+            </Link>
           </div>
         </CardContent>
       </Card>

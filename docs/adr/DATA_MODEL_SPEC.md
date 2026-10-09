@@ -1,11 +1,12 @@
-# CSC Data Model Specification --- v0.6 (draft 4)
+# CSC Data Model Specification --- v0.6 (draft 5)
 
-**Status:** draft 5, 2026-09-30 --- review gaps closed (decisions 1.1--8.21,
+**Status:** draft 5, 2026-09-30 --- review gaps closed (decisions 1.1--8.22,
 `docs/adr/DESIGN_DECISIONS.md`). Draft 4 2026-09-28 (consistency pass, 8.1--8.6), draft 3
 2026-09-24 (7.x), draft 2 2026-09-23 (6.x), first draft
 2026-09-12. Glossary: `CONTEXT.md` (repo root) --- field names follow its terms. Supersedes
-`future_implementation/MEASUREMENTS_SPEC.md` (kept for its domain research and sources). Nothing
-here is open; items marked **deferred** are out of 0.6 by the triage rule (6.8).
+the 0.5 measurements draft (2026-09-09, retired 2026-10-02): its domain research is Appendix A.0,
+its standards in section 2.5 and the Sources list. Loose ideas beyond 0.6: `docs/adr/FUTURE.md`.
+Nothing here is open; items marked **deferred** are out of 0.6 by the triage rule (6.8).
 **Precedent:** the hybrid-representation ideas here --- proxies that keep their deviation from
 the scan, `{range, confidence, source}` property descriptors, resolution following design
 relevance --- follow M. Bernhard, *HYBREP: A Hybrid Representation Framework for Computational
@@ -25,7 +26,7 @@ landscape section 10.6.
 |---|---|
 | 1 | Conceptual model --- the entities and the four rules that bind them |
 | 2 | Vocabularies --- every controlled list, with authority and extension policy |
-| 3 | Documents --- field-by-field for each collection (identities, snapshots, evidence, datasets, users, materials), plus on-disk companions |
+| 3 | Documents --- field-by-field for each collection (identities, snapshots, evidence, datasets, users, materials, change log), plus on-disk companions |
 | 4 | Derivations --- the pure functions that compute derived fields |
 | 5 | Invariants --- what the backend must reject |
 | 6 | Type x representation matrix |
@@ -33,7 +34,7 @@ landscape section 10.6.
 | 8 | Migration from 0.5 |
 | 9 | Decided questions (index into the decision log) |
 | 10 | CPR 2024/3110 & DPP alignment |
-| A | Evidence payloads: rebound hammer, core compression, non-instrumental kinds, reinforcement layout |
+| A | Evidence payloads: domain notes, rebound hammer, core compression, non-instrumental kinds, reinforcement layout |
 | B | Proxy primitive definitions: params, faces, UV |
 
 ---
@@ -114,6 +115,11 @@ IFC element-class **names only**. No IFC structure is imported.
 | `IfcFooting` | Footing | |
 | `IfcDiscreteAccessory` | Accessory / Connector | |
 | `IfcBuildingElementPart` | Element part (masonry unit, ...) | IFC 4.3.2: component used to compose a building element. A whole reclaimed brick/block (decision 6.13); brick *rubble* stays `CscDebris` |
+| `IfcWindow` | Window | decision 8.107 |
+| `IfcDoor` | Door / gate | decision 8.107 |
+| `IfcStair` | Stair | decision 8.107; an assembly, `composite` |
+| `IfcRailing` | Railing / balustrade | decision 8.107 |
+| `IfcDuctSegment` | Duct | decision 8.107 |
 | `IfcBuildingElementProxy` | Unknown | function not known |
 | `CscDebris` | Debris | CSC extension: no prior function as a discrete element (rubble, aggregate) |
 
@@ -128,11 +134,11 @@ made in design tools outside CSC (decision 7.11) and is never recorded here.
 
 | value | definition | typical `original_function` |
 |---|---|---|
-| `linear` | one dominant extent | IfcBeam, IfcColumn, IfcMember, IfcPipeSegment |
-| `planar` | two dominant extents | IfcPlate, IfcSlab, IfcWall |
+| `linear` | one dominant extent | IfcBeam, IfcColumn, IfcMember, IfcPipeSegment, IfcDuctSegment |
+| `planar` | two dominant extents | IfcPlate, IfcSlab, IfcWall, IfcWindow, IfcDoor, IfcRailing |
 | `block` | three comparable extents, box-like | bricks, blocks, footings |
 | `irregular` | no primitive fits | CscDebris, stone |
-| `composite` | several distinct bodies / branching | IfcDiscreteAccessory, assemblies |
+| `composite` | several distinct bodies / branching | IfcDiscreteAccessory, IfcStair, assemblies |
 
 `composite` cannot be derived; it is always assigned.
 
@@ -157,8 +163,13 @@ made in design tools outside CSC (decision 7.11) and is never recorded here.
 | `manufacturer_datasheet` | `archival` | no | A.3 |
 | `reinforcement_layout` | by `basis`: `drawing` --> `archival`, `scan` --> `ndt`, `exposed` --> `visual` | --- | A.4 (decision 7.8) |
 
-Future instrumental methods (UPV EN 12504-4, carbonation EN 14630, cover meter, half-cell,
-pull-off, moisture) are one `EvidenceMethodSpec` each (section 4.5).
+Future instrumental methods are one `EvidenceMethodSpec` each (section 4.5): ultrasonic pulse
+velocity (EN 12504-4), carbonation depth by phenolphthalein (EN 14630), cover meter / rebar
+scanning (prEN 12504-5:2023, draft; BS 1881-204), half-cell potential (ASTM C876), pull-off (EN 1542), chloride content,
+moisture, weighing, dimensional survey, hardness / Windsor probe, timber moisture and grading,
+steel coupon tensile tests. Several are non-destructive and repeatable; several produce a depth
+profile rather than a scalar --- the envelope must hold scalar, multi-reading and small-series
+results without a new collection per method.
 
 Tier base confidences (policy constants, `vocab.py`):
 
@@ -190,13 +201,18 @@ context is that snapshot into `snapshot.properties`).
 | `rebar_diameter` | `mm` | scalar | identity | destructive, ndt, archival, visual, heuristic |
 | `rebar_spec` | --- | categorical | identity | destructive, archival, ndt, heuristic |
 | `concrete_class` | --- | categorical | identity | destructive, archival, ndt, heuristic |
+| `steel_grade` | --- | categorical (`S235`, `S275`, `S355`, `S460`, `other`; EN 10025) | identity | destructive, archival, ndt, heuristic (decision 8.107) |
 | `cover_depth` | `mm` | scalar | identity | ndt, destructive, archival |
+| `exposure_class` | --- | categorical (EN 206: X0, XC1--XC4, XD1--XD3, XS1--XS3, XF1--XF4, XA1--XA3) | identity | archival, heuristic --- decision 8.44 |
+| `chloride_content` | `%` (by mass of cement) | scalar | identity | destructive, archival --- decision 8.44 |
+| `elastic_modulus` | `GPa` | scalar | identity | destructive, archival, heuristic --- decision 8.44 |
 | `mass` | `kg` | scalar | **snapshot** | destructive, ndt, heuristic |
 | `carbonation_depth` | `mm` | scalar | snapshot | destructive, ndt, visual |
 | `spalling` | --- | ordinal 0--3, severity | snapshot | visual, ndt --- applies to mineral |
 | `cracking` | --- | ordinal 0--3, severity | snapshot | visual, ndt --- applies to mineral, polymer, bio-based, bituminous |
 | `corrosion` | --- | ordinal 0--3, severity | snapshot | visual, ndt --- applies to metal, reinforced mineral |
 | `moisture_content` | `%` | scalar | snapshot | ndt, destructive |
+| `crack_width` | `mm` | scalar | snapshot | visual, ndt --- the widest crack, crack gauge or microscope (decision 8.44); `cracking` stays the severity |
 | `condition_grade` | --- | ordinal 0--3, **3 = good** | snapshot | visual --- **overall visual grade, any material** (decision 7.9): 3 good, 2 average, 1 poor, 0 unusable as is. The wizard's optional inspection step records only this. |
 
 **Findings vs. overall grade (decision 7.9).** Findings (`spalling`, `cracking`, `corrosion`) are
@@ -283,7 +299,8 @@ tar), 17 02 04* (treated wood), 17 06 05* (asbestos), 17 01 06*, 17 06 03*, ... 
 (PAH test, treatment class, asbestos survey). `material_class` is the non-hazardous default until
 such evidence exists; the evidence quantities that switch it are **deferred** (additive, 6.8).
 
-**Storage:** a `materials` collection `{_id, label, group, default_class, uniclass, notes}`,
+**Storage:** a `materials` collection `{_id, label, group, default_class, uniclass, notes,
+retired, merged_into}` (lifecycle: decision 8.35),
 seeded from code (`vocab.py`), extendable by admin via `/admin` --- every entry must carry a
 `default_class`. This ends the merge-vocab pattern entirely (section 2 extension policy).
 
@@ -330,6 +347,33 @@ judgement, noted in the table --- all are overridable (`material_class_source: a
 Multi-material pieces (Annex IV 1.2(e) "main materials", plural) --> `secondary_materials[]`,
 **deferred** (additive, 6.8). Until then `material` is the main material.
 
+### 2.11 Connections and circularity classes (decision 8.38)
+
+From the DGNB Building Resource Passport v1.3 (June 2026, sheet 5-Circularity), the scale DIN
+SPEC 91484 names for connection type and dismantlability. CSC stores the class, never DGNB's
+example factor (that depends on the DGNB circularity standard).
+
+`dgnb_class` (detachability and material separability alike):
+
+| value | detachability (DGNB) | material separability (DGNB) |
+|---|---|---|
+| `optimised` | loose / click connection, very low effort, no tools, removable without damage | no tools, easily accessible, mono-material, fully circular |
+| `improved` | inserted / plugged / screwed in, low effort, simple tools, removable without damage | with tools, additional effort, accessible without damage |
+| `standard` | permanently installed (nail / bolt), medium effort, standard tools, mainly removable | tools / chemicals, accessible with damage, almost fully circular |
+| `limited` | permanently installed (soldering, foam, sealing), high effort, special tools | very complex, time-consuming separation |
+| `problematic` | permanently installed (adhesive / welded), extremely complex, special tools | not economically feasible, inaccessible |
+| `not_assessable` | assessment not possible, or cannot be dismantled | assessment not possible, or not separable by origin |
+
+`connection_type` (multi-valued): DGNB's connection words `loose`, `click`, `inserted`,
+`plugged`, `screwed`, `nailed`, `bolted`, `soldered`, `foamed`, `sealed`, `adhesive`, `welded`,
+plus `cast_in` (monolithic concrete) and `grouted`, which DGNB lacks, and `other`, `unknown`.
+
+`construction_method` (DIN SPEC 91484 Table 1): `monolithic` | `prefabricated` | `mixed` | `unknown`.
+
+Postponed (user, 8.38): a reuse verdict, using DGNB's material recovery potential scale (reuse,
+closed-loop recycling, ..., disposal) --- the DIN SPEC 91484 "potential reutilization
+possibility".
+
 ## 3. Documents
 
 Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC strings with `Z`;
@@ -348,17 +392,25 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
   "material": "concrete",                    // section 2.10 --- FK --> materials; controlled, admin-extensible
   "material_class": "17 01 01", "material_class_source": "derived" | "assigned",   // section 2.10 --- EU List of Waste ch. 17
   "trade_name": "..." | null,                  // section 2.10 --- brand / product name (e.g. "Corian")
+  "manufacturer": "..." | null,                // free text (DIN SPEC 91484 Table 2); inheritable (8.38)
+  "connection_features": "..." | null,         // anchors, cast-in plates, holes on the piece itself (8.38); not inherited
+  "material_separability": { "class": "<dgnb_class>", "assessed_by": [ /* actor */ ], "note": "..." | null } | null,   // section 2.11; inheritable
                                              // CPR: "main materials used" --- Annex IV 1.2(e); input to product family (Annex VII)
-  "dataset": "sas_cita_scans",               // FK --> datasets._id (section 3.6); no longer a free string
+  "dataset": "beyond_debris",                // FK --> datasets._id (section 3.6); no longer a free string
   "manufactured_at": "...", "manufactured_precision": "year",
   "origin": {                                // section 3.1.1 --- REPLACES salvage_source + salvaged_at (decision 6.1)
                                              // CPR: when kind == deinstallation this IS "date and place of the latest deinstallation" --- Annex V 1(h);
                                              //      year of deinstallation on the CE mark --- Art 18(2)(a); life cycle of a used product starts here --- Art 3(53);
                                              //      deinstallation *process* on request --- Art 21(3)
     "kind": "deinstallation" | "demolition" | "offcut" | "surplus" | "unknown",   // section 2.8
+    "planned": false,                        // decision 8.104: true = in place, the origin has not happened yet (section 3.1.6); absent = false
     "at": "..." | null, "at_precision": "day",
     "place": { "name": "...", "address": "...", "location": { "lat": ..., "lon": ... } | null } | null,
-    "construction_work": { "name": "...", "identifier": "..." | null, "year_built": 1968 | null, "use": "..." | null } | null,
+    "construction_work": { "name": "...", "identifier": "..." | null, "year_built": 1968 | null, "use": "..." | null,
+                           "construction_method": "monolithic" | "prefabricated" | "mixed" | "unknown" | null } | null,
+    "position_in_work": "..." | null,         // where in the works, e.g. "3rd floor, axis B/4, slab S12" (8.38)
+    "connection_types": ["bolted", "grouted"], // section 2.11 (8.38)
+    "detachability": { "class": "<dgnb_class>", "assessed_by": [ /* actor */ ], "note": "..." | null } | null,   // section 2.11
     "method": "..." | null,
     "performed_by": [ /* actor section 3.3.1 */ ],
     "notes": "..." | null
@@ -372,7 +424,8 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
     "at": "...", "at_precision": "day",
     "construction_work": { /* as origin */ } | null,
     "notes": "..." | null,
-    "recorded_by_user_id": "uuid" | null     // server-set; null when set by the server (split/merge)
+    "recorded_by_user_id": "uuid" | null,    // server-set; null when set by the server (split/merge)
+    "manual_at": "..." | null, "manual_by_user_id": "uuid" | null   // a hand-set split the server took over keeps its date and author (8.34)
   } | null,
   "past_cycles": [ { "origin": { ... }, "exit": { ... } } ],   // section 3.1.3; append-only, server-written on re-entry
   "withdrawn": { "at": "...", "by_user_id": "uuid", "reason": "...", "duplicate_of": "uuid" | null } | null,   // section 3.1.4 --- record-level tombstone
@@ -400,7 +453,8 @@ Conventions unchanged from 0.5: `_id` = UUID string; timestamps ISO-8601 UTC str
 ```
 
 Removed: `type`, `salvage_source`, `salvaged_at`, `consumed_at`; `material` becomes an FK.
-Added: `original_function`, `material_class(+_source)`, `trade_name`, `origin`, `exit`,
+Added: `original_function`, `material_class(+_source)`, `trade_name`, `manufacturer`,
+`connection_features`, `material_separability`, `origin`, `exit`,
 `past_cycles`, `inherited_fields`, `inherited_from`, `withdrawn`, `properties`,
 `properties_version`, `created_by_user_id`.
 
@@ -417,9 +471,13 @@ mixed an organisation, an address, a place and a stray note in one string.
 | `at` / `at_precision` | when the piece left its previous context (deinstalled, recovered from demolition, cut off, taken from stock). Precision per section 2.7; `year` is legitimate (CE mark carries the year only, CPR Art 18(2)(a)) | all |
 | `place` | where that happened: `name`, postal `address`, optional `location` | all |
 | `construction_work` | the **works** it left --- never the company (that is `performed_by`). CPR Art 3 sense: "buildings and civil engineering works ... including ... roads, bridges, tunnels". `name` (e.g. "Lichtwiese Campus Infrastructure --- pedestrian bridge"), `use` (e.g. "pedestrian bridge"), `year_built`; `identifier` is free-form now, intended for a digital-building-logbook or cadastral id (EPBD, section 10.6) | `deinstallation`, `demolition` only (I16) |
+| `position_in_work` | where in the works the piece sat (floor, axis, element mark); a drawing goes in as an `archival_document` (8.38) | `deinstallation`, `demolition` |
+| `connection_types` | how it was fixed in the works (section 2.11) | `deinstallation`, `demolition` |
+| `detachability` | DGNB class of how it could be released from the works, with who assessed it (section 2.11) | `deinstallation`, `demolition` |
 | `method` | free text: how it was deinstalled / recovered --- the Art 21(3) "process of deinstalling" | all; expected for `deinstallation` |
 | `performed_by` | actors (section 3.3.1): deinstaller, demolition contractor, fabricator that produced the offcut, stockist | all |
 | `notes` | anything that fits nowhere else | all |
+| `planned` | `true` while the piece is **in place**: identified in its works, not yet deinstalled; `at` is then the planned date or null. Cleared by the deinstall act (section 3.1.6, decision 8.104) | `deinstallation`, `demolition` |
 
 `origin` is `null` only on identities created without any provenance; migration never produces
 `null` (it writes `kind: unknown`). CPR export: Annex V 1(h) is filled from `origin` **iff**
@@ -429,18 +487,23 @@ mixed an organisation, an address, a place and a stray note in one string.
 #### 3.1.2 Lineage inheritance (split / merge children)
 
 A cut does not change a piece's past. The **inheritable fields** --- `origin`,
-`manufactured_at` + `manufactured_precision` (one unit), `material`, `trade_name`,
-`original_function` --- are
+`manufactured_at` + `manufactured_precision` (one unit), `material` + `material_class` +
+`material_class_source` (one unit, decision 8.32), `trade_name`, `manufacturer`,
+`material_separability` (8.38), `original_function` --- are
 materialized on the child by the **server**, never copied by clients. `dataset` is not inheritable.
 
 - **Create** with `parent_identities`: each inheritable field *absent* from the payload is copied
   from the parent; its name goes into `inherited_fields`, the parent id into `inherited_from`.
   A field present in the payload is the child's own (not listed).
 - **Parent PATCH** of an inheritable field: propagates to every descendant (recursive, breadth-
-  first down `parent_identities`) whose `inherited_fields` still lists it, in the same request.
+  first down `parent_identities`) whose `inherited_fields` still lists it, in the same request ---
+  across datasets, with no role needed in the child's dataset; each child's timeline records
+  "<field> changed by parent CSC-<n>" (decision 8.31).
 - **Child PATCH** of a listed field: removes it from `inherited_fields` --- the child now owns it.
   (Re-inheriting = PATCH `inherited_fields` to add it back; server re-copies.)
-- **Merge** (>1 parent): a field is inherited only if all parents hold equal values; otherwise it
+- **Merge** (>1 parent): a field is inherited only if all parents hold equal values (`origin`:
+  equal `kind`, `planned`, `at` + precision, `place`, `construction_work`; actors united, notes joined ---
+  decision 8.33); otherwise it
   stays unset (`origin.kind: unknown`, `manufactured_precision: unknown`) and must be assigned.
   `inherited_from` is then the first parent.
 - Same pattern as property inheritance (section 4.4, decision 2.4) and `shape_class_source`: flat,
@@ -457,12 +520,18 @@ exists (split, recycled) with one that exists elsewhere (installed, returned).
   draft or pending, the parent stays in circulation and shows "a cut from this piece is awaiting
   review". **Publishing the child's first snapshot** sets each parent's `exit = {kind: split |
   merged, at: <earliest effective_from over the parent's published children>, recorded_by_user_id:
-  null}` (`merged` when the child has >1 parent) and clears the parent's reservation. The server
+  null}` (`merged` when the child has >1 parent) and clears the parent's reservation. **Not for a batch**: a draw only lowers `remaining`; the batch's `split` follows at `remaining == 0` (section 3.1.6). The server
   keeps it true: a moderator edit of that `effective_from` moves `exit.at`; withdrawing the last
   such child **identity** (the cut was recorded by mistake) clears the server-set exit.
   Withdrawing a child's *snapshot* does not: a child counts once it has ever been published (a
   `published` or `withdrawn` snapshot, the 8.9 test), because the cut happened. A client-set `split` without catalogued children is
   legal ("cut up, pieces not recorded") and is never touched by this rule.
+- **Which parents can be cut (decision 8.34)**: published, not withdrawn, and either in
+  circulation or already split / merged. `installed` / `returned` / `lost` parents re-enter
+  first; `recycled` / `disposed`, withdrawn and unpublished parents are refused (409). Checked at
+  child create and again at the child's first publish. A hand-set `split` accepts children and
+  becomes server-derived with the first published child (`at` = the earlier date); no other
+  authored exit is ever overwritten.
 - **Everything else is authored**: `POST /identities/{id}/exit` (`moderator(D)`, section 7.0) with the block.
   `construction_work` only for `kind == installed` (I18).
 - **Re-entry** (an `installed` or `returned` piece comes back, e.g. from a temporary pavilion):
@@ -471,7 +540,40 @@ exists (split, recycled) with one that exists elsewhere (installed, returned).
   resolves to `after_exit` (section 4.1); the next snapshot defaults to the new `origin.at` (8.19). `split`, `merged`, `recycled`,
   `disposed` are terminal --- re-entry is rejected (the physical piece no longer exists as this
   identity). `past_cycles` is never client-writable.
-- **Reservation** is only possible with `exit == null` (0.5 rule, unchanged).
+- **Reservation** is only possible with `exit == null` (0.5 rule, unchanged); in-place pieces can be reserved (8.104).
+- **Exit from in place** (8.104): `recycled`, `disposed`, `lost` are allowed while `origin.planned`; `installed`,
+  `returned` are refused (409), since the piece never left its works.
+- **Batches** (8.105): a drawn child does not split its batch; the batch gets the server-set `split` only when
+  `remaining` reaches 0 (section 3.1.6).
+
+#### 3.1.6 In place, deinstall, batches and draws (decisions 8.104, 8.105)
+
+**In place.** `origin.planned == true`. Counts as in circulation (`exit == null`): listed by default with a badge,
+reservable. Circulation filter: `active` (no exit) with the sub-values `in_place` (`origin.planned`) and
+`deinstalled` (not planned; web label "Not in place", since it also holds offcuts, surplus and unknown origins, 8.115), and `exited`. The v0 of an in-place piece starts at its survey date, not at `origin.at`.
+
+**Deinstall** --- `POST /identities/{id}/deinstall {at, at_precision, method?, performed_by?, notes?, kind?}`,
+`moderator(D)`: sets `planned: false`, writes the given fields into the existing origin (`kind` may switch
+`deinstallation` <--> `demolition`), keeps the reservation, creates no snapshot; the timeline shows "Deinstalled" at
+`at`. `POST /identities/{id}/undo-deinstall` restores `planned: true` only while no snapshot `effective_from` and no
+evidence valid time lies after `at`, and only when `at` is set and the latest origin change was the deinstall act (else 409; a moderator PATCHes the origin; 8.115). CPR Annex V 1(h) is filled only when
+`kind == deinstallation` and not planned (section 10.3).
+
+**Batch.** An identity whose current snapshot has `quantity > 1`: homogeneous pieces (same type, material, nominal
+size; one proxy describes each). `snapshot.quantity` is the recorded batch size and stays frozen.
+`remaining = quantity - sum(quantity of the published children drawn from it)` is derived and served on the
+identity read. **Draw** = creating a child with the batch as its only parent and a `quantity` <= `remaining` (else
+409, checked at create and at the child's first publish). The child inherits as any child (section 3.1.2); its v0
+copies the batch's authored proxy unless it states a size or carries a scan; the batch's evidence is not copied.
+At `remaining == 0` the server sets the batch's `exit = {kind: split, at: <latest draw effective_from>}`;
+withdrawing a drawn child recomputes `remaining` and clears that exit if it was server-set. Reservation is
+whole-identity: to hold part of a batch, draw a sub-batch; while a batch is reserved, only the reserving user or
+`moderator(D)` draws from it (409 otherwise). A merge never takes a batch as a parent (409). Later snapshots keep
+the batch's `quantity`; a correction may change it, but not below the drawn sum (I32). The `remaining` check is
+atomic, so concurrent draws cannot overdraw. **Deinstalling a batch** (or any parent) propagates like a parent
+PATCH of `origin` (section 3.1.2) to the descendants that still inherit `origin`, and each child's timeline
+records it; a piece deinstalled on its own owns its origin and is not touched. Undo propagates the same way
+(decision 8.110).
 
 **The moment of the cut** is the child's first snapshot's `effective_from` (valid time, section 4.1).
 `manufactured_at` is never the cut date: it is when the *material* was made, inherited from the
@@ -506,6 +608,24 @@ public timeline shows "v2 --- withdrawn (date)". **410** is only for purged reco
 snapshots and evidence of a withdrawn identity are projected the same way (tombstones outside D),
 whatever their own status.
 
+The tombstone body (every JSON read of the record answers 200 with it; file routes answer 403):
+
+```jsonc
+{ "_id": "uuid", "kind": "identity" | "snapshot" | "evidence", "status": "withdrawn",
+  "withdrawn_at": "...", "version": 2 | null, "catalog_number": 412,
+  "identity_id": "uuid", "current_snapshot_id": "uuid" | null, "duplicate_of": "uuid" | null }
+```
+
+Version lists and the lineage graph show a withdrawn snapshot outside D as a bare row (version,
+dates, `status: withdrawn`, no name); the passport leaves it out.
+
+**Implementation notes (P3).** Withdrawing a piece that other withdrawn pieces name as their
+`duplicate_of` needs a `duplicate_of` of its own, and those followers are re-pointed to it (I19
+stays flat); without one the request is refused (409). Purge (`DELETE /identities/{id}?purge=1`,
+`DELETE /snapshots/{sid}?purge=1`; admin; body `{confirm_id, reason}`) refuses a piece that other
+pieces name as parent or `duplicate_of`, and the current snapshot (promote or withdraw first); it
+writes one `purged_records` stub per removed id (identity, its snapshots, its evidence).
+
 #### 3.1.5 Unpublished identity (decision 8.9)
 
 An identity is **unpublished** until its first snapshot is published --- derived, never stored: no
@@ -534,6 +654,7 @@ Migration: `created_by_user_id` = the `added_by_user_id` of the identity's v0 (s
   "status": "draft" | "pending" | "published" | "rejected" | "withdrawn",   // REPLACES validated; same lifecycle as evidence (section 3.3.3, I15)
                                              // CPR: `published` = the tier visible to all actors (Art 76(2)(e)); never hard-deleted (Art 75(2)(i)) --- section 10.4
   "status_changed_by_user_id": "uuid" | null, "status_changed_at": "..." | null,
+  "status_history": [ { "from": "pending", "to": "rejected", "at": "...", "by_user_id": "uuid", "reason": "..." | null } ],   // NEW 8.30, append-only, server only
   "supersedes": "uuid" | null, "superseded_by": "uuid" | null,   // NEW section 3.2.2 --- corrections, same semantics as evidence section 3.3.4
   "name": "...",
 
@@ -568,10 +689,13 @@ Migration: `created_by_user_id` = the `added_by_user_id` of the identity's v0 (s
   "bbx": [X, Y, Z],                            // DERIVED: box extents along frame x / y / z (not sorted by PCA variance)
                                                // `iframe` REMOVED (7.11): only designs gave it meaning
   "complexity": 2, "complexity_source": "derived" | "assigned",   // 0--3 ordinal, DERIVED + overridable (6.15)
+  "derivation": {                              // DERIVED: what each runner stage last did (section 4.3, decision 8.46); keys frame | shape_class | proxies | descriptors | complexity | previews
+    "proxies": { "version": 1, "input": "<fingerprint of what the stage read>", "at": "...", "error": null }
+  },
   "fragment": false,                         // `assembly` REMOVED (never true; = shape_class composite) --- 6.13
                                                // `condition` REMOVED --- visual state is evidence (section 2.6, section 8 step 6b)
   "color": [r,g,b], "location": {"lat":...,"lon":...},
-  "notes": "...", "quantity": 1,               // CPR: quantity > 1 is the one case where a batch shares a product type --- Art 22(5), Annex V 1(a)
+  "notes": "...", "quantity": 1,               // CPR: quantity > 1 is the one case where a batch shares a product type --- Art 22(5), Annex V 1(a); a batch, section 3.1.6 (8.105)
   "added_by_user_id": "...", "added_by_username": "...",
   "photo_count": 0,
   "mesh_ply_resolutions": { "0": ["reduced", "detailed"] },
@@ -606,7 +730,7 @@ The representation invariant becomes (section 5):
   "placement": { "o":[...], "x":[...], "y":[...], "z":[...] },   // the primitive's local axes, in stored coordinates (App. B)
   "fit": {
     "method": "authored" | "obb" | "ransac" | "lsq" | "hull",
-    "source": { "kind": "meshes" | "point_clouds", "index": 0, "resolution": "detailed" | "reduced" | "inline" } | null,
+    "source": { "kind": "meshes" | "point_clouds", "index": 0, "resolution": "original" | "reduced" | "preview" } | null,   // detail levels, 8.23
     "n_points": 184220,
     "inlier_ratio": 0.94,                      // ransac only
     "rms_mm": 2.1, "max_mm": 14.7, "p95_mm": 6.3,
@@ -623,7 +747,7 @@ The representation invariant becomes (section 5):
   "regions": [                                 // local resolution relevance; schema slot only this release
     { "label": "east connection",
       "bounds": { "min": [x,y,z], "max": [x,y,z] },   // proxy-local AABB
-      "resolution_hint": "full" | "reduced" | "proxy",
+      "resolution_hint": "original" | "reduced" | "proxy",   // 8.23
       "reason": "connection" | "damage" | "feature" | "other",
       "source": "assigned" | "derived" }
   ]
@@ -646,9 +770,10 @@ until it is resubmitted as a draft (decision 8.18; same for evidence).
 | **frozen** --- claims about the piece's state | inline `geometry.*` (meshes, point_clouds, authored proxies); mesh + point-cloud PLY files; `capture` except `capture.notes` (incl. fixture files); `fragment`, `quantity` | author / `moderator(D)` | never in place --> correction (below) |
 | **overrides** | `shape_class` / `complexity` set by hand (`*_source: assigned`) | author / `moderator(D)` | `moderator(D)` in place (8.3); never overwritten by a recompute |
 | **derived** --- server only | `descriptors`, fitted proxies + `deviation_maps`, `shape_class` / `complexity` when `derived`, `properties`, `frame`, `bbx`, previews, `mesh_ply_resolutions` | server | server, any time (crons, recompute routes). **Never accepted from a client** --- `descriptors` leaves `UpdateComponentSnapshotModel` |
-| **mutable metadata** | `name`, `notes`, `location`, `color` | author / `moderator(D)` | `moderator(D)` in place |
+| **mutable metadata** | `name`, `notes`, `location`, `color`, `photo_credit` (8.128) | author / `moderator(D)` | `moderator(D)` in place |
 | **photos** | `photos/<sid>/*` | author / `moderator(D)` | append: `contributor(D)`; delete: `moderator(D)` |
 | **valid time** | `effective_from(+precision)` | --- | `moderator(D)` (a correction of *when*, not *what*; triggers snapshot-fold recompute, section 4.4) |
+| **fill once** (8.123 a) | a frozen `capture` field that is still empty (`method`, `device`, `software`, `captured_at`, `coordinate_system`, `markers`, `fixtures`) | author / `moderator(D)` | `moderator(D)` in place, once; a set value changes only by correction |
 
 Two distinct acts, both explicit:
 
@@ -658,7 +783,10 @@ Two distinct acts, both explicit:
   `supersedes: <sid>`; the server sets `superseded_by` on the old one when the new one is
   published. A superseded snapshot drops out of resolution (section 4.1), the fold and default lists,
   stays retrievable, and shows as "corrected" on the timeline. If the old one was
-  `current_snapshot_id`, the new one replaces it on publish.
+  `current_snapshot_id`, the new one replaces it on publish; otherwise it never becomes current
+  (`promote` is ignored). Any version can be corrected: the correction keeps the place of the
+  first record of its `supersedes` chain in the order (I3) and on the timeline (decision 8.123 b).
+  No role edits a frozen field in place; an empty `capture` field is filled once (8.123 a).
 
 **Creation is always `draft`.** Files (PLYs, photos) are uploaded while `draft`; then `submit`, or
 for a moderator `submit` + `publish?promote=1` in one call. The 0.5 immediate-promote branch of
@@ -788,10 +916,12 @@ for a robot scan, the coordinate system named by `capture.coordinate_system`, se
 the canonical `frame`. `kind: "none"` + `description` must always be sufficient.
 
 When the snapshot is later corrected in new coordinates, the record keeps its `snapshot_id` and
-point; the viewer draws it only on that snapshot. The correction dialog warns "N evidence
-records are positioned on the previous version" and offers to supersede each with a re-placed
-point (a reinforcement layout: re-imported bars). No transform between versions is stored in 0.6
-(decision 8.16).
+point; the viewer draws it only on that snapshot. When a correction changes the geometry, the
+correction dialog warns "N evidence records are positioned on the previous version" and lists
+them, each linked to its own correction in the evidence form, where the point is picked again
+(a reinforcement layout: re-imported bars); there is no bulk re-placing tool in 0.6 (decision
+8.87). A correction that keeps the geometry keeps the coordinates and warns nothing. No transform
+between versions is stored in 0.6 (decision 8.16).
 
 #### 3.3.3 Moderation vs. verification
 
@@ -870,6 +1000,11 @@ capture/<snapshot_id>/fixtures/<i>.ply              NEW  fixture meshes (e.g. ro
 evidence/<evidence_id>/<index>.<ext>                NEW  pdf | jpg | png | webp; sniffed, not trusted  (CPR: Annex V 7 reports; retention Art 75(2)(i))
 ```
 
+Detail levels (decision 8.23): the inline `geometry.meshes` / `point_clouds` are the **preview**,
+`reduced.ply` the **reduced** mesh, `detailed.ply` and the point-cloud PLY the **original** (as
+uploaded). The file name `detailed` stays until a later rename; schema values and the interface say
+`original`.
+
 Evidence attachments (decision 7.3): one upload attached to several records is stored once **per
 record** --- hard links where the filesystem allows, else copies --- so every record owns its files
 and no reference counting exists. PDFs are stored byte-for-byte; images go through the snapshot
@@ -881,8 +1016,9 @@ pipeline removes the EXIF GPS block, owner / artist and body serial number, and 
 capture time (`DateTimeOriginal`) and camera make / model. Where a piece is stays the snapshot's
 chosen `location`, never the photo's GPS.
 
-New env vars: `SNAPSHOT_PROXIES_DIR`, `SNAPSHOT_CAPTURE_DIR`, `EVIDENCE_ATTACHMENTS_DIR`
-(+ upload limit), added to `_REQUIRED_ENV`.
+New env vars: `SNAPSHOT_PROXIES_DIR` (the `proxies/` folder above) and `SNAPSHOT_CAPTURE_DIR`
+(the `capture/` folder), both required since P5; `EVIDENCE_ATTACHMENTS_DIR` (+ upload limit)
+follows with P6, added to `_REQUIRED_ENV`.
 
 ---
 
@@ -893,8 +1029,9 @@ belongs to exactly one.
 
 ```jsonc
 {
-  "_id": "sas_cita_scans",                   // slug, immutable; = identity.dataset (FK)
-  "name": "SAS CITA scans", "description": "...",
+  "_id": "beyond_debris",                    // slug, immutable; = identity.dataset (FK)
+  "name": "Beyond Debris",
+  "description": "...",                     // set by step 11b from the mapping (8.25)
   "visibility": "members" | "catalog",       // DEFAULT "members" (user decision)
   "members": [
     { "user_id": "uuid", "roles": ["contributor", "reviewer", "moderator"],   // a set, not a ladder
@@ -916,15 +1053,23 @@ policy: the merge pattern is removed; `datasets` and `materials` are collections
 | member of D | always --- all of D, plus the row above for every other dataset |
 | admin | always |
 
+An anonymous caller never receives a person: responses on the public tier carry no username, name, e-mail or user id (authors, recorders, reviewers, moderators, reservations, history actors) --- decision 8.101. Every identity-shaped response carries the response-only boolean `is_reserved` (the stored `reserved` holds the user id and reaches signed-in callers only); ETags of viewer-dependent responses are viewer-specific; public-tier responses send `Vary: Authorization`.
+
 As one predicate: `admin or member(D) or (logged_in and D.visibility == catalog) or is_public`.
 Unpublished records: section 7.0.
 
 ### 3.7 `users` changes
 
-Global `role in {user, admin}` unchanged. `admin` = system role and **implicit full membership of
+Global `role in {user, admin}` unchanged. `username` is stored lowercase and unique; sign-in by username or e-mail ignores case (decision 8.28, I29). `admin` = system role and **implicit full membership of
 every dataset** --- kept as the testing and emergency hatch (user decision); at least one enabled
 admin must exist (I20). No `moderated_datasets` field (0.5.0.2 plan superseded by memberships).
-The shared `ddu` account is retired (section 8 step 11).
+The shared `ddu` account stays as the internal **user-role test account** (decision 8.22); all
+its records move to personal accounts by the 8.24 mapping (section 8 step 11b), so a test session
+never acts as the author of real records. The `admin` account likewise stays as the system admin
+and the **admin-role test account**; personal admin accounts are additional (decision 8.25). Admins see every
+dataset, so production has exactly two admin accounts, both held by the maintainer (decision 8.125 b). Snapshot
+files are served only through the checked `/snapshots/...` routes, never from the web server's document root
+(8.125 a).
 
 **Registration (decision 8.14).** Self-registration is open to addresses of
 `CSC_OPEN_REGISTRATION_DOMAINS` (env, comma-separated, default `tu-darmstadt.de`, subdomains
@@ -946,6 +1091,10 @@ included), with the verification email as in 0.5. Every other address needs an *
 mail carries `/auth/register?code=...`; registering with a code requires the invited address,
 which then counts as verified. A code is single-use; a batch is a list of addresses, one
 invitation each. There are no open codes. Index: `code_sha256` (unique), `email`.
+An invitation also carries `revoked_by_user_id`; the account made from it carries
+`invitation_id` (the admin list's "invited" filter, 8.21). `POST /invitations` reports an
+address that already has an account as `exists` instead of inviting it (add it with the member
+editor). A code is compared case-insensitively.
 
 **Adding people to a dataset (decision 8.20).** The member editor takes an **email address** and
 the roles. An existing account is added at once and notified by mail ("added to dataset X as
@@ -963,6 +1112,52 @@ role** (`user` / `admin`), **account state** (enabled, disabled, email unverifie
 (registered through an invitation --- from `invitations.used_by_user_id`). Open invitations are
 listed in a second tab with the same dataset filter and their state (open, used, expired,
 revoked). No bulk actions in 0.6.
+
+**Mail (decision 8.124).** Four mails, one template (plain text + HTML, every inserted value escaped, English,
+subject prefix `[CSC]`, a footer saying why the address got it and linking `/imprint`): verification, password
+reset, invitation, "added to dataset". `From` is one monitored mailbox of the production SMTP (Uberspace);
+`Reply-To` is the acting moderator for the invitation and the member notice, none otherwise. Mails are sent off
+the event loop. A failed invitation or member notice is reported to the inviter (`mail_failed`, **Resend** issues a
+new code); the registration link is never shown to anyone but the mailbox. **Password reset:** `POST
+/auth/password-reset` always 202, a single-use token (hash stored, 1 h, rate-limited per address and IP),
+`POST /auth/password-reset/confirm`; the user's `password_changed_at` (also set by `change-password`) refuses every
+token issued before it.
+
+### 3.8 `change_log` (NEW collection --- decision 8.36)
+
+Append-only history of every authored or server-maintained field change on identities,
+snapshots and evidence (EN 18221 archiving; DIN SPEC 91484 traceability). Status changes keep
+their own `status_history` (8.30); derived fields (`properties`, `frame`, proxies, descriptors,
+`shape_class` unless assigned) are never logged.
+
+```jsonc
+{
+  "_id": "uuid",
+  "record_kind": "identity" | "snapshot" | "evidence",
+  "record_id": "uuid",
+  "identity_id": "uuid",                       // for timeline queries
+  "at": "...",
+  "by_user_id": "uuid" | null,                 // null for server and migration writes
+  "cause": "patch" | "inherited_from_parent" | "material_merge" | "exit" | "reenter"
+         | "withdraw" | "reinstate" | "migration",
+  "source_record_id": "uuid" | null,           // the parent (inherited_from_parent), the merged material, ...
+  "changes": [ { "path": "origin.at", "old": "...", "new": "..." } ]
+}
+```
+
+- Written in the same request as the change; a write that changes nothing writes no entry.
+- **Point in time:** `GET /identities/{id}?as_of=<date>` (and the same on snapshots and evidence)
+  = the current document with every later entry rolled back. Rolled-back derived fields are
+  omitted, not recomputed.
+- **Access:** members of D and `admin` read the entries (`GET /identities/{id}/changes`); the
+  timeline outside D shows "metadata changed (date)" only --- old values may name people.
+- **Redaction** (`POST /actors/redact`, section 3.1.4) also blanks the person's `name`, `email`,
+  `orcid` inside `old` / `new` values.
+- **Purge** (section 3.1.4) deletes the record's entries with the record.
+- The migration writes no entries: history starts at cutover (`cause: migration` is for later
+  data-repair scripts). `reserved` is not logged --- a booking, not a fact about the piece;
+  `current_snapshot_id` is (promote / fallback, cause `patch`).
+- Indexes: `(record_id, at)`, `(identity_id, at)`.
 
 ## 4. Derivations
 
@@ -982,7 +1177,7 @@ existing product's passport, Art 76(1), 75(2)(e) --- the snapshot chain *is* tha
   assumed unchanged since it left its previous context; else `capture.captured_at`; else `created`.
   A child's v0 (cut from a parent) starts at the cut: `created` or the author's date --- never the
   parent's inherited `origin.at`. Later versions: now or the author's date; the first snapshot
-  after a **re-entry** defaults to the new `origin.at` (8.19).
+  after a **re-entry** defaults to the new `origin.at` (8.19). The v0 of an **in-place** piece (`origin.planned`, section 3.1.6) starts at its survey date (the author's date, else `capture.captured_at`, else `created`), never at the planned `origin.at` (8.104).
 - **Evidence outside the snapshot history** (8.10): resolution `before_first` (e.g. an inspection
   while the piece was still installed) or `after_exit` (e.g. inspected in the building it went
   into) feeds no snapshot's `properties` --- no snapshot records that state. The record belongs to
@@ -1016,31 +1211,43 @@ resolve_snapshot_at(snapshots, at) -> Context
 
 Inputs: the frame's box extents (`bbx`, section 4.3 stage 1) sorted `e1 >= e2 >= e3` and
 `descriptors.{boxscore, spherescore, linescore, planescore}` --- computed in stage 1 from the same hull and box as the frame (decision 8.7), so always present. Sorting makes the
-class independent of the frame's axis order, so the column rule of stage 1 (which reads the
-class) cannot loop: stage 1 runs with the current class (none on a new snapshot --> the default
-lying convention), stage 2 derives the class, and stage 1 re-runs only if the class became
-`linear` on an `IfcColumn`.
+class independent of the frame's axis order. Stage 1 does not read the class: the column rule
+uses the box's elongation (decision 8.52), so frame and class never wait on each other.
 
 ```
-if boxscore > T_IRREGULAR:                  irregular       # hull << OBB: pocketed, blobby
-elif e1/e2 >= T_LINEAR:                     linear
-elif e2/e3 >= T_PLANAR:                     planar
+linear_ok = e1/e2 >= T_LINEAR
+planar_ok = e2/e3 >= T_PLANAR
+if linear_ok and planar_ok:                 linear if e1/e2 >= e2/e3 else planar   # the stronger elongation wins (8.58)
+elif linear_ok:                             linear          # elongation first (decision 8.56)
+elif planar_ok:                             planar
+elif boxscore > T_IRREGULAR:                irregular       # hull << OBB: pocketed, blobby
 else:                                       block
 ```
 
-Initial thresholds `T_LINEAR = 4`, `T_PLANAR = 4`, `T_IRREGULAR = 25` --- **to be tuned against
-the 701 snapshots of dump 260916 before freezing**; the tuning script and its confusion table are part of the
-deliverable. `composite` is never produced. Stored with `shape_class_source: "derived"`; a user
-override writes `"assigned"` and is not overwritten by recompute.
+Elongation is tested before the hull score (decision 8.56): a clearly elongated or flat piece
+is linear or planar even when its hull is uneven (zirkus timber, aggregations); only the
+remaining compact pieces can be irregular. A piece that passes both tests takes the class of
+its stronger elongation (decision 8.58): a long thin strip (e1/e2 3.3, e2/e3 25) is planar, a
+batten or board (e1/e2 20, e2/e3 5) linear.
+
+**Thresholds, frozen 2026-10-02 on dump 261001 (decision 8.59):** `T_LINEAR = 3`,
+`T_PLANAR = 3`, `T_IRREGULAR = 25`. The tuning script and its tables
+(`scripts/dev/tune_geometry.py`) stay part of the deliverable; a change of thresholds is a
+version bump of the stage. `composite` is never produced. Stored with `shape_class_source: "derived"`; a user
+override writes `"assigned"` and is not overwritten by recompute. Setting the override to
+`null` returns it to derived: the source becomes `"derived"` and the stage recomputes
+(decision 8.55; same rule for `complexity`, and as for `material_class`, I25).
 
 ### 4.2b Complexity --- `complexity.py` (decision 6.15)
 
 Ordinal 0--3 (0 simple, 1 normal, 2 complex, 3 very complex). Inputs: primary-proxy residual
 `p95_mm / e1` (how far the piece departs from its proxy), `boxscore` (hull concavity), and
 `shape_class == composite` => >= 2. Thresholds tuned by the same script as section 4.2 against the
-**71 `sas_cita_scans` ratings, which are authored per element** (user) --- the only genuine labels;
-confusion table part of the deliverable. `complexity_source: derived | assigned`; assigned is never
-overwritten.
+**71 `beyond_debris` (0.5: `sas_cita_scans`) ratings, which are authored per element** (user) --- the only genuine labels;
+confusion table part of the deliverable. **Frozen 2026-10-02 (decision 8.59):** residual
+`p95_mm / e1` thresholds `0.005 / 0.05 / 0.12`, `boxscore` thresholds `5 / 15 / 45` (on 261001:
+44 of 71 authored ratings exact, 71 of 71 within one level). `complexity_source: derived |
+assigned`; assigned is never overwritten.
 
 ### 4.3 Proxy fitting --- `proxies/registry.py` + `proxies/specs.py`
 
@@ -1063,7 +1270,7 @@ nothing derived. `/utility/compute-snapshot-orientation` and client-sent `bbx` /
 
 | # | stage | reads | writes | cost | when |
 |---|---|---|---|---|---|
-| 1 | `frame` | source geometry, `shape_class`, identity `original_function` | `frame`, `bbx` (no proxy --- decision 7.10); the four hull scores `boxscore`, `spherescore`, `linescore`, `planescore` from the same hull + box (8.7) | cheap | **synchronous** on every source-geometry write to a draft (create, PLY upload/replace) and on submit; again when `original_function` or `shape_class` changes |
+| 1 | `frame` | source geometry, identity `original_function` (decision 8.52) | `frame`, `bbx` (no proxy --- decision 7.10); the four hull scores `boxscore`, `spherescore`, `linescore`, `planescore` from the same hull + box (8.7) | cheap | **synchronous** on every source-geometry write to a draft (create, supersede, PLY upload / replace / delete, geometry PATCH) and on submit; again when `original_function` changes |
 | 2 | `shape_class` | stage 1 extents + scores | `shape_class` (unless `assigned`) | cheap | synchronous, right after 1 |
 | 3 | `proxies` | source + `shape_class` | fitted primary/part proxies, residuals, `deviation_maps` | expensive | async runner |
 | 4 | `descriptors` | source + `frame` (radial section, rest alignment) | the expensive descriptors: radial signatures, HKS (8.6) | expensive | async runner |
@@ -1071,8 +1278,12 @@ nothing derived. `/utility/compute-snapshot-orientation` and client-sent `bbx` /
 | 6 | `previews` | source / proxies | `previews/<sid>.webp` | medium | async runner |
 
 Each stage is idempotent and stores, next to its output, its `*_VERSION` **and a fingerprint of
-its inputs** (decision 8.7) --- e.g. for `proxies`: source-geometry etag, `shape_class`,
-`shape_class_source`. A stage is stale when either differs; the cron sweeps everything stale. So
+its inputs** (decision 8.7) as the **stage stamp** `derivation.<stage> = {version, input, at,
+error}` (decision 8.46) --- e.g. for `proxies`: the source geometry, `shape_class`,
+`shape_class_source` and the frame. The source part is the digest of the inline geometry and, per
+chosen PLY file, its path, size and modification time (decision 8.47). A stage is stale when its
+stamp is missing or either differs; the cron sweeps everything stale (`main_geometry.py`; the same
+stages also run off the server through the API, decisions 8.45 and 8.51). So
 any change of an upstream result --- a recompute, a moderator override of `shape_class`, an
 `original_function` change that flips the column rule --- makes stages 3--5 of that snapshot
 stale and they rerun; no stage order can loop. Authored proxies are never refitted but still feed stage 1--2 (frame
@@ -1087,8 +1298,10 @@ descriptors and the shape class. It is **not a proxy**:
    Edge-aligned for box-like pieces; vertex PCA is not used (it lands on diagonals when two
    extents are similar or vertex density is uneven).
 2. Axes by extent: **longest --> x, middle --> y, shortest --> z** (lying on its largest face);
-   **`shape_class == linear` and `original_function == IfcColumn`: longest --> z, middle --> x,
-   shortest --> y** (standing). Same rule as the add-component wizard's `canonicalizeBoxAxesMm`.
+   **`original_function == IfcColumn` and longest >= 2 x middle extent: longest --> z, middle -->
+   x, shortest --> y** (standing; decision 8.52 --- elongation from this stage's own box, not the
+   shape class, so a misclassified column still stands and a short column fragment lies). Same
+   axis order as the add-component wizard's `canonicalizeBoxAxesMm`.
 3. **Signs and ties (decision 8.15): the valid frame closest to the stored coordinates.**
    Candidates are the OBB axes assigned by step 2, where extents within
    `max(2 % of the larger, 3 mm)` of each other count as tied and may swap, with either sign per
@@ -1097,8 +1310,14 @@ descriptors and the shape class. It is **not a proxy**:
    OBB's angle about the long axis is taken as trimesh returns it (deterministic on the same
    input). Re-runs give the same frame; signs are not intrinsic (a rescan in another pose may
    differ by a 180 degree flip). `frame.o` = box centre; `bbx` = extents along x / y / z.
+4. **Never upside down against the input (decision 8.53).** Before step 3's `trace(R)`: when the
+   canonical z of a candidate lies within 60 degrees of the stored z axis (|z . Z| >= 0.5), only
+   candidates with `z . Z > 0` are valid --- the piece keeps the input's up direction. Step 3
+   then decides among the rest. The frame report (rehearsal, tuning tables) lists every snapshot
+   whose canonical z points against stored z (`z . Z < 0`) and every axis-order change against
+   0.5, for review.
 
-Recomputed when `original_function` or `shape_class` changes.
+Recomputed when `original_function` changes (no longer on a `shape_class` change, 8.52).
 
 **The frame is a transform, never a re-orientation** (user; the reason 0.5 introduced
 `pca_frame`). Stored geometry keeps the coordinates it was uploaded in, whatever produced them ---
@@ -1113,8 +1332,10 @@ later assigned override (additive).
 Proxy fitting per snapshot (stage 3):
 
 1. Load highest-resolution source (`detailed.ply` > `reduced.ply` > inline mesh > cloud PLY >
-   inline cloud), same priority as descriptors --- over **all** component meshes / clouds, never
-   `capture` markers or fixtures (section 3.2.3).
+   inline cloud), same priority as descriptors --- over **all** component meshes (else all
+   clouds, else the authored proxies; a mesh and a cloud of one scan are one state, decision
+   8.47), never `capture` markers or fixtures (section 3.2.3). Residuals, deviation maps and the
+   HKS sample use a seeded surface sample of this source (decisions 8.48, 8.6).
 2. Fit per spec --- **no new dependency** (decision 6.11; numpy, scipy, trimesh, shapely only):
    - `box`: `obb` = the frame's box (stage 1), optional `lsq` refine.
    - `prism`, planar shape class: the frame's shortest axis = thickness direction; project
@@ -1127,12 +1348,16 @@ Proxy fitting per snapshot (stage 3):
    - `hull`: `trimesh` convex hull, deterministic.
    Rejected: Open3D (heavy wheel + system GL libs on shared hosting, two functions used),
    `pyransac3d` (unmaintained).
-3. Residuals: signed distance of every source point to the proxy surface --> `rms/p95/max`,
-   `inlier_ratio` at a tolerance from the spec.
-4. Deviation maps: transform points into the proxy's placement; for each face, orthographic
-   projection onto the face plane, regular grid at `resolution_mm`; per cell aggregate mean signed
+3. Residuals: signed distance of the surface sample (seeded; about 3 points per deviation-map cell of the
+   sampled area, at least 50 000, at most 300 000, decision 8.119) to the proxy surface
+   --> `rms/p95/max`, `inlier_ratio` at a tolerance from the spec (3 mm; decision 8.48).
+4. Deviation maps: transform points into the proxy's placement; assign each point to the face whose
+   outward normal best matches the point's surface normal (nearest face plane only when no face
+   matches with `|n . face| >= 0.5`, e.g. at edges; decision 8.119), so a recessed surface stays on the
+   face it looks toward; the map's distance is the signed distance to that face's plane or surface (8.121;
+   residuals stay the distance to the nearest proxy surface); for each face, orthographic projection onto the face plane, regular grid at `resolution_mm`; per cell aggregate mean signed
    distance, mean angle between point normal and face normal, and occupancy count --> three 16-bit
-   channels. Cylinder lateral face unrolls to (theta, z). Hull faces are triangles, one map each is
+   channels of one RGB PNG (layout and units: decision 8.49). Cylinder lateral face unrolls to (theta, z). Hull faces are triangles, one map each is
    too many --- **hull uses a single spherical (theta, phi) map** of concavity depth instead.
 5. Write `fit` and `deviation_maps`. The frame (`frame`, `bbx`) is stage 1's and is never
    rewritten from a proxy.
@@ -1162,6 +1387,10 @@ One pure function, two call sites that differ only in the input filter and the t
 |---|---|---|
 | `identity.properties` | all published, non-superseded evidence for the identity; quantities with `scope == identity` | evidence publish / withdraw / reinstate / supersede / verification change; identity creation with parents (inheritance); **a parent's `properties` changing** (recomputes every descendant that still inherits --- same propagation as section 3.1.2) |
 | `snapshot.properties` (per snapshot) | the **as-of** set: published, non-superseded evidence whose resolved context (section 4.1) is *this* snapshot --- `before_first` / `after_exit` evidence enters no snapshot (8.10); quantities with `scope == snapshot` | the same evidence events, **plus** any `effective_from` change on any snapshot of the identity (it moves the windows), plus snapshot publish / withdraw / reinstate / supersede |
+
+Both targets also recompute on an **exit, an undone exit, a re-entry and an origin change** of the
+identity: they move the context windows of section 4.1 (`after_exit`, archived cycles; 8.10,
+8.19; decision 8.70).
 
 Unpublished evidence (draft, pending, rejected) never enters the fold, so creating, rejecting or
 hard-deleting it triggers nothing.
@@ -1227,11 +1456,11 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 |---|---|
 | I1 | Snapshot geometry has >=1 of `meshes`, `point_clouds`, or a proxy with `fit.method == "authored"`. |
 | I2 | Exactly one proxy with `role == "primary"` per snapshot once proxies exist. |
-| I3 | `effective_from` is always set; over non-superseded, non-withdrawn snapshots it is monotonic in `version` per identity (a superseding snapshot shares its predecessor's `effective_from`). |
+| I3 | `effective_from` is always set; over non-superseded, non-withdrawn snapshots it is monotonic in `version` per identity (a superseding snapshot shares its predecessor's `effective_from` and is ordered by the `version` of the first record of its `supersedes` chain, 8.123 b). |
 | I3b | At most one snapshot with `status in {draft, pending}` per identity. `current_snapshot_id`, if not null, references a `published` snapshot; it is null only when the identity has no published, non-superseded snapshot left (8.17). |
 | I4 | `shape_class == "composite"` => `shape_class_source == "assigned"`. |
 | I5 | Evidence `identity_id` is immutable after create. |
-| I6 | `summary` has `value` or `range` (or both), matching the quantity's kind and canonical unit after conversion. |
+| I6 | `summary` has `value` or `range` (or both), matching the quantity's kind and canonical unit after conversion. The one exception: an `archival_document` may carry no `summary` at all --- a **document**, which never enters the fold (8.106); every other method requires one. |
 | I7 | Within one record, `summary.quantity` and every `derived[].quantity` are pairwise distinct --- a derived value never shadows the measured one, and each quantity has at most one result per record (the fold counts records, section 4.4). |
 | I8 | `payload` validates against the method's model with `extra = "forbid"`, plus `spec.validate()` returns no errors. |
 | I9 | `position.snapshot_id`, if set, belongs to the same `identity_id`. |
@@ -1241,12 +1470,12 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 | I13 | Frozen fields (section 3.3.4) of a `published` evidence record cannot be changed by PATCH; the only path is a superseding record. |
 | I14 | `supersedes` must reference a `published` record of the same `identity_id` and same `method`; a record can be superseded at most once (no forks), and at most one `draft` / `pending` record may name it in `supersedes` at a time (8.16). |
 | I15 | `status` transitions (snapshots and evidence): `draft-->pending`, `pending-->draft` (author recall, 8.18), `pending-->published\|rejected`, `rejected-->draft` (resubmit), `published-->withdrawn` (`moderator(D)`, reason required), `withdrawn-->published` (`moderator(D)` reinstate). Hard delete only from `draft\|pending\|rejected`. Evidence additionally leaves the default set via supersession. |
-| I16 | `origin.construction_work != null` => `origin.kind in {deinstallation, demolition}`. |
+| I16 | `origin.construction_work`, `position_in_work`, `connection_types`, `detachability` non-empty => `origin.kind in {deinstallation, demolition}` (8.38). |
 | I17 | `inherited_fields` and `inherited_from` are server-maintained: never accepted from a client except `inherited_fields` additions (re-inherit). `inherited_fields != []` => `inherited_from in parent_identities`. |
-| I18 | A server-set `exit` (`recorded_by_user_id == null`, kind `split` / `merged`) exists iff the identity has >= 1 non-withdrawn child that has ever been published (a `published` or `withdrawn` snapshot); `exit.at` = the earliest such child's first `effective_from` (8.8). `exit.construction_work` non-null => `exit.kind == installed`. `exit.kind in {split, merged, recycled, disposed}` => `reenter` rejected. `reserved` non-empty => `exit == null`. `past_cycles` never client-writable. |
+| I18 | A server-set `exit` (`recorded_by_user_id == null`, kind `split` / `merged`) exists iff the identity has >= 1 non-withdrawn child that has ever been published (a `published` or `withdrawn` snapshot); `exit.at` = the earliest such child's first `effective_from` (8.8). **For a batch** (current snapshot `quantity > 1`, section 3.1.6) the server-set `split` exists iff `remaining == 0`, with `exit.at` = the latest draw's `effective_from` (8.105). `exit.construction_work` non-null => `exit.kind == installed`. `exit.kind in {split, merged, recycled, disposed}` => `reenter` rejected. `reserved` non-empty => `exit == null`. `past_cycles` never client-writable. |
 | I19 | Identity hard `DELETE` only if no snapshot or evidence of it ever reached `published` (server checks `status` history: any `published`/`withdrawn` record => 409). `?purge=1` overrides, admin only, leaves a purge stub. `withdrawn.duplicate_of` must reference a non-withdrawn identity != self (no chains: re-point to the terminal). |
 | I20 | `identity.dataset` references an existing `datasets._id`. At least one enabled user with `role == admin` exists (the last admin cannot be demoted or disabled). A dataset always has >=1 `moderator` member or is administered by admins only (allowed, warned). |
-| I21 | Frozen snapshot fields and files (section 3.2.2) of a `published` snapshot reject PUT/PATCH/DELETE (409, pointing at `/supersede`). Derived fields are rejected from every client payload. A snapshot is superseded at most once; `supersedes` references a `published` snapshot of the same identity. |
+| I21 | Frozen snapshot fields and files (section 3.2.2) of a `published` snapshot reject PUT/PATCH/DELETE (409, pointing at `/supersede`), for every role; the one exception is filling an empty `capture` field once (8.123 a). Derived fields are rejected from every client payload. A snapshot is superseded at most once; `supersedes` references a `published` snapshot of the same identity. |
 | I22 | `verification.state == accredited` => exists `performed_by` actor with `accreditation.scope contains standard.code` and (`valid_until` null or >= `observed_at`). |
 | I23 | `capture.markers` and `capture.fixtures` never satisfy I1 and are never read by a derivation (section 3.2.3). A `reinforcement_layout` record requires `position.snapshot_id` (its bar coordinates are in that snapshot's stored coordinates). |
 | I24 | Evidence `attachments[]` of a `published` record: entries are never removed or reordered; a removal sets `removed {at, by_user_id, reason}` (`moderator(D)`, reason required) and deletes the file. `sha256` is computed server-side over the stored bytes. Same rule for snapshot photos after publish (section 3.2.2). |
@@ -1254,6 +1483,10 @@ IDs are stable (referenced throughout); I12 is kept as a tombstone.
 | I26 | Evidence of an unpublished identity (section 3.1.5) cannot be published (409). `created_by_user_id` is server-set on create and never changed by a client. |
 | I27 | `verification.state in {reviewed, accredited}` => `verification.by.user_id` is set, differs from `recorded_by_user_id` and from every `performed_by[].user_id`; `accredited` => `verification.note` non-empty. `self_attested` => some `performed_by[].user_id == recorded_by_user_id` (decision 8.12). |
 | I28 | No evidence is created on a withdrawn identity (409, naming `duplicate_of` if set). On an identity with a terminal `exit` (`split`, `merged`, `recycled`, `disposed`), evidence needs `observed_at <= exit.at` (8.16). |
+| I29 | `users.username` is lowercase and unique (decision 8.28); registration lowercases it and sign-in compares lowercase. |
+| I30 | Every change to an authored or server-maintained field of an identity, snapshot or evidence record writes one `change_log` entry in the same request; entries are never updated or deleted except by redaction (names blanked) and purge (section 3.8, decision 8.36). |
+| I31 | `origin.planned == true` => `origin.kind in {deinstallation, demolition}`; while planned, `exit.kind` is `recycled`, `disposed` or `lost` if set (8.104). |
+| I32 | Quantity and batches (8.105, 8.110, 8.115): every later snapshot of **any** identity keeps v0's `quantity`; a correction may change it, but never below the sum of the published drawn children; `remaining >= 0` always (the draw check is atomic). A merge child never has a batch among its parents. While a batch is reserved, only the reserving user or `moderator(D)` draws from it. |
 
 ---
 
@@ -1282,7 +1515,7 @@ Reviewed against 6.14 (decision 7.10):
 Composite `part` proxies drawn by hand have no entry surface in 0.6 (neither web nor GH bridge)
 --> later.
 
-**Variable resolution** --- global LOD via `reduced` / `detailed` PLY and inline preview; the
+**Variable resolution** --- global detail levels (8.23): preview, reduced, original; the
 proxy is the "container" (Bernhard's term) with `fit.source` as the link to the original. Local
 relevance is expressed by `proxies[].regions[]` (section 3.2.1): a **schema slot only** in this release
 --- authored or later derived, consumed by nothing yet. The viewer and GH keep fetching global
@@ -1320,9 +1553,11 @@ role)`; the frontend merely hides controls. `admin` passes every check. D = the 
 | upload / replace / delete geometry files and photos | as "edit an unpublished record", **only while the snapshot is not `published`** (freeze rules: decision 6.6) |
 | evidence attachments | unpublished record: as "edit an unpublished record"; published: `contributor(D)` adds, `moderator(D)` removes with reason, tombstone entry kept (decision 7.3) |
 | publish / reject / withdraw / reinstate (snapshot, evidence) | `moderator(D)`; publishing a child's **first** snapshot also ends its parents (split / merge, 8.8), so it needs `moderator` of every parent's dataset as well --- otherwise it waits in that dataset's queue |
-| promote `current_snapshot_id`; `effective_from`, `shape_class` overrides | `moderator(D)` |
+| promote `current_snapshot_id`; `effective_from`, `shape_class` overrides; recompute a snapshot's derived fields | `moderator(D)` |
 | PATCH identity metadata (`origin`, `material`, `original_function`, `is_public`, ...) | `moderator(D)`; while the identity is unpublished also its creator (8.9) |
 | `exit`, `reenter`, `withdraw` identity | `moderator(D)` |
+| `deinstall`, `undo-deinstall` (8.104) | `moderator(D)` |
+| draw from a batch (8.105) | as "create identity"; while the batch is reserved only the reserving user or `moderator(D)` (8.110) |
 | move identity D1 --> D2 | `moderator(D1) and moderator(D2)` |
 | set evidence `verification` | `self_attested` / back to `unverified`: the recorder, unless a reviewer set the state; `reviewed` / `accredited` / any downgrade: `reviewer(D)` or `admin`, never the recorder or a `performed_by` user (8.12, I27) |
 | supersede published evidence | `contributor(D)` (new record enters `pending`) |
@@ -1341,26 +1576,44 @@ POST   /identities/{id}/snapshots                  contributor(D): always create
 POST   /snapshots/{sid}/supersede                  contributor(D): body = corrected snapshot; inherits effective_from (section 3.2.2)
 POST   /snapshots/{sid}/submit                     author: draft --> pending      (replaces implicit pending on create); ?publish=1&promote=1 for moderators
 POST   /snapshots/{sid}/recall                     author: pending --> draft (8.18)
+POST   /snapshots/{sid}/resubmit                   author: rejected --> draft (I15; one in flight, I3b)
 POST   /snapshots/{sid}/publish                    moderator(D): pending --> published (+ ?promote=1 to set current_snapshot_id; replaces /validate)
 POST   /snapshots/{sid}/reject                     moderator(D): pending --> rejected (+ reason; replaces DELETE-as-reject)
 POST   /snapshots/{sid}/promote                    moderator(D): set current_snapshot_id to this published, non-superseded snapshot
-POST   /snapshots/{sid}/withdraw                   moderator(D): published --> withdrawn (+ reason, replacement?); the current one falls back to the latest published or null (section 3.1.4, 8.17)
+POST   /snapshots/{sid}/withdraw                   moderator(D): published --> withdrawn (+ reason, replacement_id?); the current one falls back to replacement_id, else the latest live one (published, non-superseded), else null (section 3.1.4, 8.17)
 POST   /snapshots/{sid}/reinstate                  moderator(D): withdrawn --> published
 DELETE /snapshots/{sid}                            author or moderator(D), only draft|pending|rejected (hard delete + files)
 GET    /snapshots/pending                          moderation queue (replaces /pending-validation), filtered to the caller's moderated datasets
 PATCH  /snapshots/{sid}                           per-field permission (section 3.2.2): draft --> author / moderator(D), pending --> moderator(D), everything but derived fields;
                                                   published --> moderator(D): mutable metadata, effective_from(+precision), shape_class / complexity override;
                                                   frozen field on a published snapshot --> 409 pointing at /supersede. Replaces PATCH /identities/{id}/current-snapshot
-GET    /snapshots/{sid}/proxies/{i}/faces/{face}   deviation map PNG
+GET    /snapshots/{sid}/proxies/{i}/faces/{face}   deviation map PNG (16-bit RGB, decision 8.49); same visibility as the snapshot
+GET    /snapshots/{sid}/proxies/{i}/mesh           the proxy as PLY / OBJ in stored coordinates (every primitive)
 GET    /snapshots/{sid}/capture/fixtures/{i}.ply   fixture mesh (section 3.2.3); visibility of the snapshot
-POST   /snapshots/{sid}/proxies/recompute          moderator(D); runs section 4.3 for one snapshot
-GET    /identities/{id}/timeline                   merged: past_cycles, origin, snapshot states + corrections, evidence, exit
-POST   /identities/{id}/exit                       moderator(D); body = exit block (replaces POST /consume)
+POST   /snapshots/{sid}/proxies/recompute          moderator(D); runs every stage of section 4.3 on one snapshot, stale or not
+GET    /geometry/stale | /geometry/work/{sid}      admin: the geometry runner off the server (decisions 8.45, 8.51)
+POST   /geometry/results/{sid}                     admin: a worker's derived fields + files; 409 when the inputs changed
+GET    /geometry/failed                            admin: snapshots with a failed frame / class / proxy stage, stage and stored error text (decisions 8.60, 8.61); web /admin/geometry
+GET    /identities/{id}/snapshots                  version list; each row carries `geometry_failed` (a frame, class or proxy stage failed --- a flag, never the text; 8.60)
+GET    /identities/{id}/changes                    member(D) / admin: change_log entries of the identity, its snapshots and evidence (section 3.8)
+GET    /identities/{id}?as_of=<date>               the record as of a date (section 3.8); same for /snapshots/{sid}, /evidence/{eid}
+GET    /identities/{id}/timeline                   merged: past_cycles, origin, deinstalled (8.104), snapshot states + corrections, evidence, exit
+POST   /identities                                 contributor(D), + read access to each parent and the cut rules of 8.34: identity + v0 draft; a child
+                                                  inherits every unit it does not state (section 3.1.2); a merge whose parents disagree on material /
+                                                  original_function needs them stated (422). Replaces the 0.5 create.
+                                                  A child whose only parent is a batch is a **draw** (8.105): `quantity` <= `remaining`,
+                                                  else 409, checked at create and at first publish; while the batch is reserved only
+                                                  the reserving user or moderator(D); a merge with a batch among its parents: 409 (8.110)
+POST   /identities/{id}/deinstall                  moderator(D); body {at, at_precision, method?, performed_by?, notes?, kind?}; planned --> false;
+                                                  propagates like a parent PATCH of `origin` to descendants that still inherit it (8.110)
+POST   /identities/{id}/undo-deinstall             moderator(D); planned --> true while nothing is dated after `at` (else 409); propagates the same way
+POST   /identities/{id}/exit                       moderator(D); body = exit block (replaces POST /consume); `merged` is server-only
 DELETE /identities/{id}/exit                       moderator(D); undo a mistaken exit (replaces /unconsume); not for server-set split/merge while children exist
 POST   /identities/{id}/reenter                    moderator(D); body = new origin; archives {origin, exit} to past_cycles (section 3.1.3)
 POST   /identities/{id}/withdraw                   moderator(D); body = {reason, duplicate_of?} (section 3.1.4)
 POST   /identities/{id}/reinstate                  moderator(D); clears `withdrawn`
-DELETE /identities/{id}                            author or moderator(D) while nothing was ever published (I19); ?purge=1 admin only
+DELETE /identities/{id}                            author or moderator(D) while nothing was ever published (I19); ?purge=1 admin only (body {confirm_id, reason})
+DELETE /snapshots/{sid}?purge=1                    admin: any status (body {confirm_id, reason}); not the current snapshot
 ```
 
 ### 7.2 Evidence
@@ -1382,9 +1635,10 @@ POST   /evidence/{eid}/reject                      moderator(D): pending --> rej
 POST   /evidence/{eid}/supersede                   contributor(D): body = full new record; server links supersedes/superseded_by on publish; new record enters as pending; 409 if a correction of eid is already open (I14)
 PUT    /evidence/{eid}/verification                recorder (self_attested) | reviewer(D), four eyes (8.12): set state/note; server sets by/at; I22, I27 checked; recomputes properties
 GET    /evidence                                   cross-catalog; ?dataset= ?method= ?quantity= ?min= ?max= ?status= ?verification=
+                                                  ?recorded_by=me ?order=newest|oldest ?limit= (repeat-from-my-last-record, 7.6; decision 8.83)
 GET    /evidence/pending                           moderation queue, filtered to the caller's moderated datasets
 GET    /evidence/methods                           registry introspection
-POST   /evidence/attachments                       multipart: one file + record_ids[] --- attaches one upload to several records (one stored copy per record, 7.3)
+POST   /evidence/attachments                       multipart: one file + record_ids[] --- attaches one upload to several records (one stored copy per record, 7.3); max 25 MB per file, else 413 (8.82)
 GET    /evidence/{eid}/attachments[/{index}]       list: visibility of the record; download: signed in + visibility of the record (anonymous --> 401, 8.13)
 DELETE /evidence/{eid}/attachments/{index}         unpublished: author; published: moderator(D) + reason --> tombstone entry, file deleted
 GET    /schema/evidence  /schema/create-evidence   codegen
@@ -1434,7 +1688,9 @@ GET /id/{uuid}      frontend route AND API route, permanent --- never renamed, n
 - `Accept: application/json` --> 302 to `/identities/{uuid}/compose` (the passport).
 - Withdrawn with `duplicate_of` --> **301** to `/id/{duplicate_of}`; withdrawn without --> the
   tombstone page / JSON (members of D: the full record, 8.17); `current_snapshot_id == null` -->
-  the component page with "no current state"; purged --> **410**; unknown --> 404.
+  the component page with "no current state"; purged --> **410**; unknown --> 404 --- except for a
+  signed-in caller with `contributor` in some dataset: the page "this tag is not in the catalog
+  yet" with *New component* and *Cut from pieces* (the snapshot form, section 7.6; decision 8.87).
 - Visibility rules (section 3.6) apply after the redirect. A piece the viewer cannot see does
   **not** hide behind a 404 (decision 8.11) --- whoever scans a tag holds the piece: anonymous -->
   a page "this component is not public" with a sign-in link (callback to the piece); logged in
@@ -1468,16 +1724,26 @@ document a finding and belong to the evidence record; **snapshot photos** stay a
 impression of the component, independent of its geometric representation. The camera / gallery
 capture of the add-component wizard is reused.
 
-**Position.** `kind: none` + `description` is always enough (section 3.3.2); optionally the user picks a
-point on the 3D viewer (tap or click), which sets `position.snapshot_id` and `position.point`.
+**Position (decision 8.43).** `kind: none` + `description` is always enough (section 3.3.2);
+optionally the user picks a point on the 3D viewer (tap or click), which sets
+`position.snapshot_id` and `position.point` --- in the browser, without CAD software or
+Grasshopper. Picking works on every representation the viewer draws: a mesh (ray hit), a point
+cloud (nearest point within a screen tolerance) and an authored proxy (ray hit on the box /
+prism). The **grid tool** lays a regular grid on a picked face: origin, two in-plane
+directions, rows x columns and spacing, all in the snapshot's stored coordinates. It serves two
+uses: the impact points of one rebound test area (A.1 `test_area.grid`, one reading per point)
+and a set of test locations across a member (one record per point, the fan-out shortcut). The
+viewer warns when a point falls closer to an edge than `min_edge_distance_mm`.
 
-**Snapshots (decision 7.5).** One snapshot form --- the add-component wizard's details + photos
-steps; geometry = an authored box from L x W x H --- reached from four places:
+**Snapshots (decisions 7.5, 8.87).** One snapshot form with four modes --- steps details -->
+size (an authored box from L x W x H) --> photos --> optional visual inspection (7.9, new
+component only) --> submit; it replaces the 0.5 add-component wizard (reused parts: photo
+capture, location, dimension inputs) --- reached from four places:
 
 | entry point | reached from | creates |
 |---|---|---|
-| new component | scan an unused tag | identity + v0 |
-| cut from ... | scan an unused tag, then the parent's tag(s) | child identity; server inherits (section 3.1.2); publishing its v0 sets the parents' `exit` split / merged (section 3.1.3, 8.8) |
+| new component | scan an unused tag (`/id/{uuid}`, section 7.5); `/add-component` | identity + v0 |
+| cut from ... | scan an unused tag, then the parent's tag(s); "Cut a piece from it" on the parent's page | child identity; server inherits (section 3.1.2); publishing its v0 sets the parents' `exit` split / merged (section 3.1.3, 8.8) |
 | record new state | component page | next version, `effective_from` = now unless set; only for a changed **shape** --- damage without shape change is evidence |
 | correct | a published snapshot | superseding snapshot (section 3.2.2), prefilled, geometry kept unless dimensions are re-entered, same `effective_from` |
 
@@ -1487,7 +1753,7 @@ All four: `draft` --> photos --> `submit`; for a moderator, submit also publishe
 scanning app or import; source apps and formats; server-side processing of uploads).
 
 Not in 0.6: spreadsheet-style entry sheet, CSV / lab-report import, GH evidence
-components. There is no campaign entity (decision 7.2): the study is the dataset, the occasion is
+components (one exception: `ReinforcementLayout` + generic `AddEvidence`, decision 7.8). There is no campaign entity (decision 7.2): the study is the dataset, the occasion is
 stated by each record.
 
 ### 7.7 Datasets, materials, administration (decisions 6.4, 6.5, 6.10)
@@ -1503,16 +1769,53 @@ GET    /users                                      admin: + memberships per user
 PATCH  /identities/{id}                            moderator(D) for metadata; changing `dataset` needs moderator of both (section 7.0)
 GET    /materials                                  public: the controlled list (section 2.10)
 POST   /materials                                  admin; `default_class` required (I25)
-PATCH  /materials/{mid}                            admin; label, group, default_class, uniclass, notes (_id immutable); re-derives material_class
+PATCH  /materials/{mid}                            admin; label, group, default_class, uniclass, notes, retired (_id immutable); re-derives material_class
+DELETE /materials/{mid}                            admin; only while unreferenced (withdrawn identities count), else 409 + count (8.35)
+POST   /materials/{mid}/merge                      admin; body {into}; moves every identity, re-derives derived classes, leaves an alias {_id, merged_into} (8.35)
 POST   /actors/redact                              admin; GDPR redaction (section 3.1.4)
 POST   /invitations                                admin | moderator(D): body = {emails: [...], dataset?, roles[], expires_days?}; mails one code per address (8.14)
 GET    /invitations                                admin: all; moderator(D): D's; ?status=open|used|expired|revoked
 DELETE /invitations/{iid}                          revoke while unused
 POST   /auth/register                              body + code? --- open domain: as 0.5; otherwise the code must match an open invitation for that email
+POST   /auth/password-reset                        anonymous: body {email}; always 202, mails a single-use token (8.124)
+POST   /auth/password-reset/confirm                anonymous: body {token, new_password}; sets password_changed_at (8.124)
 ```
 
 The `/admin` web area gains dataset CRUD and a per-dataset member / role editor (decision 6.5),
 the materials list, and invitations (8.14; also from the member editor).
+
+### 7.8 Exports (decisions 8.39, 8.44, 8.103; plan P10, before the cutover)
+
+```
+GET    /context/v1.jsonld                          public: the JSON-LD context (SOSA/SSN, PROV-O, BOT, QUDT, IFC, bSDD)
+GET    /identities/{id}/compose?format=jsonld      the passport as JSON-LD: the same JSON plus @context, @id, @type
+GET    /identities/{id}/export/cero                CERO (Turtle; ?format=jsonld): one value per CERO property
+GET    /identities/{id}/export/pdf                 the human-readable passport summary (DIN SPEC 91484 section 8)
+```
+
+All three read what the component read returns for the caller (section 3.6): the public tier for
+a public viewer, people named in evidence only for members (8.13). The storage is unchanged ---
+ontologies sit at the boundary (`ONTOLOGIES.md`).
+
+- **Mapping columns.** Each vocabulary row names its counterparts: a quantity its QUDT unit,
+  CERO property and bSDD / IFC property where one exists; `original_function` its IFC class;
+  identity --> `bot:Element`, `construction_work` --> `bot:Building`, an evidence record -->
+  `sosa:Observation` (a core: `sosa:Sample`), actors --> `prov:Agent`. The JSON-LD context and
+  the CERO exporter both read these columns; a new ontology is a new column (and, where its
+  shape differs, an exporter).
+- **CERO.** One literal per CERO property on the element: the conservative bound of the folded
+  range (as the CPR projection, section 10.3), the unit of the CERO property; provenance stays
+  behind a link to the CSC record (`rdfs:seeAlso` to `/id/{uuid}`). Lossy by design.
+- **PDF** (at most two pages, English): header (catalog number, name, QR code of `/id/{uuid}`,
+  dataset, issue date, snapshot version); identity (original function, material and waste
+  class, trade name, manufacturer, manufactured); origin and DGNB items (kind, date, place,
+  works with construction method and year built, position, connections, detachability,
+  material separability); current state (preview image, dimensions, shape class, mass,
+  condition grade); the folded properties (quantity, range, unit, n, source, verification);
+  the evidence list (method, date, result, verification, attachment names); lineage and
+  circulation (parents, children, exit, earlier cycles); footer (links to the JSON, JSON-LD
+  and CERO editions, last change and number of change-log entries, generation time).
+  Generated server-side with ReportLab.
 
 ## 8. Migration from 0.5
 
@@ -1538,37 +1841,48 @@ abort-on-unclassifiable guards catch drift since 260916. Minimum client version 
 
 ### 8.1 Scripts
 
-Scripts in `scripts/db_maintenance/`, each idempotent with `--dry-run`. All run at cutover
-(section 8.0) on the then-current dump, **in the order of this table** (`run`); `after` names the
-steps whose output a step reads. Step IDs are stable names (the decision log cites them), not
-the order. Step 14 may also run on 0.5 once its upload pipeline strips EXIF; 11b runs after
-cutover.
+Every step is a function in `apps/catalog/migration06/steps.py` (the pure mappings in
+`mappings.py`, unit-tested), run through **one command**,
+`scripts/db_maintenance/migrate_06.py --all | --steps 1,1b,... | --list [--dry-run]`; the
+script names in the table are the steps' titles. Each step is idempotent (it selects only
+documents still in the 0.5 shape), validates what it builds against the 0.6 models, and writes
+nothing when a guard aborts. All run at cutover (section 8.0) on the then-current dump, **in the
+order of this table** (`run`); `after` names the steps whose output a step reads. Step IDs are
+stable names (the decision log cites them), not the order. Step 14 may also run on 0.5 once
+its upload pipeline strips EXIF (done in 0.5.1.0); 11b runs after cutover. **Rehearsal:**
+`invoke rehearse --dump 260916 [--assets <asset folder>]` --- throwaway `mongod`, all steps,
+a second run that must change nothing, `check_invariants`, per-dataset report; the spec's
+260916 numbers are asserted by `tests/api/test_migration06_dump.py` (`CSC_DUMP_DIR`).
+**Rehearsed 2026-09-30 on 260916: 0 invariant errors** (7 warnings: no dataset has a moderator
+until memberships are assigned), idempotent, 70 fixture files.
 
 | run | step | script | after | what |
 |---|---|---|---|---|
-| 1 | 1 | `migrate_add_snapshot_effective_from.py` | --- | `effective_from` by the 8.10 default --- v0: `origin.at` + precision when known (Corian 2022-10-26 day, ZirKuS 2024-07-24 day, `schoenes_neues_feld` 2026-05-19 day; children: their `created`), else `created` (`exact`); v1+: `created` (`exact`). Reads the 0.5 `salvaged_at` directly (step 10 converts and drops it later), so the run order is unchanged. 260916: 4 identities have a v1; `created` is monotonic in `version` for all of them --- the script asserts that and aborts otherwise. |
+| 0 | 11a | (in `migrate_06.py`) | --- | rename 0.5 dataset slugs before anything reads them (decision 8.24): `sas_cita_scans` --> `beyond_debris` ("Beyond Debris"). A `datasets` document made under the old slug moves to the new one. 260916: 71 identities. Steps 9b, 10 and 11 read the new slugs. |
+| 1 | 1 | `migrate_add_snapshot_effective_from.py` | --- | `effective_from` by the 8.10 default --- v0: `origin.at` + precision when known (Corian 2022-10-26 day, ZirKuS 2024-07-24 day for all 16, `schoenes_neues_feld` 2026-05-19 day; children: their `created`), else the robot scan's time (`attributes.3d_scan_metadata.created_utc`, the 70 `ddu_build_with_debris` stones), else `created` (`exact`); v1+: `created` (`exact`). Computes `origin.at` with step 10's mapping function (step 10 writes and drops the 0.5 fields later), so the run order is unchanged. 260916: 4 identities have a v1; `created` is monotonic in `version` for all of them --- the script asserts that and aborts otherwise. |
 | 2 | 1b | `migrate_snapshot_validated_to_status.py` | 1 | `validated: true --> status: published`; `false --> pending`; drop `validated`. Rejected 0.5 snapshots were deleted, so none map to `rejected`. |
 | 3 | 1c | `migrate_init_06_fields.py` | 1b | initialise every new field to its empty value so no reader meets a missing key: snapshots `supersedes` / `superseded_by` / `status_changed_*` = null, `capture` = null, `effective_from_precision` from step 1; identities `withdrawn` = null, `past_cycles` = [], `properties` = {}; later steps overwrite where they have data. Identities: `created_by_user_id` = their v0 `added_by_user_id` (8.9) Nulls in list / dict fields become empty, as the 0.6 models expect (found by `check_invariants.py` on 260916): `geometry.meshes` null on 531 snapshots and `geometry.point_clouds` on 700 --> `[]`, `mesh_ply_resolutions` null on 532 --> `{}`, `manufactured_precision` null on 6 identities --> `unknown`. |
 | 4 | 9 | `migrate_drop_snapshot_fields.py` | --- | `$unset` `processes` (empty in all 701) and `assembly` (false in all 701) --- 6.13; `virtual` (false in all 701) --- 7.12; `iframe` (always identity) --- 7.11. Aborts if any snapshot has `virtual: true`. |
 | 5 | 2 | `migrate_rename_measurements_collection.py` | --- | drop the empty `component_measurements`; bind `component_evidence`. |
-| 6 | 11 | `migrate_datasets_collection.py` | --- | create the 7 `datasets` docs from distinct `identity.dataset` values, `members: []`. Visibility: `catalog` for `mineral_composite_panels`, `sas_cita_scans`, `ddu_build_with_debris`, `ddu_aggregations`; `members` for `dbu_zirkus`, `schoenes_neues_feld`, `spa_example_data`. `admin` stays global admin. Memberships are **not** migrated --- assigned afterwards by admin through the extended user-administration frontend (deliverable: dataset CRUD + per-dataset member/role editor under `/admin`). |
+| 6 | 11 | `migrate_datasets_collection.py` | --- | create the 7 `datasets` docs from distinct `identity.dataset` values, `members: []`; `beyond_debris` gets its description (8.25). Visibility: `catalog` for `mineral_composite_panels`, `beyond_debris`, `ddu_build_with_debris`, `ddu_aggregations`; `members` for `dbu_zirkus`, `schoenes_neues_feld`, `spa_example_data`. `admin` stays global admin. Memberships are **not** migrated --- step 11b adds owners, the two moderators and per-dataset members (8.25, 8.26); everything else is assigned by admin through the extended user-administration frontend (deliverable: dataset CRUD + per-dataset member/role editor under `/admin`). |
 | 7 | 12 | `migrate_material_vocab.py` | --- | seed `materials` (section 2.10); map `corian --> mineral_composite` + `trade_name: "Corian"`, `concrete --> concrete`, `brick --> fired_clay`, `aerated-concrete --> autoclaved_aerated_concrete`, `asphalt --> asphalt`, `steel --> steel`, `wood --> timber`; derive `material_class` (`derived`). Aborts on any unmapped value. Runs before 10b (inheritance compares `material`/`trade_name`). |
 | 8 | 3 | `migrate_type_to_original_function.py` | --- | `panel-->IfcPlate`, `beam-->IfcBeam`, `column-->IfcColumn`, `slab-->IfcSlab`, `brick-->IfcBuildingElementPart` (6.13; no 0.5 identity uses it), `pipe-->IfcPipeSegment`, `profile-->IfcMember`, `connector-->IfcDiscreteAccessory`, `rubble-->CscDebris`, `other-->IfcBuildingElementProxy`. Drops `type` (no alias, section 8.0). |
 | 9 | 10 | `migrate_salvage_to_origin.py` | --- | Hand-mapped, not string-copied --- the 0.5 data holds only 4 distinct `salvage_source` values (table below). `salvaged_at` --> `origin.at`, precision `day` (all stored values are midnight). Identities with no salvage data get `origin.kind` from their dataset (table below). Drops `salvage_source`, `salvaged_at`. |
-| 10 | 10c | `migrate_consumed_to_exit.py` | --- | 42 consumed identities (260916): the 37 split parents --> `{kind: split, at: consumed_at, precision exact, recorded_by_user_id: null}` (in 260916 `consumed_at` equals the earliest child's v0 `created` to the microsecond for all 37 --- the I18 `at`; the script asserts it); 5 `ddu_build_with_debris` --> `{kind: installed, notes: "modified by students during the workshop; resulting pieces not catalogued"}`; 1 `ddu_aggregations` --> `{kind: lost, notes: same}`. `at` = `consumed_at`. All others `exit: null`, `past_cycles: []`. Drops `consumed_at`. Script asserts the 37/5/1 split and aborts on any consumed identity it cannot classify. |
+| 10 | 10c | `migrate_consumed_to_exit.py` | --- | 42 consumed identities (260916): by rule: consumed with catalogued children --> `{kind: split, at: <earliest child's first effective_from> (I18), precision exact, recorded_by_user_id: null}` (in 260916 that equals `consumed_at` to the microsecond for all 37; a difference is reported); consumed without children in `ddu_build_with_debris` --> `{kind: installed, notes: "modified by students during the workshop; resulting pieces not catalogued"}`, in `ddu_aggregations` --> `{kind: lost, notes: same}`, `at` = `consumed_at`; anything else aborts. **260916: 37 split (36 panels + 1 aggregations piece that was cut again), 5 installed, 0 lost** --- the draft's "1 lost" was that aggregations piece before its own cut was catalogued. All others `exit: null`, `past_cycles: []`. Drops `consumed_at`. |
 | 11 | 10b | `migrate_lineage_inheritance.py` | 3, 10, 12 | after 3 and 10. For every identity with `parent_identities`: set `inherited_from`; for each inheritable field equal to the parent's value --> list it in `inherited_fields`. **`manufactured_at` on the 45 children holds their creation timestamp (GH wrote it)** --> overwrite with the parent's (all `unknown`) and list it as inherited; the cut moment survives as the child's first-snapshot `effective_from` (step 1). Roots get `inherited_fields: []`, `inherited_from: null`. |
-| 12 | 6 | `migrate_attributes_cleanup.py` | 1c | `attributes.primitive` --> dropped (now derivable); `attributes.scan` --> `capture.notes`; `attributes.3d_scan_metadata` --> `capture{method: photogrammetry, captured_at, device, software}` **on the identity's v0 snapshot** (7.7); local paths dropped. |
-| 13 | 6c | `migrate_capture_context.py` | 6 | the 70 `ddu_build_with_debris` snapshots (7.7): `geometry.marker_points` --> `capture.markers` --- labels re-read from the source OBJs (`marker_blue_*`, `marker_green_*`) if still on disk, else by position (the +/-120 mm cross at z ~ 0 --> `role: rig`, the rest --> `role: component`); `meshes[1]` (`end_effector`) --> `capture.fixtures[0]`, its `detailed.ply` moved to `capture/<sid>/fixtures/0.ply`, inline copy and `reduced.ply` dropped, `mesh_ply_resolutions["1"]` removed; `capture.coordinate_system = {name: "DDU robot gripper marker plane"}`. Drops `geometry.marker_points`. Asserts every moved mesh is the effector (bbox +/-145 mm around the marker plane). |
-| 14 | 6d | `migrate_reinforcements_to_evidence.py` | 2 | the 1 snapshot with `geometry.reinforcements` (dbu_zirkus, 35 bars): one `reinforcement_layout` record (7.8) --- `basis: drawing` (user: the bars were modelled after the original drawing), bars copied, `position.snapshot_id` = that snapshot, `status: published`, `verification: unverified`, `observed_at` = snapshot `created` (day), `recorded_by` = snapshot author. Drops `geometry.reinforcements`. |
+| 12 | 6 | `migrate_attributes_cleanup.py` | 1c | `attributes.primitive` --> dropped (now derivable); `attributes.scan` --> `capture.notes`; `attributes.3d_scan_metadata` --> `capture{method: photogrammetry, captured_at: created_utc}` **on the identity's v0 snapshot** (7.7; device and software are not in the metadata); `attributes.scan` --> `capture.notes: "scan <n>"`; local paths dropped. 260916: 141 captures (70 robot scans, 71 `beyond_debris`). |
+| 13 | 6c | `migrate_capture_context.py` | 6 | the 70 `ddu_build_with_debris` snapshots (7.7): `geometry.marker_points` --> `capture.markers` by **order**: the import wrote the four blue rig markers first (`blue_1..4`, `role: rig`; asserted within 50 mm of the marker plane), then the green ones on the stone (`green_1..`, `role: component`; asserted z > 100 mm) --- in 260916 all 70 scans follow it, while the "+/-120 mm cross" of the draft fails on 7 (rotated or shifted planes); the source OBJs are not available. `meshes[1]` (`end_effector`) --> `capture.fixtures[0]`, its `detailed.ply` (else `reduced.ply`; one scan has neither --- its inline mesh is exported) moved to `capture/<sid>/fixtures/0.ply`, inline copy and `reduced.ply` dropped, `mesh_ply_resolutions["1"]` removed; `capture.coordinate_system = {name: "DDU robot gripper marker plane"}`. Drops `geometry.marker_points`. Asserts every moved mesh is the effector: every vertex within r 170 mm of the gripper axis, z -260 ... 310 mm (the robot pipeline cut it out with a cylinder r 160, h 300 --- `3d_scan_metadata.step4.cylinder_split`). 260916: 70 snapshots, 337 markers, 70 fixture files. |
+| 14 | 6d | `migrate_reinforcements_to_evidence.py` | 2 | the 1 snapshot with `geometry.reinforcements` (dbu_zirkus, 35 bars): one `reinforcement_layout` record (7.8) --- `basis: drawing` (user: the bars were modelled after the original drawing), bars copied, `position = {kind: none, snapshot_id: that snapshot, description}`, `status: published`, `verification: unverified`, `observed_at` = snapshot `created` (day), `recorded_by` = snapshot author. Drops `geometry.reinforcements`. |
 | 15 | 6b | `migrate_condition_to_evidence.py` | 2 | **only grades from datasets where they vary** (decision 7.9; 260916: `schoenes_neues_feld`, 5 snapshots) --- a value uniform across a dataset is a batch default and is dropped (698 x `2`); the script prints the per-dataset table and takes an override list. Each migrated snapshot --> one `component_evidence` record: `method: visual_inspection`, `summary: {condition_grade, value, ordinal, claimed}`, `source_tier: visual`, `status: published`, `verification: unverified`, `performed_by: [{kind: user, user_id: added_by_user_id}]`, `observed_at: snapshot.created` (precision `day`), `position: {kind: none, snapshot_id}`. Then drop `condition`. |
 | 16 | 4 | `migrate_extrusions_to_proxies.py` | --- | each `geometry.extrusions[i]` --> `proxies[i] = {primitive: prism, role: primary if i==0, params: {profile, height}, placement: the extrusion's own placement, fit: {method: authored}}`. Remove `extrusions`. |
-| 17 | 9b | `migrate_complexity_source.py` | --- | `sas_cita_scans` (71): keep value, `complexity_source: assigned`. All others (630, batch defaults): `complexity_source: derived`, value recomputed by stage 5 of `main_geometry.py`. |
+| 17 | 9b | `migrate_complexity_source.py` | 11a | `beyond_debris` (71): keep value, `complexity_source: assigned`. All others (630, batch defaults): `complexity_source: derived`, value recomputed by stage 5 of `main_geometry.py`. |
 | 18 | 5 | `main_geometry.py --stages frame,shape_class --recompute` | 3, 4, 6c | every snapshot gets `frame` + `bbx` by the 7.10 rule (min-volume box, axis convention); `pca_frame` and `bbx_origin` `$unset`. Replaces the planned `migrate_obb_to_box_proxy.py` --- the frame is no longer a proxy. Prints, per dataset, how many frames changed axis order vs. 0.5 (expected: diagonal cases, columns). **Must run after 4 (authored prisms), 6c (gripper leaves `geometry`) and 3 (column rule reads `original_function`).** |
 | 19 | 7 | `main_geometry.py --stages proxies,descriptors,complexity,previews --recompute` | 5, 9b | fits, residuals, deviation maps, descriptors (frame-aligned, version bump), complexity, previews (6.14). |
-| 20 | 8 | `main_geometry.py --stages shape_class,frame --recompute` | 7 + threshold tuning | after threshold tuning: recompute `shape_class`; where it changed, the frame (column rule, 7.10) and --- by fingerprint (8.7) --- stages 3--5 rerun. An ordinary recompute, no special pass. |
+| 20 | 8 | `main_geometry.py --stages shape_class,frame --recompute` | 7 + threshold tuning | after threshold tuning: recompute `shape_class`; where it changed, stages 3--5 rerun by fingerprint (8.7); the frame does not depend on the class (8.52). An ordinary recompute, no special pass. |
 | 21 | 13 | `migrate_archive_designs.py` | --- | decision 7.11: export the whole `designs` collection to `designs_archive_<yymmdd>.json` next to the cutover dump, verify the document count, then drop the collection. |
+| 21b | 15 | (in `migrate_06.py`) | --- | decision 8.28: lowercase every `users.username` and the copies `added_by_username` (snapshots) and `recorded_by_username` (evidence); aborts, naming them, if two accounts would share a name. 261001: 10 of 31 accounts, no clash. |
 | 22 | 14 | `migrate_strip_photo_gps.py` | --- | decision 7.13: re-save every stored snapshot photo without GPS / owner / serial (orientation, capture time, make / model kept); prints how many files carried GPS (260916 assets: 3 of 8). Independent of 0.6 --- can run as soon as the upload pipeline strips too. |
-| post | 11b | `migrate_retire_shared_account.py` | cutover done, personal accounts exist | **after personal accounts exist.** Input: a mapping file (`dataset` or explicit snapshot/identity id list --> personal `user_id`). Rewrites `added_by_user_id`/`added_by_username` on snapshots (and `recorded_by_*` on migrated evidence, `performed_by` user actors), keeping `attribution_corrected: {from_user_id, at, by_user_id}` on each touched document so the correction is auditable. Adds the mapped users as `contributor` of the datasets they authored. Then sets `ddu.disabled = true` --- never deleted, it is still referenced by `attribution_corrected`. Refuses to run while any record still points at `ddu` without a mapping. |
+| post | 11b | `migrate_reattribute_shared_account.py` | cutover done, personal accounts exist | **after personal accounts exist; may run again for later mappings.** Input: a mapping file (untracked; template `scripts/db_maintenance/reattribute_06.example.json`): `from` = the source accounts (default `ddu`), then `datasets` / `identities` / `snapshots` --> personal user id or username; an explicit snapshot wins over its identity, the identity over its dataset; an unknown user aborts. Rewrites `added_by_user_id`/`added_by_username` on snapshots, `created_by_user_id` on identities (and `recorded_by_*` on migrated evidence, `performed_by` user actors), keeping `attribution_corrected: {from_user_id, at, by_user_id}` on each touched document so the correction is auditable. Adds the mapped users as `contributor` of the datasets they authored. Records the mapping does not cover stay with their source account and are counted (`left unmapped`). **`ddu` is not disabled** (decision 8.22): it stays as the internal user-role test account and, after the 8.24 mapping, owns no records. The 8.24 mapping, from `ddu` and `admin`, gives every record a personal owner (who is who: decisions 8.24--8.26 by role). The mapping's `moderators` become `moderator` of every dataset the migration created in step 11 (8.25; never of a dataset created later, 8.125 c); its `members` add roles per dataset (8.26; unknown roles abort); its `descriptions` set dataset descriptions (8.25). Roles are only ever added, so a rerun changes nothing. The filled-in mapping names people and stays untracked (`.dev/reattribute_06.json`; template `scripts/db_maintenance/reattribute_06.example.json`; decision 8.27). |
 
 Step 10 mapping (dump 260916):
 
@@ -1578,10 +1892,11 @@ Step 10 mapping (dump 260916):
 | `ExFeld Architektur, TU Darmstadt` | 4 (`schoenes_neues_feld`) | `kind: unknown`, `at: 2026-05-19` (day), `place: {name: "ExFeld", address: "TU Darmstadt"}` --- ExFeld is the location, not an institution; `performed_by: []` |
 | `Guenther Behnisch Strasse, TU Darmstadt Lichtwiese Campus, 64287 Darmstadt, Germany` | 1 (`dbu_zirkus` beam) | same as the `dbu_zirkus` row below |
 | `Measured by Hand, Parent not found (ID:69da...)` | 1 | `kind: unknown`, string --> `origin.notes` |
-| *(none)* `sas_cita_scans` | 71 | `kind: demolition`, rest null |
+| *(none)* `beyond_debris` (0.5 `sas_cita_scans`) | 71 | `kind: demolition`, rest null |
 | *(none)* `ddu_build_with_debris` | 70 | `kind: demolition`, rest null |
 | *(none)* `spa_example_data` | 9 | `kind: unknown` |
-| *(none)* `ddu_aggregations` without parent | 5 | as the Rosskopf row (`offcut`) |
+| *(none)* `ddu_aggregations` without parent | 4 | as the Rosskopf row (`offcut`) |
+| *(none)* child without salvage data | 1 | its parents' origin when they agree (the one piece cut from an aggregations child); step 10b lists it as inherited |
 | all 16 `dbu_zirkus` | 16 | `kind: deinstallation`, `place: {name: "TU Darmstadt Lichtwiese Campus", address: "Guenther-Behnisch-Strasse, 64287 Darmstadt, Germany"}`, `construction_work: {name: "Lichtwiese Campus Infrastructure --- pedestrian bridge", use: "pedestrian bridge"}`, `at: 2024-07-24` (day) --- one deinstallation for all 16 (user, 2026-09-28) |
 
 Frontend: regenerate models; replace every `type` and `extrusions` consumer. Grasshopper: bump
@@ -1606,7 +1921,7 @@ assigned in the first draft; the numbering is kept so older references stay vali
 11. *(decided 6.14: one runner, ordered stages, cheap stages synchronous)*
 12. *(decided: `condition` dropped; see section 2.6 `condition_grade`, section 8 6b)*
 13. *(decided 6.1, 6.4, 6.8, 6.9: CPR proposals triaged --- see section 10.5)*
-14. *(decided 6.15: `complexity` derived + overridable; sas_cita ratings = tuning labels)*
+14. *(decided 6.15: `complexity` derived + overridable; beyond_debris ratings = tuning labels)*
 15. *(decided 7.13: strip GPS / owner / serial at upload, keep orientation, capture time, make /
     model; one-off cleanup of stored photos --- 3 of 8 in the 260916 assets carried GPS)*
 
@@ -1645,9 +1960,13 @@ Consequences, and how CSC absorbs them:
   (`CSC-000042`) --- human-facing, monotonic, never recycled, already on the QR label.
 - **Batch or serial number** <-> `identity._id` (UUID); a `snapshot.quantity > 1` batch is the one
   case where several physical items share a type.
-- **Persistent unique identifier + data carrier** (Art 77(1)(a--c), 79(1) --> ESPR Art 12: identifiers
-  per ISO/IEC 15459, data carrier per ISO/IEC 15459 too) --- CSC's UUID is *persistent* but not
-  ISO/IEC 15459. **Decided (6.9):** the data carrier (QR/NFC tag) keeps encoding the **raw
+- **Persistent unique identifier + data carrier** (Art 77(1)(a--c), 79(1) --> ESPR Art 10(1)(c),
+  Annex III: identifier and carrier per ISO/IEC 15459-1..6 until harmonised standards are cited;
+  since Decision 2026/1736, EN 18219 (five identifier schemes, two of them --- `did:web` and DOI
+  --- without an issuing agency) and EN 18220 (the carrier encodes an EN 18219 identifier)) ---
+  CSC's UUID is *persistent* but follows none of these schemes. **Decided (8.37):** tags keep the UUID; when
+  an EN 18219 identifier is needed, each published identity gets a DOI (scheme 5) in
+  `identifiers[]`, not a `did:web` (domain-bound). **Decided (6.9):** the data carrier (QR/NFC tag) keeps encoding the **raw
   UUID** --- host-independent by construction; no domain can be guaranteed forever. Resolvability
   is a *server* capability, not a label property: the permanent route `/id/{uuid}` (section 7.5).
   Moving hosts = DNS / redirect, never relabelling. ESPR compatibility later = (a) an
@@ -1719,9 +2038,9 @@ of how directly it binds:
 | instrument | status (Sep 2026) | what it fixes | CSC consequence |
 |---|---|---|---|
 | **ESPR --- Reg. (EU) 2024/1781**, Arts 9--15 + Annex III | in force; DPP registry to be set up by the Commission by **19 Jul 2026** (Art 13); product-group delegated acts pending | the DPP *framework*: data requirements, unique product / operator / facility identifiers (Art 12), registry (Art 13), web portal (Art 14). CPR Art 79 applies these to construction products | `identifiers[]` (section 10.2) must hold an ESPR-registry-issued identifier once it exists; the QR on the piece is the ESPR data carrier |
-| **EN 182xx family --- CEN/CLC JTC 24** ("Digital product passport: framework and system", standardisation request M/604) | first six published **27 May 2026**, cited in the OJ **15 Jul 2026** (Implementing Decision (EU) 2026/1736); two still to be cited | EN 18216 data exchange protocols ; **EN 18219 unique identifiers** ; **EN 18220 data carriers** (optical 2D, RFID, NFC) ; **EN 18221 data storage, archiving, persistence** ; **EN 18222 APIs for passport lifecycle management and searchability** ; EN 18223 system interoperability ; EN 18239 access rights, security, confidentiality ; EN 18246 data authentication, reliability, integrity | these are the *technical* targets for section 10.4: identifier syntax (18219), QR payload (18220), retention (18221 --- the 25-year rule made concrete), the API surface an export must speak (18222), tombstones + hashes (18246). **Obtain 18219/18220/18221/18222 before implementing `identifiers[]` and the export.** |
+| **EN 182xx family --- CEN/CLC JTC 24** ("Digital product passport: framework and system", standardisation request M/604) | first six published **27 May 2026**, cited in the OJ **15 Jul 2026** (Implementing Decision (EU) 2026/1736); two still to be cited | EN 18216 data exchange protocols ; **EN 18219 unique identifiers** ; **EN 18220 data carriers** (optical 2D, RFID, NFC) ; **EN 18221 data storage, archiving, persistence** ; **EN 18222 APIs for passport lifecycle management and searchability** ; EN 18223 system interoperability ; EN 18239 access rights, security, confidentiality ; EN 18246 data authentication, reliability, integrity | these are the *technical* targets for section 10.4: identifier syntax (18219), QR payload (18220), archiving (18221: every change archived, point-in-time retrieval, a backup service provider; the 25 years come from CPR Art 75(2)(i)), the API surface an export must speak (18222), tombstones + hashes (18246). **Obtain 18219/18220/18221/18222 before implementing `identifiers[]` and the export.** |
 | **CIRPASS-2** (Digital Europe, May 2024 -- Apr 2027) | running; 13 lighthouse pilots, one of them **construction, led by Cobuilder** | the reference pilot for a construction DPP; will produce the de-facto data model the delegated act inherits | watch item; the pilot's construction data model (Cobuilder's "Define"/bSDD-based dictionary) is the likeliest shape of Recital 92's "common data dictionary" |
-| **EN 15804+A2** (EPD core rules) | established | the 13 core + 6 additional environmental indicators | **CPR Annex II (a)--(m) = the 13 core, (n)--(s) = the 6 additional --- a 1:1 match.** The `env_*` quantities (section 10.3) should carry EN 15804 indicator codes (GWP-total, GWP-fossil, GWP-biogenic, GWP-luluc, ODP, AP, EP-freshwater, EP-marine, EP-terrestrial, POCP, ADP-minerals&metals, ADP-fossil, WDP; PM, IRP, ETP-fw, HTP-c, HTP-nc, SQP) as their `unit`-adjacent identifier. Used products: modules from the latest deinstallation only (Art 3(53), Recital 36). Data source candidates: Oekobaudat (already in `FUTURE.md`), ISO 22057 EPD data templates |
+| **EN 15804+A2** (EPD core rules) | established | the 13 core + 6 additional environmental indicators | **CPR Annex II (a)--(m) = the 13 core, (n)--(s) = the 6 additional --- a 1:1 match.** The `env_*` quantities (section 10.3) should carry EN 15804 indicator codes (GWP-total, GWP-fossil, GWP-biogenic, GWP-luluc, ODP, AP, EP-freshwater, EP-marine, EP-terrestrial, POCP, ADP-minerals&metals, ADP-fossil, WDP; PM, IRP, ETP-fw, HTP-c, HTP-nc, SQP) as their `unit`-adjacent identifier. Used products: modules from the latest deinstallation only (Art 3(53), Recital 36). Data source candidates: Oekobaudat (`docs/adr/FUTURE.md`), ISO 22057 EPD data templates |
 | **EPBD --- Dir. (EU) 2024/1275** | renovation-passport schemes by **29 May 2026** (Annex VIII); digital building logbooks where available; whole-life-carbon disclosure per EN 15978 / Level(s) 1.2 | the *building-side* twin of the product passport: what the piece is deinstalled *from* and installed *into* | `origin.construction_work.identifier` / `exit.construction_work.identifier` (section 3.1.1) should be able to carry a building identifier that a digital building logbook would recognise; a design's WLC (computed outside CSC, 7.11) needs each component's `env_*` |
 | **Level(s)** (EU building sustainability framework) | established, voluntary | indicator 1.2 life-cycle GWP, 2.1 bill of quantities/materials, 2.4 design for deconstruction & reuse | CSC components are exactly Level(s) 2.4's input; a GH definition over fetched catalog data could produce a 2.1 bill of materials (designs are not stored in CSC, 7.11) |
 | **Battery Reg. (EU) 2023/1542** | battery passport mandatory **Feb 2027** | the first live DPP --- the working reference for registry, access tiers, QR resolution | implementation patterns only; no data overlap |
@@ -1735,7 +2054,8 @@ alignment into obligation, and starts the Art 80 clocks (system live +6 months, 
 
 **Practical reading for CSC:** the identifier, data-carrier, persistence and API standards now
 exist as ENs; the construction-specific data dictionary does not. So: build to EN 18219/18220/
-18221/18222/18246 now (they are stable and cited), keep the field vocabulary IFC/EN 15804/UCUM-
+18221/18222 now (stable and cited; presumption of conformity with ESPR Arts 10--11), follow
+EN 18246 once it is cited (not cited as of 2026-10-02), keep the field vocabulary IFC/EN 15804/UCUM-
 based so it can be mapped when the dictionary lands, and treat the CIRPASS-2 construction pilot
 as the early signal for that dictionary.
 
@@ -1745,7 +2065,70 @@ as the early signal for that dictionary.
 
 All payload models: `extra = "forbid"`. Server recomputes and cross-checks marked fields.
 
-### A.1 `rebound_hammer` (EN 12504-2:2021 / ASTM C805)
+### A.0 Domain notes (from the retired 0.5 measurements draft)
+
+Why the two reference payloads look the way they do. The standards define what a result is;
+the schema stores enough to re-check it. Checked against the full texts on 2026-10-02
+(`SOURCE_CHECK_2026-10-02.md`); the payload changes that check calls for are open topic O17.
+
+**Rebound hammer (EN 12504-2:2021; interpretation EN 13791).**
+
+- EN methods only in 0.6; the ASTM variants (C805, C42, C39) are a later, additive method (8.40).
+- A result belongs to a **test location**, not to one impact: at least 9 valid readings, impacts
+  >= 25 mm apart and >= 25 mm from any edge.
+- The reported value is the **median, as a whole number**. If more than 20 % of the readings
+  deviate by more than 25 % from the median, the whole set is discarded. The rule is only
+  auditable if every reading survives, so rejected readings are flagged, never deleted.
+- **Impact direction** (horizontal, vertically down / up, inclined) needs a correction; store the
+  raw direction and whether the correction was applied.
+- **Hammer type:** N (2.207 Nm), L (0.735 Nm), NR / LR (recording), and energy-based digital
+  hammers that report a **Q-value**. Q and R are different quantities and are never aggregated
+  together.
+- **Surface state** changes the number: ground vs. as found, dry / damp / wet, carbonation depth,
+  member age, surface temperature (hammer use 0--50 deg C). The member must be >= 100 mm thick
+  and firmly fixed; smaller pieces only if firmly supported. **Calibration:** five anvil readings
+  before and after each series, within +-3 of the manufacturer value.
+- **The rebound number is not a strength** (EN 12504-2, note 2). EN 13791:2019 converts it only
+  through a correlation with cores taken at the same test locations (>= 8, better 10 pairs;
+  extrapolation <= 4 MPa; a single-location estimate is the lower 5 % prediction bound). Without
+  cores, the German national annex (DIN EN 13791/A20:2022-04, NA.8.5) assigns only a strength
+  *class* from the median R or Q, N-type hammer, not on fire / frost / chemically attacked
+  surfaces, not with carbonation > 5 mm unless ground off. Raw and converted values are
+  different facts (rule 3, section 1); the conversion is a `derived[]` result with its model
+  named.
+
+**Drilled core in compression (EN 12504-1:2019, EN 12390-3:2019, machine EN 12390-4, assessment
+EN 13791).** Three acts at different times:
+
+1. **Sampling** --- the core is drilled out of the piece: diameter (typically 50 / 100 / 150 mm),
+   position, orientation to the casting direction, wet / dry drilling, date.
+2. **Specimen preparation** --- measured diameter, lengths as drilled and prepared, end
+   preparation (ground / capped / sawn), length-to-diameter ratio (2:1 class 1.95--2.05, 1:1
+   class 0.90--1.10), estimated maximum aggregate size, mass, density, storage (sealed or
+   water), visible defects. A bar in or near the core axis rejects the core (redrill); a
+   transverse bar is recorded (diameter, position in mm) and assessed separately.
+3. **Testing** --- loading rate 0.6 +- 0.2 MPa/s, maximum load F, cross-section A_c,
+   f_c = F / A_c to 0.1 MPa with A_c from the mean diameter, failure type (unsatisfactory
+   patterns are recorded by the letter of the closest figure in EN 12390-3), test date, age at
+   test.
+4. **In-situ strength** (EN 13791:2019) --- f_c,is is the 2:1-core equivalent; 1:1 cores x core
+   length factor 0.82 (normal concrete). Diameter >= 75 mm, >= 50 mm only if impractical (then
+   1:1 and three cores per location). In Germany (A20, NA.7) a 1:1 core of 50--150 mm equals a
+   water-stored 150 mm cube, a 2:1 core of 75--150 mm a 150 x 300 mm cylinder.
+
+Consequences: the record carries both times --- `sampled_at` (when the *component* was in the
+sampled state; SOSA `phenomenonTime`) and `observed_at` (when the number was produced;
+`resultTime`) --- and context resolves at `sampled_at` (section 4.1). Hand-entered lab data
+fails most often by transcription, hence the server recomputing F / A and the l/d class. Coring
+is destructive; the record is the event and no snapshot is created (decision 1.5).
+
+**Data-model alignment.** The envelope follows the *shape* of W3C/OGC SOSA/SSN, not its RDF:
+the identity is the feature of interest, a core is a `sosa:Sample`, crushing it is an
+observation on the sample whose ultimate feature of interest is still the identity. Attribution
+follows W3C PROV-O (entity / activity / agent). UCUM for units, ORCID for persons, ROR for
+institutions make it machine-resolvable at no cost.
+
+### A.1 `rebound_hammer` (EN 12504-2:2021)
 
 ```jsonc
 {
@@ -1754,39 +2137,73 @@ All payload models: `extra = "forbid"`. Server recomputes and cross-checks marke
     "manufacturer": "...", "model": "...", "serial": "...",
     "impact_energy_nm": 2.207,
     "last_calibration_at": "2026-01-15",
-    "anvil_check": { "performed_at": "...", "value": 80, "expected": 80, "correction_factor": 1.0 } | null
+    "anvil_check": {                                     // 5 readings each, within +-3 of `expected` (12504-2, 7.1.2 / 7.3)
+      "expected": 80,
+      "before": { "performed_at": "...", "readings": [80, 81, 79, 80, 80] },
+      "after":  { "performed_at": "...", "readings": [80, 80, 79, 81, 80] } | null,
+      "second_anvil": { "expected": 62, "readings": [...] } | null,   // the softer anvil 12504-2:2021 recommends
+      "correction_factor": 1.0
+    } | null
   },
   "test_area": {
     "label": "TA-1",
     "surface_preparation": "ground" | "as_found",
     "surface_condition": "dry" | "damp" | "wet",
     "carbonation_depth_mm": null, "surface_temperature_c": 14.0,
-    "min_spacing_mm": 25, "min_edge_distance_mm": 25
+    "min_spacing_mm": 25, "min_edge_distance_mm": 25,
+    "grid": {                                          // optional, decision 8.43: the impact points
+      "origin": [x,y,z], "u": [1,0,0], "v": [0,1,0],    // first point and unit directions on the face (stored coordinates of position.snapshot_id)
+      "rows": 3, "cols": 3, "spacing_mm": 30
+    } | null,
+    "member_thickness_mm": 180,
+    "support": "fixed_in_structure" | "clamped" | "loose"   // < 100 mm or loose: only if firmly supported (12504-2, 6.1)
   },
   "impact_direction": "horizontal" | "vertically_down" | "vertically_up" | "inclined",
   "impact_angle_deg": null,
   "readings": [44, 42, 41, 45, 43, 42, 40, 44, 43],      // all, in order
   "reading_unit": "1" | "Q",
   "rejected_reading_indices": [],                          // flagged, never deleted
-  "outlier_policy": "en_12504_2" | "astm_c805" | "none",
+  "outlier_policy": "en_12504_2" | "none",
   "set_discarded": false,                                  // server: EN rule >20% deviate >25% from median
   "n_valid": 9,
   "median": 43,                                            // server-computed, whole number
-  "direction_correction_applied": false
+  "direction_correction_applied": false,
+  "deviations": null                                      // deviations from the standard (mandatory report item)
 }
 ```
 
-Validation: `len(readings) >= 9` when standard is EN 12504-2 (`>= 10` for ASTM); `median` and
+Validation: `len(readings) >= 9` (EN 12504-2); `median` and
 `set_discarded` recomputed server-side and must match; `reading_unit == "Q"` <=>
 `hammer_type in {Q_N, Q_L}`; `summary.quantity` = `rebound_number` or `q_value` accordingly;
-**never** a strength. Strength estimates go in `derived[]` with a named model.
+**never** a strength. Strength estimates go in `derived[]` with a named model. `anvil_check`
+readings outside +-3 of `expected` --> warning on the record. `support: loose` with
+`member_thickness_mm < 100` --> warning (the standard asks for a firm support). With a
+`grid`: `rows x cols == len(readings)`, `readings[i]` belongs to grid point i (row by row),
+`spacing_mm >= min_spacing_mm`, `u` and `v` orthogonal unit vectors, `position.kind: region`
+with `position.point` = the grid centre; the server derives the points, the client never sends
+them.
 
-### A.2 `core_compression` (EN 12504-1:2019, EN 12390-3:2019 / ASTM C42, C39)
+**Rebound-derived strength (`derived[]`, decision 8.41).** Two model kinds:
+
+- `din_en_13791_a20_na6` (R, N-type hammer) / `din_en_13791_a20_na7` (Q): quantity
+  `concrete_class`, the **class the user reads from the German annex table** for the median;
+  the model's `note` names the table row. The server keeps no table values (DIN copyright) and
+  checks only the conditions: hammer N or Q_N, `carbonation_depth_mm <= 5` (or
+  `surface_preparation: ground`), median present, no `set_discarded`. Fire / frost / chemical
+  attack are the user's declaration (`deviations` or a visual inspection).
+- `en_13791_correlation`: quantity `compressive_strength_in_situ`, the lower 5 % prediction bound
+  of a site correlation from >= 8 rebound / core pairs at the same locations, extrapolation
+  <= 4 MPa. A pair is a core whose `sampling.paired_rebound_id` names the rebound record taken at
+  its drill spot (decision 8.42). The correlation itself is made outside CSC in 0.6;
+  `model.reference` names it and the report is an attachment.
+
+### A.2 `core_compression` (EN 12504-1:2019, EN 12390-3:2019)
 
 ```jsonc
 {
   "sampling": {
     "cored_at": "...",                                      // --> envelope sampled_at
+    "paired_rebound_id": "uuid" | null,                    // decision 8.42: the rebound record taken at this drill spot
     "drill_diameter_mm": 100, "drilling_method": "wet" | "dry",
     "orientation_vs_casting": "perpendicular" | "parallel" | "unknown",
     "operator": { /* actor */ } | null,
@@ -1798,10 +2215,14 @@ Validation: `len(readings) >= 9` when standard is EN 12504-2 (`>= 10` for ASTM);
     "length_as_drilled_mm": 215.0, "length_prepared_mm": 199.2,
     "end_preparation": "ground" | "capped" | "sawn" | "none",
     "length_diameter_ratio": 2.0,                         // server-computed
-    "ld_class": "2:1" | "1:1" | "other",                  // server: 2:1 iff 1.95--2.05
+    "ld_class": "2:1" | "1:1" | "other",                  // server: 2:1 iff 1.95--2.05, 1:1 iff 0.90--1.10
     "mass_g": 3712.0, "density_kg_m3": 2382.0,
-    "moisture_condition": "as_received" | "water_saturated" | "air_dried",
-    "reinforcement_present": false, "reinforcement_note": null,
+    "max_aggregate_size_mm": 16,                          // estimated; d / Dmax < 3 biases the result
+    "storage": "sealed" | "water",                        // EN 12504-1: sealed container, or water >= 48 h at 20 +- 2 deg C
+    "reinforcement": [                                    // empty = none seen
+      { "orientation": "transverse" | "longitudinal", "diameter_mm": 10, "position_mm": 45 }
+    ],
+    "valid_for_strength": true,                           // server: false with a longitudinal bar (redrill)
     "defects_note": null
   },
   "test": {
@@ -1809,29 +2230,38 @@ Validation: `len(readings) >= 9` when standard is EN 12504-2 (`>= 10` for ASTM);
     "machine": { "manufacturer": "...", "model": "...", "serial": "...", "class": "EN 12390-4", "last_calibration_at": "..." },
     "loading_rate_mpa_s": 0.6,                            // warn outside 0.4--0.8
     "max_load_kn": 298.4, "cross_section_area_mm2": 7791.0,
-    "failure_type": "satisfactory" | "unsatisfactory", "failure_type_code": null,
+    "failure_type": "satisfactory" | "unsatisfactory",
+    "failure_type_code": null,                            // letter of the closest unsatisfactory pattern, EN 12390-3 Fig 2 / 4
     "age_at_test_days": 7
   },
   "result": {
     "fc_core_mpa": 38.3,                                  // server: F/A within 1 %
     "ld_correction_applied": false,
-    "fc_is_cyl_mpa": 38.3 | null, "fc_is_cube_mpa": null,
-    "conversion_basis": "EN 13791" | null
-  }
+    "fc_is_cyl_mpa": 38.3 | null,                         // server: 2:1 core = f_c,is; 1:1 core x 0.82 (normal concrete)
+    "fc_is_cube_mpa": null,                               // server: German NA.7 --- 1:1 core 50--150 mm = water-stored 150 mm cube
+    "conversion_basis": "EN 13791:2019 + DIN EN 13791/A20:2022-04" | null
+  },
+  "deviations": null                                      // deviations from the standard (mandatory report item)
 }
 ```
 
 `summary` = `{compressive_strength, fc_core_mpa, MPa, measured}`. In-situ conversions go in
-`derived[]`. `reinforcement_present: true` --> UI warning, not rejection. Context resolves at
-`sampled_at`.
+`derived[]`. A longitudinal bar makes the core invalid for strength: the record stays (the
+core was taken), `valid_for_strength: false`, and the fold skips it; a transverse bar is
+recorded and the result kept. `paired_rebound_id`: same identity, method `rebound_hammer`,
+its `observed_at` not after `cored_at`, not `set_discarded`; one core per rebound record.
+Diameter < 75 mm --> warning (EN 13791: only when larger cores are
+impractical, then 1:1 and three cores per location). Context resolves at `sampled_at`.
 
 ### A.3 Non-instrumental kinds
 
 ```jsonc
 // archival_document
-{ "document": { "title": "...", "date": "1968-03", "kind": "drawing" | "spec" | "report" | "photo" | "other", "reference": "..." },
-  "claim": { "text": "B225", "interpretation": "..." } }
+{ "document": { "title": "...", "date": "1968-03", "kind": "drawing" | "spec" | "report" | "photo" | "ce_marking" | "ue_mark" | "type_plate" | "declaration_of_performance" | "other", "reference": "...",
+                "url": "https://..." | null, "retrieved_at": "2026-10-05" | null },   // 8.106: http(s) only; the date the link was read
+  "claim": { "text": "B225", "interpretation": "..." } | null }
 // summary: {concrete_class, range: ["B225"], claimed}  or  {compressive_strength, range:[18,28], MPa, claimed}
+//          or none (8.106): a **document** --- documents the piece, never enters the fold; the only method whose summary is optional
 
 // visual_inspection
 { "observations": [ { "quantity": "spalling", "value": 1, "note": "..." } ] }   // value = severity 0--3 for findings, grade 0--3 (3 good) for condition_grade (section 2.6)
@@ -1851,9 +2281,16 @@ Validation: `len(readings) >= 9` when standard is EN 12504-2 (`>= 10` for ASTM);
 ```jsonc
 {
   "basis": "drawing" | "scan" | "exposed",            // --> source tier: archival | ndt | visual
-  "document": { "title": "...", "date": "1974-05", "reference": "..." } | null,   // for basis == drawing; the drawing itself is an attachment (7.3)
+  "document": { "title": "...", "date": "1974-05", "reference": "...", "url": null, "retrieved_at": null } | null,   // for basis == drawing; url / retrieved_at as A.3 (8.106); the drawing itself is an attachment (7.3)
+  "instrument": {                                     // basis == scan (prEN 12504-5, 7.2)
+    "kind": "covermeter" | "radar" | "other", "manufacturer": "...", "model": "...",
+    "last_calibration_at": "...", "site_calibration": "..." | null
+  } | null,
+  "accuracy_note": null,                               // e.g. "size and cover +-20 %, neither known"
   "bars": [
     { "spec": "BSt III", "diameter_mm": 8,
+      "diameter_known": true,                          // scan: known from a drawing / exposure, or assumed
+      "cover_mm": null,                                // scan: measured cover
       "points": [[x,y,z], ...] }                        // open centreline polyline, in the stored coordinates of position.snapshot_id
   ]
 }
@@ -1908,7 +2345,7 @@ beam's prism has z along the beam, its `frame` has x along the beam.
   <https://cirpass2.eu/>, <https://cobuilder.com/en/digital-product-passport-dpp/eu-funded-project-digital-product-passports/>.
 - Directive (EU) 2024/1275 (EPBD recast) --- renovation passports (Annex VIII), digital building
   logbooks, whole-life carbon --- <https://eur-lex.europa.eu/eli/dir/2024/1275/oj/eng>.
-- EN 15804:2012+A2:2019 --- core rules for EPDs of construction products; its 13+6 indicators are
+- EN 15804:2012+A2:2019 + AC:2021 (DIN EN 15804:2022-03) --- core rules for EPDs of construction products; its 13+6 indicators are
   CPR Annex II. Level(s) framework (EC JRC), indicators 1.2, 2.1, 2.4.
 - Regulation (EU) 2023/1542 (batteries) --- the first mandatory DPP (Feb 2027), reference
   implementation only.
@@ -1920,9 +2357,48 @@ beam's prism has z along the beam, its `frame` has x along the beam.
 - Commission Decision 2000/532/EC (List of Waste) as amended by Decision 2014/955/EU, chapter 17;
   verified 2026-09-28 against its verbatim German transposition, Abfallverzeichnis-Verordnung
   (AVV), Anlage --- <https://www.gesetze-im-internet.de/avv/anlage.html>.
-- EN 12504-2:2021, EN 12504-1:2019, EN 12390-3:2019, EN 13791; ASTM C805, C42/C42M, C39/C39M ---
-  see `MEASUREMENTS_SPEC.md` section 3 and its source list.
-- W3C/OGC SOSA/SSN (`sosa:Observation`, `sosa:Sampling`, `phenomenonTime` / `resultTime`) and
-  W3C PROV-O --- the shape of the evidence envelope (section 3.3).
-- DIN SPEC 91484:2023-09 --- recording of reusable building products (pre-demolition audit); to be
-  cross-checked against section 3.1 and section 10.3 once obtained.
+- EN 12504-2:2021, *Testing concrete in structures --- Part 2: Non-destructive testing ---
+  Determination of rebound number* ---
+  <https://standards.iteh.ai/catalog/standards/cen/70c293c6-822f-42bc-8438-3f555fd5709f/en-12504-2-2021>;
+  BS EN 12504-2 text (PDF) ---
+  <https://eclass.duth.gr/modules/document/file.php/TMB300/BS%20EN%2012504-2%20rebound%20number.pdf>.
+  US equivalent ASTM C805.
+- EN 12504-1:2019 + AC:2020 (DIN EN 12504-1:2021-02), *Cored specimens --- taking, examining and testing in compression* ---
+  <https://standards.iteh.ai/catalog/standards/cen/15314b4e-ac55-43b3-8f57-602c7b877f16/en-12504-1-2019>;
+  OENORM EN 12504-1:2019 preview (PDF) ---
+  <https://webstore.ansi.org/preview-pages/ON/preview_ONORM+EN+12504-1_2019.pdf>.
+  US equivalent ASTM C42/C42M.
+- EN 12390-3:2019, *Compressive strength of test specimens* ---
+  <https://standards.iteh.ai/catalog/standards/cen/7eb738ef-44af-436c-ab8e-e6561571302c/en-12390-3-2019>;
+  machine per EN 12390-4. US equivalent ASTM C39/C39M.
+- EN 13791:2019 (DIN EN 13791:2020-02) with the German national annex DIN EN 13791/A20:2022-04, *Assessment of in-situ compressive strength in structures and precast concrete
+  components*; BRMCA draft guide to EN 13791 clause 9, assessment using comparative testing (PDF) ---
+  <https://brmca.org.uk/documents/01_DRAFT_BRMCA_GUIDE_EN_13791_Clause_9_Assessment_using_comparative_testing_v200123.pdf>.
+- W3C/OGC Semantic Sensor Network Ontology (SSN/SOSA: `sosa:Observation`, `sosa:Sampling`,
+  `phenomenonTime` / `resultTime`) --- <https://www.w3.org/TR/vocab-ssn/>; K. Janowicz et al.,
+  *SOSA: A lightweight ontology for sensors, observations, samples, and actuators* (PDF) ---
+  <https://www.maxime-lefrancois.info/docs/Janowicz-JWS-SOSA.pdf>. With W3C PROV-O, the shape of
+  the evidence envelope (section 3.3, A.0).
+- DGNB, *Building Resource Passport* v1.3 (June 2026): accompanying manual, Excel template and
+  examples (`reference/pdf/dgnb-building-resource-passport-*`) --- detachability, material
+  separability and material recovery classes (section 2.11).
+- DIN SPEC 91484:2023-09 --- recording of reusable building products (pre-demolition audit,
+  two-stage preliminary / detailed inspection) ---
+  <https://www.dinmedia.de/en/technical-rule/din-spec-91484/371235753>; overview by the
+  Bayerische Ingenieurekammer ---
+  <https://www.bayika.de/de/aktuelles/meldungen/2023-08-18_DIN-SPEC-91484-Neuer-Standard-zur-erneuten-Verwendung-von-Bauprodukten.php>.
+  Cross-checked 2026-10-02 (`SOURCE_CHECK_2026-10-02.md`): its stage 1 / 2 data fields CSC lacks
+  are open topic O16. Free download (DIN Media account).
+- Also referenced, not separately sourced: IFC 4.3.2 (ISO 16739-1, buildingSMART) element class
+  names (section 2.1); UCUM unit codes (section 2.6); ISO 8601 timestamps; ORCID and ROR
+  identifiers (section 3.3.1); ISO/IEC 17025 lab accreditation (section 3.3.1); ISO/IEC 15459
+  identifiers (section 10.2); Regulation (EU) 2016/679 (GDPR) Arts 6, 17 (sections 3.1.4, 3.3.1,
+  10.4); EN 771-4 (AAC units, section 2.10); EN 15978, ISO 22057 (section 10.6); future evidence
+  methods EN 12504-4, EN 14630, BS 1881-204, ASTM C876, EN 1542 (section 2.5).
+- Source check 2026-10-02 against the full texts in `reference/pdf/` (untracked): CPR, ESPR,
+  WFD (2008 text), EPBD, EN 12504-1/-2, prEN 12504-5:2023 (covermeters, draft), EN 12390-3,
+  EN 13791 + A20, EN 15804, EN 18219/18220/18221/18222:2026, ISO/IEC 15459-1..6, DIN SPEC 91484.
+  Findings and corrections: `docs/adr/SOURCE_CHECK_2026-10-02.md`. Implementing Decision (EU)
+  2026/1736 of 14 July 2026 (OJ 15.7.2026, in force that day) read in full: it cites EN 18216, 18219, 18220,
+  18221, 18222, 18223 (presumption of conformity with ESPR Arts 10--11); EN 18239 and EN 18246
+  not yet cited.

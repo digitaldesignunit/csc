@@ -3,8 +3,9 @@
 Descriptor specifications.
 
 One `DescriptorSpec` per descriptor family. Add or change descriptors here;
-the cron runner (`main_descriptors_simple.py`) discovers them automatically
-via `ALL_SPECS`.
+stage 4 of the geometry runner (`main_geometry.py`) discovers the expensive
+ones automatically via `ALL_SPECS`. The four hull scores are written by
+stage 1 with the frame (decision 8.7) and are not in `ALL_SPECS`.
 
 Each spec owns:
     - `output_keys`: which ``descriptors.*`` fields it writes;
@@ -25,7 +26,9 @@ from apps.descriptors.boxscore import compute_boxscore_with_metadata
 from apps.descriptors.spherescore import compute_spherescore_with_metadata
 from apps.descriptors.linescore import compute_linescore_with_metadata
 from apps.descriptors.planescore import compute_planescore_with_metadata
+from apps.catalog.geometry_source import load_source
 from apps.descriptors import radial_signature as rs
+from apps.descriptors.hks import compute_hks
 from apps.descriptors.outline import (
     DEFAULT_CONCAVITY,
     outline_from_component,
@@ -166,18 +169,47 @@ RADIAL_SIGNATURE = DescriptorSpec(
 )
 
 
+# HEAT KERNEL SIGNATURE (decision 8.6) ---------------------------------------
+
+def _hks(ctx: DescriptorContext) -> Dict[str, Any]:
+    source = ctx.source
+    if source is None:
+        source = load_source(ctx.component, ctx.meshes_dir,
+                             ctx.point_clouds_dir)
+    values = compute_hks(source)
+    ctx.log(f'hks: {len(values)} values from {source.kind} '
+            f'({source.resolution})')
+    return {'hks': values}
+
+
+HKS = DescriptorSpec(
+    name='hks',
+    output_keys=('hks',),
+    compute=_hks,
+    params={},
+    applicability_filter=None,
+    requires_mesh=False,
+)
+
+
 # REGISTRY -------------------------------------------------------------------
 
 ALL_SPECS: List[DescriptorSpec] = [
-    BOXSCORE,
-    SPHERESCORE,
-    LINESCORE,
-    PLANESCORE,
     RADIAL_SIGNATURE,
+    HKS,
 ]
 """
-All descriptor specifications known to the runner.
+The expensive descriptors of runner stage 4.
 
 Order is not significant for correctness (each spec is computed
 independently), but the runner logs specs in registry order.
 """
+
+HULL_SCORE_SPECS: List[DescriptorSpec] = [
+    BOXSCORE,
+    SPHERESCORE,
+    LINESCORE,
+    PLANESCORE,
+]
+"""The scores stage 1 writes with the frame; kept as specs so tests can
+run them on a mesh."""

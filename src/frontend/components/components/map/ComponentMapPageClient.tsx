@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Loader2, Map as MapIcon, RotateCcw } from 'lucide-react'
+import { Loader2, RotateCcw } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import InPlaceBadge from '@/components/components/InPlaceBadge'
+import Help from '@/components/ui/help'
 import {
   Select,
   SelectContent,
@@ -34,7 +35,10 @@ import type {
   ComponentMapResponse,
 } from '@/generated/catalogExtras'
 import type { CatalogComponent } from '@/generated/CatalogModels'
-import { cn } from '@/lib/utils'
+import { cn, formatDay } from '@/lib/utils'
+import { COLOR_BY_OPTIONS, colorMap, legendOf, type ColorBy } from '@/lib/mapColors'
+import { useMaterials } from '@/lib/lineage'
+import { ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/generated/Vocab'
 
 const PAD_DESKTOP = 28
 const PAD_MOBILE = 16
@@ -48,7 +52,7 @@ const MAX_ZOOM = 12
 const TRANSITION_MS = 700
 const ENTER_STAGGER_MS = 12
 const CANVAS_HEIGHT_CLASS =
-  'h-[min(42dvh,320px)] md:h-full md:min-h-0 md:flex-1'
+  'h-[min(58dvh,520px)] md:h-full md:min-h-0 md:flex-1'
 
 type ViewBox = { minX: number; minY: number; width: number; height: number }
 type Camera = { x: number; y: number; k: number }
@@ -132,11 +136,14 @@ function ComponentMapCanvas({
   points,
   method,
   transitioning,
+  colors,
   onSelect,
 }: {
   points: ComponentMapPoint[]
   method: string
   transitioning: boolean
+  /** The colour of each point id (colour by, decision 8.118 C-2). */
+  colors: Map<string, string>
   onSelect: (point: ComponentMapPoint) => void
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -148,6 +155,7 @@ function ComponentMapCanvas({
   const padRef = useRef(PAD_DESKTOP)
   const hitRRef = useRef(DOT_HIT_R)
   const onSelectRef = useRef(onSelect)
+  const colorsRef = useRef(colors)
   const drawRef = useRef<() => void>(() => {})
 
   const [size, setSize] = useState({ width: 0, height: 0 })
@@ -191,6 +199,7 @@ function ComponentMapCanvas({
   padRef.current = pad
   hitRRef.current = hitR
   onSelectRef.current = onSelect
+  colorsRef.current = colors
 
   const project = useCallback((x: number, y: number, cam: Camera = cameraRef.current) => {
     const { width, height } = sizeRef.current
@@ -265,7 +274,7 @@ function ComponentMapCanvas({
       ctx.globalAlpha = alpha
       ctx.beginPath()
       ctx.arc(cx, cy, active ? DOT_R + 2 : DOT_R, 0, Math.PI * 2)
-      ctx.fillStyle = rgbFromPoint(p.meta) || primary
+      ctx.fillStyle = colorsRef.current.get(p.id) || rgbFromPoint(p.meta) || primary
       ctx.fill()
       ctx.strokeStyle = background
       ctx.lineWidth = POINT_STROKE_INNER
@@ -414,7 +423,7 @@ function ComponentMapCanvas({
 
   useEffect(() => {
     drawRef.current()
-  }, [camera, size, hoverId, view, pad])
+  }, [camera, size, hoverId, view, pad, colors])
 
   useEffect(() => {
     const root = document.documentElement
@@ -591,7 +600,7 @@ function ComponentMapCanvas({
   return (
     <div
       ref={containerRef}
-      className={cn('relative w-full overflow-hidden rounded-md border bg-muted/20', CANVAS_HEIGHT_CLASS)}
+      className={cn('relative w-full overflow-hidden border-y bg-muted/20 md:rounded-md md:border', CANVAS_HEIGHT_CLASS)}
     >
       {size.width > 0 && size.height > 0 && (
         <canvas
@@ -623,9 +632,12 @@ function ComponentMapCanvas({
 
       {hoverPoint && (
         <div className="pointer-events-none absolute left-2 top-2 z-10 max-w-[calc(100%-1rem)] rounded-md border bg-background/95 px-2 py-1.5 text-xs shadow-sm sm:left-3 sm:top-3 sm:max-w-xs">
-          <div className="truncate font-medium">{hoverPoint.name || hoverPoint.id}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="min-w-0 truncate font-medium">{hoverPoint.name || hoverPoint.id}</span>
+            {hoverPoint.in_place && <InPlaceBadge />}
+          </div>
           <div className="truncate text-muted-foreground">
-            {[hoverPoint.type, hoverPoint.catalog_number != null ? `#${hoverPoint.catalog_number}` : null]
+            {[vocabLabel(ORIGINAL_FUNCTION_LABELS, hoverPoint.original_function), hoverPoint.catalog_number != null ? `#${hoverPoint.catalog_number}` : null]
               .filter(Boolean)
               .join(' · ')}
           </div>
@@ -660,6 +672,8 @@ export default function ComponentMapPageClient() {
   const router = useRouter()
   const [basis, setBasis] = useState<ComponentMapBasis>('radial_signature')
   const [method, setMethod] = useState<ComponentMapMethod>('umap')
+  const [colorBy, setColorBy] = useState<ColorBy>('shape_class')
+  const materials = useMaterials(true)
   const [data, setData] = useState<ComponentMapResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -688,8 +702,6 @@ export default function ComponentMapPageClient() {
         basis,
         method,
         source: 'cache',
-        consumed_filter: 'active',
-        validated: '1',
       })
 
       try {
@@ -757,15 +769,29 @@ export default function ComponentMapPageClient() {
     [router],
   )
 
-  const coverage = data
-    ? `Displaying ${data.displayed}/${data.total} components with ${data.basis_label}`
-    : null
+  const materialLabel = useCallback(
+    (id: string) => materials.find((m) => m._id === id)?.label ?? id,
+    [materials],
+  )
+  const points = useMemo(() => data?.points ?? [], [data])
+  const legend = useMemo(() => legendOf(points, colorBy, { material: materialLabel }), [points, colorBy, materialLabel])
+  const colors = useMemo(() => colorMap(points, colorBy), [points, colorBy])
 
+  const count = data ? data.displayed : 0
+  const countText = data ? `${count} ${count === 1 ? 'component' : 'components'}` : ''
+  const coverage = data
+    ? `Displaying ${data.displayed} of ${data.total} components that have ${data.basis_label.toLowerCase()}.`
+    : ''
   const cacheNote = data?.computed_at
-    ? `Cached ${new Date(data.computed_at).toLocaleString()}`
+    ? `Layout cached ${formatDay(data.computed_at)}.`
     : data?.source === 'live'
-      ? 'Live compute'
-      : null
+      ? 'Layout computed live.'
+      : ''
+  const mapHelp = [
+    'The map arranges components by how similar their shape descriptors are: points close together look alike.',
+    coverage,
+    cacheNote,
+  ].filter(Boolean).join(' ')
 
   const previewName =
     (previewPoint?.name && String(previewPoint.name).trim()) ||
@@ -774,94 +800,93 @@ export default function ComponentMapPageClient() {
   const previewId = previewPoint?.id || ''
 
   return (
-    <div className="mx-auto flex max-w-full flex-col overflow-x-hidden p-3 md:h-[calc(100dvh-6.5rem)] md:min-h-0 md:p-4">
-      <div className="mb-2 flex shrink-0 items-center gap-2">
-        <MapIcon className="h-5 w-5 shrink-0 text-primary" />
-        <h1 className="text-lg font-bold sm:text-xl">Component Map</h1>
-        <p className="hidden min-w-0 truncate text-sm text-muted-foreground md:block">
-          Arranged by descriptor similarity
-        </p>
+    <div className="flex w-full max-w-full flex-col gap-2 overflow-x-hidden md:h-[calc(100dvh-3.5rem)] md:min-h-0 md:p-3">
+      <div className="flex flex-col gap-2 px-3 pt-3 md:flex-row md:flex-wrap md:items-center md:gap-x-3 md:px-0 md:pt-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <ToggleGroup
+            type="single"
+            value={method}
+            onValueChange={(value) => {
+              if (value === 'umap' || value === 'pca') setMethod(value)
+            }}
+            variant="outline"
+            size="sm"
+            aria-label="Layout"
+          >
+            <ToggleGroupItem value="umap" aria-label="UMAP layout">UMAP</ToggleGroupItem>
+            <ToggleGroupItem value="pca" aria-label="PCA layout">PCA</ToggleGroupItem>
+          </ToggleGroup>
+          <Select value={basis} onValueChange={(value) => setBasis(value as ComponentMapBasis)}>
+            <SelectTrigger className="h-8 w-[170px]" aria-label="Descriptor">
+              <SelectValue placeholder="Descriptor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="radial_signature">Radial signature</SelectItem>
+              <SelectItem value="scalars">Scalar descriptors</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={colorBy} onValueChange={(value) => setColorBy(value as ColorBy)}>
+            <SelectTrigger className="h-8 w-[170px]" aria-label="Colour by">
+              <SelectValue placeholder="Colour by" />
+            </SelectTrigger>
+            <SelectContent>
+              {COLOR_BY_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>Colour: {o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex min-w-0 items-center gap-1 text-sm text-muted-foreground md:ml-auto">
+          {(loading || switching) ? (
+            <span className="inline-flex items-center gap-1 text-xs">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {switching ? 'Switching layout...' : 'Loading map...'}
+            </span>
+          ) : (
+            <>
+              <span className={cn(error && 'text-amber-700 dark:text-amber-300')}>
+                {error ?? countText}
+              </span>
+              {data && <Help label="About this map" text={mapHelp} />}
+            </>
+          )}
+        </div>
       </div>
 
-      <Card className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden py-0">
-        <CardHeader className="flex flex-col gap-2 space-y-0 px-3 py-2.5 sm:px-4 md:flex-row md:flex-wrap md:items-center md:gap-x-4 md:gap-y-1.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <CardTitle className="text-sm sm:text-base">Layout</CardTitle>
-            <ToggleGroup
-              type="single"
-              value={method}
-              onValueChange={(value) => {
-                if (value === 'umap' || value === 'pca') setMethod(value)
-              }}
-              variant="outline"
-              size="sm"
-              className="w-full justify-start sm:w-auto"
-            >
-              <ToggleGroupItem value="umap" aria-label="UMAP layout" className="flex-1 sm:flex-none">
-                UMAP
-              </ToggleGroupItem>
-              <ToggleGroupItem value="pca" aria-label="PCA layout" className="flex-1 sm:flex-none">
-                PCA
-              </ToggleGroupItem>
-            </ToggleGroup>
-            <Select
-              value={basis}
-              onValueChange={(value) => setBasis(value as ComponentMapBasis)}
-            >
-              <SelectTrigger className="h-8 w-full sm:w-[200px]">
-                <SelectValue placeholder="Feature basis" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="radial_signature">Radial signature</SelectItem>
-                <SelectItem value="scalars">Scalar descriptors</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="min-w-0 flex-1 md:text-right">
-            {(loading || switching) ? (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {switching ? 'Switching layout...' : 'Loading map...'}
-              </span>
-            ) : (
-              <CardDescription
-                className={cn(
-                  'text-xs',
-                  error && 'text-amber-700 dark:text-amber-300',
-                )}
-              >
-                {error
-                  ? `${coverage ? `${coverage}. ` : ''}${error}`
-                  : [coverage, cacheNote].filter(Boolean).join(' · ') ||
-                    'Loading coverage...'}
-              </CardDescription>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-0 sm:px-4 sm:pb-4">
-          {data && data.points.length > 0 ? (
-            <ComponentMapCanvas
-              points={data.points}
-              method={data.method}
-              transitioning={switching}
-              onSelect={openPreview}
-            />
-          ) : (
-            <div
-              className={cn(
-                'flex items-center justify-center rounded-md border border-dashed px-3 text-center text-sm text-muted-foreground',
-                CANVAS_HEIGHT_CLASS,
-              )}
-            >
-              {loading
-                ? 'Loading map...'
-                : data
-                  ? coverage
-                  : error || 'No points to display'}
-            </div>
+      {legend.length > 0 && (
+        <ul className="flex max-h-16 flex-wrap gap-x-3 gap-y-1 overflow-y-auto px-3 text-xs md:px-0" aria-label="Legend">
+          {legend.map((entry) => (
+            <li key={entry.key} className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ backgroundColor: entry.color }} aria-hidden />
+              <span>{entry.label}</span>
+              <span className="text-muted-foreground">{entry.count}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {data && data.points.length > 0 ? (
+        <ComponentMapCanvas
+          points={data.points}
+          method={data.method}
+          transitioning={switching}
+          colors={colors}
+          onSelect={openPreview}
+        />
+      ) : (
+        <div
+          className={cn(
+            'mx-3 flex items-center justify-center rounded-md border border-dashed px-3 text-center text-sm text-muted-foreground md:mx-0',
+            CANVAS_HEIGHT_CLASS,
           )}
-        </CardContent>
-      </Card>
+        >
+          {loading
+            ? 'Loading map...'
+            : data
+              ? coverage
+              : error || 'No points to display'}
+        </div>
+      )}
 
       <Sheet
         open={previewOpen}
@@ -876,7 +901,7 @@ export default function ComponentMapPageClient() {
       >
         <SheetContent side="bottom" className="sm:max-w-none">
           <SheetHeader>
-            <SheetTitle className="text-center text-base">Component Preview</SheetTitle>
+            <SheetTitle className="text-center text-base">Preview</SheetTitle>
             <SheetDescription>
               <span className="block text-center text-sm font-semibold">{previewName}</span>
               <span className="block text-center text-xs font-bold">{previewId}</span>
@@ -894,20 +919,20 @@ export default function ComponentMapPageClient() {
               className="w-full sm:w-[200px]"
             >
               <Button variant="outline" className="h-8 w-full">
-                Open Detail Page
+                Open the component
               </Button>
             </Link>
             <Link
-              href={`/locate-by-id?reference_id=${encodeURIComponent(previewId)}`}
+              href={`/scan?mode=locate&reference_id=${encodeURIComponent(previewId)}`}
               className="w-full sm:w-[200px]"
             >
               <Button variant="outline" className="h-8 w-full">
-                Locate by ID
+                Locate
               </Button>
             </Link>
             <SheetClose asChild className="w-full sm:w-[200px]">
               <Button variant="outline" className="h-8 w-full">
-                Close Preview
+                Close
               </Button>
             </SheetClose>
           </SheetFooter>

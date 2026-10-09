@@ -20,16 +20,16 @@ def test_provenance_graph_links_parent_child_and_snapshot_versions():
             parent_id: {
                 '_id': parent_id,
                 'catalog_number': 1,
-                'type': 'beam',
-                'consumed_at': '2026-01-01T00:00:00Z',
+                'original_function': 'IfcBeam',
+                'exit': {'kind': 'split', 'at': '2026-01-01T00:00:00Z'},
                 'current_snapshot_id': snap_b,
                 'parent_identities': None,
             },
             child_id: {
                 '_id': child_id,
                 'catalog_number': 2,
-                'type': 'beam',
-                'consumed_at': None,
+                'original_function': 'IfcBeam',
+                'exit': None,
                 'current_snapshot_id': child_snap,
                 'parent_identities': [parent_id],
             },
@@ -40,16 +40,16 @@ def test_provenance_graph_links_parent_child_and_snapshot_versions():
                     '_id': snap_b,
                     'identity_id': parent_id,
                     'version': 1,
-                    'virtual': False,
-                    'validated': True,
+                    'status': 'published',
+                    'superseded_by': None,
                     'name': 'Parent v1',
                 },
                 {
                     '_id': snap_a,
                     'identity_id': parent_id,
                     'version': 0,
-                    'virtual': False,
-                    'validated': True,
+                    'status': 'published',
+                    'superseded_by': None,
                     'name': 'Parent v0',
                 },
             ],
@@ -58,8 +58,8 @@ def test_provenance_graph_links_parent_child_and_snapshot_versions():
                     '_id': child_snap,
                     'identity_id': child_id,
                     'version': 0,
-                    'virtual': False,
-                    'validated': True,
+                    'status': 'published',
+                    'superseded_by': None,
                     'name': 'Child v0',
                 },
             ],
@@ -77,7 +77,10 @@ def test_provenance_graph_links_parent_child_and_snapshot_versions():
         node for node in graph['nodes'] if node['id'] == identity_node_id(parent_id)
     )
     assert parent_node['is_root'] is True
-    assert parent_node['consumed_at'] == '2026-01-01T00:00:00Z'
+    assert parent_node['exit_kind'] == 'split'
+    assert parent_node['original_function'] == 'IfcBeam'
+    snap_node = next(n for n in graph['nodes'] if n['id'] == snapshot_node_id(snap_a))
+    assert (snap_node['status'], snap_node['superseded']) == ('published', False)
     assert parent_node['name'] == 'Parent v1'
 
     kinds = {(edge['kind'], edge['source'], edge['target']) for edge in graph['edges']}

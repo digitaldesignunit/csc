@@ -1,41 +1,28 @@
 'use client'
 
 import React, { useState, useRef } from 'react'
-import { Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
-import { Button } from '@/components/ui/button'
-import { CardContent, CardHeader } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
-import { QrCode } from 'lucide-react'
-import QRScanner, { QRScannerRef } from '@/components/qr/QRScanner'
+import { Search } from 'lucide-react'
+
+import ScanCamera from '@/components/qr/ScanCamera'
+import { type QRScannerRef } from '@/components/qr/QRScanner'
+import UnknownTagLink from '@/components/snapshot/UnknownTagLink'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { uuidFromScan } from '@/lib/scanIds'
 
 type ScanStatus = 'neutral' | 'scanning' | 'found' | 'not_found' | 'error'
 
+/** Scan mode "Identify": the tag of a physical piece opens its digital twin. */
 const ComponentIdentifier: React.FC = () => {
   const router = useRouter()
-  const config = {
-    aspectRatio: 1,
-    fps: 10,
-    qrbox: { width: 300, height: 300 },
-    rememberLastUsedCamera: true,
-    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-  }
-
   const [scannedID, setScannedID] = useState('')
+  const [typed, setTyped] = useState('')
   const [isScanning, setIsScanning] = useState(false)
   const [status, setStatus] = useState<ScanStatus>('neutral')
   const [isChecking, setIsChecking] = useState(false)
 
   const qrScannerRef = useRef<QRScannerRef | null>(null)
-  const elementId = 'identifier-reader'
-  const cameraContainerId = 'identifier-cameracontainer'
-
-  const MSG_CAMERA_FEED = 'Camera Feed Placeholder.\n\nScan a QR code to identify a component.'
-  const MSG_SCANNING = 'Scanning for QR code...'
-  const MSG_FOUND = 'Component found! Opening...'
-  const MSG_NOT_FOUND = 'Component not found in database.'
-  const MSG_ERROR = 'Error occurred while checking component.'
 
   const checkComponentExists = async (identityId: string): Promise<boolean> => {
     try {
@@ -50,19 +37,23 @@ const ComponentIdentifier: React.FC = () => {
     }
   }
 
-  const handleScannedCode = async (decodedText: string) => {
+  const stopScanning = () => {
+    if (qrScannerRef.current) {
+      void qrScannerRef.current.stopScanning()
+      setIsScanning(false)
+    }
+  }
+
+  const handleScannedCode = async (scanned: string) => {
+    const decodedText = uuidFromScan(scanned) ?? scanned.trim()
+    if (!decodedText) return
     setScannedID(decodedText)
     setIsChecking(true)
     setStatus('scanning')
-    
     try {
-      const exists = await checkComponentExists(decodedText)
-      if (exists) {
+      if (await checkComponentExists(decodedText)) {
         setStatus('found')
-        // Navigate to component page after a brief delay to show success message
-        setTimeout(() => {
-          router.push(`/components/${decodedText}`)
-        }, 1000)
+        router.push(`/components/${decodedText}`)
       } else {
         setStatus('not_found')
       }
@@ -76,116 +67,74 @@ const ComponentIdentifier: React.FC = () => {
   }
 
   const startScanning = () => {
-    document.getElementById(elementId)?.scrollIntoView()
     if (!isScanning && qrScannerRef.current) {
       setIsScanning(true)
       setStatus('scanning')
-      qrScannerRef.current.startScanning()
+      void qrScannerRef.current.startScanning()
     }
   }
 
-  const stopScanning = () => {
-    if (qrScannerRef.current) {
-      qrScannerRef.current.stopScanning()
-      setIsScanning(false)
-    }
-  }
-
-  const resetScanner = () => {
-    if (isScanning) stopScanning()
-    setScannedID('')
-    setStatus('neutral')
-    setIsChecking(false)
-  }
-
-  // theme-friendly classes
   const borderClass =
     status === 'found'
       ? 'border-green-500'
       : status === 'not_found' || status === 'error'
-      ? 'border-destructive'
-      : status === 'scanning'
-      ? 'border-blue-500'
-      : 'border-border'
+        ? 'border-destructive'
+        : status === 'scanning'
+          ? 'border-blue-500'
+          : 'border-border'
 
-  const statusBadgeClass =
-    status === 'found'
-      ? 'bg-green-500 text-white'
-      : status === 'not_found' || status === 'error'
-      ? 'bg-destructive text-destructive-foreground'
-      : status === 'scanning'
-      ? 'bg-blue-500 text-white'
-      : 'bg-muted text-muted-foreground'
-
-  const getStatusMessage = () => {
-    if (isChecking) return 'Checking component...'
-    switch (status) {
-      case 'scanning': return MSG_SCANNING
-      case 'found': return MSG_FOUND
-      case 'not_found': return MSG_NOT_FOUND
-      case 'error': return MSG_ERROR
-      default: return MSG_CAMERA_FEED
-    }
-  }
+  const message = isChecking
+    ? 'Checking...'
+    : status === 'found'
+      ? 'Found. Opening...'
+      : 'Tap to start the camera and scan a tag.'
 
   return (
-    <div className="flex flex-col items-center">
-      {scannedID ? (
-        <CardHeader className="relative w-full max-w-sm p-1 pb-3">
-          <div className="grid w-full grid-cols-2 items-center gap-y-3">
-            <span className="text-sm font-medium text-foreground">Component ID:</span>
-            <div className="flex justify-end items-center">
-              <Badge variant="secondary" className={`flex-shrink-0 ${statusBadgeClass}`}>
-                {scannedID}
-              </Badge>
-            </div>
-          </div>
-        </CardHeader>
-      ) : null}
+    <div className="flex flex-col items-center gap-3">
+      <ScanCamera
+        scannerRef={qrScannerRef}
+        elementId="identifier-reader"
+        onScanSuccess={handleScannedCode}
+        onScanError={() => {
+          setStatus('error')
+          setIsScanning(false)
+        }}
+        isScanning={isScanning}
+        onStart={startScanning}
+        onStop={stopScanning}
+        borderClass={borderClass}
+        message={message}
+        disabled={isChecking}
+      />
 
-      {/* QR Code Scanner Canvas */}
-      <CardContent
-        id={cameraContainerId}
-        className={`mt-4 p-0 relative w-full max-w-[500px] h-[500px] border-8 rounded-xl ${borderClass} bg-card`}
+      <form
+        className="flex w-full max-w-[420px] gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void handleScannedCode(typed)
+        }}
       >
-        <QRScanner
-          ref={qrScannerRef}
-          elementId={elementId}
-          onScanSuccess={handleScannedCode}
-          config={config}
+        <Input
+          aria-label="Paste an id or a link"
+          placeholder="or paste an id or a link"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
         />
-        {!isScanning && (
-          <div className="absolute inset-0 bg-muted/60 flex items-center justify-center text-center rounded">
-            <span className="whitespace-pre-wrap text-sm text-muted-foreground">
-              {getStatusMessage()}
-            </span>
-          </div>
-        )}
-      </CardContent>
+        <Button type="submit" variant="outline" disabled={!typed.trim() || isChecking} className="gap-1.5">
+          <Search className="h-4 w-4" aria-hidden />
+          Open
+        </Button>
+      </form>
 
-      <div className="m-4 flex flex-col items-center space-y-3">
-        {!isScanning && status !== 'found' && (
-          <Button 
-            onClick={startScanning} 
-            variant="outline" 
-            className="w-[200px] flex items-center gap-2"
-            disabled={isChecking}
-          >
-            <QrCode className="h-4 w-4" />
-            Start QR Code Scan
-          </Button>
-        )}
-        {isScanning && (
-          <Button onClick={stopScanning} variant="outline" className="w-[200px]">
-            Stop Scanning
-          </Button>
-        )}
-        {!isScanning && status !== 'found' && (
-          <Button onClick={resetScanner} variant="destructive" className="w-[200px]">
-            Reset
-          </Button>
-        )}
-      </div>
+      {status === 'not_found' && (
+        <div className="w-full max-w-[420px] text-center text-sm">
+          <p className="text-destructive">No component with this id.</p>
+          <UnknownTagLink id={scannedID} className="mt-1 text-xs text-muted-foreground" />
+        </div>
+      )}
+      {status === 'error' && (
+        <p className="text-sm text-destructive">The camera or the lookup failed. Try again or paste the id.</p>
+      )}
     </div>
   )
 }

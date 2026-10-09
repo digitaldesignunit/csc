@@ -30,7 +30,7 @@ def _ids(violations, severity='error'):
 def test_every_invariant_id_is_registered_once():
     ids = [inv.id for inv in INVARIANTS]
     assert len(ids) == len(set(ids))
-    expected = {f'I{n}' for n in range(1, 29)} | {'I3b'}
+    expected = {f'I{n}' for n in range(1, 33)} | {'I3b'}
     assert set(ids) == expected
     for inv in INVARIANTS:
         assert inv.kind in ('document', 'corpus', 'route', 'dropped')
@@ -141,6 +141,87 @@ def test_i18_split_exit_follows_published_children():
     assert 'I18' in _ids(check_all(corpus))           # at = earliest child effective_from
 
 
+def _batch_corpus(size=10, drawn=(4,)):
+    """The beam as a batch of ``size`` with one published draw each."""
+    corpus = _corpus()
+    corpus.snapshots[0]['quantity'] = size
+    for n, quantity in enumerate(drawn):
+        child = ex.identity()
+        child.update({'_id': f'draw{n}', 'catalog_number': 50 + n,
+                      'parent_identities': [ex.IDENTITY_ID],
+                      'current_snapshot_id': f'draw{n}-v0'})
+        snap = ex.snapshot()
+        snap.update({'_id': f'draw{n}-v0', 'identity_id': f'draw{n}',
+                     'quantity': quantity,
+                     'effective_from': f'2026-0{n + 5}-01T00:00:00Z'})
+        corpus.identities.append(child)
+        corpus.snapshots.append(snap)
+    return corpus
+
+
+def test_i18_a_batch_splits_only_when_drawn_out_at_the_latest_draw():
+    corpus = _batch_corpus(10, (4,))
+    assert 'I18' not in _ids(check_all(corpus))       # pieces remain
+    corpus = _batch_corpus(10, (4, 6))
+    assert 'I18' in _ids(check_all(corpus))           # drawn out, no exit
+    corpus.identities[0]['exit'] = {'kind': 'split', 'at': '2026-06-01T00:00:00Z',
+                                    'recorded_by_user_id': None}
+    assert 'I18' not in _ids(check_all(corpus))
+    corpus.identities[0]['exit']['at'] = '2026-05-01T00:00:00Z'
+    assert 'I18' in _ids(check_all(corpus))           # at = the latest draw
+    corpus = _batch_corpus(10, (4,))
+    corpus.identities[0]['exit'] = {'kind': 'split', 'at': '2026-05-01T00:00:00Z',
+                                    'recorded_by_user_id': None}
+    assert 'I18' in _ids(check_all(corpus))           # split with pieces left
+
+
+def test_i32_batch_never_overdrawn_merged_or_changed_in_a_later_state():
+    assert 'I32' not in _ids(check_all(_batch_corpus(10, (4, 5))))
+    assert 'I32' in _ids(check_all(_batch_corpus(10, (6, 6))))     # overdrawn
+    corpus = _batch_corpus(10, (4,))
+    merge = ex.identity()
+    merge.update({'_id': 'merge', 'catalog_number': 60,
+                  'parent_identities': [ex.IDENTITY_ID, 'draw0'],
+                  'current_snapshot_id': None})
+    corpus.identities.append(merge)
+    assert 'I32' in _ids(check_all(corpus))           # a batch in a merge
+    corpus = _batch_corpus(10, ())
+    state = ex.snapshot()
+    state.update({'_id': 'v1', 'version': 1, 'quantity': 3,
+                  'effective_from': '2026-07-01T00:00:00Z'})
+    corpus.snapshots.append(state)
+    assert 'I32' in _ids(check_all(corpus))           # a later state disagrees
+
+
+def test_i32_any_identity_records_one_quantity_in_its_live_states():
+    corpus = _corpus()
+    assert 'I32' not in _ids(check_all(corpus))
+    state = ex.snapshot()
+    state.update({'_id': 'v1', 'version': 1, 'quantity': 2,
+                  'effective_from': '2026-07-01T00:00:00Z'})
+    corpus.snapshots.append(state)
+    assert 'I32' in _ids(check_all(corpus))
+    state['superseded_by'] = 'v2'           # a corrected state does not count
+    assert 'I32' not in _ids(check_all(corpus))
+
+
+def test_i31_planned_origin_and_authored_exits_from_in_place():
+    corpus = _corpus()
+    origin = {'kind': 'deinstallation', 'planned': True, 'at': None,
+              'at_precision': 'unknown'}
+    corpus.identities[0]['origin'] = origin
+    assert 'I31' not in _ids(check_all(corpus))
+    corpus.identities[0]['origin'] = {**origin, 'kind': 'offcut'}
+    assert 'I31' in _ids(check_all(corpus))           # offcuts are not planned
+    corpus.identities[0]['origin'] = origin
+    corpus.identities[0]['exit'] = {'kind': 'installed',
+                                    'at': '2026-06-01T00:00:00Z',
+                                    'recorded_by_user_id': 'root'}
+    assert 'I31' in _ids(check_all(corpus))
+    corpus.identities[0]['exit']['kind'] = 'recycled'
+    assert 'I31' not in _ids(check_all(corpus))
+
+
 def test_i19_duplicate_of_live_identity():
     corpus = _corpus()
     corpus.identities[0]['withdrawn'] = {'at': ex.T1, 'by_user_id': 'root',
@@ -196,3 +277,84 @@ def test_i3b_no_current_only_when_no_published_snapshot_is_left():
     assert _ids(check_all(corpus)) == {'I3b'}
     corpus.snapshots[0]['status'] = 'withdrawn'
     assert check_all(corpus) == []
+
+
+def test_i29_usernames_lowercase_and_unique():
+    from apps.catalog.invariants import Corpus, check_i29
+    corpus = Corpus(users=[{'_id': '1', 'username': 'alice'},
+                           {'_id': '2', 'username': 'Bob'},
+                           {'_id': '3', 'username': 'bob'}])
+    messages = sorted(v.message for v in check_i29(corpus))
+    assert messages == ['username is not lowercase',
+                        'username is not unique once lowercased']
+
+
+def test_i8_evidence_validates_against_its_method():
+    corpus = _corpus()
+    corpus.evidence[0]['payload']['result']['fc_core_mpa'] = 99.0
+    found = [v for v in check_all(corpus) if v.invariant == 'I8']
+    assert found and 'fc_core_mpa' in found[0].message
+    corpus = _corpus()
+    corpus.evidence[0]['payload'] = {}
+    assert 'I8' in _ids(check_all(corpus))
+    corpus = _corpus()
+    corpus.evidence[0]['payload']['surprise'] = 1
+    assert 'I8' in _ids(check_all(corpus))
+
+
+def test_i8_a_core_pairs_with_one_existing_rebound_record_8_42():
+    corpus = _corpus()
+    corpus.evidence[0]['payload']['sampling']['paired_rebound_id'] = 'nope'
+    assert 'I8' in _ids(check_all(corpus))
+    # a real rebound record, paired once
+    rebound = ex.evidence()
+    rebound.update({
+        '_id': 'r1', 'method': 'rebound_hammer', 'source_tier': 'ndt',
+        'destructive': False, 'sampled_at': None,
+        'sampled_at_precision': None, 'standard': None,
+        'observed_at': '2026-02-19T09:00:00Z', 'derived': [],
+        'verification': {'state': 'unverified', 'by': None, 'at': None,
+                         'note': None},
+        'summary': {'quantity': 'rebound_number', 'value': 43,
+                    'range': None, 'unit': '1', 'unit_entered': None,
+                    'kind': 'measured', 'uncertainty': None},
+        'payload': {
+            'instrument': {'hammer_type': 'N'},
+            'test_area': {'surface_preparation': 'ground',
+                          'surface_condition': 'dry'},
+            'impact_direction': 'horizontal',
+            'readings': [44, 42, 41, 45, 43, 42, 40, 44, 43],
+            'reading_unit': '1', 'median': 43, 'n_valid': 9,
+            'set_discarded': False}})
+    corpus = _corpus()
+    corpus.evidence[0]['payload']['sampling']['paired_rebound_id'] = 'r1'
+    corpus.evidence.append(rebound)
+    assert 'I8' not in _ids(check_all(corpus))
+    second = ex.evidence()
+    second.update({'_id': 'c2', 'status': 'draft'})
+    second['payload']['sampling']['paired_rebound_id'] = 'r1'
+    corpus.evidence.append(second)
+    found = [v for v in check_all(corpus) if v.invariant == 'I8']
+    assert found and 'one core per rebound' in found[0].message
+
+
+def test_i11_properties_are_the_fold_of_the_evidence():
+    corpus = _corpus()
+    assert 'I11' not in _ids(check_all(corpus))
+    corpus.identities[0]['properties']['compressive_strength'][
+        'range'] = [10.0, 11.0]
+    assert _ids(check_all(corpus)) == {'I11'}
+    corpus = _corpus()
+    corpus.identities[0]['properties'] = {}          # not recomputed
+    assert _ids(check_all(corpus)) == {'I11'}
+    corpus = _corpus()
+    corpus.snapshots[0]['properties'] = {
+        'spalling': {'range': [1, 2], 'confidence': 0.35, 'source': 'visual',
+                     'n': 2, 'evidence_ids': [],
+                     'derived_at': '2026-02-27T14:30:00Z'}}
+    found = [v for v in check_all(corpus) if v.invariant == 'I11']
+    assert found and found[0].collection == 'component_snapshots'
+    # a withdrawn record leaves the fold: its properties must go too
+    corpus = _corpus()
+    corpus.evidence[0]['status'] = 'withdrawn'
+    assert 'I11' in _ids(check_all(corpus))

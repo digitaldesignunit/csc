@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { ComponentBoundingBox, ComponentLocation } from "@/generated/CatalogSharedTypes";
+import type { GeoLocation } from "@/generated/CatalogSharedTypes";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -154,17 +154,17 @@ export function formatTimestamp(input: string): string {
   return input || 'Unknown Date'
 }
 
-export function formatLocation(coords: ComponentLocation): string {
+export function formatLocation(coords: GeoLocation): string {
   const { lat, lon } = coords;
   return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
 }
 
-export function formatLocationMapsLink(coords: ComponentLocation): string {
+export function formatLocationMapsLink(coords: GeoLocation): string {
   const { lat, lon } = coords;
   return `https://www.google.com/maps/place/${lat.toFixed(6)},${lon.toFixed(6)}`;
 }
 
-export function componentBounds(component_bbx: ComponentBoundingBox): Array<number> {
+export function componentBounds(component_bbx: number[]): Array<number> {
   // Add defensive programming for unexpected data structures
   if (!component_bbx || !Array.isArray(component_bbx) || component_bbx.length < 3) {
     console.warn('Invalid bounding box data:', component_bbx)
@@ -185,12 +185,19 @@ export function componentBounds(component_bbx: ComponentBoundingBox): Array<numb
   return [bnds_x, bnds_y, bnds_z]
 }
 
-// Assets shipped inside the Next `public/` folder. The Apache static host only
-// serves uploaded catalog assets, so these must stay on the app origin ---
-// otherwise they 404 (and cross-origin GLB fetches additionally fail CORS).
+// Assets shipped inside the Next `public/` folder stay on the app origin
+// (cross-origin GLB fetches would need CORS as well).
 const BUNDLED_ASSET_PREFIXES = ['/logo/', '/gh-interface/', '/backgroundmeshes/']
 
-// Resolve a static asset URL: use NEXT_STATIC_BASE_URL in production, fallback to Next public path locally
+// The only paths the optional static host may serve: public UI files under
+// `/static/`. Catalogue files (previews, photos, meshes, point clouds,
+// proxies, capture fixtures) never come from a static host: they are private
+// and are fetched through the authenticated `/snapshots/...` API routes
+// (decision 8.125 a).
+const STATIC_HOST_PREFIX = '/static/'
+
+// Resolve a static asset URL: NEXT_PUBLIC_STATIC_BASE_URL (optional) for
+// public UI files under `/static/`, the path itself for everything else.
 export function resolveStatic(path: string): string {
   // Prefer client-exposed var; fall back to legacy server var
   const base = (process.env.NEXT_PUBLIC_STATIC_BASE_URL || process.env.NEXT_STATIC_BASE_URL || '').trim()
@@ -204,6 +211,9 @@ export function resolveStatic(path: string): string {
   if (BUNDLED_ASSET_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
     return path
   }
+
+  // anything but a public UI file stays on the app origin
+  if (!lower.startsWith(STATIC_HOST_PREFIX)) return path
 
   // In dev (localhost) or no base configured, return original path
   const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -370,4 +380,19 @@ export function generateGrasshopperPanelXML(panelTitle: string, componentId: str
     </chunk>
   </chunks>
 </Archive>`
+}
+
+/** A day, "24.07.2024": the date as stored for a day or coarser precision, the
+ *  Berlin date for an exact timestamp. */
+export function formatDay(value: string | null | undefined, precision?: string | null): string {
+  if (!value) return ''
+  const [y, m, d] = value.slice(0, 10).split('-')
+  if (precision === 'year') return y
+  if (precision === 'month') return `${m}.${y}`
+  if (precision === 'day' || /T00:00:00/.test(value) || value.length <= 10) return `${d}.${m}.${y}`
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return `${d}.${m}.${y}`
+  return date.toLocaleDateString('de-DE', {
+    timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric',
+  })
 }

@@ -28,6 +28,11 @@ OriginalFunction = Literal[
     'IfcFooting',
     'IfcDiscreteAccessory',
     'IfcBuildingElementPart',
+    'IfcWindow',
+    'IfcDoor',
+    'IfcStair',
+    'IfcRailing',
+    'IfcDuctSegment',
     'IfcBuildingElementProxy',
     'CscDebris',
 ]
@@ -43,8 +48,35 @@ ORIGINAL_FUNCTION_LABELS: Dict[str, str] = {
     'IfcFooting': 'Footing',
     'IfcDiscreteAccessory': 'Accessory / Connector',
     'IfcBuildingElementPart': 'Element part (masonry unit, ...)',
+    'IfcWindow': 'Window',
+    'IfcDoor': 'Door / gate',
+    'IfcStair': 'Stair',
+    'IfcRailing': 'Railing / balustrade',
+    'IfcDuctSegment': 'Duct',
     'IfcBuildingElementProxy': 'Unknown',
     'CscDebris': 'Debris',
+}
+# what a function hints about the shape class (spec 2.2; decision 8.107). A
+# hint, never a rule: the class is derived from the geometry, `composite`
+# only assigned. None = no hint.
+SHAPE_CLASS_HINTS: Dict[str, Optional[str]] = {
+    'IfcBeam': 'linear',
+    'IfcColumn': 'linear',
+    'IfcSlab': 'planar',
+    'IfcPlate': 'planar',
+    'IfcWall': 'planar',
+    'IfcMember': 'linear',
+    'IfcPipeSegment': 'linear',
+    'IfcFooting': 'block',
+    'IfcDiscreteAccessory': 'composite',
+    'IfcBuildingElementPart': 'block',
+    'IfcWindow': 'planar',
+    'IfcDoor': 'planar',
+    'IfcStair': 'composite',
+    'IfcRailing': 'planar',          # composite where it is an assembly
+    'IfcDuctSegment': 'linear',
+    'IfcBuildingElementProxy': None,
+    'CscDebris': 'irregular',
 }
 
 # SHAPE CLASS (section 2.2) ---------------------------------------------------
@@ -80,9 +112,10 @@ ProxyRole = Literal['primary', 'part']
 PROXY_ROLES: Tuple[str, ...] = get_args(ProxyRole)
 
 FitSourceKind = Literal['meshes', 'point_clouds']
-FitSourceResolution = Literal['detailed', 'reduced', 'inline']
+# detail levels (decision 8.23): 'original' is stored on disk as detailed.ply
+FitSourceResolution = Literal['original', 'reduced', 'preview']
 
-ResolutionHint = Literal['full', 'reduced', 'proxy']
+ResolutionHint = Literal['original', 'reduced', 'proxy']
 RegionReason = Literal['connection', 'damage', 'feature', 'other']
 
 # CAPTURE (section 3.2.3) -----------------------------------------------------
@@ -136,6 +169,27 @@ TERMINAL_EXIT_KINDS: Tuple[str, ...] = (
 )
 # set by the server from published children (decision 8.8)
 SERVER_SET_EXIT_KINDS: Tuple[str, ...] = ('split', 'merged')
+
+# CHANGE LOG (section 3.8, decision 8.36) -------------------------------------
+ChangeCause = Literal[
+    'patch', 'inherited_from_parent', 'material_merge', 'exit', 'reenter',
+    'withdraw', 'reinstate', 'migration', 'derived_exit', 'deinstall',
+    'undo_deinstall',
+]
+CHANGE_CAUSES: Tuple[str, ...] = get_args(ChangeCause)
+CHANGE_CAUSE_LABELS: Dict[str, str] = {
+    'patch': 'Edited',
+    'inherited_from_parent': 'Taken over from a parent',
+    'material_merge': 'Material merged',
+    'exit': 'Circulation changed',
+    'reenter': 'Re-entered circulation',
+    'withdraw': 'Withdrawn',
+    'reinstate': 'Reinstated',
+    'migration': 'Migration',
+    'derived_exit': 'Cut into pieces',
+    'deinstall': 'Deinstalled',
+    'undo_deinstall': 'Deinstallation undone',
+}
 
 # MODERATION AND VERIFICATION (section 3.3.3) ---------------------------------
 Status = Literal['draft', 'pending', 'published', 'rejected', 'withdrawn']
@@ -218,6 +272,30 @@ METHOD_TIER: Dict[str, Optional[str]] = {
 }
 DESTRUCTIVE_METHODS: Tuple[str, ...] = ('core_compression',)
 
+EVIDENCE_METHOD_LABELS: Dict[str, str] = {
+    'rebound_hammer': 'Rebound hammer',
+    'core_compression': 'Core in compression',
+    'archival_document': 'Archival document',
+    'visual_inspection': 'Visual inspection',
+    'era_heuristic': 'Rule of thumb (era, region, typology)',
+    'manufacturer_datasheet': 'Manufacturer datasheet',
+    'reinforcement_layout': 'Reinforcement layout',
+}
+SOURCE_TIER_LABELS: Dict[str, str] = {
+    'destructive': 'Destructive test',
+    'ndt': 'Non-destructive test',
+    'archival': 'Archival document',
+    'visual': 'Visual inspection',
+    'heuristic': 'Estimate',
+    'inherited': 'Inherited from a parent',
+}
+VERIFICATION_STATE_LABELS: Dict[str, str] = {
+    'unverified': 'Unverified',
+    'self_attested': 'Self-attested',
+    'reviewed': 'Reviewed',
+    'accredited': 'Accredited',
+}
+
 ReinforcementBasis = Literal['drawing', 'scan', 'exposed']
 REINFORCEMENT_BASIS_TIER: Dict[str, str] = {
     'drawing': 'archival',
@@ -255,29 +333,94 @@ class Quantity:
     ordinal_direction: Optional[str] = None
     # material groups a visual finding applies to; None = any material
     applies_to: Optional[Tuple[str, ...]] = None
+    # categorical only: the closed value list, where the quantity has one
+    values: Optional[Tuple[str, ...]] = None
+    # MAPPING COLUMNS (spec section 7.8, decision 8.44): the counterpart in
+    # each ontology, where one exists; None = none known. The JSON-LD
+    # context and the CERO exporter (apps/catalog/exports) read them.
+    qudt_unit: Optional[str] = None        # QUDT unit, e.g. 'unit:MegaPA'
+    cero: Optional[str] = None             # CERO property (local name)
+    ifc_property: Optional[str] = None     # IFC property set + property
+    bsdd: Optional[str] = None             # bSDD property code (IFC 4.3)
+    # the bound of a folded range that a single-value export takes (8.116 c):
+    # 'low' where a lower value is the safe one (strengths, density, cover),
+    # 'high' where a higher one is (chloride, carbonation, crack width, mass);
+    # None = a value only when the range is a single value
+    conservative: Optional[str] = None
 
+
+# EN 206 exposure classes (decision 8.44)
+EXPOSURE_CLASSES: Tuple[str, ...] = (
+    'X0', 'XC1', 'XC2', 'XC3', 'XC4', 'XD1', 'XD2', 'XD3', 'XS1', 'XS2',
+    'XS3', 'XF1', 'XF2', 'XF3', 'XF4', 'XA1', 'XA2', 'XA3',
+)
+
+# EN 10025 grades (decision 8.107)
+STEEL_GRADES: Tuple[str, ...] = ('S235', 'S275', 'S355', 'S460', 'other')
 
 QUANTITIES: Tuple[Quantity, ...] = (
     Quantity('compressive_strength', 'MPa', 'scalar', 'identity',
-             ('destructive', 'ndt', 'archival', 'visual', 'heuristic')),
+             ('destructive', 'ndt', 'archival', 'visual', 'heuristic'),
+             qudt_unit='unit:MegaPA', cero='compressiveStrength',
+             ifc_property='Pset_MaterialConcrete.CompressiveStrength',
+             bsdd='CompressiveStrength', conservative='low'),
     Quantity('compressive_strength_in_situ', 'MPa', 'scalar', 'identity',
-             ('destructive', 'ndt', 'archival', 'heuristic')),
-    Quantity('rebound_number', '1', 'scalar', 'identity', ('ndt',)),
-    Quantity('q_value', '1', 'scalar', 'identity', ('ndt',)),
+             ('destructive', 'ndt', 'archival', 'heuristic'),
+             qudt_unit='unit:MegaPA', cero='concreteCompressiveStrength',
+             ifc_property='Pset_MaterialConcrete.CompressiveStrength',
+             bsdd='CompressiveStrength', conservative='low'),
+    Quantity('rebound_number', '1', 'scalar', 'identity', ('ndt',),
+             qudt_unit='unit:UNITLESS'),
+    Quantity('q_value', '1', 'scalar', 'identity', ('ndt',),
+             qudt_unit='unit:UNITLESS'),
     Quantity('density', 'kg/m3', 'scalar', 'identity',
-             ('destructive', 'ndt', 'archival', 'heuristic')),
+             ('destructive', 'ndt', 'archival', 'heuristic'),
+             qudt_unit='unit:KiloGM-PER-M3', cero='density',
+             ifc_property='Pset_MaterialCommon.MassDensity',
+             bsdd='MassDensity', conservative='low'),
     Quantity('rebar_diameter', 'mm', 'scalar', 'identity',
-             ('destructive', 'ndt', 'archival', 'visual', 'heuristic')),
+             ('destructive', 'ndt', 'archival', 'visual', 'heuristic'),
+             qudt_unit='unit:MilliM',
+             ifc_property='IfcReinforcingBar.NominalDiameter'),
     Quantity('rebar_spec', None, 'categorical', 'identity',
              ('destructive', 'archival', 'ndt', 'heuristic')),
     Quantity('concrete_class', None, 'categorical', 'identity',
-             ('destructive', 'archival', 'ndt', 'heuristic')),
+             ('destructive', 'archival', 'ndt', 'heuristic'),
+             ifc_property='Pset_ConcreteElementGeneral.StrengthClass',
+             bsdd='StrengthClass'),
+    # decision 8.107: the steel twin of concrete_class (EN 10025)
+    # IFC 4.3 has Pset_MaterialSteel.StructuralGrade (checked with the
+    # IfcOpenShell 0.9 pset templates, 2026-10-06; IFC4 has no such property)
+    Quantity('steel_grade', None, 'categorical', 'identity',
+             ('destructive', 'archival', 'ndt', 'heuristic'),
+             values=STEEL_GRADES,
+             ifc_property='Pset_MaterialSteel.StructuralGrade',
+             bsdd='StructuralGrade'),
     Quantity('cover_depth', 'mm', 'scalar', 'identity',
-             ('ndt', 'destructive', 'archival')),
+             ('ndt', 'destructive', 'archival'),
+             qudt_unit='unit:MilliM', cero='concreteCover',
+             ifc_property='Pset_ConcreteElementGeneral.ConcreteCover',
+             bsdd='ConcreteCover', conservative='low'),
+    # decision 8.44: four rows the CERO check found missing
+    Quantity('exposure_class', None, 'categorical', 'identity',
+             ('archival', 'heuristic'), values=EXPOSURE_CLASSES,
+             cero='exposureClass',
+             ifc_property='Pset_ConcreteElementGeneral.ExposureClass',
+             bsdd='ExposureClass'),
+    Quantity('chloride_content', '%', 'scalar', 'identity',
+             ('destructive', 'archival'), qudt_unit='unit:PERCENT',
+             cero='chlorideContent', conservative='high'),
+    Quantity('elastic_modulus', 'GPa', 'scalar', 'identity',
+             ('destructive', 'archival', 'heuristic'),
+             qudt_unit='unit:GigaPA', cero='youngModulus',
+             ifc_property='Pset_MaterialMechanical.YoungModulus',
+             bsdd='YoungModulus', conservative='low'),
     Quantity('mass', 'kg', 'scalar', 'snapshot',
-             ('destructive', 'ndt', 'heuristic')),
+             ('destructive', 'ndt', 'heuristic'), qudt_unit='unit:KiloGM',
+             cero='weight', conservative='high'),
     Quantity('carbonation_depth', 'mm', 'scalar', 'snapshot',
-             ('destructive', 'ndt', 'visual')),
+             ('destructive', 'ndt', 'visual'), qudt_unit='unit:MilliM',
+             cero='carbonationDepth', conservative='high'),
     Quantity('spalling', None, 'ordinal', 'snapshot', ('visual', 'ndt'),
              ordinal_direction='severity', applies_to=('mineral',)),
     Quantity('cracking', None, 'ordinal', 'snapshot', ('visual', 'ndt'),
@@ -288,11 +431,37 @@ QUANTITIES: Tuple[Quantity, ...] = (
     Quantity('corrosion', None, 'ordinal', 'snapshot', ('visual', 'ndt'),
              ordinal_direction='severity', applies_to=('metal', 'mineral')),
     Quantity('moisture_content', '%', 'scalar', 'snapshot',
-             ('ndt', 'destructive')),
+             ('ndt', 'destructive'), qudt_unit='unit:PERCENT'),
+    # decision 8.44: the widest crack; `cracking` stays the severity
+    Quantity('crack_width', 'mm', 'scalar', 'snapshot', ('visual', 'ndt'),
+             qudt_unit='unit:MilliM', cero='crackWidth', conservative='high'),
     Quantity('condition_grade', None, 'ordinal', 'snapshot', ('visual',),
              ordinal_direction='grade'),
 )
 QUANTITY_BY_NAME: Dict[str, Quantity] = {q.name: q for q in QUANTITIES}
+QUANTITY_LABELS: Dict[str, str] = {
+    'compressive_strength': 'Compressive strength',
+    'compressive_strength_in_situ': 'In-situ compressive strength',
+    'rebound_number': 'Rebound number R',
+    'q_value': 'Q-value',
+    'density': 'Density',
+    'rebar_diameter': 'Rebar diameter',
+    'rebar_spec': 'Rebar steel grade',
+    'concrete_class': 'Concrete strength class',
+    'steel_grade': 'Steel grade (EN 10025)',
+    'cover_depth': 'Concrete cover',
+    'exposure_class': 'Exposure class',
+    'chloride_content': 'Chloride content',
+    'elastic_modulus': 'Elastic modulus',
+    'mass': 'Mass',
+    'carbonation_depth': 'Carbonation depth',
+    'spalling': 'Spalling',
+    'cracking': 'Cracking',
+    'corrosion': 'Corrosion',
+    'moisture_content': 'Moisture content',
+    'crack_width': 'Widest crack',
+    'condition_grade': 'Condition grade',
+}
 ORDINAL_RANGE: Tuple[int, int] = (0, 3)
 
 CONDITION_GRADE_LABELS: Dict[int, str] = {
@@ -300,6 +469,21 @@ CONDITION_GRADE_LABELS: Dict[int, str] = {
     2: 'Average',
     1: 'Poor',
     0: 'Unusable as is',
+}
+
+
+# MAPPING COLUMNS OF THE OTHER VOCABULARIES (spec section 7.8) ----------------
+# original_function IS an IFC class name; CscDebris is a CSC extension and has
+# no IFC counterpart
+ORIGINAL_FUNCTION_IFC_CLASS: Dict[str, Optional[str]] = {
+    value: (None if value == 'CscDebris' else value)
+    for value in ORIGINAL_FUNCTIONS
+}
+# an evidence record is a sosa:Observation; a core is also a sosa:Sample
+EVIDENCE_METHOD_SOSA_TYPE: Dict[str, str] = {
+    method: 'sosa:Sample' if method == 'core_compression'
+    else 'sosa:Observation'
+    for method in EVIDENCE_METHODS
 }
 
 
@@ -381,12 +565,81 @@ MATERIAL_SEED_BY_ID: Dict[str, MaterialSeed] = {
 }
 
 
+# CONNECTIONS AND CIRCULARITY CLASSES (section 2.11, decision 8.38) ----------
+# DGNB Building Resource Passport v1.3: the class only, never DGNB's example
+# factor (that depends on the DGNB circularity standard)
+DgnbClass = Literal[
+    'optimised', 'improved', 'standard', 'limited', 'problematic',
+    'not_assessable',
+]
+DGNB_CLASSES: Tuple[str, ...] = get_args(DgnbClass)
+DGNB_CLASS_LABELS: Dict[str, str] = {
+    'optimised': 'Optimised',
+    'improved': 'Improved',
+    'standard': 'Standard',
+    'limited': 'Limited',
+    'problematic': 'Problematic',
+    'not_assessable': 'Assessment not possible',
+}
+# DGNB's connection words, plus cast_in / grouted for concrete
+ConnectionType = Literal[
+    'loose', 'click', 'inserted', 'plugged', 'screwed', 'nailed', 'bolted',
+    'soldered', 'foamed', 'sealed', 'adhesive', 'welded', 'cast_in',
+    'grouted', 'other', 'unknown',
+]
+CONNECTION_TYPES: Tuple[str, ...] = get_args(ConnectionType)
+CONNECTION_TYPE_LABELS: Dict[str, str] = {
+    'loose': 'Loose', 'click': 'Click', 'inserted': 'Inserted',
+    'plugged': 'Plugged', 'screwed': 'Screwed', 'nailed': 'Nailed',
+    'bolted': 'Bolted', 'soldered': 'Soldered', 'foamed': 'Foamed',
+    'sealed': 'Sealed', 'adhesive': 'Adhesive', 'welded': 'Welded',
+    'cast_in': 'Cast in', 'grouted': 'Grouted', 'other': 'Other',
+    'unknown': 'Unknown',
+}
+# DIN SPEC 91484 Table 1
+ConstructionMethod = Literal['monolithic', 'prefabricated', 'mixed',
+                             'unknown']
+CONSTRUCTION_METHODS: Tuple[str, ...] = get_args(ConstructionMethod)
+CONSTRUCTION_METHOD_LABELS: Dict[str, str] = {
+    'monolithic': 'Monolithic (cast in place)',
+    'prefabricated': 'Prefabricated',
+    'mixed': 'Mixed',
+    'unknown': 'Unknown',
+}
+
+
 # INHERITANCE (section 3.1.2) -------------------------------------------------
-# fields a child copies from its parent unless it states its own (6.2, 6.10)
-INHERITABLE_FIELDS: Tuple[str, ...] = (
-    'origin',
-    'manufactured_at',        # together with manufactured_precision
-    'material',
-    'trade_name',
-    'original_function',
+# units a child copies from its parent unless it states its own (6.2, 6.10);
+# a unit is listed in `inherited_fields` by its name and moves as a whole
+# (8.32, 8.38)
+INHERIT_UNITS: Dict[str, Tuple[str, ...]] = {
+    'origin': ('origin',),
+    'manufactured_at': ('manufactured_at', 'manufactured_precision'),
+    'material': ('material', 'material_class', 'material_class_source'),
+    'trade_name': ('trade_name',),
+    'manufacturer': ('manufacturer',),
+    'material_separability': ('material_separability',),
+    'original_function': ('original_function',),
+}
+INHERITABLE_FIELDS: Tuple[str, ...] = tuple(INHERIT_UNITS)
+INHERIT_UNIT_LABELS: Dict[str, str] = {
+    'origin': 'Origin',
+    'manufactured_at': 'Manufactured',
+    'material': 'Material and waste class',
+    'trade_name': 'Trade name',
+    'manufacturer': 'Manufacturer',
+    'material_separability': 'Material separability',
+    'original_function': 'Original function',
+}
+# what a merge compares to decide whether the parents agree on `origin`
+# (8.33); actors are united and notes joined
+ORIGIN_IDENTIFYING_KEYS: Tuple[str, ...] = (
+    'kind', 'planned', 'at', 'at_precision', 'place', 'construction_work',
 )
+# the exits a piece can take straight from in place: it never left its works
+# (decision 8.104, I31); the server-set split / merge of a cut are not
+# authored exits and stay possible
+IN_PLACE_EXIT_KINDS: Tuple[str, ...] = ('recycled', 'disposed', 'lost')
+# exit kinds a cut may start from: the parent is in circulation (no exit)
+# or already ended by a cut (8.34)
+CUTTABLE_EXIT_KINDS: Tuple[str, ...] = ('split', 'merged')

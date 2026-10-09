@@ -1,16 +1,18 @@
 #! python3
 # -*- coding: utf-8 -*-
 # venv: DDU_CSC
-print('ENV OK!')
 # r: charset_normalizer
-# r: requests
-# r: d2p-core-py
+# r: numpy==2.0.2
+# r: d2p-core-py==0.1.2
+print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
 
 # D2P WRAPPER IMPORTS ---------------------------------------------------------
 from d2p_core import ComponentType, GHComponent, Member, Settings  # NOQA
+from D2P.Core.Components.Primitives import BaseObject  # NOQA
+from D2P.Core.Interfaces import IBaseObject  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
 import System  # NOQA
@@ -24,37 +26,64 @@ ghenv.Component.NickName = 'PassportToD2P'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '9 D2P Components Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Converts CSC passport JSON into an in-memory D2P GHComponent. Geometry '
+    'Converts component passport JSON into an in-memory D2P GHComponent. Geometry '
     'is registered as a nested Member tree via SetMember (D2P ParentMember '
-    '+ : layer paths). Every baked component gets id_<identity> and '
-    'snap_<snapshot> shells so layer paths stay consistent for single- and '
-    'multi-snapshot passport and distinct across catalog identities. '
-    'Optional Parent prefixes ShortName for D2P child naming. CSC '
-    'identity/snapshot metadata is stored on the component label user text. '
+    '+ : layer paths) in the canonical orientation of the piece (frame '
+    'applied, centred at the origin) or where its csc_placement puts it; '
+    'the component plane is the plane of the canonical piece. Every baked '
+    'component gets id_<identity> and snap_<snapshot> shells so layer paths '
+    'stay consistent for single- and multi-snapshot component passport and distinct '
+    'across catalog identities. The D2P type id comes from the original '
+    'function (IFC class). Optional Parent prefixes ShortName for D2P child '
+    'naming. The convention user text (csc_identity_id, csc_snapshot_id, '
+    'csc_placement, csc_component) is stored on the geometry objects of the '
+    'component (D2P commits its label without user text): ReadFromD2P and '
+    'SyncWithRhinoDoc read it back. '
     'MeshMode: best | inline | reduced | detailed | all. '
     'CloudMode: best | inline | detailed | all (optional; defaults to '
     'MeshMode, with reduced mapped to inline). '
     'SnapshotScope: current | all.'
 )
 
-# CSC identity type -> D2P component type id (2-letter convention)
-_TYPE_ID_MAP = {
-    'panel': 'PN',
-    'beam': 'BM',
-    'column': 'CL',
-    'slab': 'SB',
-    'rubble': 'RB',
-    'brick': 'BR',
-    'pipe': 'PP',
-    'profile': 'PR',
-    'connector': 'CN',
-    'other': 'OT',
-}
+# CSC LIBRARY (decision 8.111) ----------------------------------------------
+CSC_GH_MINIMUM = '261005'
+LIBRARY_PROBLEM = None
+try:
+    import csc_gh
+    csc_gh.require(CSC_GH_MINIMUM)
+    from csc_gh.read import (authored_only, drawable_proxies)  # NOQA
+    from csc_gh.convention import (ConventionError, KEY_COMPONENT, d2p_type_id, d2p_type_name, frame_of, part_values, piece_plane, resolve_placement, tag_values)  # NOQA
+    from csc_gh.rhino import (placement_transform, plane_from_frame, proxy_to_rhino)  # NOQA
+    from csc_gh.doc import (marker_points)  # NOQA
+except ImportError:
+    LIBRARY_PROBLEM = (
+        'CSC library 261005 too old or missing: run CSC_Update, '
+        'then restart Rhino')
+
 
 # Mesh resolution preference for MeshMode=best (highest fidelity first)
 _MESH_BEST_CHAIN = ('detailed', 'reduced', 'inline')
 # Point clouds have no reduced PLY; best prefers the full cloud then inline.
 _CLOUD_BEST_CHAIN = ('detailed', 'inline')
+
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('D2PComponent', 'D2PComponent',
+     'In-memory D2P GHComponent (.NET IComponentBase) per component passport entry. RetrieveGeometry accepts layer segments such as id_, snap_, Mesh, 00, or detailed (recursive).'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
 
 
 class _MemberTree:
@@ -64,6 +93,12 @@ class _MemberTree:
     Children are attached with SetMember so the wrapper can unwrap Python
     Member objects and so ParentMember / nested DynamicMembers stay in
     sync (same pattern as D2P.Core.Utility.Members.FindMembers).
+
+    D2P writes the label of a component with fresh attributes when it
+    commits, so user text set on the label is lost; the geometry objects keep
+    theirs. ``text`` (the two ids) goes on every object of the leaves added
+    while it is set, ``carrier`` (the full convention values) on the first
+    object only; ReadFromD2P and SyncWithRhinoDoc merge the keys of a group.
     """
 
     def __init__(self, component, layer_color):
@@ -71,6 +106,8 @@ class _MemberTree:
         self._color = layer_color
         self._shells = {}
         self.has_members = False
+        self.text = {}
+        self.carrier = None
 
     def _attach(self, member, parent=None):
         if parent is not None:
@@ -87,28 +124,43 @@ class _MemberTree:
         self._shells[key] = member
         return self._attach(member, parent)
 
-    def add_leaf(self, path_segments, geometry):
-        if geometry is None or not path_segments:
-            return
+    def _base_object(self, geometry):
+        """The geometry with attributes holding the user text."""
+        attributes = Rhino.DocObjects.ObjectAttributes()
+        values = dict(self.text)
+        if self.carrier:
+            values.update(self.carrier)
+            self.carrier = None
+        for key, value in values.items():
+            attributes.SetUserString(key, str(value))
+        return BaseObject(geometry, attributes)
+
+    def _parent_of(self, path_segments):
         parent = None
         for i, segment in enumerate(path_segments[:-1]):
             key = tuple(path_segments[:i + 1])
             parent = self._shell(key, segment, parent)
+        return parent
+
+    def add_leaf(self, path_segments, geometry):
+        if geometry is None or not path_segments:
+            return
+        parent = self._parent_of(path_segments)
         leaf = Member(
             self._component, path_segments[-1], self._color)
-        leaf.SetObject(geometry)
+        leaf.SetObject(self._base_object(geometry))
         self._attach(leaf, parent)
 
     def add_leaf_many(self, path_segments, geometries):
         if not geometries or not path_segments:
             return
-        parent = None
-        for i, segment in enumerate(path_segments[:-1]):
-            key = tuple(path_segments[:i + 1])
-            parent = self._shell(key, segment, parent)
+        parent = self._parent_of(path_segments)
         leaf = Member(
             self._component, path_segments[-1], self._color)
-        leaf.SetObjects(geometries)
+        objects = System.Collections.Generic.List[IBaseObject]()
+        for geometry in geometries:
+            objects.Add(self._base_object(geometry))
+        leaf.SetObjects(objects)
         self._attach(leaf, parent)
 
 
@@ -116,7 +168,7 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260908
+    Version: 261005
 
     D2P member layer taxonomy (SetMember tree)
     -----------------------------------------
@@ -127,7 +179,8 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
 
         id_<8> -> snap_<8> -> Mesh -> 00 -> detailed
         id_<8> -> snap_<8> -> PointCloud -> 00 -> detailed
-        id_<8> -> snap_<8> -> Extrusion -> 00
+        id_<8> -> snap_<8> -> Proxy -> 00         (authored shapes)
+        id_<8> -> snap_<8> -> Marker -> 00        (capture markers)
 
     id_* distinguishes catalog identities when baking (D2P shares type
     root layers across instances). snap_* is always present so single- and
@@ -137,7 +190,18 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
     --------------------------------------------
     ShortName = parent.ShortName + NameDelimiter + snapshot.name
     (same rule as D2P CreateComponent). Does NOT use CSC parent_identities.
+
+    Placement (8.98)
+    ----------------
+    Geometry is drawn at T = placement_transform(Q), Q = the passport's
+    csc_placement, else the placement that puts the piece in its frame. The
+    component plane (the label) is P = Q . frame, the plane of the canonical
+    piece, which is what csc_placement means in the user text. The ids go on
+    every geometry object, the full convention on the first one.
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
@@ -158,9 +222,34 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the library is missing or
+        too old, or the outputs were just updated (says why)."""
+        if LIBRARY_PROBLEM:
+            self._addError(LIBRARY_PROBLEM)
+            return True
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
     def BeforeRunScript(self):
         self.InputParams[0].Description = (
-            'Passport JSON ({identity, snapshot} or future {snapshots[]}) '
+            'Component passport JSON ({identity, snapshot} or future {snapshots[]}) '
             'from CSC catalog components.'
         )
         if self.InputParams.Count > 1:
@@ -190,14 +279,9 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 'for D2P parent-child retrieval. '
                 'Ignores CSC parent_identities.'
             )
-        i = 0
-        if self.OutputParams[0].Name == 'out':
-            i += 1
-        self.OutputParams[0 + i].Description = (
-            'In-memory D2P GHComponent (.NET IComponentBase) per passport '
-            'entry. RetrieveGeometry accepts layer segments such as id_, '
-            'snap_, Mesh, 00, or detailed (recursive).'
-        )
+        self._check_outputs()
+        if LIBRARY_PROBLEM is None:
+            csc_gh.dev_reload(globals())
 
     def _normalize_mode(self, value: str, allowed: tuple, default: str) -> str:
         key = (value or default).strip().lower()
@@ -208,17 +292,11 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         )
         return default
 
-    def _type_id(self, identity_type: str) -> str:
-        key = (identity_type or 'other').strip().lower()
-        if key in _TYPE_ID_MAP:
-            return _TYPE_ID_MAP[key]
-        if len(key) >= 2:
-            return key[:2].upper()
-        return 'OT'
+    def _type_id(self, original_function: str) -> str:
+        return d2p_type_id(original_function)
 
-    def _type_name(self, identity_type: str) -> str:
-        key = (identity_type or 'other').strip().lower()
-        return key.replace('_', ' ').title() or 'Other'
+    def _type_name(self, original_function: str) -> str:
+        return d2p_type_name(original_function)
 
     def _snapshot_id(self, snapshot: dict) -> str:
         return str(snapshot.get('_id') or snapshot.get('id') or '')
@@ -230,23 +308,22 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         except (TypeError, ValueError, IndexError):
             return (110, 110, 110)
 
-    def _iframe_plane(self, snapshot: dict) -> Rhino.Geometry.Plane:
-        try:
-            iframe = snapshot['iframe']
-            return Rhino.Geometry.Plane(
-                Rhino.Geometry.Point3d(*iframe['o']),
-                Rhino.Geometry.Vector3d(*iframe['x']),
-                Rhino.Geometry.Vector3d(*iframe['y']),
-            )
-        except (KeyError, TypeError):
-            return Rhino.Geometry.Plane.WorldXY
+    def _single(self, identity: dict, snapshot: dict) -> dict:
+        """A passport of one snapshot (the placement key sits on it)."""
+        return {'identity': identity, 'snapshots': [snapshot]}
 
-    def _iframe_transform(self, snapshot: dict) -> Rhino.Geometry.Transform:
-        iplane = self._iframe_plane(snapshot)
-        return Rhino.Geometry.Transform.PlaneToPlane(
-            Rhino.Geometry.Plane.WorldXY,
-            iplane,
-        )
+    def _placement(self, identity: dict, snapshot: dict) -> dict:
+        """Q: the placement of the stored geometry of a snapshot (its own
+        csc_placement, else the one that puts it in its frame)."""
+        placed = resolve_placement(self._single(identity, snapshot))
+        if placed is None:
+            raise ConventionError(
+                'the snapshot has no frame yet (geometry still being '
+                'processed?)')
+        return placed
+
+    def _xform(self, identity: dict, snapshot: dict):
+        return placement_transform(self._placement(identity, snapshot))
 
     def _identity_scope_label(self, identity: dict) -> str:
         iid = str(
@@ -302,45 +379,30 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             )
         return f'{parent_name}{delimiter}{base_name}'
 
-    def _attach_csc_metadata(
+    def _user_text(
             self,
-            component,
             identity: dict,
             snapshot: dict,
             passport_json: str = None):
-        try:
-            label = component.Label
-            base_objects = list(label.BaseObjects)
-            if not base_objects:
-                return
-            attrs = base_objects[0].Attributes
-            identity_id = identity.get('_id') or identity.get('id')
-            if identity_id:
-                attrs.SetUserString('csc_identity_id', str(identity_id))
-            snapshot_id = self._snapshot_id(snapshot)
-            if snapshot_id:
-                attrs.SetUserString('csc_snapshot_id', snapshot_id)
-            parent_identities = identity.get('parent_identities')
-            if parent_identities:
-                attrs.SetUserString(
-                    'csc_parent_identities',
-                    json.dumps(parent_identities),
-                )
-            if identity.get('type') is not None:
-                attrs.SetUserString('csc_type', str(identity.get('type')))
-            if identity.get('material') is not None:
-                attrs.SetUserString(
-                    'csc_material', str(identity.get('material')))
-            if snapshot.get('assembly') is not None:
-                attrs.SetUserString(
-                    'csc_assembly', str(bool(snapshot['assembly'])))
-            if snapshot.get('fragment') is not None:
-                attrs.SetUserString(
-                    'csc_fragment', str(bool(snapshot['fragment'])))
-            if passport_json:
-                attrs.SetUserString('csc_component', passport_json)
-        except Exception as e:
-            self._addWarning(f'Could not attach CSC metadata to label: {e}')
+        """``(ids, carrier)``: the user text of every object of the piece
+        (the two ids) and of the first one (the convention values and the
+        descriptive keys of the identity)."""
+        single = self._single(identity, snapshot)
+        ids = part_values(single)
+        carrier = tag_values(single)
+        if passport_json:
+            carrier[KEY_COMPONENT] = passport_json
+        parent_identities = identity.get('parent_identities')
+        if parent_identities:
+            carrier['csc_parent_identities'] = json.dumps(parent_identities)
+        if identity.get('original_function') is not None:
+            carrier['csc_original_function'] = str(
+                identity.get('original_function'))
+        if identity.get('material') is not None:
+            carrier['csc_material'] = str(identity.get('material'))
+        if snapshot.get('fragment') is not None:
+            carrier['csc_fragment'] = str(bool(snapshot['fragment']))
+        return ids, carrier
 
     def _iter_snapshot_blocks(self, passport: dict, snapshot_scope: str):
         """Yield snapshot dicts from passport.snapshots[]."""
@@ -474,39 +536,6 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             return ['inline']
         return sources
 
-    def _build_extrusion(self, extr: dict):
-        tol = Rhino.RhinoMath.SqrtEpsilon
-        profile = extr.get('profile') or []
-        if len(profile) < 3:
-            return None
-
-        pts = [Rhino.Geometry.Point3d(pt[0], pt[1], 0.0) for pt in profile]
-        if len(pts) >= 2 and pts[0].DistanceTo(pts[-1]) <= tol:
-            pts = pts[:-1]
-        if len(pts) < 3:
-            return None
-
-        pl = Rhino.Geometry.Polyline()
-        pl.AddRange(pts)
-        if not pl.IsClosed:
-            pl.Add(pl[0])
-
-        height = float(extr.get('height', 0))
-        if height <= 0:
-            return None
-
-        cxt = Rhino.Geometry.Extrusion.Create(
-            pl.ToPolylineCurve(),
-            Rhino.Geometry.Plane.WorldXY,
-            height,
-            True,
-        )
-        if cxt is None:
-            return None
-
-        cxt.Translate(Rhino.Geometry.Vector3d(0, 0, height * -0.5))
-        return cxt
-
     def _build_point_cloud(self, pc_data: dict):
         cloud = Rhino.Geometry.PointCloud()
         pts = pc_data.get('points', [])
@@ -524,19 +553,6 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 cloud.Add(Rhino.Geometry.Point3d(p[0], p[1], p[2]))
         return cloud
 
-    def _build_marker_points(self, geometry: dict) -> list:
-        points = []
-        for point_data in geometry.get('marker_points', []) or []:
-            if isinstance(point_data, list) and len(point_data) >= 3:
-                points.append(
-                    Rhino.Geometry.Point(
-                        float(point_data[0]),
-                        float(point_data[1]),
-                        float(point_data[2]),
-                    )
-                )
-        return points
-
     def _build_members_for_snapshot(
             self,
             tree: _MemberTree,
@@ -546,27 +562,32 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             identity_id: str,
             mesh_mode: str,
             cloud_mode: str,
-            auth_core):
+            auth_core,
+            xform):
         geometry = snapshot.get('geometry', {}) or {}
         if not geometry:
             return
 
         snapshot_color = self._snapshot_color(snapshot)
-        xform = self._iframe_transform(snapshot)
         snapshot_id = self._snapshot_id(snapshot)
         res_map = snapshot.get('mesh_ply_resolutions', {}) or {}
         inline_meshes = geometry.get('meshes', []) or []
 
-        for idx, extr in enumerate(geometry.get('extrusions', []) or []):
-            xtr = self._build_extrusion(extr)
-            if xtr is None:
-                continue
-            xtr.Transform(xform)
-            tree.add_leaf(
-                self._geometry_path(
-                    identity_label, snapshot_label, 'Extrusion', idx),
-                xtr,
-            )
+        # authored shapes (a web-authored box, a migrated extrusion) of a
+        # piece that has no mesh and no cloud: from proxy params + placement
+        if authored_only(snapshot):
+            for idx, proxy in drawable_proxies(snapshot):
+                if (proxy.get('fit') or {}).get('method') != 'authored':
+                    continue
+                shape = proxy_to_rhino(proxy)
+                if shape is None:
+                    continue
+                shape.Transform(xform)
+                tree.add_leaf(
+                    self._geometry_path(
+                        identity_label, snapshot_label, 'Proxy', idx),
+                    shape,
+                )
 
         for idx, mesh_data in enumerate(inline_meshes):
             ply_available = res_map.get(str(idx), []) or []
@@ -630,10 +651,9 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 )
                 placed = True
 
-        markers = self._build_marker_points(geometry)
+        markers = [Rhino.Geometry.Point(point)
+                   for _, _, point in marker_points(snapshot, xform)]
         if markers:
-            for pt in markers:
-                pt.Transform(xform)
             tree.add_leaf_many(
                 self._geometry_path(
                     identity_label, snapshot_label, 'Marker', 0),
@@ -652,12 +672,14 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         snapshots = list(self._iter_snapshot_blocks(passport, snapshot_scope))
         if not identity or not snapshots:
             raise ValueError(
-                'Passport JSON missing identity or snapshot data')
+                'Component passport JSON missing identity or snapshot data')
 
         primary = snapshots[0]
-        identity_type = identity.get('type') or 'other'
-        type_id = self._type_id(identity_type)
-        type_name = self._type_name(identity_type)
+        # the placement first: a piece without a frame cannot be placed
+        placement = self._placement(identity, primary)
+        original_function = identity.get('original_function')
+        type_id = self._type_id(original_function)
+        type_name = self._type_name(original_function)
         layer_color = self._snapshot_color(primary)
         component_type = ComponentType(
             type_id,
@@ -669,11 +691,12 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         base_name = str(
             primary.get('name') or identity.get('_id') or 'Component')
         short_name = self._child_short_name(base_name, parent)
-        plane = self._iframe_plane(primary)
+        # the plane of the canonical piece: P = Q . frame
+        plane = plane_from_frame(
+            piece_plane(placement, frame_of(primary)))
         component = GHComponent(component_type, short_name, plane)
 
-        self._attach_csc_metadata(
-            component, identity, primary, passport_json)
+        ids, carrier = self._user_text(identity, primary, passport_json)
 
         identity_label = self._identity_scope_label(identity)
         auth_core = self._get_auth_core()
@@ -688,6 +711,9 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
 
         tree = _MemberTree(component, layer_color)
         for snapshot in snapshots:
+            # the user text names the primary snapshot only
+            tree.text, tree.carrier = (
+                (ids, carrier) if snapshot is primary else ({}, None))
             self._build_members_for_snapshot(
                 tree,
                 snapshot,
@@ -697,6 +723,7 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 mesh_mode,
                 cloud_mode,
                 auth_core,
+                self._xform(identity, snapshot),
             )
 
         if not tree.has_members:
@@ -708,13 +735,14 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         return component
 
     def RunScript(self,
-            ComponentData: Grasshopper.DataTree[str],
+            ComponentPassport: Grasshopper.DataTree[object],
             MeshMode,
             CloudMode,
             SnapshotScope,
             Parent):
+        if self._stop():
+            return empty_outputs()
         Component = Grasshopper.DataTree[System.Object]()
-        self.Component.Message = ''
 
         mesh_mode = self._normalize_mode(
             MeshMode,
@@ -728,21 +756,19 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
             'current',
         )
 
-        if not ComponentData or ComponentData.DataCount == 0:
-            msg = 'Input ComponentData failed to collect data!'
+        if not ComponentPassport or ComponentPassport.DataCount == 0:
+            msg = 'Input ComponentPassport failed to collect data!'
             self._addWarning(msg)
-            self.Component.Message = msg
             return Component
 
         converted = 0
         try:
-            self.Component.Message = 'Converting passport to D2P...'
 
-            for i in range(ComponentData.BranchCount):
-                ghp = ComponentData.Paths[i]
-                for comp_json in ComponentData.Branches[i]:
+            for i in range(ComponentPassport.BranchCount):
+                ghp = ComponentPassport.Paths[i]
+                for comp_json in ComponentPassport.Branches[i]:
                     if not comp_json:
-                        self._addWarning('Empty passport entry, skipping')
+                        self._addWarning('Empty component passport entry, skipping')
                         continue
                     try:
                         passport = json.loads(comp_json)
@@ -757,17 +783,14 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
                         Component.Add(d2p_component.NetObj, ghp)
                         converted += 1
                     except json.JSONDecodeError as e:
-                        self._addError(f'Failed to parse passport JSON: {e}')
+                        self._addError(f'Failed to parse component passport JSON: {e}')
                     except Exception as e:
                         self._addError(
-                            f'Failed to convert passport entry: {e}'
+                            f'Failed to convert component passport entry: {e}'
                         )
 
-            self.Component.Message = (
-                f'Converted {converted} passport entr'
-                f'{"y" if converted == 1 else "ies"} to D2P'
-            )
             if converted:
+                self._state(f'Converted {converted}')
                 self._addRemark(
                     f'Successfully converted {converted} component(s) '
                     f'(mesh={mesh_mode}, cloud={cloud_mode}, '
@@ -778,5 +801,4 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
         except Exception as e:
             msg = f'Unexpected error during conversion: {e}'
             self._addError(msg)
-            self.Component.Message = msg
             return Component

@@ -2,11 +2,24 @@
 Aggregation pipelines for listing identities with current snapshot.
 """
 
+import os
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, Request
 
-from .identity_filters import merge_shallow_catalog_row, resolve_sort_field
+from apps.catalog.read_models import catalog_row
+
+from .identity_filters import resolve_sort_field
+
+
+def annotate_has_preview(request: Request, docs: List[Dict[str, Any]]) -> None:
+    """Say on each row whether its current state has a rendered preview, so a
+    client asks for the image only when there is one (no 404 per row)."""
+    preview_dir = request.app.snapshot_preview_dir
+    for doc in docs:
+        snapshot_id = doc.get('current_snapshot_id')
+        doc['has_preview'] = bool(snapshot_id) and os.path.isfile(
+            os.path.join(preview_dir, f'{snapshot_id}.webp'))
 
 
 def _username_enrichment_stages() -> List[Dict[str, Any]]:
@@ -122,8 +135,12 @@ def build_count_pipeline(
 
 _STATS_FACET_TEMPLATE: Dict[str, Any] = {
     'total': [{'$count': 'count'}],
-    'byType': [
-        {'$group': {'_id': '$type', 'count': {'$sum': 1}}},
+    'byOriginalFunction': [
+        {'$group': {'_id': '$original_function', 'count': {'$sum': 1}}},
+        {'$sort': {'count': -1}},
+    ],
+    'byShapeClass': [
+        {'$group': {'_id': '$shape_class', 'count': {'$sum': 1}}},
         {'$sort': {'count': -1}},
     ],
     'byMaterial': [
@@ -138,17 +155,35 @@ _STATS_FACET_TEMPLATE: Dict[str, Any] = {
         {'$group': {'_id': '$complexity', 'count': {'$sum': 1}}},
         {'$sort': {'_id': 1}},
     ],
-    'byValidated': [
-        {'$group': {'_id': '$validated', 'count': {'$sum': 1}}},
+    'byStatus': [
+        {'$group': {'_id': '$status', 'count': {'$sum': 1}}},
         {'$sort': {'count': -1}},
     ],
     'byFragment': [
         {'$group': {'_id': '$fragment', 'count': {'$sum': 1}}},
         {'$sort': {'count': -1}},
     ],
-    'byAssembly': [
-        {'$group': {'_id': '$assembly', 'count': {'$sum': 1}}},
+    # where the pieces are: in place, not in place, out of circulation
+    'byCirculation': [
+        {
+            '$group': {
+                '_id': {
+                    '$cond': [
+                        {'$ne': [{'$ifNull': ['$exit', None]}, None]},
+                        'exited',
+                        {'$cond': [{'$eq': ['$planned', True]},
+                                   'in_place', 'deinstalled']},
+                    ]
+                },
+                'count': {'$sum': 1},
+            }
+        },
         {'$sort': {'count': -1}},
+    ],
+    # the pieces the current states stand for (a batch counts its quantity)
+    'pieces': [
+        {'$group': {'_id': None,
+                    'count': {'$sum': {'$ifNull': ['$quantity', 1]}}}},
     ],
     'reserved': [
         {
@@ -238,11 +273,13 @@ def build_identity_stats_pipeline(
                         '$current_snapshot',
                         {
                             '_id': '$_id',
-                            'type': '$type',
+                            'original_function': '$original_function',
                             'material': '$material',
                             'dataset': '$dataset',
                             'reserved': {'$ifNull': ['$reserved', '']},
                             'catalog_number': '$catalog_number',
+                            'exit': '$exit',
+                            'planned': '$origin.planned',
                         },
                     ]
                 }
@@ -266,7 +303,7 @@ async def shallow_row_for_identity(
     request: Request,
     identity_id: str,
 ) -> dict:
-    """One legacy-style shallow catalog row for a single identity."""
+    """One catalog row (``CatalogRow``) for a single identity."""
     pipeline = build_list_pipeline(
         snapshots_collection=request.app.mongodb_component_snapshots.name,
         identity_match={'_id': identity_id},
@@ -285,7 +322,7 @@ async def shallow_row_for_identity(
             status_code=404,
             detail=f'Identity {identity_id} not found',
         )
-    return merge_shallow_catalog_row(docs[0])
+    return catalog_row(docs[0])
 
 
 async def count_identities(

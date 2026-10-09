@@ -109,15 +109,18 @@ class ClientHeaderLogMiddleware:
 
 # ENFORCEMENT (decision 8.11) -------------------------------------------------
 MIN_VERSIONS_ENV = 'CSC_MIN_CLIENT_VERSIONS'
-# the updater must reach everything under /ghinterface/, even when outdated
+# the updater must reach everything under /ghinterface/, even when outdated;
+# an outdated client must also be able to log in (``/auth/token``, which
+# carries no data and gives no access by itself) to reach the updater
 EXEMPT_PREFIXES: Tuple[str, ...] = (
-    '/ghinterface/', '/docs', '/redoc', '/openapi.json', '/health',
-    '/version',
+    '/ghinterface/', '/auth/token', '/docs', '/redoc', '/openapi.json',
+    '/health', '/version',
 )
 ANONYMOUS_READ_METHODS: Tuple[str, ...] = ('GET', 'HEAD')
 _UPDATE_HINT: Dict[str, str] = {
     'gh-userobjects': 'update the Grasshopper UserObjects via CSC_Update',
     'web': 'reload the page to get the current web app',
+    'geometry-runner': 'update the geometry runner (main_geometry.py --remote)',
 }
 
 

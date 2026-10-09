@@ -2,6 +2,7 @@
 
 import React, { useRef, MutableRefObject, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react'
 import { Html5Qrcode, Html5QrcodeScanType, Html5QrcodeSupportedFormats } from 'html5-qrcode'
+import { uuidFromScan } from '@/lib/scanIds'
 
 interface QRScannerProps {
   elementId: string
@@ -74,8 +75,9 @@ const QRScanner = forwardRef<QRScannerRef, QRScannerProps>(({
         { facingMode: 'environment' },
         mergedConfig,
         (decodedText) => {
-          // QR code detected
-          onScanSuccess(decodedText)
+          // QR code detected: a tag holds a bare UUID or a link ending in
+          // one (spec section 7.5); callers always get the id
+          onScanSuccess(uuidFromScan(decodedText) ?? decodedText)
         },
         () => {
           // Per-frame scan callback - called when no QR code found in current frame

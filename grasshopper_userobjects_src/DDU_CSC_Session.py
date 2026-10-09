@@ -1,9 +1,10 @@
 #! python3
 # -*- coding: utf-8 -*-
 # venv: DDU_CSC
-print('ENV OK!')
 # r: charset_normalizer
-# r: requests
+# r: requests==2.32.5
+# r: numpy==2.0.2
+print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import time  # NOQA
@@ -33,8 +34,9 @@ ghenv.Component.NickName = 'CSC_Session'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '1 User'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Handles user authentication with the remote API, manages access '
-    'tokens, and provides a unified catalog cache (identities and '
+    'Handles user authentication with the remote API (server address '
+    'input), manages access tokens, keeps one connection alive for all '
+    'requests and provides a unified catalog cache (identities and '
     'snapshots stored independently, mesh PLY geometry cached per '
     'snapshot). Stores authentication state in scriptcontext.sticky.'
 )
@@ -42,12 +44,77 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 260928.1
+Version: 261005a
 """
 
 # Sent as X-CSC-Client on every request so the backend can tell which
 # UserObjects release is calling (spec 7.4).
-CSC_CLIENT = 'gh-userobjects/0.5.1.0'
+CSC_CLIENT = 'gh-userobjects/0.6.0.0'
+
+# The server of a fresh session; the Server input of this component changes it.
+DEFAULT_SERVER = 'https://api.2ndchances.build'
+
+# CSC LIBRARY (decision 8.111) ----------------------------------------------
+CSC_GH_MINIMUM = '261005'
+LIBRARY_PROBLEM = None
+try:
+    import csc_gh
+    csc_gh.require(CSC_GH_MINIMUM)
+    from csc_gh.rhino import (mesh_from_ply, point_cloud_from_ply)  # NOQA
+except ImportError:
+    LIBRARY_PROBLEM = (
+        'CSC library 261005 too old or missing: run CSC_Update, '
+        'then restart Rhino')
+
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('Status', 'Status',
+     'Status Message'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
+
+
+class CSCClientOutdated(RuntimeError):
+    """The server answered 426: this UserObjects release is too old."""
+
+
+def server_url(value):
+    """A server address as typed (``localhost:8010``, a full URL, empty =
+    the default) as a URL without a trailing slash."""
+    value = (value or '').strip()
+    if not value:
+        return DEFAULT_SERVER
+    if '://' not in value:
+        host = value.split('/')[0].lower()
+        host = (host.split(']')[0] + ']' if host.startswith('[')
+                else host.split(':')[0])
+        local = host in ('localhost', '127.0.0.1', '[::1]')
+        value = ('http://' if local else 'https://') + value
+    return value.rstrip('/')
+
+
+def outdated_message(response):
+    """The sentence of a 426 answer: the server's reason and the fix."""
+    try:
+        detail = response.json().get('detail')
+    except Exception:
+        detail = None
+    detail = detail or 'this UserObjects release is older than the server needs'
+    if 'CSC_Update' not in str(detail):
+        detail = f'{detail}: update the UserObjects with CSC_Update'
+    return f'Server refused this client (426): {detail}'
 
 
 def _compute_passport_etag(identity_doc, snapshot_docs):
@@ -154,13 +221,15 @@ class _ComponentCache(object):
         self.components_dir = os.path.join(self.cache_dir, 'components')
         self.identities_dir = os.path.join(self.cache_dir, 'identities')
         self.snapshots_dir = os.path.join(self.cache_dir, 'snapshots')
-        self.designs_dir = os.path.join(self.cache_dir, 'designs')
         self.metadata_dir = os.path.join(self.cache_dir, 'metadata')
         self.geometry_dir = os.path.join(self.cache_dir, 'component_geometry')
         self._lock = RLock()
 
         # Ensure cache directories exist
         self._ensure_cache_dirs()
+        # A cache written by another client release is not trusted: purge
+        # it once when the release changes (0.5 documents differ from 0.6)
+        self._purge_on_client_change()
 
     def _get_default_cache_dir(self):
         """Get platform-specific cache directory."""
@@ -177,12 +246,29 @@ class _ComponentCache(object):
         """Create cache directories if they don't exist."""
         dirs = [
             self.cache_dir, self.components_dir, self.identities_dir,
-            self.snapshots_dir, self.designs_dir, self.metadata_dir,
-            self.geometry_dir
+            self.snapshots_dir, self.metadata_dir, self.geometry_dir
         ]
         for directory in dirs:
             if not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)
+
+    def _purge_on_client_change(self):
+        """Empty the cache once when CSC_CLIENT changed since it was written."""
+        stamp = os.path.join(self.cache_dir, 'client_release.txt')
+        try:
+            with open(stamp, 'r', encoding='utf-8') as f:
+                written_by = f.read().strip()
+        except (IOError, OSError):
+            written_by = ''
+        if written_by == CSC_CLIENT:
+            return
+        if written_by or os.listdir(self.metadata_dir):
+            self.invalidate()
+        try:
+            with open(stamp, 'w', encoding='utf-8') as f:
+                f.write(CSC_CLIENT)
+        except (IOError, OSError):
+            pass
 
     def _get_cache_key_hash(self, cache_key):
         """Generate a safe filename from cache key."""
@@ -524,29 +610,14 @@ class _ComponentCache(object):
                                 if os.path.isfile(file_path):
                                     geometry_size += os.path.getsize(file_path)
 
-                # Calculate design cache stats
-                design_count = 0
-                design_size = 0
-                if os.path.exists(self.designs_dir):
-                    for filename in os.listdir(self.designs_dir):
-                        if filename.endswith('.pkl'):
-                            design_count += 1
-                            file_path = os.path.join(
-                                self.designs_dir, filename)
-                            if os.path.isfile(file_path):
-                                design_size += os.path.getsize(file_path)
-
                 return {
                     'component_count': component_count,
                     'identity_count': identity_count,
                     'snapshot_count': snapshot_count,
                     'metadata_count': metadata_count,
                     'geometry_count': geometry_count,
-                    'design_count': design_count,
-                    'total_size_bytes': (total_size + geometry_size +
-                                         design_size),
+                    'total_size_bytes': total_size + geometry_size,
                     'geometry_size_bytes': geometry_size,
-                    'design_size_bytes': design_size,
                     'cache_dir': self.cache_dir
                 }
             except (IOError, OSError):
@@ -556,10 +627,8 @@ class _ComponentCache(object):
                     'snapshot_count': 0,
                     'metadata_count': 0,
                     'geometry_count': 0,
-                    'design_count': 0,
                     'total_size_bytes': 0,
                     'geometry_size_bytes': 0,
-                    'design_size_bytes': 0,
                     'cache_dir': self.cache_dir
                 }
 
@@ -605,23 +674,7 @@ class _ComponentCache(object):
                             component_data = pickle.load(f)
                         return component_data, metadata.get('etag'), True
 
-                elif cache_key.startswith('design:'):
-                    # Individual design
-                    design_id = cache_key.split(':', 1)[1]
-                    design_file = os.path.join(
-                        self.designs_dir, f"{design_id}.pkl"
-                    )
-
-                    if os.path.exists(design_file):
-                        with open(design_file, 'rb') as f:
-                            design_data = pickle.load(f)
-                        return design_data, metadata.get('etag'), True
-
                 elif cache_key == 'schema:create_identity':
-                    # Schema data is stored directly in metadata
-                    return metadata.get('data'), metadata.get('etag'), True
-
-                elif cache_key == 'schema:design':
                     # Schema data is stored directly in metadata
                     return metadata.get('data'), metadata.get('etag'), True
 
@@ -666,36 +719,7 @@ class _ComponentCache(object):
                         'type': 'component'
                     }
 
-                elif cache_key.startswith('design:'):
-                    # Individual design
-                    design_id = cache_key.split(':', 1)[1]
-                    design_file = os.path.join(
-                        self.designs_dir, f"{design_id}.pkl"
-                    )
-
-                    # Store design data as pickle
-                    with open(design_file, 'wb') as f:
-                        pickle.dump(data, f)
-
-                    # Store metadata
-                    metadata = {
-                        'cache_key': cache_key,
-                        'cached_at': current_time,
-                        'etag': etag,
-                        'type': 'design'
-                    }
-
                 elif cache_key == 'schema:create_identity':
-                    # Schema data - store directly in metadata
-                    metadata = {
-                        'cache_key': cache_key,
-                        'cached_at': current_time,
-                        'etag': etag,
-                        'type': 'schema',
-                        'data': data
-                    }
-
-                elif cache_key == 'schema:design':
                     # Schema data - store directly in metadata
                     metadata = {
                         'cache_key': cache_key,
@@ -930,134 +954,14 @@ class _ComponentCache(object):
 def _parse_ply_binary_to_mesh(ply_bytes):
     """
     Parse a binary_little_endian PLY (CSC canonical, Rhino Z-up) into a
-    single Rhino.Geometry.Mesh. Supports float/double vertex coords,
-    optional uchar red/green/blue, and a face list (uchar count + int
-    indices). No coordinate rotation is applied (PLY is already Z-up).
+    single Rhino.Geometry.Mesh: numpy parse (csc_ply), then the Rhino build
+    chosen by MESH_BUILD_MODE (csc_rhino). No coordinate rotation is applied.
     Returns the mesh or None on failure.
     """
     try:
         if not ply_bytes:
             return None
-
-        # Locate end of (ascii) header
-        marker = b'end_header\n'
-        header_end = ply_bytes.find(marker)
-        if header_end == -1:
-            print('PLY: missing end_header')
-            return None
-        header_text = ply_bytes[:header_end].decode('ascii', 'ignore')
-        body = ply_bytes[header_end + len(marker):]
-
-        if 'binary_little_endian' not in header_text:
-            print('PLY: only binary_little_endian supported')
-            return None
-
-        # Parse header elements/properties
-        _type_fmt = {
-            'char': 'b', 'int8': 'b',
-            'uchar': 'B', 'uint8': 'B',
-            'short': 'h', 'int16': 'h',
-            'ushort': 'H', 'uint16': 'H',
-            'int': 'i', 'int32': 'i',
-            'uint': 'I', 'uint32': 'I',
-            'float': 'f', 'float32': 'f',
-            'double': 'd', 'float64': 'd',
-        }
-        _type_size = {
-            'b': 1, 'B': 1, 'h': 2, 'H': 2,
-            'i': 4, 'I': 4, 'f': 4, 'd': 8,
-        }
-
-        vertex_count = 0
-        face_count = 0
-        vertex_props = []  # list of (fmt_char, name)
-        face_list = None  # (count_fmt, index_fmt)
-        current = None
-        for raw_line in header_text.splitlines():
-            line = raw_line.strip()
-            if not line:
-                continue
-            tok = line.split()
-            if tok[0] == 'element':
-                current = tok[1]
-                if current == 'vertex':
-                    vertex_count = int(tok[2])
-                elif current == 'face':
-                    face_count = int(tok[2])
-            elif tok[0] == 'property':
-                if tok[1] == 'list':
-                    count_fmt = _type_fmt.get(tok[2], 'B')
-                    index_fmt = _type_fmt.get(tok[3], 'i')
-                    face_list = (count_fmt, index_fmt)
-                elif current == 'vertex':
-                    fmt = _type_fmt.get(tok[1])
-                    if fmt:
-                        vertex_props.append((fmt, tok[2]))
-
-        if face_list is None:
-            face_list = ('B', 'i')
-
-        # Read vertices
-        vertex_struct = struct.Struct(
-            '<' + ''.join(f for f, _ in vertex_props)
-        )
-        names = [n for _, n in vertex_props]
-        ix = names.index('x') if 'x' in names else 0
-        iy = names.index('y') if 'y' in names else 1
-        iz = names.index('z') if 'z' in names else 2
-        has_color = ('red' in names and 'green' in names and
-                     'blue' in names)
-        if has_color:
-            ir = names.index('red')
-            ig = names.index('green')
-            ib = names.index('blue')
-
-        mesh = Rhino.Geometry.Mesh()
-        offset = 0
-        vsize = vertex_struct.size
-        colors = []
-        for _ in range(vertex_count):
-            vals = vertex_struct.unpack_from(body, offset)
-            offset += vsize
-            mesh.Vertices.Add(
-                float(vals[ix]), float(vals[iy]), float(vals[iz])
-            )
-            if has_color:
-                colors.append(
-                    (int(vals[ir]), int(vals[ig]), int(vals[ib]))
-                )
-
-        # Read faces
-        count_fmt, index_fmt = face_list
-        count_struct = struct.Struct('<' + count_fmt)
-        count_size = _type_size[count_fmt]
-        index_size = _type_size[index_fmt]
-        for _ in range(face_count):
-            (n,) = count_struct.unpack_from(body, offset)
-            offset += count_size
-            idx_struct = struct.Struct('<' + index_fmt * n)
-            indices = idx_struct.unpack_from(body, offset)
-            offset += index_size * n
-            if n == 3:
-                mesh.Faces.AddFace(indices[0], indices[1], indices[2])
-            elif n == 4:
-                mesh.Faces.AddFace(
-                    indices[0], indices[1], indices[2], indices[3]
-                )
-            elif n > 4:
-                for k in range(1, n - 1):
-                    mesh.Faces.AddFace(
-                        indices[0], indices[k], indices[k + 1]
-                    )
-
-        if has_color and len(colors) == mesh.Vertices.Count:
-            for r, g, b in colors:
-                mesh.VertexColors.Add(r, g, b)
-
-        mesh.Normals.ComputeNormals()
-        mesh.Compact()
-        return mesh
-
+        return mesh_from_ply(ply_bytes)
     except Exception as e:
         print(f'Error parsing PLY: {str(e)}')
         return None
@@ -1071,83 +975,7 @@ def _parse_ply_binary_to_point_cloud(ply_bytes):
     try:
         if not ply_bytes:
             return None
-
-        marker = b'end_header\n'
-        header_end = ply_bytes.find(marker)
-        if header_end == -1:
-            print('PLY point cloud: missing end_header')
-            return None
-        header_text = ply_bytes[:header_end].decode('ascii', 'ignore')
-        body = ply_bytes[header_end + len(marker):]
-
-        if 'binary_little_endian' not in header_text:
-            print('PLY point cloud: only binary_little_endian supported')
-            return None
-
-        _type_fmt = {
-            'char': 'b', 'int8': 'b',
-            'uchar': 'B', 'uint8': 'B',
-            'short': 'h', 'int16': 'h',
-            'ushort': 'H', 'uint16': 'H',
-            'int': 'i', 'int32': 'i',
-            'uint': 'I', 'uint32': 'I',
-            'float': 'f', 'float32': 'f',
-            'double': 'd', 'float64': 'd',
-        }
-
-        vertex_count = 0
-        vertex_props = []
-        current = None
-        for raw_line in header_text.splitlines():
-            line = raw_line.strip()
-            if not line:
-                continue
-            tok = line.split()
-            if tok[0] == 'element':
-                current = tok[1]
-                if current == 'vertex':
-                    vertex_count = int(tok[2])
-            elif tok[0] == 'property' and current == 'vertex':
-                if tok[1] != 'list':
-                    fmt = _type_fmt.get(tok[1])
-                    if fmt:
-                        vertex_props.append((fmt, tok[2]))
-
-        if vertex_count <= 0 or not vertex_props:
-            return None
-
-        vertex_struct = struct.Struct(
-            '<' + ''.join(f for f, _ in vertex_props)
-        )
-        names = [n for _, n in vertex_props]
-        ix = names.index('x') if 'x' in names else 0
-        iy = names.index('y') if 'y' in names else 1
-        iz = names.index('z') if 'z' in names else 2
-        has_color = ('red' in names and 'green' in names and
-                     'blue' in names)
-        if has_color:
-            ir = names.index('red')
-            ig = names.index('green')
-            ib = names.index('blue')
-
-        cloud = Rhino.Geometry.PointCloud()
-        offset = 0
-        vsize = vertex_struct.size
-        for _ in range(vertex_count):
-            vals = vertex_struct.unpack_from(body, offset)
-            offset += vsize
-            point = Rhino.Geometry.Point3d(
-                float(vals[ix]), float(vals[iy]), float(vals[iz]))
-            if has_color:
-                cloud.Add(
-                    point,
-                    System.Drawing.Color.FromArgb(
-                        int(vals[ir]), int(vals[ig]), int(vals[ib])))
-            else:
-                cloud.Add(point)
-
-        return cloud if cloud.Count > 0 else None
-
+        return point_cloud_from_ply(ply_bytes)
     except Exception as e:
         print(f'Error parsing point cloud PLY: {str(e)}')
         return None
@@ -1167,8 +995,10 @@ class _AuthCore(object):
     CLIENT = CSC_CLIENT
 
     def __init__(self, base_url, leeway=30, disable_cache=False):
-        self.base_url = (base_url or 'https://api.2ndchances.build').rstrip('/')
+        self.base_url = server_url(base_url)
         self.leeway = int(leeway) if leeway is not None else 30
+        # one connection pool for every request of the session (8.92)
+        self._http = requests.Session()
         self.disable_cache = disable_cache
         self._lock = RLock()
         self._token = None
@@ -1179,6 +1009,29 @@ class _AuthCore(object):
     @staticmethod
     def _now():
         return int(time.time())
+
+    def _send(self, method, url, **kwargs):
+        """One request over the shared connection. A 426 (this release is
+        too old for the server) raises CSCClientOutdated with the server's
+        sentence, so every component shows the fix and not a bare status."""
+        response = self._http.request(method, url, **kwargs)
+        if response.status_code == 426:
+            raise CSCClientOutdated(outdated_message(response))
+        return response
+
+    def set_base_url(self, url):
+        """Point the session at another server: login and cache of the old
+        one are dropped. Returns True when the address changed."""
+        url = server_url(url)
+        with self._lock:
+            if url == self.base_url:
+                return False
+            self.base_url = url
+            self._token = None
+            self._exp = 0
+            self._username = None
+        self.sync_cache()
+        return True
 
     @staticmethod
     def _b64url_decode(seg):
@@ -1240,25 +1093,46 @@ class _AuthCore(object):
             params=None,
             extra_headers=None,
             timeout=20):
-        if not self.is_valid():
-            raise RuntimeError(
-                'Access token missing or expired. Please sign in again.'
-            )
-        headers = self.auth_header()
-        if extra_headers:
-            headers.update(extra_headers)
-        return requests.get(
-            self.base_url + path,
-            params=params,
-            headers=headers,
-            timeout=timeout
-        )
+        return self._authorized(
+            'GET', path, params=params, extra_headers=extra_headers,
+            timeout=timeout)
 
     def authorized_post(
             self,
             path,
             json_body=None,
             files=None,
+            extra_headers=None,
+            timeout=60,
+            params=None,
+            data=None):
+        return self._authorized(
+            'POST', path, json_body=json_body, files=files, data=data,
+            params=params, extra_headers=extra_headers, timeout=timeout)
+
+    def authorized_put(
+            self,
+            path,
+            files=None,
+            json_body=None,
+            extra_headers=None,
+            timeout=300,
+            params=None,
+            data=None):
+        """PUT, e.g. a mesh PLY as multipart ``files``: the uploads of the
+        Add components use the shared connection too."""
+        return self._authorized(
+            'PUT', path, json_body=json_body, files=files, data=data,
+            params=params, extra_headers=extra_headers, timeout=timeout)
+
+    def _authorized(
+            self,
+            method,
+            path,
+            params=None,
+            json_body=None,
+            files=None,
+            data=None,
             extra_headers=None,
             timeout=60):
         if not self.is_valid():
@@ -1268,25 +1142,19 @@ class _AuthCore(object):
         headers = self.auth_header()
         if extra_headers:
             headers.update(extra_headers)
-        # Handle file uploads vs JSON requests
+        kwargs = {'headers': headers, 'timeout': timeout}
+        if params is not None:
+            kwargs['params'] = params
         if files is not None:
-            # For file uploads, don't set Content-Type header
-            # (let requests handle it)
-            # and use data instead of json
-            return requests.post(
-                self.base_url + path,
-                files=files,
-                headers=headers,
-                timeout=timeout
-            )
-        else:
-            # For JSON requests, use json parameter
-            return requests.post(
-                self.base_url + path,
-                json=json_body,
-                headers=headers,
-                timeout=timeout
-            )
+            # multipart: requests sets the Content-Type with its boundary
+            kwargs['files'] = files
+            if data is not None:
+                kwargs['data'] = data
+        elif json_body is not None:
+            kwargs['json'] = json_body
+        elif data is not None:
+            kwargs['data'] = data
+        return self._send(method, self.base_url + path, **kwargs)
 
     def validate_uuid(self, uuid_to_test: str, version: int = 4):
         """
@@ -1416,7 +1284,7 @@ class _AuthCore(object):
             headers['If-None-Match'] = cached_etag
 
         # Make request
-        response = requests.get(
+        response = self._send('GET', 
             self.base_url + path,
             params=params,
             headers=headers,
@@ -1473,7 +1341,7 @@ class _AuthCore(object):
         if has_query and query_etag:
             headers['If-None-Match'] = query_etag
 
-        response = requests.get(
+        response = self._send('GET', 
             self.base_url + '/identities',
             params=params,
             headers=headers,
@@ -1489,7 +1357,7 @@ class _AuthCore(object):
             headers = self.auth_header()
             if extra_headers:
                 headers.update(extra_headers)
-            response = requests.get(
+            response = self._send('GET', 
                 self.base_url + '/identities',
                 params=params,
                 headers=headers,
@@ -1569,7 +1437,7 @@ class _AuthCore(object):
         if cached_etag:
             headers['If-None-Match'] = cached_etag
 
-        response = requests.get(
+        response = self._send('GET', 
             self.base_url + path,
             headers=headers,
             params=params or None,
@@ -1582,7 +1450,7 @@ class _AuthCore(object):
             headers = self.auth_header()
             if extra_headers:
                 headers.update(extra_headers)
-            response = requests.get(
+            response = self._send('GET', 
                 self.base_url + path,
                 headers=headers,
                 params=params or None,
@@ -1653,7 +1521,7 @@ class _AuthCore(object):
         if is_from_cache and cached_etag:
             headers['If-None-Match'] = cached_etag
 
-        response = requests.get(
+        response = self._send('GET', 
             self.base_url + path,
             headers=headers,
             timeout=timeout
@@ -1712,7 +1580,7 @@ class _AuthCore(object):
         if is_from_cache and cached_etag:
             headers['If-None-Match'] = cached_etag
 
-        response = requests.get(
+        response = self._send('GET', 
             self.base_url + path,
             headers=headers,
             timeout=timeout
@@ -1754,7 +1622,7 @@ class _AuthCore(object):
 
         if not self._cache:
             try:
-                response = requests.get(f'{self.base_url}{endpoint}',
+                response = self._send('GET', f'{self.base_url}{endpoint}',
                                         headers=self.client_header())
                 if response.status_code == 200:
                     return response.json()
@@ -1776,7 +1644,7 @@ class _AuthCore(object):
                 if is_from_cache and cached_etag:
                     headers['If-None-Match'] = cached_etag
 
-            response = requests.get(
+            response = self._send('GET', 
                 f'{self.base_url}{endpoint}',
                 headers=headers,
             )
@@ -1802,82 +1670,6 @@ class _AuthCore(object):
                 if is_from_cache:
                     return cached_schema
             return None
-
-    def get_design_schema(self, force_refresh=False):
-        """
-        Get design schema with caching support.
-
-        Args:
-            force_refresh: Force refresh of schema even if cached
-
-        Returns:
-            Design schema dictionary or None if failed
-        """
-        # Schema endpoints are unprotected, so we can access without auth
-        # But we still need to check if we have a valid base_url
-        if not self.base_url:
-            raise RuntimeError(
-                'Base URL not configured. Please sign in first.')
-
-        # If cache is disabled, make regular request
-        # (schema endpoint is unprotected)
-        if not self._cache:
-            try:
-                response = requests.get(f'{self.base_url}/schema/design',
-                                        headers=self.client_header())
-                if response.status_code == 200:
-                    return response.json()
-                return None
-            except Exception:
-                return None
-
-        # Check cache first (unless force refresh)
-        if not force_refresh:
-            cached_schema, cached_etag, is_from_cache = self._cache.get(
-                'schema:design')
-            if is_from_cache:
-                return cached_schema
-
-        # Make request to get schema (unprotected endpoint)
-        try:
-            # Prepare headers for conditional request
-            headers = self.client_header()
-            if not force_refresh:
-                cached_schema, cached_etag, is_from_cache = self._cache.get(
-                    'schema:design')
-                if is_from_cache and cached_etag:
-                    headers['If-None-Match'] = cached_etag
-
-            response = requests.get(f'{self.base_url}/schema/design',
-                                    headers=headers)
-
-            if response.status_code == 304 and not force_refresh:
-                # Not modified - return cached data
-                cached_schema, _, is_from_cache = self._cache.get(
-                    'schema:design')
-                if is_from_cache:
-                    return cached_schema
-
-            elif response.status_code == 200:
-                # Data changed or first request - cache the response
-                try:
-                    data = response.json()
-                    etag = response.headers.get('ETag')
-                    self._cache.set('schema:design', data, etag)
-                    return data
-                except (ValueError, KeyError):
-                    return None
-
-            return None
-        except Exception:
-            # If request fails and we have cached schema, return cached version
-            if not force_refresh:
-                cached_schema, _, is_from_cache = self._cache.get(
-                    'schema:design')
-                if is_from_cache:
-                    return cached_schema
-            return None
-
 
 class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
     """
@@ -1911,6 +1703,34 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
+
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the library is missing or
+        too old, or the outputs were just updated (says why)."""
+        if LIBRARY_PROBLEM:
+            self._addError(LIBRARY_PROBLEM)
+            return True
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -1925,13 +1745,16 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
         self.InputParams[4].Description = (
             'Clear cache (default: False)'
         )
+        if len(self.InputParams) > 5:
+            self.InputParams[5].Description = (
+                'Server address, e.g. https://api.2ndchances.build or '
+                'localhost:8010 (default: the CSC server; changing it signs '
+                'you out and clears the cache)'
+            )
         # Initialize output param descriptions
-        i = 0
-        if self.OutputParams[0].Name == 'out':
-            i += 1
-        self.OutputParams[0+i].Description = (
-            'Status Message'
-        )
+        self._check_outputs()
+        if LIBRARY_PROBLEM is None:
+            csc_gh.dev_reload(globals())
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage or create new one."""
@@ -1966,8 +1789,11 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
             Password: str,
             Refresh: bool,
             DisableCache: bool,
-            ClearCache: bool):
+            ClearCache: bool,
+            Server):
         # Initialize status messages list
+        if self._stop():
+            return empty_outputs()
         status_messages = []
 
         # Sanitize input parameters (defaults don't work in function signature)
@@ -1979,11 +1805,16 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
         # Get or create AuthCore instance
         auth_core = self.get_auth_core_from_sticky()
 
+        # The server of this session (8.93): a new address drops the login
+        if Server is not None and str(Server).strip():
+            if auth_core.set_base_url(Server):
+                status_messages.append(
+                    f'Server changed to {auth_core.base_url}: signed out')
+
         # Handle cache management
         if ClearCache:
             auth_core.sync_cache()
             status_messages.append('Cache cleared')
-            self.Component.Message = 'Cache cleared'
             # Return status messages
             Status = status_messages
             return (Status,)
@@ -1994,13 +1825,11 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
         # Input validation
         if not Username or not Username.strip():
             status_messages.append('Please provide username/email')
-            self.Component.Message = 'Please provide username/email'
             Status = status_messages
             return (Status,)
 
         if not Password or not Password.strip():
             status_messages.append('Please provide password')
-            self.Component.Message = 'Please provide password'
             Status = status_messages
             return (Status,)
 
@@ -2011,14 +1840,10 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
             if Refresh:
                 # Refresh authentication - clear existing token and re-auth
                 auth_core.clear()
-                self.Component.Message = 'Refreshing authentication...'
             else:
                 # Check if we already have a valid token
                 if auth_core.is_valid():
                     current_user = auth_core.get_username()
-                    self.Component.Message = (
-                        f'Already signed in as: {current_user}'
-                    )
 
                     # Fetch and cache create-identity schema
                     try:
@@ -2044,13 +1869,9 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                     cache_enabled = auth_core.is_cache_enabled()
                     comp_count = cache_stats["component_count"]
                     geometry_count = cache_stats["geometry_count"]
-                    design_count = cache_stats["design_count"]
                     size_kb = cache_stats["total_size_bytes"] // 1024
                     geometry_size_kb = (
                         cache_stats["geometry_size_bytes"] // 1024
-                    )
-                    design_size_kb = (
-                        cache_stats["design_size_bytes"] // 1024
                     )
 
                     # Add cache status to messages
@@ -2059,15 +1880,13 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                         f'{"Enabled" if cache_enabled else "Disabled"}\n'
                         f' | Components: {comp_count}\n'
                         f' | Geometry: {geometry_count} files\n'
-                        f' | Designs: {design_count} files\n'
                         f' | Size: {size_kb} kB\n'
                         f' | Geometry: {geometry_size_kb} kB\n'
-                        f' | Designs: {design_size_kb} kB\n')
+                        f' | Server: {auth_core.base_url}\n')
                     status_messages.append(cache_status)
                     Status = status_messages
                     return (Status,)
 
-                self.Component.Message = 'Signing in...'
 
             # Prepare login data
             login_data = {
@@ -2076,7 +1895,8 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
             }
 
             # Make login request
-            response = requests.post(
+            response = auth_core._send(
+                'POST',
                 f'{auth_core.base_url}/auth/token',
                 data=login_data,
                 headers={
@@ -2122,13 +1942,9 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                     cache_enabled = auth_core.is_cache_enabled()
                     comp_count = cache_stats["component_count"]
                     geometry_count = cache_stats["geometry_count"]
-                    design_count = cache_stats["design_count"]
                     size_kb = cache_stats["total_size_bytes"] // 1024
                     geometry_size_kb = (
                         cache_stats["geometry_size_bytes"] // 1024
-                    )
-                    design_size_kb = (
-                        cache_stats["design_size_bytes"] // 1024
                     )
 
                     # Add cache status to messages
@@ -2137,13 +1953,11 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                         f'{"Enabled" if cache_enabled else "Disabled"}\n'
                         f' | Components: {comp_count}\n'
                         f' | Geometry: {geometry_count} files\n'
-                        f' | Designs: {design_count} files\n'
                         f' | Size: {size_kb} kB\n'
                         f' | Geometry: {geometry_size_kb} kB\n'
-                        f' | Designs: {design_size_kb} kB\n')
+                        f' | Server: {auth_core.base_url}\n')
                     status_messages.append(cache_status)
 
-                    self.Component.Message = f'Signed in as: {username}'
 
                     # Return status messages
                     Status = status_messages
@@ -2153,7 +1967,6 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                     msg = 'Login failed: No token received'
                     status_messages.append(msg)
                     self._addWarning(msg)
-                    self.Component.Message = msg
                     Status = status_messages
                     return (Status,)
 
@@ -2161,7 +1974,6 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = 'Invalid username or password'
                 status_messages.append(msg)
                 self._addError(msg)
-                self.Component.Message = msg
                 Status = status_messages
                 return (Status,)
 
@@ -2169,7 +1981,6 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = 'Invalid input data'
                 status_messages.append(msg)
                 self._addError(msg)
-                self.Component.Message = msg
                 Status = status_messages
                 return (Status,)
 
@@ -2177,7 +1988,6 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = 'Server error - please try again'
                 status_messages.append(msg)
                 self._addWarning(msg)
-                self.Component.Message = msg
                 Status = status_messages
                 return (Status,)
 
@@ -2185,15 +1995,20 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = f'Login failed with status code: {response.status_code}'
                 status_messages.append(msg)
                 self._addError(msg)
-                self.Component.Message = msg
                 Status = status_messages
                 return (Status,)
+
+        except CSCClientOutdated as e:
+            msg = str(e)
+            status_messages.append(msg)
+            self._addError(msg)
+            Status = status_messages
+            return (Status,)
 
         except requests.exceptions.ConnectionError as e:
             msg = 'Cannot connect to server - check URL'
             status_messages.append(msg)
             self._addError(msg + f'\nFull Error: {str(e)}')
-            self.Component.Message = msg
             Status = status_messages
             return (Status,)
 
@@ -2201,7 +2016,6 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
             msg = 'Request timeout - server may be slow'
             status_messages.append(msg)
             self._addError(msg + f'\nFull Error: {str(e)}')
-            self.Component.Message = msg
             Status = status_messages
             return (Status,)
 
@@ -2209,13 +2023,11 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
             msg = f'Request error: {str(e)}'
             status_messages.append(msg)
             self._addError(msg)
-            self.Component.Message = msg
             Status = status_messages
             return (Status,)
 
         except Exception as e:
             msg = f'Unexpected error: {str(e)}'
             status_messages.append(msg)
-            self.Component.Message = msg
             Status = status_messages
             return (Status,)

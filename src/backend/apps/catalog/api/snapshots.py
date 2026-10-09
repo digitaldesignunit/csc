@@ -19,13 +19,16 @@ Routes for the v0.5 `component_snapshots` collection.
     -> rendered catalog thumbnail
 * `GET|PUT|DELETE
     /snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}`
-    -> PLY file (GET supports `?format=obj`; DELETE clears disk + manifest)
+    -> reduced / original mesh file, stored as `reduced.ply` /
+    `detailed.ply` (GET supports `?format=obj`; DELETE clears disk +
+    manifest)
 * `GET
-    /snapshots/{snapshot_id}/meshes/{primitive_index}/primitive`
-    -> inline mesh (`?format=ply|obj`)
+    /snapshots/{snapshot_id}/meshes/{primitive_index}/preview`
+    -> the preview: the inline mesh (`?format=ply|obj`; decision 8.23;
+    `/primitive` is an alias until P5)
 * `GET
-    /snapshots/{snapshot_id}/extrusions/{index}`
-    -> inline extrusion mesh (`?format=ply|obj`)
+    /snapshots/{snapshot_id}/proxies/{index}/mesh`
+    -> prism proxy as a mesh (`?format=ply|obj`)
 * `GET|PUT|DELETE
     /snapshots/{snapshot_id}/point_clouds/{index}.ply`
     -> PLY file (GET falls back to inline points when no file on disk)
@@ -47,6 +50,7 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Header,
     HTTPException,
     Query,
     Request,
@@ -55,36 +59,44 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pymongo.errors import PyMongoError
 
-from apps.catalog.models import (
+from apps.catalog.models import User
+from apps.catalog.people import for_viewer
+from apps.catalog.permissions import dataset_roles
+from apps.catalog.read_models import (
     ComponentSnapshot,
-    ComponentPassport,
-    PendingValidationSnapshotItem,
-    User,
+    MySnapshotItem,
+    PendingSnapshotItem,
+    snapshot_body,
 )
 from utility import ensure_file, read_upload_limited
 
 from apps.catalog.geometry_mesh_export import (
-    export_extrusion,
     export_inline_mesh,
     export_inline_point_cloud_ply,
     export_mesh_file,
-    get_inline_extrusion_primitive,
     get_inline_mesh_primitive,
     get_inline_point_cloud_primitive,
     mesh_export_extension,
     mesh_export_media_type,
     normalize_mesh_format,
+    trimesh_to_bytes,
 )
+from apps.catalog.proxies.primitives import proxy_mesh
 
-from .auth import get_current_active_user, get_optional_current_user, require_admin
-from .public_access import ensure_snapshot_read_access
+from .auth import get_current_active_user, get_optional_current_user
+from .geometry_hooks import derive_sync
+from .access import load_datasets, require_snapshot_file_write, viewer_of
+from .public_access import (
+    ensure_snapshot_read_access,
+    viewer_etag,
+    viewer_headers,
+)
 from .catalog_common import (
     compute_snapshot_etag,
     get_identities_col,
     get_snapshots_col,
     not_modified_response,
     now_iso,
-    validate_snapshot_and_promote,
     validate_uuid,
 )
 from .snapshot_images import (
@@ -233,37 +245,122 @@ async def _sync_photo_count(request: Request, snapshot_id: str) -> int:
     return await refresh_snapshot_photo_count(request, snapshot_id)
 
 
+MINE_STATUSES = ('draft', 'pending', 'rejected', 'published', 'withdrawn')
+
+
 @router.get(
-    '/snapshots/pending-validation',
-    summary='List unvalidated snapshots awaiting admin approval',
-    response_model=List[PendingValidationSnapshotItem],
-    response_model_by_alias=True,
+    '/snapshots',
+    summary='The caller\'s own snapshots (mine=1), newest change first',
 )
-async def list_pending_validation_snapshots(
+async def list_my_snapshots(
     request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    mine: bool = Query(
+        False, description='required: only the caller\'s own are listed'),
+    status_: str = Query(
+        'draft,pending,rejected', alias='status',
+        description='comma-separated: draft, pending, rejected, published, '
+                    'withdrawn; "any" for all'),
+    limit: int = Query(100, ge=1, le=500),
 ):
     """
-    All snapshots with ``validated=false``,
-    newest first, with identity context.
+    The versions the caller added (``added_by_user_id``), for "My work"
+    (8.118 Q4): drafts, pending and rejected ones by default, each with its
+    piece and, when rejected, the reason. Nobody lists another person's
+    snapshots here.
+    """
+    if not mine:
+        raise HTTPException(
+            status_code=422,
+            detail='mine=1 is required: only your own snapshots are listed')
+    wanted = ([s.strip() for s in status_.split(',') if s.strip()]
+              if status_.strip() != 'any' else list(MINE_STATUSES))
+    unknown = [s for s in wanted if s not in MINE_STATUSES]
+    if unknown or not wanted:
+        raise HTTPException(
+            status_code=422,
+            detail=f'status: one of {", ".join(MINE_STATUSES)} or any')
+    snapshots = await get_snapshots_col(request)
+    identities = await get_identities_col(request)
+    try:
+        docs = await snapshots.find(
+            {'added_by_user_id': current_user.id,
+             'status': {'$in': wanted}},
+            {'_id': 1, 'identity_id': 1, 'version': 1, 'status': 1,
+             'name': 1, 'created': 1, 'status_changed_at': 1,
+             'supersedes': 1, 'status_history': 1},
+        ).sort('status_changed_at', -1).limit(limit).to_list(length=None)
+        ids = sorted({d['identity_id'] for d in docs if d.get('identity_id')})
+        pieces = {
+            i['_id']: i async for i in identities.find(
+                {'_id': {'$in': ids}},
+                {'_id': 1, 'current_snapshot_id': 1, 'catalog_number': 1,
+                 'original_function': 1, 'material': 1, 'dataset': 1})}
+    except PyMongoError as exc:
+        print(f'[ERROR] list_my_snapshots: {exc}')
+        raise HTTPException(status_code=500, detail='Internal server error')
+    items: List[Dict[str, Any]] = []
+    for snap in docs:
+        piece = pieces.get(snap.get('identity_id'))
+        if piece is None:
+            continue
+        reason = None
+        if snap.get('status') == 'rejected':
+            for entry in reversed(snap.get('status_history') or []):
+                if entry.get('to') == 'rejected':
+                    reason = entry.get('reason')
+                    break
+        try:
+            items.append(MySnapshotItem.model_validate({
+                **{k: v for k, v in snap.items() if k != 'status_history'},
+                'is_current': snap['_id'] == piece.get('current_snapshot_id'),
+                'catalog_number': piece.get('catalog_number'),
+                'original_function': piece.get('original_function'),
+                'material': piece.get('material'),
+                'dataset': piece.get('dataset'),
+                'rejection_reason': reason,
+            }).model_dump(by_alias=True))
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f'Snapshot row failed validation: {exc}')
+    return JSONResponse(status_code=200, content=items)
+
+
+@router.get(
+    '/snapshots/pending',
+    summary='Moderation queue: pending snapshots of the caller\'s datasets',
+)
+async def list_pending_snapshots(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """
+    Snapshots with ``status == pending`` in the datasets the caller
+    moderates (admin: all), oldest first --- the order they arrived.
     """
     snapshots = await get_snapshots_col(request)
     identities = await get_identities_col(request)
+    viewer = viewer_of(current_user)
+    moderated = {d.id for d in (await load_datasets(request)).values()
+                 if 'moderator' in dataset_roles(viewer, d)}
 
     try:
         pending_docs = await snapshots.find(
-            {'validated': False},
+            {'status': 'pending'},
             {
                 '_id': 1,
                 'identity_id': 1,
                 'version': 1,
-                'validated': 1,
+                'status': 1,
                 'name': 1,
                 'created': 1,
+                'supersedes': 1,
+                'added_by_username': 1,
             },
-        ).sort('created', -1).to_list(length=None)
+        ).sort('created', 1).to_list(length=None)
     except PyMongoError as exc:
-        print(f'[ERROR] list_pending_validation_snapshots: {exc}')
+        print(f'[ERROR] list_pending_snapshots: {exc}')
         raise HTTPException(status_code=500, detail='Internal server error')
 
     items: List[Dict[str, Any]] = []
@@ -278,11 +375,12 @@ async def list_pending_validation_snapshots(
                 '_id': 1,
                 'current_snapshot_id': 1,
                 'catalog_number': 1,
-                'type': 1,
+                'original_function': 1,
                 'material': 1,
+                'dataset': 1,
             },
         )
-        if identity_doc is None:
+        if identity_doc is None or identity_doc.get('dataset') not in moderated:
             continue
 
         current_snapshot_id = identity_doc.get('current_snapshot_id')
@@ -299,127 +397,24 @@ async def list_pending_validation_snapshots(
             **snap,
             'is_current': snap.get('_id') == current_snapshot_id,
             'catalog_number': identity_doc.get('catalog_number'),
-            'type': identity_doc.get('type'),
+            'original_function': identity_doc.get('original_function'),
             'material': identity_doc.get('material'),
+            'dataset': identity_doc.get('dataset'),
             'live_version': live_version,
         }
         try:
             items.append(
-                PendingValidationSnapshotItem.model_validate(row).model_dump(
+                PendingSnapshotItem.model_validate(row).model_dump(
                     by_alias=True
                 )
             )
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
-                detail=f'Pending validation row failed validation: {exc}',
+                detail=f'Pending snapshot row failed validation: {exc}',
             )
 
     return JSONResponse(status_code=200, content=items)
-
-
-@router.post(
-    '/snapshots/{snapshot_id}/validate',
-    summary='Validate snapshot and promote to live (admin only)',
-    response_model=ComponentPassport,
-    response_model_by_alias=True,
-)
-async def validate_snapshot_route(
-    request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
-    snapshot_id: str,
-):
-    """Mark snapshot validated and set ``current_snapshot_id`` to it."""
-    identity_doc, snapshot_doc = await validate_snapshot_and_promote(
-        request,
-        snapshot_id,
-    )
-
-    from .identities import _passport_response
-
-    return _passport_response(
-        identity_doc,
-        [snapshot_doc],
-    )
-
-
-@router.delete(
-    '/snapshots/{snapshot_id}',
-    summary='Reject and delete a pending snapshot (admin only)',
-)
-async def delete_pending_snapshot(
-    request: Request,
-    admin_user: Annotated[User, Depends(require_admin)],
-    snapshot_id: str,
-):
-    """
-    Remove an unvalidated snapshot that is not the identity's live version.
-
-    Use ``DELETE /identities/{id}`` when rejecting a brand-new (v0) component.
-    """
-    validate_uuid(snapshot_id, label='snapshot id')
-
-    snapshots = await get_snapshots_col(request)
-    identities = await get_identities_col(request)
-
-    snapshot_doc = await snapshots.find_one({'_id': snapshot_id})
-    if snapshot_doc is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Snapshot {snapshot_id} not found',
-        )
-
-    if snapshot_doc.get('validated', False):
-        raise HTTPException(
-            status_code=409,
-            detail='Cannot delete a validated snapshot',
-        )
-
-    identity_id = snapshot_doc.get('identity_id')
-    if not identity_id:
-        raise HTTPException(
-            status_code=500,
-            detail=f'Snapshot {snapshot_id} has no identity_id',
-        )
-
-    identity_doc = await identities.find_one({'_id': identity_id})
-    if identity_doc is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Identity {identity_id} not found',
-        )
-
-    if identity_doc.get('current_snapshot_id') == snapshot_id:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                'Cannot delete the live snapshot. For a new unvalidated '
-                'component (v0), delete the identity instead.'
-            ),
-        )
-
-    _delete_snapshot_disk_assets(request, snapshot_id)
-
-    try:
-        result = await snapshots.delete_one({'_id': snapshot_id})
-    except PyMongoError as exc:
-        print(f'[ERROR] delete_pending_snapshot DB: {exc}')
-        raise HTTPException(status_code=500, detail='Internal server error')
-
-    if result.deleted_count == 0:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Snapshot {snapshot_id} not found',
-        )
-
-    return JSONResponse(
-        status_code=200,
-        content={
-            'ok': True,
-            'snapshot_id': snapshot_id,
-            'identity_id': identity_id,
-        },
-    )
 
 
 @router.get(
@@ -433,11 +428,13 @@ async def get_snapshot_by_id(
     current_user: OptionalUser,
     snapshot_id: str,
 ):
-    """Return a single snapshot document. ETag == stored `etag` field."""
+    """Return a single snapshot document. ETag == stored `etag` field.
+    A withdrawn one outside its dataset answers with its tombstone (8.17)."""
     doc = await ensure_snapshot_read_access(
         request,
         snapshot_id,
         current_user,
+        allow_tombstone=True,
     )
 
     etag = doc.get('etag')
@@ -446,28 +443,26 @@ async def get_snapshot_by_id(
             status_code=500,
             detail=f'Snapshot {snapshot_id} has no etag field',
         )
+    # the stored etag for a signed-in caller, its own one for an anonymous
+    # caller: the bodies differ (8.101), a 304 must not mix them
+    etag = viewer_etag(etag, current_user)
 
     if_none_match = request.headers.get('if-none-match')
     if if_none_match and if_none_match == etag:
-        return not_modified_response(etag)
+        return not_modified_response(etag, **viewer_headers())
 
     try:
-        model = ComponentSnapshot.model_validate(doc)
+        body = snapshot_body(doc)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
             detail=f'Stored snapshot failed Pydantic validation: {exc}',
         )
 
-    body = model.model_dump(by_alias=True)
-
     return JSONResponse(
         status_code=200,
-        content=body,
-        headers={
-            'ETag': etag,
-            'Cache-Control': 'private, max-age=3600',
-        },
+        content=for_viewer(body, current_user),      # no people (8.101)
+        headers=viewer_headers(etag=etag),
     )
 
 
@@ -526,10 +521,15 @@ def _http_mesh_format(format: str) -> str:
 
 
 @router.get(
-    '/snapshots/{snapshot_id}/meshes/{primitive_index}/primitive',
-    summary='Export inline mesh primitive (PLY or OBJ)',
+    '/snapshots/{snapshot_id}/meshes/{primitive_index}/preview',
+    summary='Export the mesh preview stored in the snapshot (PLY or OBJ)',
 )
-async def get_snapshot_mesh_primitive(
+@router.get(
+    '/snapshots/{snapshot_id}/meshes/{primitive_index}/primitive',
+    summary='Alias of .../preview until plan P5 (decision 8.23)',
+    deprecated=True,
+)
+async def get_snapshot_mesh_preview(
     request: Request,
     current_user: OptionalUser,
     snapshot_id: str,
@@ -537,8 +537,8 @@ async def get_snapshot_mesh_primitive(
     format: str = Query('ply', description='ply (default) or obj'),
 ):
     """
-    Build mesh from ``geometry.meshes[primitive_index]``;
-    OBJ is converted on the fly.
+    The preview (decision 8.23): ``geometry.meshes[primitive_index]`` as
+    a file; OBJ is converted on the fly.
     """
     fmt = _http_mesh_format(format)
     if primitive_index < 0:
@@ -555,18 +555,18 @@ async def get_snapshot_mesh_primitive(
         mesh = get_inline_mesh_primitive(doc, primitive_index)
         body = export_inline_mesh(mesh, fmt)  # type: ignore[arg-type]
     except IndexError:
-        raise HTTPException(status_code=404, detail='Mesh primitive not found')
+        raise HTTPException(status_code=404, detail='Mesh preview not found')
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        print(f'[ERROR] mesh primitive export ({fmt}): {exc}')
+        print(f'[ERROR] mesh preview export ({fmt}): {exc}')
         raise HTTPException(
             status_code=500,
-            detail=f'Failed to export mesh primitive as {fmt.upper()}',
+            detail=f'Failed to export mesh preview as {fmt.upper()}',
         )
 
     ext = mesh_export_extension(fmt)  # type: ignore[arg-type]
-    filename = f'{snapshot_id}_mesh_{primitive_index}_primitive.{ext}'
+    filename = f'{snapshot_id}_mesh_{primitive_index}_preview.{ext}'
     return _mesh_export_attachment_response(body, filename, fmt)
 
 
@@ -790,6 +790,9 @@ async def put_snapshot_mesh_ply(
         )
 
     doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'upload_geometry',
+        frozen_when_published=True)
     meshes = (doc.get('geometry') or {}).get('meshes') or []
     if primitive_index >= len(meshes):
         raise HTTPException(
@@ -836,6 +839,7 @@ async def put_snapshot_mesh_ply(
         resolution,
     )
 
+    await derive_sync(request, snapshot_id)
     return JSONResponse(
         status_code=200,
         content={
@@ -877,6 +881,9 @@ async def delete_snapshot_mesh_ply(
         )
 
     doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'delete_geometry',
+        frozen_when_published=True)
     meshes = (doc.get('geometry') or {}).get('meshes') or []
     if primitive_index >= len(meshes):
         raise HTTPException(
@@ -915,6 +922,7 @@ async def delete_snapshot_mesh_ply(
             resolution,
         )
 
+    await derive_sync(request, snapshot_id)
     return JSONResponse(
         status_code=200,
         content={
@@ -928,10 +936,57 @@ async def delete_snapshot_mesh_ply(
 
 
 @router.get(
-    '/snapshots/{snapshot_id}/extrusions/{index}',
-    summary='Export inline extrusion primitive (PLY or OBJ mesh)',
+    '/snapshots/{snapshot_id}/capture/fixtures/{index}.ply',
+    summary='Capture fixture mesh (e.g. the robot gripper; decision 7.7)',
 )
-async def get_snapshot_extrusion(
+async def get_snapshot_capture_fixture(
+    request: Request,
+    current_user: OptionalUser,
+    snapshot_id: str,
+    index: int,
+):
+    """
+    Serve ``capture.fixtures[index].file`` (``capture/<snapshot_id>/
+    fixtures/<i>.ply`` under ``SNAPSHOT_CAPTURE_DIR``). Fixtures are capture
+    context, never the component: no derivation reads them.
+    """
+    doc = await ensure_snapshot_read_access(
+        request,
+        snapshot_id,
+        current_user,
+    )
+    fixtures = ((doc.get('capture') or {}).get('fixtures')) or []
+    if index < 0 or index >= len(fixtures):
+        raise HTTPException(status_code=404, detail='Fixture not found')
+    root = getattr(request.app, 'snapshot_capture_dir', None)
+    relative = str(fixtures[index].get('file') or '')
+    if relative.startswith('capture/'):
+        relative = relative[len('capture/'):]
+    path = os.path.normpath(os.path.join(root, relative)) if root else ''
+    if not root \
+            or not path.startswith(os.path.normpath(root) + os.sep) \
+            or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail='Fixture file not found')
+    etag = _mesh_etag(path)
+    if request.headers.get('if-none-match') == etag:
+        return not_modified_response(etag)
+    filename = f'{snapshot_id}_fixture_{index}.ply'
+    return FileResponse(
+        path,
+        media_type='model/ply',
+        filename=filename,
+        headers={
+            'ETag': etag,
+            'Cache-Control': 'private, max-age=86400',
+        },
+    )
+
+
+@router.get(
+    '/snapshots/{snapshot_id}/proxies/{index}/mesh',
+    summary='Export a proxy as a mesh (PLY or OBJ), in stored coordinates',
+)
+async def get_snapshot_proxy_mesh(
     request: Request,
     current_user: OptionalUser,
     snapshot_id: str,
@@ -939,37 +994,79 @@ async def get_snapshot_extrusion(
     format: str = Query('ply', description='ply (default) or obj'),
 ):
     """
-    Triangulate ``geometry.extrusions[index]``;
-    OBJ is converted on the fly.
+    Triangulate ``geometry.proxies[index]`` (box, prism, cylinder or hull;
+    Appendix B) and place it with its ``placement``, so the mesh lies in the
+    snapshot's stored coordinates like the source geometry. OBJ is converted
+    on the fly.
     """
     fmt = _http_mesh_format(format)
-    if index < 0:
-        raise HTTPException(status_code=400, detail='index must be >= 0')
     doc = await ensure_snapshot_read_access(
         request,
         snapshot_id,
         current_user,
     )
+    proxies = (doc.get('geometry') or {}).get('proxies') or []
+    if index < 0 or index >= len(proxies):
+        raise HTTPException(status_code=404, detail='Proxy not found')
     try:
-        ext = get_inline_extrusion_primitive(doc, index)
-        body = export_extrusion(ext, fmt)  # type: ignore[arg-type]
-    except IndexError:
-        raise HTTPException(
-            status_code=404,
-            detail='Extrusion primitive not found'
-        )
+        body = trimesh_to_bytes(proxy_mesh(proxies[index]), fmt)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        print(f'[ERROR] extrusion export ({fmt}): {exc}')
+        print(f'[ERROR] proxy export ({fmt}): {exc}')
         raise HTTPException(
             status_code=500,
-            detail=f'Failed to export extrusion as {fmt.upper()}',
+            detail=f'Failed to export proxy as {fmt.upper()}',
         )
 
     file_ext = mesh_export_extension(fmt)  # type: ignore[arg-type]
-    filename = f'{snapshot_id}_extrusion_{index}.{file_ext}'
+    filename = f'{snapshot_id}_proxy_{index}.{file_ext}'
     return _mesh_export_attachment_response(body, filename, fmt)
+
+
+@router.get(
+    '/snapshots/{snapshot_id}/proxies/{index}/faces/{face}',
+    summary='Deviation map of one proxy face (16-bit RGB PNG)',
+)
+async def get_snapshot_deviation_map(
+    request: Request,
+    current_user: OptionalUser,
+    snapshot_id: str,
+    index: int,
+    face: str,
+    if_none_match: Annotated[Optional[str], Header()] = None,
+):
+    """
+    Channels (spec appendix B): R = distance (``value * scale_mm +
+    offset_mm`` from ``deviation_maps.faces[face].distance``), G = normal
+    deviation (hundredths of a degree), B = occupancy. The face must be
+    listed in the proxy's ``deviation_maps``; nothing else is served.
+    """
+    doc = await ensure_snapshot_read_access(
+        request,
+        snapshot_id,
+        current_user,
+    )
+    proxies = (doc.get('geometry') or {}).get('proxies') or []
+    faces = ((proxies[index].get('deviation_maps') or {}).get('faces')
+             if 0 <= index < len(proxies) else None) or {}
+    if face not in faces:
+        raise HTTPException(status_code=404, detail='Deviation map not found')
+    root = getattr(request.app, 'snapshot_proxies_dir', None)
+    relative = faces[face]['file']
+    if relative != f'proxies/{snapshot_id}/{index}/{face}.png':
+        raise HTTPException(status_code=404, detail='Deviation map not found')
+    path = os.path.normpath(os.path.join(root or '', *relative.split('/')[1:]))
+    if not root \
+            or not path.startswith(os.path.normpath(root) + os.sep) \
+            or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail='Deviation map not found')
+    etag = f'"{doc.get("etag")}-{index}-{face}"'
+    if if_none_match and if_none_match == etag:
+        return not_modified_response(etag)
+    return FileResponse(
+        path, media_type='image/png',
+        headers={'ETag': etag, 'Cache-Control': 'private, max-age=86400'})
 
 
 @router.get(
@@ -1074,6 +1171,9 @@ async def put_snapshot_point_cloud_ply(
         )
 
     doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'upload_geometry',
+        frozen_when_published=True)
     point_clouds = (doc.get('geometry') or {}).get('point_clouds') or []
     if index >= len(point_clouds):
         raise HTTPException(
@@ -1111,6 +1211,7 @@ async def put_snapshot_point_cloud_ply(
             detail='Failed to save point cloud file',
         )
 
+    await derive_sync(request, snapshot_id)
     return JSONResponse(
         status_code=200,
         content={
@@ -1136,6 +1237,9 @@ async def delete_snapshot_point_cloud_ply(
         raise HTTPException(status_code=400, detail='index must be >= 0')
 
     doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'delete_geometry',
+        frozen_when_published=True)
     point_clouds = (doc.get('geometry') or {}).get('point_clouds') or []
     if index >= len(point_clouds):
         raise HTTPException(
@@ -1163,6 +1267,7 @@ async def delete_snapshot_point_cloud_ply(
             detail='Failed to delete point cloud file',
         )
 
+    await derive_sync(request, snapshot_id)
     return JSONResponse(
         status_code=200,
         content={
@@ -1244,7 +1349,10 @@ async def put_snapshot_photo(
     """
     Accept up to upload limit; store JPEG scaled/compressed to max output.
     """
-    await _load_snapshot(request, snapshot_id)
+    doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'add_photo',
+        frozen_when_published=False)
 
     content_type = (photo.content_type or '').split(';', 1)[0].strip().lower()
     if content_type not in _ALLOWED_PHOTO_TYPES:
@@ -1316,7 +1424,10 @@ async def delete_snapshot_photo(
     snapshot_id: str,
     index: int,
 ):
-    await _load_snapshot(request, snapshot_id)
+    doc = await _load_snapshot(request, snapshot_id)
+    await require_snapshot_file_write(
+        request, current_user, doc, 'delete_photo',
+        frozen_when_published=False)
 
     removed = False
     for path in (

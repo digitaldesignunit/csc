@@ -27,6 +27,11 @@ def get_db_connectionstring() -> str:
     return os.environ['MONGODB_URI']
 
 
+def get_database_name() -> str:
+    """The MongoDB database (MONGODB_DB, default ``csc``)."""
+    return os.environ.get('MONGODB_DB') or 'csc'
+
+
 def get_cors_origins() -> list:
     """
     Read CORS origins from environment variable FASTAPI_CORS_ORIGINS
@@ -57,6 +62,35 @@ def get_snapshot_meshes_directory() -> str:
 def get_snapshot_point_clouds_directory() -> str:
     """PLY point clouds: point_clouds/<snapshot_id>/<index>.ply."""
     return sanitize_path(os.environ['SNAPSHOT_POINT_CLOUDS_DIR'])
+
+
+def get_snapshot_proxies_directory() -> str:
+    """Deviation maps: proxies/<snapshot_id>/<proxy_index>/<face_id>.png."""
+    return sanitize_path(os.environ['SNAPSHOT_PROXIES_DIR'])
+
+
+def get_snapshot_capture_directory() -> str:
+    """Capture fixtures: capture/<snapshot_id>/fixtures/<i>.ply."""
+    return sanitize_path(os.environ['SNAPSHOT_CAPTURE_DIR'])
+
+
+def get_evidence_attachments_directory() -> str:
+    """Evidence attachments: evidence/<evidence_id>/<index>.<ext>."""
+    return sanitize_path(os.environ['EVIDENCE_ATTACHMENTS_DIR'])
+
+
+EVIDENCE_UPLOAD_MAX_MB = 25
+
+
+def get_evidence_upload_limit_bytes() -> int:
+    """Largest evidence attachment accepted: 25 MB (decision 8.82); the
+    environment (EVIDENCE_UPLOAD_LIMIT_MB) may only lower it."""
+    mb = int(os.getenv('EVIDENCE_UPLOAD_LIMIT_MB',
+                       str(EVIDENCE_UPLOAD_MAX_MB)))
+    if not 1 <= mb <= EVIDENCE_UPLOAD_MAX_MB:
+        raise ValueError(
+            f'EVIDENCE_UPLOAD_LIMIT_MB must be 1 to {EVIDENCE_UPLOAD_MAX_MB}')
+    return mb * 1024 * 1024
 
 
 def get_snapshot_photo_upload_limit_bytes() -> int:

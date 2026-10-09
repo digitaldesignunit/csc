@@ -2,6 +2,7 @@
 
 import { SessionProvider } from 'next-auth/react';
 import { Toaster } from '@/components/ui/sonner';
+import { MeProvider } from '@/lib/me';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -10,7 +11,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       refetchOnWindowFocus={true} // Check when window regains focus
       refetchWhenOffline={false} // Don't check when offline
     >
-      {children}
+      <MeProvider>{children}</MeProvider>
       <Toaster richColors closeButton />
     </SessionProvider>
   );

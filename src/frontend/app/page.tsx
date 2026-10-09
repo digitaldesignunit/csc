@@ -1,18 +1,25 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import BackgroundMesh from '@/components/components/BackgroundMesh'
-import { Package, BookOpen, Users, Settings } from 'lucide-react'
+import { Globe, Workflow } from 'lucide-react'
 
+import BackgroundMesh from '@/components/components/BackgroundMesh'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
+/**
+ * The home page (plan P11 stage 3, decision 8.118 C-1): the one page a
+ * visitor can read, so the call to action comes first: browse. Then how the
+ * catalog is used, then two sentences about it.
+ */
 export default function Home() {
   const { data: session, status } = useSession()
+  const known = status !== 'loading'
+  const signedIn = known && Boolean(session?.user) && !(session as { error?: string } | null)?.error
 
   return (
     <div className="relative min-h-[80vh] md:min-h-[90vh]">
-      {/* Background Mesh */}
       <BackgroundMesh
         className="absolute inset-0 -z-10"
         opacity={0.08}
@@ -21,105 +28,58 @@ export default function Home() {
         scale={1.0}
       />
 
-      <div className="container mx-auto p-6 space-y-6 max-w-6xl">
-        {/* Header */}
-        <div className="mb-4 sm:mb-6">
-          <div className="flex items-center gap-2 sm:gap-3 mb-2">
-            <BookOpen className="h-6 w-6 text-primary" />
-            <h1 className="text-xl sm:text-2xl font-bold">Catalog of Second Chances</h1>
+      <div className="relative z-10 mx-auto w-full max-w-3xl space-y-5 p-4 sm:p-6">
+        <section className="space-y-4 pt-4 sm:pt-10">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold sm:text-3xl">Catalog of Second Chances</h1>
+            <p className="text-base text-muted-foreground sm:text-lg">
+              Find, record and reuse building components that have a second life ahead of them.
+            </p>
           </div>
-          <p className="text-muted-foreground text-sm sm:text-base">
-            A repository for architectural component reuse
-          </p>
-        </div>
+          <div className="flex flex-wrap gap-3">
+            {signedIn ? (
+              <>
+                <Button asChild size="lg"><Link href="/components">Browse</Link></Button>
+                <Button asChild size="lg" variant="outline"><Link href="/scan">Scan a tag</Link></Button>
+              </>
+            ) : (
+              <>
+                <Button asChild size="lg"><Link href="/components">Browse the catalog</Link></Button>
+                {known && (
+                  <Button asChild size="lg" variant="outline"><Link href="/auth/signin">Sign in / Register</Link></Button>
+                )}
+              </>
+            )}
+          </div>
+        </section>
 
-        {/* Main Content */}
-        <div className="relative z-10 space-y-6">
-        
-        {/* About Section */}
         <Card className="bg-card/75">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              About
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 text-base leading-relaxed">
-            <p>
-              The <i>Catalog of Second Chances</i> is a digital repository designed to store, browse and access digitized representations of building components. 
-              It aims to promote reuse and circularity in architecture by providing structured access to component data.
-            </p>
-            <p>
-              The Catalog can be accessed in two ways: through this web interface, and from within the parametric design environment 
-              <i> Rhino/Grasshopper</i> using custom Python components. It is primarily developed for use in architectural research and teaching, 
-              where it serves as a testbed for workflows involving reuse, digital documentation, and component-based design.
-            </p>
-            <p>
-              The Catalog is created and maintained as a case-study for the PhD thesis of Max Benjamin Eschenbach. For more information, please visit the <Link href="/credits" className='text-blue-500 underline'>Credits</Link> page.
-            </p>
+          <CardHeader className="pb-2"><CardTitle className="text-base">How it is used</CardTitle></CardHeader>
+          <CardContent className="grid gap-4 text-sm leading-relaxed sm:grid-cols-2">
+            <div className="space-y-1">
+              <p className="flex items-center gap-2 font-medium"><Globe className="h-4 w-4 text-primary" aria-hidden />On the web</p>
+              <p>Browse and filter components, open a piece with its geometry and records, and on site record
+                pieces and evidence from a phone.</p>
+            </div>
+            <div className="space-y-1">
+              <p className="flex items-center gap-2 font-medium"><Workflow className="h-4 w-4 text-primary" aria-hidden />In Grasshopper</p>
+              <p>Components for Rhino read and write the same catalog for design and documentation.
+                See <Link href="/gh-interface" className="text-primary underline underline-offset-4">Grasshopper</Link>.</p>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Access Section - Only show when user is not logged in */}
-        {status !== 'loading' && !session?.user && (
-          <Card className="bg-card/75">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Access
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-base leading-relaxed">
-              <p>
-                To browse components and interact with the repository, you need to create an account and log in. 
-                Registered users can explore the Catalog, access component data, and begin working with it either 
-                through the web interface or within Rhino/Grasshopper.
-              </p>
-              <div className="flex gap-4">
-                <Link href="/auth/signin">
-                  <Button variant="default">Sign In</Button>
-                </Link>
-                <Link href="/auth/register">
-                  <Button variant="outline">Register</Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Quick Actions - Only show when user is logged in */}
-        {status !== 'loading' && session?.user && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Quick Actions
-              </CardTitle>
-              <CardDescription>
-                Get started with the Catalog
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <Link href="/components">
-                  <Button variant="outline" className="w-full h-auto p-4 flex flex-col items-center gap-2">
-                    <Package className="h-6 w-6" />
-                    <span className="font-medium">Browse Components</span>
-                    <span className="text-xs">Explore the component Catalog</span>
-                  </Button>
-                </Link>
-                <Link href="/dashboard">
-                  <Button variant="outline" className="w-full h-auto p-4 flex flex-col items-center gap-2">
-                    <Users className="h-6 w-6" />
-                    <span className="font-medium">Dashboard</span>
-                    <span className="text-xs">Your personal workspace</span>
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        </div>
+        <Card className="bg-card/75">
+          <CardHeader className="pb-2"><CardTitle className="text-base">About</CardTitle></CardHeader>
+          <CardContent className="text-sm leading-relaxed">
+            <p>
+              The <i>Catalog of Second Chances</i> is a research and teaching repository of digitised building
+              components that promotes reuse and circularity in architecture. It is developed as a case study
+              of a doctoral thesis; <Link href="/credits" className="text-primary underline underline-offset-4">Credits</Link> has
+              the details.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

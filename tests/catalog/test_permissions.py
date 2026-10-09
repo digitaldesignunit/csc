@@ -114,8 +114,15 @@ TABLE = [
     ('edit_published_metadata', PUBLISHED, {'mod', 'admin'}),
     ('edit_valid_time', PUBLISHED, {'mod', 'admin'}),
     ('override_derived', PUBLISHED, {'mod', 'admin'}),
-    ('set_verification', dataclasses.replace(PENDING, kind='evidence'),
-     {'review', 'admin'}),
+    # verification (8.12): the recorder who performed it self-attests;
+    # a reviewer who did neither reviews --- admin by the same rule
+    ('self_attest', dataclasses.replace(
+        PENDING, kind='evidence', performer_ids=('author',)), {'author'}),
+    ('self_attest', dataclasses.replace(PENDING, kind='evidence'), set()),
+    ('review_verification', dataclasses.replace(
+        PENDING, kind='evidence', performer_ids=('review',)), {'admin'}),
+    ('review_verification', dataclasses.replace(
+        PENDING, kind='evidence', author_id='root'), {'review'}),
     # identity metadata: moderator; the creator too while unpublished (8.9)
     ('patch_identity', Target(D, author_id='author'), {'mod', 'admin'}),
     ('patch_identity', Target(D, author_id='author', identity_published=False),
@@ -125,6 +132,7 @@ TABLE = [
     ('delete_identity', Target(D, author_id='author'), {'admin'}),
     ('exit', Target(D), {'mod', 'admin'}),
     ('reenter', Target(D), {'mod', 'admin'}),
+    ('deinstall', Target(D), {'mod', 'admin'}),
     ('withdraw_identity', Target(D), {'mod', 'admin'}),
     ('reinstate_identity', Target(D), {'mod', 'admin'}),
     # reservations
@@ -135,6 +143,9 @@ TABLE = [
     # datasets
     ('manage_members', Target(D, kind='dataset'), {'mod', 'admin'}),
     ('edit_dataset', Target(D, kind='dataset'), {'mod', 'admin'}),
+    ('invite', Target(D, kind='dataset'), {'mod', 'admin'}),
+    ('revoke_invitation', Target(D, kind='invitation', author_id='contrib'),
+     {'contrib', 'mod', 'admin'}),
     # admin only
     ('create_dataset', Target(D), {'admin'}),
     ('purge', Target(D), {'admin'}),
@@ -142,6 +153,7 @@ TABLE = [
     ('manage_users', Target(D), {'admin'}),
     ('manage_materials', Target(D), {'admin'}),
     ('read_logs', Target(D), {'admin'}),
+    ('search_users', Target(D), {'admin'}),
 ]
 
 

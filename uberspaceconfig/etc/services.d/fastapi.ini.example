@@ -8,6 +8,10 @@ autorestart=true
 startsecs=30
 # GITHUB_CSC_GH_TOKEN is optional (public repo). Set it only if you need
 # higher GitHub API rate limits for CSC_Update.
+# CSC_TRUSTED_PROXIES: the peers whose X-Forwarded-For the rate limits believe
+# (README, "Client addresses and rate limits"). Loopback is right while the web
+# frontend reaches this backend at FASTAPI_URL=http://127.0.0.1:8000; add the
+# server's own address if it goes through the public API host.
 environment=
     PYTHONUNBUFFERED="1",
     MONGODB_URI="mongodb+srv://USERNAME:PASSWORD@your.cluster.mongodb.net/csc",
@@ -21,15 +25,23 @@ environment=
     SMTP_PASSWORD="your-password",
     SMTP_FROM_EMAIL="noreply@yourdomain.com",
     SMTP_FROM_NAME="Catalog of Second Chances",
+    SMTP_REPLY_TO="support@yourdomain.com",
     SMTP_DEV_MODE="false",
     FRONTEND_URL="https://2ndchances.build",
+    CSC_TRUSTED_PROXIES="127.0.0.0/8,::1",
+    CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de",
     GH_XML_CACHE_DIR="/home/ddu/csc/current/backend/static/ghxml",
     FASTAPI_CORS_ORIGINS="https://yourdomain.com,http://localhost:3000",
     GEOMETRY_UPLOAD_LIMIT_MB="250",
-    SNAPSHOT_MESHES_DIR="/home/ddu/html/csc_assets/meshes",
-    SNAPSHOT_POINT_CLOUDS_DIR="/home/ddu/html/csc_assets/pointclouds",
-    SNAPSHOT_PREVIEW_DIR="/home/ddu/html/csc_assets/snapshot_previews",
-    SNAPSHOT_PHOTOS_DIR="/home/ddu/html/csc_assets/snapshot_photos",
+    SNAPSHOT_MESHES_DIR="/home/ddu/csc_assets_private/meshes",
+    SNAPSHOT_POINT_CLOUDS_DIR="/home/ddu/csc_assets_private/pointclouds",
+    SNAPSHOT_PROXIES_DIR="/home/ddu/csc_assets_private/proxies",
+    SNAPSHOT_CAPTURE_DIR="/home/ddu/csc_assets_private/capture",
+    EVIDENCE_ATTACHMENTS_DIR="/home/ddu/csc_assets_private/evidence",
+    EVIDENCE_UPLOAD_LIMIT_MB="25",
+    CSC_GEOMETRY_HEAVY_STAGES="server",
+    SNAPSHOT_PREVIEW_DIR="/home/ddu/csc_assets_private/snapshot_previews",
+    SNAPSHOT_PHOTOS_DIR="/home/ddu/csc_assets_private/snapshot_photos",
     SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB="10",
     SNAPSHOT_PHOTO_MAX_OUTPUT_MB="2",
     SNAPSHOT_PHOTO_MAX_LONG_EDGE_PX="4096"

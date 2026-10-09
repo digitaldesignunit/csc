@@ -6,7 +6,9 @@ import os
 from typing import List, Optional, Tuple
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')   # headless: the runner draws in a worker thread, a GUI backend crashes it
+import matplotlib.pyplot as plt  # noqa: E402
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
 from PIL import Image, ImageOps
@@ -102,6 +104,18 @@ def combine_extrusion_meshes(
     return combined_vertices, all_faces
 
 
+def combine_proxy_meshes(proxies: List[dict]) -> Tuple[np.ndarray, list]:
+    """Authored proxies (0.6) as renderable triangles in stored coordinates."""
+    from apps.catalog.proxies.primitives import proxy_mesh
+    all_vertices = []
+    all_faces = []
+    for proxy in proxies:
+        mesh = proxy_mesh(proxy)
+        all_vertices.append(np.asarray(mesh.vertices))
+        all_faces.extend(mesh.triangles.tolist())
+    return np.vstack(all_vertices), all_faces
+
+
 def combine_snapshot_point_clouds(
         point_clouds: List[dict],
         default_color: List[int],
@@ -172,6 +186,8 @@ def create_snapshot_preview_image(
     geometry = snapshot_data.get('geometry', {}) or {}
     meshes = geometry.get('meshes') or []
     extrusions = geometry.get('extrusions') or []
+    authored = [p for p in geometry.get('proxies') or []
+                if (p.get('fit') or {}).get('method') == 'authored']
     point_clouds = geometry.get('point_clouds') or []
     snapshot_color = snapshot_data.get('color') or [110, 110, 110]
 
@@ -186,6 +202,8 @@ def create_snapshot_preview_image(
         (vertices, faces,
          vertex_colors,
          faces_idx) = combine_snapshot_meshes(meshes)
+    elif authored:
+        vertices, faces = combine_proxy_meshes(authored)
     elif extrusions:
         vertices, faces = combine_extrusion_meshes(extrusions)
     else:

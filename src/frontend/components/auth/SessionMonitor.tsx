@@ -3,6 +3,7 @@
 import { useSession, signOut } from 'next-auth/react'
 import { useEffect, useRef } from 'react'
 import { isPublicComponentDetailPath } from '@/lib/publicAccess'
+import { forgetRecentComponents } from '@/lib/recentComponents'
 
 export default function SessionMonitor() {
   const { data: session, status } = useSession()
@@ -20,6 +21,7 @@ export default function SessionMonitor() {
     if (session?.error === 'ApiTokenExpired') {
       console.log('[SessionMonitor] API token expired, logging out user')
       hasLoggedOut.current = true
+      forgetRecentComponents(session?.user?.id)
       
       signOut({ 
         callbackUrl: '/auth/signin?error=SessionExpired',
@@ -41,6 +43,7 @@ export default function SessionMonitor() {
       if (session.api?.expiresAt && Date.now() >= session.api.expiresAt) {
         console.log('[SessionMonitor] API token expired (periodic check), logging out user')
         hasLoggedOut.current = true
+        forgetRecentComponents(session?.user?.id)
         
         signOut({ 
           callbackUrl: '/auth/signin?error=SessionExpired',

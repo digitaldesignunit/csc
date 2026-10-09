@@ -1,9 +1,10 @@
 #! python3
 # -*- coding: utf-8 -*-
 # venv: DDU_CSC
-print('ENV OK!')
 # r: charset_normalizer
-# r: requests
+# r: requests==2.32.5
+# r: numpy==2.0.2
+print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -24,18 +25,55 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '2 Catalog Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Fetches identities (with their current snapshot) from the remote '
-    'Catalog based on filter criteria (type, material, dataset, complexity, '
-    'fragment, bounding box dimensions). Mirrors the web catalog filter '
-    'menu and returns passport JSON ({identity, snapshots[]}) results.'
+    'Catalog based on filter criteria (original function, material, '
+    'dataset, complexity, fragment, bounding box dimensions, shape class, '
+    'material class, circulation). Mirrors the web catalog filter menu and '
+    'returns component passport JSON ({identity, snapshots[]}) results.'
 )
+
+# CSC LIBRARY (decision 8.111) ----------------------------------------------
+CSC_GH_MINIMUM = '261005'
+LIBRARY_PROBLEM = None
+try:
+    import csc_gh
+    csc_gh.require(CSC_GH_MINIMUM)
+    from csc_gh.read import (fetch_filter_params)  # NOQA
+except ImportError:
+    LIBRARY_PROBLEM = (
+        'CSC library 261005 too old or missing: run CSC_Update, '
+        'then restart Rhino')
+
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('FilterDescription', 'FilterDescription',
+     'Human-readable description of the applied filters and query'),
+    ('ComponentPassport', 'ComponentPassport',
+     "Component passport JSON per entry ({identity, snapshots[]}) fetched from the server. Use 'DisassembleComponent' to access the individual fields ready for Grasshopper"),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
 
 
 class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260908
+    Version: 261005a
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
@@ -60,58 +98,64 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the library is missing or
+        too old, or the outputs were just updated (says why)."""
+        if LIBRARY_PROBLEM:
+            self._addError(LIBRARY_PROBLEM)
+            return True
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
-        self.InputParams[0].Description = (
-            'Component type filter (e.g., "beam", "slab", "column")'
-        )
-        self.InputParams[1].Description = (
-            'Material type filter (e.g., "concrete", "steel", "wood")'
-        )
-        self.InputParams[2].Description = (
-            'Dataset name filter (e.g., "sas_cita_scans", '
-            '"mineral_composite_sheets")'
-        )
-        self.InputParams[3].Description = (
-            'Complexity level filter (0-3, where 0=simple, 3=complex)'
-        )
-        self.InputParams[4].Description = (
-            'Fragment status filter (True for fragments, False for complete)'
-        )
-        self.InputParams[5].Description = (
-            'Minimum X dimension filter (bounding box)'
-        )
-        self.InputParams[6].Description = (
-            'Maximum X dimension filter (bounding box)'
-        )
-        self.InputParams[7].Description = (
-            'Minimum Y dimension filter (bounding box)'
-        )
-        self.InputParams[8].Description = (
-            'Maximum Y dimension filter (bounding box)'
-        )
-        self.InputParams[9].Description = (
-            'Minimum Z dimension filter (bounding box)'
-        )
-        self.InputParams[10].Description = (
-            'Maximum Z dimension filter (bounding box)'
-        )
-        self.InputParams[11].Description = (
+        descriptions = [
+            'Original function filter, an IFC class (e.g. IfcBeam, '
+            'IfcColumn, IfcSlab, IfcPlate, CscDebris)',
+            'Material filter, a material id (e.g. concrete, steel, timber)',
+            'Dataset name filter (e.g., "beyond_debris", '
+            '"mineral_composite_sheets")',
+            'Complexity level filter (0-3, where 0=simple, 3=complex)',
+            'Fragment status filter (True for fragments, False for complete)',
+            'Minimum X dimension filter (bounding box, longest side)',
+            'Maximum X dimension filter (bounding box)',
+            'Minimum Y dimension filter (bounding box)',
+            'Maximum Y dimension filter (bounding box)',
+            'Minimum Z dimension filter (bounding box, shortest side)',
+            'Maximum Z dimension filter (bounding box)',
             'Reservation status filter: -1=ignore, 0=not reserved, '
-            '1=reserved by current user'
-        )
+            '1=reserved by current user',
+            'Shape class filter: linear, planar, block, irregular or '
+            'composite (derived by the server)',
+            'Material class filter, a List of Waste code (e.g. 17 01 01)',
+            'Circulation: active (default: in circulation, in place or '
+            'deinstalled), in_place (still in the works), deinstalled, '
+            'exited or all',
+        ]
+        for index, text_ in enumerate(descriptions):
+            if index < len(self.InputParams):
+                self.InputParams[index].Description = text_
         # Initialize output param descriptions
-        i = 0
-        if self.OutputParams[0].Name == 'out':
-            i += 1
-        self.OutputParams[0+i].Description = (
-            'Human-readable description of the applied filters and query'
-        )
-        self.OutputParams[1+i].Description = (
-            'Passport JSON per entry ({identity, snapshots[]}) fetched from '
-            'the server. Use \'DisassembleComponent\' to access the individual '
-            'fields ready for Grasshopper')
+        self._check_outputs()
+        if LIBRARY_PROBLEM is None:
+            csc_gh.dev_reload(globals())
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -119,14 +163,13 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         if auth_core is None:
             msg = ('No authentication found. Please use CSC_Session component '
                    'first.')
-            self._addError(msg)
-            self.Component.Message = msg
+            self._addWarning(msg)
             return None
         return auth_core
 
     def build_filter_query_params(
             self,
-            Type,
+            OriginalFunction,
             Material,
             Dataset,
             Complexity,
@@ -137,109 +180,64 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             MaxDimensionY,
             MinDimensionZ,
             MaxDimensionZ,
-            ReservedStatus):
+            ReservedStatus,
+            ShapeClass,
+            MaterialClass,
+            Circulation):
         """
-        Build query parameters for filtering identities.
+        Build query parameters for GET /identities (csc_read).
 
-        Mirrors the web catalog filter menu
-        (ComponentOverviewFilterMenu): comptype, material, dataset,
-        complexity, fragment, and bounding box dimensions. ``validated``
-        is left to the server default (validated-only), matching the web.
-        Adds a reservation-status filter on top (not part of the web
-        catalog filter menu): 1=reserved by current user, 0=not reserved.
+        Mirrors the web catalog filter menu: original function, material,
+        dataset, complexity, fragment, bounding box, shape class, material
+        class and circulation. ``status`` is left to the server default
+        (published only), matching the web. Adds a reservation-status filter
+        on top: 1=reserved by current user, 0=not reserved.
         """
-        params = {}
-
-        # Add type filter if provided
-        if Type and len(Type) > 0:
-            # Take the first type if multiple are provided
-            type_value = Type[0] if isinstance(Type, list) else str(Type)
-            if type_value and type_value.strip():
-                params['comptype'] = type_value.strip()
-
-        # Add material filter if provided
-        if Material and Material.strip():
-            params['material'] = Material.strip()
-
-        # Add dataset filter if provided
-        if Dataset and Dataset.strip():
-            params['dataset'] = Dataset.strip()
-
-        # Add complexity filter if provided
-        if Complexity is not None:
-            params['complexity'] = Complexity
-
-        # Add fragment filter if provided (web sends 'true'/'false')
-        if Fragment is not None:
-            params['fragment'] = 'true' if Fragment else 'false'
-
-        # Add reservation status filter if provided
-        # (backend: reserved=true -> reserved by current user,
-        #  reserved=false -> not reserved by anyone)
-        if ReservedStatus is not None and ReservedStatus != -1:
-            if ReservedStatus == 0:
-                params['reserved'] = 'false'
-            elif ReservedStatus == 1:
-                params['reserved'] = 'true'
-
-        # Add bounding box filters if provided
-        if MinDimensionX is not None and MinDimensionX != 0.0:
-            params['bbx_min_x'] = MinDimensionX
-        if MaxDimensionX is not None and MaxDimensionX != 0.0:
-            params['bbx_max_x'] = MaxDimensionX
-        if MinDimensionY is not None and MinDimensionY != 0.0:
-            params['bbx_min_y'] = MinDimensionY
-        if MaxDimensionY is not None and MaxDimensionY != 0.0:
-            params['bbx_max_y'] = MaxDimensionY
-        if MinDimensionZ is not None and MinDimensionZ != 0.0:
-            params['bbx_min_z'] = MinDimensionZ
-        if MaxDimensionZ is not None and MaxDimensionZ != 0.0:
-            params['bbx_max_z'] = MaxDimensionZ
-
-        return params
+        function = OriginalFunction
+        if isinstance(function, (list, tuple)):
+            function = function[0] if function else None
+        return fetch_filter_params(
+            original_function=function,
+            material=Material, dataset=Dataset, complexity=Complexity,
+            fragment=Fragment, reserved=ReservedStatus,
+            shape_class=ShapeClass, material_class=MaterialClass,
+            circulation=Circulation,
+            bbx={'min_x': MinDimensionX, 'max_x': MaxDimensionX,
+                 'min_y': MinDimensionY, 'max_y': MaxDimensionY,
+                 'min_z': MinDimensionZ, 'max_z': MaxDimensionZ})
 
     def generate_filter_description(self, filter_params: dict) -> str:
         """Generates a human-readable description of the applied filters."""
         description = []
-        if filter_params.get('comptype'):
-            description.append(f'\nType: {filter_params["comptype"]}')
-        if filter_params.get('material'):
-            description.append(f'\nMaterial: {filter_params["material"]}')
-        if filter_params.get('dataset'):
-            description.append(f'\nDataset: {filter_params["dataset"]}')
+        for key, label in (('original_function', 'Original function'),
+                           ('material', 'Material'),
+                           ('dataset', 'Dataset'),
+                           ('shape_class', 'Shape class'),
+                           ('material_class', 'Material class'),
+                           ('circulation', 'Circulation')):
+            if filter_params.get(key):
+                description.append(f'\n{label}: {filter_params[key]}')
         if filter_params.get('complexity') is not None:
             description.append(f'\nComplexity: {filter_params["complexity"]}')
         if filter_params.get('fragment') is not None:
             description.append(f'\nFragment: {filter_params["fragment"]}')
-
-        # Add reservation status filter description
         if filter_params.get('reserved') == 'false':
             description.append('\nReservation: Not reserved by anyone')
         elif filter_params.get('reserved') == 'true':
             description.append('\nReservation: Reserved by current user')
-
-        # Handle bounding box filters with detailed information
         bbx_filters = []
-        if filter_params.get('bbx_min_x') is not None:
-            bbx_filters.append(f'\nX >= {filter_params["bbx_min_x"]:.2f}')
-        if filter_params.get('bbx_max_x') is not None:
-            bbx_filters.append(f'\nX <= {filter_params["bbx_max_x"]:.2f}')
-        if filter_params.get('bbx_min_y') is not None:
-            bbx_filters.append(f'\nY >= {filter_params["bbx_min_y"]:.2f}')
-        if filter_params.get('bbx_max_y') is not None:
-            bbx_filters.append(f'\nY <= {filter_params["bbx_max_y"]:.2f}')
-        if filter_params.get('bbx_min_z') is not None:
-            bbx_filters.append(f'\nZ >= {filter_params["bbx_min_z"]:.2f}')
-        if filter_params.get('bbx_max_z') is not None:
-            bbx_filters.append(f'\nZ <= {filter_params["bbx_max_z"]:.2f}')
-
+        for axis in 'xyz':
+            for kind, sign in (('min', '>='), ('max', '<=')):
+                value = filter_params.get(f'bbx_{kind}_{axis}')
+                if value is not None:
+                    bbx_filters.append(
+                        f'\n{axis.upper()} {sign} {float(value):.2f}')
         if bbx_filters:
             description.append(f'\nBounding Box: {", ".join(bbx_filters)}')
-
         return f'Applied filters: {", ".join(description)}'
 
     def RunScript(self,
-            Type: str,
+            OriginalFunction: str,
             Material: str,
             Dataset: str,
             Complexity: int,
@@ -250,30 +248,40 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             MaxDimensionY: float,
             MinDimensionZ: float,
             MaxDimensionZ: float,
-            ReservedStatus):
+            ReservedStatus,
+            ShapeClass: str,
+            MaterialClass: str,
+            Circulation: str):
+
+        if self._stop():
+            return empty_outputs()
+        if not ShapeClass or ShapeClass == '':
+            ShapeClass = None
+        if not MaterialClass or MaterialClass == '':
+            MaterialClass = None
+        if not Circulation or Circulation == '':
+            Circulation = None
 
         # Get AuthCore instance from sticky storage
         auth_core = self.get_auth_core_from_sticky()
         if auth_core is None:
-            return
+            return empty_outputs()
 
         # Check if authentication is valid
         if not auth_core.is_valid():
             msg = ('Authentication expired. Please use CSC_Session '
                    'component to refresh.')
-            self._addError(msg)
-            self.Component.Message = msg
-            return
+            self._addWarning(msg)
+            return empty_outputs()
 
         try:
-            self.Component.Message = 'Building filter query...'
 
             # Build filter query parameters (parity with web filter menu)
             filter_params = self.build_filter_query_params(
-                Type, Material, Dataset, Complexity, Fragment,
+                OriginalFunction, Material, Dataset, Complexity, Fragment,
                 MinDimensionX, MaxDimensionX, MinDimensionY,
                 MaxDimensionY, MinDimensionZ, MaxDimensionZ,
-                ReservedStatus
+                ReservedStatus, ShapeClass, MaterialClass, Circulation
             )
 
             # Request params: filters + passport expansion (identity+snapshot)
@@ -285,9 +293,6 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 filter_params
             )
 
-            self.Component.Message = (
-                'Fetching filtered identities (with cache)...'
-            )
 
             # Unified catalog cache (same identity/snapshot store as
             # FetchAllComponents and FetchComponents).
@@ -298,10 +303,8 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 json_comps = response.json()
                 component_count = len(json_comps)
 
-                # Show filter info in message
-                filter_msg = f'Found {component_count} components (cached).'
+                self._state(f'{component_count} found')
 
-                self.Component.Message = filter_msg
                 self._addRemark(
                     f'Successfully fetched {component_count} components '
                     f'with applied filters'
@@ -309,15 +312,15 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
                 # Set up output trees and results tuple
                 FilterDescription = Grasshopper.DataTree[System.Object]()
-                ComponentData = Grasshopper.DataTree[System.Object]()
-                __Results = (FilterDescription, ComponentData)
+                ComponentPassport = Grasshopper.DataTree[System.Object]()
+                __Results = (FilterDescription, ComponentPassport)
 
                 # Loop over all passport entries and add them to the data tree
                 for i, json_comp in enumerate(json_comps):
                     # Create datatree path
                     ghp = Grasshopper.Kernel.Data.GH_Path(0, i)
                     # Add passport JSON to the datatree
-                    ComponentData.Add(
+                    ComponentPassport.Add(
                         auth_core.passport_json_string(json_comp), ghp)
 
                 # Add filter description to the filter query output
@@ -331,46 +334,38 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             elif response.status_code == 401:
                 msg = 'Authentication failed. Please sign in again.'
                 self._addError(msg)
-                self.Component.Message = msg
 
             elif response.status_code == 403:
                 msg = 'Access denied. Insufficient permissions.'
                 self._addError(msg)
-                self.Component.Message = msg
 
             elif response.status_code == 500:
                 msg = 'Server error. Please try again later.'
                 self._addWarning(msg)
-                self.Component.Message = msg
 
             else:
                 msg = (f'Request failed with status code: '
                        f'{response.status_code}')
                 self._addError(msg)
-                self.Component.Message = msg
 
         except requests.exceptions.ConnectionError as e:
             msg = 'Cannot connect to server. Please check your connection.'
             self._addError(msg + f'\nFull Error: {str(e)}')
-            self.Component.Message = msg
 
         except requests.exceptions.Timeout as e:
             msg = 'Request timeout. Server may be slow.'
             self._addError(msg + f'\nFull Error: {str(e)}')
-            self.Component.Message = msg
 
         except requests.exceptions.RequestException as e:
             msg = f'Request error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
 
         except Exception as e:
             msg = f'Unexpected error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
 
         # Return empty results if there was an error
-        ComponentData = Grasshopper.DataTree[System.Object]()
+        ComponentPassport = Grasshopper.DataTree[System.Object]()
         FilterDescription = Grasshopper.DataTree[System.Object]()
-        __Results = (FilterDescription, ComponentData)
+        __Results = (FilterDescription, ComponentPassport)
         return __Results

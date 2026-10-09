@@ -7,12 +7,8 @@ import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import type {
   CatalogComponent,
   ComponentSnapshot,
-  SnapshotExtrusion,
-  SnapshotGeometry,
-  SnapshotMesh,
-  SnapshotPointCloud,
-  SnapshotReinforcement,
 } from '@/generated/CatalogModels'
+import type { Geometry, Mesh, PointCloud } from '@/generated/CatalogSharedTypes'
 import type { SnapshotMeshRouting } from '@/generated/catalogExtras'
 import {
   primarySnapshot,
@@ -21,7 +17,8 @@ import {
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Scan, Grid3x3, Rotate3d } from 'lucide-react'
+import { Scan, Grid3x3, Rotate3d, SlidersHorizontal } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Bounds, OrbitControls, Html, useBounds } from '@react-three/drei'
 import { cn, rgbToHex } from '@/lib/utils'
 import {
@@ -33,11 +30,24 @@ import {
   REINFORCEMENT_RADIAL_SEGMENTS,
   buildReinforcementBarMeshes,
   reinforcementSteelMaterial,
-  snapshotReinforcementsFromGeometry,
+  type ReinforcementBar,
 } from '@/lib/reinforcementGeometry'
 import ComponentViewerSkeleton from './ComponentViewerSkeleton'
+import ProxyOverlay, {
+  useDeviationMaps,
+  type ProxyDisplay,
+} from '@/components/viewer/ProxyOverlay'
+import EvidenceMarks, { type ViewerMark } from '@/components/viewer/EvidenceMarks'
+import PickLayer from '@/components/viewer/PickLayer'
+import type { PickHit } from '@/lib/evidence/pick'
+import { publishedMarks } from '@/lib/evidence/marks'
+import type { ProxyDoc } from '@/lib/proxyOverlay'
+import type { ProxyShape } from '@/lib/proxyShape'
+import ProxySolid from '@/components/viewer/ProxySolid'
+import { useProxyShape } from '@/components/viewer/useProxyShape'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { ViewerMenu, MenuSection, MenuSubsection, MenuDivider, SegmentedControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
+import Help from '@/components/ui/help'
+import { ViewerMenu, MenuSection, MenuSubsection, MenuDivider, InfoLine, SegmentedControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
 
 // Scale factor for converting units to meters in THREE
 const scale = 0.001
@@ -99,6 +109,31 @@ function Turntable({
   return <group ref={groupRef}>{children}</group>
 }
 
+type FrameDoc = { o: number[]; x: number[]; y: number[]; z: number[] }
+
+/**
+ * The snapshot's `frame` as a transform of the scene (decision 7.10): stored
+ * coordinates map to the canonical orientation (x longest, z shortest; a
+ * standing column has z as its length). The geometry in the scene already
+ * has Rhino Z-up turned to three's Y-up, so the transform is conjugated by
+ * that turn. Stored geometry is never changed; this only moves the view.
+ */
+function canonicalSceneMatrix(frame: FrameDoc | null | undefined): THREE.Matrix4 {
+  if (!frame) return new THREE.Matrix4()
+  const x = new THREE.Vector3(...frame.x)
+  const y = new THREE.Vector3(...frame.y)
+  const z = new THREE.Vector3(...frame.z)
+  const origin = new THREE.Vector3(...frame.o)
+  // world -> frame: rows are the axes, translation -R^T o (metres in the scene)
+  const toFrame = new THREE.Matrix4().makeBasis(x, y, z).transpose()
+  const shift = origin.clone().applyMatrix4(
+    new THREE.Matrix4().extractRotation(toFrame),
+  ).multiplyScalar(-scale)
+  toFrame.setPosition(shift)
+  const turn = new THREE.Matrix4().makeRotationX(-Math.PI / 2)
+  return turn.clone().multiply(toFrame).multiply(turn.clone().invert())
+}
+
 // Simple in-memory cache for external geometry with ETag support
 interface CachedMeshGeometry {
   meshes: THREE.Group[] | null
@@ -117,8 +152,48 @@ const externalPointCloudCache = new Map<string, CachedPointCloudGeometry>()
 
 // Helpers
 
-type GeometryMode = 'primitive' | 'reduced' | 'detailed'
-type PointCloudGeometryMode = 'primitive' | 'detailed'
+/** What each deviation overlay shows (explained behind a "?", not in the panel). */
+const OVERLAY_HELP: Record<Exclude<ProxyDisplay, 'off' | 'outline'>, string> = {
+  distance: 'Signed distance from the scan to the proxy surface. Blue: the scan lies inside the proxy. '
+    + 'Red: outside. White: on the surface. Full colour at the scale value shown.',
+  normal_deviation: 'Mean angle between the scan surface direction and the proxy face. '
+    + 'Light: parallel to the face. Dark: turned away from it, up to the scale value shown.',
+  occupancy: 'Number of scan points in each cell of the face. Light: few. Dark: many, '
+    + 'on a log scale up to the value shown.',
+}
+
+/** A hull measures the depth of the scan below its surface, never negative. */
+const HULL_DISTANCE_HELP = 'Depth of the scan below the hull surface (the concavity), never negative, '
+  + 'so the map shows red only. White: on the hull. Full colour at the scale value shown.'
+
+function overlayHelp(display: keyof typeof OVERLAY_HELP, primitive: string): string {
+  return display === 'distance' && primitive === 'hull' ? HULL_DISTANCE_HELP : OVERLAY_HELP[display]
+}
+
+/**
+ * Detail levels (decision 8.23): the proxy, the preview stored in the
+ * snapshot, the reduced mesh file and the original as uploaded (stored on
+ * disk as `detailed.ply`).
+ */
+type GeometryMode = 'proxy' | 'preview' | 'reduced' | 'original'
+type MeshFileLevel = Extract<GeometryMode, 'reduced' | 'original'>
+type PointCloudGeometryMode = 'preview' | 'original'
+
+const DETAIL_LABELS: Record<GeometryMode, string> = {
+  proxy: 'Proxy',
+  preview: 'Preview',
+  reduced: 'Reduced',
+  original: 'Original',
+}
+
+/** The file a mesh detail level is stored in (`mesh_ply_resolutions`). */
+const MESH_FILE_RESOLUTION: Record<MeshFileLevel, 'reduced' | 'detailed'> = {
+  reduced: 'reduced',
+  original: 'detailed',
+}
+
+const isMeshFileLevel = (mode: GeometryMode): mode is MeshFileLevel =>
+  mode === 'reduced' || mode === 'original'
 
 function nextObjectVisibility(
   count: number,
@@ -192,23 +267,16 @@ type PointCloudLoadResult = {
   message: string
 }
 
-/** Flat buffers for one mesh primitive (snapshot geometry). */
+/** Flat buffers for one preview mesh (stored in the snapshot, 8.23). */
 type PrimitiveDrawBuffers = {
   positionsFlat: number[]
   indices: number[]
   rawColors?: number[][]
 }
 
-function snapshotMeshesFromGeometry(geometry: SnapshotGeometry): SnapshotMesh[] {
+function snapshotMeshesFromGeometry(geometry: Geometry): Mesh[] {
   const meshes = geometry.meshes
-  return Array.isArray(meshes) ? (meshes as SnapshotMesh[]) : []
-}
-
-function snapshotExtrusionsFromGeometry(
-  geometry: SnapshotGeometry,
-): SnapshotExtrusion[] {
-  const extrusions = geometry.extrusions
-  return Array.isArray(extrusions) ? (extrusions as SnapshotExtrusion[]) : []
+  return Array.isArray(meshes) ? (meshes as Mesh[]) : []
 }
 
 function vertexColorsFromSnapshot(
@@ -224,7 +292,7 @@ function vertexColorsFromSnapshot(
 }
 
 function snapshotMeshesToDrawBuffers(
-  meshes: SnapshotMesh[],
+  meshes: Mesh[],
 ): PrimitiveDrawBuffers[] {
   return meshes.map((m) => ({
     positionsFlat: m.vertices.flat(),
@@ -310,10 +378,10 @@ function buildThreeGroupFromPLYGeometry(
 
 async function loadSnapshotPlyMeshes(
   snapshotId: string,
-  mode: Exclude<GeometryMode, 'primitive'>,
+  mode: MeshFileLevel,
   manifest: Record<string, string[]> | null | undefined,
 ): Promise<{ ok: true; meshes: THREE.Group[]; etag?: string } | { ok: false }> {
-  const resolution = mode === 'reduced' ? 'reduced' : 'detailed'
+  const resolution = MESH_FILE_RESOLUTION[mode]
   const indices = plyPrimitiveIndicesForMode(manifest, resolution)
   if (indices.length === 0) {
     return { ok: false }
@@ -341,7 +409,7 @@ async function loadSnapshotPlyMeshes(
 
       const buffer = await response.arrayBuffer()
       const geom = loader.parse(buffer)
-      const label = `PLY Mesh ${primitiveIndex + 1}`
+      const label = `Mesh ${primitiveIndex + 1}`
       groups.push(buildThreeGroupFromPLYGeometry(geom, label))
     } catch (err) {
       debugLog(`PLY load error primitive ${primitiveIndex}:`, err)
@@ -364,10 +432,10 @@ async function loadSnapshotPlyMeshes(
 
 async function loadExternalMeshes(
   identityId: string,
-  mode: Exclude<GeometryMode, 'primitive'>,
+  mode: MeshFileLevel,
   snapshotRouting: SnapshotMeshRouting | null,
 ): Promise<MeshLoadResult> {
-  debugLog(`Loading ${mode} PLY meshes for identity ${identityId}`)
+  debugLog(`Loading ${mode} meshes for identity ${identityId}`)
 
   const hint = meshHintForCache(snapshotRouting)
   const cacheKey = `${identityId}:mesh:${mode}:${hint}`
@@ -382,7 +450,7 @@ async function loadExternalMeshes(
     return {
       success: false,
       error: 'not_found',
-      message: `No ${mode} PLY geometry available for this snapshot`,
+      message: `No ${mode} mesh stored for this snapshot`,
     }
   }
 
@@ -424,7 +492,7 @@ async function loadExternalMeshes(
   return {
     success: false,
     error: 'not_found',
-    message: `No ${mode} PLY geometry available for this snapshot`,
+    message: `No ${mode} mesh stored for this snapshot`,
   }
 }
 
@@ -433,7 +501,7 @@ async function loadExternalPointClouds(
   snapshotRouting: SnapshotMeshRouting | null,
   pointCloudCount: number,
 ): Promise<PointCloudLoadResult> {
-  debugLog(`Loading PLY point clouds for identity ${identityId}`)
+  debugLog(`Loading original point clouds for identity ${identityId}`)
 
   const hint = meshHintForCache(snapshotRouting)
   const cacheKey = `${identityId}:pc:${hint}:count${pointCloudCount}`
@@ -451,12 +519,12 @@ async function loadExternalPointClouds(
     return {
       success: false,
       error: 'not_found',
-      message: 'No PLY point cloud geometry available for this snapshot',
+      message: 'No original point cloud stored for this snapshot',
     }
   }
 
   if (!snapshotRouting?.snapshot_id) {
-    const msg = 'No snapshot routing for point cloud PLY (passport payload missing current snapshot _id)'
+    const msg = 'No snapshot routing for the original point cloud (passport payload missing current snapshot _id)'
     externalPointCloudCache.set(cacheKey, {
       pointClouds: null,
       etag: undefined,
@@ -493,62 +561,9 @@ async function loadExternalPointClouds(
   return {
     success: false,
     error: 'not_found',
-    message: 'No PLY point cloud geometry available for this snapshot',
+    message: 'No original point cloud stored for this snapshot',
   }
 }
-
-/**
- * Extrusion from API `{ profile: [x,y][], height }` (+ material RGB).
- */
-const ExtrusionVisualization = React.memo(
-  ({
-    profile,
-    height,
-    colorRgb,
-  }: {
-    profile: number[][]
-    height: number
-    colorRgb: [number, number, number]
-  }) => {
-    const pline_shape = useMemo(() => {
-      const shape = new THREE.Shape()
-      if (!profile?.length) return shape
-      shape.moveTo(profile[0][0] * scale, profile[0][1] * scale)
-      profile.forEach((p, i) => {
-        if (i > 0) shape.lineTo(p[0] * scale, p[1] * scale)
-      })
-      return shape
-    }, [profile])
-
-    const extrude_geometry = useMemo(() => {
-      if (!profile?.length || !height) {
-        return new THREE.ExtrudeGeometry(new THREE.Shape())
-      }
-      const extrudeSettings = { steps: 2, depth: height * scale, bevelEnabled: false }
-      const g = new THREE.ExtrudeGeometry(pline_shape, extrudeSettings)
-      g.translate(0, 0, -height * scale * 0.5)
-      g.rotateX(-Math.PI / 2)
-      // Indexed extrusion + shared vertices smear normals at cap/side edges.
-      const geom = g.index !== null ? g.toNonIndexed() : g
-      geom.computeVertexNormals()
-      return geom
-    }, [pline_shape, profile, height])
-
-    const colorHex = rgbToHex(colorRgb[0], colorRgb[1], colorRgb[2])
-    const edge_geometry = useMemo(() => new THREE.EdgesGeometry(extrude_geometry), [extrude_geometry])
-    const edge_material = useMemo(() => new THREE.LineBasicMaterial({ color: 0x000000 }), [])
-
-    return (
-      <>
-        <mesh visible geometry={extrude_geometry}>
-          <meshStandardMaterial color={new THREE.Color(colorHex)} />
-        </mesh>
-        <lineSegments geometry={edge_geometry} material={edge_material} />
-      </>
-    )
-  },
-)
-ExtrusionVisualization.displayName = 'ExtrusionVisualization'
 
 /**
  * MarkerPoints - renders marker points as red dots
@@ -578,19 +593,67 @@ const MarkerPoints = React.memo(({
 })
 MarkerPoints.displayName = 'MarkerPoints'
 
-const ReinforcementBar = React.memo(({
-  bar,
+/**
+ * Capture fixtures (decision 7.7): meshes captured with the piece that are
+ * not part of it, e.g. the robot gripper. Drawn translucent, never measured.
+ */
+async function loadCaptureFixtures(
+  snapshotId: string,
+  count: number,
+): Promise<THREE.Group[]> {
+  const loader = new PLYLoader()
+  const groups: THREE.Group[] = []
+  for (let index = 0; index < count; index += 1) {
+    const url = `/api/backend/snapshots/${encodeURIComponent(snapshotId)}/capture/fixtures/${index}.ply`
+    const response = await fetch(url, { credentials: 'include' })
+    if (!response.ok) continue
+    const geometry = loader.parse(await response.arrayBuffer())
+    geometry.computeVertexNormals()
+    geometry.rotateX(-Math.PI / 2)
+    const mesh = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({
+        color: 0x9ca3af,
+        transparent: true,
+        opacity: 0.35,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    )
+    mesh.name = `fixture_${index}`
+    const group = new THREE.Group()
+    group.add(mesh)
+    group.scale.set(scale, scale, scale)
+    groups.push(group)
+  }
+  return groups
+}
+
+const CaptureFixtures = React.memo(({
+  fixtures,
+  visible,
 }: {
-  bar: SnapshotReinforcement
+  fixtures: THREE.Group[]
+  visible: boolean
 }) => {
+  if (!visible || fixtures.length === 0) return null
+  return (
+    <>
+      {fixtures.map((group, index) => (
+        <primitive key={`fixture-${index}`} object={group} />
+      ))}
+    </>
+  )
+})
+CaptureFixtures.displayName = 'CaptureFixtures'
+
+const ReinforcementBarMesh = React.memo(({ bar }: { bar: ReinforcementBar }) => {
   const { segments, cornerJoints } = useMemo(
     () => buildReinforcementBarMeshes(bar.points),
-    [bar.points, bar.diameter],
+    [bar.points],
   )
-  const radius = bar.diameter / 2
-
+  const radius = bar.diameter_mm / 2
   if (segments.length === 0) return null
-
   return (
     <group>
       {segments.map((segment, index) => (
@@ -601,45 +664,33 @@ const ReinforcementBar = React.memo(({
           material={reinforcementSteelMaterial}
         >
           <cylinderGeometry
-            args={[
-              radius,
-              radius,
-              segment.height,
-              REINFORCEMENT_RADIAL_SEGMENTS,
-            ]}
+            args={[radius, radius, segment.height, REINFORCEMENT_RADIAL_SEGMENTS]}
           />
         </mesh>
       ))}
       {cornerJoints.map((joint, index) => (
-        <mesh
-          key={`joint-${index}`}
-          position={joint}
-          material={reinforcementSteelMaterial}
-        >
+        <mesh key={`joint-${index}`} position={joint} material={reinforcementSteelMaterial}>
           <sphereGeometry args={[radius, REINFORCEMENT_RADIAL_SEGMENTS, 12]} />
         </mesh>
       ))}
     </group>
   )
 })
-ReinforcementBar.displayName = 'ReinforcementBar'
+ReinforcementBarMesh.displayName = 'ReinforcementBarMesh'
 
+/** Bars of the `reinforcement_layout` evidence positioned on this snapshot. */
 const ReinforcementBars = React.memo(({
-  reinforcements,
+  bars,
   visible,
 }: {
-  reinforcements: SnapshotReinforcement[]
+  bars: ReinforcementBar[]
   visible: boolean
 }) => {
-  if (!visible || reinforcements.length === 0) return null
-
+  if (!visible || bars.length === 0) return null
   return (
     <group scale={[scale, scale, scale]} rotation={[-Math.PI / 2, 0, 0]}>
-      {reinforcements.map((bar, index) => (
-        <ReinforcementBar
-          key={`${bar.spec}-${bar.diameter}-${index}`}
-          bar={bar}
-        />
+      {bars.map((bar, index) => (
+        <ReinforcementBarMesh key={`${bar.spec}-${index}`} bar={bar} />
       ))}
     </group>
   )
@@ -653,13 +704,13 @@ const PointCloudVisualization = React.memo(({
   pointCloudGeometryMode,
   isLoadingExternal,
 }: {
-  pointClouds: SnapshotPointCloud[]
+  pointClouds: PointCloud[]
   visiblePointClouds: boolean[]
   externalPointClouds: THREE.Group[]
   pointCloudGeometryMode: PointCloudGeometryMode
   isLoadingExternal: boolean
 }) => {
-  const isExternalMode = pointCloudGeometryMode === 'detailed'
+  const isExternalMode = pointCloudGeometryMode === 'original'
 
   const inlineGroups = useMemo(
     () => pointClouds
@@ -713,7 +764,7 @@ const VisualizeMultipleMeshes = React.memo(({
   geometryError?: string | null
   showEdges: boolean
 }) => {
-  const isExternalMode = meshGeometryMode === 'reduced' || meshGeometryMode === 'detailed'
+  const isExternalMode = isMeshFileLevel(meshGeometryMode)
 
   if (isLoadingExternal) {
     return (
@@ -817,9 +868,12 @@ type VisualizeProps = {
   isLoadingExternalPointClouds?: boolean
   meshGeometryError?: string | null
   showEdges: boolean
+  /** The primary proxy, as the solid and the overlay draw it (8.85). */
+  proxyShape: ProxyShape | null
+  showProxyMesh: boolean
 }
 
-function snapshotExtrusionRgb(snap: ComponentSnapshot): [number, number, number] {
+function snapshotPrismRgb(snap: ComponentSnapshot): [number, number, number] {
   const c = snap.color
   return [
     Array.isArray(c) ? (c[0] as number) : 110,
@@ -831,22 +885,22 @@ function snapshotExtrusionRgb(snap: ComponentSnapshot): [number, number, number]
 function VisualizeComponent(props: VisualizeProps) {
   const snapshot = primarySnapshot(props.catalog)
   const sg = snapshot.geometry
-  const ext = snapshotExtrusionsFromGeometry(sg)[0]
   const primitiveDraws = snapshotMeshesToDrawBuffers(snapshotMeshesFromGeometry(sg))
   const pointClouds = snapshotPointCloudsFromGeometry(sg)
 
-  const hasExtrusion =
-    !!ext?.profile?.length && typeof ext.height === 'number' && Number.isFinite(ext.height)
   const hasMeshes = primitiveDraws.length > 0
   const hasPointClouds = pointClouds.length > 0
 
-  if (hasExtrusion) {
+  // the proxy stands in when there is nothing else, or when chosen (8.23)
+  if (props.proxyShape && (props.meshGeometryMode === 'proxy' || !hasMeshes)) {
+    const [r, g, b] = snapshotPrismRgb(snapshot)
     return (
       <>
-        <ExtrusionVisualization
-          profile={ext!.profile}
-          height={ext!.height}
-          colorRgb={snapshotExtrusionRgb(snapshot)}
+        <ProxySolid
+          shape={props.proxyShape}
+          color={rgbToHex(r, g, b)}
+          showMesh={props.showProxyMesh}
+          showEdges={props.showEdges}
         />
         <PointCloudVisualization
           pointClouds={pointClouds}
@@ -858,7 +912,7 @@ function VisualizeComponent(props: VisualizeProps) {
       </>
     )
   }
-  if (hasMeshes || hasPointClouds || props.catalog.identity.type === 'panel') {
+  if (hasMeshes || hasPointClouds) {
     return (
       <>
         <VisualizeMultipleMeshes
@@ -904,19 +958,40 @@ function VisualizeComponent(props: VisualizeProps) {
 
 /**
  * Catalog 3D viewer: **`GET /identities/{id}/compose`** payload (`identity` + `snapshots[]`).
- * Reduced/detailed mesh modes load **`GET /snapshots/{snapshot_id}/meshes/...`** PLY.
- * Detailed point cloud mode loads **`GET /snapshots/{snapshot_id}/point_clouds/...`** PLY.
+ * Detail levels (decision 8.23): Proxy and Preview come from the snapshot
+ * itself; Reduced / Original meshes load **`GET /snapshots/{snapshot_id}/meshes/{i}/{reduced|detailed}`**,
+ * the original point cloud **`GET /snapshots/{snapshot_id}/point_clouds/{i}.ply`**.
  */
 export type ComponentViewerProps = {
   catalog: CatalogComponent
   /** Shorter laptop+ viewport for the component detail L-layout. Other pages keep 50dvh. */
   compactDesktop?: boolean
+  /**
+   * Position picking (decision 8.43): a click or tap that is not a drag
+   * reports the hit in the stored coordinates of the snapshot on screen.
+   */
+  picking?: { enabled: boolean; onPick: (hit: PickHit | null) => void }
+  /** Positions drawn for the snapshot they name (stored coordinates). */
+  marks?: ViewerMark[]
+  /** Fill the parent's height (the picker dialog) instead of the page heights. */
+  fill?: boolean
+  /**
+   * The component page (decision 8.118): the viewer carries a toolbar (detail
+   * level, orientation, an Overlay menu) instead of the settings panel beside it.
+   */
+  toolbar?: boolean
 }
 
-export default function ComponentViewer({ catalog, compactDesktop = false }: ComponentViewerProps) {
+export default function ComponentViewer({
+  catalog,
+  compactDesktop = false,
+  picking,
+  marks = [],
+  fill = false,
+  toolbar = false,
+}: ComponentViewerProps) {
   const snapshot = primarySnapshot(catalog)
   const identityId = catalog.identity._id
-  const catalogType = catalog.identity.type
 
   const snapshotRouting = useMemo(
     () => snapshotMeshRoutingFromSnapshot(snapshot),
@@ -928,22 +1003,51 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     () => snapshotMeshesFromGeometry(snapshotGeometry),
     [snapshotGeometry],
   )
-  const snapshotExtrusions = useMemo(
-    () => snapshotExtrusionsFromGeometry(snapshotGeometry),
-    [snapshotGeometry],
-  )
   const snapshotPointClouds = useMemo(
     () => snapshotPointCloudsFromGeometry(snapshotGeometry),
     [snapshotGeometry],
   )
 
+  const [orientation, setOrientation] = useState<'stored' | 'canonical'>('stored')
+  const [proxyDisplay, setProxyDisplay] = useState<ProxyDisplay>('off')
+  const [proxyRange, setProxyRange] = useState<number | null>(null)
+  const snapshotFrame = (snapshot as { frame?: FrameDoc | null }).frame ?? null
+  const orientationMatrix = useMemo(
+    () => (orientation === 'canonical' ? canonicalSceneMatrix(snapshotFrame) : new THREE.Matrix4()),
+    [orientation, snapshotFrame],
+  )
+  const primaryProxyIndex = useMemo(() => {
+    const proxies = snapshotGeometry.proxies ?? []
+    const primary = proxies.findIndex((proxy) => proxy.role === 'primary')
+    return primary >= 0 ? primary : proxies.length > 0 ? 0 : -1
+  }, [snapshotGeometry])
+  const overlayProxy = primaryProxyIndex >= 0
+    ? (snapshotGeometry.proxies ?? [])[primaryProxyIndex]
+    : null
+  const proxyShape = useProxyShape(overlayProxy as unknown as ProxyDoc | null)
+  const deviationFaces = (overlayProxy?.deviation_maps as
+    | { faces?: Record<string, { distance: { scale_mm: number; offset_mm: number } }> }
+    | null
+    | undefined)?.faces
+  const { maps: deviationMaps, error: deviationError } = useDeviationMaps(
+    snapshot._id,
+    primaryProxyIndex,
+    deviationFaces,
+    proxyDisplay !== 'off' && proxyDisplay !== 'outline',
+  )
+
   const canRenderViewport =
     snapshotMeshes.length > 0
-    || snapshotExtrusions.length > 0
+    || proxyShape !== null
     || snapshotPointClouds.length > 0
 
-  const [meshGeometryMode, setMeshGeometryMode] = useState<GeometryMode>('primitive')
-  const [pointCloudGeometryMode, setPointCloudGeometryMode] = useState<PointCloudGeometryMode>('primitive')
+  // picking starts on the reduced mesh where one exists: cleaner faces than the
+  // preview and far lighter than the original (decision 8.83 d)
+  const hasReducedMesh = plyPrimitiveIndicesForMode(snapshotRouting?.mesh_ply_resolutions, 'reduced').length > 0
+  const [meshGeometryMode, setMeshGeometryMode] = useState<GeometryMode>(
+    picking && hasReducedMesh ? 'reduced' : 'preview',
+  )
+  const [pointCloudGeometryMode, setPointCloudGeometryMode] = useState<PointCloudGeometryMode>('preview')
   const [visibleMeshes, setVisibleMeshes] = useState<boolean[]>([])
   const [visiblePointClouds, setVisiblePointClouds] = useState<boolean[]>([])
   const [externalMeshes, setExternalMeshes] = useState<THREE.Group[]>([])
@@ -952,8 +1056,8 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
   const [isLoadingExternalPointClouds, setIsLoadingExternalPointClouds] = useState(false)
   const [meshGeometryError, setMeshGeometryError] = useState<string | null>(null)
   const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
-  const [showReinforcements, setShowReinforcements] = useState<boolean>(true)
   const [showEdges, setShowEdges] = useState<boolean>(true)
+  const [showProxyMesh, setShowProxyMesh] = useState<boolean>(true)
   const [showGrid, setShowGrid] = useState<boolean>(true)
   const [turntableEnabled, setTurntableEnabled] = useState<boolean>(false)
   const fitCameraRef = useRef<(() => void) | null>(null)
@@ -973,27 +1077,81 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     return `${snapshotRouting.snapshot_id}:${JSON.stringify(snapshotRouting.mesh_ply_resolutions ?? null)}`
   }, [snapshotRouting])
 
-  const isPanel = catalogType === 'panel'
+  // a proxy only: no preview and no files to switch to
+  const isProxyOnly = snapshotMeshes.length === 0 && snapshotPointClouds.length === 0
   const hasMultipleMeshes = primitiveMeshCount > 0
   const pointCloudVisibleByDefault = !hasMultipleMeshes
-  const isMeshExternalMode = meshGeometryMode === 'reduced' || meshGeometryMode === 'detailed'
-  const isPointCloudExternalMode = pointCloudGeometryMode === 'detailed'
+  const isMeshExternalMode = isMeshFileLevel(meshGeometryMode)
+  const isPointCloudExternalMode = pointCloudGeometryMode === 'original'
 
-  const markerPoints = useMemo(() => {
-    const points = snapshot.geometry.marker_points
-    if (Array.isArray(points) && points.length > 0) {
-      return points.filter((point) => Array.isArray(point) && point.length >= 3)
-    }
-    return []
-  }, [snapshot.geometry.marker_points])
+  // capture markers (robot scans, decision 7.7): context, not the component
+  const markerPoints = useMemo(
+    () => (snapshot.capture?.markers ?? []).map((marker) => marker.point),
+    [snapshot.capture],
+  )
 
   const hasMarkerPoints = markerPoints.length > 0
 
-  const reinforcements = useMemo(
-    () => snapshotReinforcementsFromGeometry(snapshot.geometry),
-    [snapshot.geometry],
-  )
-  const hasReinforcements = reinforcements.length > 0
+  // capture fixtures (e.g. the robot gripper) of this snapshot
+  const fixtureCount = snapshot.capture?.fixtures?.length ?? 0
+  const snapshotIdForOverlays = String(snapshot._id ?? '')
+  const [fixtureGroups, setFixtureGroups] = useState<THREE.Group[]>([])
+  const [showFixtures, setShowFixtures] = useState<boolean>(true)
+  useEffect(() => {
+    let cancelled = false
+    setFixtureGroups([])
+    if (fixtureCount > 0 && snapshotIdForOverlays) {
+      loadCaptureFixtures(snapshotIdForOverlays, fixtureCount)
+        .then((groups) => { if (!cancelled) setFixtureGroups(groups) })
+        .catch(() => { if (!cancelled) setFixtureGroups([]) })
+    }
+    return () => { cancelled = true }
+  }, [fixtureCount, snapshotIdForOverlays])
+  const hasFixtures = fixtureGroups.length > 0
+
+  // reinforcement layouts are evidence positioned on one snapshot (7.8)
+  const [reinforcementBars, setReinforcementBars] = useState<ReinforcementBar[]>([])
+  const [showReinforcement, setShowReinforcement] = useState<boolean>(true)
+  // positions of the published evidence on this snapshot (8.43)
+  const [evidenceMarks, setEvidenceMarks] = useState<ViewerMark[]>([])
+  const [showEvidenceMarks, setShowEvidenceMarks] = useState<boolean>(true)
+  const pickRootRef = useRef<THREE.Group>(null)
+  useEffect(() => {
+    let cancelled = false
+    setEvidenceMarks([])
+    if (!identityId || !snapshotIdForOverlays) return
+    fetch(`/api/backend/identities/${encodeURIComponent(String(identityId))}/evidence`, {
+      credentials: 'include',
+    })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((records: unknown) => {
+        if (!cancelled) setEvidenceMarks(publishedMarks(records, snapshotIdForOverlays))
+      })
+      .catch(() => { if (!cancelled) setEvidenceMarks([]) })
+    return () => { cancelled = true }
+  }, [identityId, snapshotIdForOverlays])
+  useEffect(() => {
+    let cancelled = false
+    setReinforcementBars([])
+    if (!identityId || !snapshotIdForOverlays) return
+    const params = new URLSearchParams({ method: 'reinforcement_layout' })
+    fetch(`/api/backend/identities/${encodeURIComponent(String(identityId))}/evidence?${params}`, {
+      credentials: 'include',
+    })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((records: { position?: { snapshot_id?: string | null }; payload?: { bars?: ReinforcementBar[] } }[]) => {
+        if (cancelled) return
+        const bars = records
+          .filter((record) => record.position?.snapshot_id === snapshotIdForOverlays)
+          .flatMap((record) => record.payload?.bars ?? [])
+          .filter((bar) => Array.isArray(bar.points) && bar.points.length >= 2 && bar.diameter_mm > 0)
+        setReinforcementBars(bars)
+      })
+      .catch(() => { if (!cancelled) setReinforcementBars([]) })
+    return () => { cancelled = true }
+  }, [identityId, snapshotIdForOverlays])
+  const hasReinforcement = reinforcementBars.length > 0
+
 
   useEffect(() => {
     let isMounted = true
@@ -1002,7 +1160,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
       meshVisibilitySeedRef.current !== visibilitySeed
     meshVisibilitySeedRef.current = visibilitySeed
 
-    if (isMeshExternalMode && catalogType !== 'panel' && identityId) {
+    if (isMeshExternalMode && !isProxyOnly && identityId) {
       setIsLoadingExternalMeshes(true)
       setMeshGeometryError(null)
       setShowEdges(false)
@@ -1059,7 +1217,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     }
   }, [
     meshGeometryMode,
-    catalogType,
+    isProxyOnly,
     identityId,
     isMeshExternalMode,
     primitiveMeshCount,
@@ -1075,7 +1233,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
       pointCloudVisibilitySeedRef.current !== visibilitySeed
     pointCloudVisibilitySeedRef.current = visibilitySeed
 
-    if (isPointCloudExternalMode && catalogType !== 'panel' && identityId) {
+    if (isPointCloudExternalMode && !isProxyOnly && identityId) {
       setIsLoadingExternalPointClouds(true)
       loadExternalPointClouds(
         identityId.toString(),
@@ -1125,7 +1283,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     }
   }, [
     pointCloudGeometryMode,
-    catalogType,
+    isProxyOnly,
     identityId,
     isPointCloudExternalMode,
     primitivePointCloudCount,
@@ -1202,88 +1360,124 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
     return <ComponentViewerSkeleton message="No Geometry Available" />
   }
 
-  const meshResolutionOptions = [
-    { value: 'primitive', label: 'Primitive' },
-    { value: 'reduced', label: 'Reduced' },
-    { value: 'detailed', label: 'Detailed' },
+  // only the levels this snapshot has (decision 8.23)
+  const storedMeshFiles = new Set(
+    Object.values(snapshotRouting?.mesh_ply_resolutions ?? {}).flat(),
+  )
+  const meshDetailLevels: GeometryMode[] = [
+    ...(proxyShape ? ['proxy' as const] : []),
+    'preview',
+    ...(storedMeshFiles.has('reduced') ? ['reduced' as const] : []),
+    ...(storedMeshFiles.has('detailed') ? ['original' as const] : []),
   ]
+  const meshDetailOptions = meshDetailLevels.map((value) => ({
+    value,
+    label: DETAIL_LABELS[value],
+  }))
 
-  const pointCloudResolutionOptions = [
-    { value: 'primitive', label: 'Primitive' },
-    { value: 'detailed', label: 'Detailed' },
-  ]
+  const pointCloudDetailOptions = (['preview', 'original'] as const).map((value) => ({
+    value,
+    label: DETAIL_LABELS[value],
+  }))
+
+  const primaryProxy = (snapshotGeometry.proxies ?? []).find((proxy) => proxy.role === 'primary')
+    ?? snapshotGeometry.proxies?.[0]
 
   const meshCount = activeMeshCount || primitiveMeshCount
   const pointCloudCount = activePointCloudCount || primitivePointCloudCount
-  const hasOverlays = hasMarkerPoints || hasReinforcements
+  const hasEvidenceMarks = evidenceMarks.length > 0
+  const hasOverlays = hasMarkerPoints || hasFixtures || hasReinforcement || hasEvidenceMarks
 
-  const meshLabel = (index: number) => (
-    isMeshExternalMode && externalMeshes[index]
-      ? (
-          externalMeshes[index]?.children[0]?.name ||
-          `External Mesh ${index + 1}`
-        )
-      : `Mesh ${index + 1}`
-  )
-
-  const pointCloudLabel = (index: number) => (
-    isPointCloudExternalMode
-      ? (
-          externalPointClouds[index]?.name ||
-          `Point Cloud ${index + 1}`
-        )
-      : `Point Cloud ${index + 1}`
-  )
+  // items are numbered only when there is more than one (8.23)
+  const meshLabel = (index: number) => `Mesh ${index + 1}`
+  const pointCloudLabel = (index: number) => `Point cloud ${index + 1}`
 
   const displayBlocks: React.ReactNode[] = []
 
+  // the proxy is the mesh shown when it is chosen, or when nothing else is stored
+  const showingProxy = proxyShape !== null && (meshGeometryMode === 'proxy' || !hasMultipleMeshes)
+  const proxyCheckboxes = (
+    <>
+      <CheckboxControl
+        id="toggle-edges"
+        label="Show edges"
+        checked={showEdges}
+        onChange={(checked) => setShowEdges(checked)}
+      />
+      <CheckboxControl
+        id="toggle-proxy-mesh"
+        label="Show mesh"
+        checked={showProxyMesh}
+        onChange={(checked) => setShowProxyMesh(checked)}
+      />
+    </>
+  )
+
+  if (showingProxy && !hasMultipleMeshes && primaryProxy) {
+    displayBlocks.push(
+      <MenuSubsection key="proxy" title="Proxy">
+        <p className="text-xs text-muted-foreground">
+          Showing: {primaryProxy.primitive} proxy ({primaryProxy.fit.method})
+        </p>
+        {proxyCheckboxes}
+      </MenuSubsection>,
+    )
+  }
+
   if (hasMultipleMeshes) {
     displayBlocks.push(
-      <MenuSubsection key="meshes" title={`Meshes (${meshCount})`}>
-        <SegmentedControl
-          id="meshGeometryModeSelect"
-          label="Resolution"
-          value={meshGeometryMode}
-          onValueChange={onMeshModeChange}
-          disabled={isPanel}
-          options={meshResolutionOptions}
-        />
-        <CheckboxControl
-          id="toggle-edges"
-          label="Show edges"
-          checked={showEdges}
-          onChange={(checked) => setShowEdges(checked)}
-        />
-        {meshCount > 1 ? (
+      <MenuSubsection key="meshes" title={meshCount > 1 && !showingProxy ? `Meshes (${meshCount})` : 'Mesh'}>
+        {toolbar ? null : meshDetailOptions.length > 1 ? (
+          <SegmentedControl
+            id="meshGeometryModeSelect"
+            label="Detail"
+            value={meshGeometryMode}
+            onValueChange={onMeshModeChange}
+            options={meshDetailOptions}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground">Detail: Preview</p>
+        )}
+        {showingProxy ? proxyCheckboxes : (
           <>
             <CheckboxControl
-              id="toggle-all-meshes"
-              label="Show all"
-              checked={allMeshesVisible}
-              onChange={toggleAllMeshes}
+              id="toggle-edges"
+              label="Show edges"
+              checked={showEdges}
+              onChange={(checked) => setShowEdges(checked)}
             />
-            <ScrollableCheckboxList
-              items={Array.from({ length: meshCount }, (_, i) => i).map((index: number) => ({
-                id: String(index),
-                label: meshLabel(index),
-                checked: visibleMeshes[index] || false,
-              }))}
-              onToggle={(id) => toggleMeshVisibility(Number(id))}
-            />
+            {meshCount > 1 ? (
+              <>
+                <CheckboxControl
+                  id="toggle-all-meshes"
+                  label="Show all"
+                  checked={allMeshesVisible}
+                  onChange={toggleAllMeshes}
+                />
+                <ScrollableCheckboxList
+                  items={Array.from({ length: meshCount }, (_, i) => i).map((index: number) => ({
+                    id: String(index),
+                    label: meshLabel(index),
+                    checked: visibleMeshes[index] || false,
+                  }))}
+                  onToggle={(id) => toggleMeshVisibility(Number(id))}
+                />
+              </>
+            ) : (
+              <CheckboxControl
+                id="toggle-mesh-0"
+                label="Show mesh"
+                checked={visibleMeshes[0] ?? false}
+                onChange={(checked) => {
+                  setVisibleMeshes((prev) => {
+                    const next = [...prev]
+                    next[0] = checked
+                    return next
+                  })
+                }}
+              />
+            )}
           </>
-        ) : (
-          <CheckboxControl
-            id="toggle-mesh-0"
-            label={meshLabel(0)}
-            checked={visibleMeshes[0] ?? false}
-            onChange={(checked) => {
-              setVisibleMeshes((prev) => {
-                const next = [...prev]
-                next[0] = checked
-                return next
-              })
-            }}
-          />
         )}
       </MenuSubsection>,
     )
@@ -1294,15 +1488,20 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
       displayBlocks.push(<MenuDivider key="divider-pc" />)
     }
     displayBlocks.push(
-      <MenuSubsection key="point-clouds" title={`Point clouds (${pointCloudCount})`}>
-        <SegmentedControl
-          id="pointCloudGeometryModeSelect"
-          label="Resolution"
-          value={pointCloudGeometryMode}
-          onValueChange={onPointCloudModeChange}
-          disabled={isPanel}
-          options={pointCloudResolutionOptions}
-        />
+      <MenuSubsection
+        key="point-clouds"
+        title={pointCloudCount > 1 ? `Point clouds (${pointCloudCount})` : 'Point cloud'}
+      >
+        {!toolbar && (
+          <SegmentedControl
+            id="pointCloudGeometryModeSelect"
+            label="Detail"
+            value={pointCloudGeometryMode}
+            onValueChange={onPointCloudModeChange}
+            disabled={isProxyOnly}
+            options={pointCloudDetailOptions}
+          />
+        )}
         {pointCloudCount > 1 ? (
           <>
             <CheckboxControl
@@ -1323,7 +1522,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
         ) : (
           <CheckboxControl
             id="toggle-point-cloud-0"
-            label={pointCloudLabel(0)}
+            label="Show point cloud"
             checked={visiblePointClouds[0] ?? false}
             onChange={(checked) => {
               setVisiblePointClouds((prev) => {
@@ -1333,6 +1532,95 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
               })
             }}
           />
+        )}
+      </MenuSubsection>,
+    )
+  }
+
+  const orientationHelp = `${snapshot.bbx && snapshot.bbx[2] > snapshot.bbx[0]
+    ? 'Canonical: a standing column, its length along z.'
+    : 'Canonical: longest side along x, shortest along z.'} As stored: the geometry as it was captured. The stored geometry is never turned; this only changes the view.`
+
+  if (snapshotFrame && !toolbar) {
+    if (displayBlocks.length > 0) {
+      displayBlocks.push(<MenuDivider key="divider-orientation" />)
+    }
+    displayBlocks.push(
+      <MenuSubsection
+        key="orientation"
+        title="Orientation"
+        help={`${snapshot.bbx && snapshot.bbx[2] > snapshot.bbx[0]
+          ? 'Canonical: a standing column, its length along z.'
+          : 'Canonical: longest side along x, shortest along z.'} As stored: the geometry as it was captured. The stored geometry is never turned; this only changes the view.`}
+      >
+        <SegmentedControl
+          id="orientationSelect"
+          label="Show"
+          value={orientation}
+          onValueChange={(value) => setOrientation(value as 'stored' | 'canonical')}
+          options={[
+            { value: 'stored', label: 'As stored' },
+            { value: 'canonical', label: 'Canonical' },
+          ]}
+        />
+        {snapshot.bbx && (
+          <p className="text-xs text-muted-foreground">
+            {snapshot.bbx.map((v: number) => Math.round(v)).join(' x ')} mm
+          </p>
+        )}
+      </MenuSubsection>,
+    )
+  }
+
+  if (overlayProxy && proxyShape) {
+    const fit = overlayProxy.fit
+    const hasMaps = !!deviationFaces && Object.keys(deviationFaces).length > 0
+    const options: { value: ProxyDisplay; label: string }[] = [
+      { value: 'off', label: 'Off' },
+      { value: 'outline', label: 'Outline' },
+      ...(hasMaps
+        ? [
+            { value: 'distance' as const, label: 'Distance' },
+            { value: 'normal_deviation' as const, label: 'Normal' },
+            { value: 'occupancy' as const, label: 'Points' },
+          ]
+        : []),
+    ]
+    const unit = proxyDisplay === 'distance' ? 'mm' : proxyDisplay === 'normal_deviation' ? 'deg' : 'points'
+    if (displayBlocks.length > 0) {
+      displayBlocks.push(<MenuDivider key="divider-proxy" />)
+    }
+    displayBlocks.push(
+      <MenuSubsection key="proxy-overlay" title="Proxy overlay">
+        <SegmentedControl
+          id="proxyDisplaySelect"
+          label="Overlay"
+          value={proxyDisplay}
+          onValueChange={(value) => setProxyDisplay(value as ProxyDisplay)}
+          options={options}
+        />
+        {!toolbar && (
+          <InfoLine
+            label="Proxy fit"
+            help={'The proxy is the simple shape fitted to the scan. The word in brackets names the fitting method. '
+              + 'p95: 95 % of the scan points lie within this distance of the proxy surface. '
+              + 'max: the distance of the farthest scan point.'}
+          >
+            {overlayProxy.primitive} ({fit.method})
+            {fit.p95_mm != null
+              ? `: p95 ${fit.p95_mm.toFixed(1)} mm, max ${(fit.max_mm ?? 0).toFixed(1)} mm`
+              : ''}
+          </InfoLine>
+        )}
+        {proxyRange != null && proxyDisplay !== 'off' && proxyDisplay !== 'outline' && (
+          <InfoLine label="Colour scale" help={overlayHelp(proxyDisplay, overlayProxy.primitive)}>
+            {proxyDisplay === 'distance'
+              ? `Scale +/-${proxyRange.toFixed(1)} ${unit}`
+              : `Scale 0 to ${proxyRange.toFixed(proxyDisplay === 'occupancy' ? 0 : 1)} ${unit}`}
+          </InfoLine>
+        )}
+        {deviationError && (
+          <p className="text-xs text-destructive">Deviation maps unavailable ({deviationError}).</p>
         )}
       </MenuSubsection>,
     )
@@ -1352,12 +1640,28 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
             onChange={(checked) => setShowMarkerPoints(checked)}
           />
         )}
-        {hasReinforcements && (
+        {hasFixtures && (
           <CheckboxControl
-            id="toggle-reinforcements"
-            label={`Reinforcement (${reinforcements.length})`}
-            checked={showReinforcements}
-            onChange={(checked) => setShowReinforcements(checked)}
+            id="toggle-capture-fixtures"
+            label={`Capture fixtures (${fixtureGroups.length})`}
+            checked={showFixtures}
+            onChange={(checked) => setShowFixtures(checked)}
+          />
+        )}
+        {hasReinforcement && (
+          <CheckboxControl
+            id="toggle-reinforcement"
+            label={`Reinforcement (${reinforcementBars.length} bars)`}
+            checked={showReinforcement}
+            onChange={(checked) => setShowReinforcement(checked)}
+          />
+        )}
+        {hasEvidenceMarks && (
+          <CheckboxControl
+            id="toggle-evidence-marks"
+            label={`Test positions (${evidenceMarks.length})`}
+            checked={showEvidenceMarks}
+            onChange={(checked) => setShowEvidenceMarks(checked)}
           />
         )}
       </MenuSubsection>,
@@ -1374,24 +1678,82 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
       }]
     : []
 
-  const desktopViewportClass = compactDesktop
-    ? 'h-[30dvh] sm:h-[40dvh] md:h-[50dvh] 2xl:h-[56vh]'
-    : 'h-[30dvh] sm:h-[40dvh] md:h-[50dvh]'
+  const desktopViewportClass = fill
+    ? 'h-full min-h-[16rem]'
+    : compactDesktop
+      ? 'h-[30dvh] sm:h-[40dvh] md:h-[50dvh] 2xl:h-[56vh]'
+      : 'h-[30dvh] sm:h-[40dvh] md:h-[50dvh]'
+
+  // the toolbar of the component page (8.118): detail level, orientation and
+  // an Overlay menu in place of the settings panel
+  const toolbarBar = toolbar ? (
+    <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Viewer">
+      {meshDetailOptions.length > 1 && (
+        <div className="w-full max-w-[18rem] sm:w-auto sm:min-w-[16rem]">
+          <SegmentedControl
+            id="meshGeometryModeSelect"
+            value={meshGeometryMode}
+            onValueChange={onMeshModeChange}
+            options={meshDetailOptions}
+          />
+        </div>
+      )}
+      {hasPointClouds && !isProxyOnly && (
+        <div className="w-full max-w-[12rem] sm:w-auto sm:min-w-[10rem]" title="Point cloud detail">
+          <SegmentedControl
+            id="pointCloudGeometryModeSelect"
+            value={pointCloudGeometryMode}
+            onValueChange={onPointCloudModeChange}
+            options={pointCloudDetailOptions}
+          />
+        </div>
+      )}
+      {snapshotFrame && (
+        <div className="flex items-center gap-1" title={orientationHelp}>
+          <SegmentedControl
+            id="orientationSelect"
+            value={orientation}
+            onValueChange={(value) => setOrientation(value as 'stored' | 'canonical')}
+            options={[
+              { value: 'stored', label: 'As stored' },
+              { value: 'canonical', label: 'Canonical' },
+            ]}
+          />
+          <Help label="Orientation" text={orientationHelp} />
+        </div>
+      )}
+      {hasDisplayOptions && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" size="sm" className="h-6 gap-1 px-2 text-[11px]">
+              <SlidersHorizontal className="h-3 w-3" />
+              Overlay
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="max-h-[70vh] w-72 overflow-y-auto p-3">
+            <div className="flex flex-col gap-3 text-xs">{displayBlocks}</div>
+          </PopoverContent>
+        </Popover>
+      )}
+    </div>
+  ) : null
 
   return (
-    <div className="flex flex-col md:flex-row gap-2 w-full">
-      {hasDisplayOptions && (
+    <div className={cn('flex flex-col md:flex-row gap-2 w-full', fill && 'h-full', toolbar && 'md:flex-col')}>
+      {toolbarBar}
+      {hasDisplayOptions && !toolbar && (
         <div
           className={cn(
-            'w-full md:w-64 md:flex-shrink-0 order-2 md:order-1 md:h-[50dvh]',
-            compactDesktop && '2xl:h-[56vh]',
+            'w-full md:w-64 md:flex-shrink-0 order-2 md:order-1',
+            fill ? 'hidden md:block md:h-full' : 'md:h-[50dvh]',
+            !fill && compactDesktop && '2xl:h-[56vh]',
           )}
         >
           <ViewerMenu sections={menuSections} className="h-full" />
         </div>
       )}
 
-      <Card className={cn('flex-1 overflow-hidden order-1 md:order-2 p-0', desktopViewportClass)}>
+      <Card className={cn('overflow-hidden order-1 md:order-2 p-0', toolbar ? 'w-full' : 'flex-1', desktopViewportClass)}>
         <div className="relative w-full h-full">
           <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
             <Tooltip>
@@ -1461,6 +1823,7 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
           >
             <FitCameraController fitRef={fitCameraRef} />
             <Turntable enabled={turntableEnabled}>
+              <group ref={pickRootRef} matrixAutoUpdate={false} matrix={orientationMatrix}>
               <VisualizeComponent
                 catalog={catalog}
                 meshGeometryMode={meshGeometryMode}
@@ -1473,15 +1836,36 @@ export default function ComponentViewer({ catalog, compactDesktop = false }: Com
                 isLoadingExternalPointClouds={isLoadingExternalPointClouds}
                 meshGeometryError={meshGeometryError}
                 showEdges={showEdges}
+                proxyShape={proxyShape}
+                showProxyMesh={showProxyMesh}
               />
-              <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
-              <ReinforcementBars
-                reinforcements={reinforcements}
-                visible={showReinforcements}
-              />
+              {/* overlays are context, not the component: never a pick target (8.43) */}
+              <group userData={{ noPick: true }}>
+                <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
+                <CaptureFixtures fixtures={fixtureGroups} visible={showFixtures} />
+                <ReinforcementBars bars={reinforcementBars} visible={showReinforcement} />
+              </group>
+              {showEvidenceMarks && (
+                <EvidenceMarks marks={evidenceMarks} snapshotId={snapshotIdForOverlays} />
+              )}
+              <EvidenceMarks marks={marks} snapshotId={snapshotIdForOverlays} />
+              {proxyShape && (
+                <group userData={{ noPick: true }}>
+                  <ProxyOverlay
+                    shape={proxyShape}
+                    display={proxyDisplay}
+                    maps={deviationMaps}
+                    onRange={setProxyRange}
+                  />
+                </group>
+              )}
+              </group>
             </Turntable>
           </Bounds>
 
+          {picking && (
+            <PickLayer rootRef={pickRootRef} enabled={picking.enabled} onPick={picking.onPick} />
+          )}
           <axesHelper args={[0.1]} />
           {showGrid && <gridHelper args={[2, 20, 'Gray', 'Gainsboro']} />}
           <OrbitControls makeDefault />

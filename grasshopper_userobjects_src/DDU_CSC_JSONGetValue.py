@@ -24,13 +24,41 @@ ghenv.Component.Description = (  # NOQA
     'appropriate native Grasshopper data types where possible.'
 )
 
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('Value', 'Value',
+     'Extracted value converted to appropriate Grasshopper type'),
+    ('ValueType', 'ValueType',
+     'Data type of the extracted value (string, number, boolean, object, array, null)'),
+    ('Success', 'Success',
+     'True if extraction was successful, False otherwise'),
+    ('Error', 'Error',
+     'Error message if extraction failed, empty string if successful'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
+
 
 class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 261005
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
@@ -55,6 +83,28 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the outputs were just
+        updated (says why)."""
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -69,22 +119,7 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
             'Default value to return if key path is not found (optional)'
         )
         # Initialize output param descriptions
-        i = 0
-        if self.OutputParams[0].Name == 'out':
-            i += 1
-        self.OutputParams[0+i].Description = (
-            'Extracted value converted to appropriate Grasshopper type'
-        )
-        self.OutputParams[1+i].Description = (
-            'Data type of the extracted value '
-            '(string, number, boolean, object, array, null)'
-        )
-        self.OutputParams[2+i].Description = (
-            'True if extraction was successful, False otherwise'
-        )
-        self.OutputParams[3+i].Description = (
-            'Error message if extraction failed, empty string if successful'
-        )
+        self._check_outputs()
 
     def get_value_by_path(self, data, path):
         """Get value from JSON data using dot-notation path."""
@@ -210,6 +245,8 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
 
     def RunScript(self, JSON: str, KeyPath: str, DefaultValue: str):
         # set up output trees and results tuple
+        if self._stop():
+            return empty_outputs()
         Value = Grasshopper.DataTree[System.Object]()
         ValueType = Grasshopper.DataTree[System.Object]()
         Success = Grasshopper.DataTree[System.Object]()
@@ -220,7 +257,6 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
             if not JSON:
                 msg = 'No JSON input provided'
                 self._addWarning(msg)
-                self.Component.Message = msg
                 Value.Add('')
                 ValueType.Add('')
                 Success.Add(False)
@@ -230,7 +266,6 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
             if not KeyPath:
                 msg = 'No key path provided'
                 self._addWarning(msg)
-                self.Component.Message = msg
                 default_val = DefaultValue if DefaultValue else ''
                 if isinstance(default_val, list):
                     Value.AddRange(default_val)
@@ -241,7 +276,6 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
                 Error.Add(msg)
                 return __Results
 
-            self.Component.Message = 'Extracting JSON value...'
 
             # Parse JSON
             try:
@@ -249,7 +283,6 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
             except json.JSONDecodeError as e:
                 msg = f'Invalid JSON format: {str(e)}'
                 self._addError(msg)
-                self.Component.Message = msg
                 default_val = DefaultValue if DefaultValue else ''
                 if isinstance(default_val, list):
                     Value.AddRange(default_val)
@@ -282,7 +315,6 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
                 Error.Add('')
 
                 # Update success message
-                self.Component.Message = f'Extracted: {value_type}'
                 self._addRemark(
                     f'Successfully extracted {value_type} value from path: '
                     f'{KeyPath}'
@@ -291,7 +323,6 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
             except KeyError as e:
                 msg = f'Key path not found: {str(e)}'
                 self._addWarning(msg)
-                self.Component.Message = msg
                 default_val = DefaultValue if DefaultValue else ''
                 if isinstance(default_val, list):
                     Value.AddRange(default_val)
@@ -304,7 +335,6 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
             except Exception as e:
                 msg = f'Error extracting value: {str(e)}'
                 self._addError(msg)
-                self.Component.Message = msg
                 default_val = DefaultValue if DefaultValue else ''
                 if isinstance(default_val, list):
                     Value.AddRange(default_val)

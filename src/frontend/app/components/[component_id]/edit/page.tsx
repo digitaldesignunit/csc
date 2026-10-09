@@ -1,143 +1,34 @@
-'use client'
-
-import { use, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useSession } from 'next-auth/react'
+import { notFound } from 'next/navigation'
 import { Pencil } from 'lucide-react'
 
-import ComponentEditForm from '@/components/components/ComponentEditForm'
-import type { CatalogComponent } from '@/generated/CatalogModels'
+import EditSnapshotForm from '@/components/snapshot/EditSnapshotForm'
+import { uuidFromScan } from '@/lib/scanIds'
 
-type PageParams = { component_id: string }
-
-function isConsumedIdentity(consumedAt: unknown): boolean {
-  return consumedAt !== undefined && consumedAt !== null && String(consumedAt).trim() !== ''
-}
-
-export default function ComponentEditPage({
+/**
+ * Edit the details of any version (spec 3.2.2, plan P7, decision 8.123 c):
+ * name, notes, location, colour, the date it is valid from, the capture
+ * notes and the capture fields that are still empty. `?snapshot=<sid>` picks
+ * the version, the current one by default. The backend decides per field who
+ * may.
+ */
+export default async function ComponentEditPage({
   params,
+  searchParams,
 }: {
-  params: Promise<PageParams>
+  params: Promise<{ component_id: string }>
+  searchParams: Promise<{ snapshot?: string }>
 }) {
-  const { component_id } = use(params)
-  const router = useRouter()
-  const { data: session, status } = useSession()
-
-  const [catalog, setCatalog] = useState<CatalogComponent | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [notFoundState, setNotFoundState] = useState(false)
-
-  useEffect(() => {
-    if (status === 'loading') return
-    if (!session?.user || session.error === 'ApiTokenExpired') {
-      router.push(`/auth/signin?callbackUrl=/components/${component_id}/edit`)
-      return
-    }
-    if (session.user.role !== 'admin') {
-      router.push(`/components/${component_id}`)
-    }
-  }, [session, status, router, component_id])
-
-  useEffect(() => {
-    if (session?.user?.role !== 'admin') return
-    let cancelled = false
-
-    const load = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        const res = await fetch(
-          `/api/backend/identities/${encodeURIComponent(component_id)}/compose`,
-          { cache: 'no-store', credentials: 'include' },
-        )
-        if (cancelled) return
-        if (res.status === 404) {
-          setNotFoundState(true)
-          return
-        }
-        if (!res.ok) {
-          throw new Error(`Failed to load identity (${res.status})`)
-        }
-        const data = (await res.json()) as CatalogComponent
-        if (isConsumedIdentity(data.identity.consumed_at)) {
-          router.replace(`/components/${component_id}`)
-          return
-        }
-        if (!cancelled) {
-          setCatalog(data)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Unknown error')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [session, component_id, router])
-
-  if (status === 'loading' || (session?.user?.role === 'admin' && loading)) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="flex min-h-[400px] items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
-        </div>
-      </div>
-    )
-  }
-
-  if (!session?.user || session.user.role !== 'admin') {
-    return null
-  }
-
-  if (notFoundState) {
-    return (
-      <div className="container mx-auto max-w-3xl space-y-6 p-6">
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-          Identity not found.
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="container mx-auto max-w-3xl space-y-6 p-6">
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-          Failed to load identity: {error}
-        </div>
-      </div>
-    )
-  }
-
-  if (!catalog) return null
-
+  const { component_id } = await params
+  const { snapshot } = await searchParams
+  const id = uuidFromScan(component_id)
+  if (!id) notFound()
   return (
-    <div className="container mx-auto max-w-3xl space-y-6 p-6">
-      <div className="mb-4 sm:mb-6">
-        <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <Pencil className="h-6 w-6 text-primary" />
-          <h1 className="text-xl sm:text-2xl font-bold">Edit Component</h1>
-        </div>
-        <p className="text-muted-foreground text-sm sm:text-base">
-          Update the human-readable name, classification, color, and
-          location. Structural fields (geometry, bounding box, frames) and
-          lifecycle state (validation, reservation) are managed separately.
-          Complexity is derived from geometry and cannot be edited here.
-        </p>
-        <div className="mt-3 break-all rounded-md border border-border bg-muted/40 p-3 font-mono text-xs">
-          <span className="text-muted-foreground">Identity ID:</span>{' '}
-          {catalog.identity._id}
-        </div>
+    <div className="container mx-auto max-w-3xl space-y-4 p-4 sm:space-y-6 sm:p-6">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <Pencil className="h-6 w-6 text-primary" />
+        <h1 className="text-xl font-bold sm:text-2xl">Edit details</h1>
       </div>
-
-      <ComponentEditForm catalog={catalog} />
+      <EditSnapshotForm identityId={id} snapshotId={snapshot ?? null} />
     </div>
   )
 }

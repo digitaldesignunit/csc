@@ -2,23 +2,27 @@
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from datetime import datetime, timedelta, timezone
-import re
+import hashlib
+import os
+import secrets
 from typing import Annotated, Optional
 
 # THIRD PARTY MODULE IMPORTS --------------------------------------------------
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 import bcrypt
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalog.models import Token, User, UserInDB, UserPublic, RegisterPayload, ChangePasswordPayload # NOQA
+from apps.catalog.models import PasswordResetConfirm, PasswordResetRequest
 from apps.catalog.models import BCRYPT_MAX_PASSWORD_BYTES
+from apps.catalog.models import normalize_username
+from services import email_service
 from services.email_service import (
     generate_verification_token,
     get_token_expiry,
-    send_verification_email,
-    send_verification_resent_email,
     load_email_config
 )
 from limiter import limiter
@@ -35,8 +39,20 @@ oauth2_scheme_optional = OAuth2PasswordBearer(
     auto_error=False,
 )
 
-# Only allow @*.tu-darmstadt.de emails (at registration; optional at login)
-TU_REGEX = re.compile(r'^[^@]+@([^.]+\.)*tu-darmstadt\.de$', re.IGNORECASE)
+
+def open_registration_domains() -> list:
+    """CSC_OPEN_REGISTRATION_DOMAINS (comma-separated, default
+    tu-darmstadt.de): self-registration without invitation (8.14)."""
+    raw = os.getenv('CSC_OPEN_REGISTRATION_DOMAINS', 'tu-darmstadt.de')
+    return [d.strip().lower().lstrip('.') for d in raw.split(',')
+            if d.strip()]
+
+
+def is_open_domain(email: str) -> bool:
+    """The address's domain is an open domain or one of its subdomains."""
+    domain = email.rsplit('@', 1)[-1].lower()
+    return any(domain == d or domain.endswith('.' + d)
+               for d in open_registration_domains())
 
 
 # HELPERS ---------------------------------------------------------------------
@@ -96,6 +112,25 @@ def create_access_token(
 
 # AUTHENTICATION DEPENDENCIES -------------------------------------------------
 
+def token_predates_password(payload: dict, doc: dict) -> bool:
+    """A token issued (``iat``, whole seconds) before the last password
+    change is refused: a change or a reset signs out every other device and
+    the Grasshopper session (8.124 a). The comparison is on whole seconds:
+    a token issued in the second of the change is still good (the sign-in
+    that follows a reset at once must work); the window it leaves is under a
+    second."""
+    changed = doc.get('password_changed_at')
+    if not changed:
+        return False
+    if isinstance(changed, str):
+        changed = datetime.fromisoformat(changed.replace('Z', '+00:00'))
+    if changed.tzinfo is None:
+        changed = changed.replace(tzinfo=timezone.utc)
+    issued = payload.get('iat')
+    return not isinstance(issued, (int, float)) \
+        or issued < int(changed.timestamp())
+
+
 async def lookup_user_from_token(
     request: Request,
     token: str,
@@ -125,12 +160,15 @@ async def lookup_user_from_token(
         doc = await users.find_one({'_id': sub})
 
     if not doc and uname:
-        doc = await users.find_one({'username': uname})
+        doc = await users.find_one({'username': normalize_username(uname)})
 
     if not doc and email:
         doc = await users.find_one({'email': email})
 
     if not doc or doc.get('disabled'):
+        return None
+
+    if token_predates_password(payload, doc):
         return None
 
     try:
@@ -198,9 +236,10 @@ async def login_for_access_token(
     users=Depends(users_coll),
 ):
     # OAuth2 form uses `.username` as the identifier field
-    identifier = form_data.username.strip()
+    # any case is accepted: emails and usernames are stored lowercase (8.28)
+    identifier = form_data.username.strip().lower()
     user = await users.find_one({
-        '$or': [{'email': identifier.lower()}, {'username': identifier}],
+        '$or': [{'email': identifier}, {'username': identifier}],
         'disabled': {'$ne': True},
     })
     if (
@@ -237,26 +276,48 @@ async def login_for_access_token(
 @router.post('/register',
              response_model=UserPublic,
              status_code=201,
-             summary='Register new user (@*.tu-darmstadt.de)')
+             summary='Register (open domains, or with an invitation code)')
 @limiter.limit('5/minute')
 async def register_user(
     request: Request,
     payload: RegisterPayload,
     users=Depends(users_coll),
 ):
-    username = payload.username.strip()
+    username = normalize_username(payload.username)
     full_name = payload.full_name.strip()
     email = payload.email.strip().lower()
     password = payload.password
 
-    if not TU_REGEX.match(email):
-        raise HTTPException(400, 'Email must be @*.tu-darmstadt.de')
+    # late import: invitations depends on this module's auth dependencies
+    from apps.catalog.api.invitations import grant_invitation, redeem
+
+    invitation = None
+    if payload.code:
+        # the code proves the address received it: verified at once (8.14)
+        invitation = await redeem(request, payload.code, email)
+    elif not is_open_domain(email):
+        raise HTTPException(
+            400, 'Registration with this address needs an invitation; '
+                 'ask a dataset moderator to invite you.')
 
     # prevent duplicates
     if await users.find_one({'$or': [{'email': email},
                                      {'username': username}]}):
         raise HTTPException(status.HTTP_409_CONFLICT,
                             'User with this email or username already exists')
+
+    if invitation is not None:
+        new_id = str(__import__('uuid').uuid4())
+        doc = {
+            '_id': new_id, 'username': username, 'full_name': full_name,
+            'email': email, 'hashed_password': get_password_hash(password),
+            'disabled': False, 'role': 'user', 'email_verified': True,
+            'verification_token': None, 'verification_token_expires': None,
+            'invitation_id': invitation['_id'],
+        }
+        await users.insert_one(doc)
+        await grant_invitation(request, invitation, new_id)
+        return User(**doc)
 
     # Generate verification token
     verification_token = generate_verification_token()
@@ -277,21 +338,18 @@ async def register_user(
     }
     await users.insert_one(doc)
 
-    # Send verification email
+    # Send verification email (off the event loop); a failure is logged, the
+    # user is created and can ask for it again
     try:
         email_config = load_email_config()
-        dev_mode = email_config.get('dev_mode', False)
-
-        send_verification_email(
-            email_config,
-            email,
-            full_name,
-            verification_token,
-            dev_mode=dev_mode
-        )
+        failure = await run_in_threadpool(
+            email_service.send_mail, email_config,
+            email_service.verification_mail(
+                email_config, email, full_name, verification_token))
+        if failure:
+            print(f'{ts()} [AUTH] Verification email failed: {failure}')
     except Exception as e:
         print(f'{ts()} [AUTH] Failed to send verification email: {str(e)}')
-        # Continue anyway - user is created, they can request resend
 
     return User(**doc)  # maps _id->id
 
@@ -380,13 +438,18 @@ async def change_password(
         )
 
     new_hashed = get_password_hash(payload.new_password)
+    # every other device and the Grasshopper session are signed out (8.124);
+    # an open reset link is void too
     await users.update_one(
         {'_id': current_user.id},
-        {'$set': {'hashed_password': new_hashed}},
+        {'$set': {'hashed_password': new_hashed,
+                  'password_changed_at': datetime.now(timezone.utc)},
+         '$unset': {'password_reset_sha256': '',
+                    'password_reset_expires': ''}},
     )
 
     print(f'{ts()} [AUTH] Password changed for user: {current_user.email}')
-    return {'message': 'Password changed successfully'}
+    return {'message': 'Password changed successfully. Sign in again.'}
 
 
 @router.post('/resend-verification',
@@ -442,26 +505,21 @@ async def resend_verification(
         }
     )
 
-    # Send verification email
+    # Send verification email (off the event loop). A failure goes to the
+    # log: the answer must not tell whether the account exists.
     try:
         email_config = load_email_config()
-        dev_mode = email_config.get('dev_mode', False)
-
-        send_verification_resent_email(
-            email_config,
-            email,
-            user.get('full_name', 'User'),
-            verification_token,
-            dev_mode=dev_mode
-        )
-
-        print(f'{ts()} [AUTH] Verification email resent to: {email}')
+        failure = await run_in_threadpool(
+            email_service.send_mail, email_config,
+            email_service.verification_mail(
+                email_config, email, user.get('full_name', 'User'),
+                verification_token))
+        if failure:
+            print(f'{ts()} [AUTH] Verification email failed: {failure}')
+        else:
+            print(f'{ts()} [AUTH] Verification email resent to: {email}')
     except Exception as e:
         print(f'{ts()} [AUTH] Failed to resend verification email: {str(e)}')
-        raise HTTPException(
-            500,
-            'Failed to send verification email. Please try again later.'
-        )
 
     return {
         'message': (
@@ -469,3 +527,108 @@ async def resend_verification(
             'a verification email has been sent.'
         ),
     }
+
+
+# PASSWORD RESET (decision 8.124 a) -------------------------------------------
+RESET_TOKEN_HOURS = 1
+RESET_MAILS_PER_HOUR = 3                   # per address (the limiter counts per IP)
+RESET_ANSWER = {
+    'message': ('If an account exists for this address, an email with a '
+                'link to choose a new password has been sent.'),
+}
+
+
+def reset_token_sha256(token: str) -> str:
+    """Only this hash is stored: a leaked database holds no usable link."""
+    return hashlib.sha256(token.strip().encode('utf-8')).hexdigest()
+
+
+def _send_reset_mail(email: str, full_name: str, token: str) -> None:
+    """Blocking, run as a background task after the answer is out, so the
+    answer takes the same time for a known and an unknown address. A failure
+    goes to the log only: the answer must not tell whether the address has
+    an account."""
+    try:
+        config = load_email_config()
+        failure = email_service.send_mail(
+            config, email_service.reset_mail(config, email, full_name, token))
+        if failure:
+            print(f'{ts()} [AUTH] Password reset mail failed: {failure}')
+    except Exception as exc:
+        print(f'{ts()} [AUTH] Password reset mail failed: {exc}')
+
+
+@router.post('/password-reset', status_code=202,
+             summary='Ask for a password reset mail (always 202)')
+@limiter.limit('20/hour')
+async def request_password_reset(
+    request: Request,
+    payload: PasswordResetRequest,
+    background: BackgroundTasks,
+    users=Depends(users_coll),
+):
+    """Always 202 with the same text: no account is revealed. For an enabled
+    account a single-use token is stored (as a hash, one hour) and mailed;
+    at most ``RESET_MAILS_PER_HOUR`` mails go to one address in an hour (the
+    limiter counts the requests per client address)."""
+    email = payload.email.strip().lower()
+    user = await users.find_one({'email': email,
+                                 'disabled': {'$ne': True}})
+    token = secrets.token_urlsafe(32)
+    digest = reset_token_sha256(token)
+    if user is not None:
+        now = datetime.now(timezone.utc)
+        horizon = now.timestamp() - 3600
+        recent = [t for t in user.get('password_reset_requests') or []
+                  if isinstance(t, (int, float)) and t > horizon]
+        if len(recent) < RESET_MAILS_PER_HOUR:
+            await users.update_one(
+                {'_id': user['_id']},
+                {'$set': {
+                    'password_reset_sha256': digest,
+                    'password_reset_expires':
+                        now + timedelta(hours=RESET_TOKEN_HOURS),
+                    'password_reset_requests': [*recent, now.timestamp()]}})
+            background.add_task(_send_reset_mail, email,
+                                user.get('full_name') or user.get(
+                                    'username') or '', token)
+    return RESET_ANSWER
+
+
+@router.post('/password-reset/confirm', status_code=200,
+             summary='Choose a new password with the mailed token')
+@limiter.limit('10/hour')
+async def confirm_password_reset(
+    request: Request,
+    payload: PasswordResetConfirm,
+    users=Depends(users_coll),
+):
+    """The token works once and for an hour. It sets the password, signs out
+    every token issued before (``password_changed_at``) and, because the mail
+    reached the mailbox, counts as the verification of the address."""
+    digest = reset_token_sha256(payload.token)
+    now = datetime.now(timezone.utc)
+    match = {'password_reset_sha256': digest,
+             'password_reset_expires': {'$gt': now},
+             'disabled': {'$ne': True}}
+    if await users.find_one(match, {'_id': 1}) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='This reset link is invalid or has expired. Ask for a '
+                   'new one.')
+    new_hashed = get_password_hash(payload.new_password)
+    user = await users.find_one_and_update(
+        match,
+        {'$set': {'hashed_password': new_hashed, 'password_changed_at': now,
+                  'email_verified': True},
+         '$unset': {'password_reset_sha256': '',
+                    'password_reset_expires': '',
+                    'verification_token': '',
+                    'verification_token_expires': ''}})
+    if user is None:                # used by a second request meanwhile
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='This reset link is invalid or has expired. Ask for a '
+                   'new one.')
+    print(f'{ts()} [AUTH] Password reset for user: {user.get("email")}')
+    return {'message': 'Password changed. You can now sign in.'}

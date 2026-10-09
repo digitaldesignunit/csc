@@ -5,14 +5,22 @@ type ComponentDetailSnapshotBannerProps = {
   identityId: string
   viewingVersion: number
   liveVersion: number
-  isPending: boolean
+  /** Status of the snapshot being viewed; anything but published is named. */
+  status?: string | null
+}
+
+const STATUS_NOTE: Record<string, string> = {
+  pending: ' (pending approval)',
+  draft: ' (draft)',
+  rejected: ' (rejected)',
+  withdrawn: ' (withdrawn)',
 }
 
 export default function ComponentDetailSnapshotBanner({
   identityId,
   viewingVersion,
   liveVersion,
-  isPending,
+  status,
 }: ComponentDetailSnapshotBannerProps) {
   return (
     <div
@@ -24,7 +32,7 @@ export default function ComponentDetailSnapshotBanner({
         <div>
           <p className="font-medium">
             Viewing snapshot v{viewingVersion}
-            {isPending ? ' (pending approval)' : ''}
+            {STATUS_NOTE[status ?? ''] ?? ''}
           </p>
           <p className="mt-0.5 text-xs text-blue-900/90 dark:text-blue-100/90">
             Live catalog version is v{liveVersion}. Geometry and metadata below

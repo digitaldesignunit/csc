@@ -54,6 +54,10 @@ export const config = {
     '/gh-interface',        // protect gh-interface root
     '/locate-by-id/:path*', // protect locate-by-id subpages
     '/locate-by-id',       // protect locate-by-id root
+    '/scan/:path*',         // protect the scan page
+    '/scan',
+    '/my-work/:path*',      // protect my work
+    '/my-work',
     '/identify/:path*',     // protect identify subpages
     '/identify',            // protect identify root
     '/analytics/:path*',    // protect analytics subpages

@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import Help from '@/components/ui/help'
 
 /**
  * Section types for the viewer menu
@@ -107,19 +108,43 @@ export function ViewerMenu({ sections, className = '' }: ViewerMenuProps) {
  */
 export function MenuSubsection({
   title,
+  help,
   children,
   className = '',
 }: {
   title?: string
+  /** Explanation behind a "?" next to the title (the form's Help popover). */
+  help?: string
   children: React.ReactNode
   className?: string
 }) {
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {title && (
-        <div className="text-sm font-medium">{title}</div>
+        <div className="flex items-center gap-1 text-sm font-medium">
+          {title}
+          {help && <Help label={title} text={help} />}
+        </div>
       )}
       {children}
+    </div>
+  )
+}
+
+/** A line of numbers, with the explanation behind a "?" (not in the panel). */
+export function InfoLine({
+  label,
+  help,
+  children,
+}: {
+  label: string
+  help: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+      <span>{children}</span>
+      <Help label={label} text={help} />
     </div>
   )
 }

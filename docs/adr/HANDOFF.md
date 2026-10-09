@@ -8,16 +8,116 @@ are in place. **Next: P1 of `docs/adr/IMPLEMENTATION_PLAN_0.6.md` on a new branc
 `main`.** Pending cleanup after a few good releases: the old server layout (deployment README,
 step 7).
 
-**P1 status: done and committed** (2026-09-30; the 8.12--8.18 code additions are still in the working tree): vocab, document models, permission / lifecycle
+**P1 status: done and committed** (2026-09-30): vocab, document models, permission / lifecycle
 predicates, invariant checker (I1--I28 + I3b), designs removed, client-header enforcement (8.11);
-346 tests green. **Next: P2** (migrations + rehearsal on 260916).
+346 tests green. **P2 in progress (branch `v-0.6.0.0-P2`, 2026-09-30):** migrations
+(`apps/catalog/migration06/`, `migrate_06.py`, `invoke rehearse` --- 0 invariant errors on 260916, idempotent) and
+the read-only catch-up (0.6 read routes, 0.5 writes answer 503, frontend on generated 0.6 types; `invoke
+dev-migrated` serves a migrated 260916 for the web app) are built; the user checked the web app. Grilled from that check: 8.22 (`ddu` test account), 8.23 (detail
+levels Proxy / Preview / Reduced / Original), 8.24 (owners of every record, `beyond_debris`), 8.25
+(moderators, `admin` test account), 8.26 (`ddu_aggregations` roles), 8.27 (no names
+of people or accounts in committed files), 8.28 (lowercase usernames, case-insensitive
+sign-in; step 15, I29); nothing open. The 8.23 interface wording is built (viewer
+detail selector, download groups, `/meshes/{i}/preview` with `/primitive` as alias). Rehearsal on dump 261001 (2026-10-01, `invoke rehearse --mapping .dev/reattribute_06.json`): all
+cutover steps + 11b, idempotent, **0 errors, 0 warnings**; 10 usernames lowercased, 2 designs
+archived, nothing left unmapped. `invoke rehearse` / `dev-migrated` default to 261001; the preview
+applies the untracked mapping when present. 8.29 (navigation shell, closes O3); nothing open. P2 committed. **P2b built (branch `v-0.6.0.0-P2b`, 2026-10-01):** the
+navigation shell of 8.29 (`components/ui/sidebar.tsx`, `components/layout/AppSidebar.tsx`,
+`TopBar.tsx`, entries in `lib/navigation.ts`, Recent in `lib/recentComponents.ts`); the old
+`Sidebar` / `Header` / `AppMenu` / `UserItem` / `ThemeToggle` are gone. **P3 in progress (branch `v-0.6.0.0-P3`):** part 1 of 5
+done --- `api/access.py` (visibility rule on every read / list / map / graph route, 401 "not public" /
+403 "no access" instead of 404, `require(action, ...)` for writes, geometry of published snapshots
+frozen with 409), `GET /users/me`, `/datasets` routes, file write routes closed; table-driven
+`tests/api/test_permissions_routes.py`. Part 2 done --- `api/snapshot_lifecycle.py`: create-as-draft,
+supersede, submit (+ `?publish=1&promote=1`), recall, resubmit, publish, reject, promote, withdraw /
+reinstate, `PATCH /snapshots/{sid}` per field (8.3), delete of never-published records; one in flight
+(I3b), valid time in order (I3), `status_history` (8.30); the queue `GET /snapshots/pending` lists the
+caller's moderated datasets; the 0.5 validate / delete-as-reject / current-snapshot PATCH routes are
+gone. Not yet: publishing a child's first snapshot does not set the parents' `exit` (I18, plan P4).
+Part 3 done --- `api/identity_lifecycle.py`: withdraw / reinstate (with `duplicate_of`, followers
+re-pointed), delete of never-published pieces, purge with 410 stubs (`purged_records`), `GET /id/{uuid}`;
+tombstones outside D on every JSON read (`TombstoneHit`, 200), files of withdrawn records members-only (403).
+Left for part 5 (web): the `/id/[uuid]` page, tombstone / "not public" / "no access" pages, scanners taking a
+URL. Open to grill: O4 (email setup review). Part 4 done --- `api/invitations.py` (`POST/GET/DELETE
+/invitations`, `POST /datasets/{did}/members` by email: existing account added + notified, else invited),
+`/auth/register` with `code` (verified at once, roles granted) and `CSC_OPEN_REGISTRATION_DOMAINS`,
+`GET /users` filters + memberships (8.21), `GET /users/search` (admin), rules `invite`,
+`revoke_invitation`, `search_users`, verification split into `self_attest` / `review_verification`
+without the admin shortcut (8.12; the evidence routes use them in P6). Part 5 (web) done ---
+`lib/me.tsx` (`useMe`, roles per dataset from `/users/me`), `lib/backend.ts`; sidebar: Moderation for
+dataset moderators with the queue count, Datasets, "Users and invitations"; queue with publish / reject;
+lifecycle buttons on the version list; withdraw / reinstate component with "duplicate of"; component page
+notices (not public, no access, withdrawn, removed, no current state) and the members' withdrawal banner;
+`/id/[uuid]`; scanners and the id box take a link; `/admin/datasets` (+ `[did]`: settings, members by email,
+admin account search, invitations); `/admin/users` with URL filters, memberships and an invitations tab;
+registration with `?code=`. Fixed on the way: the web sign-in matched usernames by exact case (8.28 now
+holds there too); killed preview / test runs left 200--700 MB temp folders each (now swept at the next
+start). **P3 is done (accepted 2026-10-02).**
+
+**2026-10-02, before P4 (branch `v-0.6.0.0-P4`):** the 0.5 measurements draft is retired into the
+spec (Appendix A.0, section 2.5, Sources), the 0.5 plan archived (`docs/adr/archive/`), loose ideas
+in `docs/adr/FUTURE.md`, and `docs/adr/STANDARDS_ALIGNMENT.md` lists what the model follows. Source
+check against the full texts in `reference/pdf/`: findings in
+`docs/adr/SOURCE_CHECK_2026-10-02.md` (factual fixes applied to spec 2.5, 10.2, 10.6, A.0,
+Sources; payload changes are O17). Open topics O4--O17 in `DESIGN_DECISIONS.md`; O5--O9, O13,
+O14, O16 grilled into 8.31--8.39.
+
+**2026-10-02, P4 built (branch `v-0.6.0.0-P4`).** Backend: `api/identity_edit.py` (0.6
+`POST /identities` with inheritance, `PATCH /identities/{id}` with detach / re-inherit /
+propagation, exit / undo / re-entry, `sync_parent_exits` --- the parents' split / merged now follows
+published children, closing the P3 "not yet"), `api/materials.py` (delete / merge / retire),
+`api/change_log.py` (`/identities/{id}/changes` with usernames, `?as_of=`, `/schema/lineage`),
+pure `lineage.py` and `history.py`; the 0.5 consume / restore / create / PATCH routes are gone.
+Web: provenance card with the DIN SPEC / DGNB fields, inherited markers and earlier cycles; edit
+dialog per inheritance unit ("from the parents" tick); circulation actions (exit, undo, re-enter);
+"Cut a piece from it" (authored box, submit + publish for moderators); change history on the
+component page; `/admin/materials`; the viewer draws box proxies. Checked in the browser on the
+261001 rehearsal copy. Grilled the same day: 8.40 (EN methods only), 8.41 (payload corrections,
+German strength class read by the user), 8.42 (core-to-rebound pairs; test regions later), 8.43
+(points and grids picked in the web viewer), 8.44 (exports: JSON-LD + CERO + PDF in P10, 0.6.1).
+**2026-10-02, P5 built (branch `v-0.6.0.0-P5`).** The geometry runner: `main_geometry.py` with the
+stages frame --> shape class --> proxies (+ deviation maps) --> descriptors (radial, HKS) --> complexity
+--> previews, each stamped on the snapshot (`derivation`, 8.46) so a changed input reruns its
+dependents; frame and class also run in the API on every draft geometry write, submit, override and
+function change (`api/geometry_hooks.py`); one cron (`geometry_cronjob.ini`) replaces the descriptor
+and preview crons; `--remote <url>` runs it off the server through admin-only routes (8.45, 8.51);
+deviation-map and proxy-mesh routes; `POST /snapshots/{sid}/proxies/recompute`. Web: stored /
+canonical orientation and a proxy overlay (outline, distance, normal, points) in the viewer. Rehearsal
+on dump 261001 (`invoke rehearse`, now with steps 5, 7, 8): 701 / 701 snapshots derived, 0 stage
+errors, 0 invariant errors; the frame changed axis order against the 0.5 `pca_frame` on 23 snapshots
+(5 `beyond_debris`, 8 `dbu_zirkus`, 8 `ddu_build_with_debris`, 1 each `schoenes_neues_feld` and
+`spa_example_data`). Build decisions 8.46--8.51 are marked "to confirm". **Open before P5 is
+accepted:** the user signs off the tuning tables (`.dev/tuning_261001.txt`: shape class and
+complexity against the 71 authored `beyond_debris` ratings) and the frame report; the thresholds in
+`shape_class.py` and `complexity.py` are still the initial guesses and are frozen after that sign-off
+(a change is a `*_VERSION` bump). Left for P7: the add-component wizard still calls
+`/utility/compute-snapshot-orientation` and `orientation.py` (6.14: they go with the wizard).
+**Next:** P6 (evidence). Still open: O11 before P8; O4, O12 before P9.
+
+**2026-10-03, resume here.** Since then: P5 accepted (tuning frozen, 8.52--8.61), P6 evidence
+(8.62--8.86), P7 web completion (8.87--8.91, appendix A walkthrough in the plan), Grasshopper client
+decided (8.92 CPython stays; 8.93 P8 tested locally; 8.94 touch only what must change, frame
+replicated offline; 8.95 audit answers) and **P8 part A built and reviewed** (8.96, 8.97) on branch
+`v-0.6.0.0-P8`. Work runs in three sessions: the coordinator (spec, grilling, decisions), the
+implementation session and the review session; a "go" from the user sends a task. **Next:**
+(1) the user commits P8 part A (backend; gh client; docs); (2) go for **P8 part B**: D2P
+(`PassportToD2P` updated, new `ReadFromD2P`) and the built-in Bake / Sync on one user-text convention
+(`csc_identity_id`, `csc_snapshot_id`, `csc_placement`), the `Version` bump of ViewCaptureToFile,
+a rewire list for the release / example definitions and the in-Rhino checklist; (3) the user's
+Rhino runs (`.dev/p8/in-rhino-checklist.md`, `measure_mesh_build.py`) and one export of every new or
+changed `.ghuser` with ExportScriptsAndSource after part B. O12 (cutover runbook) closed by 8.122
+(one offline day, plan P12 "Cutover day"); O4 (email setup) closed by 8.124. Phase order from 8.103: P9 in-place state, batches and the external catalogue import (grilled 2026-10-05: 8.104--8.109, ready to build), P10 exports, P11 UI revision, P12 cutover. The production Atlas password, the JWT
+secret and the NextAuth secret were rotated on 2026-10-08 (printed into session tool output earlier). New on 2026-10-08, not part of the
+0.6 phases: a student's spherical harmonics descriptor may be read and integrated (8.126); findings in
+`SH_DESCRIPTOR_SOURCE_2026-10-08.md`, open topics O19--O25 to grill (O25: research pass first); no code copied before the author
+commits a licence file.
 
 **Last session:** 2026-09-30 --- remaining review gaps grilled (8.12 verification owners, 8.13
 attachments signed-in only, 8.15 frame closest to stored axes, 8.16 / 8.17 minor items incl.
 "withdrawn" = tombstone outside the dataset), 8.14 invitations (new), full document review for
 consistency. 2026-09-29: 8.6 HKS, `adr/` --> `docs/adr/`, agent-skill setup, review gaps 1--5
 (8.7--8.11), P1. 2026-09-28: consistency pass (8.1--8.4), 0.5.1.0 released (8.5).
-**Who:** fstwn (eschenbach@dg.tu-darmstadt.de), TU Darmstadt DG --- sole maintainer of CSC.
+**Who:** the maintainer (TU Darmstadt DG) --- sole maintainer of CSC.
 
 ## 1. What this work is
 
@@ -48,11 +148,11 @@ Threads merged into one spec:
 | `docs/adr/DATA_MODEL_SPEC.md` | **authoritative spec**, draft 5 (2026-09-30). section 0 reading guide ... section 10 CPR/DPP, Appendices A (evidence payloads, A.4 reinforcement layout), B (proxy primitives). section 9 = open questions (all struck through as decided). |
 | `docs/adr/DESIGN_DECISIONS.md` | decision log: 1.x evidence, 2.x property fold, 3.x geometry, 4.x classification, 5.x CPR proposals, 6.x provenance / permissions / release, **7.x entry surfaces / representation / scope (2026-09-24)**, **8.x consistency pass + review gaps (2026-09-28 -- 30)**. |
 | `CONTEXT.md` (repo root) | **glossary** (domain-modeling format): canonical terms + words to avoid. Created 2026-09-24. |
-| `docs/adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1--P9 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> cutover); test strategy; Q1--Q3 decided |
+| `docs/adr/IMPLEMENTATION_PLAN_0.6.md` | **phased plan**: P0 = 0.5.1.0, P1--P12 = 0.6 (foundations --> migrations + rehearsal --> permissions / lifecycle --> provenance --> geometry runner --> evidence --> web --> GH bridge --> in-place state, batches + catalogue import --> exports --> UI revision --> cutover; order from 8.103); test strategy; Q1--Q3 decided |
 | `docs/adr/HANDOFF.md` | this file |
 | `AGENTS.md`, `docs/agents/` | agent-skill config: GitHub issues, triage labels, domain-doc rules (2026-09-29) |
-| `future_implementation/MEASUREMENTS_SPEC.md` | original measurement spec --- superseded, kept for domain research and standards sources. Gitignored. |
-| `future_implementation/IMPLEMENTATION_PLAN_V0-5+.md` | older plan; its 0.5.0.2 moderator section is **superseded by 6.5** |
+| `docs/adr/FUTURE.md` | loose ideas beyond 0.6 (LCA, IFC, similarity search, analytics, GH); nothing decided |
+| `docs/adr/archive/IMPLEMENTATION_PLAN_0.5.md` | archived 0.5.x plan; its 0.5.0.2 moderator section is **superseded by 6.5**, open items moved to `FUTURE.md` |
 | `reference/pdf/Bernhard_HYBREP.pdf`, `reference/pdf/CPR_2024_3110.pdf` | sources. Gitignored. |
 | `mongodb_collections_local/260916/` | newest local dump (identities, snapshots, map cache --- **no designs**) |
 | `D:\01_PROJECT_WORKDATA\260916_CSC_ASSETS` | files for that dump (meshes, point clouds, photos, previews) |
@@ -162,7 +262,7 @@ outside, automatic current-snapshot fallback; 8.18 pending records: moderator ed
 
 697 identities / **701 snapshots** --- 4 identities have a v1 (3 `schoenes_neues_feld`, 1
 `dbu_zirkus`); all `validated: true`, none virtual. Datasets: `mineral_composite_panels` 477,
-`sas_cita_scans` 71, `ddu_build_with_debris` 70, `ddu_aggregations` 50, `dbu_zirkus` 16,
+`sas_cita_scans` 71 (0.6: `beyond_debris`, 8.24), `ddu_build_with_debris` 70, `ddu_aggregations` 50, `dbu_zirkus` 16,
 `spa_example_data` 9, `schoenes_neues_feld` 4. 45 split children / 37 parents. 42 consumed. 700 of
 701 snapshots written by the shared `ddu` account. `processes` empty and `assembly` false
 everywhere. `complexity` and `condition` are batch defaults (condition `2` on 698 of 701; only

@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import Image from 'next/image'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 
+import PhotoCreditLine from '@/components/photos/PhotoCreditLine'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -27,6 +28,8 @@ type PhotoLightboxDialogProps = {
   index: number | null
   onIndexChange: (index: number) => void
   title?: string
+  /** The photo credit of the version, shown under the image (8.128 a). */
+  credit?: unknown
 }
 
 export default function PhotoLightboxDialog({
@@ -36,6 +39,7 @@ export default function PhotoLightboxDialog({
   index,
   onIndexChange,
   title = 'Photo preview',
+  credit,
 }: PhotoLightboxDialogProps) {
   const current = index !== null && index >= 0 && index < items.length ? items[index] : null
   const canPrev = index !== null && index > 0
@@ -128,6 +132,7 @@ export default function PhotoLightboxDialog({
             )}
           </div>
         )}
+        {current && <PhotoCreditLine credit={credit} className="mx-4 mb-3 -mt-2" />}
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border p-4">
           {showNav && index !== null ? (

@@ -9,7 +9,7 @@ import SessionExpiredNotice from '@/components/auth/SessionExpiredNotice'
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
 function toSafePathServer(raw: string | string[] | undefined): string {
-  const fallback = '/dashboard'
+  const fallback = '/my-work'
   const val = Array.isArray(raw) ? raw[0] : raw
   if (!val) return fallback
   // allow only same-origin relative paths

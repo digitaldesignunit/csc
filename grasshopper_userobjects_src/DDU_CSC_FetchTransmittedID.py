@@ -28,13 +28,35 @@ ghenv.Component.Description = (  # NOQA
     'authentication state.'
 )
 
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('IdentityID', 'IdentityID',
+     'The currently pending transmitted IdentityID. Empty if none is pending.'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) == 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
+
 
 class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 261005a
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
@@ -59,6 +81,27 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the outputs were just updated (says why)."""
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize output param descriptions
@@ -66,9 +109,10 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
         if self.OutputParams[0].Name == 'out':
             i += 1
         self.OutputParams[0+i].Description = (
-            'The currently pending transmitted ComponentID. Empty if none is '
+            'The currently pending transmitted IdentityID. Empty if none is '
             'pending.'
         )
+        self._check_outputs()
 
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
@@ -77,11 +121,13 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
             msg = ('No authentication found. Please use CSC_Session component '
                    'first.')
             self._addError(msg)
-            self.Component.Message = msg
+            self._state(msg)
             return None
         return auth_core
 
     def RunScript(self, Refresh):
+        if self._stop():
+            return empty_outputs()
         component_id = Grasshopper.DataTree[object]()
 
         # Get AuthCore instance from sticky storage
@@ -94,11 +140,11 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
             msg = ('Authentication expired. Please use CSC_Session '
                    'component to refresh.')
             self._addError(msg)
-            self.Component.Message = msg
+            self._state(msg)
             return component_id
 
         try:
-            self.Component.Message = 'Fetching transmitted ID...'
+            self._state('Fetching transmitted ID...')
 
             response = auth_core.authorized_get('/component_id_transmission')
 
@@ -108,12 +154,12 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
 
                 if pending and isinstance(pending, dict):
                     component_id = str(pending.get('identity_id', '') or '')
-                    self.Component.Message = 'Pending transmitted ID found'
+                    self._state('Pending transmitted ID found')
                     self._addRemark(
                         f'Fetched pending transmitted ID: {component_id}'
                     )
                 else:
-                    self.Component.Message = 'No transmitted ID pending'
+                    self._state('No transmitted ID pending')
                     self._addRemark(
                         'No pending transmitted component ID for this user.'
                     )
@@ -123,42 +169,42 @@ class CSC_FetchTransmittedID(Grasshopper.Kernel.GH_ScriptInstance):
             elif response.status_code == 401:
                 msg = 'Authentication failed. Please sign in again.'
                 self._addError(msg)
-                self.Component.Message = msg
+                self._state(msg)
 
             elif response.status_code == 403:
                 msg = 'Access denied. Insufficient permissions.'
                 self._addError(msg)
-                self.Component.Message = msg
+                self._state(msg)
 
             elif response.status_code == 500:
                 msg = 'Server error. Please try again later.'
                 self._addWarning(msg)
-                self.Component.Message = msg
+                self._state(msg)
 
             else:
                 msg = (f'Request failed with status code: '
                        f'{response.status_code}')
                 self._addError(msg)
-                self.Component.Message = msg
+                self._state(msg)
 
         except requests.exceptions.ConnectionError as e:
             msg = 'Cannot connect to server. Please check your connection.'
             self._addError(msg + f'\nFull Error: {str(e)}')
-            self.Component.Message = msg
+            self._state(msg)
 
         except requests.exceptions.Timeout as e:
             msg = 'Request timeout. Server may be slow.'
             self._addError(msg + f'\nFull Error: {str(e)}')
-            self.Component.Message = msg
+            self._state(msg)
 
         except requests.exceptions.RequestException as e:
             msg = f'Request error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
+            self._state(msg)
 
         except Exception as e:
             msg = f'Unexpected error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
+            self._state(msg)
 
         return component_id

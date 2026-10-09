@@ -12,8 +12,11 @@ error message names its invariant id, e.g. "(I4)" (spec section 5).
 Invariants that span documents are checked by ``invariants.py`` and by the
 routes.
 
-Evidence ``payload`` stays an untyped dict until the method registry lands
-(spec section 4.5, plan P6).
+Evidence ``payload`` is an untyped dict here: the method registry
+(``apps/catalog/evidence/``, spec section 4.5) validates it against the
+method's model, recomputes its server fields and checks the derived results
+before a record is stored, and ``check_invariants`` (I8) does the same over a
+stored database.
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
@@ -34,6 +37,7 @@ from pydantic import (
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.vocab import (
     DESTRUCTIVE_METHODS,
+    IN_PLACE_EXIT_KINDS,
     INHERITABLE_FIELDS,
     METHOD_TIER,
     ORDINAL_RANGE,
@@ -44,7 +48,11 @@ from apps.catalog.vocab import (
     ActorKind,
     ActorRole,
     CaptureMethod,
+    ChangeCause,
+    ConnectionType,
+    ConstructionMethod,
     DatasetRole,
+    DgnbClass,
     EvidenceMethod,
     ExitKind,
     FitMethod,
@@ -140,16 +148,33 @@ class Accreditation(_Block):
 
 class Actor(_Block):
     """A person or organization credited with an act."""
-    kind: ActorKind
-    user_id: Optional[str] = None
-    name: Optional[str] = None
-    organization: Optional[str] = None
-    organization_ror: Optional[str] = None
-    orcid: Optional[str] = None
-    email: Optional[str] = None
-    role: Optional[ActorRole] = None
-    accreditation: Optional[Accreditation] = None
-    redacted_at: Optional[Timestamp] = None
+    kind: ActorKind = Field(
+        description='user: an account of this catalog; person or '
+                    'organization: someone without one')
+    user_id: Optional[str] = Field(
+        None, description='The account, for kind user')
+    name: Optional[str] = Field(
+        None, description='Name of a person; shown to signed-in users only')
+    organization: Optional[str] = Field(
+        None, description='The organization (a laboratory, a contractor); '
+                          'shown to everyone')
+    organization_ror: Optional[str] = Field(
+        None, description='ROR identifier of the organization')
+    orcid: Optional[str] = Field(
+        None, description='ORCID of a person; shown to signed-in users only')
+    email: Optional[str] = Field(
+        None, description='E-mail address; shown to admins and moderators '
+                          'of the dataset only, never in lists')
+    role: Optional[ActorRole] = Field(
+        None, description='What the actor did: operator, supervisor, '
+                          'laboratory, client or witness')
+    accreditation: Optional[Accreditation] = Field(
+        None, description='The accreditation of a laboratory, typed in; '
+                          '"accredited" evidence needs one that covers the '
+                          'standard (I22)')
+    redacted_at: Optional[Timestamp] = Field(
+        None, description='Set when the personal data was redacted '
+                          '(GDPR Art 17)')
 
     @model_validator(mode='after')
     def _named(self) -> 'Actor':
@@ -168,6 +193,32 @@ class GeoLocation(_Block):
     lon: float = Field(ge=-180, le=180)
 
 
+class PhotoCredit(_Block):
+    """Who the photos of one version come from (decision 8.128 a): a short
+    text for all its photos and, optionally, the page they come from. Good
+    practice, not a licence."""
+    text: str = Field(min_length=1, max_length=300)
+    url: Optional[str] = Field(None, max_length=500)
+
+    @field_validator('text')
+    @classmethod
+    def _text_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError('the credit text is empty')
+        return value
+
+    @field_validator('url')
+    @classmethod
+    def _url_is_a_web_address(cls, value: Optional[str]) -> Optional[str]:
+        value = (value or '').strip()
+        if not value:
+            return None
+        if not value.lower().startswith(('http://', 'https://')):
+            raise ValueError('the url must start with http:// or https://')
+        return value
+
+
 class Place(_Block):
     name: Optional[str] = None
     address: Optional[str] = None
@@ -180,25 +231,47 @@ class ConstructionWork(_Block):
     identifier: Optional[str] = None
     year_built: Optional[int] = None
     use: Optional[str] = None
+    construction_method: Optional[ConstructionMethod] = None
+
+
+class CircularityClass(_Block):
+    """A DGNB Building Resource Passport class with who assessed it
+    (section 2.11, decision 8.38)."""
+    class_: DgnbClass = Field(alias='class')
+    assessed_by: List[Actor] = Field(default_factory=list)
+    note: Optional[str] = None
 
 
 class Origin(_Block):
     """How the piece entered circulation (section 3.1.1)."""
     kind: OriginKind
+    planned: bool = Field(
+        False, description='true while the piece is in place: identified in '
+                           'its works, not yet deinstalled (decision 8.104)')
     at: Optional[Timestamp] = None
     at_precision: Precision = 'unknown'
     place: Optional[Place] = None
     construction_work: Optional[ConstructionWork] = None
+    position_in_work: Optional[str] = None
+    connection_types: List[ConnectionType] = Field(default_factory=list)
+    detachability: Optional[CircularityClass] = None
     method: Optional[str] = None
     performed_by: List[Actor] = Field(default_factory=list)
     notes: Optional[str] = None
 
     @model_validator(mode='after')
     def _construction_work_kind(self) -> 'Origin':
-        if self.construction_work is not None \
+        about_the_works = (self.construction_work, self.position_in_work,
+                           self.connection_types, self.detachability)
+        if any(about_the_works) \
                 and self.kind not in ORIGIN_KINDS_WITH_CONSTRUCTION_WORK:
-            raise ValueError('origin.construction_work only for '
-                             'deinstallation / demolition (I16)')
+            raise ValueError('construction work, position, connections and '
+                             'detachability only for deinstallation / '
+                             'demolition (I16)')
+        if self.planned and self.kind not in (
+                ORIGIN_KINDS_WITH_CONSTRUCTION_WORK):
+            raise ValueError('only a deinstallation or a demolition can be '
+                             'planned (I31)')
         return self
 
 
@@ -210,6 +283,10 @@ class Exit(_Block):
     construction_work: Optional[ConstructionWork] = None
     notes: Optional[str] = None
     recorded_by_user_id: Optional[str] = None
+    # a hand-set split taken over by the server keeps its date and author,
+    # and falls back to them when its last child goes (8.34)
+    manual_at: Optional[Timestamp] = None
+    manual_by_user_id: Optional[str] = None
 
     @model_validator(mode='after')
     def _construction_work_kind(self) -> 'Exit':
@@ -222,6 +299,16 @@ class Exit(_Block):
 class PastCycle(_Block):
     origin: Optional[Origin] = None
     exit: Exit
+
+
+class StatusChange(_Block):
+    """One status transition of a snapshot or evidence record (8.30):
+    append-only, so the timeline and the audit keep every moderation act."""
+    from_: Status = Field(alias='from')
+    to: Status
+    at: Timestamp
+    by_user_id: str
+    reason: Optional[str] = None
 
 
 class Withdrawn(_Block):
@@ -253,6 +340,9 @@ class ComponentIdentity(_Document):
     material_class: LowCode
     material_class_source: ValueSource = 'derived'
     trade_name: Optional[str] = None
+    manufacturer: Optional[str] = None
+    connection_features: Optional[str] = None
+    material_separability: Optional[CircularityClass] = None
     dataset: str = Field(description='FK -> datasets._id (I20)')
     manufactured_at: Optional[Timestamp] = None
     manufactured_precision: Precision = 'unknown'
@@ -293,6 +383,13 @@ class ComponentIdentity(_Document):
         if self.reserved and self.exit is not None:
             raise ValueError(
                 'a piece out of circulation cannot be reserved (I18)')
+        if (self.origin is not None and self.origin.planned
+                and self.exit is not None
+                and self.exit.recorded_by_user_id is not None
+                and self.exit.kind not in IN_PLACE_EXIT_KINDS):
+            raise ValueError(
+                'an exit set by hand from in place is recycled, disposed or '
+                'lost: the piece never left its works (I31)')
         if self.withdrawn and self.withdrawn.duplicate_of == self.id:
             raise ValueError(
                 'an identity cannot be a duplicate of itself (I19)')
@@ -342,10 +439,36 @@ class BoxParams(_Block):
     size: Vec3
 
 
+def polygon_problem(profile: Any, holes: Any = None) -> Optional[str]:
+    """Why a prism profile (with its holes) is not a simple polygon, or None:
+    no self-intersection, an area, holes inside the profile and apart from
+    each other (shapely's validity). A stored profile is never judged by it
+    on a read, only a client's new geometry is (the 0.5 data has a few
+    self-intersecting ones that stay as they were, decision 8.112 review)."""
+    from shapely.geometry import Polygon
+    from shapely.validation import explain_validity
+    try:
+        polygon = Polygon([tuple(p) for p in profile],
+                          [tuple(h) for h in holes or []])
+    except Exception as error:         # too few points, bad numbers
+        return str(error)
+    if polygon.is_empty:
+        return 'the profile has no area'
+    if not polygon.is_valid:
+        return explain_validity(polygon)
+    if polygon.area == 0:
+        return 'the profile has no area'
+    return None
+
+
 class PrismParams(_Block):
     profile: List[Vec2] = Field(min_length=3)
     holes: Optional[List[List[Vec2]]] = None
     height: float = Field(gt=0)
+
+    def simple_problem(self) -> Optional[str]:
+        """None when the profile is a simple polygon (see ``polygon_problem``)."""
+        return polygon_problem(self.profile, self.holes)
 
 
 class CylinderParams(_Block):
@@ -403,11 +526,25 @@ class MapScale(_Block):
     offset_mm: float
 
 
+_MAP_FILE = re.compile(
+    r'^proxies/[A-Za-z0-9-]{1,64}/\d{1,3}/[A-Za-z0-9_+-]{1,32}\.png$')
+
+
 class DeviationMapFace(_Block):
     file: str
     width: int = Field(gt=0)
     height: int = Field(gt=0)
     distance: MapScale
+
+    @field_validator('file')
+    @classmethod
+    def _named_by_the_server(cls, value: str) -> str:
+        """``proxies/<snapshot_id>/<proxy index>/<face_id>.png``, nothing
+        else: the file is joined below the storage root when it is served."""
+        if not _MAP_FILE.match(value):
+            raise ValueError('a deviation map file is named '
+                             'proxies/<snapshot id>/<index>/<face>.png')
+        return value
 
 
 class DeviationMaps(_Block):
@@ -493,6 +630,26 @@ class Capture(_Block):
     fixtures: List[Fixture] = Field(default_factory=list)
 
 
+class StageStamp(_Block):
+    """What a geometry-runner stage last did (spec section 4.3): its
+    version, a fingerprint of its inputs and the error it ended with."""
+    version: int
+    input: str
+    at: Timestamp
+    error: Optional[str] = None
+
+
+class Derivation(_Block):
+    """The stamp of each geometry-runner stage (a named block, not a free
+    dict, so that the generated frontend types keep ``StageStamp``)."""
+    frame: Optional[StageStamp] = None
+    shape_class: Optional[StageStamp] = None
+    proxies: Optional[StageStamp] = None
+    descriptors: Optional[StageStamp] = None
+    complexity: Optional[StageStamp] = None
+    previews: Optional[StageStamp] = None
+
+
 class ComponentSnapshot(_Document):
     """``component_snapshots``: one recorded state of a component."""
     id: str = Field(alias='_id')
@@ -501,6 +658,7 @@ class ComponentSnapshot(_Document):
     status: Status
     status_changed_by_user_id: Optional[str] = None
     status_changed_at: Optional[Timestamp] = None
+    status_history: List[StatusChange] = Field(default_factory=list)
     supersedes: Optional[str] = None
     superseded_by: Optional[str] = None
     name: Optional[str] = None
@@ -517,10 +675,12 @@ class ComponentSnapshot(_Document):
     bbx: Optional[Vec3] = None
     complexity: Optional[Grade] = None
     complexity_source: Optional[ValueSource] = None
+    derivation: Derivation = Field(default_factory=Derivation)
     fragment: bool = False
     color: Optional[Rgb] = None
     location: Optional[GeoLocation] = None
     notes: Optional[str] = None
+    photo_credit: Optional[PhotoCredit] = None
     quantity: int = Field(1, ge=1)
     added_by_user_id: str
     added_by_username: Optional[str] = None
@@ -594,6 +754,10 @@ def _check_result(quantity: str, value: Any, range_: Any,
         if not all(isinstance(v, str) for v in items):
             raise ValueError(
                 f'{quantity}: categorical values are strings (I6)')
+        if spec.values is not None and any(
+                v not in spec.values for v in items):
+            raise ValueError(f'{quantity}: values are {list(spec.values)} '
+                             f'(I6)')
     elif spec.kind == 'ordinal':
         low, high = ORDINAL_RANGE
         if not all(isinstance(v, int) and not isinstance(v, bool)
@@ -688,7 +852,9 @@ class Evidence(_Document):
     recorded_by_user_id: str
     recorded_by_username: Optional[str] = None
     position: Position
-    summary: Summary
+    # None only for a document: an archival_document without a claimed value
+    # (decision 8.106, I6)
+    summary: Optional[Summary] = None
     derived: List[DerivedResult] = Field(default_factory=list)
     payload: Dict[str, Any] = Field(default_factory=dict)
     destructive: bool = False
@@ -697,6 +863,7 @@ class Evidence(_Document):
     status: Status
     status_changed_by_user_id: Optional[str] = None
     status_changed_at: Optional[Timestamp] = None
+    status_history: List[StatusChange] = Field(default_factory=list)
     verification: Verification = Field(default_factory=Verification)
     supersedes: Optional[str] = None
     superseded_by: Optional[str] = None
@@ -706,8 +873,12 @@ class Evidence(_Document):
 
     @model_validator(mode='after')
     def _consistency(self) -> 'Evidence':
-        quantities = [self.summary.quantity] + \
-            [d.quantity for d in self.derived]
+        if self.summary is None and self.method != 'archival_document':
+            raise ValueError('a result: every method but a document has a '
+                             'summary (I6)')
+        quantities = [d.quantity for d in self.derived]
+        if self.summary is not None:
+            quantities.insert(0, self.summary.quantity)
         if len(set(quantities)) != len(quantities):
             raise ValueError('one result per quantity per record (I7)')
         if self.sampled_at is not None and \
@@ -740,7 +911,8 @@ class Evidence(_Document):
         """I27: who may hold which verification state (decision 8.12)."""
         state = self.verification.state
         performers = {a.user_id for a in self.performed_by if a.user_id}
-        if state == 'self_attested' and                 self.recorded_by_user_id not in performers:
+        if (state == 'self_attested'
+                and self.recorded_by_user_id not in performers):
             raise ValueError('self_attested needs the recorder among '
                              'performed_by (I27)')
         if state not in ('reviewed', 'accredited'):
@@ -818,6 +990,10 @@ class Material(_Document):
     default_class: LowCode
     uniclass: Optional[str] = None
     notes: Optional[str] = None
+    # hidden from forms, kept by the pieces using it (8.35)
+    retired: bool = False
+    # a merged material stays as an alias of its target (8.35)
+    merged_into: Optional[str] = None
 
     @field_validator('default_class')
     @classmethod
@@ -827,6 +1003,52 @@ class Material(_Document):
             raise ValueError(
                 'a default class is never a hazardous (*) entry')
         return value
+
+
+class Invitation(_Document):
+    """``invitations``: one email-bound, single-use registration code
+    (section 3.7, decision 8.14); only the code's sha256 is stored."""
+    id: str = Field(alias='_id')
+    email: str
+    code_sha256: str
+    dataset: Optional[str] = None
+    roles: List[DatasetRole] = Field(default_factory=list)
+    created_by_user_id: str
+    created: Timestamp
+    expires_at: Timestamp
+    used_at: Optional[Timestamp] = None
+    used_by_user_id: Optional[str] = None
+    revoked_at: Optional[Timestamp] = None
+    revoked_by_user_id: Optional[str] = None
+    # the mail with the code could not be sent: the moderator sees it and
+    # resends (8.124 b); the code itself is never shown
+    mail_failed: bool = False
+
+    @model_validator(mode='after')
+    def _roles_need_a_dataset(self) -> 'Invitation':
+        if self.roles and not self.dataset:
+            raise ValueError('roles are granted in a dataset')
+        return self
+
+
+class FieldChange(_Block):
+    path: str
+    old: Any = None
+    new: Any = None
+
+
+class ChangeLogEntry(_Document):
+    """``change_log``: one write to an identity, snapshot or evidence
+    record (section 3.8, decision 8.36, I30); append-only."""
+    id: str = Field(alias='_id')
+    record_kind: str = Field(pattern='^(identity|snapshot|evidence)$')
+    record_id: str
+    identity_id: str
+    at: Timestamp
+    by_user_id: Optional[str] = None
+    cause: ChangeCause
+    source_record_id: Optional[str] = None
+    changes: List[FieldChange] = Field(min_length=1)
 
 
 class PurgeStub(_Document):

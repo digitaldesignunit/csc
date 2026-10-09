@@ -6,24 +6,10 @@ from pathlib import Path
 from typing import Annotated
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-from fastapi import (APIRouter, # NOQA
-                     Body,
-                     Depends,
-                     HTTPException,
-                     Query,
-                     Request,
-                     status)
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import PlainTextResponse
-from apps.catalog.models import (
-    ComputeSnapshotOrientationRequest,
-    ComputeSnapshotOrientationResponse,
-    User,
-)
-from apps.catalog.orientation import (
-    compute_snapshot_orientation,
-    orientation_result_to_dict,
-)
-from .auth import get_current_active_user, require_admin
+from apps.catalog.models import User
+from .auth import require_admin
 
 # INIT ROUTER -----------------------------------------------------------------
 router = APIRouter()
@@ -57,28 +43,16 @@ async def get_fastapi_log(
     return _read_last_log_lines('fastapi.log', lines)
 
 
-@router.get('/previewgen_log',
-            response_description='Get PreviewGen Cronjob log',
+@router.get('/geometry_log',
+            response_description='Get Geometry Runner Cronjob log',
             response_class=PlainTextResponse)
-async def get_previewgen_log(
+async def get_geometry_cronjob_log(
     request: Request,
     _admin_user: Annotated[User, Depends(require_admin)],
     lines: Annotated[int, Query(ge=1, le=5000)] = 200,
 ):
     del request, _admin_user
-    return _read_last_log_lines('previewgen_cronjob.log', lines)
-
-
-@router.get('/descriptors_simple_log',
-            response_description='Get Descriptors Simple Cronjob log',
-            response_class=PlainTextResponse)
-async def get_descriptors_simple_cronjob_log(
-    request: Request,
-    _admin_user: Annotated[User, Depends(require_admin)],
-    lines: Annotated[int, Query(ge=1, le=5000)] = 200,
-):
-    del request, _admin_user
-    return _read_last_log_lines('descriptors_simple_cronjob.log', lines)
+    return _read_last_log_lines('geometry_cronjob.log', lines)
 
 
 @router.get('/component_map_log',
@@ -91,34 +65,3 @@ async def get_component_map_cronjob_log(
 ):
     del request, _admin_user
     return _read_last_log_lines('component_map_cronjob.log', lines)
-
-
-@router.post(
-    '/utility/compute-snapshot-orientation',
-    response_model=ComputeSnapshotOrientationResponse,
-    summary='Compute PCA frame and OBB metadata from snapshot geometry',
-)
-async def compute_snapshot_orientation_route(
-    _request: Request,
-    current_user: Annotated[User, Depends(get_current_active_user)],
-    payload: ComputeSnapshotOrientationRequest = Body(...),
-):
-    """
-    Wizard helper: derive ``bbx``, ``bbx_origin``, and ``pca_frame`` from
-    inline geometry using the same logic as Grasshopper create-component.
-    """
-    del current_user
-    try:
-        result = compute_snapshot_orientation(
-            payload.geometry.model_dump(),
-            assembly=payload.assembly,
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-
-    return ComputeSnapshotOrientationResponse.model_validate(
-        orientation_result_to_dict(result)
-    )

@@ -1,13 +1,13 @@
 // app/components/[component_id]/page.tsx
-import ComponentDetailPageLayout from '@/components/components/ComponentDetailPageLayout'
-import ComponentDetailSnapshotBanner from '@/components/components/ComponentDetailSnapshotBanner'
-import ComponentViewer from '@/components/components/ComponentViewer'
+import ComponentPageView from '@/components/components/detail/ComponentPageView'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot, type CatalogShallowRow } from '@/generated/catalogExtras'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
-import { formatTimestamp } from '@/lib/utils'
-import { Archive, Package } from 'lucide-react'
+import { isPublished } from '@/components/components/componentDetailShared'
 import Link from 'next/link'
+import ComponentAccessNotice from '@/components/components/ComponentAccessNotice'
+import ComponentSnapshotVersionList from '@/components/components/ComponentSnapshotVersionList'
+import { isTombstone } from '@/lib/backend'
 import { headers } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 
@@ -16,10 +16,6 @@ export const dynamic = 'force-dynamic'
 
 type PageParams = { component_id: string }
 type PageSearchParams = { snapshots?: string }
-
-function isConsumedIdentity(consumedAt: unknown): boolean {
-  return consumedAt !== undefined && consumedAt !== null && String(consumedAt).trim() !== ''
-}
 
 export default async function ComponentDetailPage({
   params,
@@ -55,11 +51,18 @@ export default async function ComponentDetailPage({
 
   const res = passportRes
 
+  // a piece the viewer cannot see is explained, not hidden (8.11, 8.17)
   if (res.status === 401) {
     const callback = requestedSnapshotId
       ? `/components/${component_id}?snapshots=${encodeURIComponent(requestedSnapshotId)}`
       : `/components/${component_id}`
-    redirect(`/auth/signin?callbackUrl=${encodeURIComponent(callback)}`)
+    return <ComponentAccessNotice kind="not-public" callbackUrl={callback} />
+  }
+  if (res.status === 403) {
+    return <ComponentAccessNotice kind="no-access" />
+  }
+  if (res.status === 410) {
+    return <ComponentAccessNotice kind="purged" />
   }
   if (res.status === 404) {
     notFound()
@@ -71,7 +74,50 @@ export default async function ComponentDetailPage({
     )
   }
 
-  const catalog = (await res.json()) as CatalogComponent
+  const body = (await res.json()) as unknown
+  if (isTombstone(body)) {
+    if (body.duplicate_of) {
+      redirect(`/components/${encodeURIComponent(body.duplicate_of)}`)
+    }
+    return (
+      <ComponentAccessNotice
+        kind="withdrawn"
+        withdrawnAt={body.withdrawn_at}
+        catalogNumber={body.catalog_number}
+      />
+    )
+  }
+  const catalog = body as CatalogComponent
+  if (!catalog.snapshots?.length) {
+    // the author and the moderators of a piece nobody has published yet see
+    // its versions (draft, pending, rejected) and their buttons (spec 3.1.5, 7.0)
+    const inFlight: SnapshotSummaryItem[] = snapshotsRes.ok ? ((await snapshotsRes.json()) as SnapshotSummaryItem[]) : []
+    return (
+      <>
+        <ComponentAccessNotice
+          kind="no-current-state"
+          catalogNumber={catalog.identity.catalog_number}
+        />
+        {inFlight.length > 0 && (
+          <div className="container mx-auto max-w-2xl p-4 sm:p-6">
+            <ComponentSnapshotVersionList
+              identityId={component_id}
+              snapshots={inFlight}
+              activeSnapshotId=""
+              liveSnapshotId=""
+              dataset={catalog.identity.dataset}
+            />
+            <Link
+              href={`/components/${encodeURIComponent(component_id)}/edit`}
+              className="mt-3 inline-block text-sm font-medium underline underline-offset-4"
+            >
+              Edit details of the latest version
+            </Link>
+          </div>
+        )}
+      </>
+    )
+  }
   const snapshot = primarySnapshot(catalog)
   let snapshots: SnapshotSummaryItem[] = []
   if (snapshotsRes.ok) {
@@ -98,66 +144,16 @@ export default async function ComponentDetailPage({
       ? snapshot.version
       : snapshots.find((row) => row._id === activeSnapshotId)?.version ?? 0
 
-  const isConsumed = isConsumedIdentity(catalog.identity.consumed_at)
-  const consumedAtLabel =
-    isConsumed && catalog.identity.consumed_at
-      ? formatTimestamp(String(catalog.identity.consumed_at))
-      : null
-
   return (
-    <div className="container mx-auto p-6 space-y-6 max-w-full">
-      <div className="mb-4 sm:mb-6 space-y-4">
-        <div className="flex items-center gap-2 sm:gap-3">
-          {isConsumed ? (
-            <Archive className="h-6 w-6 text-primary" />
-          ) : (
-            <Package className="h-6 w-6 text-primary" />
-          )}
-          <h1 className="text-xl sm:text-2xl font-bold">
-            {isConsumed ? 'Consumed Component' : 'Component Details'}
-          </h1>
-        </div>
-
-        {isConsumed && (
-          <div
-            role="status"
-            className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
-          >
-            <p className="font-medium">This identity is consumed</p>
-            <p className="mt-1 text-sm text-amber-900/90 dark:text-amber-100/90">
-              It no longer appears in the active catalog
-              {consumedAtLabel ? ` (marked ${consumedAtLabel})` : ''}.
-              Admins can restore it from the actions below.
-            </p>
-            <Link
-              href="/components?consumed=1"
-              className="mt-2 inline-block text-sm font-medium underline underline-offset-4 hover:no-underline"
-            >
-              Browse consumed components
-            </Link>
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-6">
-        {!isViewingLive && (
-          <ComponentDetailSnapshotBanner
-            identityId={component_id}
-            viewingVersion={viewingVersion}
-            liveVersion={liveVersion}
-            isPending={!snapshot.validated}
-          />
-        )}
-        <ComponentDetailPageLayout
-          catalog={catalog}
-          snapshots={snapshots}
-          activeSnapshotId={activeSnapshotId}
-          liveSnapshotId={liveSnapshotId}
-          childIdentities={childIdentities}
-        >
-          <ComponentViewer catalog={catalog} compactDesktop />
-        </ComponentDetailPageLayout>
-      </div>
-    </div>
+    <ComponentPageView
+      catalog={catalog}
+      snapshots={snapshots}
+      childIdentities={childIdentities}
+      activeSnapshotId={activeSnapshotId}
+      viewingVersion={viewingVersion}
+      liveVersion={liveVersion}
+      isViewingLive={isViewingLive}
+      snapshotStatus={isPublished(snapshot) ? 'published' : snapshot.status}
+    />
   )
 }

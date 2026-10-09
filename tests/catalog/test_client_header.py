@@ -74,6 +74,7 @@ def test_enforcement_table(method, header, authenticated, refused):
 @pytest.mark.parametrize('path', [
     '/ghinterface/userobject/DDU_CSC_Update', '/ghinterface/version',
     '/ghinterface', '/docs', '/openapi.json', '/health/db', '/version',
+    '/auth/token',
 ])
 def test_exempt_paths_and_preflight(path):
     assert rejection('GET', path, 'gh-userobjects/0.5.1.0', True, TABLE) is None
@@ -84,3 +85,13 @@ def test_refusal_names_the_fix():
     reason = rejection('GET', '/identities', 'gh-userobjects/0.5.1.0', True,
                        TABLE)
     assert '0.6.0.0' in reason and 'CSC_Update' in reason
+
+
+def test_login_is_open_to_an_outdated_client_but_only_login():
+    """A 0.5 Session must reach /auth/token to log in and run CSC_Update
+    (8.95 11); nothing else of /auth is exempt."""
+    old = 'gh-userobjects/0.5.1.0'
+    assert rejection('POST', '/auth/token', old, False, TABLE) is None
+    assert rejection('POST', '/auth/token', None, False, TABLE) is None
+    assert rejection('POST', '/auth/change-password', old, True, TABLE)
+    assert rejection('POST', '/auth/register', old, False, TABLE)

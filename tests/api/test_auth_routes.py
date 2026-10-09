@@ -7,6 +7,9 @@ def test_login_by_username_or_email(make_user, login):
     make_user('alice')
     assert login('alice').status_code == 200
     assert login('alice@tu-darmstadt.de').status_code == 200
+    # any case is accepted (8.28)
+    assert login('Alice').status_code == 200
+    assert login('ALICE@TU-Darmstadt.de').status_code == 200
 
 
 def test_login_rejects_wrong_password_unverified_and_disabled(make_user, login):
@@ -27,6 +30,22 @@ def test_registration_creates_an_unverified_account(api, db):
     user = db['users'].find_one({'username': 'dora'})
     assert user is not None and user['email_verified'] is False
     assert user['hashed_password'].startswith('$2b$')
+
+
+def test_registration_stores_lowercase_unique_usernames(api, db):
+    """Decision 8.28: stored lowercase; another case of a taken name is
+    the same name."""
+    first = api.post('/auth/register', json={
+        'username': ' Dora_K ', 'full_name': 'Dora',
+        'email': 'dora@stud.tu-darmstadt.de', 'password': DEFAULT_PASSWORD,
+    })
+    assert first.status_code in (200, 201), first.text
+    assert db['users'].find_one({'username': 'dora_k'}) is not None
+    again = api.post('/auth/register', json={
+        'username': 'DORA_K', 'full_name': 'Dora Two',
+        'email': 'dora2@stud.tu-darmstadt.de', 'password': DEFAULT_PASSWORD,
+    })
+    assert again.status_code == 409
 
 
 def test_registration_rejects_foreign_domains_and_long_passwords(api):

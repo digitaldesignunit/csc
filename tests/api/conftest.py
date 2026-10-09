@@ -4,6 +4,10 @@ Fixtures for route tests.
 `api` is a TestClient on the real app, `db` a pymongo handle on the same
 throwaway database (emptied after every test); both need a local `mongod`, or
 CSC_TEST_MONGODB_URI pointing at a disposable server (CI's service container).
+
+Under pytest-xdist every worker is its own process with its own session
+fixtures: its own `mongod` on a free port, or --- with CSC_TEST_MONGODB_URI ---
+its own database `csc_<worker id>` on the shared server (decision 8.114).
 """
 
 from __future__ import annotations
@@ -25,14 +29,24 @@ class _ExternalMongo:
 
 
 @pytest.fixture(scope='session')
-def mongod():
+def db_name():
+    """The database of this process: ``csc``, or ``csc_<worker>`` under
+    xdist (only a shared external server needs the split, but it is harmless
+    on a private mongod)."""
+    worker = os.getenv('PYTEST_XDIST_WORKER')
+    return f'csc_{worker}' if worker else 'csc'
+
+
+@pytest.fixture(scope='session')
+def mongod(db_name):
     external = os.getenv('CSC_TEST_MONGODB_URI')
     if external:  # CI: a mongo service container instead of a local binary
         from pymongo import MongoClient
         with MongoClient(external, serverSelectionTimeoutMS=5000) as client:
-            if client['csc']['component_identities'].estimated_document_count():
-                pytest.exit('CSC_TEST_MONGODB_URI holds catalog data; route '
-                            'tests empty the database --- use a disposable one')
+            if client[db_name]['component_identities'].estimated_document_count():
+                pytest.exit(f'CSC_TEST_MONGODB_URI holds catalog data in '
+                            f'{db_name}; route tests empty the database '
+                            f'--- use a disposable one')
         yield _ExternalMongo(external)
         return
     binary = find_mongod()
@@ -47,10 +61,11 @@ def mongod():
 
 
 @pytest.fixture(scope='session')
-def backend_env(mongod, tmp_path_factory):
+def backend_env(mongod, db_name, tmp_path_factory):
     root = tmp_path_factory.mktemp('backend')
     env = {
-        'MONGODB_URI': f'{mongod.uri}/csc',
+        'MONGODB_URI': f'{mongod.uri}/{db_name}',
+        'MONGODB_DB': db_name,
         'JWT_SECRET': 'test-only-secret',
         'GITHUB_REPO_URL': 'https://github.com/example/csc',
         'SMTP_HOST': 'localhost',
@@ -63,6 +78,9 @@ def backend_env(mongod, tmp_path_factory):
         'SNAPSHOT_PHOTOS_DIR': str(root / 'photos'),
         'SNAPSHOT_MESHES_DIR': str(root / 'meshes'),
         'SNAPSHOT_POINT_CLOUDS_DIR': str(root / 'point_clouds'),
+        'SNAPSHOT_PROXIES_DIR': str(root / 'proxies'),
+        'SNAPSHOT_CAPTURE_DIR': str(root / 'capture'),
+        'EVIDENCE_ATTACHMENTS_DIR': str(root / 'evidence'),
         'GH_XML_CACHE_DIR': str(root / 'ghxml'),
         'FASTAPI_CORS_ORIGINS': 'http://localhost:3000',
         'CLIENT_LOG_PATH': str(root / 'logs' / 'client_versions.log'),
@@ -93,10 +111,10 @@ def api(app):
 
 
 @pytest.fixture
-def db(mongod, api):
+def db(mongod, api, db_name):
     from pymongo import MongoClient
     client = MongoClient(mongod.uri)
-    database = client['csc']
+    database = client[db_name]
     yield database
     for name in database.list_collection_names():
         database[name].delete_many({})
@@ -146,4 +164,25 @@ def auth_headers(make_user, login):
         response = login(user['username'])
         assert response.status_code == 200, response.text
         return {'Authorization': f"Bearer {response.json()['access_token']}"}
+    return _headers
+
+
+@pytest.fixture
+def member_headers(db, make_user, login):
+    """Bearer headers for a fresh user with dataset roles (section 3.6):
+    ``member_headers({'dbu_zirkus': ['moderator']})``; ``'*'`` = every
+    dataset in the database. Returns (headers, user id)."""
+    def _headers(roles_by_dataset, username=None):
+        user = make_user(username=username or f'm-{uuid.uuid4().hex[:6]}')
+        if '*' in roles_by_dataset:
+            roles = roles_by_dataset['*']
+            roles_by_dataset = {d['_id']: roles for d in db['datasets'].find({}, {'_id': 1})}
+        for slug, roles in roles_by_dataset.items():
+            db['datasets'].update_one({'_id': slug}, {'$push': {'members': {
+                'user_id': user['id'], 'roles': list(roles),
+                'added_by_user_id': None, 'added_at': None}}})
+        response = login(user['username'])
+        assert response.status_code == 200, response.text
+        return ({'Authorization': f"Bearer {response.json()['access_token']}"},
+                user['id'])
     return _headers

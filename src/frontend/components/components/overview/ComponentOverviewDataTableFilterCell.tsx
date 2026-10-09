@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import React from 'react'
 
-function ComponentOverviewDataTableFilterCell({ param, value, titletext }: { param: string, value: string , titletext: string}) {
+function ComponentOverviewDataTableFilterCell({ param, value, titletext, label }: { param: string, value: string, titletext: string, label?: string }) {
   // Now we can safely use React hooks
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -22,7 +22,7 @@ function ComponentOverviewDataTableFilterCell({ param, value, titletext }: { par
       onClick={handleClick}
       title={titletext}
     >
-      {value}
+      {label ?? value}
     </div>
   )
 }

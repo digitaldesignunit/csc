@@ -7,8 +7,10 @@ import { useSession } from 'next-auth/react'
 import { Camera, Loader2, ZoomIn } from 'lucide-react'
 
 import SnapshotPhotoCapture from '@/components/photos/SnapshotPhotoCapture'
+import PhotoCreditLine from '@/components/photos/PhotoCreditLine'
 import PhotoLightboxDialog, { type PhotoLightboxItem } from '@/components/photos/PhotoLightboxDialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { THUMB_BOX, THUMB_IMG, thumbRow } from '@/lib/photoThumbs'
 import {
   fetchSnapshotPhotoIndices,
   parseSnapshotPhotoCount,
@@ -21,12 +23,23 @@ type ComponentSnapshotPhotoGalleryProps = {
   /** From snapshot.photo_count (passport refreshes from disk). */
   photoCount?: unknown
   compact?: boolean
+  /** Without a card of its own: the photos and the lightbox only (the merged
+   *  "Photos and location" card, 8.118). */
+  embedded?: boolean
+  /** Photos can be added only to a version that is not published yet (6.6):
+   *  without this the camera and gallery buttons are not shown, admins too. */
+  allowUpload?: boolean
+  /** The photo credit of the version (8.128 a): a line under the photos and a caption in the lightbox. */
+  credit?: unknown
 }
 
 export default function ComponentSnapshotPhotoGallery({
   snapshotId,
   photoCount: photoCountRaw,
   compact = false,
+  embedded = false,
+  allowUpload = true,
+  credit,
 }: ComponentSnapshotPhotoGalleryProps) {
   const photoCountFromProps = parseSnapshotPhotoCount(photoCountRaw)
   const router = useRouter()
@@ -105,12 +118,11 @@ export default function ComponentSnapshotPhotoGallery({
     }
   }, [lightboxItems.length, lightboxPosition])
 
-  const gridClass = compact
-    ? 'flex h-[200px] lg:h-[140px] gap-1.5 overflow-hidden'
-    : 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'
+  const rowHeight = embedded ? 'h-24' : 'h-[200px] lg:h-[140px]'
+  const gridClass = compact ? thumbRow(indices.length) : 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'
 
   const thumbClass = compact
-    ? 'group relative h-full min-w-0 flex-1 overflow-hidden rounded-md border border-border bg-muted'
+    ? THUMB_BOX
     : 'group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted'
 
   const photoBody = (
@@ -124,12 +136,12 @@ export default function ComponentSnapshotPhotoGallery({
       {loading ? (
         <div
           className={`flex items-center justify-center text-muted-foreground ${
-            compact ? 'h-[200px] lg:h-[140px]' : 'py-12'
+            compact ? rowHeight : 'py-12'
           }`}
         >
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
-      ) : isAdmin ? (
+      ) : isAdmin && allowUpload ? (
         <SnapshotPhotoCapture
           mode="live"
           snapshotId={snapshotId}
@@ -142,14 +154,15 @@ export default function ComponentSnapshotPhotoGallery({
             router.refresh()
           }}
           compact={compact}
+          dense={embedded}
         />
       ) : indices.length === 0 ? (
         <p
           className={`${
-            compact ? 'flex h-[200px] lg:h-[140px] items-center justify-center' : 'py-8'
-          } text-center text-sm text-muted-foreground`}
+            embedded ? 'py-1' : compact ? `flex ${rowHeight} items-center justify-center` : 'py-8'
+          } ${embedded ? 'text-left' : 'text-center'} text-sm text-muted-foreground`}
         >
-          No photos for this snapshot yet.
+          No photos yet.
         </p>
       ) : (
         <div className={gridClass}>
@@ -157,18 +170,28 @@ export default function ComponentSnapshotPhotoGallery({
             <div key={index} className={thumbClass}>
               <button
                 type="button"
-                className="relative h-full w-full"
+                className={compact ? 'relative block h-full' : 'relative h-full w-full'}
                 onClick={() => setLightboxPosition(position)}
                 aria-label={`View photo ${position + 1}`}
               >
-                <Image
-                  src={snapshotPhotoUrl(snapshotId, index)}
-                  alt={`Snapshot photo ${index + 1}`}
-                  fill
-                  className="object-cover transition-opacity group-hover:opacity-90"
-                  unoptimized
-                  sizes={compact ? '140px' : '(max-width: 640px) 50vw, 20vw'}
-                />
+                {compact ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={snapshotPhotoUrl(snapshotId, index)}
+                    alt={`Snapshot photo ${index + 1}`}
+                    className={THUMB_IMG}
+                   
+                  />
+                ) : (
+                  <Image
+                    src={snapshotPhotoUrl(snapshotId, index)}
+                    alt={`Snapshot photo ${index + 1}`}
+                    fill
+                    className="object-cover transition-opacity group-hover:opacity-90"
+                    unoptimized
+                    sizes="(max-width: 640px) 50vw, 20vw"
+                  />
+                )}
                 <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
                   #{index}
                 </span>
@@ -180,12 +203,15 @@ export default function ComponentSnapshotPhotoGallery({
           ))}
         </div>
       )}
+      {!loading && indices.length > 0 && <PhotoCreditLine credit={credit} className="mt-1.5" />}
     </>
   )
 
   return (
     <>
-      {compact ? (
+      {embedded ? (
+        photoBody
+      ) : compact ? (
         <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
           <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
             <Camera className="h-4 w-4" />
@@ -224,6 +250,7 @@ export default function ComponentSnapshotPhotoGallery({
         index={lightboxPosition}
         onIndexChange={setLightboxPosition}
         title="Snapshot photo"
+        credit={credit}
       />
     </>
   )

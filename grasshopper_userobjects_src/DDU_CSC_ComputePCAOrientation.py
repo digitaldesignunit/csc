@@ -1,12 +1,11 @@
 #! python3
 # -*- coding: utf-8 -*-
-# venv: DDU_CSC
-print('ENV OK!')
+# venv: DDU_CSC_MATCH
 # r: charset_normalizer
-# r: requests
-# r: numpy
-# r: scipy
-# r: scikit-learn
+# r: numpy==2.0.2
+# r: scipy==1.13.1
+# r: scikit-learn==1.6.1
+print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 
@@ -35,13 +34,43 @@ ghenv.Component.Description = (  # NOQA
     'aligned geometry, translation vector, and PCA transformation matrix.'
 )
 
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('ObjectOrientedBBX', 'ObjectOrientedBBX',
+     'Object oriented bounding box, obtained using PCA,  at the location of the input geometry'),
+    ('AlignedGeometry', 'AlignedGeometry',
+     'Input geometry transformed using PCA method and centered at world origin'),
+    ('AlignedBBX', 'AlignedBBX',
+     'Object oriented bounding box transformed using the computed PCA frame, centered at the world origin'),
+    ('TranslationVector', 'TranslationVector',
+     'Translation vector that was used to move the geometry to the world origin'),
+    ('PCAXForm', 'PCAXForm',
+     'PCA frame that was used to transform the geometry converted to a Rhino XForm.'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
+
 
 class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260826
+    Version: 261005
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
@@ -66,6 +95,28 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the outputs were just
+        updated (says why)."""
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -73,29 +124,7 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
             'Input Rhino Geometry (Mesh, Brep, Extrusion, or PointCloud)'
         )
         # Initialize output param descriptions
-        i = 0
-        if self.OutputParams[0].Name == 'out':
-            i += 1
-        self.OutputParams[0+i].Description = (
-            'Object oriented bounding box, obtained using PCA, '
-            ' at the location of the input geometry'
-        )
-        self.OutputParams[1+i].Description = (
-            'Input geometry transformed using PCA method and centered at '
-            'world origin'
-        )
-        self.OutputParams[2+i].Description = (
-            'Object oriented bounding box transformed using the computed '
-            'PCA frame, centered at the world origin'
-        )
-        self.OutputParams[3+i].Description = (
-            'Translation vector that was used to move the geometry '
-            'to the world origin'
-        )
-        self.OutputParams[4+i].Description = (
-            'PCA frame that was used to transform the geometry '
-            'converted to a Rhino XForm.'
-        )
+        self._check_outputs()
 
     def center_geometry_at_origin(self, geometry):
         """
@@ -407,6 +436,8 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
 
     def RunScript(self, Geometry: Rhino.Geometry.GeometryBase):
         # set up output variables
+        if self._stop():
+            return empty_outputs()
         ObjectOrientedBBX = Grasshopper.DataTree[System.Object]()
         AlignedGeometry = Grasshopper.DataTree[System.Object]()
         AlignedBBX = Grasshopper.DataTree[System.Object]()
@@ -414,7 +445,6 @@ class CSC_ComputePCAOrientation(Grasshopper.Kernel.GH_ScriptInstance):
         PCAXForm = Grasshopper.DataTree[System.Object]()
         try:
             # sanitize input and abort if not present
-            self.Component.Message = None
             if not Geometry:
                 msg = 'Input Geometry failed to collect data!'
                 self._addWarning(msg)

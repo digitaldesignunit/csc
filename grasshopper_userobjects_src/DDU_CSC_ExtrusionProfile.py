@@ -22,13 +22,35 @@ ghenv.Component.Description = (  # type: ignore[reportUnedfinedVariable] # NOQA
     'Extract the profile curves of an Extrusion.'
 )
 
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('ProfileCurve', 'ProfileCurve',
+     'The extracted profile curve.'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
+
 
 class CSC_ExtrusionProfile(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 261005
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
@@ -53,6 +75,28 @@ class CSC_ExtrusionProfile(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the outputs were just
+        updated (says why)."""
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -69,25 +113,21 @@ class CSC_ExtrusionProfile(Grasshopper.Kernel.GH_ScriptInstance):
             '0 = bottom profile and 1 = top profile.'
         )
         # Initialize output param descriptions
-        i = 0
-        if self.OutputParams[0].Name == 'out':
-            i += 1
-        self.OutputParams[0+i].Description = (
-            'The extracted profile curve.'
-        )
+        self._check_outputs()
 
     def RunScript(self,
             ExtrusionGeometry: Rhino.Geometry.Extrusion,
             ProfileIndex: int,
             ProfileParameter: float):
         # init outputs
+        if self._stop():
+            return empty_outputs()
         ProfileCurve = Grasshopper.DataTree[System.Object]()
         # defaults
         if not ExtrusionGeometry:
             self._addWarning(
                 'Input Parameter ExtrusionGeometry failed to collect data.'
             )
-            self.Component.Message = ('No Profile extracted.')
             return ProfileCurve
         if ProfileIndex is None:
             ProfileIndex = 0
@@ -113,8 +153,5 @@ class CSC_ExtrusionProfile(Grasshopper.Kernel.GH_ScriptInstance):
             ProfileParameter = 0.0
         # finally extract profile curve
         ProfileCurve = ExtrusionGeometry.Profile3d(0, 0.5)
-        self.Component.Message = (
-            f'Extrusion Profile at i = {ProfileIndex} | s = {ProfileParameter}'
-        )
         # return results
         return ProfileCurve

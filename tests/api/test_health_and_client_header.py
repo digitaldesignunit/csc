@@ -52,3 +52,17 @@ def test_enforcement_refuses_outdated_clients_with_426(api, app, backend_env):
                 in _client_log(backend_env))
     finally:
         app.state.min_client_versions = {}
+
+
+def test_an_outdated_client_can_log_in_but_not_work(api, app):
+    """8.95 11: /auth/token answers an old client (so it can run CSC_Update),
+    a data route still answers 426."""
+    app.state.min_client_versions = {'gh-userobjects': (0, 6, 0, 0)}
+    try:
+        old = {'X-CSC-Client': 'gh-userobjects/0.5.1.0'}
+        login = api.post('/auth/token', headers=old,
+                         data={'username': 'nobody', 'password': 'x'})
+        assert login.status_code == 401        # reached the route
+        assert api.get('/materials', headers=old).status_code == 426
+    finally:
+        app.state.min_client_versions = {}

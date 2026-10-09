@@ -1,15 +1,10 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Html5QrcodeScanType,
-  Html5QrcodeSupportedFormats,
-} from 'html5-qrcode'
-import { AlertTriangle, Check, QrCode, Search, Send, Trash2, X } from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { AlertTriangle, Check, Send, Trash2, X } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
+import UnknownTagLink from '@/components/snapshot/UnknownTagLink'
 import { Button } from '@/components/ui/button'
-import { CardContent, CardHeader } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -19,7 +14,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import QRScanner, { QRScannerRef } from '@/components/qr/QRScanner'
+import { formatDay } from '@/lib/utils'
+import ScanCamera from '@/components/qr/ScanCamera'
+import { type QRScannerRef } from '@/components/qr/QRScanner'
 
 type TransmitItem = {
   user_id: string
@@ -44,30 +41,11 @@ type TransmitStatus =
 const API_BASE = '/api/backend/component_id_transmission'
 
 function formatTimestamp(iso?: string): string {
-  if (!iso) return ''
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
+  return iso ? formatDay(iso) : ''
 }
 
 const ComponentIdTransmitter: React.FC = () => {
-  const scannerConfig = useMemo(
-    () => ({
-      aspectRatio: 1,
-      fps: 10,
-      qrbox: { width: 300, height: 300 },
-      rememberLastUsedCamera: true,
-      supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-      formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-    }),
-    []
-  )
-
   const qrScannerRef = useRef<QRScannerRef | null>(null)
-  const elementId = 'id-transmission-reader'
-  const cameraContainerId = 'id-transmission-cameracontainer'
 
   const [pending, setPending] = useState<TransmitItem | null>(null)
   const [isLoadingPending, setIsLoadingPending] = useState(true)
@@ -181,7 +159,6 @@ const ComponentIdTransmitter: React.FC = () => {
   }, [])
 
   const startScanning = useCallback(() => {
-    document.getElementById(elementId)?.scrollIntoView()
     if (!isScanning && qrScannerRef.current) {
       setIsScanning(true)
       setStatus('scanning')
@@ -348,208 +325,107 @@ const ComponentIdTransmitter: React.FC = () => {
       ? 'border-blue-500'
       : 'border-border'
 
-  const statusBadgeClass =
-    status === 'transmitted'
-      ? 'bg-green-500 text-white'
-      : status === 'error'
-      ? 'bg-destructive text-destructive-foreground'
-      : status === 'scanning' || status === 'transmitting'
-      ? 'bg-blue-500 text-white'
-      : 'bg-muted text-muted-foreground'
-
-  const placeholderMessage =
-    'Camera Feed Placeholder.\n\nScan a QR code to transmit the identity id.'
+  const placeholderMessage = 'Tap to start the camera and scan the tag to transmit.'
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center gap-3">
       {/* Current pending ID panel */}
-      <div className="w-full max-w-[500px] mb-4">
-        <div className="rounded-lg border bg-card/60 p-4 text-sm">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="font-medium mb-1">
-                Current pending ID
+      <div className="w-full max-w-[420px] rounded-lg border bg-card/60 p-3 text-sm">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="mb-1 font-medium">Waiting in the queue</div>
+            {isLoadingPending ? (
+              <div className="text-muted-foreground">Loading...</div>
+            ) : pending ? (
+              <div className="space-y-1">
+                <div className="break-all font-mono text-xs">{pending.identity_id}</div>
+                <div className="text-xs text-muted-foreground">
+                  since {formatTimestamp(pending.created_at)}
+                </div>
               </div>
-              {isLoadingPending ? (
-                <div className="text-muted-foreground">Loading...</div>
-              ) : pending ? (
-                <div className="space-y-1">
-                  <div className="font-mono break-all">
-                    {pending.identity_id}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    pending since {formatTimestamp(pending.created_at)}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-muted-foreground">
-                  No pending ID.
-                </div>
-              )}
-            </div>
-            {pending && !isLoadingPending && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClearPending}
-                className="flex-shrink-0"
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Clear
-              </Button>
+            ) : (
+              <div className="text-muted-foreground">Nothing is waiting.</div>
             )}
           </div>
+          {pending && !isLoadingPending && (
+            <Button variant="outline" size="sm" onClick={handleClearPending} className="flex-shrink-0">
+              <Trash2 className="mr-1 h-4 w-4" />
+              Clear
+            </Button>
+          )}
         </div>
       </div>
 
-      <CardHeader className="relative w-full max-w-sm p-1">
-        {/* Manual Input */}
-        {!isScanning && (
-          <div className="flex w-full max-w-sm flex-col gap-2 pb-4">
-            <Input
-              id="inputFieldTransmitID"
-              placeholder="Identity ID (scan or paste)"
-              value={inputId}
-              onChange={(e) => {
-                setInputId(e.target.value)
-                setScannedId('')
-                if (status !== 'idle') {
-                  setStatus('idle')
-                  setStatusMessage('')
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleTransmitClick()
-                }
-              }}
-            />
-            <Button
-              onClick={handleTransmitClick}
-              disabled={!canTransmit}
-              className="flex items-center gap-2"
-            >
-              <Send className="h-4 w-4" />
-              {isCheckingId
-                ? 'Checking ID...'
-                : status === 'transmitting'
-                ? 'Transmitting...'
-                : 'Transmit ID'}
-            </Button>
-          </div>
+      <ScanCamera
+        scannerRef={qrScannerRef}
+        elementId="id-transmission-reader"
+        onScanSuccess={handleScannedCode}
+        isScanning={isScanning}
+        onStart={startScanning}
+        onStop={() => void stopScanning()}
+        borderClass={borderClass}
+        message={placeholderMessage}
+      >
+        {!isScanning && effectiveId && (
+          <Button variant="ghost" size="sm" onClick={handleReset} className="gap-1.5">
+            <X className="h-4 w-4" aria-hidden />
+            Clear the id
+          </Button>
         )}
+      </ScanCamera>
 
-        {/* Scanned / active ID badge */}
-        {effectiveId && (
-          <div className="w-full grid grid-cols-2 gap-y-3 items-center">
-            <div className="flex justify-start min-w-0 w-28">
-              <span className="text-sm font-medium text-foreground">
-                Active ID:
-              </span>
-            </div>
-            <div className="flex justify-end items-center">
-              <Badge
-                variant="secondary"
-                className={`no-wrap flex-shrink-0 ${statusBadgeClass}`}
-              >
-                {effectiveId}
-              </Badge>
-            </div>
-          </div>
-        )}
+      <div className="flex w-full max-w-[420px] gap-2">
+        <Input
+          id="inputFieldTransmitID"
+          aria-label="Identity id"
+          placeholder="or paste the identity id"
+          value={inputId}
+          onChange={(e) => {
+            setInputId(e.target.value)
+            setScannedId('')
+            if (status !== 'idle') {
+              setStatus('idle')
+              setStatusMessage('')
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleTransmitClick()
+          }}
+        />
+        <Button onClick={handleTransmitClick} disabled={!canTransmit} className="gap-1.5">
+          <Send className="h-4 w-4" aria-hidden />
+          {isCheckingId ? 'Checking...' : status === 'transmitting' ? 'Sending...' : 'Transmit'}
+        </Button>
+      </div>
 
-        {statusMessage && (
-          <div
-            className={`mt-2 text-xs ${
-              status === 'error'
-                ? 'text-destructive'
-                : status === 'transmitted'
+      {effectiveId && (
+        <p className="w-full max-w-[420px] break-all text-center font-mono text-xs text-muted-foreground">
+          {effectiveId}
+        </p>
+      )}
+
+      {statusMessage && (
+        <div
+          role="status"
+          className={`text-xs ${
+            status === 'error'
+              ? 'text-destructive'
+              : status === 'transmitted'
                 ? 'text-green-600 dark:text-green-400'
                 : 'text-muted-foreground'
-            }`}
-          >
-            {status === 'transmitted' && (
-              <Check className="inline h-3 w-3 mr-1" />
-            )}
-            {statusMessage}
-          </div>
-        )}
+          }`}
+        >
+          {status === 'transmitted' && <Check className="mr-1 inline h-3 w-3" />}
+          {statusMessage}
+        </div>
+      )}
 
-        {idCheckMessage && status !== 'transmitting' && (
-          <div
-            className={`mt-2 text-xs ${
-              idBlocked
-                ? 'text-destructive'
-                : 'text-green-600 dark:text-green-400'
-            }`}
-          >
-            {idCheckMessage}
-          </div>
-        )}
-      </CardHeader>
-
-      {/* QR Code Scanner Canvas */}
-      <CardContent
-        id={cameraContainerId}
-        className={`mt-4 p-0 relative w-full max-w-[500px] h-[500px] border-8 rounded-xl ${borderClass} bg-card`}
-      >
-        <QRScanner
-          ref={qrScannerRef}
-          elementId={elementId}
-          onScanSuccess={handleScannedCode}
-          config={scannerConfig}
-        />
-        {!isScanning && (
-          <div className="absolute inset-0 bg-muted/60 flex items-center justify-center text-center rounded">
-            <span className="whitespace-pre-wrap text-sm text-muted-foreground px-4">
-              {placeholderMessage}
-            </span>
-          </div>
-        )}
-      </CardContent>
-
-      <div className="m-4 flex flex-col items-center space-y-3">
-        {!isScanning && (
-          <Button
-            onClick={startScanning}
-            variant="outline"
-            className="w-[200px] flex items-center gap-2"
-          >
-            <QrCode className="h-4 w-4" />
-            Start QR Code Scan
-          </Button>
-        )}
-        {isScanning && (
-          <Button
-            onClick={stopScanning}
-            variant="outline"
-            className="w-[200px]"
-          >
-            Stop Scanning
-          </Button>
-        )}
-        {!isScanning && effectiveId && (
-          <Button
-            onClick={handleReset}
-            variant="destructive"
-            className="w-[200px]"
-          >
-            <X className="h-4 w-4 mr-1" />
-            Reset
-          </Button>
-        )}
-        {!isScanning && !effectiveId && (
-          <Button
-            variant="outline"
-            onClick={handleTransmitClick}
-            disabled={!canTransmit}
-            className="w-[200px] flex items-center gap-2"
-          >
-            <Search className="h-4 w-4" />
-            Transmit
-          </Button>
-        )}
-      </div>
+      {idCheckMessage && status !== 'transmitting' && (
+        <div className={`text-xs ${idBlocked ? 'text-destructive' : 'text-green-600 dark:text-green-400'}`}>
+          {idCheckMessage}
+        </div>
+      )}
+      <UnknownTagLink id={effectiveId} className="text-xs text-muted-foreground" />
 
       {/* Overwrite confirmation dialog */}
       <Dialog

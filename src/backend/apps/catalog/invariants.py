@@ -2,7 +2,7 @@
 """
 The invariants of data model spec section 5 as code.
 
-Every id I1..I28 is registered once. Four kinds:
+Every id I1..I32 is registered once. Four kinds:
 
 * ``document`` --- one document can break it; checked by validating each
   stored document against its model in ``documents.py`` (the validator
@@ -38,6 +38,19 @@ from apps.catalog.documents import (
     Evidence,
     Material,
 )
+from apps.catalog.evidence.registry import RESULT_FIELDS, prepare_record
+from apps.catalog.evidence.types import EvidenceInvalid, PairingFacts
+from apps.catalog.lifecycle import chain_position
+from apps.catalog.lineage import expected_unit, unit_values
+from apps.catalog.properties import (
+    contexts_for,
+    fold,
+    foldable,
+    quantities_of_scope,
+    same_properties,
+    snapshot_inputs,
+)
+from apps.catalog.timeline import live_snapshots
 from apps.catalog.vocab import (
     EVER_PUBLISHED_STATUSES,
     OPEN_STATUSES,
@@ -129,17 +142,20 @@ def _ever_published(snaps: List[dict]) -> bool:
 
 
 def check_i3(corpus: Corpus) -> Iterable[Violation]:
-    """effective_from monotonic in version over an identity's snapshots."""
+    """effective_from monotonic in the place of an identity's snapshots: the
+    ``version``, a correction at the place of the first record of its
+    ``supersedes`` chain (8.123 b)."""
     for snaps in _by_identity(corpus).values():
+        by_id = {s['_id']: s for s in snaps}
         live = sorted(
             (s for s in snaps if s.get('status') == 'published'
              and not s.get('superseded_by') and s.get('effective_from')),
-            key=lambda s: s.get('version', 0))
+            key=lambda s: (chain_position(s, by_id), s.get('version', 0)))
         for earlier, later in zip(live, live[1:]):
             if _when(later['effective_from']) \
                     < _when(earlier['effective_from']):
                 yield _v('I3', SNAPSHOTS, later, 'effective_from before '
-                         f'v{earlier.get("version")}')
+                         f'v{chain_position(earlier, by_id)}')
 
 
 def check_i3b(corpus: Corpus) -> Iterable[Violation]:
@@ -165,6 +181,81 @@ def check_i3b(corpus: Corpus) -> Iterable[Violation]:
                 or snap.get('identity_id') != identity['_id']:
             yield _v('I3b', IDENTITIES, identity,
                      'current_snapshot_id is not a published snapshot of it')
+
+
+def _paired_id(record: dict) -> Optional[str]:
+    return (((record.get('payload') or {}).get('sampling') or {})
+            .get('paired_rebound_id')) if record.get(
+        'method') == 'core_compression' else None
+
+
+def check_i8(corpus: Corpus) -> Iterable[Violation]:
+    """Every evidence record validates against its method (spec 4.5): the
+    payload model, the values the server recomputes (median, F / A, l/d
+    class, grid points ...), the derived results' conditions, and the
+    pairing of a core to its rebound record (8.42)."""
+    by_id = {r['_id']: r for r in corpus.evidence}
+    pairs: Dict[str, List[str]] = defaultdict(list)
+    for record in corpus.evidence:
+        pid = _paired_id(record)
+        if pid and record.get('status') not in ('rejected', 'withdrawn') \
+                and not record.get('superseded_by'):
+            pairs[pid].append(record['_id'])
+    for record in corpus.evidence:
+        pid = _paired_id(record)
+        facts = None
+        if pid:
+            facts = PairingFacts(
+                identity_id=record.get('identity_id'),
+                rebound=by_id.get(pid),
+                other_pairs=[i for i in pairs.get(pid, [])
+                             if i not in (record['_id'],
+                                          record.get('supersedes'))])
+        try:
+            prepare_record({k: record.get(k) for k in RESULT_FIELDS},
+                           pairing=facts)
+        except EvidenceInvalid as exc:
+            for problem in exc.problems:
+                yield _v('I8', EVIDENCE, record,
+                         f'{problem.path}: {problem.message}')
+
+
+def check_i11(corpus: Corpus) -> Iterable[Violation]:
+    """``properties`` is what the fold says (spec 4.4): recomputed from the
+    published evidence and the parents' stored properties, it equals the
+    stored block of every identity and snapshot (``derived_at`` aside)."""
+    grouped = _by_identity(corpus)
+    records: Dict[str, List[dict]] = defaultdict(list)
+    for record in corpus.evidence:
+        records[record.get('identity_id')].append(record)
+    stored = {i['_id']: i.get('properties') or {} for i in corpus.identities}
+    now = '1970-01-01T00:00:00Z'
+    for identity in corpus.identities:
+        iid = identity['_id']
+        parents = [{'_id': p, 'properties': stored[p]}
+                   for p in identity.get('parent_identities') or []
+                   if p in stored]
+        expected = fold(quantities_of_scope('identity'),
+                        foldable(records.get(iid, [])),
+                        parents_of=lambda parents=parents: parents,
+                        now=now).properties
+        if not same_properties(stored[iid], expected):
+            yield _v('I11', IDENTITIES, identity,
+                     'properties differ from the fold of the published '
+                     'evidence (recompute)')
+        snaps = grouped.get(iid, [])
+        live = {s['_id'] for s in live_snapshots(snaps)}
+        published = foldable(records.get(iid, []))
+        contexts = contexts_for(identity, snaps, published)
+        for snap in snaps:
+            want = fold(quantities_of_scope('snapshot'),
+                        snapshot_inputs(published, contexts, snap['_id']),
+                        now=now).properties \
+                if snap['_id'] in live else {}
+            if not same_properties(snap.get('properties') or {}, want):
+                yield _v('I11', SNAPSHOTS, snap,
+                         'properties differ from the fold of the '
+                         'evidence that resolves to it (recompute)')
 
 
 def check_i9(corpus: Corpus) -> Iterable[Violation]:
@@ -221,28 +312,67 @@ def check_i21(corpus: Corpus) -> Iterable[Violation]:
 
 
 def check_i17(corpus: Corpus) -> Iterable[Violation]:
-    """An inherited field equals the parent's (the server propagates)."""
+    """An inherited unit equals what the parents give (the server
+    propagates, 8.31); merged parents must still agree on it (8.33)."""
     by_id = {i['_id']: i for i in corpus.identities}
     for child in corpus.identities:
-        parent = by_id.get(child.get('inherited_from'))
-        if child.get('inherited_fields') and parent is None:
+        if not child.get('inherited_fields'):
+            continue
+        parents = [by_id[p] for p in child.get('parent_identities') or []
+                   if p in by_id]
+        if by_id.get(child.get('inherited_from')) is None or not parents:
             yield _v('I17', IDENTITIES, child,
                      'inherited_from names an unknown identity')
             continue
-        for name in child.get('inherited_fields') or []:
-            fields = (name,)
-            if name == 'manufactured_at':
-                fields = (name, 'manufactured_precision')
-            for f in fields:
-                if child.get(f) != parent.get(f):
-                    yield _v('I17', IDENTITIES, child,
-                             f'inherited {f} differs from the parent')
+        for unit in child['inherited_fields']:
+            agree, values = expected_unit(unit, parents)
+            if not agree:
+                yield _v('I17', IDENTITIES, child,
+                         f'inherits {unit} but its parents disagree')
+            elif unit_values(child, unit) != values:
+                yield _v('I17', IDENTITIES, child,
+                         f'inherited {unit} differs from the parents')
+
+
+def _batch_sizes(corpus: Corpus) -> Dict[str, int]:
+    """Identity id --> recorded size, for every batch (8.105): the
+    quantity of its current snapshot when it is above one."""
+    quantity = {s['_id']: s.get('quantity') or 1 for s in corpus.snapshots}
+    sizes = {}
+    for identity in corpus.identities:
+        size = quantity.get(identity.get('current_snapshot_id'), 1)
+        if size > 1:
+            sizes[identity['_id']] = size
+    return sizes
+
+
+def _draws(corpus: Corpus) -> Dict[str, List[Tuple[dict, int, datetime]]]:
+    """Batch id --> its published, non-withdrawn draws (a child naming it
+    as its only parent): ``(child, quantity, first published at)``."""
+    grouped = _by_identity(corpus)
+    out: Dict[str, List[Tuple[dict, int, datetime]]] = defaultdict(list)
+    for child in corpus.identities:
+        parents = child.get('parent_identities') or []
+        if len(parents) != 1 or child.get('withdrawn'):
+            continue
+        ever = sorted(
+            (s for s in grouped.get(child['_id'], [])
+             if s.get('status') in EVER_PUBLISHED_STATUSES
+             and not s.get('superseded_by') and s.get('effective_from')),
+            key=lambda s: (_when(s['effective_from']), -s['version']))
+        if ever:
+            out[parents[0]].append((child, ever[0].get('quantity') or 1,
+                                    _when(ever[0]['effective_from'])))
+    return out
 
 
 def check_i18(corpus: Corpus) -> Iterable[Violation]:
     """A server-set split / merged exit exists iff a published child does,
-    at the earliest child effective_from (8.8)."""
+    at the earliest child effective_from (8.8); a batch's iff it is drawn
+    out, at the latest draw (8.105)."""
     grouped = _by_identity(corpus)
+    sizes = _batch_sizes(corpus)
+    draws = _draws(corpus)
     children: Dict[str, List[dict]] = defaultdict(list)
     for identity in corpus.identities:
         for parent_id in identity.get('parent_identities') or []:
@@ -261,6 +391,21 @@ def check_i18(corpus: Corpus) -> Iterable[Violation]:
         exit_ = identity.get('exit') or {}
         server_set = exit_.get('kind') in ('split', 'merged') \
             and exit_.get('recorded_by_user_id') is None
+        size = sizes.get(identity['_id'])
+        if size:
+            mine = draws.get(identity['_id'], [])
+            drawn_out = sum(q for _, q, _ in mine) >= size
+            if drawn_out and not exit_:
+                yield _v('I18', IDENTITIES, identity,
+                         'a batch drawn out has no split exit')
+            elif server_set and not drawn_out:
+                yield _v('I18', IDENTITIES, identity,
+                         'server-set split on a batch with pieces left')
+            elif server_set and _when(exit_['at']) != max(
+                    t for _, _, t in mine):
+                yield _v('I18', IDENTITIES, identity,
+                         'exit.at is not the latest draw effective_from')
+            continue
         if live and not exit_:
             yield _v('I18', IDENTITIES, identity,
                      'has published children but no split / merged exit')
@@ -269,6 +414,8 @@ def check_i18(corpus: Corpus) -> Iterable[Violation]:
                      'merged exit without a published child')
         elif server_set:
             earliest = min(first_published(c) for c in live)
+            if exit_.get('manual_at'):          # a hand-set split, 8.34
+                earliest = min(earliest, _when(exit_['manual_at']))
             if _when(exit_['at']) != earliest:
                 yield _v('I18', IDENTITIES, identity,
                          'exit.at is not the earliest child effective_from')
@@ -310,6 +457,8 @@ def check_i25(corpus: Corpus) -> Iterable[Violation]:
     materials = {m['_id']: m for m in corpus.materials}
     for identity in corpus.identities:
         material = materials.get(identity.get('material'))
+        if material is not None and material.get('merged_into'):
+            material = materials.get(material['merged_into'])   # 8.35
         derived = identity.get('material_class_source', 'derived') \
             == 'derived'
         if material is None:
@@ -341,16 +490,66 @@ def check_i28(corpus: Corpus) -> Iterable[Violation]:
         if identity is None:
             continue
         withdrawn = identity.get('withdrawn')
-        if withdrawn and record.get('created') and                 _when(record['created']) > _when(withdrawn['at']):
+        if withdrawn and record.get('created') \
+                and _when(record['created']) > _when(withdrawn['at']):
             yield _v('I28', EVIDENCE, record,
                      'created after its identity was withdrawn')
         exit_ = identity.get('exit')
-        if exit_ and exit_.get('kind') in TERMINAL_EXIT_KINDS and                 exit_.get('at') and record.get('observed_at') and                 _when(record['observed_at']) > _when(exit_['at']):
+        if exit_ and exit_.get('kind') in TERMINAL_EXIT_KINDS \
+                and exit_.get('at') and record.get('observed_at') \
+                and _when(record['observed_at']) > _when(exit_['at']):
             yield _v('I28', EVIDENCE, record,
                      f'observed after a terminal exit ({exit_["kind"]})')
 
 
+def check_i32(corpus: Corpus) -> Iterable[Violation]:
+    """Every identity has one quantity in all its live states, a batch was
+    not drawn below zero, and a batch is never a parent of a merge (8.105,
+    8.110, 8.115)."""
+    sizes = _batch_sizes(corpus)
+    draws = _draws(corpus)
+    for identity in corpus.identities:
+        size = sizes.get(identity['_id'])
+        if size:
+            drawn = sum(q for _, q, _ in draws.get(identity['_id'], []))
+            if drawn > size:
+                yield _v('I32', IDENTITIES, identity,
+                         f'{drawn} pieces drawn from a batch of {size}')
+        parents = identity.get('parent_identities') or []
+        if len(parents) > 1:
+            for parent_id in parents:
+                if parent_id in sizes:
+                    yield _v('I32', IDENTITIES, identity,
+                             f'a merge takes the batch {parent_id} as a '
+                             f'parent')
+    quantities = defaultdict(set)
+    live = defaultdict(list)
+    for snap in corpus.snapshots:
+        if snap.get('status') == 'published' and not snap.get('superseded_by'):
+            quantities[snap.get('identity_id')].add(snap.get('quantity') or 1)
+            live[snap.get('identity_id')].append(snap)
+    for identity_id, seen in quantities.items():
+        if len(seen) > 1:
+            for snap in live[identity_id]:
+                yield _v('I32', SNAPSHOTS, snap,
+                         f'the live states of the identity record '
+                         f'{sorted(seen)} pieces; one quantity for all')
+
+
 # REGISTRY (spec section 5) ---------------------------------------------------
+def check_i29(corpus: Corpus) -> Iterable[Violation]:
+    """Usernames are lowercase and unique (8.28)."""
+    seen: Dict[str, str] = {}
+    for user in corpus.users:
+        name = user.get('username') or ''
+        if name != name.lower():
+            yield _v('I29', 'users', user, 'username is not lowercase')
+        if name.lower() in seen:
+            yield _v('I29', 'users', user, 'username is not unique '
+                     'once lowercased')
+        seen[name.lower()] = user['_id']
+
+
 INVARIANTS: Tuple[Invariant, ...] = (
     Invariant('I1', 'geometry: a mesh, a point cloud or an authored proxy',
               'document'),
@@ -362,22 +561,27 @@ INVARIANTS: Tuple[Invariant, ...] = (
               'corpus', check_i3b),
     Invariant('I4', 'composite is assigned, never derived', 'document'),
     Invariant('I5', 'evidence identity_id is immutable', 'route'),
-    Invariant('I6', 'summary has value or range fitting its quantity',
+    Invariant('I6', 'summary has value or range fitting its quantity; only a '
+              'document has none',
               'document'),
     Invariant('I7', 'one result per quantity per record', 'document'),
-    Invariant('I8', 'payload validates against its method (P6)', 'route'),
+    Invariant('I8', 'payload validates against its method, server '
+              'fields recomputed, pairing', 'corpus', check_i8),
     Invariant('I9', 'position.snapshot_id belongs to the identity',
               'corpus', check_i9),
     Invariant('I10', 'observed_at >= sampled_at', 'document'),
-    Invariant('I11', 'properties never accepted from a client', 'route'),
+    Invariant('I11', 'properties are the fold of the published '
+              'evidence; never accepted from a client', 'corpus',
+              check_i11),
     Invariant('I12', 'dropped (6.13)', 'dropped'),
     Invariant('I13', 'frozen evidence fields change only by supersession',
               'route'),
     Invariant('I14', 'evidence supersession: same identity and method, '
               'no forks', 'corpus', check_i14),
     Invariant('I15', 'status transitions', 'route'),
-    Invariant('I16', 'origin.construction_work only for deinstallation / '
-              'demolition', 'document'),
+    Invariant('I16', 'construction work, position, connections, '
+              'detachability only for deinstallation / demolition',
+              'document'),
     Invariant('I17', 'inherited fields server-maintained, equal to the '
               'parent', 'corpus', check_i17),
     Invariant('I18', 'exit rules; server-set split / merged from '
@@ -402,6 +606,16 @@ INVARIANTS: Tuple[Invariant, ...] = (
               'performer', 'document'),
     Invariant('I28', 'no evidence on a withdrawn identity or after a '
               'terminal exit', 'corpus', check_i28),
+    Invariant('I29', 'usernames lowercase and unique', 'corpus',
+              check_i29),
+    Invariant('I30', 'every field change writes one change_log entry',
+              'route'),
+    Invariant('I31', 'planned origin only for deinstallation / demolition; '
+              'authored exits from in place are recycled, disposed or '
+              'lost', 'document'),
+    Invariant('I32', 'batch: quantity kept, never overdrawn, never merged; '
+              'a reserved batch is drawn by its holder or a moderator',
+              'corpus', check_i32),
 )
 INVARIANT_BY_ID: Dict[str, Invariant] = {inv.id: inv for inv in INVARIANTS}
 

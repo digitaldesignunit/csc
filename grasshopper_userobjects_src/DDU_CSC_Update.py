@@ -6,9 +6,14 @@ print('ENV OK!')
 # r: requests
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
+import hashlib  # NOQA
 import os  # NOQA
 import re  # NOQA
 import glob  # NOQA
+import shutil  # NOQA
+import stat  # NOQA
+import sys  # NOQA
+import uuid  # NOQA
 from pathlib import Path  # NOQA
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
@@ -23,13 +28,21 @@ import GhPython as ghpy  # NOQA
 import ScriptComponents as scomp  # NOQA
 import RhinoCodePluginGH as rcpgh  # NOQA
 
+# the one place that sets the text under the component (decision 8.113); the
+# updater installs the library, so it must work without it
+try:
+    from csc_gh.messages import set_state
+except ImportError:
+    set_state = None
+
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
 ghenv.Component.Name = 'Update'  # NOQA
 ghenv.Component.NickName = 'CSC_Update'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '0 Development'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Updates component sources and userobjects in document from server.\n'
+    'Updates component sources, userobjects and the shared library '
+    'csc_gh (installed to the Rhino scripts folder) from server.\n'
     'NOTE: CheckForUpdates must be True to check for updates AND to '
     'install updates! Switch on both to update everything.\n'
     'Updates come from the Grasshopper release that belongs to the '
@@ -56,15 +69,197 @@ RENAMED_COMPONENTS = {
     'AddComponent': 'AddComponentIdentity',
     'ArrangeComponents': 'CreateArrangement',
     'CreateComponent': 'CreateComponentIdentity / CreateComponentSnapshot',
-    'FetchGeometry': 'FetchReducedGeometry / FetchDetailedGeometry',
+    'FetchGeometry': 'FetchReducedGeometry / FetchOriginalGeometry',
+    'FetchDetailedGeometry': 'FetchOriginalGeometry',
+    'ApplyPCAFrame': 'ApplyFrame',
+    'CreateReinforcement': 'ReinforcementLayout',
 }
+
+# Components that were removed in 0.6 without a successor: designs are not
+# part of CSC any more (decision 7.11).
+REMOVED_COMPONENTS = {
+    'CreateDesign': 'removed in 0.6: designs are not part of CSC',
+    'AddDesign': 'removed in 0.6: designs are not part of CSC',
+    'FetchDesign': 'removed in 0.6: designs are not part of CSC',
+}
+
+# THE SHARED LIBRARY csc_gh (decision 8.111) ------------------------------------
+LIBRARY_NAME = 'csc_gh'
+LIBRARY_VERSION_RE = re.compile(r"^__version__\s*=\s*'(\d+[a-zA-Z]?)'\s*$",
+                                re.M)
+LIBRARY_FILE_RE = re.compile(r'^(__init__|[a-z][a-z_]*)\.py$')
+
+
+class LibraryInstallError(Exception):
+    """The library was not installed; the old one is untouched."""
+
+
+def scripts_folder():
+    """Rhino 8's scripts folder (on sys.path of every Python 3 script): the
+    entry of sys.path that ends in McNeel/Rhinoceros/8.0/scripts, else the
+    default place of the platform."""
+    for entry in sys.path:
+        parts = os.path.normpath(entry).replace('\\', '/').split('/')
+        if parts[-4:] == ['McNeel', 'Rhinoceros', '8.0', 'scripts']:
+            return os.path.normpath(entry)
+    if sys.platform.startswith('win'):
+        base = os.path.expandvars('%APPDATA%')
+        return os.path.join(base, 'McNeel', 'Rhinoceros', '8.0', 'scripts')
+    return os.path.join(os.path.expanduser('~'), 'Library',
+                        'Application Support', 'McNeel', 'Rhinoceros',
+                        '8.0', 'scripts')
+
+
+def is_link(path):
+    """A symbolic link or a directory junction (the development setup of
+    grasshopper_development/README.md): never replaced by an update."""
+    try:
+        if os.path.islink(path):
+            return True
+        attributes = getattr(os.lstat(path), 'st_file_attributes', 0)
+        return bool(attributes & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT',
+                                         0x400))
+    except OSError:
+        return False
+
+
+def library_version_of(folder):
+    """The __version__ text of an installed package folder, else None."""
+    try:
+        with open(os.path.join(folder, '__init__.py'), 'r',
+                  encoding='utf-8') as handle:
+            match = LIBRARY_VERSION_RE.search(handle.read())
+    except OSError:
+        return None
+    return match.group(1) if match else None
+
+
+def library_version_key(version):
+    match = re.match(r'^(\d+)([a-zA-Z]?)$', str(version or ''))
+    if not match:
+        return (-1, '')
+    return (int(match.group(1)), match.group(2).lower())
+
+
+def secure_server(base_url):
+    """HTTPS, or the loopback address of a local development server."""
+    url = (base_url or '').lower()
+    if url.startswith('https://'):
+        return True
+    host = url.split('://', 1)[-1].split('/')[0]
+    if host.startswith('['):
+        host = host.split(']')[0] + ']'
+    else:
+        host = host.split(':')[0]
+    return url.startswith('http://') and host in (
+        'localhost', '127.0.0.1', '[::1]')
+
+
+def check_manifest(manifest):
+    """The manifest as the installer takes it: a version, and per file a plain
+    name of the package and a sha256; raises LibraryInstallError."""
+    if not isinstance(manifest, dict) or not manifest.get('version'):
+        raise LibraryInstallError('the library manifest has no version')
+    files = manifest.get('files')
+    if not files:
+        raise LibraryInstallError('the library manifest lists no files')
+    names = set()
+    for entry in files:
+        name = str(entry.get('path', ''))
+        if not LIBRARY_FILE_RE.match(name) or name in names:
+            raise LibraryInstallError('not a library file name: %r' % name)
+        if not re.match(r'^[0-9a-f]{64}$', str(entry.get('sha256', ''))):
+            raise LibraryInstallError('no sha256 for %s' % name)
+        names.add(name)
+    if '__init__.py' not in names:
+        raise LibraryInstallError('the manifest has no __init__.py')
+    return manifest
+
+
+def install_library(scripts_dir, manifest, read_file):
+    """Install the package ``csc_gh`` into ``scripts_dir``.
+
+    ``manifest`` is the release manifest ({version, files: [{path, size,
+    sha256}]}); ``read_file(name)`` returns the bytes of one file. Every file
+    is checked against the manifest (size, sha256) and written into a
+    temporary folder next to the target; the installed package is renamed to
+    ``csc_gh.bak``, the new folder to ``csc_gh`` and the backup removed. Any
+    failure leaves the old package in place (the backup is put back).
+    Raises LibraryInstallError; returns the installed version."""
+    check_manifest(manifest)
+    target = os.path.join(scripts_dir, LIBRARY_NAME)
+    if is_link(target):
+        raise LibraryInstallError(
+            '%s is a link to a repository (a development setup): not '
+            'replaced' % target)
+    os.makedirs(scripts_dir, exist_ok=True)
+    fresh = os.path.join(scripts_dir, '.%s_new_%s' % (LIBRARY_NAME,
+                                                      uuid.uuid4().hex[:8]))
+    backup = target + '.bak'
+    os.makedirs(fresh)
+    try:
+        for entry in manifest['files']:
+            data = read_file(entry['path'])
+            if data is None:
+                raise LibraryInstallError('missing: %s' % entry['path'])
+            if hashlib.sha256(data).hexdigest() != entry['sha256'] or (
+                    'size' in entry and len(data) != entry['size']):
+                raise LibraryInstallError(
+                    'checksum mismatch: %s (not installed)' % entry['path'])
+            with open(os.path.join(fresh, entry['path']), 'wb') as handle:
+                handle.write(data)
+        if library_version_of(fresh) != str(manifest['version']):
+            raise LibraryInstallError('the files are not version %s'
+                                      % manifest['version'])
+        if os.path.exists(backup):
+            shutil.rmtree(backup)
+        had_old = os.path.isdir(target)
+        if had_old:
+            os.rename(target, backup)
+        try:
+            os.rename(fresh, target)
+        except OSError:
+            if had_old:
+                os.rename(backup, target)
+            raise
+        shutil.rmtree(backup, ignore_errors=True)
+    except LibraryInstallError:
+        shutil.rmtree(fresh, ignore_errors=True)
+        raise
+    except Exception as error:
+        shutil.rmtree(fresh, ignore_errors=True)
+        raise LibraryInstallError('%s' % error) from error
+    return str(manifest['version'])
+
+
+def local_library_manifest(root, folder_name='grasshopper_lib'):
+    """The manifest of the package in a local checkout, and a reader."""
+    folder = os.path.join(root, folder_name, LIBRARY_NAME)
+    files, data = [], {}
+    for name in sorted(os.listdir(folder)):
+        if not LIBRARY_FILE_RE.match(name):
+            continue
+        with open(os.path.join(folder, name), 'rb') as handle:
+            data[name] = handle.read()
+        files.append({'path': name, 'size': len(data[name]),
+                      'sha256': hashlib.sha256(data[name]).hexdigest()})
+    init = data.get('__init__.py', b'').decode('utf-8', 'replace')
+    match = LIBRARY_VERSION_RE.search(init)
+    return ({'ref': 'local', 'version': match.group(1) if match else None,
+             'files': files}, data.get)
+
+
+# The two folders of the repository the updater reads from a local copy
+# (decision 8.93: the bridge is tested against a local checkout).
+SRC_DIR_NAME = 'grasshopper_userobjects_src'
+UO_DIR_NAME = 'grasshopper_userobjects'
 
 
 class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260928
+    Version: 261005
     """
 
     def __init__(self):
@@ -74,6 +269,9 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         self.Component = ghenv.Component  # NOQA
         self.InputParams = self.Component.Params.Input
         self.OutputParams = self.Component.Params.Output
+        # root of a local checkout while LocalFolder is set, else None
+        self.local_root = None
+        self._local_error = ''
 
     def _addRemark(self, msg: str = ''):
         """Add a remark message to the component."""
@@ -96,6 +294,13 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         self.InputParams[0].Description = (
             'Toggle to check for updates on the server.'
         )
+        if len(self.InputParams) > 2:
+            self.InputParams[2].Description = (
+                'Optional: a local copy of the repository (or its '
+                'grasshopper_userobjects_src / grasshopper_userobjects '
+                'folder). When set, sources and UserObjects are read from '
+                'disk instead of the server and no sign-in is needed.'
+            )
         self.InputParams[1].Description = (
             'Toggle to install updates from server.'
         )
@@ -107,16 +312,125 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
             'Status messages about the update process.'
         )
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
     def get_auth_core_from_sticky(self):
         """Get AuthCore instance from sticky storage."""
         auth_core = sc.sticky.get('CSC_AuthCore')
         if auth_core is None:
-            msg = ('No authentication found. Please use CSC_Session component '
-                   'first.')
-            self._addError(msg)
-            self.Component.Message = msg
+            # nothing to check against yet: a warning, not a failure
+            self._addWarning('No authentication found. Please use the '
+                             'CSC_Session component first.')
             return None
         return auth_core
+
+    # THE LIBRARY (8.111) ---------------------------------------------------
+    def expire_replaced(self, objects):
+        """Solve the components whose code was replaced. The swap alone does
+        not run them, and a component with declared outputs sets them up in its
+        first solve (decision 8.112): schedule an expire, which runs between
+        solutions."""
+        document = self.Component.OnPingDocument()
+        if not objects or document is None:
+            return
+
+        def callback(_document):
+            for obj in objects:
+                try:
+                    obj.ExpireSolution(False)
+                except Exception as error:
+                    print(f'Could not expire {obj}: {error}')
+
+        document.ScheduleSolution(
+            1, Grasshopper.Kernel.GH_Document.GH_ScheduleDelegate(callback))
+
+    def get_api_library_manifest(self, auth_core):
+        response = auth_core.authorized_get(
+            '/ghinterface/library_manifest', params=self._channel_params(),
+            timeout=90)
+        if response.status_code != 200:
+            raise LibraryInstallError(
+                f'the server answered {response.status_code} for the '
+                'library manifest')
+        return response.json()
+
+    def api_library_reader(self, auth_core):
+        def read(name):
+            response = auth_core.authorized_get(
+                '/ghinterface/library/' + name,
+                params=self._channel_params(), timeout=90)
+            return response.content if response.status_code == 200 else None
+        return read
+
+    def check_library(self, auth_core):
+        """What this machine and the release have of csc_gh:
+        ``{text, install, manifest, reader, scripts_dir}``; ``install`` says
+        whether InstallUpdates would install it."""
+        scripts_dir = scripts_folder()
+        target = os.path.join(scripts_dir, LIBRARY_NAME)
+        result = {'text': '', 'install': False, 'manifest': None,
+                  'reader': None, 'scripts_dir': scripts_dir}
+        installed = library_version_of(target)
+        try:
+            if self.local_root:
+                manifest, reader = local_library_manifest(self.local_root)
+            elif not secure_server(auth_core.base_url):
+                result['text'] = (
+                    'csc_gh not checked: the server address is not HTTPS')
+                self._addWarning(result['text'])
+                return result
+            else:
+                manifest = self.get_api_library_manifest(auth_core)
+                reader = self.api_library_reader(auth_core)
+            check_manifest(manifest)
+        except Exception as error:
+            result['text'] = f'csc_gh not checked: {error}'
+            self._addWarning(result['text'])
+            return result
+        wanted = str(manifest['version'])
+        if is_link(target):
+            result['text'] = (
+                f'csc_gh {installed} is linked to a repository (development '
+                'setup): not replaced')
+            self._addRemark(result['text'])
+            return result
+        if installed is None:
+            result['text'] = f'csc_gh is not installed; release has {wanted}'
+        elif library_version_key(installed) < library_version_key(wanted):
+            result['text'] = f'csc_gh {installed} < {wanted}: update'
+        elif library_version_key(installed) > library_version_key(wanted):
+            result['text'] = (
+                f'csc_gh {installed} > {wanted} of the release: not '
+                'replaced (a development copy?)')
+            self._addWarning(result['text'])
+            return result
+        else:
+            result['text'] = f'csc_gh {installed} is up to date'
+            self._addRemark(result['text'])
+            return result
+        result.update(install=True, manifest=manifest, reader=reader)
+        self._addRemark(result['text'])
+        return result
+
+    def install_library_now(self, library, Status):
+        """Install the package; True when it was replaced (Rhino must be
+        restarted: imported modules stay cached)."""
+        try:
+            version = install_library(library['scripts_dir'],
+                                      library['manifest'], library['reader'])
+        except LibraryInstallError as error:
+            msg = f'csc_gh was not installed: {error}'
+            self._addError(msg)
+            Status.Add(msg)
+            return False
+        msg = (f'Installed csc_gh {version} to {library["scripts_dir"]}. '
+               'Restart Rhino to use it.')
+        self._addRemark(msg)
+        Status.Add(msg)
+        return True
 
     def _channel_params(self):
         """Query params selecting the GitHub update channel (branch)."""
@@ -360,8 +674,71 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         dir = Grasshopper.Folders.DefaultUserObjectFolder
         return dir
 
+    def resolve_local_root(self, value):
+        """The checkout a LocalFolder input names: its root, None for an
+        empty input, False (with an error) when it is not a checkout."""
+        value = (value or '').strip()
+        if not value:
+            return None
+        root = os.path.abspath(os.path.expanduser(value))
+        if os.path.basename(root) in (SRC_DIR_NAME, UO_DIR_NAME):
+            root = os.path.dirname(root)
+        for name in (SRC_DIR_NAME, UO_DIR_NAME):
+            if not os.path.isdir(os.path.join(root, name)):
+                msg = (f'LocalFolder {root} has no {name} folder: give the '
+                       'root of a CSC checkout.')
+                self._addError(msg)
+                self._local_error = msg
+                return False
+        return root
+
+    def local_source_versions(self):
+        """{source name: version} of the sources in the local checkout."""
+        versions = {}
+        folder = os.path.join(self.local_root, SRC_DIR_NAME)
+        for file_name in sorted(os.listdir(folder)):
+            stem, ext = os.path.splitext(file_name)
+            if ext.lower() not in ('.py', '.cs'):
+                continue
+            with open(os.path.join(folder, file_name), 'r',
+                      encoding='utf-8', errors='replace') as handle:
+                version = self.get_source_version(handle.read())
+            if not version:
+                print(f'{stem} has no version, skipping!')
+                continue
+            versions[stem] = tuple(version)
+        return versions
+
+    def local_source_file_text(self, full_name):
+        folder = os.path.join(self.local_root, SRC_DIR_NAME)
+        for ext in ('.py', '.cs'):
+            path = os.path.join(folder, full_name + ext)
+            if os.path.isfile(path):
+                with open(path, 'r', encoding='utf-8',
+                          errors='replace') as handle:
+                    return handle.read()
+        msg = f'Source file {full_name} not found in {folder}.'
+        self._addError(msg)
+        return None
+
+    def local_userobject_names(self):
+        folder = os.path.join(self.local_root, UO_DIR_NAME)
+        return sorted(os.path.splitext(n)[0] for n in os.listdir(folder)
+                      if n.lower().endswith('.ghuser'))
+
+    def local_userobject_bytes(self, uo_name):
+        path = os.path.join(self.local_root, UO_DIR_NAME, uo_name + '.ghuser')
+        if not os.path.isfile(path):
+            msg = f'UserObject {uo_name} not found in {os.path.dirname(path)}.'
+            self._addError(msg)
+            return None
+        with open(path, 'rb') as handle:
+            return handle.read()
+
     def get_api_source_versions(self, auth_core):
-        """Get source versions from API."""
+        """Get source versions from API (or the local checkout)."""
+        if self.local_root:
+            return self.local_source_versions()
         api_src_versions = {}
         response = auth_core.authorized_get(
             '/ghinterface/src_names',
@@ -386,22 +763,18 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 'exactly; the server release exists once it is published.'
             )
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 401:
             msg = 'Authentication failed. Please sign in again.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 403:
             msg = 'Access denied. Insufficient permissions.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 500:
             msg = 'Server error. Please try again later.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         else:
             msg = (f'Request failed with status code: '
@@ -413,12 +786,13 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
             except Exception:
                 pass
             self._addError(msg)
-            self.Component.Message = msg
             return None
         return api_src_versions
 
     def get_api_userobject_names(self, auth_core):
-        """Get userobject names from API."""
+        """Get userobject names from API (or the local checkout)."""
+        if self.local_root:
+            return self.local_userobject_names()
         api_uo_names = []
         response = auth_core.authorized_get(
             '/ghinterface/userobject_names',
@@ -434,33 +808,30 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 'exactly; the server release exists once it is published.'
             )
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 401:
             msg = 'Authentication failed. Please sign in again.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 403:
             msg = 'Access denied. Insufficient permissions.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 500:
             msg = 'Server error. Please try again later.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         else:
             msg = (f'Request failed with status code: '
                    f'{response.status_code}')
             self._addError(msg)
-            self.Component.Message = msg
             return None
         return api_uo_names
 
     def get_api_source_file_text(self, auth_core, full_name):
-        """Get source file from API."""
+        """Get source file from API (or the local checkout)."""
+        if self.local_root:
+            return self.local_source_file_text(full_name)
         response = auth_core.authorized_get(
             f'/ghinterface/src/{full_name}',
             params=self._channel_params(),
@@ -471,32 +842,29 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         elif response.status_code == 404:
             msg = 'Source file not found.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 401:
             msg = 'Authentication failed. Please sign in again.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 403:
             msg = 'Access denied. Insufficient permissions.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 500:
             msg = 'Server error. Please try again later.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         else:
             msg = (f'Request failed with status code: '
                    f'{response.status_code}')
             self._addError(msg)
-            self.Component.Message = msg
             return None
 
     def get_api_userobject_bytes(self, auth_core, uo_name):
-        """Get userobject bytes from API."""
+        """Get userobject bytes from API (or the local checkout)."""
+        if self.local_root:
+            return self.local_userobject_bytes(uo_name)
         response = auth_core.authorized_get(
             f'/ghinterface/userobject/{uo_name}',
             params=self._channel_params(),
@@ -507,40 +875,47 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         elif response.status_code == 404:
             msg = 'Userobject not found.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 401:
             msg = 'Authentication failed. Please sign in again.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 403:
             msg = 'Access denied. Insufficient permissions.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         elif response.status_code == 500:
             msg = 'Server error. Please try again later.'
             self._addError(msg)
-            self.Component.Message = msg
             return None
         else:
             msg = (f'Request failed with status code: '
                    f'{response.status_code}')
             self._addError(msg)
-            self.Component.Message = msg
             return None
 
-    def RunScript(self, CheckForUpdates, InstallUpdates):
+    def RunScript(self,
+            CheckForUpdates: bool,
+            InstallUpdates: bool,
+            LocalFolder: str):
+        if not LocalFolder or LocalFolder == '':
+            LocalFolder = None
         # hardcoded category of the components to update
         CATEGORY = 'DDU_CSC'
         # init output tree for status messages
         Status = Grasshopper.DataTree[System.Object]()
-        # Get AuthCore instance from sticky storage
-        auth_core = self.get_auth_core_from_sticky()
-        if auth_core is None:
+        # a local checkout replaces the server (no sign-in needed)
+        local_root = self.resolve_local_root(LocalFolder)
+        if local_root is False:
+            Status.Add(self._local_error)
             return Status
-        if UPDATE_CHANNEL:
+        self.local_root = local_root
+        # Get AuthCore instance from sticky storage
+        auth_core = None if self.local_root else \
+            self.get_auth_core_from_sticky()
+        if auth_core is None and not self.local_root:
+            return Status
+        if UPDATE_CHANNEL and not self.local_root:
             channel_msg = (
                 f'UPDATE_CHANNEL is "{UPDATE_CHANNEL}" instead of the '
                 "server's release. It must match a GitHub branch or tag "
@@ -549,21 +924,21 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
             self._addWarning(channel_msg)
             Status.Add(channel_msg)
         # Check if authentication is valid
-        if not auth_core.is_valid():
+        if not self.local_root and not auth_core.is_valid():
             msg = ('Authentication expired. Please use CSC_Session '
                    'component to refresh.')
-            self._addError(msg)
-            self.Component.Message = msg
+            self._addWarning(msg)
             Status.Add(msg)
             return Status
         msg = (
             'Toggle CheckForUpdates to True to check for updates on the '
             'server.'
         )
-        self.Component.Message = msg
         try:
             if CheckForUpdates:
                 msg = (
+                    f'Using the local checkout {self.local_root}'
+                    if self.local_root else
                     f'Using GitHub update channel: {UPDATE_CHANNEL}'
                     if UPDATE_CHANNEL else
                     "Using the Grasshopper release that belongs to the "
@@ -575,7 +950,6 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     f'Searching current document for {CATEGORY} script '
                     'components...'
                 )
-                self.Component.Message = msg
                 # loop through the document to find all script components
                 doc = self.Component.OnPingDocument()
                 script_components = self.process_script_components(
@@ -593,12 +967,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     f'Checking Server for updates '
                     f'(channel: {UPDATE_CHANNEL or "server release"})...'
                 )
-                self.Component.Message = msg
                 api_src_versions = self.get_api_source_versions(auth_core)
                 if api_src_versions is None:
                     msg = 'Failed to get source versions from server.'
                     self._addError(msg)
-                    self.Component.Message = msg
                     Status.Add(msg)
                     return Status
                 msg = (f'Found {len(api_src_versions)} unique script '
@@ -644,7 +1016,9 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 if unmatched_names:
                     details = ', '.join([
                         (f'{n} (replaced by {RENAMED_COMPONENTS[n]})'
-                         if n in RENAMED_COMPONENTS else n)
+                         if n in RENAMED_COMPONENTS else
+                         f'{n} ({REMOVED_COMPONENTS[n]})'
+                         if n in REMOVED_COMPONENTS else n)
                         for n in sorted(unmatched_names)
                     ])
                     msg = (
@@ -658,7 +1032,6 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 if not scripts_to_update:
                     msg = 'No scripts in document need updating!'
                     self._addRemark(msg)
-                    self.Component.Message = msg
                     Status.Add(msg)
                 else:
                     msg = (
@@ -693,7 +1066,6 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 if api_uo_names is None:
                     msg = 'Failed to get userobject names from server.'
                     self._addError(msg)
-                    self.Component.Message = msg
                     Status.Add(msg)
                     return Status
                 msg = f'Found {len(api_uo_names)} UserObjects on server.'
@@ -726,11 +1098,13 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     )
                     self._addWarning(msg)
                     Status.Add(msg)
-                msg = (
-                    'Toggle InstallUpdates to True to install updates from '
-                    'server.'
-                )
-                self.Component.Message = msg
+                library = self.check_library(auth_core)
+                Status.Add(library['text'])
+                if (scripts_to_update or missing_uo_names or stale_uo_names
+                        or library['install']):
+                    self._state('Updates available')
+                else:
+                    self._state('Up to date')
             if InstallUpdates:
                 if not CheckForUpdates:
                     msg = 'CheckForUpdates must be True to install updates!'
@@ -739,6 +1113,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     return Status
 
                 # loop over scripts that need updates
+                replaced = []
                 if len(scripts_to_update) > 0:
                     for iguid, values in scripts_to_update:
                         (script_type,
@@ -757,7 +1132,6 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                                 'from server.'
                             )
                             self._addError(msg)
-                            self.Component.Message = msg
                             Status.Add(msg)
                             return Status
                         res = self.replace_scriptcomp_source(
@@ -771,15 +1145,15 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                                 '(lol)'
                             )
                             self._addError(msg)
-                            self.Component.Message = msg
                             Status.Add(msg)
                             return Status
+                        replaced.append(obj)
                         msg = (
                             f'Replaced source for {nickname} with new version!'
                         )
                         self._addRemark(msg)
                         Status.Add(msg)
-                        self.Component.Message = msg
+                    self.expire_replaced(replaced)
 
                 # currently, we need to install/replace all userobjects
                 # since we can't check userobjects file versions
@@ -824,7 +1198,6 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                             f'Failed to get userobject {uo_name} from server.'
                         )
                         self._addError(msg)
-                        self.Component.Message = msg
                         Status.Add(msg)
                         return Status
                     os.makedirs(uo_install_dir, exist_ok=True)
@@ -837,30 +1210,29 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 msg = f'Installed {len(written_uo_files)} UserObject files!'
                 self._addRemark(msg)
                 Status.Add(msg)
+                restart = False
+                if library['install']:
+                    restart = self.install_library_now(library, Status)
                 msg = 'All updates installed successfully!'
                 self._addRemark(msg)
-                self.Component.Message = msg
                 Status.Add(msg)
+                self._state('Restart Rhino' if restart else 'Updated')
 
         except requests.exceptions.ConnectionError as e:
             msg = 'Cannot connect to server. Please check your connection.'
             self._addError(msg + f'\nFull Error: {str(e)}')
-            self.Component.Message = msg
 
         except requests.exceptions.Timeout as e:
             msg = 'Request timeout. Server may be slow.'
             self._addError(msg + f'\nFull Error: {str(e)}')
-            self.Component.Message = msg
 
         except requests.exceptions.RequestException as e:
             msg = f'Request error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
 
         except Exception as e:
             msg = f'Unexpected error: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
 
         # return status message
         return Status

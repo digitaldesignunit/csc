@@ -1,9 +1,9 @@
 #! python3
 # -*- coding: utf-8 -*-
 # venv: DDU_CSC
-print('ENV OK!')
 # r: charset_normalizer
-# r: requests
+# r: numpy==2.0.2
+print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
@@ -12,7 +12,6 @@ import json  # NOQA
 import System  # NOQA
 import Grasshopper  # NOQA
 import Rhino  # NOQA
-import rhinoscriptsyntax as rs  # NOQA
 import scriptcontext as sc  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
@@ -21,18 +20,56 @@ ghenv.Component.NickName = 'SyncWithRhinoDoc'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Scans the active Rhino document for objects with csc_component user '
-    'data (passport JSON) and updates snapshot.iframe based on text tag '
-    'planes or combined geometry bounds.'
+    'Reads the pieces back from the active Rhino document: every text tag '
+    'with the user text csc_identity_id / csc_snapshot_id / csc_placement '
+    '(a piece baked by BakeComponents or by PassportToD2P) gives its '
+    'component passport JSON with csc_placement set from where the tag is now, so '
+    'moving or rotating a piece in Rhino moves it in Grasshopper. The '
+    'component passport is the tag csc_component, else read by id through the '
+    'Session. Nothing is written to the server.'
 )
+
+# CSC LIBRARY (decision 8.111) ----------------------------------------------
+CSC_GH_MINIMUM = '261005'
+LIBRARY_PROBLEM = None
+try:
+    import csc_gh
+    csc_gh.require(CSC_GH_MINIMUM)
+    from csc_gh.doc import (passport_fetcher, read_document)  # NOQA
+except ImportError:
+    LIBRARY_PROBLEM = (
+        'CSC library 261005 too old or missing: run CSC_Update, '
+        'then restart Rhino')
+
+# OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
+try:
+    from csc_gh.ports import ensure_outputs
+    from csc_gh.messages import set_state
+except ImportError:
+    ensure_outputs = set_state = None
+
+OUTPUTS = [
+    ('DocumentComponents', 'DocumentComponents',
+     'DataTree of component passport JSON ({identity, snapshots[]}) of the pieces in the document, one per tag, with csc_placement set from the tag plane (feed it to Disassemble, ApplyFrame or TransformComponent)'),
+]
+
+
+def empty_outputs():
+    """What RunScript returns when it stops early."""
+    if len(OUTPUTS) <= 1:
+        return None
+    return tuple(None for _ in OUTPUTS)
 
 
 class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260908
+    Version: 261005
     """
+
+    _outputs_ready = True       # set by BeforeRunScript (8.112)
+    _outputs_note = None
 
     def __init__(self):
         """Initialize this component and set component parameters."""
@@ -57,6 +94,31 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
         rml = self.Component.RuntimeMessageLevel.Error
         self.AddRuntimeMessage(rml, msg)
 
+    def _state(self, text=''):
+        """The one short state under the component (decision 8.113)."""
+        if set_state is not None:
+            set_state(self.Component, text)
+
+    def _stop(self):
+        """True when RunScript has to return early: the library is missing or
+        too old, or the outputs were just updated (says why)."""
+        if LIBRARY_PROBLEM:
+            self._addError(LIBRARY_PROBLEM)
+            return True
+        if self._outputs_note:
+            self._addRemark(self._outputs_note)
+        return not self._outputs_ready
+
+    def _check_outputs(self):
+        """Make the outputs match OUTPUTS before the script runs (8.112)."""
+        self._outputs_ready, self._outputs_note = True, None
+        if ensure_outputs is None:
+            self._outputs_note = (
+                'output check skipped: CSC library not installed')
+            return
+        status = ensure_outputs(self.Component, OUTPUTS)
+        self._outputs_ready, self._outputs_note = status.ready, status.remark
+
     def BeforeRunScript(self):
         """Perform some setup actions."""
         # Initialize input param descriptions
@@ -64,284 +126,45 @@ class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
             'Trigger to sync components with Rhino document'
         )
         # Initialize output param descriptions
-        i = 0
-        if self.OutputParams[0].Name == 'out':
-            i += 1
-        self.OutputParams[0+i].Description = (
-            'DataTree of passport JSON ({identity, snapshot}) found in the '
-            'document, with snapshot.iframe updated from object positions'
-        )
-
-    def find_objects_with_csc_component(self, doc):
-        """
-        Find all objects in the document that have the 'csc_component' userkey.
-        Also find text tags that are grouped with these components.
-        Groups objects by identity._id to handle multiple meshes correctly.
-        Returns a list of tuples: (identity_id, passport, objects_list,
-                                   combined_path)
-        """
-        components_dict = {}
-        try:
-            # Get all objects in the document
-            all_objects = doc.Objects
-            for obj in all_objects:
-                if obj is None:
-                    continue
-                # Check if object has user strings
-                usr_txt_type = rs.IsUserText(obj)
-                if usr_txt_type > 0:
-                    # Look for 'csc_component' userkey
-                    component_data = None
-                    if usr_txt_type == 1:
-                        component_data = rs.GetUserText(
-                            obj, 'csc_component', False)
-                    elif usr_txt_type == 2:
-                        component_data = rs.GetUserText(
-                            obj, 'csc_component', True)
-                    elif usr_txt_type == 3:
-                        component_data = rs.GetUserText(
-                            obj, 'csc_component', False)
-                        if not component_data:
-                            component_data = rs.GetUserText(
-                                obj, 'csc_component', True)
-                    if component_data:
-                        try:
-                            passport = json.loads(component_data)
-                            identity = passport.get('identity')
-                            if not isinstance(identity, dict):
-                                self._addWarning(
-                                    f'Invalid passport JSON for object '
-                                    f'{obj.Id}: missing identity'
-                                )
-                                continue
-                            identity_id = identity.get('_id', 'unknown')
-                            if identity_id not in components_dict:
-                                components_dict[identity_id] = {
-                                    'passport': passport,
-                                    'objects': [],
-                                    'paths': []
-                                }
-                            obj_path = self.get_object_path(obj, doc)
-                            components_dict[identity_id]['objects'].append(obj)
-                            components_dict[identity_id]['paths'].append(
-                                obj_path)
-                        except json.JSONDecodeError as e:
-                            self._addWarning(
-                                f'Invalid JSON in csc_component userstring '
-                                f'for object {obj.Id}: {str(e)}'
-                            )
-                            continue
-
-            for identity_id, data in components_dict.items():
-                groups = doc.Groups
-                for i in range(groups.Count):
-                    group = groups[i]
-                    if (group and isinstance(group.Name, str) and
-                            group.Name.startswith(identity_id)):
-                        # Get all objects in this specific group instance
-                        group_objects = rs.ObjectsByGroup(group.Name)
-                        for obj_id in group_objects:
-                            obj = rs.coercegeometry(obj_id)
-                            if obj and rs.IsText(obj):
-                                # This is a text tag for our component
-                                obj_path = self.get_object_path(obj, doc)
-                                data['objects'].append(obj)
-                                data['paths'].append(obj_path)
-                                self._addRemark(
-                                    'Found text tag for identity '
-                                    f'{identity_id}'
-                                )
-
-        except Exception as e:
-            self._addError(
-                f'Error searching for objects with csc_component: {str(e)}'
-            )
-
-        # Convert to list format for compatibility
-        components_list = []
-        for identity_id, data in components_dict.items():
-            combined_path = ' | '.join(data['paths'])
-            components_list.append((
-                identity_id,
-                data['passport'],
-                data['objects'],
-                combined_path
-            ))
-
-        return components_list
-
-    def get_object_path(self, obj, doc):
-        """
-        Get a descriptive path for the object (layer hierarchy, etc.)
-        """
-        try:
-            # Try to get the layer name
-            layer_index = obj.Attributes.LayerIndex
-            if layer_index >= 0:
-                layer = doc.Layers[layer_index]
-                if layer:
-                    return layer.FullPath
-        except Exception:
-            pass
-        # Fallback to object name or type
-        try:
-            if hasattr(obj, 'Name') and obj.Name:
-                return obj.Name
-        except Exception:
-            pass
-        return f"Object_{obj}"
-
-    def update_component_frame(self, objects_list, passport):
-        """
-        Update snapshot.iframe from a text tag plane when available,
-        otherwise from the combined bounding box of all objects.
-        Returns updated passport JSON.
-        """
-        try:
-            if not objects_list:
-                return passport
-
-            snapshots = passport.get('snapshots') or []
-            snapshot = snapshots[0] if snapshots else None
-            if not isinstance(snapshot, dict):
-                return passport
-
-            for obj in objects_list:
-                if rs.IsText(obj):
-                    try:
-                        tagplane = rs.TextObjectPlane(obj)
-                        tagframe = {
-                            'o': [tagplane.OriginX,
-                                  tagplane.OriginY,
-                                  tagplane.OriginZ],
-                            'x': [tagplane.XAxis.X,
-                                  tagplane.XAxis.Y,
-                                  tagplane.XAxis.Z],
-                            'y': [tagplane.YAxis.X,
-                                  tagplane.YAxis.Y,
-                                  tagplane.YAxis.Z],
-                            'z': [tagplane.ZAxis.X,
-                                  tagplane.ZAxis.Y,
-                                  tagplane.ZAxis.Z]
-                        }
-                        snapshot['iframe'] = tagframe
-                        passport['snapshots'] = [snapshot]
-                        return passport
-                    except Exception as e:
-                        self._addWarning(
-                            f'Error extracting plane from text tag: {str(e)}'
-                        )
-                        continue
-
-            combined_bbox = None
-            for obj in objects_list:
-                if hasattr(obj, 'Geometry'):
-                    geometry = obj.Geometry
-                    if hasattr(geometry, 'GetBoundingBox'):
-                        bbox = geometry.GetBoundingBox(True)
-                        if bbox.IsValid:
-                            if combined_bbox is None:
-                                combined_bbox = bbox
-                            else:
-                                combined_bbox = (
-                                    Rhino.Geometry.BoundingBox.Union(
-                                        combined_bbox, bbox))
-
-            combined_bbox = Rhino.Geometry.Box(combined_bbox)
-            if combined_bbox and combined_bbox.IsValid:
-                center = combined_bbox.Center
-                x_axis = combined_bbox.Plane.XAxis
-                y_axis = combined_bbox.Plane.YAxis
-                z_axis = combined_bbox.Plane.ZAxis
-                snapshot['iframe'] = {
-                    'o': [center.X, center.Y, center.Z],
-                    'x': [x_axis.X, x_axis.Y, x_axis.Z],
-                    'y': [y_axis.X, y_axis.Y, y_axis.Z],
-                    'z': [z_axis.X, z_axis.Y, z_axis.Z]
-                }
-                passport['snapshots'] = [snapshot]
-                return passport
-        except Exception as e:
-            self._addWarning(
-                f'Error updating frame for component: {str(e)}'
-            )
-        return passport
+        self._check_outputs()
+        if LIBRARY_PROBLEM is None:
+            csc_gh.dev_reload(globals())
 
     def RunScript(self, Sync: bool):
         # init outputs
+        if self._stop():
+            return empty_outputs()
         DocumentComponents = Grasshopper.DataTree[str]()
         if not Sync:
             # Return empty results if not syncing
-            self.Component.Message = 'Sync Toggle is False'
+            self._state('Sync is off')
             return DocumentComponents
         try:
-            # Set scriptcontext to Rhino document
-            sc.doc = Rhino.RhinoDoc.ActiveDoc
-
-            self.Component.Message = 'Searching for components in document...'
-            # Find all objects with csc_component userkey
-            objects_with_component = self.find_objects_with_csc_component(
-                sc.doc
-            )
-            if not objects_with_component:
+            doc = Rhino.RhinoDoc.ActiveDoc
+            fetch = passport_fetcher(sc.sticky.get('CSC_AuthCore'))
+            pieces = read_document(doc, fetch)
+            if not pieces:
                 msg = 'No components found in document!'
                 self._addWarning(msg)
-                self.Component.Message = msg
-                # Return empty results
                 return DocumentComponents
-            # Create output datatree
-            # Process each component (now grouped by component ID)
-            for i, (identity_id, passport, objects_list,
-                    combined_path) in enumerate(objects_with_component):
-                try:
-                    updated_passport = self.update_component_frame(
-                        objects_list, passport)
-                    ghp = Grasshopper.Kernel.Data.GH_Path(i)
-                    DocumentComponents.Add(json.dumps(updated_passport), ghp)
 
-                    object_count = len(objects_list)
-                    if object_count == 1:
-                        self._addRemark(
-                            f'Updated identity {identity_id} '
-                            f'from {combined_path}'
-                        )
-                    else:
-                        self._addRemark(
-                            f'Updated identity {identity_id} '
-                            f'({object_count} objects) from {combined_path}'
-                        )
-                except Exception as e:
-                    msg = (
-                        f'Error processing identity {identity_id} '
-                        f'from {combined_path}: {str(e)}'
-                    )
-                    self._addWarning(msg)
+            for i, piece in enumerate(pieces):
+                label = piece['identity_id'] or 'a tag without an identity'
+                for problem in piece['problems']:
+                    self._addWarning(f'{label}: {problem}')
+                if piece['passport'] is None:
                     continue
+                ghp = Grasshopper.Kernel.Data.GH_Path(i)
+                DocumentComponents.Add(json.dumps(piece['passport']), ghp)
+                self._addRemark(f'Read {label} from its tag')
 
-            # Update success message
             if DocumentComponents.DataCount > 0:
-                self.Component.Message = (
-                    f'Synced {DocumentComponents.DataCount} component(s)'
-                )
-                self._addRemark(
-                    f'Successfully synced {DocumentComponents.DataCount} '
-                    'components with document'
-                )
+                self._state(f'Synced {DocumentComponents.DataCount}')
             else:
-                self.Component.Message = 'No components synced'
                 self._addWarning('No components were successfully synced')
-
-            # Return results
             return DocumentComponents
 
         except Exception as e:
             msg = f'Unexpected error during sync: {str(e)}'
             self._addError(msg)
-            self.Component.Message = msg
-
-            # Return empty results if there was an error
             return DocumentComponents
-
-        finally:
-            # Restore scriptcontext to Grasshopper document
-            sc.doc = self.Component.OnPingDocument()

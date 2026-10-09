@@ -13,7 +13,7 @@ of a PATCH into the three refusals of decision 8.3:
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-from typing import Dict, FrozenSet, Iterable, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Tuple
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.vocab import DELETABLE_STATUSES
@@ -74,7 +74,14 @@ SNAPSHOT_FROZEN: FrozenSet[str] = frozenset({
     'geometry', 'capture', 'fragment', 'quantity',
 })
 SNAPSHOT_MUTABLE_METADATA: FrozenSet[str] = frozenset({
-    'name', 'notes', 'location', 'color', 'capture.notes',
+    'name', 'notes', 'location', 'color', 'capture.notes', 'photo_credit',
+})
+# A frozen capture field that is empty on a published snapshot is filled once
+# in place by moderator(D) (8.123 a); `fragment` and `quantity` change what the
+# piece is and stay frozen.
+CAPTURE_FILLABLE: FrozenSet[str] = frozenset({
+    'method', 'device', 'software', 'captured_at', 'coordinate_system',
+    'markers', 'fixtures',
 })
 SNAPSHOT_VALID_TIME: FrozenSet[str] = frozenset({
     'effective_from', 'effective_from_precision',
@@ -86,7 +93,7 @@ SNAPSHOT_DERIVED: FrozenSet[str] = frozenset({
     'descriptors', 'properties', 'properties_version', 'frame', 'bbx',
     'mesh_ply_resolutions', 'photo_count', 'shape_class_source',
     'complexity_source', 'status', 'status_changed_by_user_id',
-    'status_changed_at', 'supersedes', 'superseded_by', 'version',
+    'status_changed_at', 'status_history', 'supersedes', 'superseded_by', 'version',
     'identity_id', 'added_by_user_id', 'added_by_username', 'etag',
     'created', 'lastmodified', '_id', 'id',
 })
@@ -102,7 +109,7 @@ EVIDENCE_FROZEN: FrozenSet[str] = frozenset({
 EVIDENCE_MUTABLE: FrozenSet[str] = frozenset({'notes', 'position.description'})
 EVIDENCE_DERIVED: FrozenSet[str] = frozenset({
     'source_tier', 'destructive', 'status', 'status_changed_by_user_id',
-    'status_changed_at', 'supersedes', 'superseded_by', 'identity_id',
+    'status_changed_at', 'status_history', 'supersedes', 'superseded_by', 'identity_id',
     'recorded_by_user_id', 'recorded_by_username', 'attachments',
     'verification', 'etag', 'created', 'lastmodified', '_id', 'id',
 })
@@ -111,6 +118,7 @@ EVIDENCE_DERIVED: FrozenSet[str] = frozenset({
 # unpublished, 8.9); everything else is server-maintained or has its own route.
 IDENTITY_METADATA: FrozenSet[str] = frozenset({
     'original_function', 'material', 'material_class', 'trade_name',
+    'manufacturer', 'connection_features', 'material_separability',
     'manufactured_at', 'manufactured_precision', 'origin', 'is_public',
     # inherited_fields: adding a field back (re-inherit) only, I17
     'attributes', 'inherited_fields',
@@ -138,6 +146,31 @@ def _expand(fields: Iterable[str],
     return out
 
 
+def empty_capture_fields(capture: Optional[Dict[str, Any]]) -> List[str]:
+    """The ``capture.<field>`` names of ``CAPTURE_FILLABLE`` that hold nothing
+    yet (missing, null, an empty list or object): what a published snapshot
+    still lets a moderator fill, once (8.123 a)."""
+    capture = capture or {}
+    return sorted(f'capture.{name}' for name in CAPTURE_FILLABLE
+                  if capture.get(name) in (None, [], {}, ''))
+
+
+def chain_position(snapshot: Dict[str, Any],
+                   by_id: Dict[str, Dict[str, Any]]) -> int:
+    """The place of a snapshot in the order of its identity (I3, 8.123 b): the
+    ``version`` of the first record of its ``supersedes`` chain. A correction
+    keeps the place of what it corrects, whatever its own version number."""
+    seen = set()
+    current = snapshot
+    while current.get('supersedes') and current['_id'] not in seen:
+        seen.add(current['_id'])
+        parent = by_id.get(current['supersedes'])
+        if parent is None:
+            break
+        current = parent
+    return int(current.get('version') or 0)
+
+
 def patch_problems(
     kind: str,
     fields: Dict[str, Iterable[str]],
@@ -146,6 +179,7 @@ def patch_problems(
     identity_published: bool = True,
     is_author: bool = False,
     is_moderator: bool = False,
+    fillable: Iterable[str] = (),
 ) -> Dict[str, List[str]]:
     """
     Sort the fields of a PATCH into ``derived`` / ``frozen`` / ``forbidden``.
@@ -153,19 +187,25 @@ def patch_problems(
     ``fields`` maps each top-level key to its changed subkeys (empty for a
     scalar), e.g. ``{'notes': [], 'capture': ['notes']}``. An empty result
     means the PATCH may proceed. Unknown keys count as derived (not writable).
+    ``fillable`` lists the frozen fields of a published snapshot that are
+    empty and may be filled once by a moderator (``empty_capture_fields``).
     """
     problems: Dict[str, List[str]] = {
         'derived': [], 'frozen': [], 'forbidden': []}
     names = _expand([k for k, v in fields.items()],
                     {k: v for k, v in fields.items() if v})
     editable = unpublished_editable(status, is_author, is_moderator)
+    fillable = frozenset(fillable)
 
     if kind == 'snapshot':
         published = status in ('published', 'withdrawn')
         for name in names:
             top = name.split('.', 1)[0]
-            if name in SNAPSHOT_MUTABLE_METADATA or                     top in SNAPSHOT_VALID_TIME or top in SNAPSHOT_OVERRIDES:
+            if name in SNAPSHOT_MUTABLE_METADATA \
+                    or top in SNAPSHOT_VALID_TIME or top in SNAPSHOT_OVERRIDES:
                 allowed = is_moderator if published else editable
+            elif published and name in fillable:
+                allowed = is_moderator                      # fill once (8.123 a)
             elif top in SNAPSHOT_FROZEN:
                 if published:
                     problems['frozen'].append(name)

@@ -36,8 +36,8 @@ export function ComponentOverviewDataTable<TData, TValue>({
 
   return (
     <div className="w-full overflow-x-auto rounded-lg border bg-card">
-      {/* Use table-fixed so widths from <col> and cells actually take effect */}
-      <Table className="table-auto w-full text-foreground">
+      {/* table-fixed: the widths of <col> hold, the base columns add up to 100% */}
+      <Table className="table-fixed w-full text-foreground">
         {/* Apply responsive widths via <colgroup> */}
         <colgroup>
           {table.getFlatHeaders().map((header) => (
