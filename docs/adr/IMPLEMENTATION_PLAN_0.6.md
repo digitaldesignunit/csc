@@ -667,6 +667,11 @@ pieces get one from their primitive) and how the PCA / UMAP layouts behave on it
   it as `public/public/`. Only the traced screenshots are served; `/logo/` and `/backgroundmeshes/` answer 404. Copy
   the contents (`mkdir -p "$bundle/public" && cp -a "$fe/public/." "$bundle/public/"`) and fail the packaging when
   `public/logo/ddu_logo_black.png` is missing from the bundle. Patched by hand on the server on 2026-10-09.
+- Public switch (user 2026-10-09): the web app cannot set `is_public`; only `POST /identities` (Grasshopper input) and
+  `PATCH /identities/{id}` can (moderator(D), or the creator while unpublished, 8.9). Add a "Public" switch to "Edit
+  details", shown to whoever may PATCH, with a line on what anonymous visitors then see (public tier, 3.6, 8.101,
+  8.13). Fix the "Not public" notice in `lib/componentDetail.ts`: in a `catalog` dataset every signed-in user sees
+  the piece too, so name the dataset visibility instead of "only members ... and the moderators".
 
 **Other review findings of 2026-10-07/08 (non-blocking):**
 - Geometry cache (8.122 f, review note 2): a frame-only cut uploads the cached `descriptors` dict with the frame stamp,
