@@ -632,6 +632,10 @@ coordinates, `AddEvidence` uploads, the drawing is an attachment on the same rec
   disagrees is an error); a remark says which conversion ran. Also: refuse or warn when the document unit is not
   millimetres (scale by the unit factor), and say in the component description that a layout belongs to one
   version. Same handling for any later GH builder that takes positions on a piece (Ferroscan, 0.6.2).
+- RL10 (user 2026-10-10, 0.6.1.0): the evidence card never shows a layout's `accuracy_note` (only the form has it,
+  `lib/evidence/layout.ts`). Show it in the card's unfolded details for signed-in viewers (with the basis, the
+  document or instrument block); anonymous viewers do not get it (hidden in the web; whether the public tier of the
+  API drops it too is decided with the build, 8.67 / 8.101).
 - RL7: `position.kind` is `none` from GH and `region` from the web form for the same method; pick one.
 - RL8: the steel grade stays inside the bars and never enters the fold; the spec's answer is a separate `rebar_spec`
   claim sharing the attachment (7.8), which no GH component builds.
