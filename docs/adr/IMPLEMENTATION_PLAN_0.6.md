@@ -693,6 +693,14 @@ pieces get one from their primitive) and how the PCA / UMAP layouts behave on it
 - 0.6.0.2 review (note b): `POST /datasets/{did}/public` validates each piece through the identity model; a stored
   identity that fails validation answers 422 after earlier pieces were written, without counts. Validate all first,
   or report written / skipped / failed counts.
+- 0.6.0.2 deploy (2026-10-10, blocking for the next release): the GitHub deploy runs `~/csc/bin/csc_release_deploy.sh`,
+  which `after_success` replaces with the release's copy only after a successful deploy; so a change to the deploy
+  script takes effect one release late. The 0.6.0.2 run used the 0.6.0.1 script without `--only-binary`, built a new
+  venv (constraints changed) and pip tried to compile the newest `numba` from source. Fix: after unpacking, re-exec
+  the release's own `deploy/csc_release_deploy.sh` when it differs from the running one (guard against loops), and
+  pin the transitive geometry stack in `constraints.txt` to the versions the server venv runs: `numba==0.67.0`,
+  `llvmlite==0.49.0`, `pynndescent==0.6.0`, `umap-learn==0.5.12` (numpy stays `<=2.2.6`), so plain `pip` and
+  `invoke check-server-wheels` resolve the same set. Worked around by hand: scripts fetched from the v0.6.0.2 tag.
 
 **Earlier items:** the paired rebound not linked on the core record; `window.confirm` --> shadcn `AlertDialog`
 (moderation delete, material delete); snapshot-scoped properties follow the version time order.
