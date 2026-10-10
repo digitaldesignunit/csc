@@ -726,6 +726,15 @@ projection (a row built from the projected join equals one built from the full d
 request before and after on a copy of the production data. If traffic stays near the M0 limits afterwards: decide
 between a paid Atlas tier and a MongoDB on the server, with the measured numbers.
 
+**Component preview drawer** (user 2026-10-10): the preview from Browse (the thumbnail in
+`ComponentOverviewDataTablePreviewCell.tsx`) and from the component map (`ComponentMapPageClient.tsx`, a second copy)
+opens a full-width bottom sheet with the full viewer and its menus, a centred "Preview" title and a row of 200 px
+buttons: a remnant of 0.5. Keep the preview, make it compact and quiet: one shared preview panel for both pages; on
+desktop a side sheet of about 420 px (the list or map stays visible), on a phone a bottom sheet of about 60 % height;
+the viewer without toolbar and menus (orbit and zoom only; `ComponentViewer` already has `toolbar` and
+`compactDesktop`); a slim header with name, catalogue number and dataset; one "Open" button plus small icon actions
+(locate by QR, close); arrow keys or next / previous to step through the visible rows. To confirm in the grilling.
+
 **CSC logo** (user 2026-10-10): the web shows only the lab's logo (`public/logo/ddu_logo_*.png`). Create a logo for
 CSC itself: a mark and a wordmark, light and dark variants, SVG source plus PNG exports; favicon and app icons
 (Next `app/icon`, `apple-icon`), the sidebar brand next to or instead of the lab's logo, the PDF passport, the mail
