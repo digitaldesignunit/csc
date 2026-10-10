@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0.4] - 2026-10-10
+
+An operations release (phase A of 0.6.1.0, decisions 8.136 and 8.137): less load
+on the database, the geometry cron that checks only what changed, a deploy that
+uses its own new script, and a maintenance page for cutovers. No change to the
+web interface or the Grasshopper components.
+
+### Changed
+
+- **Geometry runner** (8.136): every write that changes a geometry input (a new
+version or correction, a file upload, a geometry, colour or override edit, a
+changed original function) marks the snapshot (`derivation_due`); `--due`
+derives only marked snapshots and clears the mark only if no newer write came
+in. The runner loads identities in batches instead of one request per snapshot.
+- **Lists, map and counts** read only the snapshot fields a row needs; the full
+snapshot is joined only for the rows of the requested page. Browse and the
+catalogue lists move far less data out of the database.
+- **Crontab** (`uberspaceconfig/crontab/crontab.example`): the geometry runner
+every 20 minutes with `--due --limit 10`, a nightly full check at 3:30 with
+`--sweep`, the component map once a day at 4:15; all share one lock.
+- **Deploy**: a release whose deploy script differs from the installed one
+installs it and runs again with it (once), so a fix to the deploy script works
+in the same release. This release is still deployed by the 0.6.0.3 script; the
+re-run applies from the next release on.
+- `constraints.txt` pins `numba`, `llvmlite`, `pynndescent` and `umap-learn` to
+the versions the server runs.
+
+### Added
+
+- **Maintenance mode** (8.137): `csc_maintenance.sh on | off | status` (with
+`--dry-run`) switches the web domain to a static page that answers 503 while the
+frontend is down, and back; the text comes from `~/csc/shared/maintenance.txt`
+when present. See `uberspaceconfig/deployment/README.md`.
+- `scripts/db_maintenance/copy_provenance_capture.py`: copies the provenance and
+v0 capture details of one component to the others of a dataset through the API.
+
+### Server notes
+
+- Replace the crontab with `crontab.example` (set `MAILTO` or comment it out).
+- Existing snapshots carry no mark after the deploy: the nightly run catches
+earlier changes, or run `main_geometry.py --limit 200` once.
+- Before relying on `csc_maintenance.sh on`, check on a test subdomain that
+Apache serves the domain's own folder.
+
 ## [0.6.0.3] - 2026-10-10
 
 A small interface release: the dark theme and the light / dark switch. No change

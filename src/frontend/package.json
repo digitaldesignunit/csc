@@ -1,6 +1,6 @@
 {
   "name": "csc-frontend",
-  "version": "0.6.0.3",
+  "version": "0.6.0.4",
   "private": true,
   "scripts": {
     "dev": "next dev",
