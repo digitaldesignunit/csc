@@ -1058,6 +1058,13 @@ An anonymous caller never receives a person: responses on the public tier carry 
 As one predicate: `admin or member(D) or (logged_in and D.visibility == catalog) or is_public`.
 Unpublished records: section 7.0.
 
+**The public flag in the web (decision 8.131).** `is_public` is set per piece with the ordinary
+metadata PATCH (`moderator(D)`, or the creator while unpublished, 8.9; the "Public" switch in "Edit
+details") and for a whole dataset with `POST /datasets/{did}/public` (`moderator(D)`): it sets the
+flag on the dataset's pieces that were ever published (3.1.5) and are not withdrawn, where it
+differs, and logs each change like a metadata PATCH. No piece follows another: children never
+inherit the flag (6.2).
+
 ### 3.7 `users` changes
 
 Global `role in {user, admin}` unchanged. `username` is stored lowercase and unique; sign-in by username or e-mail ignores case (decision 8.28, I29). `admin` = system role and **implicit full membership of
@@ -1763,6 +1770,7 @@ GET    /datasets                                   datasets the caller can see (
 POST   /datasets                                   admin; body = {_id slug, name, description, visibility (default members)}
 PATCH  /datasets/{did}                             moderator(D): name, description, visibility (_id immutable)
 PUT    /datasets/{did}/members/{user_id}           moderator(D): body = {roles: [...]}; empty set = remove
+POST   /datasets/{did}/public                      moderator(D): body = {is_public, dry_run?}; every published, not withdrawn piece of D public / private; --> {changed, skipped} (8.131)
 POST   /datasets/{did}/members                     moderator(D): body = {email, roles}; exact match --> added + notified, no account --> invitation (8.20)
 GET    /users/search?q=                            admin: prefix search over username, name, email (member editor lookup, 8.20)
 GET    /users                                      admin: + memberships per user; ?q= ?dataset= ?dataset_role= ?no_dataset=1 ?role= ?state=enabled|disabled|unverified ?invited=1 (8.21)

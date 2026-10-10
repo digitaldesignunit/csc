@@ -599,6 +599,11 @@ fix forward with 0.6.0.x.
 
 ### Backlog after P12 (0.6.0.x) --- logged 2026-10-08; RL2 + bulk submit before the cutover (8.127), the rest in 0.6.0.1
 
+**0.6.0.2 (8.129--8.131, user 2026-10-09):** an operations release: bundle fix, `seed_materials` upsert, `shapely`
+cap + `--only-binary`, `CSC_WORKERS` / `CSC_LOG_LEVEL` and one lock for the heavy crons, the public switch (piece +
+dataset) and the notice, the "No scan" hint, the dry-run note, `crontab.example`. The items below that 8.129 does
+not name stay for 0.6.0.3 or later.
+
 **Reinforcement layouts** (review report 2026-10-08; workflow: GH builds the bars in the snapshot's stored
 coordinates, `AddEvidence` uploads, the drawing is an attachment on the same record, added in the web):
 - RL1 (user): several layouts per piece, e.g. one from the archival drawing and one from a covermeter / Ferroscan
@@ -661,6 +666,17 @@ pieces get one from their primitive) and how the PCA / UMAP layouts behave on it
   memory (4 workers with the geometry libraries) and consider `workers = 2`.
 - Viewer: a piece without scan (authored proxy only) offers no overlay; say "No scan: overlays need a mesh or point
   cloud" instead of an empty menu.
+- Frontend bundle (blocking for the next release): since 0.6.0.0 `app/gh-interface/page.tsx` reads
+  `public/gh-interface` at run time, so Next's file tracing already puts `public/gh-interface` into the standalone
+  output; `package_release.sh` then runs `cp -a "$fe/public" "$bundle/public"` into the existing folder and nests
+  it as `public/public/`. Only the traced screenshots are served; `/logo/` and `/backgroundmeshes/` answer 404. Copy
+  the contents (`mkdir -p "$bundle/public" && cp -a "$fe/public/." "$bundle/public/"`) and fail the packaging when
+  `public/logo/ddu_logo_black.png` is missing from the bundle. Patched by hand on the server on 2026-10-09.
+- Public switch (user 2026-10-09): the web app cannot set `is_public`; only `POST /identities` (Grasshopper input) and
+  `PATCH /identities/{id}` can (moderator(D), or the creator while unpublished, 8.9). Add a "Public" switch to "Edit
+  details", shown to whoever may PATCH, with a line on what anonymous visitors then see (public tier, 3.6, 8.101,
+  8.13). Fix the "Not public" notice in `lib/componentDetail.ts`: in a `catalog` dataset every signed-in user sees
+  the piece too, so name the dataset visibility instead of "only members ... and the moderators".
 
 **Other review findings of 2026-10-07/08 (non-blocking):**
 - Geometry cache (8.122 f, review note 2): a frame-only cut uploads the cached `descriptors` dict with the frame stamp,

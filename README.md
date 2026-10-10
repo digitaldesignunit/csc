@@ -29,8 +29,8 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.6.0.1 --- backend, web frontend and Grasshopper interface are released together
-  under one version (tag `v0.6.0.1`); the single source is the `VERSION` file.
+- **CSC**: 0.6.0.2 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.6.0.2`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
 
@@ -418,6 +418,7 @@ Then update these values and restart both services:
 | `FRONTEND_URL="https://2ndchances.build"` (verification email links) | `~/etc/services.d/fastapi.ini` and `~/.bash_profile` |
 | `CSC_PUBLIC_API_URL="https://api.2ndchances.build"` (optional: the API address in the links of the JSON-LD and PDF exports) | `~/etc/services.d/fastapi.ini` and `~/.bash_profile` |
 | `FASTAPI_CORS_ORIGINS` (add the new origin) | `~/etc/services.d/fastapi.ini` and `~/.bash_profile` |
+| `CSC_WORKERS="2"` (optional, 1 to 8, default 2: gunicorn workers; each loads the geometry libraries, so the number follows the memory of the account) and `CSC_LOG_LEVEL="info"` (optional: `debug`, `info`, `warning`, `error`, `critical`, default `info`) | `~/etc/services.d/fastapi.ini` (read by `conf.py`; a deploy no longer resets them) |
 | `Access-Control-Allow-Origin` allowlist | `~/html/.htaccess` |
 
 `NEXT_PUBLIC_STATIC_BASE_URL` (public UI files under `/static/` only) describes
@@ -468,14 +469,22 @@ images the release deploy copies there).
 ## Cron jobs
 
 All jobs run the active release (`~/csc/current`) and log to `~/csc/shared/logs/`.
-The entries, ready to paste into `crontab -e`, are in `uberspaceconfig/crontab/`:
+The complete crontab, ready to paste into `crontab -e`, is
+`uberspaceconfig/crontab/crontab.example` (it replaces the whole crontab; the
+`MAILTO` line at its top names the maintainer's address, set only on the
+server). Its jobs:
 
 | job | schedule | what |
 |---|---|---|
-| `geometry_cronjob.ini` | every 5 min (`flock`, `--limit 25 --sweep`) | geometry runner: frame, shape class, proxies + deviation maps, descriptors, complexity, previews of every snapshot whose derivation is stale. With `CSC_GEOMETRY_HEAVY_STAGES=remote` it runs only frame and shape class, and the rest runs on a worker elsewhere (`main_geometry.py --remote <url> --user <admin>`, password in `CSC_API_PASSWORD`); the recompute route then only marks the heavy stages stale |
-| `component_map_cronjob.ini` | every 6 h (`flock`) | precomputes PCA / UMAP layouts for the component map |
-| `usermaintenance_cronjob.ini` | daily 2:00 | removes unverified accounts older than 7 days |
-| `geometrymaintenance_cronjob.ini` | daily 3:00 | removes geometry folders without a component |
+| geometry runner | every 5 min (`flock -n /tmp/csc_heavy.lock`, `--limit 25 --sweep`) | geometry runner: frame, shape class, proxies + deviation maps, descriptors, complexity, previews of every snapshot whose derivation is stale. With `CSC_GEOMETRY_HEAVY_STAGES=remote` it runs only frame and shape class, and the rest runs on a worker elsewhere (`main_geometry.py --remote <url> --user <admin>`, password in `CSC_API_PASSWORD`); the recompute route then only marks the heavy stages stale |
+| component map | every 6 h (`flock -w 900 /tmp/csc_heavy.lock`) | precomputes PCA / UMAP layouts for the component map |
+| `usermaintenance.py` | daily 2:00 | removes unverified accounts older than 7 days |
+| `geometrymaintenance.py` | daily 3:00 | removes geometry folders without a component |
+
+The geometry runner and the component map share one lock, `/tmp/csc_heavy.lock`,
+so the two heavy jobs never run together (server memory, decision 8.130): the
+runner skips its run while the lock is held, the map waits up to 15 minutes
+instead of losing its slot.
 
 Each line starts with `source ~/.bash_profile &&` so the job sees the backend's
 environment variables. To run a job by hand:

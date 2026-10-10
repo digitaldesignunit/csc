@@ -5,6 +5,12 @@ idempotent and stops the run with nothing written for that step when a
 guard finds a document it cannot classify. ``--dry-run`` computes and
 reports everything but writes nothing (files included).
 
+The dry run checks the steps independently: each step sees the database as it
+is, not as the steps before it would leave it. So ``--all --dry-run`` stops at
+step 10, because the 11a rename it needs is not applied in memory. Only the
+rehearsal (``rehearse_06.py``, ``invoke rehearse``) checks the whole chain, on
+a throwaway copy.
+
 Mongo connection: ``--uri``, else ``MONGO_URI`` env, else
 ``scripts/config/dbconfig.json`` (``{"uri": ...}``). Storage directories
 default to ``SNAPSHOT_MESHES_DIR`` / ``SNAPSHOT_CAPTURE_DIR``.
@@ -69,7 +75,11 @@ def main() -> int:
                        help='every cutover step (not the runner, 14, 11b)')
     which.add_argument('--steps', help='comma-separated step ids')
     which.add_argument('--list', action='store_true')
-    parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument(
+        '--dry-run', action='store_true',
+        help='compute and report each step on its own, write nothing; '
+             '--all stops at step 10 (the 11a rename is not applied in '
+             'memory): only rehearse_06.py checks the whole chain')
     dirs = default_dirs()
     parser.add_argument('--meshes-dir', type=Path, default=dirs['meshes_dir'])
     parser.add_argument('--capture-dir', type=Path,

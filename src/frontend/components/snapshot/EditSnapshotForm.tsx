@@ -18,13 +18,17 @@ import type { CatalogComponent, ComponentIdentity, ComponentSnapshot } from '@/g
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { PRECISION_LABELS } from '@/generated/Vocab'
 import { DateWithPrecision, Field, VocabSelect } from '@/components/lineage/fields'
+import PublicConfirmDialog from '@/components/common/PublicConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { OptionalDateInput } from '@/components/ui/optional-date-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { backendJson, isTombstone } from '@/lib/backend'
 import { creditInputProblem } from '@/lib/photoCredit'
+import { canSwitchPublic } from '@/lib/publicSwitch'
 import { useMe } from '@/lib/me'
 import {
   CAPTURE_METHOD_LABELS,
@@ -56,6 +60,10 @@ export default function EditSnapshotForm({
   const [values, setValues] = useState<EditValues | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // the public flag belongs to the piece, not to a version: it has its own request (8.131)
+  const [isPublic, setIsPublic] = useState(false)
+  const [publicBusy, setPublicBusy] = useState(false)
+  const [confirmPublic, setConfirmPublic] = useState(false)
   const enc = encodeURIComponent(identityId)
 
   // the piece and its versions, once
@@ -69,6 +77,7 @@ export default function EditSnapshotForm({
       if (!first) throw new Error('This component has no version to edit.')
       if (cancelled) return
       setIdentity((body as CatalogComponent).identity)
+      setIsPublic(Boolean((body as CatalogComponent).identity.is_public))
       setRows(list)
       setSelected((current) => current ?? first._id)
     }
@@ -141,6 +150,33 @@ export default function EditSnapshotForm({
         : status === 'draft' ? 'Only the author or a moderator of the dataset edits a draft.'
           : 'Once a version is pending or published, a moderator of the dataset edits it.'
 
+  const everPublished = Boolean(identity.current_snapshot_id)
+    || rows.some((row) => row.status === 'published' || row.status === 'withdrawn')
+  const mayChangePublic = canSwitchPublic({
+    moderates: moderator,
+    isCreator: identity.created_by_user_id === me._id,
+    everPublished,
+  })
+  const changePublic = async (next: boolean) => {
+    setPublicBusy(true)
+    try {
+      await backendJson(`/identities/${enc}`, { method: 'PATCH', body: { is_public: next } })
+      setIsPublic(next)
+      toast.success(next ? 'The piece is public now' : 'The piece is private now')
+      router.refresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not change the public flag')
+    } finally {
+      setPublicBusy(false)
+      setConfirmPublic(false)
+    }
+  }
+  // public asks first, private does not
+  const onPublicSwitch = (next: boolean) => {
+    if (next) setConfirmPublic(true)
+    else void changePublic(false)
+  }
+
   const setFields = (patch: Partial<EditValues>) => setValues((v) => (v ? { ...v, ...patch } : v))
   const capture = snapshot.capture ?? {}
   const fixed = (name: 'method' | 'device' | 'software' | 'captured_at') => !open.includes(name)
@@ -187,6 +223,25 @@ export default function EditSnapshotForm({
           {why}
         </p>
       )}
+      {mayChangePublic && (
+        <section aria-label="Public" className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="ed-public" className="text-sm font-medium">Public</Label>
+            <p className="text-xs text-muted-foreground">
+              A public piece is visible to everyone without an account. It applies to the whole piece
+              and takes effect at once; it needs no version change.
+            </p>
+          </div>
+          <Switch id="ed-public" checked={isPublic} disabled={publicBusy} onCheckedChange={onPublicSwitch} />
+        </section>
+      )}
+      <PublicConfirmDialog
+        open={confirmPublic}
+        onOpenChange={(open) => { if (!publicBusy) setConfirmPublic(open) }}
+        title="Make this piece public?"
+        subject="This piece becomes public."
+        onConfirm={() => void changePublic(true)}
+      />
       <fieldset disabled={!allowed || busy} className="space-y-5">
         <Field label="Name" htmlFor="ed-name">
           <Input id="ed-name" value={values.name} onChange={(event) => setFields({ name: event.target.value })}

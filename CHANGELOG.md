@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0.2] - 2026-10-10
+
+An operations release (decisions 8.129 to 8.131): the frontend bundle, the
+server's memory, the deploy, and a public switch in the web. No change to the
+data model, the migration or the Grasshopper components.
+
+### Added
+
+- **Public switch** (8.131): "Edit details" has a "Public" switch for whoever
+may edit the piece's metadata (a moderator of the dataset; the creator while it
+is unpublished). Switching to public asks first and says what visitors without
+an account then see; switching to private does not. A moderator of a dataset
+can make all its published pieces public or private at once from the dataset
+page, with the number they affect (`POST /datasets/{did}/public`, with
+`dry_run`); every change is logged like a metadata edit, unpublished and
+withdrawn pieces are left alone, and children never follow their parents.
+- `crontab.example` in `uberspaceconfig/crontab/`: the complete production
+crontab (geometry runner, component map, user and geometry maintenance), with
+one `MAILTO` line for the maintainer.
+- `CSC_WORKERS` (default 2) and `CSC_LOG_LEVEL` (default `info`) in
+`fastapi.ini` set the gunicorn workers and the log level; a deploy no longer
+resets them.
+
+### Changed
+
+- The geometry runner and the component map cron share one lock,
+`/tmp/csc_heavy.lock`, so the two heavy jobs never run together: the runner
+skips a run while it is held, the map waits up to 15 minutes.
+- The deploy installs the backend with binary wheels only
+(`--only-binary=:all:`) and `shapely` is capped at 2.1.2 (2.2.0 needs a newer
+glibc than the server has): a missing wheel fails the deploy at once instead of
+compiling on the server.
+- The "Not public" notice on the component page says who sees the piece: every
+signed-in user in a catalog dataset, only the members and the moderators in a
+members dataset.
+- The viewer of a piece without a scan says "No scan: overlays need a mesh or
+point cloud." instead of an empty overlay menu.
+- `migrate_06.py --dry-run` is documented to check the steps independently
+(`--all --dry-run` stops at step 10); only the rehearsal checks the whole chain.
+
+### Fixed
+
+- The frontend release bundle nested `public/` as `public/public/` since
+0.6.0.0, so the logo and the background meshes answered 404 in production. The
+packaging copies the contents of `public/` now and fails when the logo is
+missing or `public/public` exists.
+- Several gunicorn workers starting together on an empty `materials`
+collection hit a duplicate-key error and gunicorn stopped; seeding skips
+duplicate keys now (and only those).
+
+### Server notes
+
+- Set `CSC_WORKERS="2"` and `CSC_LOG_LEVEL="info"` in `~/etc/services.d/fastapi.ini`
+(`fastapi.ini.example`) and restart the service.
+- Replace the crontab with `uberspaceconfig/crontab/crontab.example`
+(`crontab -e`, put the maintainer's address in the `MAILTO` line).
+
 ## [0.6.0.1] - 2026-10-09
 
 ### Fixed

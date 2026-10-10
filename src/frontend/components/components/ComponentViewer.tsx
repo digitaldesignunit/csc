@@ -1572,7 +1572,9 @@ export default function ComponentViewer({
     )
   }
 
-  if (overlayProxy && proxyShape) {
+  // the deviation overlays compare a scan with its proxy: a piece with an
+  // authored proxy only has nothing to overlay (0.6.0.2)
+  if (overlayProxy && proxyShape && !isProxyOnly) {
     const fit = overlayProxy.fit
     const hasMaps = !!deviationFaces && Object.keys(deviationFaces).length > 0
     const options: { value: ProxyDisplay; label: string }[] = [
@@ -1664,6 +1666,17 @@ export default function ComponentViewer({
             onChange={(checked) => setShowEvidenceMarks(checked)}
           />
         )}
+      </MenuSubsection>,
+    )
+  }
+
+  if (isProxyOnly && !hasOverlays) {
+    if (displayBlocks.length > 0) {
+      displayBlocks.push(<MenuDivider key="divider-no-scan" />)
+    }
+    displayBlocks.push(
+      <MenuSubsection key="no-scan" title="Overlays">
+        <p className="text-xs text-muted-foreground">No scan: overlays need a mesh or point cloud.</p>
       </MenuSubsection>,
     )
   }

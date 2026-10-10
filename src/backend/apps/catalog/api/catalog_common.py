@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException, Request, status
 from fastapi.responses import Response
 from pymongo import ReturnDocument
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import BulkWriteError, DuplicateKeyError
 
 from apps.catalog.etag import compute_snapshot_etag  # noqa: F401 (re-export)
 
@@ -239,5 +239,14 @@ async def seed_materials(collection) -> int:
              'default_class': m.default_class, 'uniclass': m.uniclass,
              'notes': m.notes, 'retired': False, 'merged_into': None}
             for m in MATERIAL_SEED]
-    await collection.insert_many(docs)
-    return len(docs)
+    # Several workers start together and may all see the collection empty:
+    # an unordered insert skips what another one has written meanwhile, and
+    # only duplicate keys are ignored (any other error still stops the start).
+    try:
+        result = await collection.insert_many(docs, ordered=False)
+    except BulkWriteError as exc:
+        if any(error.get('code') != 11000
+               for error in exc.details.get('writeErrors', [])):
+            raise
+        return int(exc.details.get('nInserted', 0))
+    return len(result.inserted_ids)

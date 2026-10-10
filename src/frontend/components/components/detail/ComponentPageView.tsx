@@ -18,6 +18,7 @@ import { primarySnapshot, type CatalogShallowRow } from '@/generated/catalogExtr
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import RecordRecentComponent from '@/components/layout/RecordRecentComponent'
 import { bannersOf, type Banner } from '@/lib/componentDetail'
+import { useDatasetVisibility } from '@/lib/useDatasetVisibility'
 import { cn } from '@/lib/utils'
 import ComponentViewer from '../ComponentViewer'
 import ComponentDetailSnapshotBanner from '../ComponentDetailSnapshotBanner'
@@ -60,10 +61,13 @@ export default function ComponentPageView({
   const { identity } = catalog
   const snapshot = primarySnapshot(catalog)
   const identityId = String(identity._id ?? '')
+  const visibility = useDatasetVisibility(
+    identity.dataset, !!session?.user && identity.is_public === false)
   const banners = bannersOf({
     identity: identity as never,
     signedIn: !!session?.user,
     geometryFailed: geometryFailed(snapshot),
+    datasetVisibility: visibility,
   })
 
   return (
