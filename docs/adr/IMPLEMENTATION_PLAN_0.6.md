@@ -687,9 +687,40 @@ pieces get one from their primitive) and how the PCA / UMAP layouts behave on it
 - Evidence edit (8.127, note b): a moderator's edit that changes the performers of a self-attested record resets the
   verification to unverified without the form saying so; show a notice before saving.
 - README: the `SMTP_REPLY_TO` sentence (about line 184) runs to about 120 characters in an 80-column paragraph.
+- 0.6.0.2 review (note a): `identity_edit._write` logs the change before `replace_one`, so a piece the bulk public
+  route reports as skipped (409) already has a change-log entry with the new flag (the single PATCH has the same
+  order); log after the replace.
+- 0.6.0.2 review (note b): `POST /datasets/{did}/public` validates each piece through the identity model; a stored
+  identity that fails validation answers 422 after earlier pieces were written, without counts. Validate all first,
+  or report written / skipped / failed counts.
 
 **Earlier items:** the paired rebound not linked on the core record; `window.confirm` --> shadcn `AlertDialog`
 (moderation delete, material delete); snapshot-scoped properties follow the version time order.
+
+### Backlog 0.6.1.0 --- opened 2026-10-10 (user); items to grill before the build
+
+0.6.0.x stays for fixes and operations (the list above); 0.6.1.0 is the next feature release.
+
+**CSC logo** (user 2026-10-10): the web shows only the lab's logo (`public/logo/ddu_logo_*.png`). Create a logo for
+CSC itself: a mark and a wordmark, light and dark variants, SVG source plus PNG exports; favicon and app icons
+(Next `app/icon`, `apple-icon`), the sidebar brand next to or instead of the lab's logo, the PDF passport, the mail
+template, an Open Graph image, the Grasshopper interface page. Grill: who designs it (in-house, student, a designer),
+the relation to the lab's logo (co-branding, "by" line), whether the GH component icons (`resources/gh_icons`) follow
+the same style, and the licence of the files.
+
+**Mail templates** (user 2026-10-10): today one inline template in `src/backend/services/email_service.py` (8.124 d:
+plain text + HTML, escaped, the blue CI colour, `[CSC]` prefix, footer with `/imprint`) serves the verification,
+reset, invitation and member-added mails. Give them a designed layout with the CSC logo (depends on the logo).
+Grill: template files (e.g. Jinja2 under `src/backend/templates/mail/`) instead of strings in code; how the logo
+travels (hosted URL on the public static host vs. inline CID attachment; many clients block remote images); dark
+mode in mail clients; an admin preview and "send me a test mail" page; which further mails come with 0.6.1.0
+(e.g. moderation outcome, reservation notices) so the template covers them.
+
+**Candidates already logged elsewhere, to sort into 0.6.1.0 or later:** O26 (user-created datasets); the IFC export
+(above); HKS as a component map basis (above) and the HKS visualisation in the viewer (level 1: the HKS curve in a
+descriptors panel; level 2: a per-point heat map with a time slider, needs per-point values, i.e. a new HKS version);
+RL3 colour-coding and RL8 steel grade; the SH descriptor (O19--O25, licence first); the npm audit updates and the
+lint refactor if 0.6.0.x does not take them.
 
 ---
 
