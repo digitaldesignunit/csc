@@ -711,6 +711,10 @@ pieces get one from their primitive) and how the PCA / UMAP layouts behave on it
 also takes the open items of the 0.6.0.x list above, first the two deploy blockers (the deploy script's self-update
 lag and the transitive geometry pins), since its own deploy depends on them.
 
+**Scope decided (8.132, user 2026-10-10)** with the profile (8.133), the evidence forms (8.134), the edge distance
+(8.135) and the swimlane graph (8.102, added to 8.132); still to grill: logo and mail templates, O26, the swimlane
+details.
+
 **CSC logo** (user 2026-10-10): the web shows only the lab's logo (`public/logo/ddu_logo_*.png`). Create a logo for
 CSC itself: a mark and a wordmark, light and dark variants, SVG source plus PNG exports; favicon and app icons
 (Next `app/icon`, `apple-icon`), the sidebar brand next to or instead of the lab's logo, the PDF passport, the mail
