@@ -121,6 +121,21 @@ gap.
   HTTP mounted next to FastAPI on Uberspace (one more supervisord / web backend route), or a local
   stdio server that calls the public API.
 
+## Usage statistics
+
+- Lightweight usage statistics for the maintainer (user 2026-10-10; moved out of 0.6.1.0 the same day). Built in,
+  without cookies and without personal data, so no consent banner: the frontend sends small events to a backend
+  route; the backend resolves the country from the IP with a local GeoIP file (DB-IP Lite, CC BY 4.0, or GeoLite2)
+  and discards the IP; only daily counters are stored (day x event x page template x country x device class x signed
+  in yes / no; referrer domain for page views), never raw events, user ids or full URLs. Events: page view by page
+  template, search run (not the text), filter used, viewer opened, overlay switched, export (JSON-LD / PDF / CERO), QR
+  scan, GH page / UserObject copied, registration and sign-in counts, draft saved, map opened. Signed-in users counted
+  without a link to the account; admins not counted. Unique visitors per day at most, from a daily-rotating salted
+  hash held in memory. Retention: daily counters 25 months, then monthly sums. Do Not Track / Global Privacy Control
+  respected; an opt-out switch in the footer and Settings (stored locally as a necessary preference); the privacy page
+  names the statistics, legitimate interest and the right to object; an admin page "Usage" with charts. Rejected:
+  Plausible CE (ClickHouse, too heavy), Umami (one more service and database), hosted analytics (consent needed).
+
 ## Housekeeping
 
 - ...

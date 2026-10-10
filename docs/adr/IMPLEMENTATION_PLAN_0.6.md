@@ -723,9 +723,21 @@ pieces get one from their primitive) and how the PCA / UMAP layouts behave on it
 also takes the open items of the 0.6.0.x list above, first the two deploy blockers (the deploy script's self-update
 lag and the transitive geometry pins), since its own deploy depends on them.
 
-**Scope decided (8.132, user 2026-10-10)** with the profile (8.133), the evidence forms (8.134), the edge distance
-(8.135) and the swimlane graph (8.102, added to 8.132); still to grill: logo and mail templates, O26, the swimlane
-details.
+**Scope decided (8.132--8.142, user 2026-10-10); build in phases, each through review:**
+- **A, operations (first; "go" 2026-10-10):** the deploy re-execs the release's own script (guarded) and the
+  transitive geometry pins (`numba==0.67.0`, `llvmlite==0.49.0`, `pynndescent==0.6.0`, `umap-learn==0.5.12`); 8.136
+  (batched identity loads, `derivation_due` markers, nightly full check and `--sweep`); the projected snapshot joins
+  of the list, map and row pipelines (Atlas traffic, below); the maintenance mode 8.137; `crontab.example` with the
+  20-minute marked run, the nightly full run with `--sweep` and the daily map.
+- **B, backend:** profile 8.133; user-created datasets with the review gate 8.139; RL4 / RL5 / RL7 (8.142), RL10;
+  history endpoint and export 8.140 g / h; photo credit in the exports; the two 0.6.0.2 review notes; the
+  evidence-edit notice.
+- **C, Grasshopper (user's OK):** RL6, RL9, the `Actor` `Session` input (8.133 f).
+- **D, web:** evidence forms 8.134 (with h); edge distance 8.135; preview and id chips 8.141; swimlane 8.140; RL3;
+  HKS map basis and level 1 curve; provenance dialog gaps and `Actor.url`; privacy page; credits page (partner
+  names, links and consent from the user).
+- **E, logo and mails 8.138:** the coordinator drafts the three concepts when the user asks (not in parallel with A).
+- **F, toolchain:** lint refactor and lint packages 16.4; npm audit with a glibc 2.17 server build test.
 
 **Atlas traffic (2026-10-10, at the front with the deploy fixes and 8.136):** since the cutover the primary's
 network rose from near zero to about 1 MB/s with about 60 requests/s for hours (the geometry runner reading every
@@ -741,25 +753,11 @@ between a paid Atlas tier and a MongoDB on the server, with the measured numbers
 **Maintenance mode** (8.137, user 2026-10-10): `csc_maintenance.sh on | off | status`, the static 503 page in
 `uberspaceconfig/html/maintenance/`; first verify the per-domain Apache folder on a test subdomain.
 
-**Usage statistics** (user 2026-10-10; to grill): lightweight, for the maintainer: page views, interactions
-(e.g. viewer opened, export downloaded, scan used, search run), country, device class, referrer. Proposal: built
-in, cookieless and without personal data, so no consent banner is needed: the frontend sends small events to a
-backend route; the backend resolves the country from the IP with a local GeoIP file (DB-IP Lite, CC BY 4.0, or
-GeoLite2 with a licence key) and then discards the IP; it stores only daily aggregate counters (day x page
-template x event x country x device class), never raw events, user ids or full URLs (catalogue ids reduced to the
-route template); unique visitors at most as a per-day count from a daily-rotating salted hash held in memory; Do Not
-Track / Global Privacy Control respected; an admin page "Usage" with charts. Small in Atlas (counters, not events) and
-cheap in traffic (8.136 / Atlas M0). Rejected for now: Plausible CE (ClickHouse, too heavy for Uberspace),
-Umami (one more Node service and a database), third-party hosted analytics (data leaves the EU host, consent
-needed). Grill: the event list, retention (counters kept, e.g. 25 months), signed-in users counted or not.
-
-**Privacy notice and cookie notice** (user 2026-10-10, with the usage statistics): the site has accounts, mails,
-uploads and soon statistics but only an imprint; add a privacy page (GDPR Art. 13: controller, purposes, legal
-bases, retention, recipients incl. the hosting and database providers, rights, the objection to the statistics)
+**Privacy notice and cookie notice** (user 2026-10-10; the usage statistics moved to `FUTURE.md` the same day):
+the site has accounts, mails and uploads but only an imprint; add a privacy page (GDPR Art. 13: controller, purposes, legal
+bases, retention, recipients incl. the hosting and database providers, rights)
 and link it from the footer, the registration form and the mails. The cookie notice shrinks to what is true: the
-site stores only what it needs (session, theme, banner state) and, if the statistics stay cookieless, an opt-out
-switch for them (objection under Art. 21, stored locally as a strictly necessary preference) instead of a consent
-banner. The legal text needs a check by the university's data protection office.
+site stores only what it needs (session, theme, banner state); no consent banner while nothing else is stored. The legal text needs a check by the university's data protection office.
 
 **Credits page revision** (user 2026-10-10): the ZirKuS paragraph gains the DBU funding logo (the "sponsored by"
 variant, as the funder's guidelines ask; files in the gitignored `reference/zirkus_logos_refs/`, copied into
