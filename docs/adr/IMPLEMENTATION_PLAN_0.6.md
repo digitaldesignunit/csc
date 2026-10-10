@@ -756,7 +756,7 @@ development, with the partners' logos (five files there). The page itself gets t
 of `text-blue-500` links, light and dark logo handling). To settle: the partners' full names and links, and that
 each partner agrees to its logo being shown.
 
-**Ferroscan to reinforcement layout** (user 2026-10-10; to grill, scope 0.6.1.0 or 0.6.2): the gitignored prototype
+**Ferroscan to reinforcement layout** (user 2026-10-10; **0.6.2**, user the same day; to grill before): the gitignored prototype
 `reference/ferromodeller/` (a GH CPython component, MIT) reads a Hilti PROFIS Detection report image (two panels: the
 plan / C-scan strip on top, the cross-section / B-scan below with blue / green cap markers per bar and layer,
 magenta cover arrows and spacings), finds the caps and the magenta datum line, and with typed values (scan length,
@@ -775,6 +775,16 @@ records (RL1). (e) Depth from the image's depth axis instead of typed covers, an
 more reports, are later steps. Grill: the payload / attachment shape for the placed image (new field on the scan
 basis vs. a generic "image placement" for any attachment), detection on the server vs. in GH only, PROFIS layouts
 other than the sample (2047 x 1465), and GH component changes (user's OK given with this request).
+
+**Snapshot ids in the web, for hybrid work with GH** (user 2026-10-10): the component page offers "Copy ID" and
+"Copy as Grasshopper panel" for the identity only (`ComponentHeaderStrip.tsx`); a version's snapshot id (what
+`FetchSnapshot`, `AddEvidence` and the reinforcement builder need) is nowhere to see or copy. Proposal, to confirm:
+one shared id chip (the short id in monospace, the full id on hover, copy on click, a menu item "Copy as Grasshopper
+panel") used wherever an id matters: the snapshot id of the shown version next to the version selector and in the
+History rows of every version, the record id on each evidence record, and the identity id as today; Browse rows get
+"Copy snapshot id" in their row menu; `?snapshot=<id>` on the component page opens that version, so an id pasted
+from GH leads straight to it; the GH panel copy carries the parameter name the component expects
+(`ComponentID`, `SnapshotID`).
 
 **Component preview drawer** (user 2026-10-10): the preview from Browse (the thumbnail in
 `ComponentOverviewDataTablePreviewCell.tsx`) and from the component map (`ComponentMapPageClient.tsx`, a second copy)
