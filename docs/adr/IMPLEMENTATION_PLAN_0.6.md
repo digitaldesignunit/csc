@@ -715,6 +715,17 @@ lag and the transitive geometry pins), since its own deploy depends on them.
 (8.135) and the swimlane graph (8.102, added to 8.132); still to grill: logo and mail templates, O26, the swimlane
 details.
 
+**Atlas traffic (2026-10-10, at the front with the deploy fixes and 8.136):** since the cutover the primary's
+network rose from near zero to about 1 MB/s with about 60 requests/s for hours (the geometry runner reading every
+snapshot every 5 minutes, one identity round trip each), and stays at about 250 KB/s; the free tier (M0) throttles,
+so every response carrying snapshot bodies slowed down (`/identities`: about 1.3 s per row, Browse about 8 s, while
+`/version`, `/health/db` and `/identities/count` answer in 0.1 s). Besides 8.136: (a) the list, map and row
+pipelines join the current snapshot projected to the fields a row reads (no `descriptors`, no inline `geometry`, no
+proxies' deviation data), and `expand=current_snapshot` projects what the passport body uses; (b) a test pins the
+projection (a row built from the projected join equals one built from the full document); (c) measure the bytes per
+request before and after on a copy of the production data. If traffic stays near the M0 limits afterwards: decide
+between a paid Atlas tier and a MongoDB on the server, with the measured numbers.
+
 **CSC logo** (user 2026-10-10): the web shows only the lab's logo (`public/logo/ddu_logo_*.png`). Create a logo for
 CSC itself: a mark and a wordmark, light and dark variants, SVG source plus PNG exports; favicon and app icons
 (Next `app/icon`, `apple-icon`), the sidebar brand next to or instead of the lab's logo, the PDF passport, the mail
