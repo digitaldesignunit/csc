@@ -49,7 +49,17 @@ case "$part" in
     mkdir -p "$bundle/.next"
     cp -a "$fe/.next/standalone/." "$bundle/"
     cp -a "$fe/.next/static" "$bundle/.next/static"
-    [ -d "$fe/public" ] && cp -a "$fe/public" "$bundle/public"
+    # the contents of public/, into the folder Next's tracing may have made
+    # already (the GH page reads public/gh-interface at run time): copying the
+    # folder itself nested it as public/public/ in 0.6.0.0 and 0.6.0.1
+    if [ -d "$fe/public" ]; then
+      mkdir -p "$bundle/public"
+      cp -a "$fe/public/." "$bundle/public/"
+    fi
+    [ -f "$bundle/public/logo/ddu_logo_black.png" ] \
+      || { echo "bundle has no public/logo/ddu_logo_black.png" >&2; exit 1; }
+    [ ! -e "$bundle/public/public" ] \
+      || { echo "bundle has a nested public/public" >&2; exit 1; }
     cp -a "$fe/scripts/start-standalone.cjs" "$bundle/start-standalone.cjs"
     # secrets come from ~/csc/shared/frontend on the server, never from the build
     rm -f "$bundle"/.env*

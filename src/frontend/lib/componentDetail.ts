@@ -82,10 +82,27 @@ export function conditionChip(grade: number | null): Chip {
 export type Banner = { id: string; tone: 'info' | 'warn' | 'bad'; text: string }
 
 /** One sentence each, only what applies, nothing a chip already says. */
+/**
+ * "Not public": says who sees the piece (decision 8.131 e): every signed-in
+ * user in a `catalog` dataset, only the members of the dataset and its
+ * moderators in a `members` one.
+ */
+export function notPublicText(dataset: string | null | undefined, visibility: string | null | undefined): string {
+  if (visibility === 'catalog') {
+    return 'Not public: every signed-in user sees this piece, visitors without an account do not.'
+  }
+  if (visibility === 'members') {
+    return `Not public: only members of ${dataset ?? 'its dataset'} and the moderators see this piece.`
+  }
+  return 'Not public: visitors without an account do not see this piece.'
+}
+
 export function bannersOf(input: {
   identity: IdentityLike
   signedIn: boolean
   geometryFailed: boolean
+  /** The visibility of the piece's dataset, when known. */
+  datasetVisibility?: string | null
 }): Banner[] {
   const { identity } = input
   const out: Banner[] = []
@@ -104,7 +121,7 @@ export function bannersOf(input: {
   if (input.signedIn && identity.is_public === false) {
     out.push({
       id: 'not-public', tone: 'info',
-      text: `Not public: only members of ${identity.dataset ?? 'its dataset'} and the moderators see this piece.`,
+      text: notPublicText(identity.dataset, input.datasetVisibility),
     })
   }
   if (input.geometryFailed) {

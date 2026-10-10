@@ -143,6 +143,7 @@ TABLE = [
     # datasets
     ('manage_members', Target(D, kind='dataset'), {'mod', 'admin'}),
     ('edit_dataset', Target(D, kind='dataset'), {'mod', 'admin'}),
+    ('set_dataset_public', Target(D, kind='dataset'), {'mod', 'admin'}),   # 8.131 c
     ('invite', Target(D, kind='dataset'), {'mod', 'admin'}),
     ('revoke_invitation', Target(D, kind='invitation', author_id='contrib'),
      {'contrib', 'mod', 'admin'}),

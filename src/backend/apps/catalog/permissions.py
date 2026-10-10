@@ -331,6 +331,8 @@ RULES: Dict[str, Rule] = {
     # datasets
     'manage_members': _role('moderator'),
     'edit_dataset': _role('moderator'),
+    # every published piece of D public or private at once (8.131 c)
+    'set_dataset_public': _role('moderator'),
     # invitations (8.14): into D by moderator(D); without a dataset admin
     'invite': _role('moderator'),
     'revoke_invitation': _revoke_invitation,

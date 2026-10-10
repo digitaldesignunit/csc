@@ -8,8 +8,9 @@
 import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { ArrowLeft, Database, Search, Trash2, UserPlus } from 'lucide-react'
+import { ArrowLeft, Database, Globe, Lock, Search, Trash2, UserPlus } from 'lucide-react'
 
+import PublicConfirmDialog from '@/components/common/PublicConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -42,6 +43,7 @@ import type {
 } from '@/generated/AccessModels'
 import { backendJson } from '@/lib/backend'
 import { memberNotice } from '@/lib/mailResult'
+import { datasetPublicHelp, datasetPublicLabel } from '@/lib/publicSwitch'
 import { useMe } from '@/lib/me'
 
 export default function DatasetPage({ params }: { params: Promise<{ did: string }> }) {
@@ -106,6 +108,7 @@ export default function DatasetPage({ params }: { params: Promise<{ did: string 
       {canManage ? (
         <>
           <DatasetSettings dataset={dataset} onSaved={(next) => setDataset(next)} />
+          <PublicPiecesCard dataset={dataset} />
           <MembersCard dataset={dataset} isAdmin={isAdmin} onChanged={() => void afterMembers()} />
           <Card>
             <CardHeader className="flex flex-row items-start justify-between gap-4">
@@ -179,6 +182,84 @@ function DatasetSettings({ dataset, onSaved }: { dataset: DatasetView; onSaved: 
           </Select>
         </div>
         <Button size="sm" onClick={() => void save()} disabled={busy || !dirty || !name.trim()}>Save</Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+type PublicCounts = { toPublic: number | null; toPrivate: number | null }
+
+/**
+ * Every published, not withdrawn piece of the dataset public or private at
+ * once (decision 8.131 c): the counts come from a dry run; public asks first.
+ */
+function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
+  const [counts, setCounts] = useState<PublicCounts>({ toPublic: null, toPrivate: null })
+  const [busy, setBusy] = useState(false)
+  const [confirm, setConfirm] = useState(false)
+  const path = `/datasets/${encodeURIComponent(dataset._id)}/public`
+
+  const count = useCallback(async () => {
+    const ask = (isPublic: boolean) =>
+      backendJson<{ changed: number }>(path, { method: 'POST', body: { is_public: isPublic, dry_run: true } })
+        .then((r) => r.changed)
+        .catch(() => null)
+    const [toPublic, toPrivate] = await Promise.all([ask(true), ask(false)])
+    setCounts({ toPublic, toPrivate })
+  }, [path])
+
+  useEffect(() => {
+    void count()
+  }, [count])
+
+  const apply = async (isPublic: boolean) => {
+    setBusy(true)
+    try {
+      const result = await backendJson<{ changed: number; skipped?: number }>(path, {
+        method: 'POST', body: { is_public: isPublic },
+      })
+      toast.success(`${result.changed} piece${result.changed === 1 ? '' : 's'} now ${isPublic ? 'public' : 'private'}`
+        + (result.skipped ? `; ${result.skipped} changed meanwhile and were left as they were` : ''))
+      await count()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'The change failed')
+    } finally {
+      setBusy(false)
+      setConfirm(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Public pieces</CardTitle>
+        <CardDescription>
+          Sets the public flag of every published piece of this dataset at once. Unpublished and withdrawn
+          pieces, and other datasets, stay as they are. Every piece keeps its own flag: children do not follow
+          their parents.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-1">
+          <Button size="sm" variant="outline" disabled={busy || !counts.toPublic} onClick={() => setConfirm(true)}>
+            <Globe className="mr-1 h-3.5 w-3.5" />{datasetPublicLabel(true, counts.toPublic)}
+          </Button>
+          <p className="text-xs text-muted-foreground">{datasetPublicHelp(counts.toPublic, true)}</p>
+        </div>
+        <div className="space-y-1">
+          <Button size="sm" variant="outline" disabled={busy || !counts.toPrivate} onClick={() => void apply(false)}>
+            <Lock className="mr-1 h-3.5 w-3.5" />{datasetPublicLabel(false, counts.toPrivate)}
+          </Button>
+          <p className="text-xs text-muted-foreground">{datasetPublicHelp(counts.toPrivate, false)}</p>
+        </div>
+        <PublicConfirmDialog
+          open={confirm}
+          onOpenChange={(open) => { if (!busy) setConfirm(open) }}
+          title={`Make ${counts.toPublic ?? 'all'} published pieces public?`}
+          subject={`${counts.toPublic ?? 'All'} published piece${counts.toPublic === 1 ? '' : 's'} of ${dataset.name} become public.`}
+          confirmLabel="Make public"
+          onConfirm={() => void apply(true)}
+        />
       </CardContent>
     </Card>
   )

@@ -1,0 +1,31 @@
+# CSC production crontab. Paste it into `crontab -e` on the server (it replaces
+# the whole crontab: see the README in this folder).
+#
+# One MAILTO line for the whole file: it applies to every line below it. Put
+# the maintainer's address in the server's crontab only, never in this
+# repository. Output of the jobs goes to the logs, so cron mails only when a
+# line fails before its redirect (e.g. when `source` fails).
+MAILTO="<maintainer email>"
+
+# The two heavy jobs share one lock, /tmp/csc_heavy.lock, so they never run
+# together (server memory, decision 8.130): the geometry runner skips a run
+# while the lock is held (-n), the component map waits up to 15 minutes (-w 900)
+# instead of losing its 6-hour slot.
+
+# Geometry Runner: frame, shape class, proxies, descriptors, complexity and
+# previews of every stale snapshot; at most 25 per run; --sweep deletes the
+# previews and deviation maps of snapshots that no longer exist (8.121)
+# Runs every 5 minutes
+*/5 * * * * source /home/ddu/.bash_profile && flock -n /tmp/csc_heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_geometry.py --limit 25 --sweep >> /home/ddu/csc/shared/logs/geometry_cronjob.log 2>&1
+
+# Component Map: precompute PCA + UMAP layouts into component_map_cache
+# Runs every 6 hours
+0 */6 * * * source /home/ddu/.bash_profile && flock -w 900 /tmp/csc_heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_component_map.py >> /home/ddu/csc/shared/logs/component_map_cronjob.log 2>&1
+
+# User Maintenance: clean up unverified user accounts
+# Runs every day at 2:00 AM
+0 2 * * * source /home/ddu/.bash_profile && /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/usermaintenance.py >> /home/ddu/csc/shared/logs/usermaintenance_cronjob.log 2>&1
+
+# Geometry Maintenance: remove mesh / point-cloud folders of deleted snapshots
+# Runs every day at 3:00 AM
+0 3 * * * source /home/ddu/.bash_profile && /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/geometrymaintenance.py >> /home/ddu/csc/shared/logs/geometrymaintenance_cronjob.log 2>&1

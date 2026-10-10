@@ -63,7 +63,21 @@ test('a banner only when it applies, one sentence each', () => {
     identity: { is_public: false, dataset: 'dbu_zirkus' }, signedIn: true, geometryFailed: false,
   })
   assert.equal(notPublic.length, 1)
-  assert.match(notPublic[0].text, /^Not public: only members of dbu_zirkus/)
+  // no visibility known: the one thing that is true in both cases
+  assert.equal(notPublic[0].text, 'Not public: visitors without an account do not see this piece.')
+  // a members dataset: its members and the moderators (8.131 e)
+  const members = bannersOf({
+    identity: { is_public: false, dataset: 'dbu_zirkus' }, signedIn: true, geometryFailed: false,
+    datasetVisibility: 'members',
+  })
+  assert.match(members[0].text, /^Not public: only members of dbu_zirkus and the moderators see this piece\.$/)
+  // a catalog dataset: every signed-in user sees it
+  const catalog = bannersOf({
+    identity: { is_public: false, dataset: 'dbu_zirkus' }, signedIn: true, geometryFailed: false,
+    datasetVisibility: 'catalog',
+  })
+  assert.match(catalog[0].text, /^Not public: every signed-in user sees this piece/)
+  assert.doesNotMatch(catalog[0].text, /only members/)
   const out = bannersOf({
     identity: { exit: { kind: 'split' }, withdrawn: { at: '2026-01-05T00:00:00Z', reason: 'duplicate' } },
     signedIn: true, geometryFailed: true,

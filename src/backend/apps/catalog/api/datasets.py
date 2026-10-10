@@ -11,6 +11,8 @@ section 7.7; plan P3).
   ``moderator(D)`` and admin.
 * ``POST /datasets`` (admin), ``PATCH /datasets/{did}`` and
   ``PUT /datasets/{did}/members/{user_id}`` (``moderator(D)``).
+* ``POST /datasets/{did}/public`` --- every published, not withdrawn piece of
+  the dataset public or private at once (``moderator(D)``, 8.131 c).
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
@@ -18,7 +20,7 @@ from typing import Annotated, Any, Dict, List, Optional
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pymongo.errors import DuplicateKeyError
 
 # LOCAL IMPORTS ---------------------------------------------------------------
@@ -27,6 +29,7 @@ from apps.catalog.models import User
 from apps.catalog.permissions import dataset_roles
 from apps.catalog.vocab import DATASET_ROLES, DatasetRole, Visibility
 from .access import (
+    EVER_PUBLISHED,
     and_match,
     load_datasets,
     require,
@@ -35,6 +38,8 @@ from .access import (
 )
 from .auth import get_current_active_user, get_optional_current_user
 from .catalog_common import now_iso
+from .identity_edit import _validated as _validated_identity
+from .identity_edit import _write as _write_identity
 
 router = APIRouter()
 
@@ -327,6 +332,72 @@ async def put_dataset_member(
     return await _dataset_view(request, current_user,
                                await _dataset_or_404(request, did),
                                with_members=True)
+
+
+class PublicBody(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    is_public: bool = Field(description='the flag to set on the pieces')
+    dry_run: bool = Field(False, description='only count what would change')
+
+
+class PublicResult(BaseModel):
+    dataset: str
+    is_public: bool
+    # how many pieces changed (dry run: would change)
+    changed: int
+    dry_run: bool
+    # pieces another edit changed in the meantime (left as they were)
+    skipped: int = 0
+
+
+@router.post('/datasets/{did}/public', response_model=PublicResult,
+             summary='Make every published piece of a dataset public or '
+                     'private (moderator(D))')
+async def set_dataset_public(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    did: str,
+    body: PublicBody,
+):
+    """Sets ``is_public`` on the pieces of the dataset that were ever
+    published (3.1.5) and are not withdrawn, where the flag differs, and logs
+    each change like a metadata PATCH (``cause: patch``). Unpublished and
+    withdrawn pieces are left alone, and so are children: no piece follows
+    another (6.2). ``dry_run`` only counts."""
+    dataset = await _dataset_or_404(request, did)
+    await require(request, current_user, 'set_dataset_public',
+                  dataset=dataset)
+    identities = request.app.mongodb_component_identities
+    differs = ({'$ne': True} if body.is_public else True)
+    candidates = await identities.find(
+        {'dataset': did, 'withdrawn': None, 'is_public': differs}
+    ).to_list(length=None)
+    ever = set(await request.app.mongodb_component_snapshots.distinct(
+        'identity_id', {'identity_id': {'$in': [c['_id'] for c in candidates]},
+                        'status': {'$in': list(EVER_PUBLISHED)}}))
+    pieces = [c for c in candidates
+              if c.get('current_snapshot_id') or c['_id'] in ever]
+    changed = skipped = 0
+    for identity in pieces:
+        if body.dry_run:
+            changed += 1
+            continue
+        after = _validated_identity({**identity, 'is_public': body.is_public})
+        try:
+            written = await _write_identity(
+                request, identity, after, user_id=current_user.id,
+                cause='patch')
+        except HTTPException as exc:
+            if exc.status_code != 409:
+                raise
+            skipped += 1
+            continue
+        if written is not None:
+            changed += 1
+    return PublicResult(dataset=did, is_public=body.is_public,
+                        changed=changed, dry_run=body.dry_run,
+                        skipped=skipped)
 
 
 # CODEGEN ---------------------------------------------------------------------

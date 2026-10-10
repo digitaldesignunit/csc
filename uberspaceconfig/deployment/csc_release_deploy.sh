@@ -147,7 +147,10 @@ PY
     mkdir -p "$VENVS"
     "$PYTHON" -m venv "$venv"
     "$venv/bin/pip" install -q --upgrade pip
-    "$venv/bin/pip" install -q -r "$target.tmp/backend/requirements.txt" \
+    # binary wheels only (as `invoke check-server-wheels` checks): a missing
+    # wheel fails here at once instead of compiling on the server
+    "$venv/bin/pip" install -q --only-binary=:all: \
+      -r "$target.tmp/backend/requirements.txt" \
       -c "$target.tmp/backend/constraints.txt"
     touch "$venv/.complete"
   else
