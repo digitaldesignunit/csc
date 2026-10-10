@@ -707,7 +707,9 @@ pieces get one from their primitive) and how the PCA / UMAP layouts behave on it
 
 ### Backlog 0.6.1.0 --- opened 2026-10-10 (user); items to grill before the build
 
-0.6.0.x stays for fixes and operations (the list above); 0.6.1.0 is the next feature release.
+0.6.1.0 is the next working release (user 2026-10-10); a 0.6.0.3+ only for a hotfix-worthy problem. So 0.6.1.0
+also takes the open items of the 0.6.0.x list above, first the two deploy blockers (the deploy script's self-update
+lag and the transitive geometry pins), since its own deploy depends on them.
 
 **CSC logo** (user 2026-10-10): the web shows only the lab's logo (`public/logo/ddu_logo_*.png`). Create a logo for
 CSC itself: a mark and a wordmark, light and dark variants, SVG source plus PNG exports; favicon and app icons
