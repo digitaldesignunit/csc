@@ -624,6 +624,14 @@ coordinates, `AddEvidence` uploads, the drawing is an attachment on the same rec
 - RL5: the migrated ZirKuS record (step 6d) has `document` null; filling title / date / reference needs a correction
   today; extend "fill once" (8.123 a) to empty `document` fields of a published evidence record.
 - RL6: the GH `ReinforcementLayout` builder lacks `url` / `retrieved_at` of the drawing (8.106).
+- RL9 (user 2026-10-10, 0.6.1.0 with RL6): `ReinforcementLayout` needs bar curves in the snapshot's stored
+  coordinates (mm), but nothing converts bars drawn on a piece moved by `ApplyFrame` (canonical, centred) or
+  `TransformComponent`; today the user must Orient World XY --> `Frame` or invert the transform by hand. Add an
+  optional `ComponentPassport` input: when it carries a `csc_placement`, the component maps the curves back to stored
+  coordinates (inverse of the placement) and takes `SnapshotID` from the passport (an explicit `SnapshotID` that
+  disagrees is an error); a remark says which conversion ran. Also: refuse or warn when the document unit is not
+  millimetres (scale by the unit factor), and say in the component description that a layout belongs to one
+  version. Same handling for any later GH builder that takes positions on a piece (Ferroscan, 0.6.2).
 - RL7: `position.kind` is `none` from GH and `region` from the web form for the same method; pick one.
 - RL8: the steel grade stays inside the bars and never enters the fold; the spec's answer is a separate `rebar_spec`
   claim sharing the attachment (7.8), which no GH component builds.
