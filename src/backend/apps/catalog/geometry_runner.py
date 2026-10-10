@@ -22,6 +22,39 @@ from apps.catalog.etag import compute_snapshot_etag
 from apps.catalog.geometry_stages import Env, Outcome, now_z, run_stages
 
 
+# THE DERIVATION_DUE MARKER (decision 8.136) ----------------------------------
+DUE_FIELD = 'derivation_due'
+# the index that serves ``DUE_QUERY``: only marked snapshots are in it
+DUE_QUERY = {DUE_FIELD: {'$type': 'string'}}
+DUE_INDEX = {'partialFilterExpression': DUE_QUERY}
+
+
+async def mark_due(snapshots, query: Mapping[str, Any]) -> None:
+    """Mark the snapshots ``query`` selects as due for the geometry cron:
+    some stage input changed (a version, a file, a geometry, colour or
+    override write, the function of the piece). Meant to be called from every
+    such write; the etag does not cover the marker."""
+    await snapshots.update_many(dict(query), {'$set': {DUE_FIELD: now_z()}})
+
+
+async def settle_due(snapshots, snapshot: Mapping[str, Any], *,
+                     errors: bool) -> None:
+    """After a run of one snapshot over all the stages this server owns:
+    clear the marker it read, unless a write set a newer one meanwhile (the
+    filter holds the value read). A run with errors keeps the marker, moved
+    to the back of the queue, so a failing snapshot does not starve the
+    others."""
+    marker = snapshot.get(DUE_FIELD)
+    if not marker:
+        return
+    if errors:
+        await snapshots.update_one({'_id': snapshot['_id'], DUE_FIELD: marker},
+                                   {'$set': {DUE_FIELD: now_z()}})
+        return
+    await snapshots.update_one({'_id': snapshot['_id'], DUE_FIELD: marker},
+                               {'$unset': {DUE_FIELD: ''}})
+
+
 def _safe_join(root: str, relative: str) -> str:
     """``root/relative``, refusing anything that leaves ``root``."""
     path = os.path.normpath(os.path.join(root, relative))

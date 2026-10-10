@@ -7,20 +7,30 @@
 # line fails before its redirect (e.g. when `source` fails).
 MAILTO="<maintainer email>"
 
-# The two heavy jobs share one lock, /tmp/csc_heavy.lock, so they never run
-# together (server memory, decision 8.130): the geometry runner skips a run
-# while the lock is held (-n), the component map waits up to 15 minutes (-w 900)
-# instead of losing its 6-hour slot.
+# The heavy jobs share one lock, /tmp/csc_heavy.lock, so they never run
+# together (server memory, decision 8.130): the frequent geometry run skips a
+# run while the lock is held (-n); the nightly run and the component map wait
+# up to 15 minutes (-w 900) instead of losing their slot.
+#
+# The database is MongoDB Atlas' free tier: what a cron reads costs bandwidth
+# for everyone. The frequent geometry run therefore reads only the snapshots a
+# write has marked (derivation_due, decision 8.136); the nightly run checks all
+# of them (changes made outside the API, a missed marker) and sweeps.
 
-# Geometry Runner: frame, shape class, proxies, descriptors, complexity and
-# previews of every stale snapshot; at most 25 per run; --sweep deletes the
-# previews and deviation maps of snapshots that no longer exist (8.121)
-# Runs every 5 minutes
-*/5 * * * * source /home/ddu/.bash_profile && flock -n /tmp/csc_heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_geometry.py --limit 25 --sweep >> /home/ddu/csc/shared/logs/geometry_cronjob.log 2>&1
+# Geometry Runner, frequent: frame, shape class, proxies, descriptors,
+# complexity and previews of the snapshots marked as due; at most 10 per run
+# Runs every 20 minutes
+*/20 * * * * source /home/ddu/.bash_profile && flock -n /tmp/csc_heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_geometry.py --due --limit 10 >> /home/ddu/csc/shared/logs/geometry_cronjob.log 2>&1
+
+# Geometry Runner, nightly: every snapshot is checked (stale ones are derived,
+# at most 200); --sweep deletes the previews and deviation maps of snapshots
+# that no longer exist (8.121)
+# Runs every day at 3:30 AM
+30 3 * * * source /home/ddu/.bash_profile && flock -w 900 /tmp/csc_heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_geometry.py --limit 200 --sweep >> /home/ddu/csc/shared/logs/geometry_cronjob.log 2>&1
 
 # Component Map: precompute PCA + UMAP layouts into component_map_cache
-# Runs every 6 hours
-0 */6 * * * source /home/ddu/.bash_profile && flock -w 900 /tmp/csc_heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_component_map.py >> /home/ddu/csc/shared/logs/component_map_cronjob.log 2>&1
+# Runs every day at 4:15 AM
+15 4 * * * source /home/ddu/.bash_profile && flock -w 3600 /tmp/csc_heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_component_map.py >> /home/ddu/csc/shared/logs/component_map_cronjob.log 2>&1
 
 # User Maintenance: clean up unverified user accounts
 # Runs every day at 2:00 AM

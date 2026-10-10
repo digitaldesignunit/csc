@@ -62,6 +62,7 @@ async def load_map_rows(
         include_username=False,
         current_user_id=None,
         reserved_filter=None,
+        snapshot_view='map',
     )
     pipeline.append(map_rows_project_stage())
     cursor = await identities_col.aggregate(pipeline)

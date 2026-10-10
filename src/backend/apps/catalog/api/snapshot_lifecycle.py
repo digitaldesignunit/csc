@@ -89,6 +89,13 @@ router = APIRouter()
 IN_FLIGHT = ('draft', 'pending')
 
 
+# the PATCH fields that are an input of a derivation stage (geometry_stages.
+# stage_input): geometry, the colour of the previews, the class and complexity
+# overrides (8.136)
+STAGE_INPUT_FIELDS = frozenset({'geometry', 'color', 'shape_class',
+                                'complexity'})
+
+
 # BODIES ----------------------------------------------------------------------
 class SnapshotDraftBody(BaseModel):
     """A new state or a correction, as the client sends it. Derived fields
@@ -232,6 +239,8 @@ def _new_snapshot(body: SnapshotDraftBody, *, identity_id: str, version: int,
         'frame': None, 'bbx': None,
         'added_by_user_id': user.id, 'added_by_username': user.username,
         'photo_count': 0, 'mesh_ply_resolutions': {},
+        # a new version is new input for every stage (8.136)
+        'derivation_due': now,
         'created': now, 'lastmodified': now,
     }
     return _validated(doc)
@@ -748,6 +757,11 @@ async def patch_snapshot(
         _check_client_geometry(SnapshotDraftBody.model_validate(
             {'geometry': body['geometry']}))
     updated['lastmodified'] = now_iso()
+    if set(body) & STAGE_INPUT_FIELDS:
+        # the previews read the colour, the stages the geometry and the
+        # overrides (8.136); an override or a geometry also goes to the sync
+        # stages below
+        updated['derivation_due'] = updated['lastmodified']
     updated = _validated(updated)
     if 'effective_from' in body and snapshot.get('status') in EVER_PUBLISHED:
         _ensure_monotonic(updated,

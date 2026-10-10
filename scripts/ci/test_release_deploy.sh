@@ -6,7 +6,8 @@
 # GitHub API, replaces supervisorctl with a stub that runs two tiny services
 # (backend: /version from the active release; frontend: /api/auth/providers),
 # and checks: first deploy, upgrade with venv reuse, a broken release that
-# must roll back by itself, a manual rollback, status, pruning, self-update.
+# must roll back by itself, a manual rollback, status, pruning, self-update,
+# and a release whose own deploy script differs (the run repeats with it, once).
 #
 #   bash scripts/ci/test_release_deploy.sh
 #
@@ -47,9 +48,12 @@ make_release() {  # make_release <version> [broken]
   cp -a "$root/src/backend" "$src/src/"
   cp -a "$root/grasshopper_userobjects_xml" "$src/"
   cp -a "$root/uberspaceconfig/deployment" "$src/uberspaceconfig/"
+  cp -a "$root/uberspaceconfig/html" "$src/uberspaceconfig/"
   cp -a "$root/scripts/ci" "$src/scripts/"
   sed -i "s/^CSC_VERSION = '.*'$/CSC_VERSION = '$v'/" "$src/src/backend/csc_version.py"
   [ "${2:-}" = broken ] && touch "$src/src/backend/BROKEN"
+  # a release whose deploy script differs from the installed one
+  [ "${2:-}" = selfupdate ] && echo "# self-update marker $v" >> "$src/uberspaceconfig/deployment/csc_release_deploy.sh"
   bash "$src/scripts/ci/package_release.sh" backend "$v" "$dl" >/dev/null
   mkdir -p "$t/fe-$v/csc-frontend-standalone/public/gh-interface"
   echo "server" > "$t/fe-$v/csc-frontend-standalone/server.js"
@@ -69,6 +73,8 @@ PY
 make_release 9.9.9.1
 make_release 9.9.9.2
 make_release 9.9.9.3 broken
+make_release 9.9.9.4 selfupdate
+make_release 9.9.9.5 selfupdate
 (cd "$t/api" && exec python3 -m http.server "$api_port" --bind 127.0.0.1 >/dev/null 2>&1) &
 pids+=($!)
 # the server starts in the background: wait until it answers
@@ -129,6 +135,9 @@ deploy v9.9.9.1 > "$t/log1" 2>&1 || { cat "$t/log1"; fail "first deploy"; }
 [ -L "$CSC_HOME/current/frontend/.env" ] || fail ".env not linked"
 [ -f "$CSC_HOME/current/backend/static/ghxml/DDU_CSC_Session.xml" ] || fail "ghxml missing"
 [ "$(cat "$t/html/gh-interface/pic.txt")" = img-9.9.9.1 ] || fail "static GH images"
+[ -x "$CSC_HOME/bin/csc_maintenance.sh" ] || fail "csc_maintenance.sh not shipped to bin/"
+[ -f "$CSC_HOME/bin/maintenance/index.template.html" ] \
+  && [ -f "$CSC_HOME/bin/maintenance/maintenance.htaccess" ] || fail "maintenance page not shipped"
 ok "first deploy"
 
 deploy v9.9.9.2 > "$t/log2" 2>&1 || { cat "$t/log2"; fail "upgrade"; }
@@ -161,5 +170,21 @@ SSH_ORIGINAL_COMMAND="deploy v9.9.9.2; rm -rf /" "$CSC_HOME/bin/csc_deploy_gate.
 out=$(SSH_ORIGINAL_COMMAND="status" "$CSC_HOME/bin/csc_deploy_gate.sh") \
   && grep -q "9.9.9.2" <<< "$out" || fail "gate status"
 ok "deploy gate"
+
+# a release that carries a changed deploy script: the old script installs it
+# into bin/ and the run repeats with it, so the change applies at once
+deploy v9.9.9.4 > "$t/log6" 2>&1 || { cat "$t/log6"; fail "self-updating release"; }
+[ "$(active)" = 9.9.9.4 ] || fail "9.9.9.4 not active after the repeat"
+grep -q "different deploy script" "$t/log6" || fail "re-exec not logged"
+grep -q "self-update marker 9.9.9.4" "$CSC_HOME/bin/csc_release_deploy.sh" \
+  || fail "release script not installed before the repeat"
+[ "$(grep -c 'different deploy script' "$t/log6")" = 1 ] || fail "re-exec more than once"
+ok "a release with a changed deploy script is deployed by that script"
+
+# the guard: a repeat never repeats again (the script differs from 9.9.9.5's)
+CSC_DEPLOY_REEXEC=1 deploy v9.9.9.5 > "$t/log7" 2>&1 || { cat "$t/log7"; fail "guarded deploy"; }
+! grep -q "different deploy script" "$t/log7" || fail "guard did not hold"
+[ "$(active)" = 9.9.9.5 ] || fail "9.9.9.5 not active"
+ok "the re-exec guard holds"
 
 echo "all deploy tests passed"

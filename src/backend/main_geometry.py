@@ -72,7 +72,12 @@ from pymongo import AsyncMongoClient
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalog.api.geometry_remote import context_of
 from apps.catalog.geometry_cache import ResultCache, cache_key
-from apps.catalog.geometry_runner import derive_and_store
+from apps.catalog.geometry_runner import (
+    DUE_FIELD,
+    DUE_QUERY,
+    derive_and_store,
+    settle_due,
+)
 from apps.catalog.geometry_source import stored_file_sizes
 from apps.catalog.geometry_stages import (
     STAGES,
@@ -91,6 +96,9 @@ from utility import (
 )
 
 DEFAULT_LIMIT = 5
+# snapshots read (and identities fetched) per round trip: a snapshot may carry
+# inline geometry, so the batch stays small (memory, and Atlas' bandwidth)
+SNAPSHOT_BATCH = 10
 _SNAPSHOT_ID = re.compile(r'^[0-9a-fA-F-]{36}$')
 
 
@@ -151,10 +159,36 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         help='also delete the previews and deviation maps '
                              'of snapshots that no longer exist (default '
                              'off; only the production cron sets it)')
+    parser.add_argument('--due', action='store_true',
+                        help='only the snapshots a write has marked '
+                             '(derivation_due, decision 8.136), oldest '
+                             'first; --limit then counts the marked ones. '
+                             'The marker is cleared after a run without '
+                             'errors. Without --due every snapshot is '
+                             'checked (the nightly safety net for changes '
+                             'outside the API)')
     parser.add_argument('--retry-errors', action='store_true',
                         help='also rerun stages whose last run ended in an '
                              'error with the same version and inputs')
     return parser.parse_args(argv)
+
+
+async def _picked(snapshots, args: argparse.Namespace,
+                  limit: Optional[int]) -> List[dict]:
+    """The snapshots to look at, as ``_id`` / ``identity_id`` rows only (one
+    cheap query; the documents follow in batches). ``--due`` selects the
+    marked ones through the index, oldest first, at most ``limit``;
+    otherwise every snapshot in id order."""
+    if args.snapshot:
+        query, order = {'_id': args.snapshot}, [('_id', 1)]
+    elif args.due:
+        query, order = DUE_QUERY, [(DUE_FIELD, 1), ('_id', 1)]
+    else:
+        query, order = {}, [('_id', 1)]
+    cursor = snapshots.find(query, {'_id': 1, 'identity_id': 1}).sort(order)
+    if args.due and not args.snapshot and limit is not None:
+        cursor = cursor.limit(limit)
+    return [row async for row in cursor]
 
 
 def _limit(args: argparse.Namespace) -> Optional[int]:
@@ -196,52 +230,81 @@ async def run(args: argparse.Namespace) -> int:
         db = client[get_database_name()]
         snapshots, identities = (db['component_snapshots'],
                                  db['component_identities'])
-        query = {'_id': args.snapshot} if args.snapshot else {}
-        cursor = snapshots.find(query).sort('_id', 1)
-        async for snapshot in cursor:
-            if limit is not None and visited >= limit:
+        # the marker is cleared only by a run over every stage this server owns
+        owns_all = not args.dry_run and set(server_stages()) <= set(stages)
+        picked = await _picked(snapshots, args, limit)
+        done = False
+        for start in range(0, len(picked), SNAPSHOT_BATCH):
+            if done:
                 break
-            identity = await identities.find_one(
-                {'_id': snapshot['identity_id']})
-            if identity is None:
-                log(f'{snapshot["_id"]} has no identity', 'WARNING')
-                continue
-            if not args.recompute:
-                due = stale_stages(snapshot, identity, env, stages,
-                                   args.retry_errors)
-                if not due:
+            chunk = [row['_id'] for row in picked[start:start + SNAPSHOT_BATCH]]
+            docs = {doc['_id']: doc async for doc in snapshots.find(
+                {'_id': {'$in': chunk}})}
+            # one query for the identities of the batch, projected to what
+            # the stages read of an identity (the function of the piece)
+            owners = {doc['identity_id'] for doc in docs.values()}
+            by_id = {row['_id']: row async for row in identities.find(
+                {'_id': {'$in': sorted(owners)}}, {'original_function': 1})}
+            for snapshot_id in chunk:
+                snapshot = docs.get(snapshot_id)
+                if snapshot is None:                    # deleted meanwhile
                     continue
-                log(f'{snapshot["_id"]} v{snapshot.get("version")}: '
-                    f'stale {", ".join(due)}')
-            else:
-                log(f'{snapshot["_id"]} v{snapshot.get("version")}: '
-                    f'recompute {", ".join(stages)}')
-            visited += 1
-            began = time.time()
-            outcome = await derive_and_store(
-                snapshots, snapshot, identity, env, proxies_root,
-                stages, force=args.recompute, dry_run=args.dry_run,
-                retry_errors=args.retry_errors)
-            took = time.time() - began
-            for stage, seconds in outcome.timings.items():
-                stage_seconds[stage] = stage_seconds.get(stage, 0.0) + seconds
-                stage_runs[stage] = stage_runs.get(stage, 0) + 1
-            if cache is not None and outcome.changed and not args.dry_run                     and 'write' not in outcome.errors:
-                key = cache_key(
-                    snapshot, context_of(snapshot, identity),
-                    stored_file_sizes(snapshot, env.meshes_dir,
-                                      env.point_clouds_dir))
-                await asyncio.to_thread(cache.store, key, outcome)
-                cached += 1
-            if outcome.errors:
-                failed += 1
-                for stage, message in outcome.errors.items():
-                    log(f'    {stage}: {message}', 'ERROR')
-            if outcome.changed:
-                changed += 1
-            log(f'    ran {", ".join(outcome.ran) or "nothing"} '
-                f'({took:.1f} s)'
-                + (' [dry run]' if args.dry_run else ''))
+                if limit is not None and visited >= limit:
+                    done = True
+                    break
+                identity = by_id.get(snapshot['identity_id'])
+                if identity is None:
+                    log(f'{snapshot["_id"]} has no identity', 'WARNING')
+                    if owns_all:
+                        # to the back of the queue, as an error would: an
+                        # orphan must not hold a --due slot on every run
+                        await settle_due(snapshots, snapshot, errors=True)
+                    continue
+                if not args.recompute:
+                    due = stale_stages(snapshot, identity, env, stages,
+                                       args.retry_errors)
+                    if not due:
+                        if owns_all:             # checked, nothing to do
+                            await settle_due(snapshots, snapshot,
+                                             errors=False)
+                        continue
+                    log(f'{snapshot["_id"]} v{snapshot.get("version")}: '
+                        f'stale {", ".join(due)}')
+                else:
+                    log(f'{snapshot["_id"]} v{snapshot.get("version")}: '
+                        f'recompute {", ".join(stages)}')
+                visited += 1
+                began = time.time()
+                outcome = await derive_and_store(
+                    snapshots, snapshot, identity, env, proxies_root,
+                    stages, force=args.recompute, dry_run=args.dry_run,
+                    retry_errors=args.retry_errors)
+                took = time.time() - began
+                for stage, seconds in outcome.timings.items():
+                    stage_seconds[stage] = (
+                        stage_seconds.get(stage, 0.0) + seconds)
+                    stage_runs[stage] = stage_runs.get(stage, 0) + 1
+                if cache is not None and outcome.changed \
+                        and not args.dry_run \
+                        and 'write' not in outcome.errors:
+                    key = cache_key(
+                        snapshot, context_of(snapshot, identity),
+                        stored_file_sizes(snapshot, env.meshes_dir,
+                                          env.point_clouds_dir))
+                    await asyncio.to_thread(cache.store, key, outcome)
+                    cached += 1
+                if owns_all and 'write' not in outcome.errors:
+                    await settle_due(snapshots, snapshot,
+                                     errors=bool(outcome.errors))
+                if outcome.errors:
+                    failed += 1
+                    for stage, message in outcome.errors.items():
+                        log(f'    {stage}: {message}', 'ERROR')
+                if outcome.changed:
+                    changed += 1
+                log(f'    ran {", ".join(outcome.ran) or "nothing"} '
+                    f'({took:.1f} s)'
+                    + (' [dry run]' if args.dry_run else ''))
         if args.sweep and not args.snapshot and not args.dry_run:
             # only on request (8.121); whatever the stages of this run: also
             # on a server that leaves the heavy stages to a remote worker
@@ -317,6 +380,10 @@ def run_remote_mode(args: argparse.Namespace) -> int:
         run_remote,
     )
     stages = [s for s in STAGES if s in (args.stages or HEAVY_STAGES)]
+    if args.due:
+        print('--due is for the local runner; --remote asks the server for '
+              'stale snapshots', file=sys.stderr)
+        return 2
     try:
         runner = RemoteRunner(
             args.remote, token=os.environ.get('CSC_API_TOKEN'),

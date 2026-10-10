@@ -9,7 +9,7 @@
 #   package_release.sh gh       <version> <outdir>  -> csc-gh-interface-<version>.zip
 #
 # backend tarball:  backend/ (src/backend + static/ghxml from the XML exports),
-#                   deploy/ (server scripts), VERSION
+#                   deploy/ (server scripts and the maintenance page), VERSION
 # frontend zip:     csc-frontend-standalone/ (Next standalone + static + public)
 # gh zip:           "CSC Grasshopper Interface <version>"/ (UserObjects, examples,
 #                   the library folder csc_gh, README, LICENSE)
@@ -34,7 +34,11 @@ case "$part" in
     mkdir -p "$stage/backend/static/ghxml"
     cp "$root"/grasshopper_userobjects_xml/*.xml "$stage/backend/static/ghxml/"
     cp "$root"/uberspaceconfig/deployment/csc_release_deploy.sh \
-       "$root"/uberspaceconfig/deployment/csc_deploy_gate.sh "$stage/deploy/"
+       "$root"/uberspaceconfig/deployment/csc_deploy_gate.sh \
+       "$root"/uberspaceconfig/deployment/csc_maintenance.sh "$stage/deploy/"
+    # the page and the .htaccess of the maintenance mode (decision 8.137)
+    mkdir -p "$stage/deploy/maintenance"
+    cp "$root"/uberspaceconfig/html/maintenance/* "$stage/deploy/maintenance/"
     chmod +x "$stage"/deploy/*.sh
     printf '%s\n' "$version" > "$stage/VERSION"
     grep -q "^CSC_VERSION = '$version'$" "$stage/backend/csc_version.py" \

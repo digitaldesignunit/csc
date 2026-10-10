@@ -673,6 +673,7 @@ async def get_identities_map(
             include_username=False,
             current_user_id=None,
             reserved_filter=filters.reserved,
+            snapshot_view='map',
         )
         pipeline.append(map_rows_project_stage())
         docs = await aggregate_identities(request, pipeline)
@@ -830,6 +831,9 @@ async def list_identities_route(
             include_username=current_user is not None,
             current_user_id=current_user.id if current_user else None,
             reserved_filter=filters.reserved,
+            # a passport row carries the whole state (Grasshopper reads it);
+            # a catalog row and an identity row only what they show
+            snapshot_view='full' if expand == 'current_snapshot' else 'row',
         )
         docs = await aggregate_identities(request, pipeline)
         if expand == 'shallow':

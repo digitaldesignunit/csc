@@ -466,6 +466,13 @@ second guard in case a folder is ever put back; `static/.htaccess` re-allows
 the public UI files in `~/html/csc_assets/static/` (the Grasshopper interface
 images the release deploy copies there).
 
+### Maintenance mode
+
+`~/csc/bin/csc_maintenance.sh on | off | status` shows a static 503 page for the
+web domain while the frontend is stopped or deployed (cutovers, migrations); see
+`uberspaceconfig/deployment/README.md`, "Maintenance mode" (the per-domain
+Apache folder still has to be verified on a test subdomain before the first use).
+
 ## Cron jobs
 
 All jobs run the active release (`~/csc/current`) and log to `~/csc/shared/logs/`.
@@ -476,15 +483,19 @@ server). Its jobs:
 
 | job | schedule | what |
 |---|---|---|
-| geometry runner | every 5 min (`flock -n /tmp/csc_heavy.lock`, `--limit 25 --sweep`) | geometry runner: frame, shape class, proxies + deviation maps, descriptors, complexity, previews of every snapshot whose derivation is stale. With `CSC_GEOMETRY_HEAVY_STAGES=remote` it runs only frame and shape class, and the rest runs on a worker elsewhere (`main_geometry.py --remote <url> --user <admin>`, password in `CSC_API_PASSWORD`); the recompute route then only marks the heavy stages stale |
-| component map | every 6 h (`flock -w 900 /tmp/csc_heavy.lock`) | precomputes PCA / UMAP layouts for the component map |
+| geometry runner | every 20 min (`flock -n /tmp/csc_heavy.lock`, `--due --limit 10`: only the snapshots a write has marked) and nightly at 3:30 (`flock -w 900`, all snapshots, `--limit 200 --sweep`) | geometry runner: frame, shape class, proxies + deviation maps, descriptors, complexity, previews of every snapshot whose derivation is stale. With `CSC_GEOMETRY_HEAVY_STAGES=remote` it runs only frame and shape class, and the rest runs on a worker elsewhere (`main_geometry.py --remote <url> --user <admin>`, password in `CSC_API_PASSWORD`); the recompute route then only marks the heavy stages stale |
+| component map | daily 4:15 (`flock -w 3600 /tmp/csc_heavy.lock`) | precomputes PCA / UMAP layouts for the component map |
 | `usermaintenance.py` | daily 2:00 | removes unverified accounts older than 7 days |
 | `geometrymaintenance.py` | daily 3:00 | removes geometry folders without a component |
 
 The geometry runner and the component map share one lock, `/tmp/csc_heavy.lock`,
 so the two heavy jobs never run together (server memory, decision 8.130): the
-runner skips its run while the lock is held, the map waits up to 15 minutes
-instead of losing its slot.
+frequent geometry run skips its run while the lock is held, the nightly run and
+the map wait up to 15 minutes instead of losing their slot. A write that changes
+what the geometry stages read (a new version, a file, the geometry, the colour,
+an override, the function of the piece) marks the snapshot (`derivation_due`);
+the frequent run derives only marked snapshots, the nightly run checks all of them
+(`main_geometry.py --due` / without it).
 
 Each line starts with `source ~/.bash_profile &&` so the job sees the backend's
 environment variables. To run a job by hand:

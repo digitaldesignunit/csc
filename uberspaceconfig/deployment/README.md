@@ -157,3 +157,60 @@ From now on every release deploys this way.
 | redeploy / roll back / status | Actions --> **Deploy** --> run with `deploy v<version>`, `rollback` or `status` |
 | same on the server | `~/csc/bin/csc_release_deploy.sh v<version>` / `--rollback` / `--status` |
 | deploy log | `~/csc/shared/logs/deploy.log` |
+| maintenance page | `~/csc/bin/csc_maintenance.sh on` / `off` / `status` (below) |
+
+**The deploy runs the release's own scripts.** After the download is verified,
+a release whose `deploy/csc_release_deploy.sh` differs from the script that is
+running is installed into `~/csc/bin/` and the run is repeated with it (the
+log says "release carries a different deploy script"; `CSC_DEPLOY_REEXEC=1`
+marks the repeat, so it happens once; the deploy lock is kept). A change to a
+deploy script therefore takes effect with the release that carries it.
+
+## Maintenance mode
+
+For a cutover or a migration the web domain shows a static page, while the
+frontend may be stopped, restarted or deployed (decision 8.137). The script
+ships with every release into `~/csc/bin/` (with `maintenance/`, the page
+template and the `.htaccess`):
+
+```bash
+~/csc/bin/csc_maintenance.sh on          # page + 503 for every path, domain --> Apache
+~/csc/bin/csc_maintenance.sh status      # backends, page installed?, since when
+~/csc/bin/csc_maintenance.sh off         # domain --> the frontend on port 3000 again
+~/csc/bin/csc_maintenance.sh on --dry-run   # prints the commands, changes nothing
+```
+
+`on` writes `index.html` and an `.htaccess` into the domain's own document root,
+`/var/www/virtual/$USER/<domain>/`, and runs
+`uberspace web backend set <domain>/ --apache`; `off` runs
+`uberspace web backend set <domain>/ --http --port <port>` and removes the two
+files. Everything else under `~/html`, the static host and the API domain stay
+as they are, so the import and the geometry runner keep working. Every path
+answers `503` with `Retry-After`, `Cache-Control: no-store` and `noindex`.
+The domain and the port are settings (`CSC_MAINT_DOMAIN`, default
+`2ndchances.build`; `CSC_MAINT_PORT`, default `3000`; `CSC_MAINT_DOCROOT`).
+
+The text of the page is `~/csc/shared/maintenance.txt` when it exists, else a
+default. Plain text: every line is a paragraph (HTML-escaped); a line
+`end: <when>` sets "Expected back", a line `contact: <how>` the contact line:
+
+```
+We are moving the catalog to a new version.
+end: Sunday 18:00
+contact: a mail address or a phone number
+```
+
+A deploy leaves the mode as it is and says so at the end of its log.
+
+**Runbook of a cutover or a migration:** start with `csc_maintenance.sh on`,
+do the work (stop the frontend, migrate, deploy), check the site through an SSH
+tunnel (`ssh -L 3000:127.0.0.1:3000 <account>`, then
+`http://127.0.0.1:3000`; the frontend answers there while the domain shows the
+page), end with `csc_maintenance.sh off`.
+
+**To verify once on the server, before the first use:** that Apache serves
+the per-domain folder `/var/www/virtual/$USER/<domain>/` for a domain whose
+backend is `--apache`. Try it on a test subdomain
+(`uberspace web domain add test.<domain>`, `csc_maintenance.sh on` with
+`CSC_MAINT_DOMAIN=test.<domain>`, open it, then `off`); this has not been
+checked on the production account yet.

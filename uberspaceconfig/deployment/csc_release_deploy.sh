@@ -14,10 +14,18 @@
 #   ~/csc/current              symlink to the active release (services + cron use it)
 #   ~/csc/shared/frontend/     .env / .env.local of the frontend (linked into each release)
 #   ~/csc/shared/logs/         backend logs (linked as backend/logs into each release)
-#   ~/csc/bin/                 this script + csc_deploy_gate.sh (updated by each deploy)
+#   ~/csc/bin/                 this script, csc_deploy_gate.sh, csc_maintenance.sh and
+#                              maintenance/ (updated by each deploy)
 #
 # A deploy never touches the database. If the new release fails its health check the
 # previous one is switched back and restarted.
+#
+# The deploy runs the release's own scripts: after the download is verified, a
+# release whose deploy/csc_release_deploy.sh differs from the running script is
+# installed into ~/csc/bin and this run is repeated with it (CSC_DEPLOY_REEXEC=1
+# marks the repeat, so it happens once; the deploy lock is kept across it). A
+# change to this script therefore takes effect with the release that carries it,
+# not one release late.
 
 set -euo pipefail
 
@@ -37,6 +45,8 @@ VENVS="$CSC_HOME/venvs"
 SHARED="$CSC_HOME/shared"
 CURRENT="$CSC_HOME/current"
 PREVIOUS_FILE="$CSC_HOME/.previous_release"
+MAINTENANCE_FLAG="$SHARED/.maintenance_on"   # written by csc_maintenance.sh
+ORIGINAL_ARGS=("$@")
 TAG_RE='^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'
 
 DEPLOY_WORK=""
@@ -54,6 +64,38 @@ github() {  # github <url> <outfile>: public repo; a token only raises rate limi
 }
 
 version_of() { cat "$1/VERSION"; }
+
+install_scripts() {  # install_scripts <dir with *.sh>: into ~/csc/bin, one atomic rename each
+  # (a script that is running is never rewritten in place: bash reads it as it goes)
+  local file name
+  mkdir -p "$CSC_HOME/bin"
+  for file in "$1"/*.sh; do
+    [ -e "$file" ] || continue
+    name=$(basename "$file")
+    cp "$file" "$CSC_HOME/bin/.$name.new"
+    chmod +x "$CSC_HOME/bin/.$name.new"
+    mv -f "$CSC_HOME/bin/.$name.new" "$CSC_HOME/bin/$name"
+  done
+  # the page of csc_maintenance.sh (decision 8.137) lives beside it
+  if [ -d "$1/maintenance" ]; then
+    mkdir -p "$CSC_HOME/bin/maintenance"
+    cp -a "$1/maintenance/." "$CSC_HOME/bin/maintenance/"
+  fi
+}
+
+reexec_with_release_script() {  # reexec_with_release_script <unpacked release dir>
+  local new="$1/deploy/csc_release_deploy.sh"
+  [ -z "${CSC_DEPLOY_REEXEC:-}" ] || return 0   # the repeat itself: never again
+  [ -f "$new" ] || return 0
+  cmp -s "$new" "$(readlink -f "$0")" && return 0
+  log "release carries a different deploy script: installing it into $CSC_HOME/bin and repeating this run with it"
+  install_scripts "$1/deploy"
+  # exec skips the EXIT trap: clean up here (the repeat downloads again)
+  rm -rf "${DEPLOY_WORK:-}" "${DEPLOY_TARGET_TMP:-}"
+  DEPLOY_WORK=""
+  DEPLOY_TARGET_TMP=""
+  CSC_DEPLOY_REEXEC=1 exec "$CSC_HOME/bin/csc_release_deploy.sh" "${ORIGINAL_ARGS[@]}"
+}
 
 active_release() { if [ -L "$CURRENT" ]; then readlink -f "$CURRENT"; fi; }
 
@@ -124,6 +166,7 @@ PY
   unzip -q "$work/$frontend" -d "$work/frontend"       # -> csc-frontend-standalone/
   mv "$work/frontend/csc-frontend-standalone" "$target.tmp/frontend"
   [ "$(version_of "$target.tmp")" = "$version" ] || die "bundle VERSION != $version"
+  reexec_with_release_script "$target.tmp"
 
   # shared state: frontend secrets and backend logs live outside releases
   mkdir -p "$SHARED/frontend" "$SHARED/logs"
@@ -195,9 +238,7 @@ after_success() {  # static GH images, self-update of these scripts, pruning
     mkdir -p "$STATIC_GH_IMAGES"
     cp -a "$target/frontend/public/gh-interface/." "$STATIC_GH_IMAGES/"
   fi
-  mkdir -p "$CSC_HOME/bin"
-  cp "$target/deploy/"*.sh "$CSC_HOME/bin/"
-  chmod +x "$CSC_HOME/bin/"*.sh
+  install_scripts "$target/deploy"
 
   # keep the KEEP_RELEASES most recently activated plus active and previous
   # (a release that never passed its health check is not kept); drop unused venvs
@@ -231,8 +272,11 @@ status() {
 
 main() {
   mkdir -p "$RELEASES" "$VENVS"
-  exec 9>"$CSC_HOME/.deploy.lock"
-  flock -n 9 || die "another deploy is running"
+  # the repeat of a run (CSC_DEPLOY_REEXEC) inherits the lock of the first one
+  if [ -z "${CSC_DEPLOY_REEXEC:-}" ]; then
+    exec 9>"$CSC_HOME/.deploy.lock"
+    flock -n 9 || die "another deploy is running"
+  fi
   case "${1:-}" in
     --status)
       status ;;
@@ -251,7 +295,10 @@ main() {
       install_release "$1"
       activate "$RELEASES/${1#v}"
       after_success "$RELEASES/${1#v}"
-      log "deployed ${1#v}" ;;
+      log "deployed ${1#v}"
+      if [ -e "$MAINTENANCE_FLAG" ]; then
+        log "maintenance mode is ON and stays on: run csc_maintenance.sh off when the site is ready"
+      fi ;;
     *)
       sed -n '2,10p' "$0"; exit 2 ;;
   esac
