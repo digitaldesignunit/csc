@@ -794,6 +794,13 @@ History rows of every version, the record id on each evidence record, and the id
 from GH leads straight to it; the GH panel copy carries the parameter name the component expects
 (`ComponentID`, `SnapshotID`).
 
+**Provenance editing gaps** (2026-10-10, found while completing a ZirKuS beam): the web provenance dialog
+(`ProvenanceEditDialog.tsx`) edits kind, date, place, works, position, connections and detachability, but not
+`origin.performed_by`, `method` or `notes`; and an `Actor` has no link field, so a contractor's website can only go
+into the notes. Add the three fields to the dialog (actors as in the evidence form, with the profile, 8.133) and an
+optional `url` on `Actor` (organisations; shown to everyone like the organisation). Until then
+`scripts/db_maintenance/copy_provenance_capture.py --contractor/--contractor-url` sets them through the API.
+
 **Component preview drawer** (user 2026-10-10): the preview from Browse (the thumbnail in
 `ComponentOverviewDataTablePreviewCell.tsx`) and from the component map (`ComponentMapPageClient.tsx`, a second copy)
 opens a full-width bottom sheet with the full viewer and its menus, a centred "Preview" title and a row of 200 px
