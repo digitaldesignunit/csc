@@ -599,6 +599,11 @@ fix forward with 0.6.0.x.
 
 ### Backlog after P12 (0.6.0.x) --- logged 2026-10-08; RL2 + bulk submit before the cutover (8.127), the rest in 0.6.0.1
 
+**0.6.0.2 (8.129--8.131, user 2026-10-09):** an operations release: bundle fix, `seed_materials` upsert, `shapely`
+cap + `--only-binary`, `CSC_WORKERS` / `CSC_LOG_LEVEL` and one lock for the heavy crons, the public switch (piece +
+dataset) and the notice, the "No scan" hint, the dry-run note, `crontab.example`. The items below that 8.129 does
+not name stay for 0.6.0.3 or later.
+
 **Reinforcement layouts** (review report 2026-10-08; workflow: GH builds the bars in the snapshot's stored
 coordinates, `AddEvidence` uploads, the drawing is an attachment on the same record, added in the web):
 - RL1 (user): several layouts per piece, e.g. one from the archival drawing and one from a covermeter / Ferroscan
