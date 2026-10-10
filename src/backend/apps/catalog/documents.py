@@ -682,6 +682,10 @@ class ComponentSnapshot(_Document):
     notes: Optional[str] = None
     photo_credit: Optional[PhotoCredit] = None
     quantity: int = Field(1, ge=1)
+    # set by every write that changes a stage input (8.136): the frequent
+    # geometry cron selects the marked snapshots and clears the marker after a
+    # run without errors; server-maintained, never client-set, not in the etag
+    derivation_due: Optional[Timestamp] = None
     added_by_user_id: str
     added_by_username: Optional[str] = None
     photo_count: int = Field(0, ge=0)

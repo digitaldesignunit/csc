@@ -89,6 +89,7 @@ from .catalog_common import allocate_catalog_number, now_iso, validate_uuid
 from .change_log import log_change
 from .evidence_fold import recompute_properties
 from .geometry_hooks import derive_sync_identity
+from apps.catalog.geometry_runner import mark_due
 
 router = APIRouter()
 
@@ -226,6 +227,12 @@ async def _write(request: Request, before: Dict[str, Any],
     if result.matched_count == 0:
         raise HTTPException(status_code=409,
                             detail='The component changed meanwhile; reload.')
+    if not _same(before.get('original_function'),
+                 after.get('original_function')):
+        # the column rule of the frame reads the function (7.10): its
+        # snapshots are due for the geometry cron (8.136)
+        await mark_due(request.app.mongodb_component_snapshots,
+                       {'identity_id': before['_id']})
     if any(not _same(before.get(key), after.get(key))
            for key in ('exit', 'past_cycles', 'origin')):
         # an exit, a re-entry or a new origin moves where the evidence

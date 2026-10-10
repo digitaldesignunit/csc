@@ -75,6 +75,7 @@ _REQUIRED_ENV = [
 
 # a bad CSC_GEOMETRY_HEAVY_STAGES fails here, not at the first recompute
 from apps.catalog.geometry_stages import heavy_stages_where  # noqa: E402
+from apps.catalog.geometry_runner import DUE_INDEX  # noqa: E402
 try:
     heavy_stages_where()
 except ValueError as _exc:
@@ -144,6 +145,9 @@ async def lifespan(app: FastAPI):
     await app.mongodb_invitations.create_index('email')
     await app.mongodb_change_log.create_index([('record_id', 1), ('at', 1)])
     await app.mongodb_change_log.create_index([('identity_id', 1), ('at', -1)])
+    await app.mongodb_component_snapshots.create_index(
+        'derivation_due', name='derivation_due_marked',
+        partialFilterExpression=DUE_INDEX['partialFilterExpression'])
     await app.mongodb_component_evidence.create_index('identity_id')
     await app.mongodb_component_evidence.create_index(
         [('status', 1), ('method', 1)])

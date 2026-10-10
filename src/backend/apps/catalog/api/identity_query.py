@@ -48,28 +48,45 @@ def _username_enrichment_stages() -> List[Dict[str, Any]]:
 
 
 # What the sort and the snapshot filters read of the current snapshot
-# (``resolve_sort_field``, ``CatalogFilters.snapshot_match``): all small. A
-# listing without a limit that sorts on a snapshot field sorts these slim
-# states and joins the whole state afterwards, so the blocking sort never
-# holds the inline meshes of the external catalogue pieces (Atlas' free tier
-# caps a blocking sort at 32 MB and ignores allowDiskUse).
+# (``resolve_sort_field``, ``CatalogFilters.snapshot_match``): all small.
 SORT_SNAPSHOT_FIELDS = (
     'status', 'name', 'shape_class', 'complexity', 'fragment', 'bbx',
     'color', 'effective_from', 'created', 'lastmodified',
 )
+# What a catalog row (``read_models.catalog_row``) reads of it; includes the
+# sort and filter fields. No ``descriptors``, no inline ``geometry``, no
+# proxies with their deviation data, no capture, no photos' bookkeeping.
+ROW_SNAPSHOT_FIELDS = tuple(dict.fromkeys(SORT_SNAPSHOT_FIELDS + (
+    'identity_id', 'version', 'effective_from_precision', 'location', 'frame',
+    'etag', 'quantity',
+)))
+# What the component map reads (``component_map.map_rows_project_stage``)
+# besides the filters: the descriptors are the map's input.
+MAP_SNAPSHOT_FIELDS = tuple(dict.fromkeys(
+    SORT_SNAPSHOT_FIELDS + ('descriptors',)))
+
+# The three views of the joined snapshot (decision 8.136, Atlas traffic):
+# ``row``  the fields a catalog row reads (Browse, the single row, the
+#          children, the reservations); ``map`` the fields of the map;
+# ``full`` the whole snapshot, joined after the page is cut (a passport row:
+#          ``expand=current_snapshot``, read by Grasshopper).
+SNAPSHOT_VIEWS = {'row': ROW_SNAPSHOT_FIELDS, 'map': MAP_SNAPSHOT_FIELDS,
+                  'full': ROW_SNAPSHOT_FIELDS}
 
 
 def _current_snapshot_lookup(snapshots_collection: str, *,
-                             slim: bool = False) -> Dict[str, Any]:
+                             fields: Optional[tuple] = None
+                             ) -> Dict[str, Any]:
+    """The join of the current snapshot, projected to ``fields`` inside the
+    lookup (nothing else leaves the database); the whole state without."""
     lookup: Dict[str, Any] = {
         'from': snapshots_collection,
         'localField': 'current_snapshot_id',
         'foreignField': '_id',
         'as': 'current_snapshot',
     }
-    if slim:
-        lookup['pipeline'] = [
-            {'$project': {name: 1 for name in SORT_SNAPSHOT_FIELDS}}]
+    if fields is not None:
+        lookup['pipeline'] = [{'$project': {name: 1 for name in fields}}]
     return {'$lookup': lookup}
 
 
@@ -85,21 +102,27 @@ def build_list_pipeline(
     include_username: bool,
     current_user_id: Optional[str],
     reserved_filter: Optional[str],
+    snapshot_view: str = 'row',
 ) -> List[Dict[str, Any]]:
+    """The identities with their current snapshot. ``snapshot_view`` (see
+    ``SNAPSHOT_VIEWS``) says how much of the snapshot comes back: the join is
+    always projected to the fields the filters, the sort and the row read, so
+    the sort never holds an inline mesh (Atlas' free tier caps a blocking sort
+    at 32 MB and ignores allowDiskUse) and a row carries no geometry; the
+    whole state of a ``full`` view is joined after ``$skip`` / ``$limit``."""
     sort_field = resolve_sort_field(sortkey)
     sort_stage = {'$sort': {sort_field: sort_order}}
     # a sort on an identity field runs on the small identity documents, right
     # after the first match (an index serves ``_id``); every later stage keeps
-    # the order. Without a limit, a sort on a snapshot field would hold the
-    # whole joined documents: sort the slim states, join the full ones after.
+    # the order
     identity_sort = not sort_field.startswith('current_snapshot.')
-    slim = not identity_sort and not size > 0
 
     pipeline: List[Dict[str, Any]] = [{'$match': identity_match}]
     if identity_sort:
         pipeline.append(sort_stage)
     pipeline.extend([
-        _current_snapshot_lookup(snapshots_collection, slim=slim),
+        _current_snapshot_lookup(snapshots_collection,
+                                 fields=SNAPSHOT_VIEWS[snapshot_view]),
         {'$unwind': '$current_snapshot'},
     ])
 
@@ -118,11 +141,6 @@ def build_list_pipeline(
 
     if not identity_sort:
         pipeline.append(sort_stage)
-    if slim:
-        pipeline.extend([
-            _current_snapshot_lookup(snapshots_collection),
-            {'$unwind': '$current_snapshot'},
-        ])
 
     if page > 0 and size > 0:
         pipeline.extend([
@@ -131,6 +149,13 @@ def build_list_pipeline(
         ])
     elif page == 0 and size > 0:
         pipeline.append({'$limit': size})
+
+    if snapshot_view == 'full':
+        # only the rows of the page carry the whole state
+        pipeline.extend([
+            _current_snapshot_lookup(snapshots_collection),
+            {'$unwind': '$current_snapshot'},
+        ])
 
     return pipeline
 
@@ -146,14 +171,8 @@ def build_count_pipeline(
 ) -> List[Dict[str, Any]]:
     pipeline: List[Dict[str, Any]] = [
         {'$match': identity_match},
-        {
-            '$lookup': {
-                'from': snapshots_collection,
-                'localField': 'current_snapshot_id',
-                'foreignField': '_id',
-                'as': 'current_snapshot',
-            }
-        },
+        _current_snapshot_lookup(snapshots_collection,
+                                 fields=SORT_SNAPSHOT_FIELDS),
         {'$unwind': '$current_snapshot'},
     ]
     if snapshot_match:

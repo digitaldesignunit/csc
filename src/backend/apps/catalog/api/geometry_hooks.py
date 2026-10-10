@@ -23,7 +23,7 @@ from fastapi import HTTPException, Request
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.api.catalog_common import now_iso
 from apps.catalog.etag import compute_snapshot_etag
-from apps.catalog.geometry_runner import derive_and_store
+from apps.catalog.geometry_runner import derive_and_store, mark_due
 from apps.catalog.geometry_stages import (
     HEAVY_STAGES,
     STAGES,
@@ -70,6 +70,9 @@ async def derive_sync(request: Request, snapshot_id: str) -> Optional[dict]:
     stored document afterwards (None when it no longer exists)."""
     app = request.app
     snapshots = app.mongodb_component_snapshots
+    # every write that reaches here changed a stage input: the cron looks at
+    # this snapshot next (decision 8.136)
+    await mark_due(snapshots, {'_id': snapshot_id})
     snapshot = await snapshots.find_one({'_id': snapshot_id})
     if snapshot is None:
         return None

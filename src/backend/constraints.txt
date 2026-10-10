@@ -22,3 +22,11 @@ pillow<=12.2.0
 contourpy<=1.3.2
 # 2.2.0 ships only manylinux_2_28 wheels (checked 2026-10-10)
 shapely<=2.1.2
+# the transitive geometry stack (via umap-learn), pinned to what the server venv
+# runs, so that plain pip and `invoke check-server-wheels` resolve the same set:
+# unpinned, pip took the newest numba, which has no glibc 2.17 wheel and was
+# compiled from source on the server
+numba==0.67.0
+llvmlite==0.49.0
+pynndescent==0.6.0
+umap-learn==0.5.12

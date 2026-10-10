@@ -699,6 +699,7 @@ Migration: `created_by_user_id` = the `added_by_user_id` of the identity's v0 (s
   "added_by_user_id": "...", "added_by_username": "...",
   "photo_count": 0,
   "mesh_ply_resolutions": { "0": ["reduced", "detailed"] },
+  "derivation_due": "...",                     // DERIVED, optional: a timestamp set by every write that changes a stage input (a new version or correction, a PLY upload or removal, a PATCH of `geometry`, `color`, `shape_class` or `complexity`, a change of the piece's `original_function`); the frequent geometry cron (`main_geometry.py --due`) reads only marked snapshots (partial index) and unsets it after a run without errors if it still holds the value read; not in the etag, not in the change log (8.136)
   "etag": "...", "created": "...", "lastmodified": "..."   // CPR: etag = integrity hash --- Art 78(h)
 }
 ```

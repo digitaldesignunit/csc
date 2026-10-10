@@ -624,6 +624,18 @@ coordinates, `AddEvidence` uploads, the drawing is an attachment on the same rec
 - RL5: the migrated ZirKuS record (step 6d) has `document` null; filling title / date / reference needs a correction
   today; extend "fill once" (8.123 a) to empty `document` fields of a published evidence record.
 - RL6: the GH `ReinforcementLayout` builder lacks `url` / `retrieved_at` of the drawing (8.106).
+- RL9 (user 2026-10-10, 0.6.1.0 with RL6): `ReinforcementLayout` needs bar curves in the snapshot's stored
+  coordinates (mm), but nothing converts bars drawn on a piece moved by `ApplyFrame` (canonical, centred) or
+  `TransformComponent`; today the user must Orient World XY --> `Frame` or invert the transform by hand. Add an
+  optional `ComponentPassport` input: when it carries a `csc_placement`, the component maps the curves back to stored
+  coordinates (inverse of the placement) and takes `SnapshotID` from the passport (an explicit `SnapshotID` that
+  disagrees is an error); a remark says which conversion ran. Also: refuse or warn when the document unit is not
+  millimetres (scale by the unit factor), and say in the component description that a layout belongs to one
+  version. Same handling for any later GH builder that takes positions on a piece (Ferroscan, 0.6.2).
+- RL10 (user 2026-10-10, 0.6.1.0): the evidence card never shows a layout's `accuracy_note` (only the form has it,
+  `lib/evidence/layout.ts`). Show it in the card's unfolded details for signed-in viewers (with the basis, the
+  document or instrument block); anonymous viewers do not get it (hidden in the web; whether the public tier of the
+  API drops it too is decided with the build, 8.67 / 8.101).
 - RL7: `position.kind` is `none` from GH and `region` from the web form for the same method; pick one.
 - RL8: the steel grade stays inside the bars and never enters the fold; the spec's answer is a separate `rebar_spec`
   claim sharing the attachment (7.8), which no GH component builds.
@@ -711,9 +723,94 @@ pieces get one from their primitive) and how the PCA / UMAP layouts behave on it
 also takes the open items of the 0.6.0.x list above, first the two deploy blockers (the deploy script's self-update
 lag and the transitive geometry pins), since its own deploy depends on them.
 
-**Scope decided (8.132, user 2026-10-10)** with the profile (8.133), the evidence forms (8.134), the edge distance
-(8.135) and the swimlane graph (8.102, added to 8.132); still to grill: logo and mail templates, O26, the swimlane
-details.
+**Scope decided (8.132--8.142, user 2026-10-10); build in phases, each through review:**
+- **A, operations (first; "go" 2026-10-10):** the deploy re-execs the release's own script (guarded) and the
+  transitive geometry pins (`numba==0.67.0`, `llvmlite==0.49.0`, `pynndescent==0.6.0`, `umap-learn==0.5.12`); 8.136
+  (batched identity loads, `derivation_due` markers, nightly full check and `--sweep`); the projected snapshot joins
+  of the list, map and row pipelines (Atlas traffic, below); the maintenance mode 8.137; `crontab.example` with the
+  20-minute marked run, the nightly full run with `--sweep` and the daily map.
+- **B, backend:** profile 8.133; user-created datasets with the review gate 8.139; RL4 / RL5 / RL7 (8.142), RL10;
+  history endpoint and export 8.140 g / h; photo credit in the exports; the two 0.6.0.2 review notes; the
+  evidence-edit notice.
+- **C, Grasshopper (user's OK):** RL6, RL9, the `Actor` `Session` input (8.133 f).
+- **D, web:** evidence forms 8.134 (with h); edge distance 8.135; preview and id chips 8.141; swimlane 8.140; RL3;
+  HKS map basis and level 1 curve; provenance dialog gaps and `Actor.url`; privacy page; credits page (partner
+  names, links and consent from the user).
+- **E, logo and mails 8.138:** the coordinator drafts the three concepts when the user asks (not in parallel with A).
+- **F, toolchain:** lint refactor and lint packages 16.4; npm audit with a glibc 2.17 server build test.
+
+**Atlas traffic (2026-10-10, at the front with the deploy fixes and 8.136):** since the cutover the primary's
+network rose from near zero to about 1 MB/s with about 60 requests/s for hours (the geometry runner reading every
+snapshot every 5 minutes, one identity round trip each), and stays at about 250 KB/s; the free tier (M0) throttles,
+so every response carrying snapshot bodies slowed down (`/identities`: about 1.3 s per row, Browse about 8 s, while
+`/version`, `/health/db` and `/identities/count` answer in 0.1 s). Besides 8.136: (a) the list, map and row
+pipelines join the current snapshot projected to the fields a row reads (no `descriptors`, no inline `geometry`, no
+proxies' deviation data), and `expand=current_snapshot` projects what the passport body uses; (b) a test pins the
+projection (a row built from the projected join equals one built from the full document); (c) measure the bytes per
+request before and after on a copy of the production data. If traffic stays near the M0 limits afterwards: decide
+between a paid Atlas tier and a MongoDB on the server, with the measured numbers.
+
+**Maintenance mode** (8.137, user 2026-10-10): `csc_maintenance.sh on | off | status`, the static 503 page in
+`uberspaceconfig/html/maintenance/`; first verify the per-domain Apache folder on a test subdomain.
+
+**Privacy notice and cookie notice** (user 2026-10-10; the usage statistics moved to `FUTURE.md` the same day):
+the site has accounts, mails and uploads but only an imprint; add a privacy page (GDPR Art. 13: controller, purposes, legal
+bases, retention, recipients incl. the hosting and database providers, rights)
+and link it from the footer, the registration form and the mails. The cookie notice shrinks to what is true: the
+site stores only what it needs (session, theme, banner state); no consent banner while nothing else is stored. The legal text needs a check by the university's data protection office.
+
+**Credits page revision** (user 2026-10-10): the ZirKuS paragraph gains the DBU funding logo (the "sponsored by"
+variant, as the funder's guidelines ask; files in the gitignored `reference/zirkus_logos_refs/`, copied into
+`public/` as needed) and a notice thanking all project partners for their support and valuable feedback during
+development, with the partners' logos (five files there). The page itself gets the 0.6 style (theme colours instead
+of `text-blue-500` links, light and dark logo handling). To settle: the partners' full names and links, and that
+each partner agrees to its logo being shown.
+
+**Ferroscan to reinforcement layout** (user 2026-10-10; **0.6.2**, user the same day; to grill before): the gitignored prototype
+`reference/ferromodeller/` (a GH CPython component, MIT) reads a Hilti PROFIS Detection report image (two panels: the
+plan / C-scan strip on top, the cross-section / B-scan below with blue / green cap markers per bar and layer,
+magenta cover arrows and spacings), finds the caps and the magenta datum line, and with typed values (scan length,
+covers, diameter, bar length, a placement plane) draws one straight bar per cap. Goal: make it the way CSC records
+Ferroscan data from Rhino / GH. (a) A `csc_gh` module and GH components: read the report image (PNG; the PDF's
+aggregate text, i.e. width, diameter, bar count and cover statistics, read too), detect the bars, place them on a
+plane picked on the piece in its stored coordinates, preview, then build a `reinforcement_layout` payload with
+`basis: scan` (the instrument block filled: covermeter, Hilti, the model; per bar `cover_mm`, `diameter_known`)
+and upload it as a draft (8.127) through `AddEvidence`. (b) The report image (and the PDF) travel as attachments of
+the record. (c) "The image in 3D": the record also stores where the image sits on the piece, i.e. the C-scan strip as
+a textured rectangle on the scanned surface and optionally the B-scan as a textured vertical section along the scan
+line (corners in stored coordinates plus the pixel crop of the image); the web shows the image as an attachment and
+the viewer draws the textured quads with the bars as an overlay (for signed-in users, since attachment files are
+theirs only, 8.13). (d) Several scans of one face ("langs" and "quer") combine into one layout or stay separate
+records (RL1). (e) Depth from the image's depth axis instead of typed covers, and the detection constants tuned on
+more reports, are later steps. Grill: the payload / attachment shape for the placed image (new field on the scan
+basis vs. a generic "image placement" for any attachment), detection on the server vs. in GH only, PROFIS layouts
+other than the sample (2047 x 1465), and GH component changes (user's OK given with this request).
+
+**Snapshot ids in the web, for hybrid work with GH** (user 2026-10-10): the component page offers "Copy ID" and
+"Copy as Grasshopper panel" for the identity only (`ComponentHeaderStrip.tsx`); a version's snapshot id (what
+`FetchSnapshot`, `AddEvidence` and the reinforcement builder need) is nowhere to see or copy. Proposal, to confirm:
+one shared id chip (the short id in monospace, the full id on hover, copy on click, a menu item "Copy as Grasshopper
+panel") used wherever an id matters: the snapshot id of the shown version next to the version selector and in the
+History rows of every version, the record id on each evidence record, and the identity id as today; Browse rows get
+"Copy snapshot id" in their row menu; `?snapshot=<id>` on the component page opens that version, so an id pasted
+from GH leads straight to it; the GH panel copy carries the parameter name the component expects
+(`ComponentID`, `SnapshotID`).
+
+**Provenance editing gaps** (2026-10-10, found while completing a ZirKuS beam): the web provenance dialog
+(`ProvenanceEditDialog.tsx`) edits kind, date, place, works, position, connections and detachability, but not
+`origin.performed_by`, `method` or `notes`; and an `Actor` has no link field, so a contractor's website can only go
+into the notes. Add the three fields to the dialog (actors as in the evidence form, with the profile, 8.133) and an
+optional `url` on `Actor` (organisations; shown to everyone like the organisation). Until then
+`scripts/db_maintenance/copy_provenance_capture.py --contractor/--contractor-url` sets them through the API.
+
+**Component preview drawer** (user 2026-10-10): the preview from Browse (the thumbnail in
+`ComponentOverviewDataTablePreviewCell.tsx`) and from the component map (`ComponentMapPageClient.tsx`, a second copy)
+opens a full-width bottom sheet with the full viewer and its menus, a centred "Preview" title and a row of 200 px
+buttons: a remnant of 0.5. Keep the preview, make it compact and quiet: one shared preview panel for both pages; on
+desktop a side sheet of about 420 px (the list or map stays visible), on a phone a bottom sheet of about 60 % height;
+the viewer without toolbar and menus (orbit and zoom only; `ComponentViewer` already has `toolbar` and
+`compactDesktop`); a slim header with name, catalogue number and dataset; one "Open" button plus small icon actions
+(locate by QR, close); arrow keys or next / previous to step through the visible rows. To confirm in the grilling.
 
 **CSC logo** (user 2026-10-10): the web shows only the lab's logo (`public/logo/ddu_logo_*.png`). Create a logo for
 CSC itself: a mark and a wordmark, light and dark variants, SVG source plus PNG exports; favicon and app icons

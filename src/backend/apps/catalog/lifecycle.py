@@ -92,7 +92,7 @@ SNAPSHOT_OVERRIDES: FrozenSet[str] = frozenset({
 SNAPSHOT_DERIVED: FrozenSet[str] = frozenset({
     'descriptors', 'properties', 'properties_version', 'frame', 'bbx',
     'mesh_ply_resolutions', 'photo_count', 'shape_class_source',
-    'complexity_source', 'status', 'status_changed_by_user_id',
+    'complexity_source', 'derivation_due', 'status', 'status_changed_by_user_id',
     'status_changed_at', 'status_history', 'supersedes', 'superseded_by', 'version',
     'identity_id', 'added_by_user_id', 'added_by_username', 'etag',
     'created', 'lastmodified', '_id', 'id',

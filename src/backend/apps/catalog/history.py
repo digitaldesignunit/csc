@@ -24,7 +24,8 @@ NOT_LOGGED: Dict[str, frozenset] = {
     }),
     'snapshot': frozenset({
         'descriptors', 'properties', 'properties_version', 'frame', 'bbx',
-        'derivation', 'mesh_ply_resolutions', 'photo_count', 'status',
+        'derivation', 'derivation_due', 'mesh_ply_resolutions',
+        'photo_count', 'status',
         'status_changed_by_user_id', 'status_changed_at', 'status_history',
         'lastmodified', 'created', 'etag', '_id',
     }),
