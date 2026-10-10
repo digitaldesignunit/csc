@@ -121,17 +121,19 @@
   --sidebar-ring: #ef509c;
 }
 
-/* === Dark theme === */
+/* === Dark theme ===
+ * Neutrals after GitHub's dark default (canvas #0d1117, raised surfaces
+ * #151b23, borders #3d444d); the brand accents stay. */
 .dark {
   /* core palette */
-  --background: #000000;       /* black */
-  --foreground: #f2f2f2;       /* light gray text */
+  --background: #0d1117;       /* blue-gray canvas, not black */
+  --foreground: #e6edf3;
 
   /* surfaces */
-  --card: #111111;
-  --card-foreground: #f2f2f2;
-  --popover: #111111;
-  --popover-foreground: #f2f2f2;
+  --card: #151b23;
+  --card-foreground: #e6edf3;
+  --popover: #151b23;
+  --popover-foreground: #e6edf3;
 
   /* brand (same hues, slightly boosted contrast if needed) */
   --primary: #4080ff;          /* use blue as primary in dark mode */
@@ -142,16 +144,16 @@
   --accent-foreground: #000000;
 
   /* neutrals */
-  --muted: #1a1a1a;
-  --muted-foreground: #cfcfcf;
+  --muted: #212830;
+  --muted-foreground: #9198a1;
 
   /* feedback */
   --destructive: #f87171;      /* red-400 */
   --destructive-foreground: #000000;
 
   /* chrome */
-  --border: rgba(255,255,255,0.12);
-  --input: rgba(255,255,255,0.16);
+  --border: #3d444d;
+  --input: #3d444d;
   --ring: #ef509c;
 
   /* charts (tuned for dark contrast) */
@@ -165,13 +167,13 @@
   --background-mesh-color: #ef509c;  /* pink for dark mode */
 
   /* sidebar */
-  --sidebar: #0f0f0f;
-  --sidebar-foreground: #f2f2f2;
+  --sidebar: #151b23;
+  --sidebar-foreground: #e6edf3;
   --sidebar-primary: #4080ff;  /* blue as primary */
   --sidebar-primary-foreground: #000000;
-  --sidebar-accent: #1a1a1a;
-  --sidebar-accent-foreground: #f2f2f2;
-  --sidebar-border: rgba(255,255,255,0.12);
+  --sidebar-accent: #262c36;
+  --sidebar-accent-foreground: #e6edf3;
+  --sidebar-border: #3d444d;
   --sidebar-ring: #4080ff;
 }
 

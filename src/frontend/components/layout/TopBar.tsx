@@ -2,14 +2,15 @@
 
 /**
  * The slim top bar of the navigation shell (decision 8.29): the sidebar
- * toggle, the page title and, on phones, Search (Browse's search field) and
- * Scan (decision 8.118 S3).
+ * toggle, the page title, on phones Search (Browse's search field) and Scan
+ * (decision 8.118 S3), and the light / dark switch.
  */
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { ScanQrCode, Search } from 'lucide-react'
 
+import ThemeToggle from '@/components/common/ThemeToggle'
 import { Badge } from '@/components/ui/badge'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { pageTitle } from '@/lib/navigation'
@@ -52,6 +53,7 @@ export default function TopBar({ betaBannerText }: { betaBannerText?: string }) 
           <ScanQrCode className="size-4" />
         </Link>
       )}
+      <ThemeToggle />
     </header>
   )
 }

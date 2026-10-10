@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0.3] - 2026-10-10
+
+A small interface release: the dark theme and the light / dark switch. No change
+to the backend, the data model or the Grasshopper components.
+
+### Changed
+
+- **Dark theme**: blue-gray neutrals after GitHub's dark default (canvas
+`#0d1117`, cards, menus and the sidebar `#151b23`, borders `#3d444d`, text
+`#e6edf3`) instead of black; the DDU blue and magenta accents stay as they were.
+
+### Added
+
+- A light / dark switch in the top bar (sun / moon), one click away again; the
+account menu and Settings keep the choice "System".
+
 ## [0.6.0.2] - 2026-10-10
 
 An operations release (decisions 8.129 to 8.131): the frontend bundle, the
