@@ -749,6 +749,33 @@ site stores only what it needs (session, theme, banner state) and, if the statis
 switch for them (objection under Art. 21, stored locally as a strictly necessary preference) instead of a consent
 banner. The legal text needs a check by the university's data protection office.
 
+**Credits page revision** (user 2026-10-10): the ZirKuS paragraph gains the DBU funding logo (the "sponsored by"
+variant, as the funder's guidelines ask; files in the gitignored `reference/zirkus_logos_refs/`, copied into
+`public/` as needed) and a notice thanking all project partners for their support and valuable feedback during
+development, with the partners' logos (five files there). The page itself gets the 0.6 style (theme colours instead
+of `text-blue-500` links, light and dark logo handling). To settle: the partners' full names and links, and that
+each partner agrees to its logo being shown.
+
+**Ferroscan to reinforcement layout** (user 2026-10-10; to grill, scope 0.6.1.0 or 0.6.2): the gitignored prototype
+`reference/ferromodeller/` (a GH CPython component, MIT) reads a Hilti PROFIS Detection report image (two panels: the
+plan / C-scan strip on top, the cross-section / B-scan below with blue / green cap markers per bar and layer,
+magenta cover arrows and spacings), finds the caps and the magenta datum line, and with typed values (scan length,
+covers, diameter, bar length, a placement plane) draws one straight bar per cap. Goal: make it the way CSC records
+Ferroscan data from Rhino / GH. (a) A `csc_gh` module and GH components: read the report image (PNG; the PDF's
+aggregate text, i.e. width, diameter, bar count and cover statistics, read too), detect the bars, place them on a
+plane picked on the piece in its stored coordinates, preview, then build a `reinforcement_layout` payload with
+`basis: scan` (the instrument block filled: covermeter, Hilti, the model; per bar `cover_mm`, `diameter_known`)
+and upload it as a draft (8.127) through `AddEvidence`. (b) The report image (and the PDF) travel as attachments of
+the record. (c) "The image in 3D": the record also stores where the image sits on the piece, i.e. the C-scan strip as
+a textured rectangle on the scanned surface and optionally the B-scan as a textured vertical section along the scan
+line (corners in stored coordinates plus the pixel crop of the image); the web shows the image as an attachment and
+the viewer draws the textured quads with the bars as an overlay (for signed-in users, since attachment files are
+theirs only, 8.13). (d) Several scans of one face ("langs" and "quer") combine into one layout or stay separate
+records (RL1). (e) Depth from the image's depth axis instead of typed covers, and the detection constants tuned on
+more reports, are later steps. Grill: the payload / attachment shape for the placed image (new field on the scan
+basis vs. a generic "image placement" for any attachment), detection on the server vs. in GH only, PROFIS layouts
+other than the sample (2047 x 1465), and GH component changes (user's OK given with this request).
+
 **Component preview drawer** (user 2026-10-10): the preview from Browse (the thumbnail in
 `ComponentOverviewDataTablePreviewCell.tsx`) and from the component map (`ComponentMapPageClient.tsx`, a second copy)
 opens a full-width bottom sheet with the full viewer and its menus, a centred "Preview" title and a row of 200 px
