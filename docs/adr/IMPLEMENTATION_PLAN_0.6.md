@@ -726,6 +726,29 @@ projection (a row built from the projected join equals one built from the full d
 request before and after on a copy of the production data. If traffic stays near the M0 limits afterwards: decide
 between a paid Atlas tier and a MongoDB on the server, with the measured numbers.
 
+**Maintenance mode** (8.137, user 2026-10-10): `csc_maintenance.sh on | off | status`, the static 503 page in
+`uberspaceconfig/html/maintenance/`; first verify the per-domain Apache folder on a test subdomain.
+
+**Usage statistics** (user 2026-10-10; to grill): lightweight, for the maintainer: page views, interactions
+(e.g. viewer opened, export downloaded, scan used, search run), country, device class, referrer. Proposal: built
+in, cookieless and without personal data, so no consent banner is needed: the frontend sends small events to a
+backend route; the backend resolves the country from the IP with a local GeoIP file (DB-IP Lite, CC BY 4.0, or
+GeoLite2 with a licence key) and then discards the IP; it stores only daily aggregate counters (day x page
+template x event x country x device class), never raw events, user ids or full URLs (catalogue ids reduced to the
+route template); unique visitors at most as a per-day count from a daily-rotating salted hash held in memory; Do Not
+Track / Global Privacy Control respected; an admin page "Usage" with charts. Small in Atlas (counters, not events) and
+cheap in traffic (8.136 / Atlas M0). Rejected for now: Plausible CE (ClickHouse, too heavy for Uberspace),
+Umami (one more Node service and a database), third-party hosted analytics (data leaves the EU host, consent
+needed). Grill: the event list, retention (counters kept, e.g. 25 months), signed-in users counted or not.
+
+**Privacy notice and cookie notice** (user 2026-10-10, with the usage statistics): the site has accounts, mails,
+uploads and soon statistics but only an imprint; add a privacy page (GDPR Art. 13: controller, purposes, legal
+bases, retention, recipients incl. the hosting and database providers, rights, the objection to the statistics)
+and link it from the footer, the registration form and the mails. The cookie notice shrinks to what is true: the
+site stores only what it needs (session, theme, banner state) and, if the statistics stay cookieless, an opt-out
+switch for them (objection under Art. 21, stored locally as a strictly necessary preference) instead of a consent
+banner. The legal text needs a check by the university's data protection office.
+
 **Component preview drawer** (user 2026-10-10): the preview from Browse (the thumbnail in
 `ComponentOverviewDataTablePreviewCell.tsx`) and from the component map (`ComponentMapPageClient.tsx`, a second copy)
 opens a full-width bottom sheet with the full viewer and its menus, a centred "Preview" title and a row of 200 px
