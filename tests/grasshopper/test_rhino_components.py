@@ -496,7 +496,7 @@ def test_reinforcement_layout_from_curves():
     record = json.loads(obj.RunScript(
         [one, two, arc], ['BSt III'], [8, 10, 12], UUID_A, 'drawing',
         '2024-05-03', 'Drawing 7', '1974-05', 'ref', None, None,
-        'size +-20 %', 'n'))
+        'size +-20 %', 'n', None, None, None))
     assert compstub.messages(obj)['error'] == [], compstub.messages(obj)
     bars = record['payload']['bars']
     assert [x['diameter_mm'] for x in bars] == [8, 10, 12]
@@ -507,11 +507,11 @@ def test_reinforcement_layout_from_curves():
     assert record['observed_at'] == '2024-05-03T00:00:00Z'
     # one value per bar or one for all, else the message says so
     bad = obj.RunScript([one, two], ['a', 'b', 'c'], [8], UUID_A, 'scan',
-                        None, None, None, None, None, None, None, None)
+                        None, None, None, None, None, None, None, None, None, None, None)
     assert bad == '' and 'one Spec' in ' '.join(
         compstub.messages(obj)['error'])
     no_id = obj.RunScript([one], None, [8], 'x', 'scan', None, None, None,
-                          None, None, None, None, None)
+                          None, None, None, None, None, None, None, None)
     assert no_id == ''
 
 
@@ -544,3 +544,44 @@ def test_the_session_downloads_a_mesh_through_the_numpy_parse():
     # a broken file is None, not an exception in the component
     data = b'not a ply'
     assert core.cached_get_snapshot_mesh('sid', 0, 'reduced')[0] is None
+
+
+def test_curves_drawn_on_a_placed_piece_are_stored_back_in_rhino():
+    from test_components_layout import PLANE, _passport
+    stored = [(0, 0, 0), (400, 0, 0), (400, 90, 30)]
+    curve = _curve([G.Point3d(*p) for p in stored])
+    curve.Transform(NS['placement_transform'](PLANE))      # as Fetch places it
+    module = compstub.load_component('ReinforcementLayout')
+    obj = compstub.instance(module, 'ReinforcementLayout')
+    record = json.loads(obj.RunScript(
+        [curve], ['BSt I'], [10], None, 'exposed', None, None, None, None,
+        None, None, None, None, None, None, _passport(PLANE)))
+    assert compstub.messages(obj)['error'] == [], compstub.messages(obj)
+    assert np.allclose(record['payload']['bars'][0]['points'], stored,
+                       atol=1e-6)
+    assert record['position']['snapshot_id'] == UUID_A
+
+
+def test_fetch_reinforcement_layout_returns_curves_and_pipes():
+    from test_components_layout import Core, PLANE, _passport, _row
+    rows = [_row('r', '2026-01-01T00:00:00Z')]
+    core = Core({('GET', '/identities/'): Response(200, rows)})
+    module = compstub.load_component(
+        'FetchReinforcementLayout', sticky={'CSC_AuthCore': core})
+    obj = compstub.instance(module, 'FetchReinforcementLayout')
+    out = obj.RunScript(_passport(PLANE), None, True)
+    bars, diameter, _spec, cover, ids, _basis, _snaps, _status, pipes = out
+    assert compstub.messages(obj)['error'] == [], compstub.messages(obj)
+    curves = bars.values
+    assert len(curves) == 2 and isinstance(curves[0], G.PolylineCurve)
+    want = NS['points_to_document']([(0, 0, 0), (100, 0, 0), (100, 50, 0)],
+                                    PLANE)
+    got = NS['curve_points'](curves[0])
+    assert np.allclose(got, want, atol=1e-6)
+    assert diameter.values == [8.0, 12.0] and cover.values == [None, 25.0]
+    assert list(ids) == ['r']
+    assert len(pipes.values) == 2 and all(p.IsSolid for p in pipes.values)
+    # the solid has the diameter of the bar: V = pi r^2 L (flat caps)
+    length = 100.0 + 50.0
+    assert pipes.values[0].GetVolume() == pytest.approx(
+        np.pi * 16 * length, rel=0.03)

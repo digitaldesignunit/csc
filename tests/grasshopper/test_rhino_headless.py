@@ -358,3 +358,54 @@ def test_a_huge_proxy_is_dropped():
     assert NS['proxy_to_rhino'](box) is None
     box['params']['size'] = [400, 200, 12]
     assert NS['proxy_to_rhino'](box) is not None
+
+
+# REINFORCEMENT LAYOUTS (RL9, RL11) ------------------------------------------------
+def _random_plane(seed):
+    rng = np.random.default_rng(seed)
+    q, r = np.linalg.qr(rng.normal(size=(3, 3)))
+    q = q * np.sign(np.diag(r))
+    if np.linalg.det(q) < 0:
+        q[:, 2] = -q[:, 2]
+    return {'o': rng.uniform(-4000, 4000, 3).tolist(), 'x': q[:, 0].tolist(),
+            'y': q[:, 1].tolist(), 'z': q[:, 2].tolist()}
+
+
+@pytest.mark.parametrize('seed', range(5))
+def test_the_numpy_placement_is_the_rhino_placement_transform(seed):
+    """stored -> placed in numpy (the library) is ``placement_transform`` on a
+    Rhino point; and the inverse maps it back."""
+    plane = _random_plane(seed)
+    xform = NS['placement_transform'](plane)
+    stored = np.random.default_rng(seed + 100).uniform(-900, 900, (10, 3))
+    placed = NS['points_to_document'](stored, plane)
+    for point, want in zip(stored, placed):
+        moved = G.Point3d(*[float(v) for v in point])
+        moved.Transform(xform)
+        assert np.allclose([moved.X, moved.Y, moved.Z], want, atol=1e-6)
+    assert np.allclose(NS['points_to_stored'](placed, plane), stored,
+                       atol=1e-6)
+
+
+def test_the_document_unit_is_millimetres_per_unit():
+    for system, factor in ((Rhino.UnitSystem.Millimeters, 1.0),
+                           (Rhino.UnitSystem.Meters, 1000.0),
+                           (Rhino.UnitSystem.Centimeters, 10.0),
+                           (Rhino.UnitSystem.Inches, 25.4)):
+        doc = Rhino.RhinoDoc.CreateHeadless(None)
+        doc.ModelUnitSystem = system
+        scale, name = NS['mm_per_document_unit'](doc)
+        assert scale == pytest.approx(factor) and name == str(system)
+        doc.Dispose()
+
+
+def test_bars_become_polylines_and_pipes():
+    points = [(0, 0, 0), (200, 0, 0), (200, 100, 0)]
+    curve = NS['polyline_curve'](points)
+    assert curve.PointCount == 3
+    assert NS['curve_points'](curve) == [(0.0, 0.0, 0.0), (200.0, 0.0, 0.0),
+                                         (200.0, 100.0, 0.0)]
+    pipe = NS['pipe_brep'](curve, 4.0, 0.01)
+    assert pipe is not None and pipe.IsSolid
+    length = 300.0
+    assert pipe.GetVolume() == pytest.approx(np.pi * 16 * length, rel=0.02)

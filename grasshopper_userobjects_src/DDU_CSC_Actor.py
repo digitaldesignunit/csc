@@ -7,11 +7,13 @@ print('ENV OK!')
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import json  # NOQA
+import time  # NOQA
 
 # RHINO AND GH RELATED IMPORTS ------------------------------------------------
 import System  # NOQA
 import Rhino  # NOQA
 import Grasshopper  # NOQA
+import scriptcontext as sc  # NOQA
 
 # GHENV COMPONENT SETTINGS ----------------------------------------------------
 ghenv.Component.Name = 'Actor'  # NOQA
@@ -22,20 +24,28 @@ ghenv.Component.Description = (  # NOQA
     'Builds one actor (a person or an organization, optionally a '
     'catalog account) as JSON for Origin or an evidence record. Kind is '
     'guessed when empty: a user id makes a user, only an organization '
-    'an organization, else a person.'
+    'an organization, else a person. With Me set to true the actor is the '
+    'signed-in account (sign in with the Session component first): its '
+    'id, name, organization, ROR and ORCID come from the profile in the '
+    'web settings, the role from Role or else the profile\'s default role; '
+    'any input you fill in overrides the profile value.'
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005'
+CSC_GH_MINIMUM = '261012'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
-    from csc_gh.build import (BuildError, actor)  # NOQA
+    from csc_gh.build import (BuildError, actor, actor_from_profile, cached_profile)  # NOQA
+    from csc_gh.upload import (http_error_text)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261005 too old or missing: run CSC_Update, '
+        'CSC library 261012 too old or missing: run CSC_Update, '
         'then restart Rhino')
+
+NOT_SIGNED_IN = ('Me needs a signed-in session: sign in with the Session '
+                 'component first')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
 try:
@@ -61,7 +71,7 @@ class CSC_Actor(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261012
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -135,12 +145,37 @@ class CSC_Actor(Grasshopper.Kernel.GH_ScriptInstance):
             'E-mail address (shown to moderators only)'
         )
         self.InputParams[7].Description = (
-            'operator, supervisor, laboratory, client or witness'
+            'operator, supervisor, laboratory, client or witness (with Me: '
+            'empty takes the default role of your profile)'
+        )
+        self.InputParams[8].Description = (
+            'True: the actor is the signed-in account, filled from its '
+            'profile (name, organization, ROR, ORCID); what you fill in '
+            'overrides it. Needs the Session component signed in'
         )
         # Initialize output param descriptions
         self._check_outputs()
         if LIBRARY_PROBLEM is None:
             csc_gh.dev_reload(globals())
+
+    def read_profile(self):
+        """The profile of the signed-in account (``GET /users/me``), read at
+        most once a minute per server and user."""
+        auth_core = sc.sticky.get('CSC_AuthCore')
+        if auth_core is None or not auth_core.is_valid():
+            raise BuildError(NOT_SIGNED_IN)
+
+        def fetch():
+            response = auth_core.authorized_get('/users/me')
+            if response.status_code == 401:
+                raise BuildError(NOT_SIGNED_IN)
+            if response.status_code != 200:
+                raise BuildError(http_error_text(
+                    response, 'Reading the profile'))
+            return response.json()
+
+        key = (auth_core.base_url, auth_core.get_username())
+        return cached_profile(sc.sticky, key, fetch, time.time())
 
     def RunScript(self,
             Kind: str,
@@ -150,13 +185,26 @@ class CSC_Actor(Grasshopper.Kernel.GH_ScriptInstance):
             OrganizationROR: str,
             ORCID: str,
             Email: str,
-            Role: str):
+            Role: str,
+            Me: bool):
         if self._stop():
             return empty_outputs()
         Actor = ''
         try:
-            fragment = actor(Kind, UserID, Name, Organization, OrganizationROR,
-                             ORCID, Email, Role)
+            if Me:
+                profile = self.read_profile()
+                fragment = actor_from_profile(
+                    profile, Kind, UserID, Name, Organization,
+                    OrganizationROR, ORCID, Email, Role)
+                own_id = str(profile.get('_id') or profile.get('id') or '')
+                if fragment.get('user_id') != own_id:
+                    self._addWarning(
+                        'UserID differs from the signed-in account: the '
+                        'actor names another account, with your profile '
+                        'values for everything you did not fill in')
+            else:
+                fragment = actor(Kind, UserID, Name, Organization,
+                                 OrganizationROR, ORCID, Email, Role)
             Actor = json.dumps(fragment)
             return Actor
         except BuildError as error:

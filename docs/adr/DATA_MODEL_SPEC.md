@@ -910,7 +910,10 @@ notified bodies (CPR Art 52) are for conformity assessment --- both are needed.
 alike), an actor of kind `user` whose `name`, `organization`, `organization_ror` or `orcid` is empty
 gets the value from that account's profile (section 3.7); a typed value wins, a redacted actor is
 left alone. It is a copy: a later profile change never rewrites a record. The same fill applies to
-the `origin.source` actor of an identity.
+the `origin.source` actor of an identity. In Grasshopper the `Actor` component's `Me` input builds the
+signed-in account's actor from `GET /users/me` (id, name, organisation, ROR, ORCID, role = the `Role` input
+or the profile's default role; typed inputs override, a typed `UserID` that is not the account's own adds a
+warning; no e-mail), read at most once a minute per server and user.
 
 Projections (decision 6.13): anonymous --> `organization` and `url` only; authenticated users --> + `name`,
 `orcid`, `role`; `email` only for `admin` and `moderator(D)` of the record's dataset, **never** in
@@ -2413,8 +2416,17 @@ by default, `--apply`, idempotent; the description is kept, 8.142 c).
 
 One record per source: a drawing, a scan survey, one exposure. Viewers draw the bars on the
 snapshot named by `position.snapshot_id`; a new snapshot (new coordinates) needs a new layout record. GH: the
-`ReinforcementLayout` builder (curves + spec + diameter) posted by the generic `AddEvidence`
-component --- the one evidence path in the 0.6 bridge.
+`ReinforcementLayout` builder (curves + spec + diameter, `DocumentUrl` / `DocumentRetrievedAt` for the drawing)
+posted by the generic `AddEvidence` component --- the one evidence path in the 0.6 bridge. Its optional
+`ComponentPassport` input maps curves drawn on a moved piece back to the stored coordinates: with the passport's
+client-side `csc_placement` Q the points go placed --> stored through the inverse of `placement_transform(Q)`
+(8.98) and `SnapshotID` comes from the passport (a different explicit `SnapshotID` is an error). Document units are taken as millimetres, 1:1, like the
+`Fetch...Geometry` components and `ApplyFrame` do: nothing is scaled, a document in another unit only gets a
+warning (all components become unit-aware in a later task). `FetchReinforcementLayout` reads the
+records back (`GET /identities/{id}/evidence?method=reinforcement_layout`, `status` as the API offers): one
+polyline per bar, one tree branch per record, newest first, the passport's placement applied to the layouts of
+its own snapshot (stored --> placed, as for the mesh), layouts of another version in their stored coordinates
+with a warning.
 
 ---
 

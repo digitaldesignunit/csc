@@ -12,10 +12,11 @@ import importlib
 # the names the tests use for the modules (the library had these file names
 # before it became a package, decision 8.111)
 SHORT = {'csc_ply': 'ply', 'csc_build': 'build', 'csc_read': 'read',
-         'csc_convention': 'convention', 'csc_frame': 'frame',
+         'csc_convention': 'convention', 'csc_layout': 'layout',
+         'csc_frame': 'frame',
          'csc_rhino': 'rhino', 'csc_doc': 'doc', 'csc_upload': 'upload'}
-ORDER = ('csc_ply', 'csc_build', 'csc_read', 'csc_convention', 'csc_frame',
-         'csc_rhino', 'csc_doc')
+ORDER = ('csc_ply', 'csc_build', 'csc_read', 'csc_convention', 'csc_layout',
+         'csc_frame', 'csc_rhino', 'csc_doc')
 
 
 def namespace(names=ORDER, fresh=False):

@@ -14,6 +14,7 @@ import json  # NOQA
 import math  # NOQA
 import re  # NOQA
 from datetime import datetime, timedelta, timezone  # NOQA
+from urllib.parse import urlsplit  # NOQA
 
 import numpy as np  # NOQA
 
@@ -162,6 +163,52 @@ def parse_date(value, name='date'):
     return moment.strftime('%Y-%m-%dT%H:%M:%SZ'), precision
 
 
+_FLEX_DATE = re.compile(r'^\d{4}(-\d{2}(-\d{2})?)?$')
+
+
+def flex_date(value, name='date'):
+    """A date as the evidence payloads of the server take it: a year, a month,
+    a day or a UTC timestamp ending in Z; None for an empty input. Another
+    readable date (a zone offset, a space before the time) becomes the UTC
+    timestamp; ``unknown`` is not a date here."""
+    value = text(value)
+    if value is None:
+        return None
+    if _FLEX_DATE.match(value):
+        parts = value.split('-')
+        try:
+            datetime(int(parts[0]), int(parts[1]) if len(parts) > 1 else 1,
+                     int(parts[2]) if len(parts) > 2 else 1)
+        except ValueError:
+            raise BuildError('%s: %r is not a date' % (name, value))
+        return value
+    when, _ = parse_date(value, name)
+    if when is None:
+        raise BuildError('%s: write 2024, 2024-05, 2024-05-03 or '
+                         '2024-05-03T14:30:00Z, got %r' % (name, value))
+    return when
+
+
+def http_link(value, name='url'):
+    """A link as the server takes it (decision 8.106): http:// or https://
+    and a host, at most 2048 characters, no spaces; None for an empty input.
+    Never javascript: or file:."""
+    value = text(value)
+    if value is None:
+        return None
+    try:
+        parts = urlsplit(value)
+        host = parts.hostname
+    except ValueError:
+        raise BuildError('%s: not a link, got %r' % (name, value))
+    if parts.scheme not in ('http', 'https') or not parts.netloc or not host:
+        raise BuildError('%s: a link needs http:// or https:// and a host, '
+                         'got %r' % (name, value))
+    if len(value) > 2048 or any(ord(c) <= 32 for c in value):
+        raise BuildError('%s: at most 2048 characters and no spaces' % name)
+    return value
+
+
 def location(lat, lon, name='location'):
     """``{lat, lon}`` or None when both are empty."""
     lat, lon = number(lat, name + ' latitude'), number(lon, name + ' longitude')
@@ -224,6 +271,51 @@ def actor(kind=None, user_id=None, name=None, organization=None,
         'email': text(email),
         'role': choice(role, 'Role', VOCAB['actor_role']),
     })
+
+
+PROFILE_TTL = 60.0
+PROFILE_KEY = 'CSC_MeProfile'
+
+
+def actor_from_profile(profile, kind=None, user_id=None, name=None,
+                       organization=None, organization_ror=None, orcid=None,
+                       email=None, role=None):
+    """The actor of the signed-in account (decision 8.133 f): kind ``user``,
+    the account id, name, organisation, ROR and ORCID of its profile
+    (``GET /users/me``), the role of the Role input else the profile's
+    default role. A typed input overrides the profile value. The e-mail
+    address is never taken from the profile."""
+    if not isinstance(profile, dict):
+        raise BuildError('the profile of the signed-in account could not be '
+                         'read')
+    if text(kind) not in (None, 'user'):
+        raise BuildError('Me builds an actor of kind user: clear Kind or '
+                         'switch Me off')
+    own_id = text(profile.get('_id') or profile.get('id'))
+    if not own_id:
+        raise BuildError('the profile of the signed-in account has no id')
+    return actor(
+        'user', text(user_id) or own_id,
+        text(name) or text(profile.get('full_name')),
+        text(organization) or text(profile.get('organization')),
+        text(organization_ror) or text(profile.get('organization_ror')),
+        text(orcid) or text(profile.get('orcid')), email,
+        text(role) or text(profile.get('default_role')))
+
+
+def cached_profile(store, key, fetch, now, ttl=PROFILE_TTL):
+    """The profile for ``key`` (server and user name) from ``store`` (a dict,
+    in a component ``scriptcontext.sticky``) when it was read less than
+    ``ttl`` seconds ago, else ``fetch()``. A fetch that raises stores
+    nothing."""
+    entry = store.get(PROFILE_KEY)
+    if (isinstance(entry, dict) and entry.get('key') == key
+            and isinstance(entry.get('profile'), dict)
+            and 0 <= now - entry.get('at', -ttl - 1) < ttl):
+        return entry['profile']
+    profile = fetch()
+    store[PROFILE_KEY] = {'key': key, 'at': now, 'profile': profile}
+    return profile
 
 
 def origin(kind, at=None, at_precision=None, place_name=None, address=None,
@@ -697,12 +789,17 @@ def reinforcement_layout_record(snapshot_id, bars, basis, observed_at=None,
                                 document_reference=None, instrument_kind=None,
                                 instrument_manufacturer=None,
                                 instrument_model=None, accuracy_note=None,
-                                performed_by=None, notes=None):
+                                performed_by=None, notes=None,
+                                document_url=None,
+                                document_retrieved_at=None):
     """One evidence record of method ``reinforcement_layout``.
 
     ``bars``: items ``{spec, diameter_mm, points[, diameter_known,
-    cover_mm]}`` with the centreline in the stored coordinates of
-    ``snapshot_id``. ``basis`` decides the tier: drawing, scan or exposed.
+    cover_mm]}`` with the centreline in the stored coordinates (millimetres)
+    of ``snapshot_id``; a layout belongs to one version. ``basis`` decides the
+    tier: drawing, scan or exposed. ``document_url`` (http / https only) and
+    ``document_retrieved_at`` belong to the drawing named by
+    ``document_title`` (decision 8.106).
     """
     snapshot_id = text(snapshot_id)
     if not is_uuid(snapshot_id):
@@ -727,11 +824,17 @@ def reinforcement_layout_record(snapshot_id, bars, basis, observed_at=None,
     if not out_bars:
         raise BuildError('a layout needs at least one bar')
     document = None
+    link = http_link(document_url, 'DocumentUrl')
+    retrieved = flex_date(document_retrieved_at, 'DocumentRetrievedAt')
+    if (link or retrieved) and not text(document_title):
+        raise BuildError('DocumentTitle is needed: the link and the day it '
+                         'was read belong to the drawing it names')
     if text(document_title):
         when, _ = parse_date(document_date, 'DocumentDate')
         document = clean({'title': text(document_title),
                           'date': text(document_date) if when else None,
-                          'reference': text(document_reference)})
+                          'reference': text(document_reference),
+                          'url': link, 'retrieved_at': retrieved})
     instrument = None
     if text(instrument_kind):
         instrument = clean({

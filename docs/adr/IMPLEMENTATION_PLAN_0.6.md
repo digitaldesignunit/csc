@@ -640,6 +640,9 @@ coordinates, `AddEvidence` uploads, the drawing is an attachment on the same rec
   layout, and solid bars with `Pipes`. A passport `csc_placement` (Q, 8.98) moves the bars stored --> placed, the
   same transform `Fetch...Geometry` applies to the mesh; RL9 is the inverse on the way in. Layouts of another version
   than the passport's are listed with their snapshot id and a remark (their coordinates belong to that version).
+- Units in GH (user 2026-10-12, later; 0.6.1.0 chose "no scaling"): every GH component uses stored millimetres
+  1:1 as document units and the reinforcement components only warn in a non-mm document. One later task scales all
+  of them by the document unit together (fetch / apply-frame / bake / reinforcement in and out), never some of them.
 - RL10 (user 2026-10-10, 0.6.1.0): the evidence card never shows a layout's `accuracy_note` (only the form has it,
   `lib/evidence/layout.ts`). Show it in the card's unfolded details for signed-in viewers (with the basis, the
   document or instrument block); anonymous viewers do not get it (hidden in the web; whether the public tier of the
