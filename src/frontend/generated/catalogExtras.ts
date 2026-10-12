@@ -56,7 +56,7 @@ export type ProvenanceGraph = {
 }
 
 /** Feature basis for `GET /identities/map`. */
-export type ComponentMapBasis = 'radial_signature' | 'scalars'
+export type ComponentMapBasis = 'radial_signature' | 'scalars' | 'hks'
 
 /** Embedding method for `GET /identities/map`. */
 export type ComponentMapMethod = 'pca' | 'umap'

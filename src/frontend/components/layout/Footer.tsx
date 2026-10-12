@@ -21,6 +21,7 @@ export default function Footer() {
     return (
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t p-1.5 text-xs">
         <Link href="/imprint" className={link}>Imprint</Link>
+        <Link href="/privacy" className={link}>Privacy</Link>
         <Link href="/credits" className={link}>Credits</Link>
         <Link href="/settings" className={link}>Cookie settings</Link>
       </div>
@@ -36,6 +37,7 @@ export default function Footer() {
       </p>
       <nav aria-label="Legal" className="flex gap-3">
         <Link href="/imprint" className={link}>Imprint</Link>
+        <Link href="/privacy" className={link}>Privacy</Link>
         <Link href="/credits" className={link}>Credits</Link>
         <Link href="/settings" className={link}>Cookie settings</Link>
       </nav>

@@ -136,7 +136,11 @@ shared server (`CSC_TEST_MONGODB_URI`) every worker gets its own database
 - **`Fatal error in launcher`** from `invoke` / `pytest`: the conda env was
   renamed or moved; recreate it (see step 2) or use `python -m invoke ...`. Every request
 to a backend is logged with its `X-CSC-Client` header in
-`logs/client_versions.log` (locally `.dev/logs/`).
+`logs/client_versions.log` (locally `.dev/logs/`). The line holds the time, the
+client name and version (or the browser's name), the method, the path and the
+status: no IP address and no user name. Both this file and gunicorn's
+`logs/fastapi.log` (the error log; the access log is off) rotate at midnight and
+keep 14 days (`logrotation.py`), the retention the privacy page names.
 
 ---
 
@@ -573,18 +577,25 @@ the frontend is checked with `npx tsc --noEmit` and `npm run lint` in
 
 ## Public Funding
 
-Part of this research was conducted within the Project _Fertigteil 2.0 -
-Real-digital process chains for the production of built-in concrete
-components_. The project _Fertigteil 2.0 (Precast Concrete Components 2.0)_
-was funded by the Federal Ministry of Education and Research Germany (BMBF)
-through the funding measure "Resource-efficient circular economy - Building and
-mineral cycles (ReMin)".
+Part of this research was conducted within the project
+[_Fertigteil 2.0 - Real-digital process chains for the production of built-in
+concrete components_](https://www.dg.architektur.tu-darmstadt.de/forschung_ddu/digitale_prozessketten_ddu/computational_design/fertigteil_2__0/fertigteile_2__0.en.jsp)
+(Precast Concrete Components 2.0), funded by the German Federal Ministry of
+Education and Research (BMBF, today [BMFTR](https://www.bmftr.bund.de/)) through
+the funding measure
+["Resource-efficient circular economy - Building and mineral cycles (ReMin)"](https://www.fona.de/en/measures/funding-measures/Resource-efficient-circular-economy-building-and-mineral-cycles.php).
 
-Part of this research was conducted within the Project _ZirKuS -
-Circular Construction and Structural Design of Reused Concrete Components_.
-The project _ZirKuS_ is funded by the Deutsche Bundesstiftung Umwelt DBU
-(German Federal Environmental Foundation) within the funding line
-"Climate- and Resource-Efficient Construction."
+<a href="https://www.bmftr.bund.de/"><img src="src/frontend/public/logo/funding/bmbf.svg" alt="Funded by the Federal Ministry of Education and Research (BMBF)" height="80"></a>
+
+Part of this research is conducted within the project
+[_ZirKuS - Circular Construction and Structural Design of Reused Concrete
+Components_](https://www.dg.architektur.tu-darmstadt.de/forschung_ddu/digitale_prozessketten_ddu/computational_design/zirkus/zirkus.en.jsp),
+funded by the [Deutsche Bundesstiftung Umwelt - DBU](https://www.dbu.de/projektdatenbank/40160-01/)
+(German Federal Environmental Foundation, project 40160-01) within the funding
+line
+["Climate- and Resource-Efficient Construction"](https://www.dbu.de/foerderung/projektfoerderung/foerderthemen/klima-und-ressourcenschonendes-bauen/).
+
+<a href="https://www.dbu.de/projektdatenbank/40160-01/"><img src="src/frontend/public/logo/funding/dbu-sponsored-by.png" alt="Sponsored by the Deutsche Bundesstiftung Umwelt (DBU)" height="80"></a>
 
 ## Student Work
 
@@ -607,7 +618,7 @@ via conda-forge.
 ## References
 
 - The technical main inspiration for the _Catalog of Second Chances_
-interface is the [Catalog Explorer](https://github.com/ibois-epfl/Catalog-explorer)
+interface is the [Catalog Explorer](https://github.com/ibois-epfl/catalogue-explorer)
 by [@AymbericBr](https://github.com/AymericBr).
 - Another huge inspiration and reference is the
 [Timberstone Project](https://epfl-enac.github.io/MANSLAB-IBOIS-EESD-timberstone/),

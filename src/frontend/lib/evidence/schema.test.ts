@@ -24,3 +24,9 @@ test('a title with spaces keeps its words, units as written', () => {
 test('without a title the key is the label', () => {
   assert.equal(labelOf('surface_preparation', resolved('')), 'Surface preparation')
 })
+
+test('the actor fields with a poor generated title have their own label', () => {
+  assert.equal(labelOf('url', resolved('Url')), 'Web page')
+  assert.equal(labelOf('orcid', resolved('Orcid')), 'ORCID')
+  assert.equal(labelOf('organization_ror', resolved('Organization Ror')), 'ROR of the organisation')
+})

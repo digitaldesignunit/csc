@@ -100,8 +100,16 @@ const UNIT_WORDS: Record<string, string> = {
   deg: 'deg', ld: 'l/d',
 }
 
+/** Fields whose generated title reads badly ("Url", "Orcid", "Organization ror"). */
+const LABEL_OVERRIDES: Record<string, string> = {
+  url: 'Web page',
+  orcid: 'ORCID',
+  organization_ror: 'ROR of the organisation',
+}
+
 /** "Min Spacing Mm" --> "Min spacing mm": sentence case, units as written. */
 export function labelOf(key: string, resolved: Resolved): string {
+  if (LABEL_OVERRIDES[key]) return LABEL_OVERRIDES[key]
   const title = resolved.title || key.replace(/_/g, ' ')
   // a class name used as a title ("ReboundInstrument") reads as words
   const source = /\s/.test(title) ? title : title.replace(/([a-z0-9])([A-Z])/g, '$1 $2')

@@ -99,9 +99,9 @@ export default function ModerationItemCard({
       <CardContent className="space-y-3 p-4 text-sm">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1.5 sm:flex-1">
-            <h3 className="flex flex-wrap items-baseline gap-x-2 text-base font-semibold leading-tight">
-              <span>{title}</span>
-              {sub && <span className="text-sm font-normal text-muted-foreground">{sub}</span>}
+            <h3 className="flex flex-wrap items-baseline gap-x-2 break-words text-base font-semibold leading-tight">
+              <span className="min-w-0 break-words">{title}</span>
+              {sub && <span className="min-w-0 break-words text-sm font-normal text-muted-foreground">{sub}</span>}
             </h3>
             <div className="flex flex-wrap items-center gap-1.5">
               {chips.map((chip) => (

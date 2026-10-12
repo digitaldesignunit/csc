@@ -162,7 +162,7 @@ function Reservations({ userId }: { userId: string | null }) {
                     </span>
                   </span>
                 </Link>
-                <Button type="button" variant="outline" size="sm" onClick={() => void release(row._id)}>
+                <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => void release(row._id)}>
                   Release
                 </Button>
               </li>

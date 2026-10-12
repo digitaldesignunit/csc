@@ -82,6 +82,11 @@ export type QuantityInfo = {
 let methodsPromise: Promise<MethodInfo[]> | null = null
 let quantitiesPromise: Promise<QuantityInfo[]> | null = null
 
+/** A payload schema that defines `Actor` (every method has one): the actor form is built from it. */
+export function actorRootOf(methods: Pick<MethodInfo, 'payload_schema'>[]): JsonSchema | null {
+  return methods.find((m) => m.payload_schema.$defs?.Actor)?.payload_schema ?? null
+}
+
 /** The method registry; one request per page load. */
 export function loadMethods(): Promise<MethodInfo[]> {
   if (!methodsPromise) {

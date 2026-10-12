@@ -34,6 +34,7 @@ import type { DatePrecision } from '@/lib/dateField'
 import { firstDay, truncateTo } from '@/lib/dateField'
 import { dateOnlyToIso, isoToDateOnly, WORKS_ORIGIN_KINDS } from '@/lib/lineage'
 import { cn } from '@/lib/utils'
+import PerformedByField from './PerformedByField'
 
 const NONE = '__none__'
 
@@ -312,6 +313,16 @@ export function OriginFields({ idPrefix, value, onChange, disabled }: {
           value={value.method ?? ''}
           onChange={(event) => set({ method: event.target.value })}
           placeholder="e.g. saw cut, crane lift"
+        />
+      </Field>
+      <Field
+        label="Done by"
+        hint="Who took it out, cut it or made it: a person or a firm, with its web page. You can add yourself from your profile."
+      >
+        <PerformedByField
+          idPrefix={`${idPrefix}-by`}
+          actors={value.performed_by ?? []}
+          onChange={(performed_by) => set({ performed_by })}
         />
       </Field>
       <Field label="Notes" htmlFor={`${idPrefix}-notes`}>

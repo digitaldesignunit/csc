@@ -575,8 +575,9 @@ async def get_identities_map(
     basis: MapBasis = Query(
         'radial_signature',
         description=(
-            'Feature space: radial_signature (concatenated ray distances) '
-            'or scalars (box/sphere/line/planescore)'
+            'Feature space: radial_signature (concatenated ray distances), '
+            'scalars (box/sphere/line/planescore) or hks (the heat kernel '
+            'signature)'
         ),
     ),
     method: MapMethod = Query(

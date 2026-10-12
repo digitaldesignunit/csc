@@ -66,27 +66,28 @@ export default function DatasetsPage() {
           {datasets.map((dataset) => (
             <li key={dataset._id}>
               <Card>
-                <CardContent className="space-y-3 p-3 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-medium">{dataset.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {dataset._id}
-                        {datasetCounts(dataset) && <>, {datasetCounts(dataset)}</>}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {awaitsReview(dataset) && (
-                        <Badge variant="outline" className="border-amber-400 text-amber-800 dark:text-amber-200">
-                          Awaiting review
-                        </Badge>
-                      )}
-                      <Badge variant={dataset.visibility === 'catalog' ? 'secondary' : 'outline'}>
-                        {dataset.visibility === 'catalog' ? 'Visible to signed-in users' : 'Members only'}
-                      </Badge>
+                <CardContent className="flex flex-col gap-2 p-3 text-sm lg:flex-row lg:items-center">
+                  <div className="min-w-0 lg:flex-1">
+                    <div className="truncate font-medium" title={dataset.name}>{dataset.name}</div>
+                    <div
+                      className="truncate text-xs text-muted-foreground"
+                      title={`${dataset._id}${datasetCounts(dataset) ? `, ${datasetCounts(dataset)}` : ''}`}
+                    >
+                      {dataset._id}
+                      {datasetCounts(dataset) && <>, {datasetCounts(dataset)}</>}
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <div className="flex flex-wrap items-center gap-1.5 lg:shrink-0">
+                    {awaitsReview(dataset) && (
+                      <Badge variant="outline" className="border-amber-400 text-amber-800 dark:text-amber-200">
+                        Awaiting review
+                      </Badge>
+                    )}
+                    <Badge variant={dataset.visibility === 'catalog' ? 'secondary' : 'outline'}>
+                      {dataset.visibility === 'catalog' ? 'Visible to signed-in users' : 'Members only'}
+                    </Badge>
+                  </div>
+                  <div className="flex gap-2 lg:shrink-0">
                     {(isAdmin || moderates(dataset._id)) && (
                       <Button asChild variant="outline" size="sm">
                         <Link href={`/admin/datasets/${encodeURIComponent(dataset._id)}`}>Edit</Link>

@@ -1,8 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Loader2, RotateCcw } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -16,28 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import ComponentViewer from '@/components/components/ComponentViewer'
-import ComponentViewerSkeleton from '@/components/components/ComponentViewerSkeleton'
+import { PreviewProvider, usePreview } from '@/components/components/preview/ComponentPreview'
 import type {
   ComponentMapBasis,
   ComponentMapMethod,
   ComponentMapPoint,
   ComponentMapResponse,
 } from '@/generated/catalogExtras'
-import type { CatalogComponent } from '@/generated/CatalogModels'
 import { cn, formatDay } from '@/lib/utils'
 import { COLOR_BY_OPTIONS, colorMap, legendOf, type ColorBy } from '@/lib/mapColors'
 import { useMaterials } from '@/lib/lineage'
+import { mapBasisOptions } from '@/lib/mapBases'
 import { ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/generated/Vocab'
 
 const PAD_DESKTOP = 28
@@ -117,19 +105,6 @@ function rgbFromPoint(point: ComponentMapPoint): string | null {
 function cssColor(el: Element, variable: string, fallback: string): string {
   const value = getComputedStyle(el).getPropertyValue(variable).trim()
   return value || fallback
-}
-
-async function fetchCatalogPassportPreview(identityId: string): Promise<CatalogComponent> {
-  const res = await fetch(
-    `/api/backend/identities/${encodeURIComponent(identityId)}/compose`,
-    { method: 'GET', credentials: 'include', cache: 'no-store' },
-  )
-  if (res.status === 401) throw new Error('unauthorized')
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`Failed to fetch passport: ${res.status} ${body}`)
-  }
-  return (await res.json()) as CatalogComponent
 }
 
 function ComponentMapCanvas({
@@ -668,8 +643,13 @@ function ComponentMapCanvas({
   )
 }
 
+/** The map; a click on a point opens it in the shared preview panel. */
+function PreviewCanvas(props: Omit<React.ComponentProps<typeof ComponentMapCanvas>, 'onSelect'>) {
+  const preview = usePreview()
+  return <ComponentMapCanvas {...props} onSelect={(point) => preview?.open(point.id)} />
+}
+
 export default function ComponentMapPageClient() {
-  const router = useRouter()
   const [basis, setBasis] = useState<ComponentMapBasis>('radial_signature')
   const [method, setMethod] = useState<ComponentMapMethod>('umap')
   const [colorBy, setColorBy] = useState<ColorBy>('shape_class')
@@ -679,11 +659,6 @@ export default function ComponentMapPageClient() {
   const [loading, setLoading] = useState(false)
   const [switching, setSwitching] = useState(false)
   const hasMapRef = useRef(false)
-
-  const [previewOpen, setPreviewOpen] = useState(false)
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewPoint, setPreviewPoint] = useState<ComponentMapPoint | null>(null)
-  const [previewCatalog, setPreviewCatalog] = useState<CatalogComponent | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -747,28 +722,6 @@ export default function ComponentMapPageClient() {
     }
   }, [basis, method])
 
-  const openPreview = useCallback(
-    async (point: ComponentMapPoint) => {
-      setPreviewPoint(point)
-      setPreviewCatalog(null)
-      setPreviewOpen(true)
-      setPreviewLoading(true)
-      try {
-        const passport = await fetchCatalogPassportPreview(point.id)
-        setPreviewCatalog(passport)
-      } catch (e: unknown) {
-        console.error('Error fetching passport for map preview:', e)
-        if (e instanceof Error && e.message.toLowerCase().includes('unauthorized')) {
-          router.push(`/auth/signin?callbackUrl=/components/map`)
-        }
-        setPreviewOpen(false)
-      } finally {
-        setPreviewLoading(false)
-      }
-    },
-    [router],
-  )
-
   const materialLabel = useCallback(
     (id: string) => materials.find((m) => m._id === id)?.label ?? id,
     [materials],
@@ -793,13 +746,13 @@ export default function ComponentMapPageClient() {
     cacheNote,
   ].filter(Boolean).join(' ')
 
-  const previewName =
-    (previewPoint?.name && String(previewPoint.name).trim()) ||
-    previewPoint?.id ||
-    'Component'
-  const previewId = previewPoint?.id || ''
+  const previewItems = useMemo(
+    () => points.map((p) => ({ id: p.id, name: p.name, number: p.catalog_number, dataset: p.dataset })),
+    [points],
+  )
 
   return (
+    <PreviewProvider items={previewItems}>
     <div className="flex w-full max-w-full flex-col gap-2 overflow-x-hidden md:h-[calc(100dvh-3.5rem)] md:min-h-0 md:p-3">
       <div className="flex flex-col gap-2 px-3 pt-3 md:flex-row md:flex-wrap md:items-center md:gap-x-3 md:px-0 md:pt-0">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -821,8 +774,9 @@ export default function ComponentMapPageClient() {
               <SelectValue placeholder="Descriptor" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="radial_signature">Radial signature</SelectItem>
-              <SelectItem value="scalars">Scalar descriptors</SelectItem>
+              {mapBasisOptions().map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={colorBy} onValueChange={(value) => setColorBy(value as ColorBy)}>
@@ -866,12 +820,11 @@ export default function ComponentMapPageClient() {
       )}
 
       {data && data.points.length > 0 ? (
-        <ComponentMapCanvas
+        <PreviewCanvas
           points={data.points}
           method={data.method}
           transitioning={switching}
           colors={colors}
-          onSelect={openPreview}
         />
       ) : (
         <div
@@ -887,57 +840,7 @@ export default function ComponentMapPageClient() {
               : error || 'No points to display'}
         </div>
       )}
-
-      <Sheet
-        open={previewOpen}
-        onOpenChange={(open) => {
-          setPreviewOpen(open)
-          if (!open) {
-            setPreviewCatalog(null)
-            setPreviewPoint(null)
-            setPreviewLoading(false)
-          }
-        }}
-      >
-        <SheetContent side="bottom" className="sm:max-w-none">
-          <SheetHeader>
-            <SheetTitle className="text-center text-base">Preview</SheetTitle>
-            <SheetDescription>
-              <span className="block text-center text-sm font-semibold">{previewName}</span>
-              <span className="block text-center text-xs font-bold">{previewId}</span>
-            </SheetDescription>
-          </SheetHeader>
-
-          {previewLoading && <ComponentViewerSkeleton message="Loading Geometry..." />}
-          {!previewLoading && previewCatalog && (
-            <ComponentViewer catalog={previewCatalog} />
-          )}
-
-          <SheetFooter className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
-            <Link
-              href={`/components/${encodeURIComponent(previewId)}`}
-              className="w-full sm:w-[200px]"
-            >
-              <Button variant="outline" className="h-8 w-full">
-                Open the component
-              </Button>
-            </Link>
-            <Link
-              href={`/scan?mode=locate&reference_id=${encodeURIComponent(previewId)}`}
-              className="w-full sm:w-[200px]"
-            >
-              <Button variant="outline" className="h-8 w-full">
-                Locate
-              </Button>
-            </Link>
-            <SheetClose asChild className="w-full sm:w-[200px]">
-              <Button variant="outline" className="h-8 w-full">
-                Close
-              </Button>
-            </SheetClose>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
     </div>
+    </PreviewProvider>
   )
 }

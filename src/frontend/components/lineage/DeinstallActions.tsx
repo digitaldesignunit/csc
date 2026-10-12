@@ -10,7 +10,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
-import type { ComponentIdentity } from '@/generated/CatalogModels'
+import type { Actor, ComponentIdentity } from '@/generated/CatalogModels'
 import { ORIGIN_KIND_LABELS, PRECISION_LABELS } from '@/generated/Vocab'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { backendJson } from '@/lib/backend'
 import { WORKS_ORIGIN_KINDS } from '@/lib/lineage'
 import { DateWithPrecision, Field, VocabSelect } from './fields'
+import PerformedByField from './PerformedByField'
 
 type Precision = keyof typeof PRECISION_LABELS
 
@@ -40,12 +41,14 @@ export function deinstallBody(input: {
   kind: 'deinstallation' | 'demolition'
   method: string
   notes: string
+  performedBy?: Actor[]
 }) {
   return {
     at: input.at,
     at_precision: input.precision,
     kind: input.kind,
     ...(input.method.trim() ? { method: input.method.trim() } : {}),
+    ...(input.performedBy && input.performedBy.length > 0 ? { performed_by: input.performedBy } : {}),
     ...(input.notes.trim() ? { notes: input.notes.trim() } : {}),
   }
 }
@@ -63,6 +66,7 @@ export function DeinstallDialog({ identity, open, onOpenChange }: {
     identity.origin?.kind === 'demolition' ? 'demolition' : 'deinstallation')
   const [method, setMethod] = useState(identity.origin?.method ?? '')
   const [notes, setNotes] = useState('')
+  const [performedBy, setPerformedBy] = useState<Actor[]>(identity.origin?.performed_by ?? [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -76,7 +80,7 @@ export function DeinstallDialog({ identity, open, onOpenChange }: {
     try {
       await backendJson(`/identities/${identity._id}/deinstall`, {
         method: 'POST',
-        body: deinstallBody({ at, precision, kind, method, notes }),
+        body: deinstallBody({ at, precision, kind, method, notes, performedBy }),
       })
       toast.success('Deinstallation recorded')
       onOpenChange(false)
@@ -108,6 +112,9 @@ export function DeinstallDialog({ identity, open, onOpenChange }: {
           <Field label="Method" htmlFor="deinstall-method">
             <Input id="deinstall-method" value={method} onChange={(event) => setMethod(event.target.value)}
               placeholder="e.g. unbolted, crane lift" />
+          </Field>
+          <Field label="Done by" hint="Who took it out: a person or a firm. You can add yourself from your profile.">
+            <PerformedByField idPrefix="deinstall-by" actors={performedBy} onChange={setPerformedBy} />
           </Field>
           <Field label="Notes" htmlFor="deinstall-notes">
             <Textarea id="deinstall-notes" rows={2} value={notes}

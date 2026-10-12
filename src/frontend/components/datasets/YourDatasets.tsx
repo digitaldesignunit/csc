@@ -22,6 +22,12 @@ import { browseUrl } from '@/lib/browse'
 import { awaitsReview, datasetCounts } from '@/lib/datasets'
 import { useMe } from '@/lib/me'
 
+/** The grey line of a row: slug, counts and, for a member, the roles. */
+function subtitle(dataset: DatasetView, isAdmin: boolean): string {
+  const counts = datasetCounts(dataset)
+  return `${dataset._id}${counts ? `, ${counts}` : ''}${isAdmin ? '' : `, ${(dataset.roles ?? []).join(', ')}`}`
+}
+
 export default function YourDatasets() {
   const router = useRouter()
   const { me, isAdmin, moderates } = useMe()
@@ -62,23 +68,21 @@ export default function YourDatasets() {
         ) : (
           <ul className="divide-y divide-border">
             {rows.map((dataset) => (
-              <li key={dataset._id} className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <p className="flex flex-wrap items-center gap-1.5 font-medium">
-                    {dataset.name}
+              <li key={dataset._id} className="flex flex-col gap-2 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-center">
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-x-1.5 font-medium">
+                    <span className="min-w-0 break-words" title={dataset.name}>{dataset.name}</span>
                     {awaitsReview(dataset) && (
-                      <Badge variant="outline" className="border-amber-400 text-[10px] text-amber-800 dark:text-amber-200">
+                      <Badge variant="outline" className="shrink-0 border-amber-400 text-[10px] text-amber-800 dark:text-amber-200">
                         Awaiting review
                       </Badge>
                     )}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {dataset._id}
-                    {datasetCounts(dataset) ? `, ${datasetCounts(dataset)}` : ''}
-                    {isAdmin ? '' : `, ${(dataset.roles ?? []).join(', ')}`}
+                  <p className="break-words text-xs text-muted-foreground" title={subtitle(dataset, isAdmin)}>
+                    {subtitle(dataset, isAdmin)}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex shrink-0 gap-2">
                   {(isAdmin || moderates(dataset._id)) && (
                     <Button asChild variant="outline" size="sm" className="h-8 text-xs">
                       <Link href={`/admin/datasets/${encodeURIComponent(dataset._id)}`}>Manage</Link>

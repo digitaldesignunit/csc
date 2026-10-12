@@ -29,9 +29,19 @@ import {
 import {
   REINFORCEMENT_RADIAL_SEGMENTS,
   buildReinforcementBarMeshes,
-  reinforcementSteelMaterial,
+  reinforcementMaterial,
   type ReinforcementBar,
 } from '@/lib/reinforcementGeometry'
+import {
+  BAR_COLOUR_OPTIONS,
+  barColour,
+  barLegend,
+  defaultColourMode,
+  diameterRange,
+  layoutLabels,
+  type BarColourMode,
+  type BarLayout,
+} from '@/lib/reinforcementColors'
 import ComponentViewerSkeleton from './ComponentViewerSkeleton'
 import ProxyOverlay, {
   useDeviationMaps,
@@ -647,7 +657,11 @@ const CaptureFixtures = React.memo(({
 })
 CaptureFixtures.displayName = 'CaptureFixtures'
 
-const ReinforcementBarMesh = React.memo(({ bar }: { bar: ReinforcementBar }) => {
+/** A bar with the index of the layout record it comes from (RL3). */
+type ViewerBar = ReinforcementBar & { layout: number }
+
+const ReinforcementBarMesh = React.memo(({ bar, colour }: { bar: ReinforcementBar; colour: string | null }) => {
+  const material = reinforcementMaterial(colour)
   const { segments, cornerJoints } = useMemo(
     () => buildReinforcementBarMeshes(bar.points),
     [bar.points],
@@ -661,7 +675,7 @@ const ReinforcementBarMesh = React.memo(({ bar }: { bar: ReinforcementBar }) => 
           key={`segment-${index}`}
           position={segment.position}
           quaternion={segment.quaternion}
-          material={reinforcementSteelMaterial}
+          material={material}
         >
           <cylinderGeometry
             args={[radius, radius, segment.height, REINFORCEMENT_RADIAL_SEGMENTS]}
@@ -669,7 +683,7 @@ const ReinforcementBarMesh = React.memo(({ bar }: { bar: ReinforcementBar }) => 
         </mesh>
       ))}
       {cornerJoints.map((joint, index) => (
-        <mesh key={`joint-${index}`} position={joint} material={reinforcementSteelMaterial}>
+        <mesh key={`joint-${index}`} position={joint} material={material}>
           <sphereGeometry args={[radius, REINFORCEMENT_RADIAL_SEGMENTS, 12]} />
         </mesh>
       ))}
@@ -682,15 +696,18 @@ ReinforcementBarMesh.displayName = 'ReinforcementBarMesh'
 const ReinforcementBars = React.memo(({
   bars,
   visible,
+  mode,
 }: {
-  bars: ReinforcementBar[]
+  bars: ViewerBar[]
   visible: boolean
+  mode: BarColourMode
 }) => {
+  const range = useMemo(() => diameterRange(bars), [bars])
   if (!visible || bars.length === 0) return null
   return (
     <group scale={[scale, scale, scale]} rotation={[-Math.PI / 2, 0, 0]}>
       {bars.map((bar, index) => (
-        <ReinforcementBarMesh key={`${bar.spec}-${index}`} bar={bar} />
+        <ReinforcementBarMesh key={`${bar.spec}-${index}`} bar={bar} colour={barColour(mode, bar, range)} />
       ))}
     </group>
   )
@@ -980,6 +997,11 @@ export type ComponentViewerProps = {
    * level, orientation, an Overlay menu) instead of the settings panel beside it.
    */
   toolbar?: boolean
+  /**
+   * The compact preview (decision 8.141 a): the viewport alone, rotate and
+   * zoom, without a toolbar or the settings panel.
+   */
+  bare?: boolean
 }
 
 export default function ComponentViewer({
@@ -989,6 +1011,7 @@ export default function ComponentViewer({
   marks = [],
   fill = false,
   toolbar = false,
+  bare = false,
 }: ComponentViewerProps) {
   const snapshot = primarySnapshot(catalog)
   const identityId = catalog.identity._id
@@ -1110,7 +1133,9 @@ export default function ComponentViewer({
   const hasFixtures = fixtureGroups.length > 0
 
   // reinforcement layouts are evidence positioned on one snapshot (7.8)
-  const [reinforcementBars, setReinforcementBars] = useState<ReinforcementBar[]>([])
+  const [reinforcementBars, setReinforcementBars] = useState<ViewerBar[]>([])
+  const [barLayouts, setBarLayouts] = useState<BarLayout[]>([])
+  const [barColourMode, setBarColourMode] = useState<BarColourMode>('steel')
   const [showReinforcement, setShowReinforcement] = useState<boolean>(true)
   // positions of the published evidence on this snapshot (8.43)
   const [evidenceMarks, setEvidenceMarks] = useState<ViewerMark[]>([])
@@ -1133,24 +1158,44 @@ export default function ComponentViewer({
   useEffect(() => {
     let cancelled = false
     setReinforcementBars([])
+    setBarLayouts([])
     if (!identityId || !snapshotIdForOverlays) return
     const params = new URLSearchParams({ method: 'reinforcement_layout' })
     fetch(`/api/backend/identities/${encodeURIComponent(String(identityId))}/evidence?${params}`, {
       credentials: 'include',
     })
       .then((response) => (response.ok ? response.json() : []))
-      .then((records: { position?: { snapshot_id?: string | null }; payload?: { bars?: ReinforcementBar[] } }[]) => {
+      .then((records: {
+        _id?: string
+        observed_at?: string | null
+        observed_at_precision?: string | null
+        position?: { snapshot_id?: string | null }
+        payload?: { bars?: ReinforcementBar[]; document?: { title?: string | null } | null }
+      }[]) => {
         if (cancelled) return
-        const bars = records
+        // one layout per record (RL3); a record without drawable bars is no layout
+        const drawable = (bar: ReinforcementBar) => Array.isArray(bar.points) && bar.points.length >= 2 && bar.diameter_mm > 0
+        const here = records
           .filter((record) => record.position?.snapshot_id === snapshotIdForOverlays)
-          .flatMap((record) => record.payload?.bars ?? [])
-          .filter((bar) => Array.isArray(bar.points) && bar.points.length >= 2 && bar.diameter_mm > 0)
+          .filter((record) => (record.payload?.bars ?? []).some(drawable))
+        const labels = layoutLabels(here)
+        const bars: ViewerBar[] = here.flatMap((record, layout) =>
+          (record.payload?.bars ?? []).filter(drawable).map((bar) => ({ ...bar, layout })))
         setReinforcementBars(bars)
+        setBarLayouts(here.map((record, layout) => ({
+          id: String(record._id ?? layout),
+          label: labels[layout],
+          count: bars.filter((bar) => bar.layout === layout).length,
+        })))
+        setBarColourMode(defaultColourMode(here.length))
       })
-      .catch(() => { if (!cancelled) setReinforcementBars([]) })
+      .catch(() => { if (!cancelled) { setReinforcementBars([]); setBarLayouts([]) } })
     return () => { cancelled = true }
   }, [identityId, snapshotIdForOverlays])
   const hasReinforcement = reinforcementBars.length > 0
+  const legend = hasReinforcement && showReinforcement
+    ? barLegend(barColourMode, barLayouts, reinforcementBars)
+    : null
 
 
   useEffect(() => {
@@ -1658,6 +1703,15 @@ export default function ComponentViewer({
             onChange={(checked) => setShowReinforcement(checked)}
           />
         )}
+        {hasReinforcement && showReinforcement && (
+          <SegmentedControl
+            id="reinforcement-colours"
+            label="Bar colours"
+            value={barColourMode}
+            onValueChange={(value) => setBarColourMode(value as BarColourMode)}
+            options={BAR_COLOUR_OPTIONS}
+          />
+        )}
         {hasEvidenceMarks && (
           <CheckboxControl
             id="toggle-evidence-marks"
@@ -1754,7 +1808,7 @@ export default function ComponentViewer({
   return (
     <div className={cn('flex flex-col md:flex-row gap-2 w-full', fill && 'h-full', toolbar && 'md:flex-col')}>
       {toolbarBar}
-      {hasDisplayOptions && !toolbar && (
+      {hasDisplayOptions && !toolbar && !bare && (
         <div
           className={cn(
             'w-full md:w-64 md:flex-shrink-0 order-2 md:order-1',
@@ -1823,6 +1877,31 @@ export default function ComponentViewer({
               </TooltipContent>
             </Tooltip>
           </div>
+          {legend && (
+            <div className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[70%] rounded-md border border-border bg-background/90 px-2 py-1.5 text-[11px] shadow-sm backdrop-blur-sm"
+              role="group" aria-label="Bar colours">
+              {legend.kind === 'layout' ? (
+                <ul className="space-y-0.5">
+                  {legend.items.map((item) => (
+                    <li key={item.label} className="flex items-center gap-1.5">
+                      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.colour }} aria-hidden />
+                      <span className="truncate">{item.label}</span>
+                      <span className="text-muted-foreground">{item.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="w-36">
+                  <div className="h-2.5 rounded-sm" aria-hidden
+                    style={{ background: `linear-gradient(to right, ${legend.stops.join(', ')})` }} />
+                  <div className="mt-0.5 flex justify-between tabular-nums text-muted-foreground">
+                    <span>{legend.min} mm</span>
+                    <span>{legend.max} mm</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <Canvas camera={{ position: [2, 5, 5], fov: 50 }}>
           <ambientLight intensity={Math.PI / 2} />
           <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI * 0.75} />
@@ -1856,7 +1935,7 @@ export default function ComponentViewer({
               <group userData={{ noPick: true }}>
                 <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
                 <CaptureFixtures fixtures={fixtureGroups} visible={showFixtures} />
-                <ReinforcementBars bars={reinforcementBars} visible={showReinforcement} />
+                <ReinforcementBars bars={reinforcementBars} visible={showReinforcement} mode={barColourMode} />
               </group>
               {showEvidenceMarks && (
                 <EvidenceMarks marks={evidenceMarks} snapshotId={snapshotIdForOverlays} />

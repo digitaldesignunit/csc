@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import Link from 'next/link'
 import { Cookie, X } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
 
 const COOKIE_BANNER_DISMISSED_KEY = 'csc-cookie-banner-dismissed'
 
@@ -33,33 +34,29 @@ export default function CookieNotice() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 p-2 pointer-events-none">
-      <Card className="mx-auto max-w-xl border shadow-md bg-background/95 backdrop-blur-sm pointer-events-auto">
-        <CardContent className="p-2.5">
-          <div className="flex items-center gap-2">
-            <Cookie className="h-4 w-4 text-amber-600 flex-shrink-0" />
-            <p className="text-xs text-muted-foreground flex-1 leading-snug">
-              <span className="font-semibold text-foreground">Can I has cookie?</span>
-              {' '}We only use technically necessary cookies. Since this might change in the future, I am asking you, pretty please?
-            </p>
-            <Button
-              size="sm"
-              onClick={handleAccept}
-              className="h-7 px-2.5 text-xs bg-amber-600 hover:bg-amber-700 flex-shrink-0"
-            >
-              Accept
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleDismiss}
-              className="h-7 w-7 flex-shrink-0"
-              aria-label="Dismiss cookie notice"
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div
+        role="region"
+        aria-label="Cookies"
+        className="pointer-events-auto mx-auto flex max-w-xl items-center gap-2 rounded-lg border bg-background/95 px-2.5 py-1.5 shadow-md backdrop-blur-sm"
+      >
+        <Cookie className="h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+        <p className="flex-1 text-xs leading-snug text-muted-foreground">
+          CSC stores only what it needs: your sign-in and the theme.{' '}
+          <Link href="/privacy" className="font-medium text-primary underline underline-offset-2">Privacy</Link>
+        </p>
+        <Button size="sm" onClick={handleAccept} className="h-7 shrink-0 bg-amber-600 px-2.5 text-xs hover:bg-amber-700">
+          OK
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleDismiss}
+          className="h-7 w-7 shrink-0"
+          aria-label="Dismiss cookie notice"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   )
 }

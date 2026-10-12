@@ -172,6 +172,14 @@ export default function RegisterPage() {
                 Research software: use a password you use nowhere else.
               </p>
 
+              <p className="text-xs text-muted-foreground">
+                What the site does with your data is in the{' '}
+                <a href="/privacy" target="_blank" rel="noreferrer" className="font-medium text-primary underline underline-offset-2">
+                  privacy notice
+                </a>
+                .
+              </p>
+
               <Button type="submit" className="w-full">Register</Button>
             </form>
             

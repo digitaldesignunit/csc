@@ -5,7 +5,7 @@ invitation and "added to a dataset", all from one template.
 
 * One template: plain text + HTML, English, the blue CI colour, the subject
   prefix ``[CSC]`` and a footer that says why the address got the mail and
-  links the imprint. Every value that goes into the HTML is escaped.
+  links the imprint and the privacy notice. Every value that goes into the HTML is escaped.
 * One sender: ``From`` is ``SMTP_FROM_NAME <SMTP_FROM_EMAIL>`` (the noreply
   mailbox). ``Reply-To`` is the acting moderator for the invitation and the
   member notice, and ``SMTP_REPLY_TO`` (the support address) for the
@@ -106,6 +106,7 @@ def render(config: Dict[str, str], *, subject: str, title: str,
     received this email because ..."; ``replies_reach`` says who a reply
     reaches (given with ``reply_to``). Plain text and HTML say the same."""
     imprint = f'{_base(config)}/imprint'
+    privacy = f'{_base(config)}/privacy'
     footer = f'You received this email because {reason}.'
     if reply_to and replies_reach:
         footer += f' Replies to this email reach {replies_reach}.'
@@ -114,7 +115,8 @@ def render(config: Dict[str, str], *, subject: str, title: str,
         text_parts += [paragraph, '']
     if button:
         text_parts += [f'{button[0]}:', button[1], '']
-    text_parts += ['--', footer, f'Catalog of Second Chances. Imprint: {imprint}']
+    text_parts += ['--', footer, f'Catalog of Second Chances. Imprint: {imprint}'
+                   f' Privacy: {privacy}']
     text = '\n'.join(text_parts) + '\n'
 
     body = ''.join(f'<p style="margin: 0 0 16px;">{_e(p)}</p>'
@@ -146,7 +148,9 @@ def render(config: Dict[str, str], *, subject: str, title: str,
         'margin: 28px 0 16px;">'
         f'<p style="margin: 0; font-size: 12px; color: #555;">{_e(footer)}'
         '<br>Catalog of Second Chances &middot; '
-        f'<a href="{_e(imprint)}" style="color: {CI_BLUE};">Imprint</a></p>'
+        f'<a href="{_e(imprint)}" style="color: {CI_BLUE};">Imprint</a>'
+        ' &middot; '
+        f'<a href="{_e(privacy)}" style="color: {CI_BLUE};">Privacy</a></p>'
         '</div></body></html>')
     return Mail(to=to, subject=f'{SUBJECT_PREFIX} {subject}', text=text,
                 html=page, reply_to=reply_to)

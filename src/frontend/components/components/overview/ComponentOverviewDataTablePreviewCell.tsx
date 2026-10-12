@@ -1,49 +1,26 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+/**
+ * The name cell of a Browse row: the thumbnail opens the compact preview
+ * (decision 8.141 a, shared with the component map), the name opens the
+ * component.
+ */
+import Link from 'next/link'
+
 import { Button } from '@/components/ui/button'
-import ComponentViewer from '../ComponentViewer'
-import ComponentViewerSkeleton from '../ComponentViewerSkeleton'
-import type { CatalogShallowRow } from '@/generated/catalogExtras'
-import type { CatalogComponent } from '@/generated/CatalogModels'
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import ComponentPreviewImage from '../ComponentPreviewImage'
 import InPlaceBadge from '../InPlaceBadge'
 import { isInPlace } from '../componentDetailShared'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-
-async function fetchCatalogPassportPreview(
-  identityId: string,
-): Promise<CatalogComponent> {
-  const res = await fetch(
-    `/api/backend/identities/${encodeURIComponent(identityId)}/compose`,
-    { method: 'GET', credentials: 'include', cache: 'no-store' },
-  )
-  if (res.status === 401) throw new Error('unauthorized')
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`Failed to fetch passport: ${res.status} ${body}`)
-  }
-  return (await res.json()) as CatalogComponent
-}
+import { usePreview } from '../preview/ComponentPreview'
 
 export default function ComponentOverviewDataTablePreviewCell({
   component_data,
 }: {
   component_data: CatalogShallowRow
 }) {
-  const router = useRouter()
+  const preview = usePreview()
   const compId = component_data._id
   const compName =
     typeof component_data.name === 'string' && component_data.name.trim().length > 0
@@ -58,134 +35,57 @@ export default function ComponentOverviewDataTablePreviewCell({
       ? component_data.current_snapshot_id
       : null
 
-  const [open, setOpen] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [catalogPreview, setCatalogPreview] = useState<CatalogComponent | null>(
-    null,
-  )
-
-  useEffect(() => {
-    setOpen(false)
-    setIsLoading(false)
-    setCatalogPreview(null)
-  }, [compId])
-
-  const handleOpenPreview = async () => {
-    setOpen(true)
-    if (catalogPreview) return
-    setIsLoading(true)
-    try {
-      const passport = await fetchCatalogPassportPreview(compId as string)
-      setCatalogPreview(passport)
-    } catch (e: unknown) {
-      console.error('Error fetching passport for preview:', e)
-      if (e instanceof Error && e.message.toLowerCase().includes('unauthorized')) {
-        router.push(`/auth/signin?callbackUrl=/components`)
-      }
-      setOpen(false)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const detailHref = `/components/${compId}`
+  const active = preview?.activeId === compId
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <div className="inline-flex items-center gap-2 min-w-0">
-        <TooltipProvider>
-          <Tooltip delayDuration={200}>
-            <TooltipTrigger asChild>
-              <SheetTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleOpenPreview}
-                  className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md border bg-white focus:outline-none focus:ring-2 focus:ring-ring"
-                  aria-label="Open component preview"
-                >
-                  <ComponentPreviewImage
-                    key={compId}
-                    snapshot_id={snapshotThumbId}
-                    alt={compId as string}
-                    width={40}
-                    height={40}
-                    maxHeight={40}
-                    className="h-full w-full"
-                  />
-                </button>
-              </SheetTrigger>
-            </TooltipTrigger>
+    <div className="inline-flex items-center gap-2 min-w-0">
+      <TooltipProvider>
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => preview?.open(compId as string)}
+              className={`relative h-10 w-10 shrink-0 overflow-hidden rounded-md border bg-white focus:outline-none focus:ring-2 focus:ring-ring ${active ? 'ring-2 ring-primary' : ''}`}
+              aria-label="Open component preview"
+              aria-pressed={active}
+            >
+              <ComponentPreviewImage
+                key={compId}
+                snapshot_id={snapshotThumbId}
+                alt={compId as string}
+                width={40}
+                height={40}
+                maxHeight={40}
+                className="h-full w-full"
+              />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="hidden sm:block">
+            <div className="text-center text-sm">Click to preview this component</div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
-            <TooltipContent side="top" className="hidden sm:block">
-              <div className="text-center text-sm">Click to preview this component</div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
-        <TooltipProvider>
-          <Tooltip delayDuration={200}>
-            <TooltipTrigger asChild>
-              <Link href={detailHref} className="min-w-0">
-                <Button
-                  variant="ghost"
-                  className="h-6 px-2 text-xs max-w-[16rem] truncate justify-start"
-                  title={compName}
-                >
-                  {compName}
-                </Button>
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="hidden sm:block">
-              <div className="text-center text-sm">Open component details</div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        {isInPlace(component_data) && <InPlaceBadge />}
-      </div>
-
-      <SheetContent side="bottom" className="sm:max-w-none">
-        <SheetHeader>
-          <SheetTitle className="text-center text-base">Preview</SheetTitle>
-          <SheetDescription>
-            <span className="block text-center text-sm font-semibold">{compName}</span>
-            <span className="block text-center text-xs font-bold">{compId}</span>
-          </SheetDescription>
-        </SheetHeader>
-
-        {isLoading && <ComponentViewerSkeleton message="Loading Geometry..." />}
-        {!isLoading && catalogPreview && (
-          <ComponentViewer catalog={catalogPreview} />
-        )}
-
-        <SheetFooter className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
-          <Link href={detailHref} className="w-full sm:w-[200px]">
-            <Button variant="outline" className="h-8 w-full">
-              Open the component
-            </Button>
-          </Link>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link href={`/scan?mode=locate&reference_id=${compId}`} className="w-full sm:w-[200px]">
-                  <Button variant="outline" className="h-8 w-full">
-                    Locate
-                  </Button>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent>
-                <div className="text-center">Find via QR code</div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <SheetClose asChild className="w-full sm:w-[200px]">
-            <Button variant="outline" className="h-8 w-full">
-              Close
-            </Button>
-          </SheetClose>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+      <TooltipProvider>
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <Link href={detailHref} className="min-w-0">
+              <Button
+                variant="ghost"
+                className="h-6 px-2 text-xs max-w-[16rem] truncate justify-start"
+                title={compName}
+              >
+                {compName}
+              </Button>
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="hidden sm:block">
+            <div className="text-center text-sm">Open component details</div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {isInPlace(component_data) && <InPlaceBadge />}
+    </div>
   )
 }

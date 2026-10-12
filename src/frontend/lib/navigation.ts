@@ -153,6 +153,7 @@ const EXTRA_TITLES: [RegExp, string][] = [
   [/^\/$/, 'Home'],
   [/^\/credits$/, 'Credits'],
   [/^\/imprint$/, 'Imprint'],
+  [/^\/privacy$/, 'Privacy'],
   [/^\/components\/[^/]+\/edit$/, 'Component'],
   [/^\/components\/[^/]+\/evidence\/new$/, 'Add evidence'],
   [/^\/components\/[^/]+\/snapshot\/new$/, 'Component'],

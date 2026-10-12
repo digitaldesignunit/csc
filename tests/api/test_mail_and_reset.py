@@ -344,6 +344,8 @@ def test_all_four_mails_share_the_template_and_escape_what_they_insert():
         assert 'Please do not reply' not in mail.text + mail.html
         assert 'https://csc.example.org/imprint' in mail.text
         assert 'https://csc.example.org/imprint' in mail.html
+        assert 'https://csc.example.org/privacy' in mail.text
+        assert 'https://csc.example.org/privacy' in mail.html
         assert 'You received this email because' in mail.text
         assert '#4080ff' in mail.html
     verification, reset, invitation, member = mails

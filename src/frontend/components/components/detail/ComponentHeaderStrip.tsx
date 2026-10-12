@@ -16,6 +16,7 @@ import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import ChipView from '@/components/common/ChipView'
+import IdChip from '@/components/common/IdChip'
 import { circulationChip, conditionChip, statusChip } from '@/lib/componentDetail'
 import { conditionBadge } from '@/lib/evidence/format'
 import { generateGrasshopperPanelXML } from '@/lib/utils'
@@ -88,6 +89,12 @@ export default function ComponentHeaderStrip({ catalog, snapshots }: {
           onCopy={() => navigator.clipboard.writeText(identityId)} />
         <CopyButton label="Copy as Grasshopper panel" done="Copied!" icon={FileText}
           onCopy={() => navigator.clipboard.writeText(generateGrasshopperPanelXML('ComponentID', identityId))} />
+        {snapshot._id && (
+          <span className="ml-2 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            {typeof snapshot.version === 'number' ? `v${snapshot.version}` : 'Version'}
+            <IdChip id={String(snapshot._id)} kind="SnapshotID" />
+          </span>
+        )}
       </div>
     </header>
   )

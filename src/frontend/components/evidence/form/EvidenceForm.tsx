@@ -75,6 +75,7 @@ import {
   UPLOAD_HELP,
   createBulk,
   evidenceAction,
+  actorRootOf,
   deleteEvidence,
   loadAttachments,
   loadEvidenceOf,
@@ -84,7 +85,6 @@ import {
   removeAttachment,
   uploadAttachment,
   type AttachmentEntry,
-  type JsonSchema,
   type MethodInfo,
   type ProblemRow,
 } from '@/lib/evidence/api'
@@ -111,10 +111,6 @@ type Picker =
   | { mode: 'locations' }
 
 const NO_PROBLEMS: ProblemRow[] = []
-
-function actorRootOf(methods: MethodInfo[]): JsonSchema | null {
-  return methods.find((m) => m.payload_schema.$defs?.Actor)?.payload_schema ?? null
-}
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 

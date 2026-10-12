@@ -15,6 +15,7 @@ import EvidenceAttachments from '@/components/evidence/EvidenceAttachments'
 import LayoutDetails from '@/components/evidence/LayoutDetails'
 import EvidenceLifecycleActions from '@/components/moderation/EvidenceLifecycleActions'
 import VerificationPanel from '@/components/moderation/VerificationPanel'
+import IdChip from '@/components/common/IdChip'
 import { Badge } from '@/components/ui/badge'
 import type { Actor, EvidenceView } from '@/generated'
 import { EVIDENCE_METHOD_LABELS, STATUS_LABELS, VERIFICATION_STATE_LABELS, vocabLabel } from '@/generated/Vocab'
@@ -60,7 +61,7 @@ export default function EvidenceCard({
   const isDocument = !record.summary
 
   return (
-    <article className="relative rounded-lg border border-border bg-card text-sm" aria-label={`Evidence ${vocabLabel(EVIDENCE_METHOD_LABELS, record.method)}`}>
+    <article id={`record-${record._id}`} className="relative scroll-mt-20 rounded-lg border border-border bg-card text-sm transition-shadow" aria-label={`Evidence ${vocabLabel(EVIDENCE_METHOD_LABELS, record.method)}`}>
       {menu && (
         <div className="absolute right-1.5 top-1.5 z-10">
           <EvidenceLifecycleActions record={record} dataset={dataset} onChanged={onChanged} variant="menu" />
@@ -108,6 +109,9 @@ export default function EvidenceCard({
 
       {open && (
         <div className="space-y-3 border-t border-border p-3">
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            Record id <IdChip id={String(record._id)} kind="RecordID" />
+          </p>
           {(record.derived ?? []).map((d, i) => (
             <p key={i} className="text-xs">
               <span className="text-muted-foreground">{quantityLabel(d.quantity)} ({d.model.kind}): </span>

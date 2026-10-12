@@ -23,6 +23,7 @@ import {
   LogOut,
   RotateCw,
   Settings,
+  Shield,
   SunMoon,
   UserPlus,
   X,
@@ -359,6 +360,9 @@ function AccountMenu() {
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/imprint" onClick={close}><FileText /> Imprint</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/privacy" onClick={close}><Shield /> Privacy</Link>
             </DropdownMenuItem>
             {user && (
               <>

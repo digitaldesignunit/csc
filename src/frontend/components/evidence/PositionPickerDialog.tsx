@@ -6,7 +6,9 @@
  * two in-plane directions, rows x columns, spacing). Everything is in the
  * stored coordinates of the snapshot on screen, never in the canonical
  * frame. The viewer draws the pick and the grid and flags points closer to
- * an edge than `min_edge_distance_mm`.
+ * an edge than `min_edge_distance_mm`: measured against the proxy of the
+ * snapshot (decision 8.135), whatever the viewer shows; without a proxy, the
+ * boundary of the flat face picked on the mesh.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Crosshair, Grid3x3, RotateCw } from 'lucide-react'
@@ -47,6 +49,8 @@ import {
 } from '@/lib/evidence/grid'
 import { parseNumber } from '@/lib/evidence/schema'
 import type { PickHit } from '@/lib/evidence/pick'
+import { proxyEdgeModel, proxyEdgeWarnings } from '@/lib/evidence/proxyEdge'
+import type { ProxyDoc } from '@/lib/proxyOverlay'
 
 export type PickerMode = 'point' | 'grid'
 
@@ -97,6 +101,13 @@ function PickerBody({
   const snapshotId = String(snapshot._id ?? '')
   const version = typeof snapshot.version === 'number' ? snapshot.version : null
 
+  // the proxy's faces, once per version (decision 8.135 a)
+  const proxyModel = useMemo(() => {
+    const proxies = snapshot.geometry?.proxies ?? []
+    const primary = proxies.find((p) => p.role === 'primary') ?? proxies[0]
+    return proxyEdgeModel((primary ?? null) as unknown as ProxyDoc | null)
+  }, [snapshot])
+
   const [hit, setHit] = useState<PickHit | null>(null)
   const [miss, setMiss] = useState(false)
   const [rows, setRows] = useState(String(initialGrid?.rows ?? defaults?.rows ?? 3))
@@ -139,10 +150,12 @@ function PickerBody({
 
   const points = useMemo(() => (grid ? gridPoints(grid) : []), [grid])
   const edge = useMemo(() => {
-    if (mode === 'grid') return edgeWarnings(points, hit?.edges ?? null, minEdgeMm ?? 0)
-    if (hit && minEdgeMm) return edgeWarnings([hit.point], hit.edges, minEdgeMm)
-    return { distances: [], tooClose: [] as number[] }
-  }, [mode, points, hit, minEdgeMm])
+    if (!minEdgeMm) return { distances: [], tooClose: [] as number[] }
+    const measured = mode === 'grid' ? points : hit ? [hit.point] : []
+    if (measured.length === 0) return { distances: [], tooClose: [] as number[] }
+    if (proxyModel) return proxyEdgeWarnings(proxyModel, measured, minEdgeMm)
+    return edgeWarnings(measured, hit?.edges ?? null, minEdgeMm)
+  }, [mode, points, hit, minEdgeMm, proxyModel])
 
   const marks = useMemo<ViewerMark[]>(() => {
     const out: ViewerMark[] = [...context]
@@ -208,12 +221,14 @@ function PickerBody({
     onOpenChange(false)
   }
 
-  const patchNote = hit?.patch === 'face'
-    ? 'Edge distance is measured to the boundary of the flat face you picked on.'
+  const patchNote = proxyModel
+    ? 'Edge distance measured to the proxy face.'
+    : hit?.patch === 'face'
+      ? 'This version has no proxy: edge distance is measured to the outer boundary of the flat face you picked on.'
     : hit?.patch === 'estimated-plane'
-      ? 'A point cloud has no faces: the plane is estimated from the points around the pick, and edge distance cannot be checked.'
+      ? 'A point cloud has no faces and this version has no proxy: edge distance cannot be checked.'
       : hit?.kind === 'mesh'
-        ? 'The surface here is not a flat face (a scan, or too few triangles): edge distance is not checked.'
+        ? 'The surface here is not a flat face and this version has no proxy: edge distance is not checked.'
         : null
 
   return (

@@ -2,10 +2,12 @@
 """
 2D component map embeddings from stored descriptors.
 
-Two feature bases:
+Three feature bases:
   - ``radial_signature``: concatenate radial distance vectors across all
     supported resolutions.
   - ``scalars``: concatenate box/sphere/line/planescore.
+  - ``hks``: the pooled heat kernel signature (decision 8.6): the mass-weighted
+    mean and variance per time, ``2 * HKS_TIMES`` floats, L2-normalised.
 
 PCA is the fast first paint; UMAP is the preferred layout when available.
 Heavy UMAP layouts are precomputed by ``main_component_map.py`` and stored
@@ -24,12 +26,13 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 from apps.descriptors import radial_signature as rs
+from apps.descriptors.hks import HKS_TIMES
 
-MapBasis = Literal['radial_signature', 'scalars']
+MapBasis = Literal['radial_signature', 'scalars', 'hks']
 MapMethod = Literal['pca', 'umap']
 MapSource = Literal['auto', 'cache', 'live']
 
-MAP_BASES: Tuple[MapBasis, ...] = ('radial_signature', 'scalars')
+MAP_BASES: Tuple[MapBasis, ...] = ('radial_signature', 'scalars', 'hks')
 MAP_METHODS: Tuple[MapMethod, ...] = ('pca', 'umap')
 
 SCALAR_KEYS: Tuple[str, ...] = (
@@ -42,6 +45,7 @@ SCALAR_KEYS: Tuple[str, ...] = (
 BASIS_LABELS: Dict[MapBasis, str] = {
     'radial_signature': 'radial signature',
     'scalars': 'scalar descriptors',
+    'hks': 'heat kernel signature',
 }
 
 RADIAL_DISTANCE_KEYS: Tuple[str, ...] = tuple(
@@ -134,6 +138,18 @@ def extract_scalar_feature(descriptors: Mapping[str, Any]) -> Optional[np.ndarra
     return np.asarray(parts, dtype=np.float64)
 
 
+def extract_hks_feature(descriptors: Mapping[str, Any]) -> Optional[np.ndarray]:
+    """The stored HKS: ``2 * HKS_TIMES`` finite floats (mean, then variance).
+
+    A snapshot without the descriptor (the geometry runner has not reached it,
+    or the spec failed) is left off the map, like the other bases.
+    """
+    vec = _flatten_distance_vector(descriptors.get('hks'), 2 * HKS_TIMES)
+    if vec is None:
+        return None
+    return np.asarray(vec, dtype=np.float64)
+
+
 def extract_feature(
     descriptors: Mapping[str, Any],
     basis: MapBasis,
@@ -142,6 +158,8 @@ def extract_feature(
         return extract_radial_feature(descriptors)
     if basis == 'scalars':
         return extract_scalar_feature(descriptors)
+    if basis == 'hks':
+        return extract_hks_feature(descriptors)
     raise ValueError(f'Unknown map basis: {basis!r}')
 
 

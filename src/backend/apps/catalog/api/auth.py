@@ -174,7 +174,10 @@ async def lookup_user_from_token(
     try:
         return UserInDB(**doc)
     except Exception as e:
-        print(f'{ts()} [AUTH] Failed to parse user doc into UserInDB:', e, doc)
+        # the document and the error text hold e-mail addresses and hashes
+        fields = [str(err.get('loc')) for err in e.errors()] if hasattr(e, 'errors') else []
+        print(f'{ts()} [AUTH] Failed to parse user doc {doc.get("_id")} into UserInDB: '
+              f'{type(e).__name__} {fields}')
         return None
 
 
@@ -207,7 +210,7 @@ async def get_current_active_user(
     current_user: Annotated[UserInDB, Depends(get_current_user)]
 ):
     if current_user.disabled:
-        print('[AUTH] Inactive user:', current_user.username)
+        print('[AUTH] Inactive user:', current_user.id)
         raise HTTPException(status_code=400, detail='Inactive user')
     return current_user
 
@@ -403,7 +406,7 @@ async def verify_email(
         }
     )
 
-    print(f'{ts()} [AUTH] Email verified for user: {user.get("email")}')
+    print(f'{ts()} [AUTH] Email verified for user: {user["_id"]}')
 
     return {
         'message': 'Email verified successfully. You can now sign in.',
@@ -448,7 +451,7 @@ async def change_password(
                     'password_reset_expires': ''}},
     )
 
-    print(f'{ts()} [AUTH] Password changed for user: {current_user.email}')
+    print(f'{ts()} [AUTH] Password changed for user: {current_user.id}')
     return {'message': 'Password changed successfully. Sign in again.'}
 
 
@@ -517,7 +520,7 @@ async def resend_verification(
         if failure:
             print(f'{ts()} [AUTH] Verification email failed: {failure}')
         else:
-            print(f'{ts()} [AUTH] Verification email resent to: {email}')
+            print(f'{ts()} [AUTH] Verification email resent to user: {user["_id"]}')
     except Exception as e:
         print(f'{ts()} [AUTH] Failed to resend verification email: {str(e)}')
 
@@ -630,5 +633,5 @@ async def confirm_password_reset(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='This reset link is invalid or has expired. Ask for a '
                    'new one.')
-    print(f'{ts()} [AUTH] Password reset for user: {user.get("email")}')
+    print(f'{ts()} [AUTH] Password reset for user: {user["_id"]}')
     return {'message': 'Password changed. You can now sign in.'}
