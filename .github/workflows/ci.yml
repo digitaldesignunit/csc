@@ -65,6 +65,8 @@ jobs:
         with:
           python-version: '3.13'
       - run: python scripts/ci/check_version.py
+      # .zenodo.json carries the version and its CHANGELOG section
+      - run: python scripts/ci/zenodo_metadata.py --check
 
   backend:
     name: Backend tests

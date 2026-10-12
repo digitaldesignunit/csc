@@ -435,10 +435,22 @@ def bump_version(c, version, gh=False):
                  f"Version: {datetime.date.today():%y%m%d}")
         print('GH: CSC_Session changed -> re-export DDU_CSC_Session.ghuser '
               '(and its XML) in Rhino before releasing')
-    print(f'VERSION -> {version}; now fill in the CHANGELOG section')
+    print(f'VERSION -> {version}; now fill in the CHANGELOG section, then '
+          f'run invoke zenodo')
     with chdir(REPO_DIR):
         c.run(f'{sys.executable} scripts/ci/check_version.py', pty=False,
               warn=True)
+
+
+@task(help={'check': 'only report whether .zenodo.json is stale'})
+def zenodo(c, check=False):
+    """
+    Write .zenodo.json (title, version, description) from VERSION and the
+    CHANGELOG section; run after filling in the section, before tagging.
+    """
+    with chdir(REPO_DIR):
+        c.run(f'{sys.executable} scripts/ci/zenodo_metadata.py'
+              + (' --check' if check else ''), pty=False)
 
 
 @task(help={'check': 'only report, write nothing'})

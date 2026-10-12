@@ -1,0 +1,61 @@
+{
+  "title": "Catalog of Second Chances (CSC) - Digital Database and Corresponding Interfaces for ReUse of Architectural Components (v0.6.0.4)",
+  "version": "0.6.0.4",
+  "upload_type": "software",
+  "description": "<p>The <em>Catalog of Second Chances (CSC)</em> is a prototypical digital component database. It catalogs digital representations of uniquely identifiable architectural components for reuse. Furthermore, it provides corresponding interfaces and tools to leverage them via a backend REST-API, a web-frontend as well as a interface for direct interaction within Rhino Grasshopper.</p><h2>Changes in v0.6.0.4 (2026-10-10)</h2><p>An operations release (phase A of 0.6.1.0, decisions 8.136 and 8.137): less load on the database, the geometry cron that checks only what changed, a deploy that uses its own new script, and a maintenance page for cutovers. No change to the web interface or the Grasshopper components.</p><h3>Changed</h3><ul><li><strong>Geometry runner</strong> (8.136): every write that changes a geometry input (a new version or correction, a file upload, a geometry, colour or override edit, a changed original function) marks the snapshot (<code>derivation_due</code>); <code>--due</code> derives only marked snapshots and clears the mark only if no newer write came in. The runner loads identities in batches instead of one request per snapshot.</li><li><strong>Lists, map and counts</strong> read only the snapshot fields a row needs; the full snapshot is joined only for the rows of the requested page. Browse and the catalogue lists move far less data out of the database.</li><li><strong>Crontab</strong> (<code>uberspaceconfig/crontab/crontab.example</code>): the geometry runner every 20 minutes with <code>--due --limit 10</code>, a nightly full check at 3:30 with <code>--sweep</code>, the component map once a day at 4:15; all share one lock.</li><li><strong>Deploy</strong>: a release whose deploy script differs from the installed one installs it and runs again with it (once), so a fix to the deploy script works in the same release. This release is still deployed by the 0.6.0.3 script; the re-run applies from the next release on.</li><li><code>constraints.txt</code> pins <code>numba</code>, <code>llvmlite</code>, <code>pynndescent</code> and <code>umap-learn</code> to the versions the server runs.</li></ul><h3>Added</h3><ul><li><strong>Maintenance mode</strong> (8.137): <code>csc_maintenance.sh on | off | status</code> (with <code>--dry-run</code>) switches the web domain to a static page that answers 503 while the frontend is down, and back; the text comes from <code>~/csc/shared/maintenance.txt</code> when present. See <code>uberspaceconfig/deployment/README.md</code>.</li><li><code>scripts/db_maintenance/copy_provenance_capture.py</code>: copies the provenance and v0 capture details of one component to the others of a dataset through the API.</li></ul><h3>Server notes</h3><ul><li>Replace the crontab with <code>crontab.example</code> (set <code>MAILTO</code> or comment it out).</li><li>Existing snapshots carry no mark after the deploy: the nightly run catches earlier changes, or run <code>main_geometry.py --limit 200</code> once.</li><li>Before relying on <code>csc_maintenance.sh on</code>, check on a test subdomain that Apache serves the domain's own folder.</li></ul><p>Full history: <a href=\"https://github.com/digitaldesignunit/csc/blob/v0.6.0.4/CHANGELOG.md\">CHANGELOG.md</a></p>",
+  "creators": [
+    {
+      "name": "Eschenbach, Max Benjamin",
+      "affiliation": "Technische Universit\u00e4t Darmstadt",
+      "orcid": "0000-0002-8190-7047"
+    }
+  ],
+  "contributors": [
+    {
+      "name": "Tessmann, Oliver",
+      "type": "Supervisor",
+      "affiliation": "Technische Universit\u00e4t Darmstadt",
+      "orcid": "0000-0003-0297-9884"
+    },
+    {
+      "name": "Siefert, Sandro",
+      "type": "ProjectMember",
+      "affiliation": "Technische Universit\u00e4t Darmstadt",
+      "orcid": "0009-0005-9934-814X"
+    },
+    {
+      "name": "Dutschke, Mirko",
+      "type": "ProjectMember",
+      "affiliation": "Technische Universit\u00e4t Darmstadt"
+    },
+    {
+      "name": "Garruto, Alessandro",
+      "type": "ProjectMember",
+      "affiliation": "Technische Universit\u00e4t Darmstadt"
+    }
+  ],
+  "keywords": [
+    "components",
+    "design",
+    "catalog",
+    "interface",
+    "digital",
+    "cad",
+    "reuse",
+    "circular construction",
+    "design tools",
+    "component database",
+    "component catalog",
+    "circular design",
+    "re-use",
+    "material catalog",
+    "material bank",
+    "architecture",
+    "architectural design",
+    "architectural components",
+    "building components"
+  ],
+  "license": "MIT",
+  "language": "eng",
+  "access_right": "open"
+}
