@@ -888,6 +888,7 @@ Replaces `component_measurements` (unused binding at `main_fastapi.py:90`).
   "user_id": "uuid" | null,
   "name": "...", "organization": "...", "organization_ror": "https://ror.org/..." | null,
   "orcid": "..." | null, "email": "..." | null,
+  "url": "https://..." | null,                          // optional http / https link (8.133); public like the organization
   "role": "operator" | "supervisor" | "laboratory" | "client" | "witness",
   "accreditation": {                                   // decision 6.8; null unless the organization is accredited
     "scheme": "iso_17025" | "notified_body",           // lab accreditation (e.g. DAkkS) | CPR notified body (Art 52 number)
@@ -905,7 +906,13 @@ Replaces `component_measurements` (unused binding at `main_fastapi.py:90`).
 >= `observed_at` (I22). Lab accreditation (ISO/IEC 17025) is the normal case for a core test;
 notified bodies (CPR Art 52) are for conformity assessment --- both are needed.
 
-Projections (decision 6.13): anonymous --> `organization` only; authenticated users --> + `name`,
+**Profile copy (decision 8.133 e).** When a record is written (create, PATCH, correction, web and GH
+alike), an actor of kind `user` whose `name`, `organization`, `organization_ror` or `orcid` is empty
+gets the value from that account's profile (section 3.7); a typed value wins, a redacted actor is
+left alone. It is a copy: a later profile change never rewrites a record. The same fill applies to
+the `origin.source` actor of an identity.
+
+Projections (decision 6.13): anonymous --> `organization` and `url` only; authenticated users --> + `name`,
 `orcid`, `role`; `email` only for `admin` and `moderator(D)` of the record's dataset, **never** in
 list responses (GDPR data minimisation).
 
@@ -1034,6 +1041,8 @@ belongs to exactly one.
   "name": "Beyond Debris",
   "description": "...",                     // set by step 11b from the mapping (8.25)
   "visibility": "members" | "catalog",       // DEFAULT "members" (user decision)
+  "reviewed": true | false,                  // 8.139: an admin has looked at a user-created dataset; false hides it from the catalog
+  "created_by_user_id": "uuid" | null,       // the creating account (a user-created dataset), else null
   "members": [
     { "user_id": "uuid", "roles": ["contributor", "reviewer", "moderator"],   // a set, not a ladder
       "added_by_user_id": "uuid", "added_at": "..." }
@@ -1044,6 +1053,23 @@ belongs to exactly one.
 
 Index: `members.user_id`. `identity.dataset` stops being a merge-vocab string (section 2 extension
 policy: the merge pattern is removed; `datasets` and `materials` are collections).
+
+**User-created datasets (decision 8.139).** Any signed-in account with a verified e-mail address (not
+disabled) may create a dataset with `POST /datasets` (name; the `_id` slug is derived from the name,
+made unique with a numeric suffix, and immutable). The creator becomes `moderator` and `contributor` of
+it; the dataset starts `visibility: members` and `reviewed: false`. A dataset that is not reviewed
+cannot be `catalog`, and no piece of it can be made public (the metadata PATCH, the create with
+`is_public`, `POST /datasets/{did}/public`; the dry run still answers) until an admin sets
+`reviewed: true` with `PATCH /datasets/{did}` (the only admin-only field; 409 otherwise). The reviewed
+flag is not a member right: admins pass the gate. Datasets created by an admin, and every dataset that
+existed before 0.6.1.0, are `reviewed: true` (the field defaults to true; startup sets it once on
+documents without it). A non-admin may create `CSC_MAX_DATASETS_PER_USER` datasets (env, default 3,
+counted by `created_by_user_id`; admins are not limited; 403 beyond). The last `moderator` of a dataset
+cannot be removed or demoted with `PUT /datasets/{did}/members/{user_id}` (409; an admin may). A
+dataset is deleted with `DELETE /datasets/{did}` by `moderator(D)` or an admin, **only while it holds
+no identity** (409 with the count otherwise, for admins too: move the pieces first, section 7.0);
+open invitations to it are revoked. Creating a dataset mails the admins ("Dataset created"); a mail
+failure never blocks the create.
 
 **Visibility of published components** --- three tiers:
 
@@ -1078,6 +1104,17 @@ and the **admin-role test account**; personal admin accounts are additional (dec
 dataset, so production has exactly two admin accounts, both held by the maintainer (decision 8.125 b). Snapshot
 files are served only through the checked `/snapshots/...` routes, never from the web server's document root
 (8.125 a).
+
+**Profile (decision 8.133).** An account carries `full_name` (editable), `organization` (free text,
+max 200), `organization_ror` (optional; any of `https://ror.org/<id>`, `ror.org/<id>` or the bare id is
+format-checked and stored as `https://ror.org/<id>`), `orcid` (optional; format and ISO 7064 MOD 11-2
+checksum checked; a URL or an id without hyphens is accepted, stored as `0000-0002-1825-0097`) and
+`default_role` (an actor role, default `operator`). `GET /users/me` returns them with the roles per
+dataset; `PATCH /users/me` changes `full_name`, `organization`, `organization_ror`, `orcid` and
+`default_role` (a blank value clears; a bad value is 422 with the field named). The profile is not
+shown anywhere on its own: it appears through the records it fills (section 3.3.1). `POST
+/actors/redact` blanks `full_name`, `organization`, `organization_ror` and `orcid` of the account as
+well (the account and its `default_role` stay).
 
 **Registration (decision 8.14).** Self-registration is open to addresses of
 `CSC_OPEN_REGISTRATION_DOMAINS` (env, comma-separated, default `tu-darmstadt.de`, subdomains
@@ -1575,7 +1612,12 @@ role)`; the frontend merely hides controls. `admin` passes every check. D = the 
 | invite a user (8.14); add a member by exact email (8.20) | `admin` (any dataset, or none); `moderator(D)` (into D only) |
 | search users (8.20) | `admin` |
 | revoke an unused invitation | its creator, `moderator(D)` of its dataset, `admin` |
-| create dataset; users; logs; `?purge=1`; actor redaction | `admin` |
+| create dataset (8.139) | any signed-in account with a verified e-mail address, up to `CSC_MAX_DATASETS_PER_USER` (admins: unlimited); the creator becomes `moderator` and `contributor` |
+| delete a dataset (8.139) | `moderator(D)` or `admin`, only while D holds no identity |
+| set `reviewed` on a dataset (8.139) | `admin` |
+| fill the empty `document` fields of a published reinforcement layout (8.142 b) | `moderator(D)`; change-logged, once per field |
+| add / remove attachments of a pending correction (8.142 a) | its author (and, as for any unpublished record, `moderator(D)`) |
+| users; logs; `?purge=1`; actor redaction | `admin` |
 
 ### 7.1 Snapshots
 
@@ -1768,10 +1810,13 @@ stated by each record.
 
 ```
 GET    /datasets                                   datasets the caller can see (section 3.6) + the caller's roles in each
-POST   /datasets                                   admin; body = {_id slug, name, description, visibility (default members)}
-PATCH  /datasets/{did}                             moderator(D): name, description, visibility (_id immutable)
-PUT    /datasets/{did}/members/{user_id}           moderator(D): body = {roles: [...]}; empty set = remove
-POST   /datasets/{did}/public                      moderator(D): body = {is_public, dry_run?}; every published, not withdrawn piece of D public / private; --> {changed, skipped} (8.131)
+POST   /datasets                                   signed in, verified e-mail (8.139); body = {name, description, visibility (default members)}; the slug comes from the name, the creator is moderator + contributor, the dataset starts reviewed: false; admin: body may carry the slug `id`, the dataset is reviewed and has no members; 403 beyond CSC_MAX_DATASETS_PER_USER
+PATCH  /datasets/{did}                             moderator(D): name, description, visibility (_id immutable; `catalog` needs reviewed); admin: + reviewed
+DELETE /datasets/{did}                             moderator(D) | admin: only while D holds no identity (409 + count), revokes open invitations --> {deleted, revoked_invitations} (8.139)
+GET    /users/me                                   the caller: username, full_name, email, role, memberships, moderated_datasets, profile (organization, organization_ror, orcid, default_role)
+PATCH  /users/me                                   the caller: full_name, organization, organization_ror, orcid, default_role; 422 names a bad field (8.133)
+PUT    /datasets/{did}/members/{user_id}           moderator(D): body = {roles: [...]}; empty set = remove; the last moderator cannot be removed or demoted (409, except by an admin)
+POST   /datasets/{did}/public                      moderator(D): body = {is_public, dry_run?}; every published, not withdrawn piece of D public / private; --> {changed, skipped} (8.131); all pieces are validated first, one that fails stops the call with a 422 that names it (nothing written); refused 409 on a dataset that is not reviewed (8.139)
 POST   /datasets/{did}/members                     moderator(D): body = {email, roles}; exact match --> added + notified, no account --> invitation (8.20)
 GET    /users/search?q=                            admin: prefix search over username, name, email (member editor lookup, 8.20)
 GET    /users                                      admin: + memberships per user; ?q= ?dataset= ?dataset_role= ?no_dataset=1 ?role= ?state=enabled|disabled|unverified ?invited=1 (8.21)
@@ -1781,7 +1826,7 @@ POST   /materials                                  admin; `default_class` requir
 PATCH  /materials/{mid}                            admin; label, group, default_class, uniclass, notes, retired (_id immutable); re-derives material_class
 DELETE /materials/{mid}                            admin; only while unreferenced (withdrawn identities count), else 409 + count (8.35)
 POST   /materials/{mid}/merge                      admin; body {into}; moves every identity, re-derives derived classes, leaves an alias {_id, merged_into} (8.35)
-POST   /actors/redact                              admin; GDPR redaction (section 3.1.4)
+POST   /actors/redact                              admin; GDPR redaction (section 3.1.4); also blanks the account's profile (8.133 g)
 POST   /invitations                                admin | moderator(D): body = {emails: [...], dataset?, roles[], expires_days?}; mails one code per address (8.14)
 GET    /invitations                                admin: all; moderator(D): D's; ?status=open|used|expired|revoked
 DELETE /invitations/{iid}                          revoke while unused
@@ -1801,6 +1846,11 @@ GET    /identities/{id}/compose?format=jsonld      the passport as JSON-LD: the 
 GET    /identities/{id}/export/cero                CERO (Turtle; ?format=jsonld): one value per CERO property
 GET    /identities/{id}/export/pdf                 the human-readable passport summary (DIN SPEC 91484 section 8)
 ```
+
+The photo credit of the current snapshot (`photo_credit`, 8.128) is exported: JSON-LD carries
+`photo_credit` as `csc:photoCredit` with its `text` (`csc:text`) and, where the credit has one, its
+`url`; the PDF passport prints it in the state block as "Photo credit" (a (c) in the text becomes the
+copyright sign; the link only for http / https). A piece without a credit exports neither.
 
 All three read what the component read returns for the caller (section 3.6): the public tier for
 a public viewer, people named in evidence only for members (8.13). The storage is unchanged ---
@@ -1825,6 +1875,49 @@ ontologies sit at the boundary (`ONTOLOGIES.md`).
   circulation (parents, children, exit, earlier cycles); footer (links to the JSON, JSON-LD
   and CERO editions, last change and number of change-log entries, generation time).
   Generated server-side with ReportLab.
+
+### 7.9 History (swimlanes, decisions 8.140 g, h)
+
+```
+GET    /identities/{id}/history?depth=1|2&expand=groups|all     the lanes and events of a component and its relatives
+```
+
+The piece is the middle lane (level 0), its parents lie above (negative levels), its children below
+(positive); `depth` = generations in each direction (default 1, max 2; 422 beyond). Read access as
+the component read (401 / 403 / 404 as there). Only projections of the documents are read.
+
+```jsonc
+{ "root": "uuid", "depth": 1, "expand": "groups",
+  "lanes": [                                   // sorted by level, then catalog number
+    { "id": "uuid", "level": -1, "role": "parent" | "piece" | "child", "visible": true,
+      "catalog_number": 12, "name": "...",     // name of the current version (else the latest the caller sees)
+      "dataset": "slug", "withdrawn": false, "exited": false, "in_place": false,
+      "events": [ ... ] },                     // time order, see below
+    { "id": "uuid", "level": -1, "role": "parent", "visible": false, "label": "not visible" }
+      // a stub: nothing else; a relative the caller may not see, or a lane beyond the first twelve is not a stub but counted in `more`
+  ],
+  "links": [ { "kind": "cut" | "assemble", "from": "parent uuid", "to": "child uuid",
+               "at": "...", "precision": "day", "version_id": "uuid" } ],   // at / precision / version_id: the child's first version, absent when the child is a stub
+  "more": 0 }                                  // lanes left out beyond twelve (MAX_LANES)
+```
+
+- **Lanes.** The piece first, then by distance (parents before children, then catalog number);
+  at most 12 lanes, the rest only as `more`. A relative the caller may not see is a stub (`visible:
+  false`, no content), and the walk does not continue through it. A withdrawn piece the caller sees
+  only as a tombstone (8.17) is a stub with `withdrawn: true`, `withdrawn_at` and `catalog_number`.
+  A link is listed only where both lanes are kept: `cut` = the child has one parent, `assemble` = it
+  has several (split / merge, 8.8); its place in time is the child's first version (a correction keeps
+  the place of the version it corrects, 8.123 b).
+- **Events** (`kind`, `at`, `precision`; `at` is `null` for an undated event, and those come first):
+  `origin` (also the origins of earlier cycles, with `cycle`; `detail` = origin kind, `planned`),
+  `version` (`id`, `version`, `status`, `name`, `corrected: true` on a version a correction replaced,
+  `corrects` = the id of what a correction replaces, `withdrawn`), `evidence_group` (default:
+  records of one day and method, `count`, `ids`, `statuses`, `day`, `method`), `evidence` (with
+  `expand=all`: one event per record with `id`, `method`, `status`, `quantity`, `corrected`),
+  `exit` (also of earlier cycles), `withdrawal`. Withdrawn evidence is not listed. A version or
+  record appears only if the caller sees it in full (drafts: their author and `moderator(D)`).
+- **Tiers.** An anonymous caller gets the public tier: full lanes only for public pieces, stubs for
+  all others, no people anywhere (8.101); the response is sent with `Vary: Authorization`.
 
 ## 8. Migration from 0.5
 
@@ -2306,6 +2399,17 @@ impractical, then 1:1 and three cores per location). Context resolves at `sample
 // summary: {rebar_diameter, range: [min, max] over bars, mm, claimed (drawing) | measured (scan, exposed)}
 // steel grade into the fold, if wanted: a separate `rebar_spec` claim sharing the attachment (7.1 fan-out)
 ```
+
+`accuracy_note` is private to signed-in users: anonymous callers never get it, on any route (RL10).
+A published layout cannot be edited, but a `moderator(D)` may fill the **empty** fields of its
+`document` once with `PATCH /evidence/{id}` (body exactly `{"payload": {"document": {...}}}`; the
+`title` is required when the layout has no document yet; a set field changes only through a
+correction; the change is logged, 8.142 b). A correction (`POST /evidence/{id}/supersede`) carries
+the live attachments of the record it replaces as hard links (a copy where the file system cannot
+link) and accepts further files; its author may remove one before publishing (8.142 a). A layout's
+`position.kind` is `none` (with the `snapshot_id`; the bars carry their own positions); stored
+layouts with `region` are converted by `scripts/db_maintenance/layout_position_none.py` (dry run
+by default, `--apply`, idempotent; the description is kept, 8.142 c).
 
 One record per source: a drawing, a scan survey, one exposure. Viewers draw the bars on the
 snapshot named by `position.snapshot_id`; a new snapshot (new coordinates) needs a new layout record. GH: the

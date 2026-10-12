@@ -500,16 +500,20 @@ def history_entry(frm: str, to: str, user_id: str, at: str,
 
 def new_evidence_doc(identity_id: str, prepared: PreparedRecord,
                      body: EvidenceCreate, user: User, *, status: str,
-                     supersedes: Optional[str] = None) -> Dict[str, Any]:
+                     supersedes: Optional[str] = None,
+                     performers: Optional[List[Dict[str, Any]]] = None
+                     ) -> Dict[str, Any]:
     """The stored document of a new record (draft; or pending, with the
-    draft --> pending step in its history)."""
+    draft --> pending step in its history). ``performers`` are the actors
+    with their profile fields filled in (8.133 e); without, as sent."""
     now = now_iso()
     history: List[Dict[str, Any]] = []
     if status != 'draft':
         history.append(history_entry('draft', status, user.id, now))
     verification = {'state': 'unverified', 'by': None, 'at': None,
                     'note': None}
-    performers = [a.model_dump(mode='json') for a in body.performed_by]
+    if performers is None:
+        performers = [a.model_dump(mode='json') for a in body.performed_by]
     if body.self_attested:
         verification = {'state': 'self_attested',
                         'by': {'kind': 'user', 'user_id': user.id},

@@ -160,6 +160,10 @@ class Actor(_Block):
                           'shown to everyone')
     organization_ror: Optional[str] = Field(
         None, description='ROR identifier of the organization')
+    url: Optional[str] = Field(
+        None, max_length=500,
+        description='A web page of the organization (http or https); '
+                    'public like the organization')
     orcid: Optional[str] = Field(
         None, description='ORCID of a person; shown to signed-in users only')
     email: Optional[str] = Field(
@@ -175,6 +179,16 @@ class Actor(_Block):
     redacted_at: Optional[Timestamp] = Field(
         None, description='Set when the personal data was redacted '
                           '(GDPR Art 17)')
+
+    @field_validator('url')
+    @classmethod
+    def _url_is_a_web_address(cls, value: Optional[str]) -> Optional[str]:
+        value = (value or '').strip()
+        if not value:
+            return None
+        if not value.lower().startswith(('http://', 'https://')):
+            raise ValueError('the url must start with http:// or https://')
+        return value
 
     @model_validator(mode='after')
     def _named(self) -> 'Actor':
@@ -969,6 +983,12 @@ class Dataset(_Document):
     description: Optional[str] = None
     visibility: Visibility = 'members'
     members: List[DatasetMember] = Field(default_factory=list)
+    # an admin has looked at the dataset (8.139): until then it cannot be
+    # `catalog` and its pieces cannot be public. A document without the field
+    # (every dataset an admin created before 0.6.1.0) is reviewed.
+    reviewed: bool = True
+    # who created it (the limit per user counts these); None for old ones
+    created_by_user_id: Optional[str] = None
     created: Timestamp
     lastmodified: Timestamp
 

@@ -39,6 +39,7 @@ environment=
     # server's own address if it goes through the public API host.
     CSC_TRUSTED_PROXIES="127.0.0.0/8,::1",
     CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de",
+    CSC_MAX_DATASETS_PER_USER="3",
     GH_XML_CACHE_DIR="/home/ddu/csc/current/backend/static/ghxml",
     FASTAPI_CORS_ORIGINS="https://yourdomain.com,http://localhost:3000",
     GEOMETRY_UPLOAD_LIMIT_MB="250",

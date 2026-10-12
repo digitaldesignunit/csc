@@ -255,6 +255,23 @@ def member_added_mail(config: Dict[str, str], to: str, full_name: str,
         replies_reach=by_name)
 
 
+def dataset_created_mail(config: Dict[str, str], to: str, dataset_name: str,
+                         slug: str, by_name: str, by_email: Optional[str]
+                         ) -> Mail:
+    """Tell an admin that an account created a dataset (8.139 i)."""
+    return render(
+        config, to=to, subject='A dataset was created',
+        title='Dataset created',
+        paragraphs=[
+            f'{by_name} created the dataset "{dataset_name}" ({slug}).',
+            'It is visible to its members only, and its pieces cannot be '
+            'made public until you have reviewed it.'],
+        button=('Open the dataset', f'{_base(config)}/admin/datasets/{slug}'),
+        reason='you are an admin of the Catalog of Second Chances',
+        reply_to=_address(by_name, by_email),
+        replies_reach=by_name)
+
+
 # SENDING (blocking: call it off the event loop) -------------------------------
 
 def _message(config: Dict[str, str], mail: Mail) -> EmailMessage:

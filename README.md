@@ -183,7 +183,9 @@ two places you need to set them:
 template `uberspaceconfig/.bash_profile.example` and fill it in (MongoDB, JWT,
 SMTP with the optional `SMTP_REPLY_TO`, the support address that replies to the
 verification and password-reset mails go to, asset folders, CORS origins; optionally `GITHUB_CSC_GH_TOKEN` for higher
-GitHub rate limits in `CSC_Update`).
+GitHub rate limits in `CSC_Update`). Optional: `CSC_MAX_DATASETS_PER_USER`
+(default 3), how many datasets a non-admin account may create; admins are
+not limited.
 
 Apply immediately by running: `source ~/.bash_profile`
 

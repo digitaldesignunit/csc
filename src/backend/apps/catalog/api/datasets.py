@@ -16,6 +16,9 @@ section 7.7; plan P3).
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
+import os
+import re
+import unicodedata
 from typing import Annotated, Any, Dict, List, Optional
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
@@ -26,17 +29,30 @@ from pymongo.errors import DuplicateKeyError
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.documents import Dataset
 from apps.catalog.models import User
+from apps.catalog.profile import (
+    clean_text,
+    normalize_orcid,
+    normalize_ror,
+)
 from apps.catalog.permissions import dataset_roles
-from apps.catalog.vocab import DATASET_ROLES, DatasetRole, Visibility
+from apps.catalog.vocab import (
+    DATASET_ROLES,
+    ActorRole,
+    DatasetRole,
+    Visibility,
+)
+from services import email_service
 from .access import (
     EVER_PUBLISHED,
     and_match,
     load_datasets,
+    refuse_unreviewed,
     require,
     viewer_of,
     visible_identity_match,
 )
 from .auth import get_current_active_user, get_optional_current_user
+from .invitations import deliver
 from .catalog_common import now_iso
 from .identity_edit import _validated as _validated_identity
 from .identity_edit import _write as _write_identity
@@ -62,6 +78,11 @@ class Me(BaseModel):
     memberships: List[Membership]
     # slugs where the caller moderates; admin: every dataset
     moderated_datasets: List[str]
+    # the personal profile (8.133)
+    organization: Optional[str] = None
+    organization_ror: Optional[str] = None
+    orcid: Optional[str] = None
+    default_role: ActorRole = 'operator'
 
     model_config = {'populate_by_name': True}
 
@@ -82,6 +103,9 @@ class DatasetView(BaseModel):
     visibility: Visibility
     # the caller's roles here (admin: every role)
     roles: List[DatasetRole]
+    # an admin has reviewed it: until then it cannot be `catalog` and its
+    # pieces cannot be public (8.139)
+    reviewed: bool = True
     # moderator(D) and admin only
     members: Optional[List[DatasetMemberView]] = None
     member_count: Optional[int] = Field(
@@ -96,8 +120,11 @@ class DatasetView(BaseModel):
 
 
 class DatasetCreate(BaseModel):
-    id: str = Field(alias='_id', description='slug, immutable')
-    name: str = Field(min_length=1)
+    id: Optional[str] = Field(
+        None, alias='_id',
+        description='slug, immutable; admins only: an account\'s dataset '
+                    'gets one derived from its name')
+    name: str = Field(min_length=1, max_length=120)
     description: Optional[str] = None
     visibility: Visibility = 'members'
 
@@ -105,9 +132,12 @@ class DatasetCreate(BaseModel):
 
 
 class DatasetPatch(BaseModel):
-    name: Optional[str] = Field(None, min_length=1)
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
     description: Optional[str] = None
     visibility: Optional[Visibility] = None
+    reviewed: Optional[bool] = Field(
+        None, description='admin only: the dataset may be catalog and its '
+                          'pieces public (8.139)')
 
 
 class MemberRoles(BaseModel):
@@ -157,6 +187,7 @@ async def _dataset_view(request: Request, user: Optional[User],
     return DatasetView(_id=dataset.id, name=dataset.name,
                        description=dataset.description,
                        visibility=dataset.visibility,
+                       reviewed=dataset.reviewed,
                        roles=_ordered(roles), members=members)
 
 
@@ -183,10 +214,69 @@ async def get_me(
         if d.roles_of(current_user.id)]
     moderated = sorted(d.id for d in datasets
                        if 'moderator' in dataset_roles(viewer, d))
-    return Me(_id=current_user.id, username=current_user.username,
-              full_name=current_user.full_name, email=current_user.email,
-              role=current_user.role, memberships=memberships,
-              moderated_datasets=moderated)
+    return _me_view(current_user, memberships, moderated)
+
+
+def _me_view(user: User, memberships: List[Membership],
+             moderated: List[str]) -> Me:
+    return Me(_id=user.id, username=user.username, full_name=user.full_name,
+              email=user.email, role=user.role, memberships=memberships,
+              moderated_datasets=moderated,
+              organization=user.organization,
+              organization_ror=user.organization_ror, orcid=user.orcid,
+              default_role=user.default_role or 'operator')
+
+
+class ProfilePatch(BaseModel):
+    """What an account edits of itself (8.133): only the fields sent change;
+    an empty text clears an optional one."""
+    model_config = ConfigDict(extra='forbid')
+
+    full_name: Optional[str] = Field(None, max_length=200)
+    organization: Optional[str] = Field(None, max_length=200)
+    organization_ror: Optional[str] = Field(None, max_length=200)
+    orcid: Optional[str] = Field(None, max_length=60)
+    default_role: Optional[ActorRole] = None
+
+
+@router.patch('/users/me', response_model=Me, response_model_by_alias=True,
+              summary='Edit the caller\'s profile (8.133)')
+async def patch_me(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    body: ProfilePatch,
+):
+    """``full_name``, ``organization``, ``organization_ror`` (a ROR id or
+    URL), ``orcid`` (format and check digit) and ``default_role``. Records
+    take the values over when they are written; a later change never rewrites
+    a record."""
+    sent = body.model_dump(exclude_unset=True)
+    changes: Dict[str, Any] = {}
+    try:
+        if 'full_name' in sent:
+            name = clean_text(sent['full_name'])
+            if name is None:
+                raise ValueError('the name cannot be empty')
+            changes['full_name'] = name
+        if 'organization' in sent:
+            changes['organization'] = clean_text(sent['organization'])
+        if 'organization_ror' in sent:
+            changes['organization_ror'] = (
+                normalize_ror(sent['organization_ror'])
+                if clean_text(sent['organization_ror']) else None)
+        if 'orcid' in sent:
+            changes['orcid'] = (normalize_orcid(sent['orcid'])
+                                if clean_text(sent['orcid']) else None)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if sent.get('default_role') is not None:
+        changes['default_role'] = sent['default_role']
+    elif 'default_role' in sent:
+        changes['default_role'] = None
+    if changes:
+        await request.app.mongodb_users.update_one(
+            {'_id': current_user.id}, {'$set': changes})
+    return await get_me(request, current_user.model_copy(update=changes))
 
 
 @router.get('/datasets', response_model=List[DatasetView],
@@ -243,34 +333,142 @@ async def get_dataset(
                                with_members=True)
 
 
+DEFAULT_MAX_DATASETS = 3
+MAX_DATASETS_ENV = 'CSC_MAX_DATASETS_PER_USER'
+
+
+def max_datasets_per_user() -> int:
+    """How many datasets one account may create (8.139 e); admins have no
+    limit. ``CSC_MAX_DATASETS_PER_USER``, 3 when unset or not a number."""
+    try:
+        return max(0, int((os.getenv(MAX_DATASETS_ENV) or '').strip()))
+    except ValueError:
+        return DEFAULT_MAX_DATASETS
+
+
+def slug_from_name(name: str) -> str:
+    """A slug from a dataset name (8.139 d): ASCII lower-case letters,
+    digits and underscores, 2 to 55 characters (room for a collision suffix)."""
+    folded = unicodedata.normalize('NFKD', name).encode(
+        'ascii', 'ignore').decode('ascii').lower()
+    slug = re.sub(r'[^a-z0-9]+', '_', folded).strip('_')[:55].strip('_')
+    if not slug:
+        slug = 'dataset'
+    return slug if len(slug) >= 2 else f'{slug}_x'
+
+
+async def _free_slug(request: Request, name: str, taken=()) -> str:
+    """The slug of ``name``, or with ``_2``, ``_3`` ... when it is taken."""
+    base = slug_from_name(name)
+    existing = set(await request.app.mongodb_datasets.distinct('_id')) | set(
+        taken)
+    slug, n = base, 1
+    while slug in existing:
+        n += 1
+        slug = f'{base}_{n}'
+    return slug
+
+
+async def _notify_admins(request: Request, dataset: Dataset,
+                         creator: User) -> None:
+    """The "Dataset created" mail to the admins (8.139 i, 8.124 template).
+    Whatever happens here never blocks the create."""
+    try:
+        admins = await request.app.mongodb_users.find(
+            {'role': 'admin', 'disabled': {'$ne': True},
+             'email': {'$nin': [None, '']}}, {'email': 1}).to_list(
+            length=None)
+        if not admins:
+            return
+        config = email_service.load_email_config()
+        by = creator.full_name or creator.username
+        failures = await deliver(request, [
+            email_service.dataset_created_mail(
+                config, admin['email'], dataset.name, dataset.id, by,
+                creator.email) for admin in admins])
+        for failure in failures:
+            if failure is not None:
+                print(f'[DATASETS] "dataset created" mail failed: {failure}')
+    except Exception as exc:                               # noqa: BLE001
+        print(f'[DATASETS] "dataset created" mail failed: {exc}')
+
+
 @router.post('/datasets', response_model=DatasetView, status_code=201,
              response_model_by_alias=True, response_model_exclude_none=True,
-             summary='Create a dataset (admin)')
+             summary='Create a dataset (a verified account, or an admin)')
 async def create_dataset(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
     body: DatasetCreate,
 ):
+    """An account with a verified e-mail address creates a dataset of its own
+    (8.139): the slug is derived from the name, the creator becomes
+    ``moderator`` and ``contributor``, the dataset is ``members`` and not
+    reviewed, and each account may create ``CSC_MAX_DATASETS_PER_USER`` of
+    them (3). An admin may state the slug, creates reviewed datasets and has
+    no limit. The admins get a "Dataset created" mail for an account's
+    dataset."""
     any_dataset = Dataset.model_validate({
         '_id': 'new', 'name': 'new', 'created': now_iso(),
         'lastmodified': now_iso()})
     await require(request, current_user, 'create_dataset',
                   dataset=any_dataset)
+    admin = viewer_of(current_user).is_admin
+    datasets = request.app.mongodb_datasets
+    if not admin:
+        if not current_user.email_verified:
+            raise HTTPException(
+                status_code=403,
+                detail='Verify your e-mail address before you create a '
+                       'dataset.')
+        if body.id is not None:
+            raise HTTPException(
+                status_code=422,
+                detail='The slug of a dataset is derived from its name.')
+        if body.visibility != 'members':
+            raise HTTPException(
+                status_code=409,
+                detail='A new dataset is visible to its members only until '
+                       'an admin has reviewed it.')
+        limit = max_datasets_per_user()
+        if await datasets.count_documents(
+                {'created_by_user_id': current_user.id}) >= limit:
+            raise HTTPException(
+                status_code=403,
+                detail=f'You have created {limit} datasets, the most one '
+                       f'account may create. Ask an admin for another.')
     now = now_iso()
-    try:
-        dataset = Dataset.model_validate({
-            '_id': body.id, 'name': body.name,
-            'description': body.description, 'visibility': body.visibility,
-            'members': [], 'created': now, 'lastmodified': now})
-    except ValidationError as exc:
-        raise HTTPException(status_code=422,
-                            detail=exc.errors()[0]['msg']) from exc
-    try:
-        await request.app.mongodb_datasets.insert_one(
-            dataset.model_dump(by_alias=True, mode='json'))
-    except DuplicateKeyError as exc:
+    members = [] if admin else [{
+        'user_id': current_user.id, 'roles': _ordered({'moderator',
+                                                       'contributor'}),
+        'added_by_user_id': current_user.id, 'added_at': now}]
+    explicit = body.id if admin and body.id else None
+    for _ in range(5):
+        slug = explicit or await _free_slug(request, body.name)
+        try:
+            dataset = Dataset.model_validate({
+                '_id': slug, 'name': body.name.strip(),
+                'description': body.description,
+                'visibility': body.visibility, 'members': members,
+                'reviewed': admin, 'created_by_user_id': current_user.id,
+                'created': now, 'lastmodified': now})
+        except ValidationError as exc:
+            raise HTTPException(status_code=422,
+                                detail=exc.errors()[0]['msg']) from exc
+        try:
+            await datasets.insert_one(
+                dataset.model_dump(by_alias=True, mode='json'))
+            break
+        except DuplicateKeyError as exc:
+            if explicit:
+                raise HTTPException(status_code=409,
+                                    detail=f'Dataset {body.id} exists') from exc
+    else:
         raise HTTPException(status_code=409,
-                            detail=f'Dataset {body.id} exists') from exc
+                            detail='No free slug for this name; try another.')
+    request.state.csc_datasets = None
+    if not admin:
+        await _notify_admins(request, dataset, current_user)
     return await _dataset_view(request, current_user, dataset,
                                with_members=True)
 
@@ -286,9 +484,22 @@ async def patch_dataset(
 ):
     dataset = await _dataset_or_404(request, did)
     await require(request, current_user, 'edit_dataset', dataset=dataset)
+    viewer = viewer_of(current_user)
     changes: Dict[str, Any] = body.model_dump(exclude_unset=True)
     if 'name' in changes and changes['name'] is None:
         raise HTTPException(status_code=422, detail='name cannot be empty')
+    if 'reviewed' in changes:
+        if changes['reviewed'] is None:
+            raise HTTPException(status_code=422,
+                                detail='reviewed is true or false')
+        if not viewer.is_admin:
+            raise HTTPException(status_code=403,
+                                detail='Only an admin marks a dataset '
+                                       'reviewed.')
+    if changes.get('visibility') == 'catalog' \
+            and dataset.visibility != 'catalog' \
+            and not changes.get('reviewed', dataset.reviewed):
+        refuse_unreviewed(dataset, viewer)
     if changes:
         changes['lastmodified'] = now_iso()
         await request.app.mongodb_datasets.update_one({'_id': did},
@@ -315,6 +526,19 @@ async def put_dataset_member(
                                                 {'_id': 1}) is None:
         raise HTTPException(status_code=404, detail='User not found')
     roles = _ordered(set(body.roles))
+    moderators_before = {m.user_id for m in dataset.members
+                         if 'moderator' in m.roles}
+    moderators_after = moderators_before - {user_id}
+    if 'moderator' in roles:
+        moderators_after |= {user_id}
+    if moderators_before and not moderators_after \
+            and not viewer_of(current_user).is_admin:
+        # 8.139 g: a dataset keeps a moderator; an admin may take the last
+        raise HTTPException(
+            status_code=409,
+            detail='A dataset keeps at least one moderator: add another '
+                   'before you remove or demote the last one (an admin can '
+                   'do it).')
     members = [m.model_dump(mode='json') for m in dataset.members
                if m.user_id != user_id]
     existing = next((m for m in dataset.members if m.user_id == user_id),
@@ -368,6 +592,8 @@ async def set_dataset_public(
     dataset = await _dataset_or_404(request, did)
     await require(request, current_user, 'set_dataset_public',
                   dataset=dataset)
+    if body.is_public and not body.dry_run:
+        refuse_unreviewed(dataset, viewer_of(current_user))      # 8.139 c
     identities = request.app.mongodb_component_identities
     differs = ({'$ne': True} if body.is_public else True)
     candidates = await identities.find(
@@ -378,12 +604,27 @@ async def set_dataset_public(
                         'status': {'$in': list(EVER_PUBLISHED)}}))
     pieces = [c for c in candidates
               if c.get('current_snapshot_id') or c['_id'] in ever]
-    changed = skipped = 0
+    if body.dry_run:
+        return PublicResult(dataset=did, is_public=body.is_public,
+                            changed=len(pieces), dry_run=True)
+    # validate every piece first: one that does not pass stops the whole
+    # change before anything is written (and is named), instead of a 422
+    # after earlier pieces were already written
+    afters: List[tuple] = []
+    invalid: Dict[str, str] = {}
     for identity in pieces:
-        if body.dry_run:
-            changed += 1
-            continue
-        after = _validated_identity({**identity, 'is_public': body.is_public})
+        try:
+            afters.append((identity, _validated_identity(
+                {**identity, 'is_public': body.is_public})))
+        except HTTPException as exc:
+            invalid[identity['_id']] = str(exc.detail)
+    if invalid:
+        raise HTTPException(status_code=422, detail={
+            'message': f'{len(invalid)} of {len(pieces)} pieces do not pass '
+                       f'validation; nothing was changed. Correct them first.',
+            'pieces': invalid})
+    changed = skipped = 0
+    for identity, after in afters:
         try:
             written = await _write_identity(
                 request, identity, after, user_id=current_user.id,
@@ -398,6 +639,34 @@ async def set_dataset_public(
     return PublicResult(dataset=did, is_public=body.is_public,
                         changed=changed, dry_run=body.dry_run,
                         skipped=skipped)
+
+
+@router.delete('/datasets/{did}', status_code=200,
+               summary='Delete an empty dataset (moderator(D), admin)')
+async def delete_dataset(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    did: str,
+):
+    """Only while the dataset holds no piece at all (no identity, whatever
+    its state; for an admin too: move the pieces first, ``move_identity``).
+    The open invitations into it are revoked with it (8.139 f)."""
+    dataset = await _dataset_or_404(request, did)
+    await require(request, current_user, 'delete_dataset', dataset=dataset)
+    pieces = await request.app.mongodb_component_identities.count_documents(
+        {'dataset': did}, limit=1)
+    if pieces:
+        raise HTTPException(
+            status_code=409,
+            detail='The dataset still holds pieces: move them to another '
+                   'dataset first.')
+    now = now_iso()
+    revoked = await request.app.mongodb_invitations.update_many(
+        {'dataset': did, 'revoked_at': None, 'used_at': None},
+        {'$set': {'revoked_at': now, 'revoked_by_user_id': current_user.id}})
+    await request.app.mongodb_datasets.delete_one({'_id': did})
+    request.state.csc_datasets = None
+    return {'deleted': did, 'revoked_invitations': revoked.modified_count}
 
 
 # CODEGEN ---------------------------------------------------------------------

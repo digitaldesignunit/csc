@@ -149,6 +149,9 @@ def build_context(base: str) -> Dict[str, Any]:
     ctx['url'] = {'@id': 'csc:url', '@type': '@id'}
     ctx['retrieved_at'] = 'csc:retrievedAt'
     ctx['document'] = {'@id': 'csc:document'}
+    # who the photos of a version come from (8.128): the text, and a link
+    ctx['photo_credit'] = {'@id': 'csc:photoCredit'}
+    ctx['text'] = 'csc:text'
     ctx['title'] = 'dcterms:title'
     ctx['quantity'] = {'@id': 'csc:quantity'}
     ctx['remaining'] = {'@id': 'csc:remaining'}

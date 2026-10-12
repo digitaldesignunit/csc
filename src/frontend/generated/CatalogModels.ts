@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-08T14:45:46.411Z
+// Generated on: 2026-10-10T21:28:21.187Z
 // Source: http://127.0.0.1:8791/schema/catalog-compose
 
 import type {
@@ -22,6 +22,7 @@ export interface Actor {
   name?: string | null; // Name of a person; shown to signed-in users only
   organization?: string | null; // The organization (a laboratory, a contractor); shown to everyone
   organization_ror?: string | null; // ROR identifier of the organization
+  url?: string | null; // A web page of the organization (http or https); public like the organization
   orcid?: string | null; // ORCID of a person; shown to signed-in users only
   email?: string | null; // E-mail address; shown to admins and moderators of the dataset only, never in lists
   role?: 'operator' | 'supervisor' | 'laboratory' | 'client' | 'witness' | null; // What the actor did: operator, supervisor, laboratory, client or witness
@@ -112,6 +113,7 @@ export interface ComponentSnapshot {
   notes?: string | null;
   photo_credit?: PhotoCredit | null;
   quantity?: number;
+  derivation_due?: string | null;
   added_by_user_id: string;
   added_by_username?: string | null;
   photo_count?: number;

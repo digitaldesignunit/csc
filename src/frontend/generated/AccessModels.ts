@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-07T06:39:03.135Z
+// Generated on: 2026-10-10T21:28:21.233Z
 // Source: http://127.0.0.1:8791/schema/access
 
 export interface AdminUserRow {
@@ -29,6 +29,7 @@ export interface DatasetView {
   description?: string | null;
   visibility: 'members' | 'catalog';
   roles: ('contributor' | 'reviewer' | 'moderator')[];
+  reviewed?: boolean;
   members?: DatasetMemberView[] | null;
   member_count?: number | null; // list rows only: how many people are members; moderator(D) and admin only, else absent
   component_count?: number | null; // list rows only: published pieces the caller may see
@@ -63,6 +64,10 @@ export interface Me {
   role: string;
   memberships: Membership[];
   moderated_datasets: string[];
+  organization?: string | null;
+  organization_ror?: string | null;
+  orcid?: string | null;
+  default_role?: 'operator' | 'supervisor' | 'laboratory' | 'client' | 'witness';
 }
 
 export interface MemberByEmailResult {

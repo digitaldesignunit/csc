@@ -61,6 +61,7 @@ from .catalog_common import (
     validate_uuid,
 )
 from .evidence_fold import evidence_fold_view
+from .profiles import fill_actors
 from .evidence_service import (
     EvidenceBulk,
     EvidenceCreate,
@@ -197,10 +198,18 @@ async def create_evidence(
     gate_identity(identity)
     prepared = await prepare(request, identity, client_data(body))
     doc = new_evidence_doc(identity_id, prepared, body, current_user,
-                           status='pending' if submit else 'draft')
+                           status='pending' if submit else 'draft',
+                           performers=await _profiled(request, body))
     await request.app.mongodb_component_evidence.insert_one(dict(doc))
     return JSONResponse(status_code=201, content=await evidence_body(
         request, viewer, doc, identity))
+
+
+async def _profiled(request: Request, body) -> List[Dict[str, Any]]:
+    """The performers of a new record with the empty fields of every account
+    among them filled from its profile (8.133 e)."""
+    return await fill_actors(
+        request, [a.model_dump(mode='json') for a in body.performed_by])
 
 
 @router.post('/evidence/bulk', status_code=201,
@@ -232,7 +241,8 @@ async def create_evidence_bulk(
             index=index)
         docs.append(new_evidence_doc(
             item.identity_id, prepared, item, current_user,
-            status='pending' if body.submit else 'draft'))
+            status='pending' if body.submit else 'draft',
+            performers=await _profiled(request, item)))
     coll = request.app.mongodb_component_evidence
     inserted: List[str] = []
     try:

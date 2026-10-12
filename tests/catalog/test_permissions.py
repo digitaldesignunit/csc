@@ -143,12 +143,14 @@ TABLE = [
     # datasets
     ('manage_members', Target(D, kind='dataset'), {'mod', 'admin'}),
     ('edit_dataset', Target(D, kind='dataset'), {'mod', 'admin'}),
+    ('delete_dataset', Target(D, kind='dataset'), {'mod', 'admin'}),    # 8.139 f
     ('set_dataset_public', Target(D, kind='dataset'), {'mod', 'admin'}),   # 8.131 c
     ('invite', Target(D, kind='dataset'), {'mod', 'admin'}),
     ('revoke_invitation', Target(D, kind='invitation', author_id='contrib'),
      {'contrib', 'mod', 'admin'}),
     # admin only
-    ('create_dataset', Target(D), {'admin'}),
+    ('create_dataset', Target(D),
+     {'stranger', 'author', 'contrib', 'review', 'mod', 'admin'}),   # 8.139
     ('purge', Target(D), {'admin'}),
     ('redact_actor', Target(D), {'admin'}),
     ('manage_users', Target(D), {'admin'}),

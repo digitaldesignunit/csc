@@ -112,6 +112,19 @@ async def identity_ever_published(request: Request,
     return found is not None
 
 
+UNREVIEWED = ('This dataset has not been reviewed by an admin yet: it stays '
+              'visible to its members only, and its pieces cannot be made '
+              'public until it is reviewed.')
+
+
+def refuse_unreviewed(dataset: Dataset, viewer: Viewer) -> None:
+    """8.139 c: a dataset an admin has not reviewed cannot be `catalog` and
+    its pieces cannot be public. An admin overrides (they can mark it
+    reviewed anyway)."""
+    if not dataset.reviewed and not viewer.is_admin:
+        raise HTTPException(status_code=409, detail=UNREVIEWED)
+
+
 def deny_read(viewer: Viewer) -> HTTPException:
     if not viewer.logged_in:
         return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
@@ -330,7 +343,8 @@ async def require(request: Request, user: Optional[User], action: str, *,
         dataset=dataset, kind=kind, status=status_, author_id=author,
         identity_published=published,
         reserved_by=(identity or {}).get('reserved') or None,
-        readable=readable, performer_ids=performers)
+        readable=readable, performer_ids=performers,
+        correction=bool(kind == 'evidence' and evidence.get('supersedes')))
     if not can(viewer, action, target):
         raise deny_write(viewer, action)
     return viewer

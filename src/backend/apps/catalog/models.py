@@ -44,6 +44,11 @@ class User(BaseModel):
     verification_token_expires: Optional[datetime] = None
     # a token issued before this moment is refused (8.124 a)
     password_changed_at: Optional[datetime] = None
+    # the personal profile (8.133): copied into the actors of records
+    organization: Optional[str] = None
+    organization_ror: Optional[str] = None
+    orcid: Optional[str] = None
+    default_role: Optional[str] = None
 
     class Config:
         populate_by_name = True

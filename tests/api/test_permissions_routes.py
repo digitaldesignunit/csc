@@ -269,10 +269,9 @@ ROWS = [
     ('search users: admin',
      lambda api, h: api.get('/users/search', params={'q': 'al'}, headers=h),
      _expect(401, 403, 403, 403, 403, 403, 200), None),
-    ('create a dataset: admin',
-     lambda api, h: api.post('/datasets', json={
-         '_id': f'new_{len(h)}', 'name': 'New'}, headers=h),
-     _expect(401, 403, 403, 403, 403, 403, 201), None),
+    ('create a dataset: any verified account (8.139)',
+     lambda api, h: api.post('/datasets', json={'name': 'New'}, headers=h),
+     _expect(401, 201, 201, 201, 201, 201, 201), None),
     ('the caller and their roles',
      lambda api, h: api.get('/users/me', headers=h),
      _expect(401, 200, 200, 200, 200, 200, 200), None),
