@@ -632,6 +632,14 @@ coordinates, `AddEvidence` uploads, the drawing is an attachment on the same rec
   disagrees is an error); a remark says which conversion ran. Also: refuse or warn when the document unit is not
   millimetres (scale by the unit factor), and say in the component description that a layout belongs to one
   version. Same handling for any later GH builder that takes positions on a piece (Ferroscan, 0.6.2).
+- RL11 (user 2026-10-12, 0.6.1.0 phase C): GH cannot read reinforcement back (no component reads evidence; the
+  API has `GET /identities/{id}/evidence?method=reinforcement_layout` and `GET /evidence/{id}`). New component
+  `FetchReinforcementLayout`: input `ComponentPassport` (or `IdentityID` / `SnapshotID`), optional `Status` (default
+  `published`, `all` adds the caller's drafts), optional `Pipes`; outputs one polyline per bar as a tree with one
+  branch per layout record (newest first), `Diameter`, `Spec`, `Cover`, record id, basis and snapshot id per
+  layout, and solid bars with `Pipes`. A passport `csc_placement` (Q, 8.98) moves the bars stored --> placed, the
+  same transform `Fetch...Geometry` applies to the mesh; RL9 is the inverse on the way in. Layouts of another version
+  than the passport's are listed with their snapshot id and a remark (their coordinates belong to that version).
 - RL10 (user 2026-10-10, 0.6.1.0): the evidence card never shows a layout's `accuracy_note` (only the form has it,
   `lib/evidence/layout.ts`). Show it in the card's unfolded details for signed-in viewers (with the basis, the
   document or instrument block); anonymous viewers do not get it (hidden in the web; whether the public tier of the
@@ -732,7 +740,8 @@ lag and the transitive geometry pins), since its own deploy depends on them.
 - **B, backend:** profile 8.133; user-created datasets with the review gate 8.139; RL4 / RL5 / RL7 (8.142), RL10;
   history endpoint and export 8.140 g / h; photo credit in the exports; the two 0.6.0.2 review notes; the
   evidence-edit notice.
-- **C, Grasshopper (user's OK):** RL6, RL9, the `Actor` `Session` input (8.133 f).
+- **C, Grasshopper (user's OK):** RL6, RL9, RL11 (`FetchReinforcementLayout`), the `Actor` `Me` input (8.133 f,
+  amended).
 - **D, web:** evidence forms 8.134 (with h); edge distance 8.135; preview and id chips 8.141; swimlane 8.140; RL3;
   HKS map basis and level 1 curve; provenance dialog gaps and `Actor.url`; privacy page; credits page (partner
   names, links and consent from the user).
