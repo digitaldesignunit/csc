@@ -1,25 +1,45 @@
 'use client'
 
 /**
- * Who performed the work (`performed_by`, spec 3.3.1): the signed-in
- * recorder in one tap ("I performed this"), laboratories and other people
- * by typing. The actor fields and their "?" texts are the backend's.
+ * Who performed the work (`performed_by`, spec 3.3.1): the signed-in recorder
+ * in one tap ("Add me"), laboratories and other people by typing. "Add me"
+ * copies the profile (name, organisation, ROR, ORCID; decision 8.133 d) into
+ * the actor, so the record states where they worked then; the role is the
+ * profile's default role. The actor fields and their "?" texts are the
+ * backend's.
  */
-import { Plus, Trash2, UserCheck } from 'lucide-react'
+import { useState } from 'react'
+import Link from 'next/link'
+import { ChevronDown, Plus, Trash2, UserCheck } from 'lucide-react'
 
 import SchemaFields from '@/components/evidence/SchemaFields'
 import { Button } from '@/components/ui/button'
 import type { Me } from '@/generated/AccessModels'
 import type { JsonSchema } from '@/lib/evidence/api'
 import type { MethodLayout } from '@/lib/evidence/layout'
-import { emptyObject, resolve, type FormObject } from '@/lib/evidence/schema'
+import { emptyObject, resolve, type FormObject, type FormValue } from '@/lib/evidence/schema'
+import { actorFromProfile } from '@/lib/profile'
+import { cn } from '@/lib/utils'
 
 const NO_LAYOUT: MethodLayout = {
-  fanOut: 'single', recordLabel: 'actor', shared: [], blankOnRepeat: [], dateFields: [], longText: [], timestampFields: [],
+  fanOut: 'single', recordLabel: 'actor', shared: [], blankOnRepeat: [], dateFields: [], flexDateFields: [],
+  longText: [], timestampFields: [],
 }
 
 export function isMe(actor: FormObject, me: Me | null): boolean {
   return !!me && actor.kind === 'user' && actor.user_id === me._id
+}
+
+/** The actor "Add me" makes: the profile copied into the form's own shape. */
+export function meActor(me: Me, root: JsonSchema): FormObject {
+  const actorSchema = resolve({ $ref: '#/$defs/Actor' }, root).schema
+  const copy = actorFromProfile(me) as Record<string, FormValue>
+  return { ...emptyObject(actorSchema, root), ...copy }
+}
+
+function summaryOf(actor: FormObject): string {
+  const text = (key: string) => (typeof actor[key] === 'string' ? (actor[key] as string).trim() : '')
+  return [text('name'), text('organization'), text('orcid') ? `ORCID ${text('orcid')}` : ''].filter(Boolean).join(', ')
 }
 
 export default function ActorsField({
@@ -40,13 +60,12 @@ export default function ActorsField({
 }) {
   const actorSchema = resolve({ $ref: '#/$defs/Actor' }, root).schema
   const meListed = actors.some((a) => isMe(a, me))
+  const [details, setDetails] = useState<number | null>(null)
+  const profileThin = !!me && !me.organization && !me.orcid
 
   const addMe = () => {
     if (!me) return
-    onChange([...actors, {
-      ...emptyObject(actorSchema, root),
-      kind: 'user', user_id: me._id, name: me.full_name || me.username, role: 'operator',
-    }])
+    onChange([...actors, meActor(me, root)])
   }
   const addOther = () => {
     onChange([...actors, { ...emptyObject(actorSchema, root), kind: 'organization' }])
@@ -54,55 +73,71 @@ export default function ActorsField({
 
   return (
     <div className="space-y-3">
-      {actors.map((actor, index) => (
-        <fieldset key={index} className="space-y-3 rounded-md border border-border/70 p-3">
-          <legend className="flex items-center gap-1 px-1 text-xs font-semibold text-muted-foreground">
-            {isMe(actor, me) ? <><UserCheck className="h-3.5 w-3.5" />You</> : `Performer ${index + 1}`}
-          </legend>
-          {isMe(actor, me) ? (
-            <SchemaFields
-              schema={actorSchema}
-              root={root}
-              value={actor}
-              onChange={(next) => onChange(actors.map((a, i) => (i === index ? next : a)))}
-              idPrefix={`${idPrefix}-${index}`}
-              layout={NO_LAYOUT}
-              errors={errors}
-              only={['role']}
-            />
-          ) : (
-            <SchemaFields
-              schema={actorSchema}
-              root={root}
-              value={actor}
-              onChange={(next) => onChange(actors.map((a, i) => (i === index ? next : a)))}
-              idPrefix={`${idPrefix}-${index}`}
-              layout={NO_LAYOUT}
-              errors={errors}
-              hide={['user_id', 'redacted_at', 'email']}
-            />
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs text-muted-foreground"
-            onClick={() => onChange(actors.filter((_, i) => i !== index))}
-          >
-            <Trash2 className="mr-1 h-3 w-3" />Remove
-          </Button>
-        </fieldset>
-      ))}
-      <div className="flex flex-wrap gap-2">
+      {actors.map((actor, index) => {
+        const mine = isMe(actor, me)
+        const set = (next: FormObject) => onChange(actors.map((a, i) => (i === index ? next : a)))
+        return (
+          <fieldset key={index} className="space-y-3 rounded-md border border-border/70 bg-background p-3">
+            <legend className="flex items-center gap-1 px-1 text-xs font-semibold text-muted-foreground">
+              {mine ? <><UserCheck className="h-3.5 w-3.5" />You</> : `Performer ${index + 1}`}
+            </legend>
+            {mine ? (
+              <>
+                <p className="text-sm">{summaryOf(actor) || 'You'}</p>
+                <SchemaFields
+                  schema={actorSchema} root={root} value={actor} onChange={set}
+                  idPrefix={`${idPrefix}-${index}`} layout={NO_LAYOUT} errors={errors} only={['role']}
+                />
+                <button
+                  type="button"
+                  aria-expanded={details === index}
+                  onClick={() => setDetails(details === index ? null : index)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:underline"
+                >
+                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', details !== index && '-rotate-90')} />
+                  Details copied from your profile
+                </button>
+                {details === index && (
+                  <SchemaFields
+                    schema={actorSchema} root={root} value={actor} onChange={set}
+                    idPrefix={`${idPrefix}-${index}-d`} layout={NO_LAYOUT} errors={errors}
+                    hide={['kind', 'user_id', 'redacted_at', 'email', 'role', 'accreditation']}
+                  />
+                )}
+              </>
+            ) : (
+              <SchemaFields
+                schema={actorSchema} root={root} value={actor} onChange={set}
+                idPrefix={`${idPrefix}-${index}`} layout={NO_LAYOUT} errors={errors}
+                hide={['user_id', 'redacted_at', 'email']}
+              />
+            )}
+            <Button
+              type="button" variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
+              onClick={() => onChange(actors.filter((_, i) => i !== index))}
+            >
+              <Trash2 className="mr-1 h-3 w-3" />Remove
+            </Button>
+          </fieldset>
+        )
+      })}
+      <div className="flex flex-wrap items-center gap-2">
         {me && !meListed && (
           <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addMe}>
-            <UserCheck className="mr-1 h-3.5 w-3.5" />I performed this
+            <UserCheck className="mr-1 h-3.5 w-3.5" />Add me (I performed this)
           </Button>
         )}
         <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addOther}>
           <Plus className="mr-1 h-3.5 w-3.5" />Laboratory or other person
         </Button>
       </div>
+      {profileThin && (
+        <p className="text-xs text-muted-foreground">
+          Your profile has no organisation or ORCID yet:{' '}
+          <Link href="/settings" className="underline underline-offset-2">add them in Settings</Link>{' '}
+          and &quot;Add me&quot; fills them in.
+        </p>
+      )}
     </div>
   )
 }

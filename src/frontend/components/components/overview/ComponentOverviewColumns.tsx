@@ -3,12 +3,21 @@
 
 import { useState } from 'react'
 import { ColumnDef } from '@tanstack/react-table'
+import { Copy, FileText, MoreHorizontal } from 'lucide-react'
+import { toast } from 'sonner'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { SHAPE_CLASS_LABELS, ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/generated/Vocab'
 import ChipView from '@/components/common/ChipView'
 import { useMaterials } from '@/lib/lineage'
 import { piecesNote, rowStatus, sizeLabel } from '@/lib/browse'
-import { formatDay, formatTimestamp, rgbToHex } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { formatDay, formatTimestamp, generateGrasshopperPanelXML, rgbToHex } from '@/lib/utils'
 import ComponentOverviewDataTablePreviewCell from './ComponentOverviewDataTablePreviewCell'
 import ComponentOverviewDataTableHeader from './ComponentOverviewDataTableHeader'
 import ComponentOverviewDataTableFilterCell from './ComponentOverviewDataTableFilterCell'
@@ -47,6 +56,39 @@ function ComponentOverviewDataTableCopyIdCell({ componentId }: { componentId: st
   )
 }
 
+/** The row menu (decision 8.141 b): the ids of the piece and of its current version, to copy. */
+function RowMenu({ row }: { row: CatalogShallowRow }) {
+  const copy = async (text: string, done: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(done)
+    } catch {
+      toast.error('Could not copy to the clipboard')
+    }
+  }
+  const snapshotId = row.current_snapshot_id ?? ''
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type='button' variant='ghost' size='icon' className='h-7 w-7' aria-label='Row actions'>
+          <MoreHorizontal className='h-4 w-4' aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align='end' className='text-xs'>
+        <DropdownMenuItem onSelect={() => void copy(row._id, 'Component id copied')}>
+          <Copy className='mr-2 h-3.5 w-3.5' aria-hidden />Copy component id
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!snapshotId} onSelect={() => void copy(snapshotId, 'Version id copied')}>
+          <Copy className='mr-2 h-3.5 w-3.5' aria-hidden />Copy snapshot id
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void copy(generateGrasshopperPanelXML('ComponentID', row._id), 'Copied as a Grasshopper panel')}>
+          <FileText className='mr-2 h-3.5 w-3.5' aria-hidden />Copy as Grasshopper panel
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 /** The material by its label in the materials list, as a filter cell. */
 function MaterialCell({ id }: { id: string }) {
   const materials = useMaterials(true)
@@ -69,7 +111,7 @@ const BASE: Record<string, Column> = {
     id: 'name',
     accessorKey: 'name',
     header: () => <ComponentOverviewDataTableHeader header='Name' sortKey='name' />,
-    meta: { colClassName: 'w-[26%]' },
+    meta: { colClassName: 'w-[23%]' },
     cell: ({ row }) => <ComponentOverviewDataTablePreviewCell component_data={row.original} />,
   },
   original_function: {
@@ -93,14 +135,14 @@ const BASE: Record<string, Column> = {
     id: 'material',
     accessorKey: 'material',
     header: () => <ComponentOverviewDataTableHeader header='Material' sortKey='material' />,
-    meta: { colClassName: 'w-[16%]' },
+    meta: { colClassName: 'w-[15%]' },
     cell: ({ row }) => <MaterialCell id={(row.getValue('material') as string | null) ?? ''} />,
   },
   dataset: {
     id: 'dataset',
     accessorKey: 'dataset',
     header: () => <ComponentOverviewDataTableHeader header='Dataset' sortKey='dataset' />,
-    meta: { colClassName: 'w-[16%]' },
+    meta: { colClassName: 'w-[15%]' },
     cell: ({ row }) => {
       const value: string = row.getValue('dataset') ?? ''
       return (
@@ -116,7 +158,7 @@ const BASE: Record<string, Column> = {
     id: 'size',
     accessorFn: (row) => sizeLabel(row.bbx),
     header: () => <ComponentOverviewDataTableHeader header='Size (mm)' sortKey='bbx.0' />,
-    meta: { colClassName: 'w-[13%]' },
+    meta: { colClassName: 'w-[12%]' },
     cell: ({ row }) => {
       const text = sizeLabel(row.original.bbx)
       return text
@@ -128,7 +170,7 @@ const BASE: Record<string, Column> = {
     id: 'shape_class',
     accessorKey: 'shape_class',
     header: () => <ComponentOverviewDataTableHeader header='Shape class' sortKey='shape_class' />,
-    meta: { colClassName: 'w-[8%]' },
+    meta: { colClassName: 'w-[9.5%]' },
     cell: ({ row }) => {
       const value = row.original.shape_class
       return value
@@ -155,6 +197,12 @@ const BASE: Record<string, Column> = {
         </div>
       )
     },
+  },
+  actions: {
+    id: 'actions',
+    header: () => <span className='sr-only'>Actions</span>,
+    meta: { colClassName: 'w-[44px]' },
+    cell: ({ row }) => <RowMenu row={row.original} />,
   },
 }
 

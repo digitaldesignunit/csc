@@ -7,7 +7,9 @@ In every evidence actor (``performed_by``, ``verification.by``, the core's
 drilling operator) and every origin actor of an identity (current and
 archived cycles) the person's ``name``, ``email`` and ``orcid`` become null
 and ``redacted_at`` is set; the organization stays. The change log is
-blanked the same way inside its old / new values. Files are not reached:
+blanked the same way inside its old / new values. For an account
+(``user_id``) the profile of the account is blanked too --- full name,
+organization, ROR, ORCID (8.133 g); the account itself stays. Files are not reached:
 the response lists the attachments of records that name the person
 (``performed_by``, ``recorded_by``, ``uploaded_by``) as the moderator's
 worklist --- add a redacted copy, remove the original with the reason
@@ -35,6 +37,8 @@ router = APIRouter()
 RETRIES = 4
 ACTOR_KINDS = ('user', 'person', 'organization')
 PERSONAL = ('name', 'email', 'orcid')
+# the personal fields of an account's profile (8.133 g)
+PROFILE_FIELDS = ('full_name', 'organization', 'organization_ror', 'orcid')
 
 
 class RedactBody(BaseModel):
@@ -126,7 +130,8 @@ async def redact_actor(
     evidence = request.app.mongodb_component_evidence
     identities = request.app.mongodb_component_identities
     log = request.app.mongodb_change_log
-    counts = {'evidence': 0, 'identities': 0, 'change_log': 0, 'actors': 0}
+    counts = {'evidence': 0, 'identities': 0, 'change_log': 0, 'actors': 0,
+              'profile': 0}
     worklist: List[Dict[str, Any]] = []
 
     async for doc in evidence.find({}):
@@ -223,5 +228,16 @@ async def redact_actor(
             # by the content that was read
             await log.update_one({'_id': entry['_id'], 'changes': before},
                                  {'$set': {'changes': changes}})
+    if body.user_id is not None:
+        users = request.app.mongodb_users
+        account = await users.find_one({'_id': body.user_id}, {
+            key: 1 for key in PROFILE_FIELDS})
+        if account is not None and any(
+                account.get(key) for key in PROFILE_FIELDS):
+            counts['profile'] = 1
+            if not body.dry_run:
+                await users.update_one(
+                    {'_id': body.user_id},
+                    {'$set': {key: None for key in PROFILE_FIELDS}})
     return JSONResponse(status_code=200, content={
         'dry_run': body.dry_run, **counts, 'worklist': worklist})

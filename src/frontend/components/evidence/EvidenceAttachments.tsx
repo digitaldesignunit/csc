@@ -51,12 +51,14 @@ export default function EvidenceAttachments({
   const published = record.status === 'published' || record.status === 'withdrawn'
   // as the routes decide (7.0): a draft: author or moderator; pending:
   // moderator; after publish contributor(D) adds, moderator(D) removes
+  // the author of a pending correction also adds and removes files (RL4, 8.142 a)
+  const ownCorrection = isAuthor && Boolean(record.supersedes) && record.status === 'pending'
   const canAdd = record.status !== 'withdrawn' && record.status !== 'rejected' && (
     record.status === 'draft' ? isAuthor || isModerator
-      : record.status === 'pending' ? isModerator
+      : record.status === 'pending' ? isModerator || ownCorrection
         : rolesIn(dataset).includes('contributor')
   )
-  const canRemove = published ? isModerator : isAuthor || isModerator
+  const canRemove = published ? isModerator : record.status === 'pending' ? isModerator || ownCorrection : isAuthor || isModerator
 
   const add = async (files: FileList | null) => {
     if (!files || files.length === 0) return

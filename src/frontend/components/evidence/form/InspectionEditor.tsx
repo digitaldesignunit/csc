@@ -7,7 +7,7 @@
  * findings is attached to each of them (one upload, decision 7.3).
  */
 import { useMemo, useState } from 'react'
-import { ImagePlus, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ImagePlus, Plus, Trash2 } from 'lucide-react'
 
 import { Field, NativeSelect } from '@/components/evidence/controls'
 import {
@@ -24,6 +24,7 @@ import type { MethodInfo, QuantityInfo } from '@/lib/evidence/api'
 import { quantityLabel } from '@/lib/evidence/format'
 import { resolve } from '@/lib/evidence/schema'
 import { conditionLabel } from '@/components/components/componentDetailShared'
+import { cn } from '@/lib/utils'
 
 const MAX_PHOTOS_PER_FINDING = 8
 
@@ -99,6 +100,8 @@ export default function InspectionEditor({
   onObservations,
   onPhotos,
   errors,
+  missing,
+  focusRecord,
 }: {
   idPrefix: string
   method: MethodInfo
@@ -110,13 +113,25 @@ export default function InspectionEditor({
   onPhotos: (next: PhotoItem[]) => void
   /** problems of the server by observation index */
   errors: (index: number) => string[]
+  /** what is missing in a finding, by position (the form's own checks) */
+  missing: (index: number) => string[]
+  /** A finding to open (a jump from the summary); changes with every jump. */
+  focusRecord?: { index: number; at: number } | null
 }) {
   const options = useMemo(
     () => inspectionQuantities(method, quantities, materialGroup),
     [method, quantities, materialGroup],
   )
   const describe = resolve({ $ref: '#/$defs/VisualObservation' }, method.payload_schema).schema
-  const [open, setOpen] = useState<string | null>(null)
+  const [open, setOpen] = useState<string | null>(observations.length === 1 ? observations[0].key : null)
+  const [openAlso, setOpenAlso] = useState<string | null>(null)
+  const [lastFocus, setLastFocus] = useState<number | null>(null)
+
+  if (focusRecord && focusRecord.at !== lastFocus) {
+    setLastFocus(focusRecord.at)
+    const target = observations[focusRecord.index]
+    if (target) setOpen(target.key)
+  }
 
   const update = (key: string, patch: Partial<ObservationState>) =>
     onObservations(observations.map((o) => (o.key === key ? { ...o, ...patch } : o)))
@@ -151,86 +166,118 @@ export default function InspectionEditor({
       <p className="text-xs text-muted-foreground">
         One record per finding, so each can be corrected and moderated on its own. Photos belong to the finding they document.
       </p>
-      {observations.map((observation, index) => {
-        const quantity = options.find((q) => q.name === observation.quantity)
-        const own = photos.filter((p) => observation.photoIds.includes(p.id))
-        const others = photos.filter((p) => !observation.photoIds.includes(p.id))
-        const id = `${idPrefix}-${observation.key}`
-        const problems = errors(index)
-        return (
-          <fieldset key={observation.key} className="space-y-3 rounded-md border border-border/70 p-3">
-            <legend className="px-1 text-xs font-semibold text-muted-foreground">
-              Finding {index + 1}
-            </legend>
-            <Field id={`${id}-quantity`} label="What was observed"
-              help={describe.properties?.quantity?.description ?? ''} required errors={problems}>
-              <NativeSelect
-                id={`${id}-quantity`}
-                value={observation.quantity}
-                onChange={(next) => update(observation.key, { quantity: next, value: '' })}
-                options={options.map((q) => ({ value: q.name, label: quantityLabel(q.name) }))}
-              />
-            </Field>
-            <Field id={`${id}-value`} label={quantity?.name === 'crack_width' ? 'Widest crack' : 'Severity or grade'}
-              help={describe.properties?.value?.description ?? ''} required>
-              <ValueInput
-                id={`${id}-value`}
-                quantity={quantity}
-                value={observation.value}
-                onChange={(next) => update(observation.key, { value: next })}
-              />
-            </Field>
-            <Field id={`${id}-note`} label="Note" help={describe.properties?.note?.description ?? ''}>
-              <Textarea id={`${id}-note`} rows={2} value={observation.note}
-                onChange={(e) => update(observation.key, { note: e.target.value })} />
-            </Field>
-            <div className="space-y-2">
-              <p className="text-xs font-medium">Photos of this finding</p>
-              <SnapshotPhotoCapture
-                mode="staged"
-                files={own.map((p) => p.file)}
-                onFilesChange={(files) => setFiles(observation, files)}
-                maxPhotos={MAX_PHOTOS_PER_FINDING}
-              />
-              {others.length > 0 && (
-                <div className="space-y-1">
-                  <Button type="button" variant="ghost" size="sm" className="h-7 text-xs"
-                    onClick={() => setOpen(open === observation.key ? null : observation.key)}>
-                    <ImagePlus className="mr-1 h-3.5 w-3.5" />
-                    Photo also shows this finding ({others.length} other{others.length === 1 ? '' : 's'})
-                  </Button>
-                  {open === observation.key && (
-                    <ul className="flex flex-wrap gap-1.5">
-                      {others.map((p) => (
-                        <li key={p.id}>
-                          <button type="button" className="rounded-md border px-2 py-1 text-xs hover:bg-muted/50"
-                            onClick={() => toggleExisting(observation, p.id)}>
-                            {p.file.name}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+      <ul className="divide-y divide-border overflow-hidden rounded-md border border-border">
+        {observations.map((observation, index) => {
+          const quantity = options.find((q) => q.name === observation.quantity)
+          const own = photos.filter((p) => observation.photoIds.includes(p.id))
+          const others = photos.filter((p) => !observation.photoIds.includes(p.id))
+          const id = `${idPrefix}-${observation.key}`
+          const problems = errors(index)
+          const flagged = problems.length + missing(index).length
+          const isOpen = open === observation.key
+          const unit = quantity?.name === 'crack_width' ? ' mm' : ''
+          const facts = [
+            quantity ? quantityLabel(quantity.name) : null,
+            observation.value ? `${observation.value}${unit}` : null,
+            own.length ? `${own.length} photo${own.length === 1 ? '' : 's'}` : null,
+          ].filter(Boolean).join(', ')
+          return (
+            <li key={observation.key} className={cn(isOpen && 'bg-muted/20')}>
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                onClick={() => setOpen(isOpen ? null : observation.key)}
+                className="grid w-full grid-cols-[2rem_minmax(0,1fr)_1.5rem] items-center gap-3 px-3 py-2 text-left"
+              >
+                <span className="text-sm font-semibold tabular-nums text-muted-foreground">{index + 1}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">Finding {index + 1}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{facts || <span className="italic">not filled in yet</span>}</span>
+                </span>
+                {flagged > 0 && !isOpen && facts ? (
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-label={`${flagged} to look at`} />
+                ) : (
+                  <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', !isOpen && '-rotate-90')} aria-hidden />
+                )}
+              </button>
+              {isOpen && (
+                <div className="space-y-3 border-t border-border/60 bg-background px-3 py-3">
+                  <Field id={`${id}-quantity`} label="What was observed"
+                    help={describe.properties?.quantity?.description ?? ''} required errors={problems}>
+                    <NativeSelect
+                      id={`${id}-quantity`}
+                      value={observation.quantity}
+                      onChange={(next) => update(observation.key, { quantity: next, value: '' })}
+                      options={options.map((q) => ({ value: q.name, label: quantityLabel(q.name) }))}
+                    />
+                  </Field>
+                  <Field id={`${id}-value`} label={quantity?.name === 'crack_width' ? 'Widest crack' : 'Severity or grade'}
+                    help={describe.properties?.value?.description ?? ''} required>
+                    <ValueInput
+                      id={`${id}-value`}
+                      quantity={quantity}
+                      value={observation.value}
+                      onChange={(next) => update(observation.key, { value: next })}
+                    />
+                  </Field>
+                  <Field id={`${id}-note`} label="Note" help={describe.properties?.note?.description ?? ''}>
+                    <Textarea id={`${id}-note`} rows={2} value={observation.note}
+                      onChange={(e) => update(observation.key, { note: e.target.value })} />
+                  </Field>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium">Photos of this finding</p>
+                    <SnapshotPhotoCapture
+                      mode="staged"
+                      files={own.map((p) => p.file)}
+                      onFilesChange={(files) => setFiles(observation, files)}
+                      maxPhotos={MAX_PHOTOS_PER_FINDING}
+                    />
+                    {others.length > 0 && (
+                      <div className="space-y-1">
+                        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs"
+                          onClick={() => setOpenAlso(openAlso === observation.key ? null : observation.key)}>
+                          <ImagePlus className="mr-1 h-3.5 w-3.5" />
+                          Photo also shows this finding ({others.length} other{others.length === 1 ? '' : 's'})
+                        </Button>
+                        {openAlso === observation.key && (
+                          <ul className="flex flex-wrap gap-1.5">
+                            {others.map((p) => (
+                              <li key={p.id}>
+                                <button type="button" className="rounded-md border px-2 py-1 text-xs hover:bg-muted/50"
+                                  onClick={() => toggleExisting(observation, p.id)}>
+                                  {p.file.name}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                    {own.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Shared with other findings:{' '}
+                        {own.filter((p) => observations.some((o) => o.key !== observation.key && o.photoIds.includes(p.id))).length}
+                      </p>
+                    )}
+                  </div>
+                  {observations.length > 1 && (
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
+                      onClick={() => { onObservations(observations.filter((o) => o.key !== observation.key)); setOpen(null) }}>
+                      <Trash2 className="mr-1 h-3 w-3" />Remove finding
+                    </Button>
                   )}
                 </div>
               )}
-              {own.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Shared with other findings:{' '}
-                  {own.filter((p) => observations.some((o) => o.key !== observation.key && o.photoIds.includes(p.id))).length}
-                </p>
-              )}
-            </div>
-            {observations.length > 1 && (
-              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
-                onClick={() => onObservations(observations.filter((o) => o.key !== observation.key))}>
-                <Trash2 className="mr-1 h-3 w-3" />Remove finding
-              </Button>
-            )}
-          </fieldset>
-        )
-      })}
+            </li>
+          )
+        })}
+      </ul>
       <Button type="button" variant="outline" size="sm" className="h-8 text-xs"
-        onClick={() => onObservations([...observations, newObservation()])}>
+        onClick={() => {
+          const fresh = newObservation()
+          onObservations([...observations, fresh])
+          setOpen(fresh.key)
+        }}>
         <Plus className="mr-1 h-3.5 w-3.5" />Add finding
       </Button>
     </div>

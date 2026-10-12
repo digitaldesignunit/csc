@@ -114,6 +114,24 @@ EVIDENCE_DERIVED: FrozenSet[str] = frozenset({
     'verification', 'etag', 'created', 'lastmodified', '_id', 'id',
 })
 
+# A frozen field of a published reinforcement layout that is still empty is
+# filled once in place by moderator(D) (8.142 b, like CAPTURE_FILLABLE for a
+# snapshot): the drawing's title, date, reference, link and retrieval day.
+LAYOUT_DOCUMENT_FILLABLE: FrozenSet[str] = frozenset({
+    'title', 'date', 'reference', 'url', 'retrieved_at',
+})
+
+
+def empty_layout_document_fields(payload: Optional[Dict[str, Any]]
+                                 ) -> List[str]:
+    """The ``payload.document.<field>`` names of
+    ``LAYOUT_DOCUMENT_FILLABLE`` that hold nothing yet."""
+    document = (payload or {}).get('document') or {}
+    return sorted(f'payload.document.{name}'
+                  for name in LAYOUT_DOCUMENT_FILLABLE
+                  if document.get(name) in (None, ''))
+
+
 # Identity (section 3.1): metadata PATCH (moderator, or the creator while
 # unpublished, 8.9); everything else is server-maintained or has its own route.
 IDENTITY_METADATA: FrozenSet[str] = frozenset({
@@ -219,10 +237,13 @@ def patch_problems(
 
     elif kind == 'evidence':
         published = status in ('published', 'withdrawn')
+        fillable = frozenset(fillable)
         for name in names:
             top = name.split('.', 1)[0]
             if name in EVIDENCE_MUTABLE or top == 'notes':
                 allowed = is_moderator if published else editable
+            elif published and name in fillable:
+                allowed = is_moderator                  # fill once (8.142 b)
             elif (name in EVIDENCE_FROZEN or top in EVIDENCE_FROZEN
                   or top == 'position'):
                 if published:

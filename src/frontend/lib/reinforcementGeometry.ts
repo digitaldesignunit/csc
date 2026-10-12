@@ -20,6 +20,19 @@ export const reinforcementSteelMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.45,
 })
 
+const COLOURED = new Map<string, THREE.MeshStandardMaterial>()
+
+/** The material of a bar: the steel one, or the colour of the layout or the diameter (RL3). */
+export function reinforcementMaterial(colour: string | null | undefined): THREE.MeshStandardMaterial {
+  if (!colour) return reinforcementSteelMaterial
+  let material = COLOURED.get(colour)
+  if (!material) {
+    material = new THREE.MeshStandardMaterial({ color: colour, metalness: 0.2, roughness: 0.55 })
+    COLOURED.set(colour, material)
+  }
+  return material
+}
+
 type ReinforcementSegment = {
   position: THREE.Vector3
   quaternion: THREE.Quaternion

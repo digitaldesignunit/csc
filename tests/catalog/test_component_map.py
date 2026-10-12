@@ -5,6 +5,7 @@ import pytest
 
 from apps.catalog.api.identity_filters import CatalogFilters
 from apps.catalog.component_map import (
+    MAP_BASES,
     build_component_map,
     cache_doc_id,
     extract_radial_feature,
@@ -140,6 +141,43 @@ def test_build_component_map_scalars_basis():
     assert payload['displayed'] == 3
     assert payload['basis_label'] == 'scalar descriptors'
     assert len(payload['points']) == 3
+
+
+def _hks(seed: int) -> list:
+    rng = np.random.default_rng(seed)
+    vec = rng.random(32)
+    return [float(v) for v in vec / np.linalg.norm(vec)]
+
+
+def test_build_component_map_hks_basis():
+    rows = [
+        {'_id': 'a', 'descriptors': {'hks': _hks(1)}},
+        {'_id': 'b', 'descriptors': {'hks': _hks(2)}},
+        {'_id': 'c', 'descriptors': {'hks': _hks(3)}},
+        {'_id': 'short', 'descriptors': {'hks': [0.1] * 31}},
+        {'_id': 'nan', 'descriptors': {'hks': [float('nan')] * 32}},
+        {'_id': 'none', 'descriptors': {'boxscore': 1.0}},
+    ]
+    payload = build_component_map(rows, basis='hks', method='pca')
+    assert payload['basis'] == 'hks'
+    assert payload['basis_label'] == 'heat kernel signature'
+    assert payload['total'] == 6
+    assert payload['displayed'] == 3
+    assert sorted(p['id'] for p in payload['points']) == ['a', 'b', 'c']
+
+
+def test_hks_basis_is_built_by_the_cache_job_and_cached_under_its_own_id():
+    assert 'hks' in MAP_BASES
+    assert cache_doc_id('hks', 'umap') == 'hks:umap:active:published'
+    assert cache_doc_id('hks', 'pca') == 'hks:pca:active:published'
+
+
+def test_hks_layouts_run_for_both_methods():
+    rows = [{'_id': f'p{i}', 'descriptors': {'hks': _hks(i)}} for i in range(20)]
+    for method in ('pca', 'umap'):
+        payload = build_component_map(rows, basis='hks', method=method)
+        assert payload['displayed'] == 20
+        assert all(np.isfinite([p['x'], p['y']]).all() for p in payload['points'])
 
 
 def test_umap_falls_back_to_pca_for_tiny_sets():

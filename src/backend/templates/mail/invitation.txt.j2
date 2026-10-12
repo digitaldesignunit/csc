@@ -1,0 +1,10 @@
+{% extends "base.txt.j2" %}
+{% block body -%}
+Hello,
+
+{{ inviter_name }} has invited you to the Catalog of Second Chances{% if dataset_name %} to the dataset "{{ dataset_name }}" as {{ roles|join(", ") if roles else "member" }}{% endif %}.
+
+Register with this email address using the link below. The link works once and expires on {{ expires_on }}.
+
+If you did not expect this invitation, you can ignore this email.
+{%- endblock %}

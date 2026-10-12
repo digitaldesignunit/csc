@@ -11,7 +11,7 @@ import { ORIGINAL_FUNCTION_LABELS } from '@/generated/Vocab'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { OptionalDateInput } from '@/components/ui/optional-date-input'
+import { DateField } from '@/components/ui/date-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Field, OriginFields, VocabSelect } from '@/components/lineage/fields'
@@ -117,9 +117,11 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
         </Field>
 
         {(mode === 'cut' || mode === 'state') && (
-          <OptionalDateInput id="sf-effective"
-            label={mode === 'cut' ? 'Cut on (empty: today)' : 'This state began on (empty: today)'}
-            value={fields.effectiveOn} onChange={(effectiveOn) => setFields({ effectiveOn })} />
+          <Field label={mode === 'cut' ? 'Cut on (empty: today)' : 'This state began on (empty: today)'}
+            htmlFor="sf-effective">
+            <DateField id="sf-effective" value={fields.effectiveOn}
+              onChange={(effectiveOn) => setFields({ effectiveOn })} />
+          </Field>
         )}
 
         <Field label={batch ? 'Pieces to draw' : 'Quantity'} htmlFor="sf-quantity"

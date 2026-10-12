@@ -12,6 +12,7 @@ import { Plus, Trash2 } from 'lucide-react'
 
 import { Field, NativeSelect, NumberList } from '@/components/evidence/controls'
 import Help from '@/components/ui/help'
+import { DateField } from '@/components/ui/date-field'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -340,6 +341,7 @@ export default function SchemaFields(props: SchemaFieldsProps) {
     // strings and numbers
     const numeric = kind === 'number' || kind === 'integer'
     const dateField = layout.dateFields.includes(dotted)
+    const flexField = layout.flexDateFields.includes(dotted)
     const long = layout.longText.includes(dotted)
     rows.push(
       <Field key={key} {...common}>
@@ -350,10 +352,17 @@ export default function SchemaFields(props: SchemaFieldsProps) {
             value={typeof current === 'string' ? current : ''}
             onChange={(event) => setKey(key, event.target.value)}
           />
+        ) : dateField || flexField ? (
+          <DateField
+            id={id}
+            value={typeof current === 'string' ? current : ''}
+            precisions={flexField ? ['year', 'month', 'day'] : ['day']}
+            onChange={(next) => setKey(key, next)}
+          />
         ) : (
           <Input
             id={id}
-            type={dateField ? 'date' : 'text'}
+            type="text"
             inputMode={numeric ? (kind === 'integer' ? 'numeric' : 'decimal') : undefined}
             value={typeof current === 'string' ? current : ''}
             onChange={(event) => setKey(key, event.target.value)}
@@ -394,7 +403,7 @@ export function enumLabel(value: string): string {
 }
 
 /** One point per line, "x y z" (a bar's centreline, stored coordinates). */
-function PointsField({
+export function PointsField({
   id,
   value,
   onChange,

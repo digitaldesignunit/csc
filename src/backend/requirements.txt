@@ -8,6 +8,9 @@ gunicorn
 uvicorn[standard]
 python-multipart
 
+# --- Mail templates (templates/mail/, decision 8.138); pure Python, with markupsafe ---
+jinja2
+
 # --- Database ---
 pymongo
 

@@ -163,7 +163,7 @@ After generation, save to `svg/{NickName}.svg`, validate in a browser or vector 
 
 Rescanned from `grasshopper_userobjects_src/` (Python + C# script components). Descriptions are shortened from each component's `Description` field for icon generation.
 
-**Icon coverage:** every component below has `svg/{NickName}.svg` and a matching `24x24/{NickName}.png` (the P8 components got theirs on 2026-10-08; `ApplyFrame`, `FetchOriginalGeometry`, `ReinforcementLayout` and `GetComponentPassport` reuse the artwork of the names they replace).
+**Icon coverage:** every component below has `svg/{NickName}.svg` and a matching `24x24/{NickName}.png` (the P8 components got theirs on 2026-10-08, `FetchReinforcementLayout` on 2026-10-12; `ApplyFrame`, `FetchOriginalGeometry`, `ReinforcementLayout` and `GetComponentPassport` reuse the artwork of the names they replace).
 
 | Icon | Meaning |
 | --- | --- |
@@ -201,6 +201,7 @@ To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_i
 | `FetchComponents` | yes | Fetches specific catalog components by identity ID; handles missing IDs; supports cache. |
 | `FetchFilteredComponents` | yes | Server-side filtered catalog query (original function, material, dataset, complexity, dimensions, reservation status, shape class, material class, circulation). |
 | `FetchOriginalGeometry` | yes | Fetches the original (as uploaded) snapshot geometry as binary PLY (ETag cache); falls back to reduced, then the inline preview; builds authored shapes. |
+| `FetchReinforcementLayout` | yes | Fetches the reinforcement layouts of a component as polylines (one tree branch per record, newest first) with diameter, grade, cover, record id, basis, snapshot and status; optional solid bars; a passport placement moves the layouts of its snapshot (RL11). |
 | `FetchReducedGeometry` | yes | Fetches the reduced snapshot geometry as binary PLY (ETag cache); falls back to the inline preview; builds authored shapes from their parameters. |
 | `FetchSnapshot` | yes | Fetches passport JSON for one identity and a specific snapshot (`{identity, snapshots:[one]}`); input can be a UUID or passport JSON. |
 | `FetchTransmittedID` | yes | Returns the pending transmitted component ID for the signed-in user from the backend. |
@@ -214,7 +215,7 @@ To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_i
 | `CreateComponentIdentity` | yes | Builds the `IdentityCreateBody` request for a new component (or a cut) from Rhino geometry and the builder objects; reduces and stages the mesh files. |
 | `CreateComponentSnapshot` | yes | Builds the request for a new state (or a correction, `Supersedes`) of an existing component; reduces and stages the mesh files. |
 | `CreateUUID` | yes | Generates and caches UUIDs; refresh input forces a new value. |
-| `Actor` | yes | Builds one actor (person, organization, or account) as JSON for `Origin` or an evidence record. |
+| `Actor` | yes | Builds one actor (person, organization, or account) as JSON for `Origin` or an evidence record; with `Me` the signed-in account from its profile (8.133 f). |
 | `Origin` | yes | Builds how a component entered circulation (kind, date, place, construction work, who) as JSON. |
 | `IdentityMetadata` | yes | Builds the identity fields of a new component (original function, material, trade name, origin ...) as JSON. |
 | `SnapshotMetadata` | yes | Builds the fields of one recorded state (name, fragment, quantity, colour, location, notes, start date) as JSON. |
@@ -254,7 +255,7 @@ To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_i
 | --- | --- | --- |
 | `ComputePCAOrientation` | yes | PCA-based orientation for meshes/breps/extrusions; returns OBB, aligned geometry, translation, and transform. |
 | `ComputeFrame` | yes | Computes the frame of a piece offline with the server's rules (minimum-volume box, axes by extent, column stands). |
-| `ReinforcementLayout` | yes | Builds a `reinforcement_layout` evidence record from bar centrelines, steel grades and diameters; post it with `AddEvidence`. |
+| `ReinforcementLayout` | yes | Builds a `reinforcement_layout` evidence record from bar centrelines, steel grades and diameters; a `ComponentPassport` with a placement maps curves drawn on a moved piece back to stored coordinates; post it with `AddEvidence`. |
 | `ExtrusionProfile` | yes | Extracts the profile curves of a Rhino extrusion. |
 | `FindLargestFlatSide` | yes | Finds the largest flat face cluster on a mesh (normal clustering + sampling heuristics for large meshes). |
 | `MaxInscribedQuad` | yes | Maximum-area inscribed quadrilateral inside closed polylines (multi-start optimization). |

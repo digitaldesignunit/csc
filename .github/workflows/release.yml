@@ -41,6 +41,8 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           python scripts/ci/check_version.py --tag "$GITHUB_REF_NAME"
+          # Zenodo archives the tagged commit with its .zenodo.json
+          python scripts/ci/zenodo_metadata.py --check
           echo "version=$version" >> "$GITHUB_OUTPUT"
           case "$version" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac >> "$GITHUB_OUTPUT"
 

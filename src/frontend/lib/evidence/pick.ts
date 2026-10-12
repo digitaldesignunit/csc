@@ -131,7 +131,14 @@ function meshHit(candidate: Candidate, root: THREE.Object3D, raycaster: THREE.Ra
 }
 
 // FACE PATCH ------------------------------------------------------------------
-const PLANAR_COS = Math.cos((4 * Math.PI) / 180)
+/**
+ * The face is grown from the picked triangle by distance to a fitted plane and
+ * tilt to it (decision 8.135 b): a scan's bumps stay inside, and only the
+ * outer boundary loop of the patch counts, so the rims of holes do not.
+ */
+const FIT_DISTANCE_M = 0.003 // 3 mm
+const FIT_TILT_COS = Math.cos((20 * Math.PI) / 180)
+const FIT_PASSES = 2
 /** a patch of fewer triangles is not a flat face (a scanned, noisy surface) */
 const MIN_PATCH_TRIANGLES = 6
 /**
@@ -213,11 +220,62 @@ function analyse(mesh: THREE.Mesh, root: THREE.Object3D): PatchAnalysis {
   return built
 }
 
+type Plane = { point: THREE.Vector3; normal: THREE.Vector3 }
+
+/** Triangles reachable over shared edges that lie on `plane` (distance and tilt). */
+function growPatch(analysis: NonNullable<PatchAnalysis>, faceIndex: number, plane: Plane): Uint8Array {
+  const { points, corner, triangles, normals, edgeUsers } = analysis
+  const near = (id: number) => Math.abs(points[id].clone().sub(plane.point).dot(plane.normal)) <= FIT_DISTANCE_M
+  const inPatch = new Uint8Array(triangles)
+  const stack = [faceIndex]
+  inPatch[faceIndex] = 1
+  while (stack.length) {
+    const t = stack.pop() as number
+    const [a, b, c] = [corner(t, 0), corner(t, 1), corner(t, 2)]
+    for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+      const key = p < q ? `${p}-${q}` : `${q}-${p}`
+      for (const other of edgeUsers.get(key) ?? []) {
+        if (inPatch[other]) continue
+        const m = normals[other]
+        if (!m || Math.abs(m.dot(plane.normal)) < FIT_TILT_COS) continue
+        if (near(corner(other, 0)) && near(corner(other, 1)) && near(corner(other, 2))) {
+          inPatch[other] = 1
+          stack.push(other)
+        }
+      }
+    }
+  }
+  return inPatch
+}
+
+/** Least-squares-like plane of a patch: area-weighted centre and normal. */
+function fitPlane(analysis: NonNullable<PatchAnalysis>, inPatch: Uint8Array, towards: THREE.Vector3): Plane | null {
+  const { points, corner, triangles } = analysis
+  const centre = new THREE.Vector3()
+  const sum = new THREE.Vector3()
+  let weight = 0
+  for (let t = 0; t < triangles; t += 1) {
+    if (!inPatch[t]) continue
+    const [a, b, c] = [points[corner(t, 0)], points[corner(t, 1)], points[corner(t, 2)]]
+    const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a))
+    const area = n.length() / 2
+    if (area <= 0) continue
+    if (n.dot(towards) < 0) n.negate()
+    sum.add(n.multiplyScalar(0.5))
+    centre.add(a.clone().add(b).add(c).multiplyScalar(area / 3))
+    weight += area
+  }
+  if (weight <= 0 || sum.lengthSq() <= 0) return null
+  return { point: centre.multiplyScalar(1 / weight), normal: sum.normalize() }
+}
+
 /**
- * The boundary of the planar patch the hit triangle belongs to: triangles
- * sharing an edge and facing within 4 degrees of each other, vertices
- * welded at 0.1 mm. Edges used by one patch triangle only are the boundary.
- * The mesh analysis behind it is cached per geometry.
+ * The outer boundary of the flat face the hit triangle belongs to (decision
+ * 8.135 b): triangles connected over shared edges that lie within 3 mm of a
+ * plane fitted to the patch and tilt at most 20 degrees to it, vertices welded
+ * at 0.1 mm. Of the boundary only the outer loop is returned: the rims of holes
+ * (bumps, missing triangles) are ignored. The mesh analysis behind it is
+ * cached per geometry.
  */
 export function facePatchEdges(
   mesh: THREE.Mesh,
@@ -230,40 +288,68 @@ export function facePatchEdges(
   const start = normals[faceIndex]
   if (!start) return null
 
-  const inPatch = new Uint8Array(triangles)
-  const stack = [faceIndex]
-  inPatch[faceIndex] = 1
-  while (stack.length) {
-    const t = stack.pop() as number
-    const n = normals[t] as THREE.Vector3
-    const [a, b, c] = [corner(t, 0), corner(t, 1), corner(t, 2)]
-    for (const [p, q] of [[a, b], [b, c], [c, a]]) {
-      const key = p < q ? `${p}-${q}` : `${q}-${p}`
-      for (const other of edgeUsers.get(key) ?? []) {
-        if (inPatch[other] || !normals[other]) continue
-        // same plane: facing alike (either side) and near the start's plane
-        const m = normals[other] as THREE.Vector3
-        if (Math.abs(m.dot(start)) >= PLANAR_COS && Math.abs(n.dot(m)) >= PLANAR_COS) {
-          inPatch[other] = 1
-          stack.push(other)
-        }
-      }
-    }
+  let plane: Plane = { point: points[corner(faceIndex, 0)].clone(), normal: start.clone() }
+  let inPatch = growPatch(analysis, faceIndex, plane)
+  for (let pass = 0; pass < FIT_PASSES; pass += 1) {
+    const fitted = fitPlane(analysis, inPatch, start)
+    if (!fitted) break
+    plane = fitted
+    inPatch = growPatch(analysis, faceIndex, plane)
   }
 
   let patchSize = 0
   for (let t = 0; t < triangles; t += 1) patchSize += inPatch[t]
   if (patchSize < (triangles <= LOW_POLY_TRIANGLES ? 1 : MIN_PATCH_TRIANGLES)) return null
 
-  const boundary: Edge[] = []
+  const boundary: [number, number][] = []
   for (const [key, users] of edgeUsers) {
-    const inside = users.filter((t) => inPatch[t]).length
-    if (inside === 1) {
+    if (users.filter((t) => inPatch[t]).length === 1) {
       const [p, q] = key.split('-').map(Number)
-      boundary.push([localToStored(points[p]), localToStored(points[q])])
+      boundary.push([p, q])
     }
   }
-  return boundary.length ? boundary : null
+  if (boundary.length === 0) return null
+
+  // loops: boundary edges joined through shared vertices; the outer loop is
+  // the one that spans the most area in the plane
+  const parent = new Map<number, number>()
+  const find = (x: number): number => {
+    let r = x
+    while (parent.get(r) !== r) r = parent.get(r) as number
+    parent.set(x, r)
+    return r
+  }
+  for (const [p, q] of boundary) {
+    if (!parent.has(p)) parent.set(p, p)
+    if (!parent.has(q)) parent.set(q, q)
+    parent.set(find(p), find(q))
+  }
+  const u = Math.abs(plane.normal.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)
+  u.sub(plane.normal.clone().multiplyScalar(u.dot(plane.normal))).normalize()
+  const v = plane.normal.clone().cross(u)
+  const extent = new Map<number, [number, number, number, number]>()
+  for (const [p, q] of boundary) {
+    const root_ = find(p)
+    const box = extent.get(root_) ?? [Infinity, -Infinity, Infinity, -Infinity]
+    for (const id of [p, q]) {
+      const x = points[id].dot(u)
+      const y = points[id].dot(v)
+      box[0] = Math.min(box[0], x)
+      box[1] = Math.max(box[1], x)
+      box[2] = Math.min(box[2], y)
+      box[3] = Math.max(box[3], y)
+    }
+    extent.set(root_, box)
+  }
+  let outer = -1
+  let largest = -1
+  for (const [id, box] of extent) {
+    const area = (box[1] - box[0]) * (box[3] - box[2])
+    if (area > largest) { largest = area; outer = id }
+  }
+  return boundary
+    .filter(([p]) => find(p) === outer)
+    .map(([p, q]) => [localToStored(points[p]), localToStored(points[q])] as Edge)
 }
 
 // POINT CLOUD -----------------------------------------------------------------

@@ -1,43 +1,36 @@
 'use client'
 
 /**
- * The History card (decision 8.102, 8.118): lineage and timeline in one place,
- * as layers. Two renderings of the same data with the same toggles --- List
- * (the timeline with the lineage events; the default on a phone and the
- * accessible form) and Graph (the ELK lineage graph; the default on desktop).
+ * The History card (decision 8.102, 8.118, 8.140): lineage and timeline in one
+ * place, as layers. Two renderings of the same data with the same toggles ---
+ * List (the timeline with the lineage events; the default on a phone and the
+ * accessible form) and Graph (the swimlane graph with its export; the default
+ * on desktop).
  * Below: the snapshot versions as read-only rows (Correct, Make current and
  * Withdraw are in the Actions menu), the change history (members; it names
  * people, 8.101 M2) and a link to the raw JSON and descriptors.
  */
 import { useEffect, useMemo, useState } from 'react'
-import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Clock, History, Loader2 } from 'lucide-react'
 
+import IdChip from '@/components/common/IdChip'
 import ComponentChangeHistory from '@/components/lineage/ComponentChangeHistory'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { CatalogComponent } from '@/generated/CatalogModels'
-import { primarySnapshot, type CatalogShallowRow, type ProvenanceGraph } from '@/generated/catalogExtras'
+import { primarySnapshot, type CatalogShallowRow } from '@/generated/catalogExtras'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { BackendError, backendJson } from '@/lib/backend'
 import { formatDay, lineageEvents, type Layers } from '@/lib/componentDetail'
 import { formatTimestamp } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { parentIdentityIds } from '../componentDetailShared'
+import SwimlaneGraph from '../history/SwimlaneGraph'
 import { useEvidenceData } from './EvidenceData'
 import HistoryList, { type TimelineEvent } from './HistoryList'
-
-const ComponentProvenanceGraph = dynamic(() => import('../ComponentProvenanceGraph'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-full items-center justify-center text-muted-foreground">
-      <Loader2 className="h-6 w-6 animate-spin" />
-    </div>
-  ),
-})
 
 type View = 'list' | 'graph'
 
@@ -46,21 +39,6 @@ const LAYER_LABELS: { key: keyof Layers; label: string; help: string }[] = [
   { key: 'states', label: 'States', help: 'The recorded states and their corrections' },
   { key: 'evidence', label: 'Evidence', help: 'The evidence records' },
 ]
-
-/** The graph with the layers applied: Lineage off leaves this piece, States
- *  off leaves the identities. (The graph has no evidence nodes.) */
-function filterGraph(graph: ProvenanceGraph, layers: Layers): ProvenanceGraph {
-  const keep = new Set(graph.nodes.filter((node) => {
-    if (node.kind === 'identity') return layers.lineage || node.is_root
-    if (!layers.states) return false
-    return layers.lineage || node.identity_id === graph.root_identity_id
-  }).map((node) => node.id))
-  return {
-    ...graph,
-    nodes: graph.nodes.filter((node) => keep.has(node.id)),
-    edges: graph.edges.filter((edge) => keep.has(edge.source) && keep.has(edge.target)),
-  }
-}
 
 function useTimeline(identityId: string, reloadKey: number | string) {
   const [events, setEvents] = useState<TimelineEvent[] | null>(null)
@@ -77,20 +55,6 @@ function useTimeline(identityId: string, reloadKey: number | string) {
     return () => { cancelled = true }
   }, [identityId, reloadKey])
   return { events, error }
-}
-
-function useGraph(identityId: string, wanted: boolean, stamp: string) {
-  const [graph, setGraph] = useState<ProvenanceGraph | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
-    if (!wanted) return
-    let cancelled = false
-    backendJson<ProvenanceGraph>(`/identities/${encodeURIComponent(identityId)}/provenance`)
-      .then((body) => { if (!cancelled) setGraph(body) })
-      .catch(() => { if (!cancelled) setError('Could not load the lineage graph.') })
-    return () => { cancelled = true }
-  }, [identityId, wanted, stamp])
-  return { graph, error }
 }
 
 function useParents(parentIds: string[]) {
@@ -133,12 +97,12 @@ function VersionRows({ identityId, snapshots, activeSnapshotId }: {
           const active = row._id === activeSnapshotId
           const href = row.is_current
             ? `/components/${encodeURIComponent(identityId)}`
-            : `/components/${encodeURIComponent(identityId)}?${new URLSearchParams({ snapshots: row._id })}`
+            : `/components/${encodeURIComponent(identityId)}?${new URLSearchParams({ snapshot: row._id })}`
           const stamps = [`created ${formatTimestamp(row.created)}`, `changed ${formatTimestamp(row.lastmodified)}`].join('; ')
           return (
-            <li key={row._id}>
+            <li key={row._id} className="flex items-start gap-1.5">
               <Link href={href} title={stamps}
-                className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border px-2 py-1 text-xs transition-colors ${
+                className={`flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border px-2 py-1 text-xs transition-colors ${
                   active ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border bg-muted/20 hover:bg-muted/40'}`}>
                 <span className="font-medium">v{row.version}</span>
                 {row.is_current && <Badge variant="default" className="text-[10px]">Current</Badge>}
@@ -156,6 +120,7 @@ function VersionRows({ identityId, snapshots, activeSnapshotId }: {
                   <span className="basis-full text-muted-foreground">added by {row.added_by_username}</span>
                 )}
               </Link>
+              <IdChip id={String(row._id)} kind="SnapshotID" className="mt-0.5 shrink-0" />
             </li>
           )
         })}
@@ -208,7 +173,6 @@ export default function ComponentHistoryCard({ catalog, snapshots, childIdentiti
   // identity: the history follows it without a reload of the page
   const stamp = `${reloadKey}:${identity.lastmodified ?? ''}`
   const { events, error } = useTimeline(identityId, stamp)
-  const { graph, error: graphError } = useGraph(identityId, view === 'graph', stamp)
   const parents = useParents(parentIdentityIds(identity))
 
   const startedAt = useMemo(
@@ -223,7 +187,6 @@ export default function ComponentHistoryCard({ catalog, snapshots, childIdentiti
     })),
   }), [startedAt, parents, childIdentities])
   const versions = Object.fromEntries(snapshots.map((s) => [String(s._id), s.version]))
-  const filtered = useMemo(() => (graph ? filterGraph(graph, layers) : null), [graph, layers])
 
   return (
     <section aria-label="History" className="rounded-lg border border-border bg-card p-3 shadow-sm">
@@ -237,11 +200,10 @@ export default function ComponentHistoryCard({ catalog, snapshots, childIdentiti
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Layers">
         {LAYER_LABELS.map(({ key, label, help }) => {
-          const unavailable = view === 'graph' && key === 'evidence'
           return (
-            <Button key={key} type="button" size="sm" variant={layers[key] && !unavailable ? 'default' : 'outline'}
-              className="h-6 rounded-full px-2.5 text-[11px]" aria-pressed={layers[key]} disabled={unavailable}
-              title={unavailable ? 'The graph shows identities and states; evidence is in the list' : help}
+            <Button key={key} type="button" size="sm" variant={layers[key] ? 'default' : 'outline'}
+              className="h-6 rounded-full px-2.5 text-[11px]" aria-pressed={layers[key]}
+              title={help}
               onClick={() => setLayers((prev) => ({ ...prev, [key]: !prev[key] }))}>
               {label}
             </Button>
@@ -258,17 +220,13 @@ export default function ComponentHistoryCard({ catalog, snapshots, childIdentiti
           <HistoryList events={events} lineage={lineage} layers={layers} />
         )
       ) : (
-        <div className="h-[26rem] overflow-hidden rounded-md border border-border">
-          {graphError ? (
-            <p className="p-3 text-sm text-destructive">{graphError}</p>
-          ) : filtered ? (
-            filtered.nodes.length > 0
-              ? <ComponentProvenanceGraph graph={filtered} onNavigate={() => undefined} />
-              : <p className="p-3 text-sm text-muted-foreground">Nothing to show with these layers.</p>
-          ) : (
-            <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
-          )}
-        </div>
+        <SwimlaneGraph
+          identityId={identityId}
+          catalogNumber={identity.catalog_number}
+          layers={layers}
+          activeSnapshotId={activeSnapshotId}
+          reloadStamp={stamp}
+        />
       )}
 
       <div className="mt-4 space-y-3 border-t border-border pt-3">

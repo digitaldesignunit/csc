@@ -269,10 +269,9 @@ ROWS = [
     ('search users: admin',
      lambda api, h: api.get('/users/search', params={'q': 'al'}, headers=h),
      _expect(401, 403, 403, 403, 403, 403, 200), None),
-    ('create a dataset: admin',
-     lambda api, h: api.post('/datasets', json={
-         '_id': f'new_{len(h)}', 'name': 'New'}, headers=h),
-     _expect(401, 403, 403, 403, 403, 403, 201), None),
+    ('create a dataset: any verified account (8.139)',
+     lambda api, h: api.post('/datasets', json={'name': 'New'}, headers=h),
+     _expect(401, 201, 201, 201, 201, 201, 201), None),
     ('the caller and their roles',
      lambda api, h: api.get('/users/me', headers=h),
      _expect(401, 200, 200, 200, 200, 200, 200), None),
@@ -411,6 +410,10 @@ ROWS = [
      lambda api, h: api.delete(f'/evidence/{EV["draft"]}/attachments/0',
                                headers=h),
      _expect(401, 403, 200, 403, 200, 403, 200), _with_attachment()),
+    # --- mail templates (8.138 e) ----------------------------------------
+    ('preview the mail templates: admin',
+     lambda api, h: api.get('/admin/mail-templates', headers=h),
+     _expect(401, 403, 403, 403, 403, 403, 200), None),
     # --- redaction (3.1.4) -----------------------------------------------
     ('redact an actor: admin',
      lambda api, h: api.post('/actors/redact', json={

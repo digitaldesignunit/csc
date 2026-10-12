@@ -632,6 +632,17 @@ coordinates, `AddEvidence` uploads, the drawing is an attachment on the same rec
   disagrees is an error); a remark says which conversion ran. Also: refuse or warn when the document unit is not
   millimetres (scale by the unit factor), and say in the component description that a layout belongs to one
   version. Same handling for any later GH builder that takes positions on a piece (Ferroscan, 0.6.2).
+- RL11 (user 2026-10-12, 0.6.1.0 phase C): GH cannot read reinforcement back (no component reads evidence; the
+  API has `GET /identities/{id}/evidence?method=reinforcement_layout` and `GET /evidence/{id}`). New component
+  `FetchReinforcementLayout`: input `ComponentPassport` (or `IdentityID` / `SnapshotID`), optional `Status` (default
+  `published`, `all` adds the caller's drafts), optional `Pipes`; outputs one polyline per bar as a tree with one
+  branch per layout record (newest first), `Diameter`, `Spec`, `Cover`, record id, basis and snapshot id per
+  layout, and solid bars with `Pipes`. A passport `csc_placement` (Q, 8.98) moves the bars stored --> placed, the
+  same transform `Fetch...Geometry` applies to the mesh; RL9 is the inverse on the way in. Layouts of another version
+  than the passport's are listed with their snapshot id and a remark (their coordinates belong to that version).
+- Units in GH (user 2026-10-12, later; 0.6.1.0 chose "no scaling"): every GH component uses stored millimetres
+  1:1 as document units and the reinforcement components only warn in a non-mm document. One later task scales all
+  of them by the document unit together (fetch / apply-frame / bake / reinforcement in and out), never some of them.
 - RL10 (user 2026-10-10, 0.6.1.0): the evidence card never shows a layout's `accuracy_note` (only the form has it,
   `lib/evidence/layout.ts`). Show it in the card's unfolded details for signed-in viewers (with the basis, the
   document or instrument block); anonymous viewers do not get it (hidden in the web; whether the public tier of the
@@ -732,11 +743,13 @@ lag and the transitive geometry pins), since its own deploy depends on them.
 - **B, backend:** profile 8.133; user-created datasets with the review gate 8.139; RL4 / RL5 / RL7 (8.142), RL10;
   history endpoint and export 8.140 g / h; photo credit in the exports; the two 0.6.0.2 review notes; the
   evidence-edit notice.
-- **C, Grasshopper (user's OK):** RL6, RL9, the `Actor` `Session` input (8.133 f).
+- **C, Grasshopper (user's OK):** RL6, RL9, RL11 (`FetchReinforcementLayout`), the `Actor` `Me` input (8.133 f,
+  amended).
 - **D, web:** evidence forms 8.134 (with h); edge distance 8.135; preview and id chips 8.141; swimlane 8.140; RL3;
   HKS map basis and level 1 curve; provenance dialog gaps and `Actor.url`; privacy page; credits page (partner
   names, links and consent from the user).
-- **E, logo and mails 8.138:** the coordinator drafts the three concepts when the user asks (not in parallel with A).
+- **E, mail templates (8.138 e as amended):** Jinja2 templates, HTML and text, the site's colour theme, no logo or
+  image; the logo moved to `FUTURE.md` (user 2026-10-12).
 - **F, toolchain:** lint refactor and lint packages 16.4; npm audit with a glibc 2.17 server build test.
 
 **Atlas traffic (2026-10-10, at the front with the deploy fixes and 8.136):** since the cutover the primary's
@@ -759,7 +772,7 @@ bases, retention, recipients incl. the hosting and database providers, rights)
 and link it from the footer, the registration form and the mails. The cookie notice shrinks to what is true: the
 site stores only what it needs (session, theme, banner state); no consent banner while nothing else is stored. The legal text needs a check by the university's data protection office.
 
-**Credits page revision** (user 2026-10-10): the ZirKuS paragraph gains the DBU funding logo (the "sponsored by"
+**Credits page revision** (user 2026-10-10; narrowed 2026-10-12: in 0.6.1.0 only the DBU "sponsored by" logo and reformatted funding statements; the partners' logos and the thank-you notice wait for their consent): the ZirKuS paragraph gains the DBU funding logo (the "sponsored by"
 variant, as the funder's guidelines ask; files in the gitignored `reference/zirkus_logos_refs/`, copied into
 `public/` as needed) and a notice thanking all project partners for their support and valuable feedback during
 development, with the partners' logos (five files there). The page itself gets the 0.6 style (theme colours instead
@@ -826,6 +839,23 @@ Grill: template files (e.g. Jinja2 under `src/backend/templates/mail/`) instead 
 travels (hosted URL on the public static host vs. inline CID attachment; many clients block remote images); dark
 mode in mail clients; an admin preview and "send me a test mail" page; which further mails come with 0.6.1.0
 (e.g. moderation outcome, reservation notices) so the template covers them.
+
+**Toolchain leftovers after phase F (2026-10-12; done in a phase F addendum the same day, user):** `next` 16.3.8 --> 16.4.x as a small separate bump (build and
+restart); remove the unused native `bcrypt` dependency (nothing imports it, `npm ci` builds it for nothing). The
+server runs Node 22.23.2 (user 2026-10-12; Next 16 needs >= 20.9; noted in the deployment README). Since
+phase F `images.unoptimized` is true everywhere and `sharp` is excluded from the standalone trace: its prebuilt
+binaries need glibc >= 2.25 (0.33 / 0.34) or 2.28 (0.35), the server has 2.17, so it never loaded there; revisit only
+with a server move.
+
+**HKS v2 (0.6.2, user 2026-10-12, research item next to O25):** the pooled HKS of `apps/descriptors/hks.py` carries
+little meaning: with M-orthonormal eigenvectors the mass-weighted mean per time is the heat trace over the area,
+`sum_i exp(-lambda_i t) / A`, whose leading term after area normalisation is the same for every shape; 64 eigenpairs
+truncate the short times; the global L2 normalisation lets the mean half dominate the variance half. 0.6.1.0 hides
+the HKS curve card (code kept behind a flag) and drops HKS from the selectable map bases (the cache may keep it). v2:
+store per-point values (also for the level 2 heat map); pool the distribution of the log HKS per time (e.g. 10 / 50
+/ 90 % quantiles) standardised per time across the catalogue, no global L2; consider ShapeDNA (the first k
+eigenvalues over the first, already computed). Adopt only after a retrieval check (nearest neighbours of reference
+pieces look sensible); new `HKS_VERSION`, recompute through the runner.
 
 **Candidates already logged elsewhere, to sort into 0.6.1.0 or later:** O26 (user-created datasets); the IFC export
 (above); HKS as a component map basis (above) and the HKS visualisation in the viewer (level 1: the HKS curve in a

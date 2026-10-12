@@ -37,15 +37,18 @@ export default function ImprintPage() {
           </CardHeader>
           <CardContent className="space-y-4 text-base leading-relaxed">
             <div className="space-y-2">
-              <p><strong>©</strong> Max Benjamin Eschenbach 2024-2026</p>
-              <p><strong>E-Mail:</strong> <a href="mailto:max.eschenbach@tu-darmstadt.de" className="text-blue-500 underline">max.eschenbach@tu-darmstadt.de</a></p>
-              <div className="mt-4 space-y-1">
-                <p>Fachgebiet Digitales Gestalten (Digital Design Unit, DDU)</p>
-                <p>TU Darmstadt</p>
-                <p>El-Lissitzky-Straße 1</p>
-                <p>64287 Darmstadt</p>
+              <p><strong>&copy;</strong> Max Eschenbach 2024-2026</p>
+              <div className="space-y-1">
+                <p>Max Eschenbach</p>
+                <p>Lahnstr. 67</p>
+                <p>60326 Frankfurt am Main</p>
                 <p>Deutschland</p>
               </div>
+              <p><strong>E-Mail:</strong> <a href="mailto:max.eschenbach@tu-darmstadt.de" className="text-blue-500 underline">max.eschenbach@tu-darmstadt.de</a></p>
+              <p className="text-sm text-muted-foreground">
+                Der Katalog ist Teil eines Promotionsprojekts am Fachgebiet Digitales Gestalten (Digital Design Unit,
+                DDU), TU Darmstadt, El-Lissitzky-Stra&szlig;e 1, 64287 Darmstadt, Deutschland.
+              </p>
             </div>
           </CardContent>
         </Card>

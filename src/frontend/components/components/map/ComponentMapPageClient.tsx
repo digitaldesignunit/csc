@@ -1,8 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RotateCcw } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -16,28 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import ComponentViewer from '@/components/components/ComponentViewer'
-import ComponentViewerSkeleton from '@/components/components/ComponentViewerSkeleton'
+import { PreviewProvider, usePreview } from '@/components/components/preview/ComponentPreview'
 import type {
   ComponentMapBasis,
   ComponentMapMethod,
   ComponentMapPoint,
   ComponentMapResponse,
 } from '@/generated/catalogExtras'
-import type { CatalogComponent } from '@/generated/CatalogModels'
 import { cn, formatDay } from '@/lib/utils'
 import { COLOR_BY_OPTIONS, colorMap, legendOf, type ColorBy } from '@/lib/mapColors'
 import { useMaterials } from '@/lib/lineage'
+import { mapBasisOptions } from '@/lib/mapBases'
 import { ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/generated/Vocab'
 
 const PAD_DESKTOP = 28
@@ -119,19 +107,6 @@ function cssColor(el: Element, variable: string, fallback: string): string {
   return value || fallback
 }
 
-async function fetchCatalogPassportPreview(identityId: string): Promise<CatalogComponent> {
-  const res = await fetch(
-    `/api/backend/identities/${encodeURIComponent(identityId)}/compose`,
-    { method: 'GET', credentials: 'include', cache: 'no-store' },
-  )
-  if (res.status === 401) throw new Error('unauthorized')
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`Failed to fetch passport: ${res.status} ${body}`)
-  }
-  return (await res.json()) as CatalogComponent
-}
-
 function ComponentMapCanvas({
   points,
   method,
@@ -193,13 +168,17 @@ function ComponentMapCanvas({
   const hitR = isCompact ? DOT_HIT_R_MOBILE : DOT_HIT_R
   const view = useMemo(() => computeViewBox(points), [points])
 
-  cameraRef.current = camera
-  hoverIdRef.current = hoverId
-  viewRef.current = view
-  padRef.current = pad
-  hitRRef.current = hitR
-  onSelectRef.current = onSelect
-  colorsRef.current = colors
+  // the latest values for the canvas handlers and the draw loop: written after
+  // the commit, never during the render (the effects below read them)
+  useLayoutEffect(() => {
+    cameraRef.current = camera
+    hoverIdRef.current = hoverId
+    viewRef.current = view
+    padRef.current = pad
+    hitRRef.current = hitR
+    onSelectRef.current = onSelect
+    colorsRef.current = colors
+  })
 
   const project = useCallback((x: number, y: number, cam: Camera = cameraRef.current) => {
     const { width, height } = sizeRef.current
@@ -230,67 +209,69 @@ function ComponentMapCanvas({
     return null
   }, [project])
 
-  drawRef.current = () => {
-    const canvas = canvasRef.current
-    const container = containerRef.current
-    if (!canvas || !container) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+  useLayoutEffect(() => {
+    drawRef.current = () => {
+      const canvas = canvasRef.current
+      const container = containerRef.current
+      if (!canvas || !container) return
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
 
-    const { width, height } = sizeRef.current
-    if (width <= 0 || height <= 0) return
+      const { width, height } = sizeRef.current
+      if (width <= 0 || height <= 0) return
 
-    const dpr = window.devicePixelRatio || 1
-    const nextW = Math.max(1, Math.round(width * dpr))
-    const nextH = Math.max(1, Math.round(height * dpr))
-    if (canvas.width !== nextW || canvas.height !== nextH) {
-      canvas.width = nextW
-      canvas.height = nextH
+      const dpr = window.devicePixelRatio || 1
+      const nextW = Math.max(1, Math.round(width * dpr))
+      const nextH = Math.max(1, Math.round(height * dpr))
+      if (canvas.width !== nextW || canvas.height !== nextH) {
+        canvas.width = nextW
+        canvas.height = nextH
+      }
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.clearRect(0, 0, width, height)
+      ctx.lineJoin = 'round'
+      ctx.lineCap = 'round'
+
+      const cam = cameraRef.current
+      const accent = cssColor(container, '--ring', '#888888')
+      const background = cssColor(container, '--background', '#ffffff')
+      const primary = cssColor(container, '--primary', '#888888')
+      const hover = hoverIdRef.current
+
+      const paint = (p: AnimPoint, active: boolean) => {
+        const alpha = Math.max(0, Math.min(1, p.opacity))
+        if (alpha <= 0) return
+        const { cx, cy } = project(p.x, p.y, cam)
+
+        ctx.globalAlpha = alpha * (active ? 1 : 0.9)
+        ctx.beginPath()
+        ctx.arc(cx, cy, active ? DOT_R + 3 : DOT_R + 1.5, 0, Math.PI * 2)
+        ctx.strokeStyle = accent
+        ctx.lineWidth = active ? POINT_STROKE_ACCENT + 0.5 : POINT_STROKE_ACCENT
+        ctx.stroke()
+
+        ctx.globalAlpha = alpha
+        ctx.beginPath()
+        ctx.arc(cx, cy, active ? DOT_R + 2 : DOT_R, 0, Math.PI * 2)
+        ctx.fillStyle = colorsRef.current.get(p.id) || rgbFromPoint(p.meta) || primary
+        ctx.fill()
+        ctx.strokeStyle = background
+        ctx.lineWidth = POINT_STROKE_INNER
+        ctx.stroke()
+      }
+
+      for (const p of animRef.current) {
+        if (p.id === hover) continue
+        paint(p, false)
+      }
+      if (hover) {
+        const hp = animRef.current.find((p) => p.id === hover)
+        if (hp) paint(hp, true)
+      }
+      ctx.globalAlpha = 1
     }
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, width, height)
-    ctx.lineJoin = 'round'
-    ctx.lineCap = 'round'
-
-    const cam = cameraRef.current
-    const accent = cssColor(container, '--ring', '#888888')
-    const background = cssColor(container, '--background', '#ffffff')
-    const primary = cssColor(container, '--primary', '#888888')
-    const hover = hoverIdRef.current
-
-    const paint = (p: AnimPoint, active: boolean) => {
-      const alpha = Math.max(0, Math.min(1, p.opacity))
-      if (alpha <= 0) return
-      const { cx, cy } = project(p.x, p.y, cam)
-
-      ctx.globalAlpha = alpha * (active ? 1 : 0.9)
-      ctx.beginPath()
-      ctx.arc(cx, cy, active ? DOT_R + 3 : DOT_R + 1.5, 0, Math.PI * 2)
-      ctx.strokeStyle = accent
-      ctx.lineWidth = active ? POINT_STROKE_ACCENT + 0.5 : POINT_STROKE_ACCENT
-      ctx.stroke()
-
-      ctx.globalAlpha = alpha
-      ctx.beginPath()
-      ctx.arc(cx, cy, active ? DOT_R + 2 : DOT_R, 0, Math.PI * 2)
-      ctx.fillStyle = colorsRef.current.get(p.id) || rgbFromPoint(p.meta) || primary
-      ctx.fill()
-      ctx.strokeStyle = background
-      ctx.lineWidth = POINT_STROKE_INNER
-      ctx.stroke()
-    }
-
-    for (const p of animRef.current) {
-      if (p.id === hover) continue
-      paint(p, false)
-    }
-    if (hover) {
-      const hp = animRef.current.find((p) => p.id === hover)
-      if (hp) paint(hp, true)
-    }
-    ctx.globalAlpha = 1
-  }
+  })
 
   useEffect(() => {
     const el = containerRef.current
@@ -668,8 +649,13 @@ function ComponentMapCanvas({
   )
 }
 
+/** The map; a click on a point opens it in the shared preview panel. */
+function PreviewCanvas(props: Omit<React.ComponentProps<typeof ComponentMapCanvas>, 'onSelect'>) {
+  const preview = usePreview()
+  return <ComponentMapCanvas {...props} onSelect={(point) => preview?.open(point.id)} />
+}
+
 export default function ComponentMapPageClient() {
-  const router = useRouter()
   const [basis, setBasis] = useState<ComponentMapBasis>('radial_signature')
   const [method, setMethod] = useState<ComponentMapMethod>('umap')
   const [colorBy, setColorBy] = useState<ColorBy>('shape_class')
@@ -679,11 +665,6 @@ export default function ComponentMapPageClient() {
   const [loading, setLoading] = useState(false)
   const [switching, setSwitching] = useState(false)
   const hasMapRef = useRef(false)
-
-  const [previewOpen, setPreviewOpen] = useState(false)
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewPoint, setPreviewPoint] = useState<ComponentMapPoint | null>(null)
-  const [previewCatalog, setPreviewCatalog] = useState<CatalogComponent | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -747,28 +728,6 @@ export default function ComponentMapPageClient() {
     }
   }, [basis, method])
 
-  const openPreview = useCallback(
-    async (point: ComponentMapPoint) => {
-      setPreviewPoint(point)
-      setPreviewCatalog(null)
-      setPreviewOpen(true)
-      setPreviewLoading(true)
-      try {
-        const passport = await fetchCatalogPassportPreview(point.id)
-        setPreviewCatalog(passport)
-      } catch (e: unknown) {
-        console.error('Error fetching passport for map preview:', e)
-        if (e instanceof Error && e.message.toLowerCase().includes('unauthorized')) {
-          router.push(`/auth/signin?callbackUrl=/components/map`)
-        }
-        setPreviewOpen(false)
-      } finally {
-        setPreviewLoading(false)
-      }
-    },
-    [router],
-  )
-
   const materialLabel = useCallback(
     (id: string) => materials.find((m) => m._id === id)?.label ?? id,
     [materials],
@@ -793,13 +752,13 @@ export default function ComponentMapPageClient() {
     cacheNote,
   ].filter(Boolean).join(' ')
 
-  const previewName =
-    (previewPoint?.name && String(previewPoint.name).trim()) ||
-    previewPoint?.id ||
-    'Component'
-  const previewId = previewPoint?.id || ''
+  const previewItems = useMemo(
+    () => points.map((p) => ({ id: p.id, name: p.name, number: p.catalog_number, dataset: p.dataset })),
+    [points],
+  )
 
   return (
+    <PreviewProvider items={previewItems}>
     <div className="flex w-full max-w-full flex-col gap-2 overflow-x-hidden md:h-[calc(100dvh-3.5rem)] md:min-h-0 md:p-3">
       <div className="flex flex-col gap-2 px-3 pt-3 md:flex-row md:flex-wrap md:items-center md:gap-x-3 md:px-0 md:pt-0">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -821,8 +780,9 @@ export default function ComponentMapPageClient() {
               <SelectValue placeholder="Descriptor" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="radial_signature">Radial signature</SelectItem>
-              <SelectItem value="scalars">Scalar descriptors</SelectItem>
+              {mapBasisOptions().map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={colorBy} onValueChange={(value) => setColorBy(value as ColorBy)}>
@@ -866,12 +826,11 @@ export default function ComponentMapPageClient() {
       )}
 
       {data && data.points.length > 0 ? (
-        <ComponentMapCanvas
+        <PreviewCanvas
           points={data.points}
           method={data.method}
           transitioning={switching}
           colors={colors}
-          onSelect={openPreview}
         />
       ) : (
         <div
@@ -887,57 +846,7 @@ export default function ComponentMapPageClient() {
               : error || 'No points to display'}
         </div>
       )}
-
-      <Sheet
-        open={previewOpen}
-        onOpenChange={(open) => {
-          setPreviewOpen(open)
-          if (!open) {
-            setPreviewCatalog(null)
-            setPreviewPoint(null)
-            setPreviewLoading(false)
-          }
-        }}
-      >
-        <SheetContent side="bottom" className="sm:max-w-none">
-          <SheetHeader>
-            <SheetTitle className="text-center text-base">Preview</SheetTitle>
-            <SheetDescription>
-              <span className="block text-center text-sm font-semibold">{previewName}</span>
-              <span className="block text-center text-xs font-bold">{previewId}</span>
-            </SheetDescription>
-          </SheetHeader>
-
-          {previewLoading && <ComponentViewerSkeleton message="Loading Geometry..." />}
-          {!previewLoading && previewCatalog && (
-            <ComponentViewer catalog={previewCatalog} />
-          )}
-
-          <SheetFooter className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
-            <Link
-              href={`/components/${encodeURIComponent(previewId)}`}
-              className="w-full sm:w-[200px]"
-            >
-              <Button variant="outline" className="h-8 w-full">
-                Open the component
-              </Button>
-            </Link>
-            <Link
-              href={`/scan?mode=locate&reference_id=${encodeURIComponent(previewId)}`}
-              className="w-full sm:w-[200px]"
-            >
-              <Button variant="outline" className="h-8 w-full">
-                Locate
-              </Button>
-            </Link>
-            <SheetClose asChild className="w-full sm:w-[200px]">
-              <Button variant="outline" className="h-8 w-full">
-                Close
-              </Button>
-            </SheetClose>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
     </div>
+    </PreviewProvider>
   )
 }

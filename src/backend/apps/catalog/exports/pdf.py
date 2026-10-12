@@ -21,6 +21,7 @@ library is used.
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import io
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import urlparse
@@ -138,6 +139,22 @@ def _link(url: str, label: Optional[str] = None) -> str:
     href = escape(url, {'"': '&quot;'})
     return (f'<link href="{href}" color="#0b5cad">'
             f'{escape(label or url)}</link>')
+
+
+def _photo_credit(credit: Any, style: ParagraphStyle) -> Optional[Paragraph]:
+    """The photo credit of the version (8.128): its text, with "(c)" written
+    as the copyright sign, and its link when it has one (http or https only,
+    as stored); None without a credit."""
+    if not isinstance(credit, dict):
+        return None
+    text = re.sub(r'\(c\)', '\u00a9', str(credit.get('text') or '').strip(),
+                  flags=re.IGNORECASE)
+    if not text:
+        return None
+    url = str(credit.get('url') or '').strip()
+    if url.lower().startswith(('http://', 'https://')):
+        return Paragraph(f'{escape(text)} ({_link(url)})', style)
+    return Paragraph(escape(text), style)
 
 
 def fmt_ts(value: Optional[str], precision: Optional[str] = None) -> str:
@@ -429,6 +446,9 @@ def _story(data: PassportPdfData, rows_cap: int, props_cap: int,
             (props.get('condition_grade') or {}).get('range') or [], None,
             'condition_grade')),
     ]
+    credit = _photo_credit(snapshot.get('photo_credit'), st['cell'])
+    if credit is not None:
+        state_rows.append(('Photo credit', credit))
     if quantity > 1 or remaining is not None:
         drawn = quantity - remaining if remaining is not None else None
         line = f'{quantity} recorded'

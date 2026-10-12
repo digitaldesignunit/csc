@@ -44,6 +44,7 @@ the only copy.
 
 ```bash
 python3.13 --version                       # Uberspace 7 ships it
+node --version                             # Next 16 needs >= 20.9 (production: 22.23.2)
 mkdir -p ~/csc/{releases,venvs,bin,shared/frontend,shared/logs}
 cp -a ~/csc/frontend/.env* ~/csc/shared/frontend/        # frontend secrets (old layout)
 cp -a ~/csc/backend/logs/. ~/csc/shared/logs/ 2>/dev/null || true

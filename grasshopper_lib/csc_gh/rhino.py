@@ -87,6 +87,17 @@ def placement_transform(frame):
         Rhino.Geometry.Plane.WorldXY, plane_from_frame(frame))
 
 
+def mm_per_document_unit(doc=None):
+    """``(millimetres per unit, unit name)`` of a Rhino document (the active
+    one by default); ``(1.0, 'Millimeters')`` without a document."""
+    doc = doc if doc is not None else Rhino.RhinoDoc.ActiveDoc
+    if doc is None:
+        return 1.0, 'Millimeters'
+    system = doc.ModelUnitSystem
+    scale = Rhino.RhinoMath.UnitScale(system, Rhino.UnitSystem.Millimeters)
+    return float(scale), str(system)
+
+
 # BLITTING: numpy <-> .NET arrays of structs -----------------------------------
 # Point3d is 3 doubles (24 bytes), MeshFace 4 ints (16 bytes): sequential
 # structs, so a pinned array is a block of memory numpy can copy into and out
@@ -521,6 +532,29 @@ def curve_points(curve, tolerance=None):
         if not ok:
             raise ValueError('a curve could not be turned into a polyline')
     return [(p.X, p.Y, p.Z) for p in polyline]
+
+
+def polyline_curve(points):
+    """A Rhino polyline curve through ``[(x, y, z), ...]`` (a typed .NET list:
+    python.net does not turn a Python list into ``IEnumerable<Point3d>``)."""
+    net = System.Collections.Generic.List[Rhino.Geometry.Point3d]()
+    for x, y, z in points:
+        net.Add(Rhino.Geometry.Point3d(float(x), float(y), float(z)))
+    return Rhino.Geometry.PolylineCurve(net)
+
+
+def pipe_brep(curve, radius, tolerance=None):
+    """A solid bar: a pipe of ``radius`` along ``curve`` with flat caps, or
+    None when Rhino cannot make one."""
+    doc = Rhino.RhinoDoc.ActiveDoc
+    if tolerance is None:
+        tolerance = doc.ModelAbsoluteTolerance if doc is not None else 0.01
+    angle = (doc.ModelAngleToleranceRadians if doc is not None
+             else 0.0174532925)
+    pipes = Rhino.Geometry.Brep.CreatePipe(
+        curve, float(radius), False, Rhino.Geometry.PipeCapMode.Flat, True,
+        tolerance, angle)
+    return pipes[0] if pipes else None
 
 
 def split_geometry(geometries):

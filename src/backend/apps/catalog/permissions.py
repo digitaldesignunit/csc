@@ -157,6 +157,8 @@ class Target:
     destination: Optional[Dataset] = None
     # evidence: users among performed_by (four eyes, 8.12)
     performer_ids: Tuple[str, ...] = field(default_factory=tuple)
+    # evidence: a correction of another record (it has `supersedes`)
+    correction: bool = False
 
 
 Rule = Callable[[Viewer, Roles, Target], bool]
@@ -207,11 +209,22 @@ def _geometry_files(viewer: Viewer, roles: Roles, target: Target) -> bool:
     return _unpublished(target) and _unpublished_editor(viewer, roles, target)
 
 
+def _file_editor(viewer: Viewer, roles: Roles, target: Target) -> bool:
+    """Who changes the files of an unpublished record: its editors (8.18),
+    and the author of a pending correction, which enters as pending and
+    takes over the files of what it corrects (8.142 a): they add new ones and
+    remove a carried one while it waits."""
+    if _unpublished_editor(viewer, roles, target):
+        return True
+    return target.correction and target.status == 'pending' \
+        and _author(viewer, roles, target)
+
+
 def _add_photo(viewer: Viewer, roles: Roles, target: Target) -> bool:
     """Before publish as any unpublished edit (8.18); after publish
     appended by contributor(D) (3.2.2)."""
     if _unpublished(target):
-        return _unpublished_editor(viewer, roles, target)
+        return _file_editor(viewer, roles, target)
     return 'contributor' in roles or 'moderator' in roles
 
 
@@ -219,7 +232,7 @@ def _remove_photo(viewer: Viewer, roles: Roles, target: Target) -> bool:
     """Before publish as any unpublished edit (8.18); after publish
     moderator(D)."""
     if _unpublished(target):
-        return _unpublished_editor(viewer, roles, target)
+        return _file_editor(viewer, roles, target)
     return 'moderator' in roles
 
 
@@ -262,6 +275,12 @@ def _release(viewer: Viewer, roles: Roles, target: Target) -> bool:
 
 def _nobody(viewer: Viewer, roles: Roles, target: Target) -> bool:
     return False
+
+
+def _any_signed_in(viewer: Viewer, roles: Roles, target: Target) -> bool:
+    """Every signed-in account; the route adds what the rule cannot see
+    (a verified address, the limit per user)."""
+    return True
 
 
 def _self_attest(viewer: Viewer, roles: Roles, target: Target) -> bool:
@@ -331,13 +350,14 @@ RULES: Dict[str, Rule] = {
     # datasets
     'manage_members': _role('moderator'),
     'edit_dataset': _role('moderator'),
+    'delete_dataset': _role('moderator'),     # 8.139 f: only while empty
     # every published piece of D public or private at once (8.131 c)
     'set_dataset_public': _role('moderator'),
     # invitations (8.14): into D by moderator(D); without a dataset admin
     'invite': _role('moderator'),
     'revoke_invitation': _revoke_invitation,
     # admin only (the admin shortcut in `can` grants them)
-    'create_dataset': _nobody,
+    'create_dataset': _any_signed_in,         # 8.139: verified accounts
     'purge': _nobody,
     'redact_actor': _nobody,
     'manage_users': _nobody,

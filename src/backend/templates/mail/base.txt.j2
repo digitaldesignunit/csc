@@ -1,0 +1,15 @@
+{#- The plain-text twin of base.html.j2: the same parts in the same order. -#}
+CATALOG OF SECOND CHANCES
+
+{{ title }}
+
+{% block body %}{% endblock %}
+{%- if button_label and button_url %}
+
+{{ button_label }}:
+{{ button_url }}
+{%- endif %}
+
+--
+{{ footer }}
+Catalog of Second Chances. Imprint: {{ imprint_url }} Privacy: {{ privacy_url }}

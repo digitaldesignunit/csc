@@ -18,12 +18,14 @@ import { primarySnapshot, type CatalogShallowRow } from '@/generated/catalogExtr
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import RecordRecentComponent from '@/components/layout/RecordRecentComponent'
 import { bannersOf, type Banner } from '@/lib/componentDetail'
+import { HKS_VISIBLE } from '@/lib/hks'
 import { useDatasetVisibility } from '@/lib/useDatasetVisibility'
 import { cn } from '@/lib/utils'
 import ComponentViewer from '../ComponentViewer'
 import ComponentDetailSnapshotBanner from '../ComponentDetailSnapshotBanner'
 import ComponentProvenanceCard from '../ComponentProvenanceCard'
 import { geometryFailed } from '../componentDetailShared'
+import ComponentDescriptorsCard from './ComponentDescriptorsCard'
 import ComponentFactsCard from './ComponentFactsCard'
 import ComponentHeaderStrip from './ComponentHeaderStrip'
 import ComponentHistoryCard from './ComponentHistoryCard'
@@ -103,6 +105,7 @@ export default function ComponentPageView({
             <div className="order-4 min-w-0">
               <ComponentProvenanceCard catalog={catalog} childIdentities={childIdentities} />
             </div>
+            {HKS_VISIBLE && <div className="order-8 min-w-0"><ComponentDescriptorsCard catalog={catalog} /></div>}
           </div>
           <div className="order-5 min-w-0 lg:col-start-2 lg:row-start-2">
             <ComponentPhotosLocationCard catalog={catalog} />

@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { Combine, Layers, MoreHorizontal, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
+import { useConfirm } from '@/components/common/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -212,6 +213,7 @@ function MergeDialog({ source, materials, onClose, onSaved }: {
 }
 
 export default function MaterialsPage() {
+  const { confirm, dialog } = useConfirm()
   const router = useRouter()
   const { me, loading: meLoading, isAdmin } = useMe()
   const [materials, setMaterials] = useState<Material[]>([])
@@ -239,7 +241,12 @@ export default function MaterialsPage() {
   }, [isAdmin, load])
 
   const remove = async (material: Material) => {
-    if (!window.confirm(`Delete ${material.label}? Only possible while no component uses it.`)) return
+    if (!(await confirm({
+      title: `Delete ${material.label}?`,
+      description: 'Only possible while no component uses it.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    }))) return
     try {
       await backendJson(`/materials/${encodeURIComponent(material._id)}`, { method: 'DELETE' })
       toast.success(`Deleted ${material.label}`)
@@ -289,6 +296,7 @@ export default function MaterialsPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-3 p-3 sm:p-6">
+      {dialog}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Layers className="h-6 w-6 text-primary" />

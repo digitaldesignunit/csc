@@ -1,0 +1,92 @@
+{
+  "title": "Catalog of Second Chances (CSC) - Digital Database and Corresponding Interfaces for ReUse of Architectural Components (v0.6.1.0)",
+  "version": "0.6.1.0",
+  "upload_type": "software",
+  "description": "<p>The <em>Catalog of Second Chances (CSC)</em> is a prototypical digital component database. It catalogs digital representations of uniquely identifiable architectural components for reuse. Furthermore, it provides corresponding interfaces and tools to leverage them via a backend REST-API, a web-frontend as well as a interface for direct interaction within Rhino Grasshopper.</p><h2>Changes in v0.6.1.0 (2026-10-12)</h2><p>The first feature release after the cutover (decisions 8.129 to 8.143): a personal profile, datasets that users create and run themselves, revised evidence forms, a swimlane history with export, reinforcement read and written from Grasshopper, designed mails, a privacy page, and a cleaner frontend toolchain. Phase A (the operations part) already shipped as 0.6.0.4. No migration of existing records is needed; one optional maintenance script normalises old reinforcement layouts.</p><h3>Added</h3><ul><li><strong>Profile</strong> (8.133): organisation, ROR id, ORCID (checksum checked), default role and full name in Settings. \"I performed this\" copies them into an evidence record; the server fills empty fields of a signed-in actor from the profile at write time (a later profile change never rewrites old records). Redaction also blanks the profile.</li><li><strong>User-created datasets</strong> (8.139): every verified account may create up to <code>CSC_MAX_DATASETS_PER_USER</code> (default 3) datasets and moderates them (\"Your datasets\" in My work, \"New dataset\"). A new dataset is members-only and unreviewed: until an admin marks it reviewed it cannot become catalogue-wide and its pieces cannot be made public. Only empty datasets can be deleted; the last moderator cannot be removed. Admins get a mail when a dataset is created.</li><li><strong>Swimlane history</strong> (8.140): the History card shows one lane per piece (parents above, children below, cut and assemble links, evidence grouped per day and method) on the new <code>GET /identities/{id}/history</code>; the whole timeline exports as SVG, PNG and JSON.</li><li><strong>Compact preview and id chips</strong> (8.141): one side panel for Browse and the map (rotate and zoom, step through rows); snapshot and record ids to see and copy, also as a Grasshopper panel; <code>?snapshot=&lt;id&gt;</code> opens that version.</li><li><strong>Grasshopper</strong> (8.133 f, RL6, RL9, RL11): <code>Actor</code> has a <code>Me</code> input that builds the signed-in user's actor from the profile; <code>ReinforcementLayout</code> takes the drawing's link and retrieval date and a <code>ComponentPassport</code>, whose placement maps bars back to stored coordinates; the new <code>FetchReinforcementLayout</code> reads layouts back (one branch per layout, placed like the fetched mesh). Document units are used 1:1 as millimetres, with a warning in other units. The release bundle carries <code>DDU_CSC_GrasshopperInterface_0.6.1.0.gh</code>.</li><li><strong>Mail templates</strong> (8.138 e): the five mails as Jinja2 templates (HTML and text) in the site's colours, without images; an admin page previews every mail and sends a test to the admin's own address.</li><li><strong>Privacy page</strong> <code>/privacy</code>, linked from the footer, the account menu, the registration and the mails; the imprint names the person responsible.</li><li>Reinforcement bar colours in the viewer by layout or by diameter, with a legend.</li><li>Corrections of evidence records carry their attachments over (keep or remove); empty document fields of a published reinforcement layout can be filled once (8.142).</li><li><code>scripts/db_maintenance/layout_position_none.py</code> (stored <code>region</code> layouts to <code>none</code>), <code>purge_datasets.py</code> (an escape hatch that removes datasets' components without a trace), and <code>.zenodo.json</code>, generated per release (<code>invoke zenodo</code>).</li></ul><h3>Changed</h3><ul><li><strong>Evidence forms</strong> (8.134): numbered sections with an outline, grouped method choice with search, records as a compact table, foldable bars with bulk edits, a check before saving; one shared date field with typing, month and year menus and a year grid (8.143).</li><li>Edge distance for picked points is measured against the proxy, so bumps in a scan no longer trigger the warning (8.135).</li><li>Provenance edits include the performers (with \"Add me\"), method and notes; organisations may carry a link.</li><li>Anonymous visitors no longer receive the accuracy note of reinforcement layouts; the JSON-LD and the PDF passport carry the photo credit.</li><li>The site's own logs rotate daily and are deleted after 14 days.</li><li>Frontend: Next.js 16.4.0, lint packages 16.4 with no errors, no production audit findings; images are served unoptimised and <code>sharp</code> is no longer bundled (its binaries need a newer glibc than the server has).</li><li>Credits: the DBU and BMBF funding logos and current links.</li></ul><h3>Removed</h3><ul><li>The HKS curve on the component page and HKS as a component-map basis are hidden (the pooled descriptor carries little meaning; a revised HKS is planned for 0.6.2).</li><li>The ELK lineage graph (replaced by the swimlane), the unused <code>bcrypt</code> package.</li></ul><h3>Server notes</h3><ul><li>New Python dependency (<code>jinja2</code>): the deploy builds a new venv. This is the first deploy that re-runs itself with the release's own deploy script.</li><li>Optional: <code>CSC_MAX_DATASETS_PER_USER</code> in <code>fastapi.ini</code> (default 3).</li><li>Run <code>layout_position_none.py</code> once (dry run first) to convert old layouts.</li><li>After the first midnight, check that <code>fastapi.log</code> rotated; send a test mail from Admin &gt; Mail templates and look at it in the usual mail clients.</li><li>Grasshopper users: run <code>CSC_Update</code> (library <code>csc_gh</code> 261012) for the new and changed components.</li></ul><p>Full history: <a href=\"https://github.com/digitaldesignunit/csc/blob/v0.6.1.0/CHANGELOG.md\">CHANGELOG.md</a></p>",
+  "creators": [
+    {
+      "name": "Eschenbach, Max Benjamin",
+      "affiliation": "Technische Universit\u00e4t Darmstadt",
+      "orcid": "0000-0002-8190-7047"
+    }
+  ],
+  "contributors": [
+    {
+      "name": "Tessmann, Oliver",
+      "type": "Supervisor",
+      "affiliation": "Technische Universit\u00e4t Darmstadt",
+      "orcid": "0000-0003-0297-9884"
+    },
+    {
+      "name": "Siefert, Sandro",
+      "type": "ProjectMember",
+      "affiliation": "Technische Universit\u00e4t Darmstadt",
+      "orcid": "0009-0005-9934-814X"
+    },
+    {
+      "name": "Dutschke, Mirko",
+      "type": "ProjectMember",
+      "affiliation": "Technische Universit\u00e4t Darmstadt"
+    },
+    {
+      "name": "Garruto, Alessandro",
+      "type": "ProjectMember",
+      "affiliation": "Technische Universit\u00e4t Darmstadt"
+    }
+  ],
+  "keywords": [
+    "components",
+    "design",
+    "catalog",
+    "interface",
+    "digital",
+    "cad",
+    "reuse",
+    "circular construction",
+    "design tools",
+    "component database",
+    "component catalog",
+    "circular design",
+    "re-use",
+    "material catalog",
+    "material bank",
+    "architecture",
+    "architectural design",
+    "architectural components",
+    "building components"
+  ],
+  "license": "mit-license",
+  "language": "eng",
+  "access_right": "open",
+  "dates": [
+    {
+      "type": "Created",
+      "start": "2024-02-22",
+      "end": "2024-02-22",
+      "description": "Project initiation and initial commit"
+    },
+    {
+      "type": "Available",
+      "start": "2026-05-13",
+      "end": "2026-05-13",
+      "description": "Publishing of Repository and Zenodo DOI acquisition"
+    }
+  ],
+  "custom": {
+    "code:codeRepository": "https://github.com/digitaldesignunit/csc",
+    "code:programmingLanguage": [
+      {
+        "id": "python"
+      },
+      {
+        "id": "c#"
+      },
+      {
+        "id": "typescript"
+      }
+    ],
+    "code:developmentStatus": {
+      "id": "active"
+    }
+  }
+}

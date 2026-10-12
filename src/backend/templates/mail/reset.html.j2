@@ -1,0 +1,7 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import p %}
+{% block body %}
+{% call p() %}Hello {{ full_name or "there" }},{% endcall %}
+{% call p() %}A password reset was requested for the account with this address. Choose a new password with the button below. The link works once and expires in one hour.{% endcall %}
+{% call p() %}If you did not ask for this, you can ignore this email: your password stays as it is.{% endcall %}
+{% endblock %}

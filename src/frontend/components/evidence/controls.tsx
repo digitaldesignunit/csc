@@ -66,7 +66,8 @@ export function NativeSelect({
   value: string
   onChange: (value: string) => void
   options: { value: string; label: string }[]
-  placeholder?: string
+  /** The text of the empty choice; `null`: there is none (a value is always set). */
+  placeholder?: string | null
   disabled?: boolean
   className?: string
 }) {
@@ -82,7 +83,7 @@ export function NativeSelect({
         className,
       )}
     >
-      <option value="">{placeholder ?? 'Select...'}</option>
+      {placeholder !== null && <option value="">{placeholder ?? 'Select...'}</option>}
       {options.map((option) => (
         <option key={option.value} value={option.value}>{option.label}</option>
       ))}

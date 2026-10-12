@@ -344,8 +344,10 @@ def test_all_four_mails_share_the_template_and_escape_what_they_insert():
         assert 'Please do not reply' not in mail.text + mail.html
         assert 'https://csc.example.org/imprint' in mail.text
         assert 'https://csc.example.org/imprint' in mail.html
+        assert 'https://csc.example.org/privacy' in mail.text
+        assert 'https://csc.example.org/privacy' in mail.html
         assert 'You received this email because' in mail.text
-        assert '#4080ff' in mail.html
+        assert '#ef509c' in mail.html and '#0000ff' in mail.html   # the site's accents (8.138)
     verification, reset, invitation, member = mails
     assert verification.reply_to is None and reset.reply_to is None
     # nothing to say about replies where nobody gets them (no SMTP_REPLY_TO)
@@ -358,7 +360,8 @@ def test_all_four_mails_share_the_template_and_escape_what_they_insert():
     odd = email_service.render(CONFIG, to='a@x.org', subject='s', title='t',
                                paragraphs=['p'], reason='r',
                                button=('Go', 'https://x.org/?a="b"&c=<d>'))
-    assert 'a="b"' not in odd.html and '&quot;b&quot;' in odd.html
+    assert 'a="b"' not in odd.html
+    assert '&quot;b&quot;' in odd.html or '&#34;b&#34;' in odd.html   # Jinja writes &#34;
 
 
 class FakeSMTP:

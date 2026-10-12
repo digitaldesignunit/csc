@@ -681,3 +681,51 @@ def test_the_login_limit_counts_per_client_address(world, limits_on,
                          headers={'X-Forwarded-For': f'198.51.100.{n}'}
                          ).status_code for n in range(11)]
     assert spoof[:10] == [401] * 10 and spoof[10] == 429
+
+
+# PHOTO CREDIT (decision 8.128, 0.6.1.0 B) -------------------------------------
+CREDIT = {'text': 'Photo: (c) Example Catalogue, retrieved 2026-10-05',
+          'url': 'https://catalogue.example/items/7'}
+
+
+def _credit_world(world):
+    world['db']['component_snapshots'].update_many(
+        {'identity_id': BEAM}, {'$set': {'photo_credit': CREDIT}})
+    world['db']['component_identities'].update_one(
+        {'_id': BEAM}, {'$set': {'is_public': True}})
+
+
+def test_json_ld_carries_the_photo_credit_as_text_and_link(world):
+    _credit_world(world)
+    api = world['api']
+    got = api.get(f'/identities/{BEAM}/compose', params={'format': 'jsonld'})
+    assert got.status_code == 200, got.text
+    credit = got.json()['snapshots'][0]['photo_credit']
+    assert credit == CREDIT
+    context = api.get('/context/v1.jsonld').json()['@context']
+    assert context['photo_credit']['@id'] == 'csc:photoCredit'
+    expanded = _expand(world, got.json())
+    flat = json.dumps(expanded)
+    assert '/vocab/v1#photoCredit' in flat and 'catalogue.example/items/7' in flat
+    # a version without a credit has none
+    world['db']['component_snapshots'].update_many(
+        {'identity_id': BEAM}, {'$unset': {'photo_credit': ''}})
+    plain = api.get(f'/identities/{BEAM}/compose', params={'format': 'jsonld'})
+    assert plain.json()['snapshots'][0]['photo_credit'] is None
+
+
+def test_the_pdf_passport_names_the_photo_credit_with_its_link(world, pdf_spy):
+    _credit_world(world)
+    got = world['api'].get(f'/identities/{BEAM}/export/pdf')
+    assert got.status_code == 200
+    text = story_text(pdf_spy[-1])
+    assert 'Photo credit' in text
+    assert 'Photo: \u00a9 Example Catalogue, retrieved 2026-10-05' in text
+    assert 'https://catalogue.example/items/7' in text
+    from apps.catalog.exports.pdf import _photo_credit, _styles
+    style = _styles()['cell']
+    assert _photo_credit(None, style) is None
+    assert _photo_credit({'text': '  '}, style) is None
+    # a link that is not http(s) is not shown
+    bad = _photo_credit({'text': 'Photo', 'url': 'javascript:alert(1)'}, style)
+    assert 'javascript' not in bad.text

@@ -66,6 +66,7 @@ from apps.catalog.vocab import (
     Precision,
 )
 from .access import (
+    refuse_unreviewed,
     component_visible,
     dataset_of,
     deny_write,
@@ -87,8 +88,10 @@ from .batches import (
 )
 from .catalog_common import allocate_catalog_number, now_iso, validate_uuid
 from .change_log import log_change
+from apps.catalog.history import diff
 from .evidence_fold import recompute_properties
 from .geometry_hooks import derive_sync_identity
+from .profiles import fill_origin
 from apps.catalog.geometry_runner import mark_due
 
 router = APIRouter()
@@ -215,18 +218,25 @@ async def _write(request: Request, before: Dict[str, Any],
             by_alias=True, mode='json')
     except ValidationError:
         stored = before
-    entry = await log_change(request, 'identity', stored, after,
-                             by_user_id=user_id, cause=cause,
-                             source_record_id=source)
-    if entry is None:
+    if source is None and not _same(before.get('origin'), after.get('origin')):
+        # a new origin written by a person: their profile fills the empty
+        # fields of the actors (8.133 e); an inherited copy is left as it is
+        after = {**after, 'origin': await fill_origin(request,
+                                                      after.get('origin'))}
+    if not diff('identity', stored, after):
         return None
-    after = {**after, 'lastmodified': entry['at']}
+    # the write first, the log entry only once it stands: a piece another
+    # edit changed meanwhile (409) leaves no entry behind
+    at = now_iso()
+    after = {**after, 'lastmodified': at}
     result = await request.app.mongodb_component_identities.replace_one(
         {'_id': before['_id'], 'lastmodified': before.get('lastmodified')},
         after)
     if result.matched_count == 0:
         raise HTTPException(status_code=409,
                             detail='The component changed meanwhile; reload.')
+    await log_change(request, 'identity', stored, after, by_user_id=user_id,
+                     cause=cause, source_record_id=source, at=at)
     if not _same(before.get('original_function'),
                  after.get('original_function')):
         # the column rule of the frame reads the function (7.10): its
@@ -375,6 +385,8 @@ async def create_identity(
                     readable=readable)
     if not can(viewer, 'create_identity', target):
         raise deny_write(viewer, 'create_identity')
+    if body.is_public:
+        refuse_unreviewed(datasets[body.dataset], viewer)         # 8.139 c
     await check_cut_allowed(request, parents)
     await refuse_batch_merge(request, parents)
     batch = await draw_parent(request, parents)
@@ -464,6 +476,8 @@ async def create_identity(
         user=current_user, effective_from=effective_from or now,
         precision=precision or 'exact')
 
+    if doc.get('origin') is not None:
+        doc['origin'] = await fill_origin(request, doc['origin'])   # 8.133 e
     await identities.insert_one(dict(doc))
     try:
         await request.app.mongodb_component_snapshots.insert_one(
@@ -500,6 +514,8 @@ async def patch_identity(
     viewer = viewer_of(current_user)
     await require(request, current_user, 'patch_identity', identity=identity)
     dataset = await dataset_of(request, identity.get('dataset'))
+    if body.get('is_public') is True and not identity.get('is_public'):
+        refuse_unreviewed(dataset, viewer)                       # 8.139 c
     published = await identity_ever_published(request, identity)
     problems = patch_problems(
         'identity', {k: [] for k in body}, identity_published=published,

@@ -6,7 +6,7 @@ import { footerMode } from './footer'
 const ID = '2e6f6e3c-165f-4ca2-9be9-884e6e8e84f5'
 
 test('the public pages have the full footer', () => {
-  for (const path of ['/', '/auth/signin', '/auth/register', '/credits', '/imprint']) {
+  for (const path of ['/', '/auth/signin', '/auth/register', '/credits', '/imprint', '/privacy']) {
     assert.equal(footerMode(path, false), 'full', path)
     assert.equal(footerMode(path, true), 'full', path)
   }

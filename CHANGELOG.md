@@ -5,6 +5,88 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1.0] - 2026-10-12
+
+The first feature release after the cutover (decisions 8.129 to 8.143): a personal
+profile, datasets that users create and run themselves, revised evidence forms, a
+swimlane history with export, reinforcement read and written from Grasshopper,
+designed mails, a privacy page, and a cleaner frontend toolchain. Phase A (the
+operations part) already shipped as 0.6.0.4. No migration of existing records is
+needed; one optional maintenance script normalises old reinforcement layouts.
+
+### Added
+
+- **Profile** (8.133): organisation, ROR id, ORCID (checksum checked), default role and
+full name in Settings. "I performed this" copies them into an evidence record; the
+server fills empty fields of a signed-in actor from the profile at write time (a
+later profile change never rewrites old records). Redaction also blanks the profile.
+- **User-created datasets** (8.139): every verified account may create up to
+`CSC_MAX_DATASETS_PER_USER` (default 3) datasets and moderates them ("Your datasets"
+in My work, "New dataset"). A new dataset is members-only and unreviewed: until an
+admin marks it reviewed it cannot become catalogue-wide and its pieces cannot be made
+public. Only empty datasets can be deleted; the last moderator cannot be removed.
+Admins get a mail when a dataset is created.
+- **Swimlane history** (8.140): the History card shows one lane per piece (parents
+above, children below, cut and assemble links, evidence grouped per day and method)
+on the new `GET /identities/{id}/history`; the whole timeline exports as SVG, PNG and
+JSON.
+- **Compact preview and id chips** (8.141): one side panel for Browse and the map
+(rotate and zoom, step through rows); snapshot and record ids to see and copy, also
+as a Grasshopper panel; `?snapshot=<id>` opens that version.
+- **Grasshopper** (8.133 f, RL6, RL9, RL11): `Actor` has a `Me` input that builds the
+signed-in user's actor from the profile; `ReinforcementLayout` takes the drawing's
+link and retrieval date and a `ComponentPassport`, whose placement maps bars back to
+stored coordinates; the new `FetchReinforcementLayout` reads layouts back (one branch
+per layout, placed like the fetched mesh). Document units are used 1:1 as
+millimetres, with a warning in other units. The release bundle carries
+`DDU_CSC_GrasshopperInterface_0.6.1.0.gh`.
+- **Mail templates** (8.138 e): the five mails as Jinja2 templates (HTML and text) in
+the site's colours, without images; an admin page previews every mail and sends a
+test to the admin's own address.
+- **Privacy page** `/privacy`, linked from the footer, the account menu, the
+registration and the mails; the imprint names the person responsible.
+- Reinforcement bar colours in the viewer by layout or by diameter, with a legend.
+- Corrections of evidence records carry their attachments over (keep or remove);
+empty document fields of a published reinforcement layout can be filled once (8.142).
+- `scripts/db_maintenance/layout_position_none.py` (stored `region` layouts to
+`none`), `purge_datasets.py` (an escape hatch that removes datasets' components
+without a trace), and `.zenodo.json`, generated per release (`invoke zenodo`).
+
+### Changed
+
+- **Evidence forms** (8.134): numbered sections with an outline, grouped method choice
+with search, records as a compact table, foldable bars with bulk edits, a check
+before saving; one shared date field with typing, month and year menus and a year
+grid (8.143).
+- Edge distance for picked points is measured against the proxy, so bumps in a scan
+no longer trigger the warning (8.135).
+- Provenance edits include the performers (with "Add me"), method and notes;
+organisations may carry a link.
+- Anonymous visitors no longer receive the accuracy note of reinforcement layouts;
+the JSON-LD and the PDF passport carry the photo credit.
+- The site's own logs rotate daily and are deleted after 14 days.
+- Frontend: Next.js 16.4.0, lint packages 16.4 with no errors, no production audit
+findings; images are served unoptimised and `sharp` is no longer bundled (its
+binaries need a newer glibc than the server has).
+- Credits: the DBU and BMBF funding logos and current links.
+
+### Removed
+
+- The HKS curve on the component page and HKS as a component-map basis are hidden
+(the pooled descriptor carries little meaning; a revised HKS is planned for 0.6.2).
+- The ELK lineage graph (replaced by the swimlane), the unused `bcrypt` package.
+
+### Server notes
+
+- New Python dependency (`jinja2`): the deploy builds a new venv. This is the first
+deploy that re-runs itself with the release's own deploy script.
+- Optional: `CSC_MAX_DATASETS_PER_USER` in `fastapi.ini` (default 3).
+- Run `layout_position_none.py` once (dry run first) to convert old layouts.
+- After the first midnight, check that `fastapi.log` rotated; send a test mail from
+Admin > Mail templates and look at it in the usual mail clients.
+- Grasshopper users: run `CSC_Update` (library `csc_gh` 261012) for the new and
+changed components.
+
 ## [0.6.0.4] - 2026-10-10
 
 An operations release (phase A of 0.6.1.0, decisions 8.136 and 8.137): less load

@@ -40,6 +40,7 @@ import {
 } from '@/lib/browse'
 import { useMaterials } from '@/lib/lineage'
 import ComponentPreviewImage from '../ComponentPreviewImage'
+import { PreviewProvider } from '../preview/ComponentPreview'
 import { buildColumns } from './ComponentOverviewColumns'
 import { ComponentOverviewDataTable } from './ComponentOverviewDataTable'
 import ComponentOverviewPagination from './ComponentOverviewPagination'
@@ -353,7 +354,12 @@ function DesktopTable({ rows }: { rows: CatalogShallowRow[] }) {
     }
   }
   const columns = useMemo(() => buildColumns(picked), [picked])
+  const items = useMemo(
+    () => rows.map((row) => ({ id: row._id, name: row.name, number: row.catalog_number, dataset: row.dataset })),
+    [rows],
+  )
   return (
+    <PreviewProvider items={items}>
     <div className="space-y-2">
       <div className="flex justify-end">
         <Popover>
@@ -381,5 +387,6 @@ function DesktopTable({ rows }: { rows: CatalogShallowRow[] }) {
         <ComponentOverviewDataTable columns={columns} data={rows} />
       </Card>
     </div>
+    </PreviewProvider>
   )
 }

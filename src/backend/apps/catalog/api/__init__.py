@@ -21,6 +21,8 @@ from .evidence import router as evidence_router
 from .evidence_lifecycle import router as evidence_lifecycle_router
 from .evidence_attachments import router as evidence_attachments_router
 from .actors import router as actors_router
+from .history import router as history_router
+from .mail_templates import router as mail_templates_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix='/auth', tags=['auth'])
@@ -39,6 +41,8 @@ api_router.include_router(evidence_router, tags=['evidence'])
 api_router.include_router(evidence_attachments_router, tags=['evidence'])
 api_router.include_router(evidence_lifecycle_router, tags=['evidence'])
 api_router.include_router(actors_router, tags=['evidence'])
+api_router.include_router(history_router, tags=['identities'])
+api_router.include_router(mail_templates_router, tags=['admin'])
 api_router.include_router(identities_router, tags=['identities'])
 api_router.include_router(exports_router, tags=['exports'])
 # before the snapshots router: /snapshots/{sid} must not catch the
@@ -46,6 +50,7 @@ api_router.include_router(exports_router, tags=['exports'])
 api_router.include_router(snapshot_lifecycle_router, tags=['snapshots'])
 api_router.include_router(identity_lifecycle_router, tags=['identities'])
 api_router.include_router(snapshots_router, tags=['snapshots'])
-api_router.include_router(users_router, tags=['users'])
+# datasets first: it owns /users/me, which the admin /users/{user_id} would take
 api_router.include_router(datasets_router, tags=['datasets'])
+api_router.include_router(users_router, tags=['users'])
 api_router.include_router(invitations_router, tags=['invitations'])

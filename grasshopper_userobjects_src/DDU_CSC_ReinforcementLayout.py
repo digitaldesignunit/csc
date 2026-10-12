@@ -22,21 +22,27 @@ ghenv.Component.Description = (  # NOQA
     'Builds one evidence record of method reinforcement_layout from bar '
     'centrelines (curves), steel grades and diameters: where the '
     'reinforcement of a component lies, known from a drawing, a scan or an '
-    'exposed bar. The curves must be in the stored coordinates of the state '
-    'named by SnapshotID (millimetres). Post the record with AddEvidence.'
+    'exposed bar. A layout belongs to one version of the component: its '
+    'curves are in the stored coordinates (millimetres) of that version, '
+    'named by SnapshotID. Curves drawn on a piece that was moved (ApplyFrame, '
+    'TransformComponent) need the ComponentPassport of that piece: its '
+    'placement is undone and its snapshot is used. Document units are '
+    'taken as millimetres (1:1); a document in another unit gets a warning. '
+    'Post the record with AddEvidence.'
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005'
+CSC_GH_MINIMUM = '261012'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
     from csc_gh.build import (BuildError, reinforcement_layout_record)  # NOQA
-    from csc_gh.rhino import (curve_points)  # NOQA
+    from csc_gh.layout import (bars_to_stored, layout_target, unit_warning)  # NOQA
+    from csc_gh.rhino import (curve_points, mm_per_document_unit)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261005 too old or missing: run CSC_Update, '
+        'CSC library 261012 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -63,7 +69,7 @@ class CSC_ReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261012
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -120,7 +126,9 @@ class CSC_ReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
             'Steel grade per bar, e.g. BSt III (one for all bars or one '
             'per bar)',
             'Bar diameter in mm (one for all bars or one per bar)',
-            'Id of the state whose stored coordinates the curves are in',
+            'Id of the snapshot whose stored coordinates the curves are in '
+            '(a layout belongs to one version; empty with a '
+            'ComponentPassport: its snapshot)',
             'drawing, scan or exposed: where the layout is known from',
             'When it was observed (2024-05-03, ...; empty: now)',
             'Basis drawing: title of the drawing',
@@ -130,6 +138,14 @@ class CSC_ReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
             'Basis scan: model of the instrument',
             'Accuracy, e.g. size and cover +-20 %',
             'Free text',
+            'Basis drawing: link to the drawing online (http or https; '
+            'needs DocumentTitle)',
+            'Basis drawing: the day the link was read (2026-10-05)',
+            'Passport of the piece the curves were drawn on, with its '
+            'placement if it was moved (ApplyFrame, TransformComponent): '
+            'the curves are mapped back to the stored coordinates and the '
+            'snapshot is taken from it. An explicit SnapshotID that '
+            'disagrees is an error',
         ]
         for index, text_ in enumerate(descriptions):
             self.InputParams[index].Description = text_
@@ -150,7 +166,10 @@ class CSC_ReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
             InstrumentKind: str,
             InstrumentModel: str,
             AccuracyNote: str,
-            Notes: str):
+            Notes: str,
+            DocumentUrl: str,
+            DocumentRetrievedAt: str,
+            ComponentPassport: str):
         if self._stop():
             return empty_outputs()
         Evidence = ''
@@ -167,6 +186,11 @@ class CSC_ReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
                         f'({len(curves)} curves, {len(items)} values)')
             if not diameters:
                 raise BuildError('Input Diameter failed to collect data')
+            target = layout_target(ComponentPassport, SnapshotID)
+            if not target['snapshot_id']:
+                raise BuildError(
+                    'SnapshotID is missing: give it, or a ComponentPassport')
+            scale, unit_name = mm_per_document_unit()
             bars = []
             for index, curve in enumerate(curves):
                 bars.append({
@@ -176,11 +200,17 @@ class CSC_ReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
                                     else diameters[index]),
                     'points': curve_points(curve),
                 })
+            bars = bars_to_stored(bars, target['placement'])
             record = reinforcement_layout_record(
-                SnapshotID, bars, Basis, ObservedAt, DocumentTitle,
-                DocumentDate, DocumentReference, InstrumentKind, None,
-                InstrumentModel, AccuracyNote, None, Notes)
+                target['snapshot_id'], bars, Basis, ObservedAt,
+                DocumentTitle, DocumentDate, DocumentReference,
+                InstrumentKind, None, InstrumentModel, AccuracyNote, None,
+                Notes, DocumentUrl, DocumentRetrievedAt)
             Evidence = json.dumps(record)
+            self._addRemark(target['remark'])
+            note = unit_warning(scale, unit_name)
+            if note:
+                self._addWarning(note)
             return Evidence
         except BuildError as error:
             self._addError(str(error))

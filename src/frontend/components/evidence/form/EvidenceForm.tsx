@@ -1,29 +1,46 @@
 'use client'
 
 /**
- * The evidence form (spec 7.6, decision 7.1): one form from the component
- * page, on a phone right after a tag scan or on a desktop. The method
- * picker drives a sub-form generated from the registry; fan-out, repeat
- * from my last record and apply-to-several-pieces all end in one
- * `POST /evidence/bulk`. The records are saved as drafts first: the review
- * step shows what the server computed and warned about, and only then are
- * they submitted. Nobody publishes directly (8.120): a moderator of the
- * dataset publishes from the queue, also their own records. `editId` opens a
- * draft (a pending record for a moderator) with its values and saves with
- * `PATCH /evidence/{id}`: the status and the attachments stay (8.127).
+ * The evidence form (spec 7.6, decisions 7.1, 8.134): one form from the
+ * component page, on a phone right after a tag scan or on a desktop, in
+ * numbered sections (method, who and when, what was found, files, notes,
+ * check and save) with an outline beside it (a progress line on a phone) and
+ * a state per section. The method picker drives a sub-form generated from the
+ * registry; fan-out, repeat from my last record and apply-to-several-pieces
+ * all end in one `POST /evidence/bulk`. The records are saved as drafts
+ * first: the review step shows what the server computed and warned about, and
+ * only then are they submitted. Nobody publishes directly (8.120): a
+ * moderator of the dataset publishes from the queue, also their own records.
+ * `editId` opens a draft (a pending record for a moderator) with its values
+ * and saves with `PATCH /evidence/{id}`: the status and the attachments stay
+ * (8.127). Create, edit and correct share the layout; the heading names the
+ * mode, the piece and the version.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, History, Loader2, Save } from 'lucide-react'
+import { ArrowLeft, FileText, History, Loader2, Save, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { useConfirm } from '@/components/common/ConfirmDialog'
 import { Field } from '@/components/evidence/controls'
 import EvidenceCard from '@/components/evidence/EvidenceCard'
-import ActorsField from '@/components/evidence/form/ActorsField'
+import ActorsField, { isMe, meActor } from '@/components/evidence/form/ActorsField'
+import BarsEditor from '@/components/evidence/form/BarsEditor'
+import CheckSection from '@/components/evidence/form/CheckSection'
 import { PiecesField, SummaryEditor } from '@/components/evidence/form/ClaimEditor'
 import FilesField from '@/components/evidence/form/FilesField'
+import {
+  FormSection,
+  Outline,
+  ProgressLine,
+  jumpToSection,
+  useActiveStep,
+  type FormStepId,
+  type Step,
+} from '@/components/evidence/form/FormShell'
 import InspectionEditor from '@/components/evidence/form/InspectionEditor'
+import MethodPicker from '@/components/evidence/form/MethodPicker'
 import PositionField from '@/components/evidence/form/PositionField'
 import RecordsEditor, { gridOf, gridToForm } from '@/components/evidence/form/RecordsEditor'
 import {
@@ -43,6 +60,7 @@ import SchemaFields from '@/components/evidence/SchemaFields'
 import type { ViewerMark } from '@/components/viewer/EvidenceMarks'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { DateField } from '@/components/ui/date-field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -52,29 +70,40 @@ import { primarySnapshot } from '@/generated/catalogExtras'
 import { EVIDENCE_METHOD_LABELS, vocabLabel } from '@/generated/Vocab'
 import { BackendError, backendJson } from '@/lib/backend'
 import { formatDay } from '@/lib/componentDetail'
-import { orderMethods, tierChip } from '@/lib/evidence/order'
+import { orderMethods } from '@/lib/evidence/order'
 import {
   UPLOAD_HELP,
   createBulk,
   evidenceAction,
+  actorRootOf,
   deleteEvidence,
+  loadAttachments,
   loadEvidenceOf,
   myLatestRecord,
   patchEvidence,
   problemsOf,
+  removeAttachment,
   uploadAttachment,
-  type JsonSchema,
+  type AttachmentEntry,
   type MethodInfo,
   type ProblemRow,
 } from '@/lib/evidence/api'
-import { canEditEvidence, editBody } from '@/lib/evidence/edit'
+import { canEditEvidence, editBody, verificationNotices } from '@/lib/evidence/edit'
 import { gridPoints } from '@/lib/evidence/grid'
+import {
+  SECTION_ORDER,
+  formIssues,
+  issuesOf,
+  sectionStates,
+  serverIssues,
+  type Issue,
+  type SectionId,
+} from '@/lib/evidence/issues'
 import { layoutOf } from '@/lib/evidence/layout'
 import { prepareUpload } from '@/lib/evidence/photos'
-import { getAt, isBlank, parseNumber, setAt } from '@/lib/evidence/schema'
+import { getAt, isBlank, parseNumber, setAt, type FormObject } from '@/lib/evidence/schema'
 import { useRegistry } from '@/lib/evidence/useRegistry'
 import { useMe } from '@/lib/me'
-import { isMe } from '@/components/evidence/form/ActorsField'
 
 type Picker =
   | { mode: 'point'; recordKey: string }
@@ -83,9 +112,7 @@ type Picker =
 
 const NO_PROBLEMS: ProblemRow[] = []
 
-function actorRootOf(methods: MethodInfo[]): JsonSchema | null {
-  return methods.find((m) => m.payload_schema.$defs?.Actor)?.payload_schema ?? null
-}
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 export default function EvidenceForm({
   identityId,
@@ -103,6 +130,7 @@ export default function EvidenceForm({
   const router = useRouter()
   const { me, rolesIn, moderates, loading: meLoading } = useMe()
   const { registry, error: registryError } = useRegistry()
+  const { confirm, dialog } = useConfirm()
 
   const [catalog, setCatalog] = useState<CatalogComponent | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -111,6 +139,9 @@ export default function EvidenceForm({
   const [corrected, setCorrected] = useState<EvidenceView | null>(null)
   const [rebounds, setRebounds] = useState<EvidenceView[]>([])
   const [cores, setCores] = useState<EvidenceView[]>([])
+  // the files of the record a correction replaces: they come over unless dropped (RL4)
+  const [carried, setCarried] = useState<AttachmentEntry[]>([])
+  const [dropped, setDropped] = useState<Set<number>>(() => new Set())
 
   const [state, setState] = useState<FormState | null>(null)
   const sourceId = editId ?? correctId
@@ -123,6 +154,8 @@ export default function EvidenceForm({
   const [loadingLast, setLoadingLast] = useState(false)
   // my latest record of any method in this dataset, for the line above the cards
   const [lastAny, setLastAny] = useState<EvidenceView | null>(null)
+  const [focusRecord, setFocusRecord] = useState<{ index: number; at: number } | null>(null)
+  const [focusBar, setFocusBar] = useState<number | null>(null)
   const topRef = useRef<HTMLDivElement>(null)
 
   // THE PIECE ----------------------------------------------------------------
@@ -150,7 +183,21 @@ export default function EvidenceForm({
     return () => { cancelled = true }
   }, [identityId, sourceId])
 
-  const method = registry?.methods.find((m) => m.name === state?.method) ?? null
+  // a correction carries the files of the record over (RL4): show them to keep or drop
+  useEffect(() => {
+    if (!correctId || editing || !corrected) return
+    let cancelled = false
+    loadAttachments(corrected._id)
+      .then((rows) => { if (!cancelled) setCarried(rows.filter((row) => !row.removed)) })
+      .catch(() => { if (!cancelled) setCarried([]) })
+    return () => { cancelled = true }
+  }, [correctId, editing, corrected])
+
+  const methodName = state?.method
+  const method = useMemo(
+    () => registry?.methods.find((m) => m.name === methodName) ?? null,
+    [registry, methodName],
+  )
   const layout = method ? layoutOf(method.name) : null
   const actorRoot = useMemo(() => (registry ? actorRootOf(registry.methods) : null), [registry])
   // a component whose first version is not published has no state to record evidence about
@@ -179,21 +226,37 @@ export default function EvidenceForm({
     if (m) setState(stateFromRecord(m, corrected, actorRoot))
   }, [corrected, registry, state, actorRoot])
 
+  /** A new form: the profile of the recorder is proposed as the performer (8.133 d, 8.134 c). */
+  const prefillPending = useRef(false)
+  const freshState = useCallback((m: MethodInfo): FormState => {
+    const next = initialState(m, identityId)
+    if (me && actorRoot) next.performers = [meActor(me, actorRoot)]
+    // the profile arrives after the form when the page is opened straight from a link
+    prefillPending.current = !me
+    return next
+  }, [identityId, me, actorRoot])
+
+  useEffect(() => {
+    if (!prefillPending.current || !me || !actorRoot || !state || sourceId) return
+    prefillPending.current = false
+    if (state.performers.length === 0) setState({ ...state, performers: [meActor(me, actorRoot)] })
+  }, [me, actorRoot, state, sourceId])
+
   const pick = (name: string) => {
     if (!registry) return
     const m = registry.methods.find((x) => x.name === name)
     if (m) {
-      setState(initialState(m, identityId))
+      setState(freshState(m))
       setProblems([])
       setCreated(null)
     }
   }
 
   useEffect(() => {
-    if (!initialMethod || sourceId || !registry || state) return
+    if (!initialMethod || sourceId || !registry || state || meLoading) return
     const m = registry.methods.find((x) => x.name === initialMethod)
-    if (m) setState(initialState(m, identityId))
-  }, [initialMethod, sourceId, registry, state, identityId])
+    if (m) setState(freshState(m))
+  }, [initialMethod, sourceId, registry, state, meLoading, freshState])
 
   const patch = useCallback((next: Partial<FormState>) => {
     setState((prev) => (prev ? { ...prev, ...next } : prev))
@@ -238,6 +301,20 @@ export default function EvidenceForm({
   )
   const envelopeProblems = (prefix: string) =>
     problems.filter((p) => p.path.startsWith(prefix)).map((p) => p.message)
+
+  // THE ISSUES: what the form sees is missing, and what the server said ---------
+  const formProblems = useMemo(() => (state && method ? formIssues(state, method) : []), [state, method])
+  const serverProblems = useMemo(() => (method ? serverIssues(problems, method) : []), [problems, method])
+  const issues = useMemo<Issue[]>(
+    () => [...serverProblems, ...formProblems.filter((f) => !serverProblems.some((s) => s.target && s.target === f.target))],
+    [serverProblems, formProblems],
+  )
+  const states = sectionStates(issues, {
+    hasMethod: Boolean(method),
+    files: state?.files.length ?? 0,
+    notes: state?.notes ?? '',
+    carried: carried.filter((e) => !dropped.has(e.index)).length,
+  })
 
   // THE PICKER ----------------------------------------------------------------
   const marksOfForm = useMemo<ViewerMark[]>(() => {
@@ -322,21 +399,24 @@ export default function EvidenceForm({
         return
       }
       let records: EvidenceView[]
+      const notes: string[] = []
       if (editing && corrected) {
         records = [await patchEvidence(corrected._id, editBody(items[0], method))]
       } else if (corrected) {
         const { identity_id: _unused, ...body } = items[0] as unknown as Record<string, unknown>
         void _unused
-        records = [await backendJson<EvidenceView>(`/evidence/${encodeURIComponent(corrected._id)}/supersede`, {
+        const made = await backendJson<EvidenceView>(`/evidence/${encodeURIComponent(corrected._id)}/supersede`, {
           method: 'POST', body,
-        })]
+        })
+        records = [made]
+        notes.push(...await dropCarried(made, carried.filter((e) => dropped.has(e.index))))
       } else {
         records = await createBulk(items, false)
       }
-      // a draft takes more files; a pending record does not (8.127)
-      const notes = !editing || records[0]?.status === 'draft'
+      // a draft takes more files; so does a correction (its author, 8.142 a); a pending record does not (8.127)
+      notes.push(...(!editing || records[0]?.status === 'draft'
         ? await attachFiles(state, records, layout.fanOut)
-        : []
+        : []))
       setUploadNotes(notes)
       // the files are on the records now: show the records as they are stored
       const stored = await Promise.all(records.map((r) =>
@@ -348,10 +428,13 @@ export default function EvidenceForm({
       if (rows.length) {
         setProblems(rows)
         toast.error('Some values need another look.')
+        // the check step lists them with a jump link each
+        window.setTimeout(() => jumpToSection('check'), 50)
       } else {
         const text = err instanceof BackendError ? err.message : 'Could not save the records'
         setProblems([{ path: '', message: text }])
         toast.error(text)
+        window.setTimeout(() => jumpToSection('check'), 50)
       }
     } finally {
       setSaving(false)
@@ -385,7 +468,13 @@ export default function EvidenceForm({
 
   const editAgain = async () => {
     if (!created) return
-    if (!window.confirm('Go back to the form? These drafts are deleted and the form keeps what you entered.')) return
+    const ok = await confirm({
+      title: 'Go back to the form?',
+      description: 'These drafts are deleted and the form keeps what you entered.',
+      confirmLabel: 'Delete the drafts and go back',
+      destructive: true,
+    })
+    if (!ok) return
     setSaving(true)
     try {
       for (const record of created.filter((r) => r.status === 'draft')) await deleteEvidence(record._id)
@@ -398,6 +487,24 @@ export default function EvidenceForm({
     }
   }
 
+  // JUMPS FROM THE CHECK STEP ----------------------------------------------------
+  const jump = (issue: Issue) => {
+    jumpToSection(issue.section)
+    if (issue.record !== undefined && layout) {
+      if (layout.fanOut === 'areas') setFocusRecord({ index: issue.record, at: Date.now() })
+      if (layout.fanOut === 'single') setFocusBar(issue.record)
+    }
+    if (issue.target) {
+      // the record or bar opens first, then the field is there to scroll to
+      window.setTimeout(() => {
+        const element = document.getElementById(issue.target ?? '')
+        if (!element) return
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        if (element instanceof HTMLElement && 'focus' in element) element.focus({ preventScroll: true })
+      }, 120)
+    }
+  }
+
   // RENDER ----------------------------------------------------------------------
   const back = (
     <Link href={`/components/${encodeURIComponent(identityId)}`}
@@ -405,6 +512,8 @@ export default function EvidenceForm({
       <ArrowLeft className="h-4 w-4" />Back to the component
     </Link>
   )
+  const stepIds: FormStepId[] = state && method ? [...SECTION_ORDER, 'check'] : ['method']
+  const active = useActiveStep(stepIds)
 
   if (loadError || registryError) {
     return (
@@ -467,6 +576,7 @@ export default function EvidenceForm({
     const drafts = created.filter((r) => r.status === 'draft')
     return (
       <div ref={topRef} className="mx-auto max-w-3xl space-y-4 p-4 pb-24">
+        {dialog}
         {back}
         <h1 className="text-xl font-bold">
           {editing ? 'Check the record' : corrected ? 'Check the correction' : 'Check the records'}
@@ -512,289 +622,420 @@ export default function EvidenceForm({
   const help = registry.help
   const hasMeActor = !!state && state.performers.some((a) => isMe(a, me))
   const date = state && method && method.context_time !== 'sampled_at'
+  const mode = editing ? 'Edit a record' : corrected ? 'Correct a record' : 'Add evidence'
+  const modeChip = editing && corrected
+    ? `Editing a ${corrected.status} record`
+    : corrected
+      ? `Correction of the ${vocabLabel(EVIDENCE_METHOD_LABELS, corrected.method).toLowerCase()} of ${formatDay(corrected.observed_at)}`
+      : null
+
+  const whatTitle = !layout ? 'What was found'
+    : layout.fanOut === 'areas' ? `${layout.recordLabel.charAt(0).toUpperCase()}${layout.recordLabel.slice(1)}s`
+      : layout.fanOut === 'observations' ? 'Findings'
+        : layout.fanOut === 'pieces' ? 'The claim' : 'The layout'
+  const titles: Record<SectionId, string> = {
+    method: 'Method', who: 'Who and when', what: whatTitle, files: 'Files', notes: 'Notes',
+  }
+  const countOf = (section: SectionId) => issuesOf(issues, section).length
+  const steps: Step[] = stepIds.map((id) => (id === 'check'
+    ? { id, title: 'Check and save', state: 'check' as const, count: issues.length }
+    : { id, title: titles[id], state: states[id], count: countOf(id) }))
+  const notices = state && editing && corrected
+    ? verificationNotices(corrected, state.performers.map((a) => String(a.user_id ?? '')).filter(Boolean))
+    : []
+
+  const savesText = (() => {
+    if (!state || !layout) return ''
+    const count = layout.fanOut === 'areas' ? plural(state.records.length, layout.recordLabel)
+      : layout.fanOut === 'observations' ? plural(state.observations.length, 'finding')
+        : layout.fanOut === 'pieces' ? plural(state.pieces.length, 'claim')
+          : `1 layout with ${plural(Array.isArray(state.records[0]?.payload.bars) ? (state.records[0].payload.bars as unknown[]).length : 0, 'bar')}`
+    const files = state.files.length + (layout.fanOut === 'observations' ? state.photos.length : 0)
+    const version = snapshot.version ? `, version ${snapshot.version}` : ''
+    const withFiles = files > 0 ? `, with ${plural(files, 'file')}` : ''
+    if (editing && corrected) return `Saves the changes to this ${corrected.status} record on ${title}${version}${withFiles}.`
+    if (corrected) {
+      return `Saves a correction on ${title}${version}${withFiles}${carried.length - dropped.size > 0 ? `, ${plural(carried.length - dropped.size, 'file')} carried over` : ''}. The corrected record stays until a moderator publishes this one.`
+    }
+    return `Saves ${count} as ${state.records.length + state.observations.length + state.pieces.length > 1 || layout.fanOut === 'single' ? 'drafts' : 'a draft'} on ${title}${version}${withFiles}.`
+  })()
+
+  const saveLabel = editing ? 'Save the changes and check' : corrected ? 'Save the correction and check' : 'Save as drafts and check'
+  const claimErrors = Object.fromEntries(problems
+    .filter((p) => p.path.startsWith('payload.'))
+    .map((p) => [p.path.slice(8), [p.message]]))
+  const barErrors = problems.filter((p) => p.path.startsWith('payload.bars')).map((p) => p.message)
 
   return (
-    <div ref={topRef} className="mx-auto max-w-3xl space-y-4 p-4 pb-28">
-      {back}
-      <div>
-        <h1 className="text-xl font-bold">
-          {editing ? 'Edit a record' : corrected ? 'Correct a record' : 'Add evidence'}
-        </h1>
-        <p className="text-sm text-muted-foreground">{title}{dataset ? ` (${dataset})` : ''}</p>
-        {editing && corrected && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            The record keeps its status{corrected.status === 'draft' ? ' and its files; you can add more files' : ' and its files'}.
+    <div ref={topRef} className="mx-auto max-w-5xl p-4 pb-28">
+      {dialog}
+      <div className="mb-4 space-y-2">
+        {back}
+        <div>
+          <h1 className="text-xl font-bold">{mode}</h1>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <span>{title}{dataset ? ` (${dataset})` : ''}</span>
+            {snapshot.version ? (
+              <span className="rounded-full border border-border px-2 py-0.5 text-xs">version {snapshot.version}</span>
+            ) : null}
+            {modeChip && <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{modeChip}</span>}
           </p>
-        )}
-        {corrected && !editing && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            The corrected record stays; the new one replaces it in the lists and the fold once a moderator publishes it.
-          </p>
-        )}
+          {editing && corrected && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              The record keeps its status{corrected.status === 'draft' ? ' and its files; you can add more files' : ' and its files'}.
+            </p>
+          )}
+          {corrected && !editing && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              The corrected record stays; the new one replaces it in the lists and the fold once a moderator publishes it.
+            </p>
+          )}
+        </div>
       </div>
 
-      {!corrected && (
-        <section aria-label="Method" className="space-y-2">
-          <h2 className="text-sm font-semibold">What kind of evidence</h2>
-          {lastAny && registry.methods.some((x) => x.name === lastAny.method) && (
-            <p className="flex flex-wrap items-center gap-2 text-sm">
-              <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={repeatAny}>
-                <History className="mr-1 h-3.5 w-3.5" />
-                Repeat from my last record
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                {vocabLabel(EVIDENCE_METHOD_LABELS, lastAny.method)}, {formatDay(lastAny.observed_at)}
-              </span>
-            </p>
-          )}
-          <div role="radiogroup" aria-label="Evidence method" className="grid gap-2 sm:grid-cols-2">
-            {methods.map((m) => {
-              const active = state?.method === m.name
-              return (
-                <button
-                  key={m.name}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => pick(m.name)}
-                  className={`rounded-lg border p-3 text-left text-sm transition-colors ${
-                    active ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-border hover:bg-muted/40'
-                  }`}
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{vocabLabel(EVIDENCE_METHOD_LABELS, m.name)}</span>
-                    {tierChip(m.source_tier, m.tier_from_payload) && (
-                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
-                        {tierChip(m.source_tier, m.tier_from_payload)}
-                      </span>
-                    )}
-                  </span>
-                  {describes(m) && (
-                    <span className="mt-1 line-clamp-2 block text-xs text-muted-foreground">{firstSentence(describes(m))}</span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
-      {state && method && layout && (
-        <>
-          {describes(method) && <p className="text-sm text-muted-foreground">{describes(method)}</p>}
-
-          <section aria-label="Who and when" className="space-y-3 rounded-lg border border-border p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold">Who and when</h2>
-              {!corrected && (
-                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={loadingLast}
-                  onClick={() => void loadLast()}>
-                  {loadingLast ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <History className="mr-1 h-3.5 w-3.5" />}
-                  Repeat from my last record
+      <ProgressLine steps={steps} active={active} />
+      <div className="mt-4 lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-6">
+        <Outline steps={steps} active={active} />
+        <div className="min-w-0 space-y-5">
+          <FormSection
+            id="method" number={1} title="Method" state={states.method}
+            actions={!corrected && lastAny && registry.methods.some((x) => x.name === lastAny.method) ? (
+              <>
+                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={repeatAny}>
+                  <History className="mr-1 h-3.5 w-3.5" />Repeat from my last record
                 </Button>
-              )}
-            </div>
-            {actorRoot && (
-              <ActorsField
-                actors={state.performers}
-                onChange={(performers) => patch({ performers })}
-                root={actorRoot}
-                me={me}
-                idPrefix="performer"
-              />
-            )}
-            {date && (
-              <Field id="observed-at" label="Date of the observation" help={help('EvidenceCreate', 'observed_at')} required
-                errors={envelopeProblems('observed_at')}>
-                <Input id="observed-at" type="date" value={state.observedAt}
-                  onChange={(e) => patch({ observedAt: e.target.value })} className="max-w-48" />
-              </Field>
-            )}
-            <div className="grid grid-cols-[1fr_6rem] gap-2">
-              <Field id="standard-code" label="Standard"
-                help={method.default_standard ? `Defaults to ${method.default_standard.code}${method.default_standard.year ? ` (${method.default_standard.year})` : ''}` : ''}
-                errors={envelopeProblems('standard')}>
-                <Input id="standard-code" value={state.standardCode}
-                  placeholder={method.default_standard?.code ?? 'e.g. EN 12504-2'}
-                  onChange={(e) => patch({ standardCode: e.target.value })} />
-              </Field>
-              <Field id="standard-year" label="Year">
-                <Input id="standard-year" inputMode="numeric" value={state.standardYear}
-                  placeholder={method.default_standard?.year ? String(method.default_standard.year) : ''}
-                  onChange={(e) => patch({ standardYear: e.target.value })} />
-              </Field>
-            </div>
-            {hasMeActor && !editing && (
-              <div className="flex items-start gap-2">
-                <Checkbox id="self-attested" checked={state.selfAttested}
-                  onCheckedChange={(c) => patch({ selfAttested: c === true })} className="mt-0.5" />
-                <Label htmlFor="self-attested" className="text-sm font-normal">
-                  I performed this and stand by the result
-                </Label>
-              </div>
-            )}
-          </section>
+                <span className="hidden text-xs text-muted-foreground sm:inline">
+                  {vocabLabel(EVIDENCE_METHOD_LABELS, lastAny.method)}, {formatDay(lastAny.observed_at)}
+                </span>
+              </>
+            ) : null}
+          >
+            <MethodPicker methods={methods} value={state?.method ?? null} onPick={pick} locked={Boolean(corrected)} />
+          </FormSection>
 
-          {layout.fanOut === 'areas' && (
-            <RecordsEditor
-              idPrefix="record"
-              method={method}
-              quantities={registry.quantities}
-              records={state.records}
-              shared={state.shared}
-              onRecords={(records) => patch({ records })}
-              onShared={(shared) => patch({ shared })}
-              problems={recordProblems}
-              rebounds={pairingCandidates(rebounds, cores, '', [])}
-              help={help}
-              onPickPoint={(recordKey) => setPicker({ mode: 'point', recordKey })}
-              onPickGrid={(recordKey) => setPicker({ mode: 'grid', recordKey })}
-              onAddLocations={() => setPicker({ mode: 'locations' })}
-              single={Boolean(corrected)}
-            />
-          )}
-
-          {layout.fanOut === 'observations' && (
-            <InspectionEditor
-              idPrefix="finding"
-              method={method}
-              quantities={registry.quantities}
-              materialGroup={groupOf}
-              observations={state.observations}
-              photos={state.photos}
-              onObservations={(observations) => patch({ observations })}
-              onPhotos={(photos) => patch({ photos })}
-              errors={(index) => problems.filter((p) => (p.record ?? 0) === index).map((p) => p.message)}
-            />
-          )}
-
-          {(layout.fanOut === 'pieces' || layout.fanOut === 'single') && state.records[0] && (
-            <section className="space-y-3">
-              <fieldset className="space-y-3 rounded-md border border-border/70 p-3">
-                <legend className="px-1 text-sm font-semibold">{vocabLabel(EVIDENCE_METHOD_LABELS, method.name)}</legend>
-                <SchemaFields
-                  schema={method.payload_schema}
-                  root={method.payload_schema}
-                  value={state.records[0].payload}
-                  onChange={(payload) => patch({ records: [{ ...state.records[0], payload }] })}
-                  idPrefix="claim"
-                  layout={layout}
-                  errors={Object.fromEntries(problems
-                    .filter((p) => p.path.startsWith('payload.'))
-                    .map((p) => [p.path.slice(8), [p.message]]))}
+          {state && method && layout && (
+            <>
+              <FormSection
+                id="who" number={2} title="Who and when" state={states.who} count={countOf('who')}
+                actions={!corrected ? (
+                  <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={loadingLast}
+                    onClick={() => void loadLast()}>
+                    {loadingLast ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <History className="mr-1 h-3.5 w-3.5" />}
+                    Repeat from my last record
+                  </Button>
+                ) : null}
+              >
+                {actorRoot && (
+                  <ActorsField
+                    actors={state.performers}
+                    onChange={(performers) => patch({ performers })}
+                    root={actorRoot}
+                    me={me}
+                    idPrefix="performer"
+                  />
+                )}
+                {date && (
+                  <Field id="observed-at" label="Date of the observation" help={help('EvidenceCreate', 'observed_at')} required
+                    errors={envelopeProblems('observed_at')}>
+                    <DateField id="observed-at" value={state.observedAt}
+                      onChange={(observedAt) => patch({ observedAt })} className="max-w-72" />
+                  </Field>
+                )}
+                <StandardLine
+                  method={method}
+                  code={state.standardCode}
+                  year={state.standardYear}
+                  errors={envelopeProblems('standard')}
+                  onChange={(standardCode, standardYear) => patch({ standardCode, standardYear })}
                 />
-              </fieldset>
-              {layout.fanOut === 'pieces' && (
-                <>
-                  <SummaryEditor
-                    id="summary"
+                {hasMeActor && !editing && (
+                  <div className="flex items-start gap-2">
+                    <Checkbox id="self-attested" checked={state.selfAttested}
+                      onCheckedChange={(c) => patch({ selfAttested: c === true })} className="mt-0.5" />
+                    <Label htmlFor="self-attested" className="text-sm font-normal">
+                      I performed this and stand by the result
+                    </Label>
+                  </div>
+                )}
+              </FormSection>
+
+              <FormSection id="what" number={3} title={whatTitle} state={states.what} count={countOf('what')}>
+                {layout.fanOut === 'areas' && (
+                  <RecordsEditor
+                    idPrefix="record"
                     method={method}
                     quantities={registry.quantities}
-                    value={state.summary}
-                    onChange={(summary) => patch({ summary })}
-                    errors={envelopeProblems('summary')}
-                    helpFor={(field) => help('SummaryInput', field)}
+                    records={state.records}
+                    shared={state.shared}
+                    onRecords={(records) => patch({ records })}
+                    onShared={(shared) => patch({ shared })}
+                    problems={recordProblems}
+                    missing={(index) => formProblems.filter((i) => i.record === index).map((i) => i.message)}
+                    sharedState={serverProblems.some((i) => i.target?.startsWith('record-shared')) ? 'error'
+                      : formProblems.some((i) => i.target?.startsWith('record-shared')) ? 'missing' : 'done'}
+                    rebounds={pairingCandidates(rebounds, cores, '', [])}
+                    help={help}
+                    onPickPoint={(recordKey) => setPicker({ mode: 'point', recordKey })}
+                    onPickGrid={(recordKey) => setPicker({ mode: 'grid', recordKey })}
+                    onAddLocations={() => setPicker({ mode: 'locations' })}
+                    single={Boolean(corrected)}
+                    focusRecord={focusRecord}
                   />
-                  {!corrected && (
-                    <PiecesField pieces={state.pieces} onChange={(pieces) => patch({ pieces })} thisPiece={identityId} />
-                  )}
-                </>
-              )}
-              {layout.fanOut === 'single' && (
-                <PositionField
-                  id="layout-position"
-                  position={state.records[0].position}
-                  onChange={(position) => patch({ records: [{ ...state.records[0], position }] })}
-                  onPick={() => undefined}
-                  noPoint
-                  errors={envelopeProblems('position')}
-                  help={help('PositionInput', 'description')}
+                )}
+
+                {layout.fanOut === 'observations' && (
+                  <InspectionEditor
+                    idPrefix="finding"
+                    method={method}
+                    quantities={registry.quantities}
+                    materialGroup={groupOf}
+                    observations={state.observations}
+                    photos={state.photos}
+                    onObservations={(observations) => patch({ observations })}
+                    onPhotos={(photos) => patch({ photos })}
+                    errors={(index) => problems.filter((p) => (p.record ?? 0) === index).map((p) => p.message)}
+                    missing={(index) => formProblems.filter((i) => i.record === index).map((i) => i.message)}
+                    focusRecord={focusRecord}
+                  />
+                )}
+
+                {(layout.fanOut === 'pieces' || layout.fanOut === 'single') && state.records[0] && (
+                  <div className="space-y-4">
+                    <SchemaFields
+                      schema={method.payload_schema}
+                      root={method.payload_schema}
+                      value={state.records[0].payload}
+                      onChange={(payload) => patch({ records: [{ ...state.records[0], payload }] })}
+                      idPrefix="claim"
+                      layout={layout}
+                      errors={claimErrors}
+                      overrides={layout.fanOut === 'single' ? {
+                        bars: ({ parent, setParent }) => (
+                          <BarsEditor
+                            id="claim-bars"
+                            bars={Array.isArray(parent.bars) ? (parent.bars as FormObject[]) : []}
+                            onChange={(bars) => setParent({ ...parent, bars })}
+                            serverErrors={barErrors}
+                            focusBar={focusBar}
+                          />
+                        ),
+                      } : undefined}
+                    />
+                    {layout.fanOut === 'pieces' && (
+                      <>
+                        <SummaryEditor
+                          id="summary"
+                          method={method}
+                          quantities={registry.quantities}
+                          value={state.summary}
+                          onChange={(summary) => patch({ summary })}
+                          errors={envelopeProblems('summary')}
+                          helpFor={(field) => help('SummaryInput', field)}
+                        />
+                        {!corrected && (
+                          <PiecesField pieces={state.pieces} onChange={(pieces) => patch({ pieces })} thisPiece={identityId} />
+                        )}
+                      </>
+                    )}
+                    {layout.fanOut === 'single' && (
+                      <>
+                        <PositionField
+                          id="layout-position"
+                          position={state.records[0].position}
+                          onChange={(position) => patch({ records: [{ ...state.records[0], position }] })}
+                          onPick={() => undefined}
+                          noPoint
+                          errors={envelopeProblems('position')}
+                          help={help('PositionInput', 'description')}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          A layout belongs to one version: the bars are in the stored coordinates (millimetres) of
+                          {snapshot.version ? ` version ${snapshot.version}` : ' the version'} you see on the component
+                          page. Another version needs a layout of its own.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </FormSection>
+
+              <FormSection id="files" number={4} title="Files" state={states.files}
+                summary={state.files.length > 0 ? plural(state.files.length, 'file') : undefined}>
+                {corrected && !editing && carried.length > 0 && (
+                  <CarriedFiles entries={carried} dropped={dropped} onChange={setDropped} />
+                )}
+                {(!editing || corrected?.status === 'draft') ? (
+                  <FilesField
+                    files={state.files}
+                    onChange={(files) => patch({ files })}
+                    help={help(...UPLOAD_HELP)}
+                    label={layout.fanOut === 'observations' ? 'Other files (a report, a drawing)'
+                      : corrected && !editing ? 'Further files for the correction' : 'Files for all records'}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    A record that waits for review keeps its files; add or remove them on the record after saving.
+                  </p>
+                )}
+              </FormSection>
+
+              <FormSection id="notes" number={5} title="Notes" state={states.notes}>
+                <Textarea id="notes" rows={3} value={state.notes} aria-label="Notes"
+                  placeholder="Anything a reader of this record should know"
+                  onChange={(e) => patch({ notes: e.target.value })} />
+              </FormSection>
+
+              <FormSection id="check" number={6} title="Check and save" state="check">
+                <CheckSection
+                  summary={savesText}
+                  notices={notices}
+                  issues={issues}
+                  titles={titles}
+                  onJump={jump}
+                  onSave={() => void save()}
+                  saving={saving}
+                  saveLabel={saveLabel}
+                />
+              </FormSection>
+
+              <div className="sticky bottom-0 z-30 -mx-4 flex flex-wrap items-center gap-2 border-t border-border bg-background/95 px-4 py-2.5 backdrop-blur lg:mx-0 lg:rounded-md lg:border">
+                <Button onClick={() => void save()} disabled={saving}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  {saveLabel}
+                </Button>
+                {issues.length > 0 ? (
+                  <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-amber-800 dark:text-amber-300"
+                    onClick={() => jumpToSection('check')}>
+                    {plural(issues.length, 'thing')} to look at
+                  </Button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Nothing missing</span>
+                )}
+              </div>
+
+              {picker && (
+                <PositionPickerDialog
+                  open
+                  onOpenChange={(open) => { if (!open) setPicker(null) }}
+                  catalog={catalog}
+                  mode={picker.mode === 'point' ? 'point' : 'grid'}
+                  initialGrid={pickerRecord ? gridOf(pickerRecord.payload) : null}
+                  minSpacingMm={picker.mode === 'locations' ? 1
+                    : parseNumber(String(getAt(pickerRecord?.payload ?? {}, ['test_area', 'min_spacing_mm']) ?? '')) ?? 25}
+                  minEdgeMm={method.name === 'rebound_hammer'
+                    ? parseNumber(String(getAt(pickerRecord?.payload ?? state.records[0]?.payload ?? {}, ['test_area', 'min_edge_distance_mm']) ?? '')) ?? 25
+                    : undefined}
+                  defaults={pickerRecord ? gridDefaults(pickerRecord) : { rows: 2, cols: 2, spacing: 100 }}
+                  context={marksOfForm.filter((m) => m.points.length > 0)}
+                  onConfirm={onPickerConfirm}
                 />
               )}
-              {layout.fanOut === 'single' && (
-                <p className="text-xs text-muted-foreground">
-                  The bars are in the stored coordinates of the version you see on the component page.
-                </p>
-              )}
-            </section>
+            </>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-          {(!corrected || (editing && corrected.status === 'draft')) && (
-            <section aria-label="Files" className="space-y-2 rounded-lg border border-border p-3">
-              <FilesField
-                files={state.files}
-                onChange={(files) => patch({ files })}
-                help={help(...UPLOAD_HELP)}
-                label={layout.fanOut === 'observations' ? 'Other files (a report, a drawing)' : 'Files for all records'}
-              />
-            </section>
-          )}
+/** The standard of the method folded to one line ("Standard: EN 12504-2 (2019) - change"), 8.134 c. */
+function StandardLine({
+  method,
+  code,
+  year,
+  errors,
+  onChange,
+}: {
+  method: MethodInfo
+  code: string
+  year: string
+  errors: string[]
+  onChange: (code: string, year: string) => void
+}) {
+  const standard = method.default_standard
+  const typed = code.trim() !== '' || year.trim() !== ''
+  const [open, setOpen] = useState(false)
+  const words = standard ? `${standard.code}${standard.year ? ` (${standard.year})` : ''}` : null
 
-          <section aria-label="Notes" className="space-y-1">
-            <Label htmlFor="notes" className="text-xs">Notes</Label>
-            <Textarea id="notes" rows={2} value={state.notes} onChange={(e) => patch({ notes: e.target.value })} />
-          </section>
-
-          {problems.filter((p) => !p.path.startsWith('payload') && !p.path.startsWith('position')
-            && !p.path.startsWith('derived') && !p.path.startsWith('summary')
-            && !p.path.startsWith('standard') && !p.path.startsWith('observed_at')).length > 0 && (
-            <ul className="space-y-1 rounded-md border border-red-300 bg-red-50 p-2 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100" role="alert">
-              {problems.filter((p) => !p.path.startsWith('payload') && !p.path.startsWith('position')
-                && !p.path.startsWith('derived') && !p.path.startsWith('summary')
-                && !p.path.startsWith('standard') && !p.path.startsWith('observed_at')).map((p, i) => (
-                <li key={i}>{p.record !== undefined && state.records.length + state.observations.length > 1 ? `Record ${p.record + 1}: ` : ''}{p.path ? `${p.path}: ` : ''}{p.message}</li>
-              ))}
-            </ul>
-          )}
-
-          <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-2 border-t border-border bg-background/95 p-3 backdrop-blur">
-            <Button onClick={() => void save()} disabled={saving}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {editing ? 'Save the changes and check' : corrected ? 'Save the correction and check' : 'Save as drafts and check'}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              {layout.fanOut === 'areas' ? `${state.records.length} record${state.records.length === 1 ? '' : 's'}`
-                : layout.fanOut === 'observations' ? `${state.observations.length} record${state.observations.length === 1 ? '' : 's'}`
-                  : layout.fanOut === 'pieces' ? `${state.pieces.length} record${state.pieces.length === 1 ? '' : 's'}` : ''}
-              {problems.length > 0 && ', see the marked fields'}
-            </p>
-          </div>
-
-          {picker && (
-            <PositionPickerDialog
-              open
-              onOpenChange={(open) => { if (!open) setPicker(null) }}
-              catalog={catalog}
-              mode={picker.mode === 'point' ? 'point' : 'grid'}
-              initialGrid={pickerRecord ? gridOf(pickerRecord.payload) : null}
-              minSpacingMm={picker.mode === 'locations' ? 1
-                : parseNumber(String(getAt(pickerRecord?.payload ?? {}, ['test_area', 'min_spacing_mm']) ?? '')) ?? 25}
-              minEdgeMm={method.name === 'rebound_hammer'
-                ? parseNumber(String(getAt(pickerRecord?.payload ?? state.records[0]?.payload ?? {}, ['test_area', 'min_edge_distance_mm']) ?? '')) ?? 25
-                : undefined}
-              defaults={pickerRecord ? gridDefaults(pickerRecord) : { rows: 2, cols: 2, spacing: 100 }}
-              context={marksOfForm.filter((m) => m.points.length > 0)}
-              onConfirm={onPickerConfirm}
-            />
-          )}
-        </>
+  if (!open && !typed && errors.length === 0) {
+    return (
+      <p className="flex flex-wrap items-center gap-x-2 text-sm">
+        <span className="text-muted-foreground">Standard:</span>
+        <span>{words ?? 'none stated'}</span>
+        <Button type="button" variant="link" size="sm" className="h-6 px-0 text-xs" onClick={() => setOpen(true)}>
+          {words ? 'change' : 'add one'}
+        </Button>
+      </p>
+    )
+  }
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-[1fr_6rem] gap-2">
+        <Field id="standard-code" label="Standard"
+          help={words ? `Defaults to ${words}` : ''} errors={errors}>
+          <Input id="standard-code" value={code}
+            placeholder={standard?.code ?? 'e.g. EN 12504-2'}
+            onChange={(e) => onChange(e.target.value, year)} />
+        </Field>
+        <Field id="standard-year" label="Year">
+          <Input id="standard-year" inputMode="numeric" value={year}
+            placeholder={standard?.year ? String(standard.year) : ''}
+            onChange={(e) => onChange(code, e.target.value)} />
+        </Field>
+      </div>
+      {words && (
+        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground"
+          onClick={() => { onChange('', ''); setOpen(false) }}>
+          <Undo2 className="mr-1 h-3 w-3" />Use the default: {words}
+        </Button>
       )}
     </div>
   )
 }
 
-/** The method's description, or nothing when it only repeats its name. */
-function describes(method: MethodInfo): string {
-  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
-  const text = method.description ?? ''
-  return !text.trim() || same(text, method.label) || same(text, vocabLabel(EVIDENCE_METHOD_LABELS, method.name))
-    ? ''
-    : text
-}
-
-function firstSentence(text: string): string {
-  const end = text.search(/\.\s/)
-  return end > 0 ? text.slice(0, end + 1) : text
+/** The files of the corrected record that come over to the correction: keep or drop each (RL4). */
+function CarriedFiles({
+  entries,
+  dropped,
+  onChange,
+}: {
+  entries: AttachmentEntry[]
+  dropped: Set<number>
+  onChange: (next: Set<number>) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium">Files carried over from the corrected record</p>
+      <ul className="space-y-1">
+        {entries.map((entry) => {
+          const off = dropped.has(entry.index)
+          return (
+            <li key={entry.index} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1 text-sm">
+              <span className={`flex min-w-0 items-center gap-1.5 ${off ? 'text-muted-foreground line-through' : ''}`}>
+                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{entry.name || `File ${entry.index + 1}`}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{Math.max(1, Math.round(entry.size / 1000))} kB</span>
+              </span>
+              <Button
+                type="button" variant="ghost" size="sm" className="h-7 text-xs"
+                onClick={() => {
+                  const next = new Set(dropped)
+                  if (off) next.delete(entry.index)
+                  else next.add(entry.index)
+                  onChange(next)
+                }}
+              >
+                {off ? 'Keep' : 'Remove'}
+              </Button>
+            </li>
+          )
+        })}
+      </ul>
+      <p className="text-xs text-muted-foreground">
+        The correction carries these files unless you remove them; the corrected record keeps its own.
+      </p>
+    </div>
+  )
 }
 
 function gridPointsOf(result: Extract<PickerResult, { kind: 'grid' }>): [number, number, number][] {
@@ -821,6 +1062,22 @@ function gridDefaults(record: RecordState): { rows?: number; cols?: number; spac
     }
   }
   return {}
+}
+
+/** Remove the carried files the author dropped from the new correction (matched by checksum). */
+async function dropCarried(made: EvidenceView, dropped: AttachmentEntry[]): Promise<string[]> {
+  const notes: string[] = []
+  const have = ((made.attachments ?? []) as AttachmentEntry[]).filter((e) => !e.removed)
+  for (const entry of dropped) {
+    const twin = have.find((e) => e.sha256 === entry.sha256 && e.name === entry.name)
+    if (!twin) continue
+    try {
+      await removeAttachment(made._id, twin.index)
+    } catch (err) {
+      notes.push(`${entry.name ?? 'A file'} could not be removed from the correction: ${err instanceof Error ? err.message : 'failed'}. Remove it on the record below.`)
+    }
+  }
+  return notes
 }
 
 async function attachFiles(

@@ -1,0 +1,6 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import p %}
+{% block body %}
+{% call p() %}Hello {{ full_name or "there" }},{% endcall %}
+{% call p() %}{{ by_name }} added you{% if dataset_name %} to the dataset "{{ dataset_name }}" as {{ roles|join(", ") if roles else "member" }}{% endif %} in the Catalog of Second Chances.{% endcall %}
+{% endblock %}

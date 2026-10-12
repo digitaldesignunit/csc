@@ -1,0 +1,6 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import p %}
+{% block body %}
+{% call p() %}{{ by_name }} created the dataset "{{ dataset_name }}" ({{ slug }}).{% endcall %}
+{% call p() %}It is visible to its members only, and its pieces cannot be made public until you have reviewed it.{% endcall %}
+{% endblock %}

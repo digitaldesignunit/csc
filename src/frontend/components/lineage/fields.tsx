@@ -21,7 +21,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { OptionalDateInput } from '@/components/ui/optional-date-input'
+import { DateField } from '@/components/ui/date-field'
 import {
   Select,
   SelectContent,
@@ -30,8 +30,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import type { DatePrecision } from '@/lib/dateField'
+import { firstDay, truncateTo } from '@/lib/dateField'
 import { dateOnlyToIso, isoToDateOnly, WORKS_ORIGIN_KINDS } from '@/lib/lineage'
 import { cn } from '@/lib/utils'
+import PerformedByField from './PerformedByField'
 
 const NONE = '__none__'
 
@@ -95,29 +98,24 @@ export function DateWithPrecision({ id, label, at, precision, onChange, disabled
   onChange: (at: string | null, precision: Precision) => void
   disabled?: boolean
 }) {
+  // `exact` is a day with a time and `unknown` an empty date: the field shows both as a day
+  const shown: DatePrecision = precision === 'year' || precision === 'month' ? precision : 'day'
+  const keep = (next: DatePrecision): Precision => (
+    next === 'day' && precision === 'exact' ? 'exact' : next)
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_9rem]">
-      <fieldset disabled={disabled} className="min-w-0">
-        <OptionalDateInput
-          id={id}
-          label={label}
-          value={isoToDateOnly(at)}
-          onChange={(value) => {
-            const iso = dateOnlyToIso(value)
-            onChange(iso, iso ? (precision && precision !== 'unknown' ? precision : 'day') : 'unknown')
-          }}
-        />
-      </fieldset>
-      <Field label="Known to the" htmlFor={`${id}-precision`}>
-        <VocabSelect
-          id={`${id}-precision`}
-          labels={PRECISION_LABELS}
-          value={(precision ?? 'unknown') as Precision}
-          onChange={(value) => onChange(at ?? null, (value ?? 'unknown') as Precision)}
-          disabled={disabled || !at}
-        />
-      </Field>
-    </div>
+    <Field label={label} htmlFor={id}>
+      <DateField
+        id={id}
+        value={truncateTo(isoToDateOnly(at), shown)}
+        precisions={['year', 'month', 'day']}
+        precision={shown}
+        disabled={disabled}
+        onChange={(value, given) => {
+          const iso = value ? dateOnlyToIso(firstDay(value)) : null
+          onChange(iso, iso ? keep(given) : 'unknown')
+        }}
+      />
+    </Field>
   )
 }
 
@@ -315,6 +313,16 @@ export function OriginFields({ idPrefix, value, onChange, disabled }: {
           value={value.method ?? ''}
           onChange={(event) => set({ method: event.target.value })}
           placeholder="e.g. saw cut, crane lift"
+        />
+      </Field>
+      <Field
+        label="Done by"
+        hint="Who took it out, cut it or made it: a person or a firm, with its web page. You can add yourself from your profile."
+      >
+        <PerformedByField
+          idPrefix={`${idPrefix}-by`}
+          actors={value.performed_by ?? []}
+          onChange={(performed_by) => set({ performed_by })}
         />
       </Field>
       <Field label="Notes" htmlFor={`${idPrefix}-notes`}>

@@ -155,6 +155,10 @@ async def lifespan(app: FastAPI):
     await app.mongodb_component_evidence.create_index(
         'payload.sampling.paired_rebound_id', sparse=True)
     await seed_materials(app.mongodb_materials)
+    # every dataset that exists is reviewed (8.139 c): the datasets of before
+    # the field have no flag; idempotent, a no-op once they have it
+    await app.mongodb_datasets.update_many(
+        {'reviewed': {'$exists': False}}, {'$set': {'reviewed': True}})
     await ensure_catalog_number_counter(app.mongodb)
 
     # --- Directories ---------------------------------------------------------

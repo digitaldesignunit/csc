@@ -425,7 +425,11 @@ def bump_version(c, version, gh=False):
     with open(changelog, encoding='utf-8') as fh:
         has_section = f'## [{version}]' in fh.read()
     if not has_section:
-        _rewrite(changelog, r'^## \[', f'## [{version}] - unreleased\n\n## [')
+        # keep the file's own line endings (CHANGELOG.md is CRLF)
+        with open(changelog, 'rb') as fh:
+            eol = '\r\n' if b'\r\n' in fh.read() else '\n'
+        _rewrite(changelog, r'^## \[',
+                 f'## [{version}] - unreleased{eol}{eol}## [')
     if gh:
         session = os.path.join(REPO_DIR, 'grasshopper_userobjects_src',
                                'DDU_CSC_Session.py')
@@ -435,10 +439,22 @@ def bump_version(c, version, gh=False):
                  f"Version: {datetime.date.today():%y%m%d}")
         print('GH: CSC_Session changed -> re-export DDU_CSC_Session.ghuser '
               '(and its XML) in Rhino before releasing')
-    print(f'VERSION -> {version}; now fill in the CHANGELOG section')
+    print(f'VERSION -> {version}; now fill in the CHANGELOG section, then '
+          f'run invoke zenodo')
     with chdir(REPO_DIR):
         c.run(f'{sys.executable} scripts/ci/check_version.py', pty=False,
               warn=True)
+
+
+@task(help={'check': 'only report whether .zenodo.json is stale'})
+def zenodo(c, check=False):
+    """
+    Write .zenodo.json (title, version, description) from VERSION and the
+    CHANGELOG section; run after filling in the section, before tagging.
+    """
+    with chdir(REPO_DIR):
+        c.run(f'{sys.executable} scripts/ci/zenodo_metadata.py'
+              + (' --check' if check else ''), pty=False)
 
 
 @task(help={'check': 'only report, write nothing'})

@@ -13,6 +13,7 @@ import {
   Layers,
   LayoutGrid,
   LogIn,
+  Mail,
   PackagePlus,
   ScanQrCode,
   ScrollText,
@@ -93,6 +94,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   { id: 'users', label: 'Users and invitations', href: '/admin/users', icon: Users, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'materials', label: 'Materials', href: '/admin/materials', icon: Layers, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'geometry', label: 'Geometry failures', href: '/admin/geometry', icon: TriangleAlert, group: 'admin', visible: (v) => v.isAdmin },
+  { id: 'mailtemplates', label: 'Mail templates', href: '/admin/mail-templates', icon: Mail, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'logs', label: 'Backend logs', href: '/admin/logs', icon: ScrollText, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'gh', label: 'Grasshopper', href: '/gh-interface', icon: Workflow, group: 'tools', visible: anyone },
   {
@@ -153,6 +155,7 @@ const EXTRA_TITLES: [RegExp, string][] = [
   [/^\/$/, 'Home'],
   [/^\/credits$/, 'Credits'],
   [/^\/imprint$/, 'Imprint'],
+  [/^\/privacy$/, 'Privacy'],
   [/^\/components\/[^/]+\/edit$/, 'Component'],
   [/^\/components\/[^/]+\/evidence\/new$/, 'Add evidence'],
   [/^\/components\/[^/]+\/snapshot\/new$/, 'Component'],

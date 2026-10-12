@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import json
 import logging
-import logging.handlers
 import os
 import re
 from typing import Dict, Optional, Tuple
+
+from logrotation import RETENTION_DAYS, DailyFileHandler
 
 CLIENT_HEADER = 'X-CSC-Client'
 _HEADER_KEY = CLIENT_HEADER.lower().encode('latin-1')
@@ -49,15 +50,14 @@ def describe_client(
 
 
 def configure_client_log(path: str) -> None:
-    """Send ``csc.clients`` records to a size-capped file (idempotent)."""
+    """Send ``csc.clients`` records to a daily file that keeps 14 days
+    (idempotent; the privacy notice names this retention)."""
     path = os.path.abspath(path)
     for handler in client_logger.handlers:
         if getattr(handler, 'baseFilename', None) == path:
             return
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    handler = logging.handlers.RotatingFileHandler(
-        path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8',
-    )
+    handler = DailyFileHandler(path, backup_count=RETENTION_DAYS)
     handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
     client_logger.addHandler(handler)
     client_logger.setLevel(logging.INFO)

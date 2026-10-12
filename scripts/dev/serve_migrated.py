@@ -26,6 +26,13 @@ sees) with fresh
 passwords, written to ``.dev/dev-test-accounts.json`` (gitignored); nothing
 but the user names is printed.
 
+``--no-migrate`` loads a dump that already is 0.6 data (a production dump
+from after the cutover) as it is: no migration, no gripper copy, no derive
+run. ``--assets DIR`` points every asset folder (meshes, previews, photos,
+point clouds, proxies, capture, evidence) at the sub-folders of DIR, a copy of
+the server's asset folder; they are read and written in place, so never name
+the backup itself and run no runner with ``--sweep`` on it.
+
 ``--existing`` serves a database that is already running (``--mongo-port``)
 again: no mongod, no dump, no migration, no accounts. The capture fixture
 files live in a temporary directory that is gone with every stop, so both
@@ -155,6 +162,11 @@ def main() -> int:
                         help='create dev-contrib, dev-mod, dev-mod2 and '
                              'dev-rev with their roles in --test-dataset, '
                              'and dev-outsider with none')
+    parser.add_argument('--no-migrate', action='store_true',
+                        help='the dump is already 0.6 data: load it as it is')
+    parser.add_argument('--assets', default=None, metavar='DIR',
+                        help='use the sub-folders of this asset folder copy '
+                             'for every asset directory')
     parser.add_argument('--existing', action='store_true',
                         help='serve the database already running on '
                              '--mongo-port: no dump, no migration; only the '
@@ -195,13 +207,23 @@ def main() -> int:
         work = Path(tempfile.mkdtemp(prefix='csc-dev-migrated-'))
         (work / 'owner.pid').write_text(str(os.getpid()), encoding='ascii')
     env = _dev_env()
+    if args.assets:
+        root = Path(args.assets).resolve()
+        for key, sub in (('SNAPSHOT_PREVIEW_DIR', 'snapshot_previews'),
+                         ('SNAPSHOT_PHOTOS_DIR', 'snapshot_photos'),
+                         ('SNAPSHOT_MESHES_DIR', 'meshes'),
+                         ('SNAPSHOT_POINT_CLOUDS_DIR', 'pointclouds'),
+                         ('SNAPSHOT_PROXIES_DIR', 'proxies'),
+                         ('SNAPSHOT_CAPTURE_DIR', 'capture'),
+                         ('EVIDENCE_ATTACHMENTS_DIR', 'evidence')):
+            env[key] = str(root / sub)
     try:
         client = MongoClient(uri)
         db = client['csc']
         mongo_uri = f'{uri}/csc'
-        proxies = work / 'proxies'
+        proxies = Path(env['SNAPSHOT_PROXIES_DIR']) if args.assets else work / 'proxies'
         assets = Path(env.get('SNAPSHOT_MESHES_DIR', ''))
-        capture = work / 'capture'
+        capture = Path(env['SNAPSHOT_CAPTURE_DIR']) if args.assets else work / 'capture'
         if not args.existing:
             counts = load_dump(db, str(_REPO / 'mongodb_collections_local' /
                                        args.dump))
@@ -210,25 +232,28 @@ def main() -> int:
             # those folders, never the asset folder itself
             meshes = work / 'meshes'
             copied = 0
-            for snap in db['component_snapshots'].find(
-                    {'geometry.meshes.1': {'$exists': True}}, {'_id': 1}):
-                source = assets / snap['_id'] / '1'
-                if source.is_dir():
-                    shutil.copytree(source, meshes / snap['_id'] / '1')
-                    copied += 1
-            run(Context(db=db, meshes_dir=meshes, capture_dir=capture,
-                        archive_dir=work / 'archive', log=lambda m: None),
-                CUTOVER_STEPS)
-            print(f'migrated to 0.6 ({copied} gripper meshes -> {capture})')
+            if not args.no_migrate:
+                for snap in db['component_snapshots'].find(
+                        {'geometry.meshes.1': {'$exists': True}}, {'_id': 1}):
+                    source = assets / snap['_id'] / '1'
+                    if source.is_dir():
+                        shutil.copytree(source, meshes / snap['_id'] / '1')
+                        copied += 1
+                run(Context(db=db, meshes_dir=meshes, capture_dir=capture,
+                            archive_dir=work / 'archive', log=lambda m: None),
+                    CUTOVER_STEPS)
+                print(f'migrated to 0.6 ({copied} gripper meshes -> {capture})')
+            else:
+                print('no migration: the dump is loaded as it is')
             # the untracked owner mapping (decisions 8.24-8.27), when present
             mapping = dev / 'reattribute_06.json'
-            if mapping.is_file():
+            if mapping.is_file() and not args.no_migrate:
                 run(Context(db=db, files=False, log=lambda m: None,
                             shared_mapping=json.loads(
                                 mapping.read_text(encoding='utf-8'))), ['11b'])
                 print('step 11b applied (.dev/reattribute_06.json)')
 
-            if not args.no_derive:
+            if not args.no_derive and not args.no_migrate:
                 from apps.catalog.geometry_runner import derive_and_store_sync
                 from apps.catalog.geometry_stages import Env
                 stages = [s for s in args.derive_stages.split(',') if s]
@@ -283,7 +308,8 @@ def main() -> int:
         env['MONGODB_URI'] = mongo_uri
         env['SNAPSHOT_CAPTURE_DIR'] = str(capture)
         env['SNAPSHOT_PROXIES_DIR'] = str(proxies)
-        env['EVIDENCE_ATTACHMENTS_DIR'] = str(work / 'evidence')
+        if not args.assets:
+            env['EVIDENCE_ATTACHMENTS_DIR'] = str(work / 'evidence')
         env.setdefault('JWT_SECRET', 'dev-migrated-only')
         env.setdefault('SMTP_PASSWORD', 'dev')
         os.environ.update(env)

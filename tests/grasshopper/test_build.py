@@ -403,3 +403,140 @@ def test_the_bulk_body_pairs_ids_and_records(server):
                          ([text], ['nope'])):
         with pytest.raises(b.BuildError):
             b.evidence_bulk_body(records, ids)
+
+
+# DOCUMENT LINK OF A LAYOUT (RL6, decision 8.106) ------------------------------
+def test_a_layout_document_may_carry_a_link_and_the_day_it_was_read(server):
+    record = b.reinforcement_layout_record(
+        UUID_A, _bars(), 'drawing', None, 'Drawing 7', '1974-05', 'ref 1',
+        document_url=' https://archive.example.org/plan?id=7 ',
+        document_retrieved_at='2026-10-05')
+    assert record['payload']['document'] == {
+        'title': 'Drawing 7', 'date': '1974-05', 'reference': 'ref 1',
+        'url': 'https://archive.example.org/plan?id=7',
+        'retrieved_at': '2026-10-05'}
+    server['payloads'].ReinforcementLayoutPayload.model_validate(
+        record['payload'])
+    # both are optional, and a timestamp with an offset becomes UTC
+    plain = b.reinforcement_layout_record(UUID_A, _bars(), 'drawing', None,
+                                          'Drawing 7')
+    assert set(plain['payload']['document']) == {'title'}
+    zone = b.reinforcement_layout_record(
+        UUID_A, _bars(), 'drawing', None, 'D',
+        document_retrieved_at='2026-10-05T14:30:00+02:00')
+    assert zone['payload']['document']['retrieved_at'] == \
+        '2026-10-05T12:30:00Z'
+    server['payloads'].ReinforcementLayoutPayload.model_validate(
+        zone['payload'])
+
+
+@pytest.mark.parametrize('url', [
+    'javascript:alert(1)', 'ftp://host/x', 'file:///etc/passwd', 'https://',
+    'example.org/plan', 'https://a b.org', 'http://[bad', '//host/x',
+    'https://' + 'a' * 2050])
+def test_a_layout_link_must_be_http_or_https_with_a_host(url, server):
+    with pytest.raises(b.BuildError) as info:
+        b.reinforcement_layout_record(UUID_A, _bars(), 'drawing', None, 'D',
+                                      document_url=url)
+    assert 'DocumentUrl' in str(info.value)
+    # what the client refuses, the server refuses too
+    with pytest.raises(Exception):
+        server['payloads'].LayoutDocument.model_validate(
+            {'title': 'D', 'url': url})
+
+
+@pytest.mark.parametrize('value', ['yesterday', '2026-13-01', '2026-02-30',
+                                   'unknown', '5.10.2026'])
+def test_a_wrong_retrieval_date_is_refused(value):
+    with pytest.raises(b.BuildError) as info:
+        b.reinforcement_layout_record(UUID_A, _bars(), 'drawing', None, 'D',
+                                      document_retrieved_at=value)
+    assert 'DocumentRetrievedAt' in str(info.value)
+
+
+def test_a_link_without_a_drawing_title_is_refused():
+    for args in (dict(document_url='https://a.org'),
+                 dict(document_retrieved_at='2026-10-05')):
+        with pytest.raises(b.BuildError) as info:
+            b.reinforcement_layout_record(UUID_A, _bars(), 'drawing', None,
+                                          **args)
+        assert 'DocumentTitle' in str(info.value)
+
+
+# THE ACTOR OF THE SIGNED-IN ACCOUNT (Me, decision 8.133 f) ---------------------
+PROFILE = {'_id': UUID_B, 'username': 'ada', 'full_name': 'Ada Lovelace',
+           'organization': 'Lab GmbH',
+           'organization_ror': 'https://ror.org/02mhbdp94',
+           'orcid': '0000-0002-1825-0097', 'default_role': 'laboratory',
+           'email': 'ada@example.org', 'role': 'user'}
+
+
+def test_me_builds_the_actor_from_the_profile(server):
+    out = b.actor_from_profile(PROFILE)
+    assert out == {'kind': 'user', 'user_id': UUID_B, 'name': 'Ada Lovelace',
+                   'organization': 'Lab GmbH',
+                   'organization_ror': 'https://ror.org/02mhbdp94',
+                   'orcid': '0000-0002-1825-0097', 'role': 'laboratory'}
+    assert 'email' not in out                  # never copied from the profile
+    server['documents'].Actor.model_validate(out)
+
+
+def test_a_typed_input_overrides_the_profile():
+    out = b.actor_from_profile(
+        PROFILE, name='A. Lovelace', organization='Other', role='witness',
+        email='x@example.org', orcid=' 0000-0001-5109-3700 ')
+    assert out['name'] == 'A. Lovelace' and out['organization'] == 'Other'
+    assert out['role'] == 'witness' and out['email'] == 'x@example.org'
+    assert out['orcid'] == '0000-0001-5109-3700'
+    assert out['organization_ror'] == 'https://ror.org/02mhbdp94'  # not typed
+    assert out['user_id'] == UUID_B
+    assert b.actor_from_profile(PROFILE, kind='user')['kind'] == 'user'
+    assert b.actor_from_profile(PROFILE, user_id=UUID_C)['user_id'] == UUID_C
+
+
+def test_me_with_a_bare_profile_still_names_the_account():
+    out = b.actor_from_profile({'id': UUID_B, 'full_name': None,
+                                'default_role': None})
+    assert out == {'kind': 'user', 'user_id': UUID_B}
+
+
+def test_me_refuses_what_it_cannot_build():
+    with pytest.raises(b.BuildError):
+        b.actor_from_profile(None)
+    with pytest.raises(b.BuildError):
+        b.actor_from_profile({'full_name': 'Ada'})
+    with pytest.raises(b.BuildError) as info:
+        b.actor_from_profile(PROFILE, kind='person')
+    assert 'kind user' in str(info.value)
+    with pytest.raises(b.BuildError):
+        b.actor_from_profile(PROFILE, role='president')
+
+
+def test_the_profile_is_cached_for_a_minute_per_server_and_user():
+    store, calls = {}, []
+
+    def fetch():
+        calls.append(1)
+        return dict(PROFILE, full_name='Call %d' % len(calls))
+    key = ('https://api.example.org', 'ada')
+    first = b.cached_profile(store, key, fetch, 1000.0)
+    assert b.cached_profile(store, key, fetch, 1030.0) is first
+    assert len(calls) == 1
+    # a minute later, another user or another server: read again
+    assert b.cached_profile(store, key, fetch, 1061.0)['full_name'] == 'Call 2'
+    b.cached_profile(store, ('https://api.example.org', 'bob'), fetch, 1062.0)
+    assert len(calls) == 3
+    # a clock that went back does not serve a stale profile for ever
+    b.cached_profile(store, ('https://api.example.org', 'bob'), fetch, 10.0)
+    assert len(calls) == 4
+
+
+def test_a_failed_read_of_the_profile_is_not_cached():
+    store = {}
+
+    def broken():
+        raise RuntimeError('offline')
+    with pytest.raises(RuntimeError):
+        b.cached_profile(store, 'k', broken, 1.0)
+    assert b.cached_profile(store, 'k', lambda: dict(PROFILE), 2.0)['_id'] == \
+        UUID_B

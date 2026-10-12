@@ -88,8 +88,11 @@ export default function ComponentProvenanceCard({
     ]
   })
 
+  // the effect depends on the ids, not on the array that holds them this render
+  const parentKey = parentIds.join('|')
   useEffect(() => {
-    if (parentIds.length === 0) {
+    const ids = parentKey ? parentKey.split('|') : []
+    if (ids.length === 0) {
       setParentStatuses({})
       return
     }
@@ -97,7 +100,7 @@ export default function ComponentProvenanceCard({
     let cancelled = false
     const resolveParentStatuses = async () => {
       const entries = await Promise.all(
-        parentIds.map(async (parentId) => {
+        ids.map(async (parentId) => {
           try {
             const res = await fetch(
               `/api/backend/identities/${encodeURIComponent(parentId)}?expand=shallow`,
@@ -133,7 +136,7 @@ export default function ComponentProvenanceCard({
     return () => {
       cancelled = true
     }
-  }, [parentIds.join('|')])
+  }, [parentKey])
 
   return (
     <>

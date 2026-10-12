@@ -1,9 +1,14 @@
 import os
+import sys
 
 # The backend folder this config lives in: ~/csc/current/backend on the server
 # (a symlink into ~/csc/releases/<version>/), so a deploy that switches
 # `current` and restarts gunicorn runs the new release.
 app_path = os.path.dirname(os.path.abspath(__file__))
+# gunicorn reads this file before it puts the backend folder on the path
+if app_path not in sys.path:
+    sys.path.insert(0, app_path)
+
 
 LOG_LEVELS = ('debug', 'info', 'warning', 'error', 'critical')
 DEFAULT_WORKERS = 2
@@ -41,3 +46,6 @@ timeout = 600
 loglevel = log_level()
 # logs/ is a symlink to ~/csc/shared/logs, so logs survive deploys
 errorlog = os.path.join(app_path, 'logs', 'fastapi.log')
+# a daily file that keeps 14 days (gunicorn_logger.py); no accesslog: it would
+# hold client addresses
+logger_class = 'gunicorn_logger.DailyLogger'

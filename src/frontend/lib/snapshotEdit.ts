@@ -42,7 +42,7 @@ export function editValuesOf(snapshot: ComponentSnapshot): EditValues {
     ? (snapshot.color.map((v) => Math.round(v)) as [number, number, number])
     : emptyFields().color
   const capture = snapshot.capture ?? {}
-  const credit = (snapshot as { photo_credit?: { text?: string | null; url?: string | null } | null }).photo_credit
+  const credit = snapshot.photo_credit
   return {
     name: snapshot.name ?? '',
     notes: snapshot.notes ?? '',

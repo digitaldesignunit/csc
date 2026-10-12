@@ -9,7 +9,8 @@ of it. ``CSC_Update`` installs the package together with the UserObjects.
 Modules (importing the package imports none of them, so a component without
 Rhino, or without numpy, can still check the version):
 
-* ``ply``, ``build``, ``read``, ``convention``, ``frame``, ``upload`` --- pure
+* ``ply``, ``build``, ``read``, ``convention``, ``layout``, ``frame``,
+  ``upload`` --- pure
   Python (numpy for arrays), no Rhino;
 * ``rhino``, ``doc`` --- RhinoCommon: geometry, the document convention;
 * ``ports`` --- the declared outputs of a script component (8.112);
@@ -25,10 +26,11 @@ import os
 import re
 import sys
 
-__version__ = '261008'
+__version__ = '261012'
 
 # in dependency order: a module is reloaded after the ones it imports from
-MODULES = ('ply', 'build', 'read', 'convention', 'frame', 'upload', 'rhino',
+MODULES = ('ply', 'build', 'read', 'convention', 'layout', 'frame', 'upload',
+           'rhino',
            'doc', 'messages', 'ports')
 
 _VERSION = re.compile(r'^(\d+)([a-zA-Z]?)$')

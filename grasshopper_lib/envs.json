@@ -35,6 +35,7 @@
     "FetchFilteredComponents": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
     "FetchReducedGeometry": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
     "FetchOriginalGeometry": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
+    "FetchReinforcementLayout": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
     "ApplyFrame": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy", "scipy", "trimesh", "networkx"]},
     "ComputeFrame": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy", "scipy", "trimesh", "networkx"]},
     "ComputePCA": {"env": "DDU_CSC_MATCH", "needs": ["charset_normalizer", "numpy", "scipy", "scikit-learn"]},

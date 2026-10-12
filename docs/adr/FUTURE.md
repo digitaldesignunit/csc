@@ -121,6 +121,14 @@ gap.
   HTTP mounted next to FastAPI on Uberspace (one more supervisord / web backend route), or a local
   stdio server that calls the public API.
 
+## Brand
+
+- A CSC logo (user 2026-10-10, moved out of 0.6.1.0 on 2026-10-12: not ready yet): a mark and a wordmark, light and
+  dark, SVG source in `resources/brand/` with generated PNGs; the main brand in the sidebar, favicon and app icons,
+  PDF passport, mails (a hosted PNG with alt text) and the Open Graph image; the lab's logo to the footer, About page
+  and passport footer ("by DDU, TU Darmstadt"); GH icons later; repository licence with a note that the brand is not
+  free to reuse. Details in 8.138 (a)--(d).
+
 ## Usage statistics
 
 - Lightweight usage statistics for the maintainer (user 2026-10-10; moved out of 0.6.1.0 the same day). Built in,

@@ -1,0 +1,8 @@
+{% extends "base.txt.j2" %}
+{% block body -%}
+Hello {{ full_name or "there" }},
+
+Thank you for registering. To activate your account, verify your email address with the link below. The link expires in 24 hours.
+
+If you did not create an account, you can ignore this email.
+{%- endblock %}

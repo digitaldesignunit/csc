@@ -1,12 +1,15 @@
 'use client'
 
 /**
- * The records of a rebound hammer or core submission (fan-out, decision
- * 7.1): one card per test area or specimen, the instrument shared. Fields
- * are generated from the registry's payload schema; the grid tool and the
- * pairing of a core with a rebound record (8.42) are the two additions.
+ * The records of a rebound hammer or core submission (fan-out, decision 7.1,
+ * 8.134 d): the shared settings (the instrument) once, folded, and one row
+ * per test area or specimen with its key values, opened one at a time to
+ * edit. Fields are generated from the registry's payload schema; the grid
+ * tool and the pairing of a core with a rebound record (8.42) are the two
+ * additions.
  */
-import { Copy, Crosshair, Grid3x3, Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { AlertTriangle, ChevronDown, Copy, Crosshair, Grid3x3, Plus, Trash2 } from 'lucide-react'
 
 import { Field, NativeSelect, NumberList } from '@/components/evidence/controls'
 import DerivedField from '@/components/evidence/form/DerivedField'
@@ -18,12 +21,16 @@ import {
   type RecordState,
 } from '@/components/evidence/form/state'
 import SchemaFields, { type Override } from '@/components/evidence/SchemaFields'
+import { FoldCard } from '@/components/evidence/form/FormShell'
 import { Button } from '@/components/ui/button'
 import type { EnvelopeHelp, MethodInfo, ProblemRow, QuantityInfo } from '@/lib/evidence/api'
 import { gridPoints, roundVec, type GridSpec } from '@/lib/evidence/grid'
+import type { SectionState } from '@/lib/evidence/issues'
 import { layoutOf } from '@/lib/evidence/layout'
+import { recordRow } from '@/lib/evidence/rows'
 import { getAt, parseNumber, setAt, type FormObject, type FormValue } from '@/lib/evidence/schema'
-import { isObject } from '@/lib/evidence/schema'
+import { isBlank, isObject } from '@/lib/evidence/schema'
+import { cn } from '@/lib/utils'
 import { formatDateAtPrecision } from '@/components/components/componentDetailShared'
 
 /** The grid of a test area as the form holds it, as the tool's spec. */
@@ -68,6 +75,10 @@ type Props = {
   onShared: (next: FormObject) => void
   /** problems of the server by record position */
   problems: (index: number) => ProblemRow[]
+  /** what is missing in a record, by position (the form's own checks) */
+  missing: (index: number) => string[]
+  /** how the shared settings stand: done, missing a field, or the server found something */
+  sharedState: SectionState
   rebounds: CandidateRebound[]
   help: EnvelopeHelp
   onPickPoint: (recordKey: string) => void
@@ -75,6 +86,8 @@ type Props = {
   onAddLocations: () => void
   /** One record only (a correction, an edit): no copies, no further records. */
   single?: boolean
+  /** A record to open (a jump from the summary), by position; changes with every jump. */
+  focusRecord?: { index: number; at: number } | null
 }
 
 function payloadErrors(rows: ProblemRow[]): Record<string, string[]> {
@@ -91,10 +104,29 @@ function otherErrors(rows: ProblemRow[]): ProblemRow[] {
   return rows.filter((row) => !row.path.startsWith('payload.'))
 }
 
+/** How many values of the shared settings are filled, for the folded line. */
+function filled(value: FormValue | undefined): number {
+  if (value === undefined || value === null) return 0
+  if (typeof value === 'string') return value.trim() === '' ? 0 : 1
+  if (typeof value === 'boolean') return 0
+  if (Array.isArray(value)) return value.reduce<number>((n, v) => n + filled(v), 0)
+  return Object.values(value).reduce<number>((n, v) => n + filled(v), 0)
+}
+
 export default function RecordsEditor(props: Props) {
   const { idPrefix, method, records, shared, onRecords, onShared, problems, help } = props
   const layout = layoutOf(method.name)
   const isRebound = method.name === 'rebound_hammer'
+  const [openKey, setOpenKey] = useState<string | null>(records.length === 1 ? records[0].key : null)
+  const [sharedOpen, setSharedOpen] = useState(true)
+  const [lastFocus, setLastFocus] = useState<number | null>(null)
+
+  // a jump from the summary opens the record (and the shared settings for -1)
+  if (props.focusRecord && props.focusRecord.at !== lastFocus) {
+    setLastFocus(props.focusRecord.at)
+    const target = records[props.focusRecord.index]
+    if (target) setOpenKey(target.key)
+  }
 
   const sharedErrors: Record<string, string[]> = {}
   records.forEach((_, i) => {
@@ -193,98 +225,160 @@ export default function RecordsEditor(props: Props) {
     },
   })
 
+  /** The fields of one record: opened from its row, or alone when there is only one. */
+  const editor = (record: RecordState, index: number) => {
+    const rowProblems = problems(index)
+    const grid = isRebound ? gridOf(record.payload) : null
+    const id = `${idPrefix}-r${index}`
+    const hide = [...layout.shared, ...(isRebound ? ['rejected_reading_indices'] : [])]
+    return (
+      <div className="space-y-3">
+        {otherErrors(rowProblems).length > 0 && (
+          <ul role="alert" className="space-y-0.5">
+            {otherErrors(rowProblems).map((row, i) => (
+              <li key={i} className="text-xs text-destructive">
+                {row.path ? `${row.path}: ` : ''}{row.message}
+              </li>
+            ))}
+          </ul>
+        )}
+        <SchemaFields
+          schema={method.payload_schema}
+          root={method.payload_schema}
+          value={record.payload}
+          onChange={(payload) => update(record.key, { payload })}
+          idPrefix={id}
+          layout={layout}
+          errors={payloadErrors(rowProblems)}
+          hide={hide}
+          overrides={recordOverrides(record)}
+        />
+        <PositionField
+          id={`${id}-position`}
+          position={record.position}
+          onChange={(position) => update(record.key, { position })}
+          onPick={() => props.onPickPoint(record.key)}
+          gridCentre={grid !== null}
+          required={method.position_required}
+          errors={rowProblems.filter((p) => p.path.startsWith('position')).map((p) => p.message)}
+          help={help('PositionInput', 'description')}
+        />
+        <DerivedField
+          id={`${id}-derived`}
+          method={method}
+          quantities={props.quantities}
+          value={record.derived}
+          onChange={(derived) => update(record.key, { derived })}
+          errors={rowProblems.filter((p) => p.path.startsWith('derived')).map((p) => p.message)}
+        />
+        {!props.single && (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" className="h-8 text-xs"
+              onClick={() => {
+                const copy = repeatedRecord(method, record)
+                onRecords([...records.slice(0, index + 1), copy, ...records.slice(index + 1)])
+                setOpenKey(copy.key)
+              }}>
+              <Copy className="mr-1 h-3.5 w-3.5" />Add another like this
+            </Button>
+            {records.length > 1 && (
+              <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground"
+                onClick={() => { onRecords(records.filter((r) => r.key !== record.key)); setOpenKey(null) }}>
+                <Trash2 className="mr-1 h-3.5 w-3.5" />Remove this {layout.recordLabel}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const sharedBlock = layout.shared.length > 0 && (
+    <FoldCard
+      title={`Used for every ${layout.recordLabel}`}
+      open={sharedOpen}
+      onOpenChange={setSharedOpen}
+      state={props.sharedState}
+      summary={`${filled(shared)} value${filled(shared) === 1 ? '' : 's'} filled in`}
+    >
+      <SchemaFields
+        schema={method.payload_schema}
+        root={method.payload_schema}
+        value={shared}
+        onChange={onShared}
+        idPrefix={`${idPrefix}-shared`}
+        layout={layout}
+        errors={sharedErrors}
+        only={layout.shared}
+      />
+    </FoldCard>
+  )
+
+  if (props.single && records[0]) {
+    return (
+      <div className="space-y-4">
+        {sharedBlock}
+        {editor(records[0], 0)}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
-      {layout.shared.length > 0 && (
-        <fieldset className="space-y-3 rounded-md border border-border/70 p-3">
-          <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Used for every {layout.recordLabel}
-          </legend>
-          <SchemaFields
-            schema={method.payload_schema}
-            root={method.payload_schema}
-            value={shared}
-            onChange={onShared}
-            idPrefix={`${idPrefix}-shared`}
-            layout={layout}
-            errors={sharedErrors}
-            only={layout.shared}
-          />
-        </fieldset>
-      )}
+      {sharedBlock}
 
-      {records.map((record, index) => {
-        const rowProblems = problems(index)
-        const grid = isRebound ? gridOf(record.payload) : null
-        const id = `${idPrefix}-r${index}`
-        const hide = [...layout.shared, ...(isRebound ? ['rejected_reading_indices'] : [])]
-        return (
-          <fieldset key={record.key} className="space-y-3 rounded-md border border-border p-3">
-            <legend className="px-1 text-sm font-semibold capitalize">
-              {layout.recordLabel} {index + 1}
-            </legend>
-            {otherErrors(rowProblems).length > 0 && (
-              <ul role="alert" className="space-y-0.5">
-                {otherErrors(rowProblems).map((row, i) => (
-                  <li key={i} className="text-xs text-destructive">
-                    {row.path ? `${row.path}: ` : ''}{row.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <SchemaFields
-              schema={method.payload_schema}
-              root={method.payload_schema}
-              value={record.payload}
-              onChange={(payload) => update(record.key, { payload })}
-              idPrefix={id}
-              layout={layout}
-              errors={payloadErrors(rowProblems)}
-              hide={hide}
-              overrides={recordOverrides(record)}
-            />
-            <PositionField
-              id={`${id}-position`}
-              position={record.position}
-              onChange={(position) => update(record.key, { position })}
-              onPick={() => props.onPickPoint(record.key)}
-              gridCentre={grid !== null}
-              required={method.position_required}
-              errors={rowProblems.filter((p) => p.path.startsWith('position')).map((p) => p.message)}
-              help={help('PositionInput', 'description')}
-            />
-            <DerivedField
-              id={`${id}-derived`}
-              method={method}
-              quantities={props.quantities}
-              value={record.derived}
-              onChange={(derived) => update(record.key, { derived })}
-              errors={rowProblems.filter((p) => p.path.startsWith('derived')).map((p) => p.message)}
-            />
-            {!props.single && (
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" className="h-8 text-xs"
-                onClick={() => onRecords([...records.slice(0, index + 1), repeatedRecord(method, record), ...records.slice(index + 1)])}>
-                <Copy className="mr-1 h-3.5 w-3.5" />Add another like this
-              </Button>
-              {records.length > 1 && (
-                <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground"
-                  onClick={() => onRecords(records.filter((r) => r.key !== record.key))}>
-                  <Trash2 className="mr-1 h-3.5 w-3.5" />Remove this {layout.recordLabel}
-                </Button>
-              )}
-            </div>
-            )}
-          </fieldset>
-        )
-      })}
+      <div className="overflow-hidden rounded-md border border-border">
+        <div className="hidden grid-cols-[2.5rem_minmax(0,1.2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_1.5rem] items-center gap-3 border-b border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground sm:grid">
+          <span>#</span><span className="capitalize">{layout.recordLabel}</span><span>Where</span><span>Values</span><span />
+        </div>
+        <ul className="divide-y divide-border">
+          {records.map((record, index) => {
+            const row = recordRow(method.name, record, index)
+            const isOpen = openKey === record.key
+            const missing = props.missing(index)
+            const server = problems(index)
+            const flagged = missing.length + server.length
+            const empty = isBlank(record.payload.readings) && isBlank(getAt(record.payload, ['specimen', 'measured_diameter_mm']))
+            return (
+              <li key={record.key} id={`${idPrefix}-row-${index}`} className={cn(isOpen && 'bg-muted/20')}>
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpenKey(isOpen ? null : record.key)}
+                  className="grid w-full grid-cols-[2rem_minmax(0,1fr)_1.5rem] items-center gap-x-3 gap-y-0.5 px-3 py-2 text-left sm:grid-cols-[2.5rem_minmax(0,1.2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_1.5rem]"
+                >
+                  <span className="row-span-2 self-center text-sm font-semibold tabular-nums text-muted-foreground sm:row-span-1">
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 truncate text-sm font-medium">{row.title}</span>
+                  <span className="col-start-3 row-start-1 flex justify-end sm:col-start-5">
+                    {flagged > 0 && !empty ? (
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-label={`${flagged} to look at`} />
+                    ) : (
+                      <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', !isOpen && '-rotate-90')} aria-hidden />
+                    )}
+                  </span>
+                  <span className="col-start-2 min-w-0 truncate text-xs text-muted-foreground sm:col-start-3 sm:text-sm">
+                    {row.where || <span className="italic">no place yet</span>}
+                  </span>
+                  <span className="col-start-2 min-w-0 truncate text-xs text-muted-foreground sm:col-start-4 sm:text-sm">
+                    {row.facts.join('; ')}
+                  </span>
+                </button>
+                {isOpen && <div className="border-t border-border/60 bg-background px-3 py-3">{editor(record, index)}</div>}
+              </li>
+            )
+          })}
+        </ul>
+      </div>
 
-      {!props.single && (
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" className="h-8 text-xs"
           onClick={() => {
             const last = records[records.length - 1]
-            onRecords([...records, last ? repeatedRecord(method, last) : { ...repeatedRecord(method, records[0]), key: newKey() }])
+            const fresh = last ? repeatedRecord(method, last) : { ...repeatedRecord(method, records[0]), key: newKey() }
+            onRecords([...records, fresh])
+            setOpenKey(fresh.key)
           }}>
           <Plus className="mr-1 h-3.5 w-3.5" />Add a {layout.recordLabel}
         </Button>
@@ -292,7 +386,6 @@ export default function RecordsEditor(props: Props) {
           <Crosshair className="mr-1 h-3.5 w-3.5" />Add test locations from a grid on the model
         </Button>
       </div>
-      )}
     </div>
   )
 }

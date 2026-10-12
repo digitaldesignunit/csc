@@ -44,6 +44,8 @@ export FRONTEND_URL="https://2ndchances.build"
 # proxy. Optional.
 export CSC_PUBLIC_API_URL="https://api.2ndchances.build"
 export CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de"
+# datasets a non-admin account may create (default 3; admins: unlimited)
+export CSC_MAX_DATASETS_PER_USER="3"
 
 # Filesystem paths
 # shipped with each release (grasshopper_userobjects_xml)

@@ -30,12 +30,12 @@ def run(name, *args, **kwargs):
 # BUILDERS --------------------------------------------------------------------
 def test_actor_component():
     result, obj, _ = run('Actor', None, None, 'Ada', 'Lab GmbH', None, None,
-                         None, 'operator')
+                         None, 'operator', None)
     assert json.loads(result) == b.actor(name='Ada', organization='Lab GmbH',
                                          role='operator')
     assert compstub.messages(obj)['error'] == []
     bad, obj, _ = run('Actor', 'user', None, None, None, None, None, None,
-                      None)
+                      None, False)
     assert bad == '' and 'UserID' in compstub.messages(obj)['error'][0]
 
 

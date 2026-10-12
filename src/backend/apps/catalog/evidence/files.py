@@ -129,6 +129,26 @@ def place_copy(copy: StoredCopy, root: str, record_id: str, index: int
     return dest
 
 
+def link_file(root: str, from_id: str, from_index: int, to_id: str,
+              to_index: int, media_type: str) -> bool:
+    """One stored file of a record, linked (else copied) into another
+    record's folder under its own index: a correction takes over the files
+    of what it corrects (8.142 a), and every record still owns its file.
+    False when the source file is not there."""
+    source = file_path(root, from_id, from_index, media_type)
+    if not os.path.exists(source):
+        return False
+    dest = file_path(root, to_id, to_index, media_type)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    if os.path.exists(dest):
+        os.remove(dest)
+    try:
+        os.link(source, dest)
+    except OSError:
+        shutil.copy2(source, dest)
+    return True
+
+
 def discard_temp(copy: StoredCopy) -> None:
     try:
         os.remove(copy.path)

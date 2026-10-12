@@ -27,7 +27,13 @@ from pydantic import ValidationError
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.documents import Actor
 from apps.catalog.evidence import files as evidence_files
-from apps.catalog.lifecycle import patch_problems, transition_action
+from apps.catalog.evidence.payloads import LayoutDocument
+from apps.catalog.lifecycle import (
+    LAYOUT_DOCUMENT_FILLABLE,
+    empty_layout_document_fields,
+    patch_problems,
+    transition_action,
+)
 from apps.catalog.models import User
 from apps.catalog.permissions import dataset_roles
 from apps.catalog.vocab import VERIFICATION_STATES
@@ -42,6 +48,7 @@ from .access import (
 from .auth import get_current_active_user
 from .catalog_common import now_iso
 from .change_log import log_change
+from .profiles import fill_actors
 from .evidence_fold import recompute_properties
 from .evidence_service import (
     EvidenceCreate,
@@ -360,6 +367,25 @@ async def reinstate_evidence(
 
 
 # CORRECTION ------------------------------------------------------------------
+def _carry_attachments(request: Request, old: Dict[str, Any], new_id: str
+                       ) -> list:
+    """The attachments of ``old`` that were not removed, as entries of the
+    correction ``new_id`` (new indices from 0), each file linked, else
+    copied, into the new record's folder. An entry whose file is gone is
+    left out."""
+    root = request.app.evidence_attachments_dir
+    carried: list = []
+    for entry in old.get('attachments') or []:
+        if entry.get('removed'):
+            continue
+        index = len(carried)
+        if not evidence_files.link_file(root, old['_id'], entry['index'],
+                                        new_id, index, entry['media_type']):
+            continue
+        carried.append({**entry, 'index': index, 'removed': None})
+    return carried
+
+
 @router.post('/evidence/{evidence_id}/supersede', status_code=201,
              summary='Correct a published record (a new pending record)')
 async def supersede_evidence(
@@ -388,9 +414,24 @@ async def supersede_evidence(
     await _open_correction(request, old['_id'])
     prepared = await prepare(request, identity, client_data(body),
                              exclude=(old['_id'],))
-    doc = new_evidence_doc(identity['_id'], prepared, body, current_user,
-                           status='pending', supersedes=old['_id'])
-    await request.app.mongodb_component_evidence.insert_one(dict(doc))
+    doc = new_evidence_doc(
+        identity['_id'], prepared, body, current_user, status='pending',
+        supersedes=old['_id'],
+        performers=await fill_actors(
+            request, [a.model_dump(mode='json') for a in body.performed_by]))
+    # the files of what is corrected go with it (8.142 a); the author removes
+    # one or adds new ones while the correction waits
+    carried = await asyncio.to_thread(_carry_attachments, request, old,
+                                      doc['_id'])
+    if carried:
+        doc = validated_doc({**doc, 'attachments': carried})
+    try:
+        await request.app.mongodb_component_evidence.insert_one(dict(doc))
+    except Exception:
+        await asyncio.to_thread(evidence_files.remove_record_files,
+                                request.app.evidence_attachments_dir,
+                                doc['_id'])
+        raise
     return await _ok(request, current_user, doc, identity, status=201)
 
 
@@ -455,6 +496,27 @@ async def put_verification(
     return await _ok(request, current_user, updated, identity)
 
 
+def _document_fill(record: Dict[str, Any], body: Dict[str, Any]
+                   ) -> Optional[Dict[str, Any]]:
+    """What a PATCH of a published reinforcement layout fills into its
+    ``payload.document`` (8.142 b): the sent fields, when the body is a
+    ``payload`` that holds nothing but a ``document`` of the five known
+    fields; None for any other body (it takes the ordinary path, where a
+    frozen field answers 409)."""
+    payload = body.get('payload')
+    if record.get('method') != 'reinforcement_layout' \
+            or record.get('status') != 'published' \
+            or not isinstance(payload, dict) or set(payload) != {'document'} \
+            or not isinstance(payload['document'], dict):
+        return None
+    given = payload['document']
+    unknown = sorted(set(given) - LAYOUT_DOCUMENT_FILLABLE)
+    if unknown:
+        raise problem_http('payload.document',
+                           f'unknown fields {", ".join(unknown)}')
+    return given
+
+
 # EDIT, DELETE ----------------------------------------------------------------
 @router.patch('/evidence/{evidence_id}',
               summary='Edit a record; per-field permission (8.3, I13)')
@@ -485,10 +547,17 @@ async def patch_evidence(
     roles = dataset_roles(viewer, dataset)
     fields = {k: (list(v) if k == 'position' and isinstance(v, dict) else [])
               for k, v in body.items()}
+    fillable: Any = ()
+    document_fill = _document_fill(record, body)
+    if document_fill is not None:
+        # a published layout: the empty fields of the document, once (8.142 b)
+        fields['payload'] = [f'document.{name}' for name in document_fill]
+        fillable = empty_layout_document_fields(record.get('payload'))
     problems = patch_problems(
         'evidence', fields, status=record.get('status'),
         is_author=current_user.id == record.get('recorded_by_user_id'),
-        is_moderator=viewer.is_admin or 'moderator' in roles)
+        is_moderator=viewer.is_admin or 'moderator' in roles,
+        fillable=fillable)
     if problems.get('derived'):
         raise HTTPException(status_code=422, detail={
             'message': 'Server-maintained fields cannot be set.',
@@ -503,6 +572,18 @@ async def patch_evidence(
     now = now_iso()
     if record.get('status') in ('published', 'withdrawn'):
         updated = {**record}
+        if document_fill is not None:
+            merged = {**((record.get('payload') or {}).get('document') or {}),
+                      **document_fill}
+            try:
+                document = LayoutDocument.model_validate(merged)
+            except ValidationError as exc:
+                raise problem_http('payload.document',
+                                   exc.errors()[0]['msg']) from exc
+            updated['payload'] = {
+                **(record.get('payload') or {}),
+                'document': document.model_dump(mode='json',
+                                                exclude_none=True)}
         if 'notes' in body:
             updated['notes'] = body['notes']
         if isinstance(body.get('position'), dict):
@@ -527,6 +608,7 @@ async def patch_evidence(
         except ValidationError as exc:
             raise problem_http(
                 'performed_by', exc.errors()[0]['msg']) from exc
+        performers = await fill_actors(request, performers)       # 8.133 e
         prepared = await prepare(request, identity, data,
                                  exclude=(record['_id'],))
         updated = {**record, **prepared.fields, 'performed_by': performers,

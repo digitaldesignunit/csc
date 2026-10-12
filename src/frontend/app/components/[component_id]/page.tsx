@@ -15,7 +15,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 type PageParams = { component_id: string }
-type PageSearchParams = { snapshots?: string }
+type PageSearchParams = { snapshot?: string; snapshots?: string }
 
 export default async function ComponentDetailPage({
   params,
@@ -29,7 +29,9 @@ export default async function ComponentDetailPage({
   const base = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`
 
   const { component_id } = await params
-  const { snapshots: requestedSnapshotId } = await searchParams
+  // `?snapshot=<id>` opens that version; `?snapshots=<id>` is the older spelling of the same
+  const query = await searchParams
+  const requestedSnapshotId = query.snapshot ?? query.snapshots
 
   const fetchOpts = { cache: 'no-store' as const, headers: { cookie } }
 
@@ -54,7 +56,7 @@ export default async function ComponentDetailPage({
   // a piece the viewer cannot see is explained, not hidden (8.11, 8.17)
   if (res.status === 401) {
     const callback = requestedSnapshotId
-      ? `/components/${component_id}?snapshots=${encodeURIComponent(requestedSnapshotId)}`
+      ? `/components/${component_id}?snapshot=${encodeURIComponent(requestedSnapshotId)}`
       : `/components/${component_id}`
     return <ComponentAccessNotice kind="not-public" callbackUrl={callback} />
   }

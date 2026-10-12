@@ -13,7 +13,9 @@ the status stays as ``is_reserved``), anything ending in ``_user_id`` or
 ``_username`` (``added_by_user_id``, ``recorded_by_username``, ...). An actor
 (``performed_by``, ``assessed_by``, a verification's ``by``, a sampling's
 ``operator``) is a person or an organization: the organization stays, the name,
-ORCID, role and e-mail go. Free text (notes, reasons) is not scanned.
+ORCID, role and e-mail go. Free text (notes, reasons) is not scanned; the one
+exception is the ``accuracy_note`` of a reinforcement layout, which an
+anonymous caller does not get either (RL10).
 
 Pure functions over plain documents; no database, no request.
 """
@@ -37,6 +39,17 @@ def is_person_key(key: Any) -> bool:
         key in PERSON_KEYS or key.endswith(PERSON_SUFFIXES))
 
 
+# a reinforcement layout's free text on how exact the bars are: for signed-in
+# readers only (RL10, decision 8.142 / plan 0.6.1.0); it can name people or
+# places the way notes do
+LAYOUT_PRIVATE_KEYS = frozenset({'accuracy_note'})
+
+
+def is_layout_payload(value: dict) -> bool:
+    """The payload of a reinforcement layout: it has ``basis`` and ``bars``."""
+    return 'basis' in value and isinstance(value.get('bars'), list)
+
+
 def strip_actor(actor: Any) -> Any:
     """An actor without the person: the organization and its accreditation
     stay."""
@@ -53,8 +66,9 @@ def strip_people(value: Any) -> Any:
     if not isinstance(value, dict):
         return value
     out = {}
+    layout = is_layout_payload(value)
     for key, item in value.items():
-        if is_person_key(key):
+        if is_person_key(key) or (layout and key in LAYOUT_PRIVATE_KEYS):
             continue
         if key in ACTOR_FIELDS:
             out[key] = ([strip_actor(a) for a in item]

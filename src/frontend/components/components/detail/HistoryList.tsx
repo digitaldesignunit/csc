@@ -11,6 +11,7 @@
 import Link from 'next/link'
 import { Archive, Camera, FlaskConical, GitBranch, LogOut, Package, Sparkles, Wrench } from 'lucide-react'
 
+import IdChip from '@/components/common/IdChip'
 import { Badge } from '@/components/ui/badge'
 import {
   EVIDENCE_METHOD_LABELS,
@@ -130,7 +131,11 @@ function Row({ event }: { event: TimelineEvent | LineageEvent }) {
       <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
       <div className="min-w-0">
         <p>{text}</p>
-        <p className="text-xs text-muted-foreground">{when}</p>
+        <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          {when}
+          {e.record_id && event.kind === 'snapshot' && <IdChip id={e.record_id} kind="SnapshotID" />}
+          {e.record_id && event.kind === 'evidence' && e.method && <IdChip id={e.record_id} kind="RecordID" />}
+        </p>
       </div>
     </li>
   )
