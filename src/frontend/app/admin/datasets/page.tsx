@@ -1,40 +1,24 @@
 'use client'
 
 /**
- * Datasets (spec section 3.6, section 7.7): admin sees and creates all;
- * a moderator sees the datasets they moderate and manages them.
+ * Datasets (spec section 3.6, section 7.7, decision 8.139): admin sees all;
+ * a moderator sees the datasets they moderate and manages them. Anyone who
+ * moderates can start a new dataset; it waits for an administrator's review.
  */
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Database, Plus } from 'lucide-react'
+import { Database } from 'lucide-react'
 
+import NewDatasetDialog from '@/components/datasets/NewDatasetDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import type { DatasetView } from '@/generated/AccessModels'
 import { backendJson } from '@/lib/backend'
 import { browseUrl } from '@/lib/browse'
-import { datasetCounts } from '@/lib/datasets'
+import { awaitsReview, datasetCounts } from '@/lib/datasets'
 import { useMe } from '@/lib/me'
 
 export default function DatasetsPage() {
@@ -69,7 +53,7 @@ export default function DatasetsPage() {
           <Database className="h-6 w-6 text-primary" />
           <h1 className="text-xl font-bold sm:text-2xl">Datasets</h1>
         </div>
-        {isAdmin && <CreateDatasetDialog onCreated={(slug) => router.push(`/admin/datasets/${slug}`)} />}
+        <NewDatasetDialog onCreated={(slug) => router.push(`/admin/datasets/${encodeURIComponent(slug)}`)} />
       </div>
       <p className="text-sm text-muted-foreground">
         A dataset is a project: its members, their roles and who sees its components.
@@ -91,9 +75,16 @@ export default function DatasetsPage() {
                         {datasetCounts(dataset) && <>, {datasetCounts(dataset)}</>}
                       </div>
                     </div>
-                    <Badge variant={dataset.visibility === 'catalog' ? 'secondary' : 'outline'}>
-                      {dataset.visibility === 'catalog' ? 'Visible to signed-in users' : 'Members only'}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {awaitsReview(dataset) && (
+                        <Badge variant="outline" className="border-amber-400 text-amber-800 dark:text-amber-200">
+                          Awaiting review
+                        </Badge>
+                      )}
+                      <Badge variant={dataset.visibility === 'catalog' ? 'secondary' : 'outline'}>
+                        {dataset.visibility === 'catalog' ? 'Visible to signed-in users' : 'Members only'}
+                      </Badge>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                     {(isAdmin || moderates(dataset._id)) && (
@@ -112,75 +103,5 @@ export default function DatasetsPage() {
         </ul>
       )}
     </div>
-  )
-}
-
-function CreateDatasetDialog({ onCreated }: { onCreated: (slug: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const [slug, setSlug] = useState('')
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [visibility, setVisibility] = useState<'members' | 'catalog'>('members')
-  const [busy, setBusy] = useState(false)
-
-  const create = async () => {
-    setBusy(true)
-    try {
-      await backendJson('/datasets', {
-        method: 'POST',
-        body: { _id: slug.trim(), name: name.trim(), description: description.trim() || null, visibility },
-      })
-      toast.success(`Dataset ${name} created`)
-      setOpen(false)
-      onCreated(slug.trim())
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not create the dataset')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <>
-      <Button size="sm" onClick={() => setOpen(true)}><Plus className="mr-2 h-4 w-4" />New dataset</Button>
-      <Dialog open={open} onOpenChange={(next) => { if (!busy) setOpen(next) }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>New dataset</DialogTitle>
-            <DialogDescription>The short id cannot be changed later; the name can.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="ds-slug">Id</Label>
-              <Input id="ds-slug" value={slug} placeholder="e.g. lichtwiese_survey"
-                onChange={(event) => setSlug(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ds-name">Name</Label>
-              <Input id="ds-name" value={name} onChange={(event) => setName(event.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ds-description">Description</Label>
-              <Textarea id="ds-description" rows={2} value={description}
-                onChange={(event) => setDescription(event.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Who sees its components</Label>
-              <Select value={visibility} onValueChange={(v) => setVisibility(v as 'members' | 'catalog')}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="members">Members only</SelectItem>
-                  <SelectItem value="catalog">All signed-in users</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
-            <Button onClick={() => void create()} disabled={busy || !slug.trim() || !name.trim()}>Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
   )
 }

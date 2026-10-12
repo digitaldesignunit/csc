@@ -31,3 +31,33 @@ export function editBody(item: EvidenceBulkItem, method: MethodInfo): Record<str
   if (method.summary_from_client) body.summary = body.summary ?? null
   return body
 }
+
+type VerifiedRecord = {
+  recorded_by_user_id?: string | null
+  verification?: { state?: string | null } | null
+}
+
+/**
+ * What an edit does to the verification of the record, to say before saving
+ * (decision 8.127 note b; the rule of `PATCH /evidence/{id}`): a
+ * self-attested record whose recorder is no longer among the performers
+ * becomes unverified, and a reviewed or accredited record becomes
+ * unverified when the result changes. Empty when the edit leaves it alone.
+ */
+export function verificationNotices(record: VerifiedRecord, performerUserIds: string[]): string[] {
+  const state = record.verification?.state ?? 'unverified'
+  const notices: string[] = []
+  if (state === 'self_attested' && !performerUserIds.includes(record.recorded_by_user_id ?? '')) {
+    notices.push(
+      'This record is self-attested by its recorder. The recorder is no longer among the performers, so '
+      + 'saving resets the verification to unverified.',
+    )
+  }
+  if (state === 'reviewed' || state === 'accredited') {
+    notices.push(
+      `This record is ${state}. If you change its result, saving resets the verification to unverified; `
+      + 'a reviewer has to confirm it again.',
+    )
+  }
+  return notices
+}

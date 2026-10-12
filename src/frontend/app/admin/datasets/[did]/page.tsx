@@ -2,19 +2,24 @@
 
 /**
  * One dataset (moderator(D) and admin; spec section 7.7, decisions 8.14,
- * 8.20): its name, description and visibility, the member list with roles,
- * adding people by email (admin may search accounts), and its invitations.
+ * 8.20, 8.139): its name, description and visibility, the review switch
+ * (admin), the member list with roles, adding people by email (admin may
+ * search accounts), its invitations and, while it holds no piece, its
+ * deletion.
  */
 import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, Database, Globe, Lock, Search, Trash2, UserPlus } from 'lucide-react'
 
 import PublicConfirmDialog from '@/components/common/PublicConfirmDialog'
+import { useConfirm } from '@/components/common/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -41,7 +46,8 @@ import type {
   MemberByEmailResult,
   UserHit,
 } from '@/generated/AccessModels'
-import { backendJson } from '@/lib/backend'
+import { BackendError, backendJson } from '@/lib/backend'
+import { REVIEW_EXPLANATION, awaitsReview } from '@/lib/datasets'
 import { memberNotice } from '@/lib/mailResult'
 import { datasetPublicHelp, datasetPublicLabel } from '@/lib/publicSwitch'
 import { useMe } from '@/lib/me'
@@ -107,7 +113,7 @@ export default function DatasetPage({ params }: { params: Promise<{ did: string 
 
       {canManage ? (
         <>
-          <DatasetSettings dataset={dataset} onSaved={(next) => setDataset(next)} />
+          <DatasetSettings dataset={dataset} isAdmin={isAdmin} onSaved={(next) => setDataset(next)} />
           <PublicPiecesCard dataset={dataset} />
           <MembersCard dataset={dataset} isAdmin={isAdmin} onChanged={() => void afterMembers()} />
           <Card>
@@ -122,6 +128,7 @@ export default function DatasetPage({ params }: { params: Promise<{ did: string 
               <InvitationsTable invitations={invitations} showDataset={false} onChanged={() => void loadInvitations()} />
             </CardContent>
           </Card>
+          <DeleteDatasetCard dataset={dataset} />
         </>
       ) : (
         <Card>
@@ -134,12 +141,32 @@ export default function DatasetPage({ params }: { params: Promise<{ did: string 
   )
 }
 
-function DatasetSettings({ dataset, onSaved }: { dataset: DatasetView; onSaved: (d: DatasetView) => void }) {
+function DatasetSettings({ dataset, isAdmin, onSaved }: {
+  dataset: DatasetView
+  isAdmin: boolean
+  onSaved: (d: DatasetView) => void
+}) {
   const [name, setName] = useState(dataset.name)
   const [description, setDescription] = useState(dataset.description ?? '')
   const [visibility, setVisibility] = useState(dataset.visibility)
   const [busy, setBusy] = useState(false)
   const dirty = name !== dataset.name || description !== (dataset.description ?? '') || visibility !== dataset.visibility
+  const waiting = awaitsReview(dataset)
+  const [reviewBusy, setReviewBusy] = useState(false)
+
+  const setReviewed = async (reviewed: boolean) => {
+    setReviewBusy(true)
+    try {
+      onSaved(await backendJson<DatasetView>(`/datasets/${encodeURIComponent(dataset._id)}`, {
+        method: 'PATCH', body: { reviewed },
+      }))
+      toast.success(reviewed ? 'Marked as reviewed' : 'Marked as not reviewed')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not change the review')
+    } finally {
+      setReviewBusy(false)
+    }
+  }
 
   const save = async () => {
     setBusy(true)
@@ -162,6 +189,25 @@ function DatasetSettings({ dataset, onSaved }: { dataset: DatasetView; onSaved: 
         <CardTitle>Settings</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {waiting && !isAdmin && (
+          <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+            {REVIEW_EXPLANATION}
+          </p>
+        )}
+        {isAdmin && (
+          <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="ds-reviewed" className="text-sm font-medium">Reviewed</Label>
+              <p className="text-xs text-muted-foreground">
+                {waiting
+                  ? REVIEW_EXPLANATION
+                  : 'An administrator has looked at this dataset: it may be visible to all signed-in users and its pieces may be made public.'}
+              </p>
+            </div>
+            <Switch id="ds-reviewed" checked={!waiting} disabled={reviewBusy}
+              onCheckedChange={(on) => void setReviewed(on)} />
+          </div>
+        )}
         <div className="space-y-1">
           <Label htmlFor="ds-name">Name</Label>
           <Input id="ds-name" value={name} onChange={(event) => setName(event.target.value)} />
@@ -177,9 +223,12 @@ function DatasetSettings({ dataset, onSaved }: { dataset: DatasetView; onSaved: 
             <SelectTrigger className="w-full sm:w-80"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="members">Members only (and pieces marked public)</SelectItem>
-              <SelectItem value="catalog">All signed-in users</SelectItem>
+              <SelectItem value="catalog" disabled={waiting && dataset.visibility !== 'catalog'}>
+                All signed-in users
+              </SelectItem>
             </SelectContent>
           </Select>
+          {waiting && <p className="text-xs text-muted-foreground">Visible to all signed-in users needs the review (above).</p>}
         </div>
         <Button size="sm" onClick={() => void save()} disabled={busy || !dirty || !name.trim()}>Save</Button>
       </CardContent>
@@ -198,15 +247,17 @@ function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const path = `/datasets/${encodeURIComponent(dataset._id)}/public`
+  const waiting = awaitsReview(dataset)
 
   const count = useCallback(async () => {
+    if (waiting) return
     const ask = (isPublic: boolean) =>
       backendJson<{ changed: number }>(path, { method: 'POST', body: { is_public: isPublic, dry_run: true } })
         .then((r) => r.changed)
         .catch(() => null)
     const [toPublic, toPrivate] = await Promise.all([ask(true), ask(false)])
     setCounts({ toPublic, toPrivate })
-  }, [path])
+  }, [path, waiting])
 
   useEffect(() => {
     void count()
@@ -240,17 +291,22 @@ function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        {waiting && (
+          <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+            {REVIEW_EXPLANATION}
+          </p>
+        )}
         <div className="space-y-1">
-          <Button size="sm" variant="outline" disabled={busy || !counts.toPublic} onClick={() => setConfirm(true)}>
+          <Button size="sm" variant="outline" disabled={waiting || busy || !counts.toPublic} onClick={() => setConfirm(true)}>
             <Globe className="mr-1 h-3.5 w-3.5" />{datasetPublicLabel(true, counts.toPublic)}
           </Button>
-          <p className="text-xs text-muted-foreground">{datasetPublicHelp(counts.toPublic, true)}</p>
+          {!waiting && <p className="text-xs text-muted-foreground">{datasetPublicHelp(counts.toPublic, true)}</p>}
         </div>
         <div className="space-y-1">
-          <Button size="sm" variant="outline" disabled={busy || !counts.toPrivate} onClick={() => void apply(false)}>
+          <Button size="sm" variant="outline" disabled={waiting || busy || !counts.toPrivate} onClick={() => void apply(false)}>
             <Lock className="mr-1 h-3.5 w-3.5" />{datasetPublicLabel(false, counts.toPrivate)}
           </Button>
-          <p className="text-xs text-muted-foreground">{datasetPublicHelp(counts.toPrivate, false)}</p>
+          {!waiting && <p className="text-xs text-muted-foreground">{datasetPublicHelp(counts.toPrivate, false)}</p>}
         </div>
         <PublicConfirmDialog
           open={confirm}
@@ -260,6 +316,57 @@ function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
           confirmLabel="Make public"
           onConfirm={() => void apply(true)}
         />
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Deleting a dataset (decision 8.139 f): only while it holds no piece, by its
+ * moderator or an administrator; open invitations go with it. The API refuses
+ * a dataset with pieces and says how many: move them first.
+ */
+function DeleteDatasetCard({ dataset }: { dataset: DatasetView }) {
+  const router = useRouter()
+  const { refresh } = useMe()
+  const { confirm, dialog } = useConfirm()
+  const [busy, setBusy] = useState(false)
+
+  const remove = async () => {
+    const ok = await confirm({
+      title: `Delete ${dataset.name}?`,
+      description: 'The dataset and its open invitations are deleted. Its members keep their accounts. This cannot be undone.',
+      confirmLabel: 'Delete the dataset',
+      destructive: true,
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      await backendJson(`/datasets/${encodeURIComponent(dataset._id)}`, { method: 'DELETE' })
+      toast.success(`${dataset.name} deleted`)
+      await refresh()
+      router.push('/my-work')
+    } catch (err) {
+      toast.error(err instanceof BackendError ? err.message : 'Could not delete the dataset')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card>
+      {dialog}
+      <CardHeader>
+        <CardTitle>Delete this dataset</CardTitle>
+        <CardDescription>
+          Only possible while the dataset holds no piece: move its pieces to another dataset first. Open
+          invitations are revoked with it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button size="sm" variant="outline" className="text-destructive" disabled={busy} onClick={() => void remove()}>
+          <Trash2 className="mr-1 h-3.5 w-3.5" />Delete the dataset
+        </Button>
       </CardContent>
     </Card>
   )
@@ -275,8 +382,14 @@ function MembersCard({
   onChanged: () => void
 }) {
   const members = dataset.members ?? []
+  const { confirm, dialog } = useConfirm()
   const setRoles = async (member: DatasetMemberView, roles: DatasetRole[]) => {
-    if (roles.length === 0 && !window.confirm(`Remove ${member.username ?? member.email} from ${dataset.name}?`)) return
+    if (roles.length === 0 && !(await confirm({
+      title: `Remove ${member.username ?? member.email}?`,
+      description: `${member.username ?? member.email} loses every role in ${dataset.name} and no longer sees it.`,
+      confirmLabel: 'Remove',
+      destructive: true,
+    }))) return
     try {
       await backendJson(`/datasets/${encodeURIComponent(dataset._id)}/members/${member.user_id}`, {
         method: 'PUT',
@@ -298,6 +411,7 @@ function MembersCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {dialog}
         <AddMember dataset={dataset} isAdmin={isAdmin} onAdded={onChanged} />
         {members.length === 0 ? (
           <p className="text-sm text-muted-foreground">No members yet.</p>

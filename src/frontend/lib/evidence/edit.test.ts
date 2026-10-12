@@ -47,3 +47,30 @@ test('an emptied summary is cleared only for a method whose client sends it', ()
   assert.equal(editBody(ITEM, METHOD(true)).summary, null)
   assert.equal('summary' in editBody(ITEM, METHOD(false)), false)
 })
+
+test('a self-attested record without its recorder among the performers says that it is reset', async () => {
+  const { verificationNotices } = await import('./edit')
+  const record = { recorded_by_user_id: 'u1', verification: { state: 'self_attested' } }
+  assert.equal(verificationNotices(record, ['u1']).length, 0)
+  assert.equal(verificationNotices(record, ['u1', 'u2']).length, 0)
+  const reset = verificationNotices(record, ['u2'])
+  assert.equal(reset.length, 1)
+  assert.ok(reset[0].includes('self-attested') && reset[0].includes('unverified'))
+  assert.equal(verificationNotices(record, []).length, 1)
+})
+
+test('a reviewed or accredited record says that a changed result resets it', async () => {
+  const { verificationNotices } = await import('./edit')
+  for (const state of ['reviewed', 'accredited']) {
+    const notices = verificationNotices({ recorded_by_user_id: 'u1', verification: { state } }, ['u1'])
+    assert.equal(notices.length, 1, state)
+    assert.ok(notices[0].includes(state) && notices[0].includes('reviewer'))
+  }
+})
+
+test('an unverified record or one with no verification says nothing', async () => {
+  const { verificationNotices } = await import('./edit')
+  assert.deepEqual(verificationNotices({ recorded_by_user_id: 'u1', verification: { state: 'unverified' } }, []), [])
+  assert.deepEqual(verificationNotices({ recorded_by_user_id: 'u1' }, []), [])
+  assert.deepEqual(verificationNotices({ verification: null }, ['u1']), [])
+})

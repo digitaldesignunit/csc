@@ -7,6 +7,7 @@ import { Check, Send, X } from 'lucide-react'
 
 import ChipView from '@/components/common/ChipView'
 import ComponentPreviewImage from '@/components/components/ComponentPreviewImage'
+import YourDatasets from '@/components/datasets/YourDatasets'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -89,6 +90,7 @@ function MyWork() {
           <Reservations userId={me?._id ?? null} />
         </div>
         <div className="min-w-0 space-y-4">
+          <YourDatasets />
           <MyRecords enabled={Boolean(me)} />
           <Recent />
         </div>

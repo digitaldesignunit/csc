@@ -25,6 +25,7 @@ import {
 import { deleteEvidence, evidenceAction, type EvidenceVerb } from '@/lib/evidence/api'
 import { canEditEvidence } from '@/lib/evidence/edit'
 import { useMe } from '@/lib/me'
+import { useConfirm } from '@/components/common/ConfirmDialog'
 
 type Props = {
   record: {
@@ -47,6 +48,7 @@ export default function EvidenceLifecycleActions({ record, dataset, onChanged, s
   const { me, moderates, rolesIn } = useMe()
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<'reject' | 'withdraw' | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   if (!me) return null
   const isAuthor = record.recorded_by_user_id === me._id
@@ -72,7 +74,12 @@ export default function EvidenceLifecycleActions({ record, dataset, onChanged, s
   const quiet = (fn: () => Promise<void>) => () => { fn().catch(() => undefined) }
 
   const remove = async () => {
-    if (!window.confirm('Delete this record? This cannot be undone.')) return
+    if (!(await confirm({
+      title: 'Delete this record?',
+      description: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    }))) return
     setBusy(true)
     try {
       await deleteEvidence(record._id)
@@ -181,6 +188,7 @@ export default function EvidenceLifecycleActions({ record, dataset, onChanged, s
 
   return (
     <>
+      {confirmDialog}
       {variant === 'menu' ? menu : <div className="flex flex-wrap items-center gap-1">{buttons}</div>}
       <ReasonDialog
         open={dialog === 'reject'}

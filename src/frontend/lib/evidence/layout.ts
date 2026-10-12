@@ -20,8 +20,12 @@ export type MethodLayout = {
   shared: string[]
   /** Payload paths (dotted) emptied when a record is repeated or cloned. */
   blankOnRepeat: string[]
-  /** Payload paths holding a date: shown as date inputs. */
+  /** Payload paths holding a day: shown as a date field (8.143). */
   dateFields: string[]
+  /** Payload paths holding a year, month or day (flexible dates): a date field with a precision choice. */
+  flexDateFields: string[]
+  /** The payload path of a record's own name in the records table (a test area's label). */
+  labelPath?: string
   /** Payload paths shown as a multi-line text. */
   longText: string[]
   /** Payload paths the server reads as the record's dates: a date is sent as a UTC midnight. */
@@ -44,7 +48,9 @@ export const LAYOUTS: Record<string, MethodLayout> = {
       'test_area.member_thickness_mm',
     ],
     dateFields: ['instrument.last_calibration_at', 'instrument.anvil_check.before.performed_at',
-      'instrument.anvil_check.after.performed_at'],
+      'instrument.anvil_check.after.performed_at', 'instrument.anvil_check.second_anvil.performed_at'],
+    flexDateFields: [],
+    labelPath: 'test_area.label',
     longText: ['deviations'],
     timestampFields: [],
   },
@@ -71,6 +77,8 @@ export const LAYOUTS: Record<string, MethodLayout> = {
       'deviations',
     ],
     dateFields: ['sampling.cored_at', 'test.tested_at', 'test.machine.last_calibration_at'],
+    flexDateFields: [],
+    labelPath: 'specimen.label',
     longText: ['deviations', 'specimen.defects_note'],
     timestampFields: ['sampling.cored_at', 'test.tested_at'],
   },
@@ -80,6 +88,7 @@ export const LAYOUTS: Record<string, MethodLayout> = {
     shared: [],
     blankOnRepeat: [],
     dateFields: [],
+    flexDateFields: [],
     longText: [],
     timestampFields: [],
   },
@@ -88,7 +97,8 @@ export const LAYOUTS: Record<string, MethodLayout> = {
     recordLabel: 'claim',
     shared: [],
     blankOnRepeat: ['claim', 'document.title', 'document.reference'],
-    dateFields: [],
+    dateFields: ['document.retrieved_at'],
+    flexDateFields: ['document.date'],
     longText: ['claim.interpretation'],
     timestampFields: [],
   },
@@ -98,6 +108,7 @@ export const LAYOUTS: Record<string, MethodLayout> = {
     shared: [],
     blankOnRepeat: [],
     dateFields: [],
+    flexDateFields: [],
     longText: [],
     timestampFields: [],
   },
@@ -107,6 +118,7 @@ export const LAYOUTS: Record<string, MethodLayout> = {
     shared: [],
     blankOnRepeat: [],
     dateFields: [],
+    flexDateFields: [],
     longText: [],
     timestampFields: [],
   },
@@ -115,7 +127,8 @@ export const LAYOUTS: Record<string, MethodLayout> = {
     recordLabel: 'layout',
     shared: [],
     blankOnRepeat: ['bars', 'document.title', 'document.reference'],
-    dateFields: ['instrument.last_calibration_at'],
+    dateFields: ['instrument.last_calibration_at', 'document.retrieved_at'],
+    flexDateFields: ['document.date'],
     longText: ['accuracy_note'],
     timestampFields: [],
   },
@@ -128,6 +141,7 @@ export function layoutOf(method: string): MethodLayout {
     shared: [],
     blankOnRepeat: [],
     dateFields: [],
+    flexDateFields: [],
     longText: [],
     timestampFields: [],
   }

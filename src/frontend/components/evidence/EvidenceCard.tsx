@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { ChevronDown, ChevronRight, MapPin, TriangleAlert } from 'lucide-react'
 
 import EvidenceAttachments from '@/components/evidence/EvidenceAttachments'
+import LayoutDetails from '@/components/evidence/LayoutDetails'
 import EvidenceLifecycleActions from '@/components/moderation/EvidenceLifecycleActions'
 import VerificationPanel from '@/components/moderation/VerificationPanel'
 import { Badge } from '@/components/ui/badge'
@@ -127,6 +128,10 @@ export default function EvidenceCard({
                 <span className="text-muted-foreground"> (read {formatDateAtPrecision(cited.retrievedAt, cited.retrievedAt.length === 4 ? 'year' : cited.retrievedAt.length === 7 ? 'month' : 'day')})</span>
               ) : null}
             </p>
+          )}
+
+          {record.method === 'reinforcement_layout' && (
+            <LayoutDetails record={record} dataset={dataset} onChanged={onChanged} />
           )}
 
           {facts.length > 0 && (

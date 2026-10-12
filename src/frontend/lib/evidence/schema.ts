@@ -102,7 +102,9 @@ const UNIT_WORDS: Record<string, string> = {
 
 /** "Min Spacing Mm" --> "Min spacing mm": sentence case, units as written. */
 export function labelOf(key: string, resolved: Resolved): string {
-  const source = resolved.title || key.replace(/_/g, ' ')
+  const title = resolved.title || key.replace(/_/g, ' ')
+  // a class name used as a title ("ReboundInstrument") reads as words
+  const source = /\s/.test(title) ? title : title.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
   const words = source.split(/\s+/).filter(Boolean)
   return words
     .map((word, i) => {

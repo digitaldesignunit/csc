@@ -22,11 +22,13 @@ import PublicConfirmDialog from '@/components/common/PublicConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { OptionalDateInput } from '@/components/ui/optional-date-input'
+import { DateField } from '@/components/ui/date-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { backendJson, isTombstone } from '@/lib/backend'
+import type { DatasetView } from '@/generated/AccessModels'
+import { REVIEW_EXPLANATION, awaitsReview } from '@/lib/datasets'
 import { creditInputProblem } from '@/lib/photoCredit'
 import { canSwitchPublic } from '@/lib/publicSwitch'
 import { useMe } from '@/lib/me'
@@ -64,6 +66,8 @@ export default function EditSnapshotForm({
   const [isPublic, setIsPublic] = useState(false)
   const [publicBusy, setPublicBusy] = useState(false)
   const [confirmPublic, setConfirmPublic] = useState(false)
+  // a dataset that waits for an administrator's review has no public pieces yet (8.139 c)
+  const [datasetReviewed, setDatasetReviewed] = useState(true)
   const enc = encodeURIComponent(identityId)
 
   // the piece and its versions, once
@@ -84,6 +88,17 @@ export default function EditSnapshotForm({
     load().catch((err) => { if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load the component') })
     return () => { cancelled = true }
   }, [enc, snapshotId])
+
+  // whether the dataset of the piece was reviewed
+  const datasetId = identity?.dataset
+  useEffect(() => {
+    if (!datasetId) return
+    let cancelled = false
+    backendJson<DatasetView>(`/datasets/${encodeURIComponent(datasetId)}`)
+      .then((row) => { if (!cancelled) setDatasetReviewed(!awaitsReview(row)) })
+      .catch(() => { if (!cancelled) setDatasetReviewed(true) })
+    return () => { cancelled = true }
+  }, [datasetId])
 
   // the version on screen
   useEffect(() => {
@@ -231,8 +246,12 @@ export default function EditSnapshotForm({
               A public piece is visible to everyone without an account. It applies to the whole piece
               and takes effect at once; it needs no version change.
             </p>
+            {!datasetReviewed && !isPublic && (
+              <p className="text-xs text-amber-800 dark:text-amber-300">{REVIEW_EXPLANATION}</p>
+            )}
           </div>
-          <Switch id="ed-public" checked={isPublic} disabled={publicBusy} onCheckedChange={onPublicSwitch} />
+          <Switch id="ed-public" checked={isPublic} disabled={publicBusy || (!datasetReviewed && !isPublic)}
+            onCheckedChange={onPublicSwitch} />
         </section>
       )}
       <PublicConfirmDialog
@@ -305,8 +324,10 @@ export default function EditSnapshotForm({
                 onChange={(event) => setFields({ software: event.target.value })} />
             </Field>
             <fieldset disabled={fixed('captured_at')} className="min-w-0">
-              <OptionalDateInput id="ed-captured" label="Captured on" value={values.capturedAt}
-                onChange={(value) => setFields({ capturedAt: value })} />
+              <Field label="Captured on" htmlFor="ed-captured">
+                <DateField id="ed-captured" value={values.capturedAt} disabled={fixed('captured_at')}
+                  onChange={(value) => setFields({ capturedAt: value })} />
+              </Field>
               {fixed('captured_at') && <p className="mt-1.5 text-xs text-muted-foreground">{readOnlyHint}</p>}
             </fieldset>
           </div>

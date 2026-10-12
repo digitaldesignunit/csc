@@ -79,7 +79,7 @@ test('the photo credit is sent when it changed, and cleared by an empty text (8.
   assert.equal('photo_credit' in editPatch(s, before, before)!, false)
   const set = editPatch(s, before, { ...before, creditText: ' Photo: archive ', creditUrl: ' https://x.org ' })!
   assert.deepEqual(set.photo_credit, { text: 'Photo: archive', url: 'https://x.org' })
-  const withCredit = snapshot({ photo_credit: { text: 'Photo: archive', url: 'https://x.org' } } as Partial<ComponentSnapshot>)
+  const withCredit = snapshot({ photo_credit: { text: 'Photo: archive', url: 'https://x.org' } })
   const had = editValuesOf(withCredit)
   assert.equal(had.creditUrl, 'https://x.org')
   assert.equal(editPatch(withCredit, had, had)!.photo_credit, undefined)

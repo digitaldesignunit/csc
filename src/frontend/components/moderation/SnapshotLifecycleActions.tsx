@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import ReasonDialog from '@/components/moderation/ReasonDialog'
 import { backendJson } from '@/lib/backend'
 import { useMe } from '@/lib/me'
+import { useConfirm } from '@/components/common/ConfirmDialog'
 
 export type LifecycleSnapshot = {
   _id: string
@@ -58,6 +59,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
   const { me, moderates, rolesIn } = useMe()
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<'reject' | 'withdraw' | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   if (!me) return null
   const isAuthor = !!snapshot.added_by_user_id && snapshot.added_by_user_id === me._id
@@ -81,7 +83,12 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
   }
 
   const remove = async () => {
-    if (!window.confirm(`Delete v${snapshot.version} and its files? This cannot be undone.`)) return
+    if (!(await confirm({
+      title: `Delete v${snapshot.version}?`,
+      description: 'The version and its files are deleted. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    }))) return
     setBusy(true)
     try {
       await backendJson(`/snapshots/${snapshot._id}`, { method: 'DELETE' })
@@ -187,6 +194,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
 
   return (
     <>
+      {confirmDialog}
       <div className="flex flex-wrap items-center gap-1" onClick={(event) => event.stopPropagation()}>
         {buttons}
       </div>

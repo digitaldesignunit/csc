@@ -33,7 +33,7 @@ export default function ComponentPhotosLocationCard({ catalog }: { catalog: Cata
         compact
         embedded
         allowUpload={snapshot.status !== 'published'}
-        credit={(snapshot as { photo_credit?: unknown }).photo_credit}
+        credit={snapshot.photo_credit}
       />
       <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border/60 pt-2 text-xs">
         <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

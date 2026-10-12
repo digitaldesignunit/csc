@@ -11,8 +11,10 @@
 # backend tarball:  backend/ (src/backend + static/ghxml from the XML exports),
 #                   deploy/ (server scripts and the maintenance page), VERSION
 # frontend zip:     csc-frontend-standalone/ (Next standalone + static + public)
-# gh zip:           "CSC Grasshopper Interface <version>"/ (UserObjects, examples,
-#                   the library folder csc_gh, README, LICENSE)
+# gh zip:           "CSC Grasshopper Interface <version>"/ (UserObjects, the examples,
+#                   the interface file DDU_CSC_GrasshopperInterface_<x>.gh with the
+#                   highest x not newer than <version>, the library folder csc_gh,
+#                   README, LICENSE)
 
 set -euo pipefail
 
@@ -22,6 +24,29 @@ outdir="$(mkdir -p "${3:?outdir}" && cd "$3" && pwd)"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
+
+# The interface file of a release: the highest version x of
+# grasshopper_release/DDU_CSC_GrasshopperInterface_<x>.gh that is not newer
+# than <version>. The Example_NN files are no versions and stay out; an older
+# interface file is never shipped next to the right one.
+pick_interface() {
+  local want="$1" dir="$2" best="" file v
+  for file in "$dir"/DDU_CSC_GrasshopperInterface_*.gh; do
+    [ -e "$file" ] || continue
+    v="${file##*/DDU_CSC_GrasshopperInterface_}"; v="${v%.gh}"
+    [[ "$v" =~ ^[0-9]+(\.[0-9]+){1,3}$ ]] || continue
+    # v <= want
+    [ "$(printf '%s\n%s\n' "$v" "$want" | sort -V | tail -n1)" = "$want" ] || continue
+    if [ -z "$best" ] || [ "$(printf '%s\n%s\n' "$best" "$v" | sort -V | tail -n1)" = "$v" ]; then
+      best="$v"
+    fi
+  done
+  [ -n "$best" ] || {
+    echo "no grasshopper_release/DDU_CSC_GrasshopperInterface_<x>.gh with x <= $want: add the interface file of this release" >&2
+    return 1
+  }
+  printf '%s\n' "$best"
+}
 
 case "$part" in
   backend)
@@ -74,6 +99,8 @@ case "$part" in
     mkdir -p "$stage/$name/UserObjects"
     cp "$root"/grasshopper_userobjects/*.ghuser "$stage/$name/UserObjects/"
     cp "$root"/grasshopper_release/DDU_CSC_GrasshopperInterface_Example_*.gh "$stage/$name/"
+    interface="$(pick_interface "$version" "$root/grasshopper_release")" || exit 1
+    cp "$root/grasshopper_release/DDU_CSC_GrasshopperInterface_$interface.gh" "$stage/$name/"
     # the shared library (decision 8.111): a first install by hand copies this
     # folder to %APPDATA%\McNeel\Rhinoceros\8.0\scripts\csc_gh; CSC_Update
     # installs and updates it from the server afterwards

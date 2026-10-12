@@ -193,8 +193,10 @@ export type BuildContext = {
 
 function positionBody(position: PositionState, method: MethodInfo, ctx: BuildContext): Record<string, unknown> | undefined {
   if (method.name === 'reinforcement_layout') {
+    // the bars carry their own positions in the stored coordinates of this
+    // version: the position names the version and nothing else (8.142 c)
     return {
-      kind: 'region', snapshot_id: ctx.snapshotId,
+      kind: 'none', snapshot_id: ctx.snapshotId,
       description: position.description.trim() || undefined,
     }
   }

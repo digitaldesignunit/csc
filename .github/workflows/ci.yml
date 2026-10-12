@@ -112,6 +112,7 @@ jobs:
       - run: sudo apt-get install -y shellcheck
       - run: shellcheck -S warning uberspaceconfig/deployment/*.sh scripts/ci/*.sh
       - run: bash scripts/ci/test_release_deploy.sh
+      - run: bash scripts/ci/test_package_gh.sh
 
   frontend:
     name: Frontend

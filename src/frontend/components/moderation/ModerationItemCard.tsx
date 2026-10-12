@@ -13,6 +13,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ExternalLink, type LucideIcon } from 'lucide-react'
 
+import { useConfirm } from '@/components/common/ConfirmDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -57,6 +58,7 @@ export default function ModerationItemCard({
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [more, setMore] = useState(false)
+  const { confirm, dialog } = useConfirm()
 
   const execute = async (action: CardAction, given: string) => {
     setBusy(true)
@@ -77,7 +79,15 @@ export default function ModerationItemCard({
       setText('')
       return
     }
-    if (action.confirm && !window.confirm(action.confirm)) return
+    if (action.confirm) {
+      void confirm({
+        title: 'Are you sure?',
+        description: action.confirm,
+        confirmLabel: action.label,
+        destructive: action.kind === 'destructive' || action.kind === 'icon',
+      }).then((ok) => { if (ok) void execute(action, '') })
+      return
+    }
     void execute(action, '')
   }
 
@@ -85,6 +95,7 @@ export default function ModerationItemCard({
 
   return (
     <Card>
+      {dialog}
       <CardContent className="space-y-3 p-4 text-sm">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1.5 sm:flex-1">
