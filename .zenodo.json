@@ -55,7 +55,38 @@
     "architectural components",
     "building components"
   ],
-  "license": "MIT",
+  "license": "mit-license",
   "language": "eng",
-  "access_right": "open"
+  "access_right": "open",
+  "dates": [
+    {
+      "type": "Created",
+      "start": "2024-02-22",
+      "end": "2024-02-22",
+      "description": "Project initiation and initial commit"
+    },
+    {
+      "type": "Available",
+      "start": "2026-05-13",
+      "end": "2026-05-13",
+      "description": "Publishing of Repository and Zenodo DOI acquisition"
+    }
+  ],
+  "custom": {
+    "code:codeRepository": "https://github.com/digitaldesignunit/csc",
+    "code:programmingLanguage": [
+      {
+        "id": "python"
+      },
+      {
+        "id": "c#"
+      },
+      {
+        "id": "typescript"
+      }
+    ],
+    "code:developmentStatus": {
+      "id": "active"
+    }
+  }
 }
