@@ -425,7 +425,11 @@ def bump_version(c, version, gh=False):
     with open(changelog, encoding='utf-8') as fh:
         has_section = f'## [{version}]' in fh.read()
     if not has_section:
-        _rewrite(changelog, r'^## \[', f'## [{version}] - unreleased\n\n## [')
+        # keep the file's own line endings (CHANGELOG.md is CRLF)
+        with open(changelog, 'rb') as fh:
+            eol = '\r\n' if b'\r\n' in fh.read() else '\n'
+        _rewrite(changelog, r'^## \[',
+                 f'## [{version}] - unreleased{eol}{eol}## [')
     if gh:
         session = os.path.join(REPO_DIR, 'grasshopper_userobjects_src',
                                'DDU_CSC_Session.py')
