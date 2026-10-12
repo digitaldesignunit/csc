@@ -840,7 +840,7 @@ travels (hosted URL on the public static host vs. inline CID attachment; many cl
 mode in mail clients; an admin preview and "send me a test mail" page; which further mails come with 0.6.1.0
 (e.g. moderation outcome, reservation notices) so the template covers them.
 
-**Toolchain leftovers after phase F (2026-10-12):** `next` 16.3.8 --> 16.4.x as a small separate bump (build and
+**Toolchain leftovers after phase F (2026-10-12; done in a phase F addendum the same day, user):** `next` 16.3.8 --> 16.4.x as a small separate bump (build and
 restart); remove the unused native `bcrypt` dependency (nothing imports it, `npm ci` builds it for nothing). The
 server runs Node 22.23.2 (user 2026-10-12; Next 16 needs >= 20.9; noted in the deployment README). Since
 phase F `images.unoptimized` is true everywhere and `sharp` is excluded from the standalone trace: its prebuilt
