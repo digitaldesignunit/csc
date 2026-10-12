@@ -841,8 +841,8 @@ mode in mail clients; an admin preview and "send me a test mail" page; which fur
 (e.g. moderation outcome, reservation notices) so the template covers them.
 
 **Toolchain leftovers after phase F (2026-10-12):** `next` 16.3.8 --> 16.4.x as a small separate bump (build and
-restart); remove the unused native `bcrypt` dependency (nothing imports it, `npm ci` builds it for nothing); note in
-HANDOFF / the deployment README that Next 16 needs Node >= 20.9 on the server and which Node the server runs. Since
+restart); remove the unused native `bcrypt` dependency (nothing imports it, `npm ci` builds it for nothing). The
+server runs Node 22.23.2 (user 2026-10-12; Next 16 needs >= 20.9; noted in the deployment README). Since
 phase F `images.unoptimized` is true everywhere and `sharp` is excluded from the standalone trace: its prebuilt
 binaries need glibc >= 2.25 (0.33 / 0.34) or 2.28 (0.35), the server has 2.17, so it never loaded there; revisit only
 with a server move.
