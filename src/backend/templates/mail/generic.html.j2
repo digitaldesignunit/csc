@@ -1,0 +1,6 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import p %}
+{% block body %}
+{% for paragraph in paragraphs %}{% call p() %}{{ paragraph }}{% endcall %}
+{% endfor %}
+{% endblock %}

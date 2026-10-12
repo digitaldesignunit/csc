@@ -1,0 +1,6 @@
+{% extends "base.txt.j2" %}
+{% block body -%}
+Hello {{ full_name or "there" }},
+
+{{ by_name }} added you{% if dataset_name %} to the dataset "{{ dataset_name }}" as {{ roles|join(", ") if roles else "member" }}{% endif %} in the Catalog of Second Chances.
+{%- endblock %}

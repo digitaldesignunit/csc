@@ -1,11 +1,13 @@
 #!/usr/bin/env python3.13
 """
-Mail of the catalog (decision 8.124): verification, password reset,
-invitation and "added to a dataset", all from one template.
+Mail of the catalog (decisions 8.124 and 8.138): verification, password reset,
+invitation, "added to a dataset" and the admin's "dataset created" notice.
 
-* One template: plain text + HTML, English, the blue CI colour, the subject
-  prefix ``[CSC]`` and a footer that says why the address got the mail and
-  links the imprint and the privacy notice. Every value that goes into the HTML is escaped.
+* Jinja2 templates in ``templates/mail/``: one layout (``base``) and one
+  template per mail, each as HTML and plain text. English, the site's colour
+  theme, no logo and no image; the subject prefix ``[CSC]`` and a footer that
+  says why the address got the mail and links the imprint and the privacy
+  notice. Every value that goes into the HTML is escaped.
 * One sender: ``From`` is ``SMTP_FROM_NAME <SMTP_FROM_EMAIL>`` (the noreply
   mailbox). ``Reply-To`` is the acting moderator for the invitation and the
   member notice, and ``SMTP_REPLY_TO`` (the support address) for the
@@ -17,7 +19,6 @@ invitation and "added to a dataset", all from one template.
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import html
 import os
 import secrets
 import smtplib
@@ -25,10 +26,18 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formataddr
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
+# THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
+from jinja2 import (
+    Environment,
+    FileSystemLoader,
+    StrictUndefined,
+    select_autoescape,
+)
+
 SUBJECT_PREFIX = '[CSC]'
-CI_BLUE = '#4080ff'
 
 
 # CONFIGURATION ---------------------------------------------------------------
@@ -75,7 +84,7 @@ def get_token_expiry(hours: int = 24) -> datetime:
     return datetime.now(timezone.utc) + timedelta(hours=hours)
 
 
-# THE TEMPLATE ----------------------------------------------------------------
+# THE TEMPLATES ---------------------------------------------------------------
 
 @dataclass
 class Mail:
@@ -87,13 +96,53 @@ class Mail:
     reply_to: Optional[str] = None       # "Name <address>" or an address
 
 
+# The mails are Jinja2 files (decision 8.138 e): templates/mail/base.html.j2
+# and base.txt.j2 are the layout, <kind>.html.j2 and <kind>.txt.j2 the words of
+# one mail. HTML templates are autoescaped, the text ones are not (a plain-text
+# mail must not show "&amp;"). A value a template lacks is an error, not a gap.
+TEMPLATE_DIR = Path(__file__).resolve().parents[1] / 'templates' / 'mail'
+
+_ENV = Environment(
+    loader=FileSystemLoader(str(TEMPLATE_DIR)),
+    autoescape=select_autoescape(enabled_extensions=('html.j2',),
+                                 default_for_string=False, default=False),
+    undefined=StrictUndefined,
+    keep_trailing_newline=True,
+)
+
+
 def _base(config: Dict[str, str]) -> str:
     return (config.get('frontend_url') or 'http://localhost:3000').rstrip('/')
 
 
-def _e(value) -> str:
-    """HTML-escape one inserted value (text and attribute positions)."""
-    return html.escape(str(value if value is not None else ''), quote=True)
+def render_mail(kind: str, config: Dict[str, str], *, to: str, subject: str,
+                title: str, reason: str, preheader: str = '',
+                button: Optional[tuple] = None,
+                reply_to: Optional[str] = None,
+                replies_reach: Optional[str] = None, **context) -> Mail:
+    """Render ``templates/mail/<kind>.html.j2`` and ``.txt.j2`` into one
+    mail. ``button`` is ``(label, url)``; ``reason`` completes "You received
+    this email because ..."; ``replies_reach`` says who a reply reaches (given
+    with ``reply_to``). The values in ``context`` are the words of the mail;
+    the HTML escapes them, the text does not. Plain text and HTML say the
+    same."""
+    footer = f'You received this email because {reason}.'
+    if reply_to and replies_reach:
+        footer += f' Replies to this email reach {replies_reach}.'
+    values = {
+        'title': title,
+        'preheader': preheader,
+        'button_label': button[0] if button else '',
+        'button_url': button[1] if button else '',
+        'footer': footer,
+        'imprint_url': f'{_base(config)}/imprint',
+        'privacy_url': f'{_base(config)}/privacy',
+        **context,
+    }
+    text = _ENV.get_template(f'{kind}.txt.j2').render(**values).strip() + '\n'
+    page = _ENV.get_template(f'{kind}.html.j2').render(**values)
+    return Mail(to=to, subject=f'{SUBJECT_PREFIX} {subject}', text=text,
+                html=page, reply_to=reply_to)
 
 
 def render(config: Dict[str, str], *, subject: str, title: str,
@@ -101,66 +150,12 @@ def render(config: Dict[str, str], *, subject: str, title: str,
            button: Optional[tuple] = None, to: str,
            reply_to: Optional[str] = None,
            replies_reach: Optional[str] = None) -> Mail:
-    """The one template. ``paragraphs`` and ``title`` are plain text and are
-    escaped here; ``button`` is ``(label, url)``; ``reason`` completes "You
-    received this email because ..."; ``replies_reach`` says who a reply
-    reaches (given with ``reply_to``). Plain text and HTML say the same."""
-    imprint = f'{_base(config)}/imprint'
-    privacy = f'{_base(config)}/privacy'
-    footer = f'You received this email because {reason}.'
-    if reply_to and replies_reach:
-        footer += f' Replies to this email reach {replies_reach}.'
-    text_parts = [title, '']
-    for paragraph in paragraphs:
-        text_parts += [paragraph, '']
-    if button:
-        text_parts += [f'{button[0]}:', button[1], '']
-    text_parts += ['--', footer, f'Catalog of Second Chances. Imprint: {imprint}'
-                   f' Privacy: {privacy}']
-    text = '\n'.join(text_parts) + '\n'
-
-    body = ''.join(f'<p style="margin: 0 0 16px;">{_e(p)}</p>'
-                   for p in paragraphs)
-    link = ''
-    if button:
-        link = (
-            '<p style="text-align: center; margin: 28px 0;">'
-            f'<a href="{_e(button[1])}" style="background-color: {CI_BLUE}; '
-            'color: #ffffff; padding: 12px 30px; text-decoration: none; '
-            'border-radius: 6px; display: inline-block; font-weight: bold; '
-            f'font-size: 16px;">{_e(button[0])}</a></p>'
-            '<p style="margin: 0 0 16px; font-size: 13px; color: #555; '
-            f'word-break: break-all;">{_e(button[1])}</p>')
-    page = (
-        '<!DOCTYPE html><html><head><meta charset="UTF-8">'
-        '<meta name="viewport" content="width=device-width, '
-        'initial-scale=1.0">'
-        f'<title>{_e(title)}</title></head>'
-        '<body style="margin: 0; padding: 20px; background-color: #f4f6fb; '
-        'font-family: Arial, Helvetica, sans-serif; line-height: 1.6; '
-        'color: #1f2937;">'
-        '<div style="max-width: 600px; margin: 0 auto; background-color: '
-        '#ffffff; border: 1px solid #dde3ef; border-top: 4px solid '
-        f'{CI_BLUE}; border-radius: 8px; padding: 28px;">'
-        f'<h1 style="color: {CI_BLUE}; font-size: 22px; margin: 0 0 20px;">'
-        f'{_e(title)}</h1>{body}{link}'
-        '<hr style="border: none; border-top: 1px solid #dde3ef; '
-        'margin: 28px 0 16px;">'
-        f'<p style="margin: 0; font-size: 12px; color: #555;">{_e(footer)}'
-        '<br>Catalog of Second Chances &middot; '
-        f'<a href="{_e(imprint)}" style="color: {CI_BLUE};">Imprint</a>'
-        ' &middot; '
-        f'<a href="{_e(privacy)}" style="color: {CI_BLUE};">Privacy</a></p>'
-        '</div></body></html>')
-    return Mail(to=to, subject=f'{SUBJECT_PREFIX} {subject}', text=text,
-                html=page, reply_to=reply_to)
-
-
-def _roles_phrase(dataset_name, roles) -> str:
-    if not dataset_name:
-        return ''
-    roles_text = ', '.join(roles) if roles else 'member'
-    return f' to the dataset "{dataset_name}" as {roles_text}'
+    """A mail made of plain paragraphs (the ``generic`` template): for a mail
+    that has no template of its own yet. Escaped like the others."""
+    return render_mail(
+        'generic', config, to=to, subject=subject, title=title, reason=reason,
+        button=button, reply_to=reply_to, replies_reach=replies_reach,
+        paragraphs=list(paragraphs))
 
 
 def _support(config: Dict[str, str]) -> Dict[str, Optional[str]]:
@@ -178,42 +173,31 @@ def _address(name: Optional[str], email: Optional[str]) -> Optional[str]:
     return formataddr((name or '', email)) if name else email
 
 
-# THE FOUR MAILS --------------------------------------------------------------
+# THE MAILS -------------------------------------------------------------------
 
 def verification_mail(config: Dict[str, str], to: str, full_name: str,
                       token: str) -> Mail:
     url = f'{_base(config)}/auth/verify-email?token={token}'
-    return render(
-        config, to=to, subject='Verify your email address',
+    return render_mail(
+        'verification', config, to=to, subject='Verify your email address',
         title='Welcome to the Catalog of Second Chances',
-        paragraphs=[
-            f'Hello {full_name or "there"},',
-            'Thank you for registering. To activate your account, verify '
-            'your email address with the link below. The link expires in '
-            '24 hours.',
-            'If you did not create an account, you can ignore this email.'],
+        preheader='Verify your email address to activate your account.',
         button=('Verify email address', url),
         reason='someone registered an account with this address',
-        **_support(config))
+        full_name=full_name, **_support(config))
 
 
 def reset_mail(config: Dict[str, str], to: str, full_name: str,
                token: str) -> Mail:
     url = f'{_base(config)}/auth/reset-password?token={token}'
-    return render(
-        config, to=to, subject='Reset your password',
+    return render_mail(
+        'reset', config, to=to, subject='Reset your password',
         title='Reset your password',
-        paragraphs=[
-            f'Hello {full_name or "there"},',
-            'A password reset was requested for the account with this '
-            'address. Choose a new password with the link below. The '
-            'link works once and expires in one hour.',
-            'If you did not ask for this, you can ignore this email: your '
-            'password stays as it is.'],
+        preheader='Choose a new password. The link works once.',
         button=('Choose a new password', url),
         reason='a password reset was requested for the account with this '
                'address',
-        **_support(config))
+        full_name=full_name, **_support(config))
 
 
 def invitation_mail(config: Dict[str, str], to: str, code: str,
@@ -222,58 +206,94 @@ def invitation_mail(config: Dict[str, str], to: str, code: str,
     """The single-use registration link of an invitation (8.14). The link
     goes to the mailbox only, never to the inviter's screen."""
     url = f'{_base(config)}/auth/register?code={code}'
-    return render(
-        config, to=to, subject='You are invited to the Catalog of Second '
-                               'Chances',
+    return render_mail(
+        'invitation', config, to=to,
+        subject='You are invited to the Catalog of Second Chances',
         title='You are invited',
-        paragraphs=[
-            'Hello,',
-            f'{inviter_name} has invited you to the Catalog of Second '
-            f'Chances{_roles_phrase(dataset_name, roles)}.',
-            'Register with this email address using the link below. The '
-            f'link works once and expires on {expires_at[:10]}.',
-            'If you did not expect this invitation, you can ignore this '
-            'email.'],
+        preheader=f'{inviter_name} invited you to the Catalog of Second '
+                  'Chances.',
         button=('Register', url),
         reason=f'{inviter_name} invited this address to the Catalog of '
                'Second Chances',
         reply_to=_address(inviter_name, inviter_email),
-        replies_reach=inviter_name)
+        replies_reach=inviter_name,
+        inviter_name=inviter_name, dataset_name=dataset_name or '',
+        roles=list(roles or []), expires_on=expires_at[:10])
 
 
 def member_added_mail(config: Dict[str, str], to: str, full_name: str,
                       dataset_name: str, roles, by_name: str,
                       by_email: Optional[str]) -> Mail:
     """Tell an existing account it was added to a dataset (8.20)."""
-    return render(
-        config, to=to, subject='You were added to a dataset',
+    return render_mail(
+        'member_added', config, to=to, subject='You were added to a dataset',
         title='Added to a dataset',
-        paragraphs=[
-            f'Hello {full_name or "there"},',
-            f'{by_name} added you{_roles_phrase(dataset_name, roles)} in '
-            'the Catalog of Second Chances.'],
+        preheader=f'{by_name} added you to a dataset.',
         button=('Open the catalog', _base(config)),
         reason=f'{by_name} added the account with this address to the '
                f'dataset "{dataset_name}"',
-        reply_to=_address(by_name, by_email),
-        replies_reach=by_name)
+        reply_to=_address(by_name, by_email), replies_reach=by_name,
+        full_name=full_name, by_name=by_name,
+        dataset_name=dataset_name or '', roles=list(roles or []))
 
 
 def dataset_created_mail(config: Dict[str, str], to: str, dataset_name: str,
                          slug: str, by_name: str, by_email: Optional[str]
                          ) -> Mail:
     """Tell an admin that an account created a dataset (8.139 i)."""
-    return render(
-        config, to=to, subject='A dataset was created',
+    return render_mail(
+        'dataset_created', config, to=to, subject='A dataset was created',
         title='Dataset created',
-        paragraphs=[
-            f'{by_name} created the dataset "{dataset_name}" ({slug}).',
-            'It is visible to its members only, and its pieces cannot be '
-            'made public until you have reviewed it.'],
+        preheader=f'{by_name} created the dataset "{dataset_name}".',
         button=('Open the dataset', f'{_base(config)}/admin/datasets/{slug}'),
         reason='you are an admin of the Catalog of Second Chances',
-        reply_to=_address(by_name, by_email),
-        replies_reach=by_name)
+        reply_to=_address(by_name, by_email), replies_reach=by_name,
+        by_name=by_name, dataset_name=dataset_name, slug=slug)
+
+
+# PREVIEW (the admin page "Mail templates") -----------------------------------
+
+# the mails that exist, in the order the admin page shows them
+MAIL_KINDS: List[Dict[str, str]] = [
+    {'kind': 'verification', 'label': 'Verify your email address',
+     'when': 'After registering: the link that activates the account.'},
+    {'kind': 'reset', 'label': 'Reset your password',
+     'when': 'After "Forgot password": a single-use link.'},
+    {'kind': 'invitation', 'label': 'Invitation',
+     'when': 'A moderator invites an address to a dataset.'},
+    {'kind': 'member_added', 'label': 'Added to a dataset',
+     'when': 'An existing account is added to a dataset.'},
+    {'kind': 'dataset_created', 'label': 'Dataset created (admin notice)',
+     'when': 'Sent to every admin when an account creates a dataset.'},
+]
+
+# invented: sample data never holds a real person
+SAMPLE_PERSON = 'Ada Lovelace'
+SAMPLE_INVITER = 'Charles Babbage'
+SAMPLE_INVITER_ADDRESS = 'charles.babbage@example.org'
+
+
+def sample_mail(config: Dict[str, str], kind: str, to: str) -> Mail:
+    """The mail ``kind`` with invented data, built by the real builder (so
+    the preview is the mail that goes out). Raises ``KeyError`` for a name
+    that is not a mail."""
+    builders = {
+        'verification': lambda: verification_mail(
+            config, to, SAMPLE_PERSON, 'sample-token'),
+        'reset': lambda: reset_mail(
+            config, to, SAMPLE_PERSON, 'sample-token'),
+        'invitation': lambda: invitation_mail(
+            config, to, 'SAMPLE-CODE', SAMPLE_INVITER, SAMPLE_INVITER_ADDRESS,
+            'Sample dataset', ['contributor', 'reviewer'],
+            '2026-12-31T00:00:00Z'),
+        'member_added': lambda: member_added_mail(
+            config, to, SAMPLE_PERSON, 'Sample dataset', ['contributor'],
+            SAMPLE_INVITER, SAMPLE_INVITER_ADDRESS),
+        'dataset_created': lambda: dataset_created_mail(
+            config, to, 'Sample dataset', 'sample_dataset', SAMPLE_INVITER,
+            SAMPLE_INVITER_ADDRESS),
+    }
+    return builders[kind]()
 
 
 # SENDING (blocking: call it off the event loop) -------------------------------

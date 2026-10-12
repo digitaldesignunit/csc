@@ -1,0 +1,62 @@
+{#- The one layout of every mail (decision 8.138 e): a table layout with inline
+    styles for mail clients, the site's light theme (page #f2f2f2, white card,
+    black text, #d9d9d9 borders), the DDU magenta as the accent and the button,
+    the DDU blue for links. No logo, no image, nothing loaded from outside; the
+    wordmark is text. Both colours of an element are always set, so a client
+    that inverts colours keeps the contrast, and a small dark scheme for the
+    clients that ask for one. White on #ef509c is 3.3:1 (below the 4.5:1 for
+    16 px text), black on it is 6.3:1: the button text is black. -#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{ title }}</title>
+<style>
+:root { color-scheme: light dark; supported-color-schemes: light dark; }
+@media (prefers-color-scheme: dark) {
+  .page { background-color: #0d1117 !important; color: #e6edf3 !important; }
+  .card { background-color: #151b23 !important; border-color: #3d444d !important; color: #e6edf3 !important; }
+  .rule { border-color: #3d444d !important; }
+  .ink { color: #e6edf3 !important; }
+  .muted { color: #9198a1 !important; }
+  .link { color: #4080ff !important; }
+}
+</style>
+</head>
+<body class="page" style="margin: 0; padding: 0; background-color: #f2f2f2; color: #000000; font-family: Arial, Helvetica, sans-serif;">
+{%- if preheader %}
+<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all; font-size: 1px; line-height: 1px; color: #f2f2f2;">{{ preheader }}</div>
+{%- endif %}
+<table role="presentation" class="page" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f2f2f2" style="background-color: #f2f2f2;">
+<tr><td align="center" style="padding: 24px 12px;">
+<table role="presentation" class="card" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width: 100%; max-width: 600px; background-color: #ffffff; border: 1px solid #d9d9d9; border-top: 6px solid #ef509c; border-radius: 8px;">
+<tr><td style="padding: 22px 28px 0 28px;">
+<span class="ink" style="font-size: 13px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; color: #000000;">Catalog of Second Chances</span>
+</td></tr>
+<tr><td class="ink" style="padding: 12px 28px 8px 28px; color: #000000;">
+<h1 class="ink" style="margin: 0 0 18px 0; font-size: 22px; line-height: 1.3; color: #000000;">{{ title }}</h1>
+{% block body %}{% endblock %}
+{%- if button_label and button_url %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 26px auto 18px auto;">
+<tr><td align="center" bgcolor="#ef509c" style="background-color: #ef509c; border-radius: 6px;">
+<a href="{{ button_url }}" style="display: inline-block; padding: 13px 30px; font-size: 16px; font-weight: bold; line-height: 1.2; text-decoration: none; color: #000000; background-color: #ef509c; border-radius: 6px;">{{ button_label }}</a>
+</td></tr>
+</table>
+<p class="muted" style="margin: 0 0 8px 0; font-size: 13px; line-height: 1.5; color: #333333;">Or copy this link into your browser:</p>
+<p style="margin: 0 0 16px 0; font-size: 13px; line-height: 1.5; word-break: break-all;"><a class="link" href="{{ button_url }}" style="color: #0000ff;">{{ button_url }}</a></p>
+{%- endif %}
+</td></tr>
+<tr><td style="padding: 8px 28px 24px 28px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="rule" style="border-top: 1px solid #d9d9d9; padding-top: 16px;">
+<p class="muted" style="margin: 0 0 8px 0; font-size: 12px; line-height: 1.5; color: #333333;">{{ footer }}</p>
+<p class="muted" style="margin: 0; font-size: 12px; line-height: 1.5; color: #333333;">Catalog of Second Chances &middot; <a class="link" href="{{ imprint_url }}" style="color: #0000ff;">Imprint</a> &middot; <a class="link" href="{{ privacy_url }}" style="color: #0000ff;">Privacy</a></p>
+</td></tr></table>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{% extends "base.txt.j2" %}
+{% block body -%}
+{% for paragraph in paragraphs %}{{ paragraph }}
+{% if not loop.last %}
+{% endif %}{% endfor %}
+{%- endblock %}

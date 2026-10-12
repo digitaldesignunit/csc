@@ -1,0 +1,8 @@
+{% extends "base.txt.j2" %}
+{% block body -%}
+Hello {{ full_name or "there" }},
+
+A password reset was requested for the account with this address. Choose a new password with the link below. The link works once and expires in one hour.
+
+If you did not ask for this, you can ignore this email: your password stays as it is.
+{%- endblock %}
