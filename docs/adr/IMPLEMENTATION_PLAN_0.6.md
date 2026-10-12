@@ -771,7 +771,7 @@ bases, retention, recipients incl. the hosting and database providers, rights)
 and link it from the footer, the registration form and the mails. The cookie notice shrinks to what is true: the
 site stores only what it needs (session, theme, banner state); no consent banner while nothing else is stored. The legal text needs a check by the university's data protection office.
 
-**Credits page revision** (user 2026-10-10): the ZirKuS paragraph gains the DBU funding logo (the "sponsored by"
+**Credits page revision** (user 2026-10-10; narrowed 2026-10-12: in 0.6.1.0 only the DBU "sponsored by" logo and reformatted funding statements; the partners' logos and the thank-you notice wait for their consent): the ZirKuS paragraph gains the DBU funding logo (the "sponsored by"
 variant, as the funder's guidelines ask; files in the gitignored `reference/zirkus_logos_refs/`, copied into
 `public/` as needed) and a notice thanking all project partners for their support and valuable feedback during
 development, with the partners' logos (five files there). The page itself gets the 0.6 style (theme colours instead
