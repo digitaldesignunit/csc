@@ -748,7 +748,8 @@ lag and the transitive geometry pins), since its own deploy depends on them.
 - **D, web:** evidence forms 8.134 (with h); edge distance 8.135; preview and id chips 8.141; swimlane 8.140; RL3;
   HKS map basis and level 1 curve; provenance dialog gaps and `Actor.url`; privacy page; credits page (partner
   names, links and consent from the user).
-- **E, logo and mails 8.138:** the coordinator drafts the three concepts when the user asks (not in parallel with A).
+- **E, mail templates (8.138 e as amended):** Jinja2 templates, HTML and text, the site's colour theme, no logo or
+  image; the logo moved to `FUTURE.md` (user 2026-10-12).
 - **F, toolchain:** lint refactor and lint packages 16.4; npm audit with a glibc 2.17 server build test.
 
 **Atlas traffic (2026-10-10, at the front with the deploy fixes and 8.136):** since the cutover the primary's
@@ -838,6 +839,16 @@ Grill: template files (e.g. Jinja2 under `src/backend/templates/mail/`) instead 
 travels (hosted URL on the public static host vs. inline CID attachment; many clients block remote images); dark
 mode in mail clients; an admin preview and "send me a test mail" page; which further mails come with 0.6.1.0
 (e.g. moderation outcome, reservation notices) so the template covers them.
+
+**HKS v2 (0.6.2, user 2026-10-12, research item next to O25):** the pooled HKS of `apps/descriptors/hks.py` carries
+little meaning: with M-orthonormal eigenvectors the mass-weighted mean per time is the heat trace over the area,
+`sum_i exp(-lambda_i t) / A`, whose leading term after area normalisation is the same for every shape; 64 eigenpairs
+truncate the short times; the global L2 normalisation lets the mean half dominate the variance half. 0.6.1.0 hides
+the HKS curve card (code kept behind a flag) and drops HKS from the selectable map bases (the cache may keep it). v2:
+store per-point values (also for the level 2 heat map); pool the distribution of the log HKS per time (e.g. 10 / 50
+/ 90 % quantiles) standardised per time across the catalogue, no global L2; consider ShapeDNA (the first k
+eigenvalues over the first, already computed). Adopt only after a retrieval check (nearest neighbours of reference
+pieces look sensible); new `HKS_VERSION`, recompute through the runner.
 
 **Candidates already logged elsewhere, to sort into 0.6.1.0 or later:** O26 (user-created datasets); the IFC export
 (above); HKS as a component map basis (above) and the HKS visualisation in the viewer (level 1: the HKS curve in a
