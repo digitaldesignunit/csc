@@ -840,6 +840,13 @@ travels (hosted URL on the public static host vs. inline CID attachment; many cl
 mode in mail clients; an admin preview and "send me a test mail" page; which further mails come with 0.6.1.0
 (e.g. moderation outcome, reservation notices) so the template covers them.
 
+**Toolchain leftovers after phase F (2026-10-12):** `next` 16.3.8 --> 16.4.x as a small separate bump (build and
+restart); remove the unused native `bcrypt` dependency (nothing imports it, `npm ci` builds it for nothing); note in
+HANDOFF / the deployment README that Next 16 needs Node >= 20.9 on the server and which Node the server runs. Since
+phase F `images.unoptimized` is true everywhere and `sharp` is excluded from the standalone trace: its prebuilt
+binaries need glibc >= 2.25 (0.33 / 0.34) or 2.28 (0.35), the server has 2.17, so it never loaded there; revisit only
+with a server move.
+
 **HKS v2 (0.6.2, user 2026-10-12, research item next to O25):** the pooled HKS of `apps/descriptors/hks.py` carries
 little meaning: with M-orthonormal eigenvectors the mass-weighted mean per time is the heat trace over the area,
 `sum_i exp(-lambda_i t) / A`, whose leading term after area normalisation is the same for every shape; 64 eigenpairs
