@@ -22,13 +22,23 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyClientMaxBodySize: '26mb',
   },
+  // The server (Uberspace 7: CentOS 7, glibc 2.17) cannot load sharp: the
+  // libvips binaries of every sharp since 0.33 need glibc 2.25 (0.35: 2.28)
+  // and libstdc++ 3.4.22. So the app never uses Next's image optimizer: every
+  // image is served as it is (`unoptimized`), and `next/image` only keeps the
+  // markup (size, lazy loading). Catalogue files (previews, photos, meshes,
+  // proxies, capture fixtures) are never fetched from a static host; they come
+  // through the authenticated /snapshots/... routes of the API (decision
+  // 8.125 a), which serve public pieces to anonymous callers too.
   images: {
-    // No remote image host: catalogue files (previews, photos, meshes,
-    // proxies, capture fixtures) are never fetched from a static host. They
-    // come through the authenticated /snapshots/... routes of the API
-    // (decision 8.125 a), which serve public pieces to anonymous callers too.
-    // Disable image optimization for local development and problematic images
-    unoptimized: process.env.NODE_ENV === 'development',
+    unoptimized: true,
+  },
+  // ... and the bundle does not carry sharp and its native libvips (about
+  // 19 MB on the Linux build) that nothing can load on the server. The
+  // "next-server" key is the trace of the server itself, which pulls sharp in
+  // for the optimizer (Next leaves it out only on its own platform).
+  outputFileTracingExcludes: {
+    'next-server': ['**/node_modules/sharp/**/*', '**/node_modules/@img/**/*'],
   },
   // `2ndchances.build` is the canonical origin. NextAuth v4 anchors every
   // absolute auth URL to the single `NEXTAUTH_URL`, so the legacy host cannot

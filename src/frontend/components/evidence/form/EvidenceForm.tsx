@@ -193,7 +193,11 @@ export default function EvidenceForm({
     return () => { cancelled = true }
   }, [correctId, editing, corrected])
 
-  const method = registry?.methods.find((m) => m.name === state?.method) ?? null
+  const methodName = state?.method
+  const method = useMemo(
+    () => registry?.methods.find((m) => m.name === methodName) ?? null,
+    [registry, methodName],
+  )
   const layout = method ? layoutOf(method.name) : null
   const actorRoot = useMemo(() => (registry ? actorRootOf(registry.methods) : null), [registry])
   // a component whose first version is not published has no state to record evidence about

@@ -163,7 +163,9 @@ export default function SwimlaneGraph({
     if (!placed || !target || !frame.current) { setTip(null); return }
     const box = target.getBoundingClientRect()
     const host = frame.current.getBoundingClientRect()
-    setTip({ placed, left: box.left - host.left + box.width / 2, top: box.top - host.top })
+    // kept 100 px from both edges, so that the 15 rem tooltip stays inside the frame
+    const left = Math.min(Math.max(box.left - host.left + box.width / 2, 100), Math.max(100, host.width - 100))
+    setTip({ placed, left, top: box.top - host.top })
   }
 
   // the export: the whole timeline, every record its own event, with a legend
@@ -295,7 +297,7 @@ export default function SwimlaneGraph({
           <div
             role="tooltip"
             className="pointer-events-none absolute z-20 max-w-60 -translate-x-1/2 -translate-y-full rounded-md border border-border bg-popover px-2 py-1.5 text-xs text-popover-foreground shadow-md"
-            style={{ left: Math.min(Math.max(tip.left, 100), (frame.current?.clientWidth ?? 400) - 100), top: tip.top - 6 }}
+            style={{ left: tip.left, top: tip.top - 6 }}
           >
             <p className="font-medium">{tipText.title}</p>
             {tipText.lines.map((line) => <p key={line} className="text-muted-foreground">{line}</p>)}

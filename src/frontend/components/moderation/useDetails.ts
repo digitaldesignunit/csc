@@ -16,7 +16,10 @@ export function useDetails<R, V>(
   const [details, setDetails] = useState<Record<string, V | null>>({})
   const asked = useRef<Set<string>>(new Set())
   const loadRef = useRef(load)
-  loadRef.current = load
+  // the newest loader, written after the commit and read by the effect below
+  useEffect(() => {
+    loadRef.current = load
+  })
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true

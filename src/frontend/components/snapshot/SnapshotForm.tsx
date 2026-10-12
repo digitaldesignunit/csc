@@ -167,6 +167,8 @@ export default function SnapshotForm(props: SnapshotFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<Done | null>(null)
   const progress = useRef<Progress | null>(null)
+  // the draft a failed submit left behind, for the hint (the ref is the working copy)
+  const [draftId, setDraftId] = useState<string | null>(null)
   const topRef = useRef<HTMLDivElement>(null)
 
   const set = useCallback((patch: Partial<FormValues>) => setValues((v) => ({ ...v, ...patch })), [])
@@ -393,6 +395,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
         }
       }
       const run = progress.current
+      setDraftId(run.identityId)
       // photo i goes to slot i: a retry overwrites, it never doubles
       for (let i = run.photosUploaded; i < values.photos.length; i += 1) {
         await uploadSnapshotPhoto(run.snapshotId, i, values.photos[i])
@@ -672,10 +675,10 @@ export default function SnapshotForm(props: SnapshotFormProps) {
           </p>
 
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-          {progress.current && (
+          {draftId && (
             <p className="text-xs text-muted-foreground">
               The draft exists already; submitting again continues from where it stopped
-              {' '}(<Link href={`/components/${progress.current.identityId}`} className="underline underline-offset-4">open it</Link>).
+              {' '}(<Link href={`/components/${draftId}`} className="underline underline-offset-4">open it</Link>).
             </p>
           )}
         </section>

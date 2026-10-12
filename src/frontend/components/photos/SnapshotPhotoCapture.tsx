@@ -27,6 +27,9 @@ import {
   type SnapshotPhotoMutationResult,
 } from '@/lib/snapshotPhotos'
 
+/** one array for "no files", so that an effect that depends on it does not run every render */
+const NO_FILES: File[] = []
+
 type StagedItem = {
   id: string
   file: File
@@ -82,7 +85,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null)
   const [stagedItems, setStagedItems] = useState<StagedItem[]>([])
 
-  const stagedFiles = props.mode === 'staged' ? props.files : []
+  const stagedFiles = props.mode === 'staged' ? props.files : NO_FILES
 
   useEffect(() => {
     if (props.mode !== 'staged') return

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RotateCcw } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -168,13 +168,17 @@ function ComponentMapCanvas({
   const hitR = isCompact ? DOT_HIT_R_MOBILE : DOT_HIT_R
   const view = useMemo(() => computeViewBox(points), [points])
 
-  cameraRef.current = camera
-  hoverIdRef.current = hoverId
-  viewRef.current = view
-  padRef.current = pad
-  hitRRef.current = hitR
-  onSelectRef.current = onSelect
-  colorsRef.current = colors
+  // the latest values for the canvas handlers and the draw loop: written after
+  // the commit, never during the render (the effects below read them)
+  useLayoutEffect(() => {
+    cameraRef.current = camera
+    hoverIdRef.current = hoverId
+    viewRef.current = view
+    padRef.current = pad
+    hitRRef.current = hitR
+    onSelectRef.current = onSelect
+    colorsRef.current = colors
+  })
 
   const project = useCallback((x: number, y: number, cam: Camera = cameraRef.current) => {
     const { width, height } = sizeRef.current
@@ -205,67 +209,69 @@ function ComponentMapCanvas({
     return null
   }, [project])
 
-  drawRef.current = () => {
-    const canvas = canvasRef.current
-    const container = containerRef.current
-    if (!canvas || !container) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+  useLayoutEffect(() => {
+    drawRef.current = () => {
+      const canvas = canvasRef.current
+      const container = containerRef.current
+      if (!canvas || !container) return
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
 
-    const { width, height } = sizeRef.current
-    if (width <= 0 || height <= 0) return
+      const { width, height } = sizeRef.current
+      if (width <= 0 || height <= 0) return
 
-    const dpr = window.devicePixelRatio || 1
-    const nextW = Math.max(1, Math.round(width * dpr))
-    const nextH = Math.max(1, Math.round(height * dpr))
-    if (canvas.width !== nextW || canvas.height !== nextH) {
-      canvas.width = nextW
-      canvas.height = nextH
+      const dpr = window.devicePixelRatio || 1
+      const nextW = Math.max(1, Math.round(width * dpr))
+      const nextH = Math.max(1, Math.round(height * dpr))
+      if (canvas.width !== nextW || canvas.height !== nextH) {
+        canvas.width = nextW
+        canvas.height = nextH
+      }
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.clearRect(0, 0, width, height)
+      ctx.lineJoin = 'round'
+      ctx.lineCap = 'round'
+
+      const cam = cameraRef.current
+      const accent = cssColor(container, '--ring', '#888888')
+      const background = cssColor(container, '--background', '#ffffff')
+      const primary = cssColor(container, '--primary', '#888888')
+      const hover = hoverIdRef.current
+
+      const paint = (p: AnimPoint, active: boolean) => {
+        const alpha = Math.max(0, Math.min(1, p.opacity))
+        if (alpha <= 0) return
+        const { cx, cy } = project(p.x, p.y, cam)
+
+        ctx.globalAlpha = alpha * (active ? 1 : 0.9)
+        ctx.beginPath()
+        ctx.arc(cx, cy, active ? DOT_R + 3 : DOT_R + 1.5, 0, Math.PI * 2)
+        ctx.strokeStyle = accent
+        ctx.lineWidth = active ? POINT_STROKE_ACCENT + 0.5 : POINT_STROKE_ACCENT
+        ctx.stroke()
+
+        ctx.globalAlpha = alpha
+        ctx.beginPath()
+        ctx.arc(cx, cy, active ? DOT_R + 2 : DOT_R, 0, Math.PI * 2)
+        ctx.fillStyle = colorsRef.current.get(p.id) || rgbFromPoint(p.meta) || primary
+        ctx.fill()
+        ctx.strokeStyle = background
+        ctx.lineWidth = POINT_STROKE_INNER
+        ctx.stroke()
+      }
+
+      for (const p of animRef.current) {
+        if (p.id === hover) continue
+        paint(p, false)
+      }
+      if (hover) {
+        const hp = animRef.current.find((p) => p.id === hover)
+        if (hp) paint(hp, true)
+      }
+      ctx.globalAlpha = 1
     }
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, width, height)
-    ctx.lineJoin = 'round'
-    ctx.lineCap = 'round'
-
-    const cam = cameraRef.current
-    const accent = cssColor(container, '--ring', '#888888')
-    const background = cssColor(container, '--background', '#ffffff')
-    const primary = cssColor(container, '--primary', '#888888')
-    const hover = hoverIdRef.current
-
-    const paint = (p: AnimPoint, active: boolean) => {
-      const alpha = Math.max(0, Math.min(1, p.opacity))
-      if (alpha <= 0) return
-      const { cx, cy } = project(p.x, p.y, cam)
-
-      ctx.globalAlpha = alpha * (active ? 1 : 0.9)
-      ctx.beginPath()
-      ctx.arc(cx, cy, active ? DOT_R + 3 : DOT_R + 1.5, 0, Math.PI * 2)
-      ctx.strokeStyle = accent
-      ctx.lineWidth = active ? POINT_STROKE_ACCENT + 0.5 : POINT_STROKE_ACCENT
-      ctx.stroke()
-
-      ctx.globalAlpha = alpha
-      ctx.beginPath()
-      ctx.arc(cx, cy, active ? DOT_R + 2 : DOT_R, 0, Math.PI * 2)
-      ctx.fillStyle = colorsRef.current.get(p.id) || rgbFromPoint(p.meta) || primary
-      ctx.fill()
-      ctx.strokeStyle = background
-      ctx.lineWidth = POINT_STROKE_INNER
-      ctx.stroke()
-    }
-
-    for (const p of animRef.current) {
-      if (p.id === hover) continue
-      paint(p, false)
-    }
-    if (hover) {
-      const hp = animRef.current.find((p) => p.id === hover)
-      if (hp) paint(hp, true)
-    }
-    ctx.globalAlpha = 1
-  }
+  })
 
   useEffect(() => {
     const el = containerRef.current
