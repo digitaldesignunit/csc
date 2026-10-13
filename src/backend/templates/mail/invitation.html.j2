@@ -3,6 +3,6 @@
 {% block body %}
 {% call p() %}Hello,{% endcall %}
 {% call p() %}{{ inviter_name }} has invited you to the Catalog of Second Chances{% if dataset_name %} to the dataset "{{ dataset_name }}" as {{ roles|join(", ") if roles else "member" }}{% endif %}.{% endcall %}
-{% call p() %}Register with this email address using the button below. The link works once and expires on {{ expires_on }}.{% endcall %}
+{% call p() %}Open the link with the button below, with this email address. If you have an account, sign in with it and accept; if you do not, create one there. The link works once and expires on {{ expires_on }}.{% endcall %}
 {% call p() %}If you did not expect this invitation, you can ignore this email.{% endcall %}
 {% endblock %}

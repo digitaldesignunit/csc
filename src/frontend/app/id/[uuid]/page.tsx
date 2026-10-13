@@ -1,10 +1,10 @@
-import { headers } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 
 import ComponentAccessNotice from '@/components/components/ComponentAccessNotice'
 import UnknownTag from '@/components/snapshot/UnknownTag'
 import type { DatasetView } from '@/generated/AccessModels'
 import { uuidFromScan } from '@/lib/scanIds'
+import { hasServerSession, serverBackend } from '@/lib/serverBackend'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -23,20 +23,15 @@ export default async function IdPage({ params }: { params: Promise<{ uuid: strin
   const id = uuidFromScan(uuid)
   if (!id) notFound()
 
-  const h = await headers()
-  const cookie = h.get('cookie') ?? ''
-  const base = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`
-  const init = { cache: 'no-store' as const, headers: { cookie } }
-
-  const found = await fetch(`${base}/api/backend/identities/${encodeURIComponent(id)}?expand=none`, init)
+  const found = await serverBackend(`/identities/${encodeURIComponent(id)}?expand=none`)
   // purged: the 410 page of spec 7.5, not a redirect to a page that says the same later
   if (found.status === 410) return <ComponentAccessNotice kind="purged" />
   if (found.status !== 404) redirect(`/components/${id}`)
 
   // unknown: only a contributor is told what they can do about it
   let contributes = false
-  if (cookie) {
-    const res = await fetch(`${base}/api/backend/datasets`, init).catch(() => null)
+  if (await hasServerSession()) {
+    const res = await serverBackend('/datasets').catch(() => null)
     if (res?.ok) {
       const datasets = (await res.json()) as DatasetView[]
       contributes = Array.isArray(datasets) && datasets.some((d) => d.roles?.includes('contributor'))

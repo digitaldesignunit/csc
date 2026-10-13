@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { headerRules } from "./lib/securityHeaders";
 
 const nextConfig: NextConfig = {
   // A second dev server for browser checks (`invoke dev-migrated` plus a
@@ -39,6 +40,11 @@ const nextConfig: NextConfig = {
   // for the optimizer (Next leaves it out only on its own platform).
   outputFileTracingExcludes: {
     'next-server': ['**/node_modules/sharp/**/*', '**/node_modules/@img/**/*'],
+  },
+  // Framing, referrer, sniffing and (canonical host only) HSTS headers on
+  // every path (decision 8.144 g); the list is in lib/securityHeaders.ts.
+  async headers() {
+    return headerRules()
   },
   // `2ndchances.build` is the canonical origin. NextAuth v4 anchors every
   // absolute auth URL to the single `NEXTAUTH_URL`, so the legacy host cannot

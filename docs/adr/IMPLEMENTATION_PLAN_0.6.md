@@ -863,6 +863,56 @@ descriptors panel; level 2: a per-point heat map with a time slider, needs per-p
 RL3 colour-coding and RL8 steel grade; the SH descriptor (O19--O25, licence first); the npm audit updates and the
 lint refactor if 0.6.0.x does not take them.
 
+### 0.6.1.1 --- security patch --- decided 2026-10-13 (8.144); size M
+
+From the read-only review of main `228b84b2` (2026-10-13). No critical or high finding. One branch `v-0.6.1.1`,
+one review; each item gets a test that fails before the fix. No GH component change.
+
+- **S1 one sign-in verifier (8.144 f; review F1, I2):** `app/api/auth/[...nextauth]/route.ts` `authorize` posts the
+  credentials to `/auth/token` only and maps 401 / 403 to `null`; delete the Mongo lookup and the bcrypt compare;
+  remove `mongodb`, `bcryptjs`, `@types/bcryptjs`, `lib/mongodb.ts` and the frontend `MONGODB_*` variables
+  (`frontend.ini.example`, README); log the outcome without the identifier. A vitest for the token exchange.
+- **S2 security headers (8.144 g; F2):** `headers()` in `next.config.ts` for every path; a test that asserts the list.
+- **S3 server-side backend client (F3):** one `serverBackend(path)` in `lib/` that reads the token with `getToken`
+  and calls `FASTAPI_URL` with `Authorization`, the client header and the forwarded address; use it in
+  `app/components/page.tsx`, `app/components/[component_id]/page.tsx`, `app/id/[uuid]/page.tsx` instead of a base
+  built from the Host header.
+- **S4 catalogue filter regex:** `identity_filters._exact` escapes its value (`re.escape`); `original_function`,
+  `material`, `dataset` get a `max_length` like `q`.
+- **S5 blocking work off the event loop:** the OBJ conversion in `get_snapshot_mesh` and the PLY parsing in the mesh
+  upload run in the threadpool; the mesh route gets a rate limit like the exports; `format=obj` is refused above a
+  size cap (or cached by path, mtime and size). PIL work in the photo route runs in a thread as the evidence path does.
+- **S6 image decoding:** snapshot photos are sniffed by magic bytes (`evidence/files.sniff`); `Image.open(...,
+  formats=['JPEG', 'PNG', 'WEBP'])`; a pixel cap (40 MP) checked before `.load()`, for photos and evidence images.
+- **S7 invitations (8.144 b--e; review A1 and the resend finding):** unreviewed datasets invite only, with one answer
+  and one mail; a page `/invite?code=...` (signed in with the invited address: accept; otherwise sign in or register)
+  and a route that grants an open invitation to the signed-in account whose address it names; the daily cap of 50
+  invitation mails per non-admin user; member e-mails only for admins and moderators of reviewed datasets; resend
+  needs the current `invite` permission. Tests: no account test through either route, resend after demotion, the cap.
+- **S8 logs without people (8.144 h; I1):** `usermaintenance.py` logs counts and ids only, uses `get_database_name()`
+  and also matches expiries stored as ISO strings; `invitations.py` member notice failure without the address; the
+  cron lines in `crontab.example` write dated daily files and one daily line deletes files older than 14 days; the
+  heavy lock moves from `/tmp` to `~/csc/shared/locks/heavy.lock` (README and 8.130 note).
+- **S9 error bodies:** `/health/db` answers `{'ok': False}` with 503 and logs the error; one `internal_error(exc,
+  where)` helper replaces `detail=str(exc)` in 500 answers (review list of 66 sites); no file system path in a detail.
+- **S10 auth details:** a dummy bcrypt check for unknown identifiers at login; `resend-verification` takes a typed
+  body (EmailStr) and sends in a background task with the reset route's per-address cap; verification tokens stored
+  as SHA-256 with a sparse index (open plain tokens stay valid until they expire, at most 24 h); `DuplicateKeyError`
+  at registration answers 409; `JWT_SECRET` under 32 bytes refuses to start; the legacy `username` / `email` claims in
+  `lookup_user_from_token` go.
+- **S11 pins:** `trimesh>=5` and `skip_materials=True` in both `trimesh.load` calls; `reportlab` and the web stack
+  (fastapi, starlette, uvicorn, gunicorn) pinned in `constraints.txt`.
+- **S12 proxy trust:** `conf.py` sets `forwarded_allow_ips` from `CSC_TRUSTED_PROXIES` (README section updated); the
+  PDF ETag includes the API base; `bind = ':8000'` stays (Uberspace web backends need it).
+- **S13 anonymous dataset list (A5):** the same match as `_component_counts` (published, not withdrawn, public).
+- **S14 privacy page:** the sign-in cookie lasts at most 24 hours; accounts are deleted on request; location data
+  is removed from photos; "Last updated" bumped.
+- **S15 CI:** actions pinned by commit SHA (Dependabot for actions); `contents: write` only on the publish job of
+  `release.yml`. User, in the GitHub settings: the `production` environment requires a reviewer; tags `v*` protected.
+
+Server notes for the deploy: the frontend `.env` loses `MONGODB_*` (harmless if left); paste the new crontab;
+`mkdir -p ~/csc/shared/locks`.
+
 ---
 
 ## 4. Dependencies at a glance

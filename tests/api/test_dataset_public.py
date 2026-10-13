@@ -178,3 +178,30 @@ def test_a_piece_that_changed_meanwhile_leaves_no_log_entry(world, monkeypatch):
     assert skipped.status_code == 200
     assert skipped.json()['changed'] == 0 and skipped.json()['skipped'] >= 1
     assert w['db']['change_log'].count_documents({}) == before
+
+
+# S13 (8.144): the anonymous dataset list follows the pieces it counts ---------
+def _anonymous_datasets(world):
+    rows = world['api'].get('/datasets').json()
+    return {row['_id']: row.get('component_count') for row in rows}
+
+
+def test_an_anonymous_list_shows_a_dataset_only_for_published_public_pieces(
+        world):
+    identities = world['db']['component_identities']
+    identities.update_many({'dataset': 'dbu_zirkus'},
+                           {'$set': {'is_public': False}})
+    # nothing public: not listed
+    assert 'dbu_zirkus' not in _anonymous_datasets(world)
+    # a public piece that is not published (no current snapshot) and a public
+    # piece that is withdrawn do not make the dataset visible ...
+    identities.update_one({'_id': DRAFT}, {'$set': {'is_public': True,
+                                                    'dataset': 'dbu_zirkus'}})
+    identities.update_one({'_id': GONE}, {'$set': {'is_public': True,
+                                                   'dataset': 'dbu_zirkus'}})
+    assert 'dbu_zirkus' not in _anonymous_datasets(world)
+    # ... a published, public, not withdrawn piece does, with its count
+    identities.update_one({'_id': BEAM}, {'$set': {'is_public': True}})
+    shown = _anonymous_datasets(world)
+    assert shown.get('dbu_zirkus') == 1
+    assert all(count for count in shown.values())      # never a count of zero

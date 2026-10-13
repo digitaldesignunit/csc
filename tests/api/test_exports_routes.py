@@ -729,3 +729,26 @@ def test_the_pdf_passport_names_the_photo_credit_with_its_link(world, pdf_spy):
     # a link that is not http(s) is not shown
     bad = _photo_credit({'text': 'Photo', 'url': 'javascript:alert(1)'}, style)
     assert 'javascript' not in bad.text
+
+
+# S12 (8.144): the links of an export come from the request where no public
+# base is configured, so a request for another host is another document ------
+def test_the_pdf_and_cero_etags_hold_the_bases_of_their_links(world, pdf_spy):
+    api = world['api']
+    other = {'Host': 'other.example'}
+    for path in (f'/identities/{BEAM}/export/pdf',
+                 f'/identities/{BEAM}/export/cero'):
+        mine = api.get(path, headers=world['m'])
+        theirs = api.get(path, headers={**world['m'], **other})
+        assert mine.status_code == theirs.status_code == 200, path
+        # the API base of the PDF is the request's (CSC_PUBLIC_API_URL unset);
+        # the CERO links use FRONTEND_URL, which the test sets: equal
+        if path.endswith('/pdf'):
+            assert mine.headers['etag'] != theirs.headers['etag']
+            assert pdf_spy[-1].api_base == 'http://other.example'
+            assert pdf_spy[-2].api_base == 'http://testserver'
+            # and the cached PDF of one host is not served to the other
+            assert len(pdf_spy) == 2
+            again = api.get(path, headers={**world['m'], **other})
+            assert again.headers['etag'] == theirs.headers['etag']
+            assert len(pdf_spy) == 2

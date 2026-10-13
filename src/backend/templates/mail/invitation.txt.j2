@@ -4,7 +4,7 @@ Hello,
 
 {{ inviter_name }} has invited you to the Catalog of Second Chances{% if dataset_name %} to the dataset "{{ dataset_name }}" as {{ roles|join(", ") if roles else "member" }}{% endif %}.
 
-Register with this email address using the link below. The link works once and expires on {{ expires_on }}.
+Open the link below with this email address. If you have an account, sign in with it and accept; if you do not, create one there. The link works once and expires on {{ expires_on }}.
 
 If you did not expect this invitation, you can ignore this email.
 {%- endblock %}

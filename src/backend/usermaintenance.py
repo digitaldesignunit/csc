@@ -22,6 +22,7 @@ from pymongo import AsyncMongoClient
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from utility import (
+    get_database_name,
     get_db_connectionstring,
     create_logging_timestamp as logts
 )
@@ -29,9 +30,27 @@ from utility import (
 
 # MAIN CLEANUP LOGIC ----------------------------------------------------------
 
+def unverified_query(cutoff: datetime) -> dict:
+    """The accounts to remove: not verified, and the verification period ended
+    before ``cutoff``. The expiry is a date in the accounts the API creates and
+    an ISO text in accounts that went through an import or an older version; a
+    comparison matches only values of its own type, so both are asked for."""
+    return {
+        'email_verified': False,
+        '$or': [
+            {'verification_token_expires': {'$lt': cutoff}},
+            {'verification_token_expires': {
+                '$lt': cutoff.strftime('%Y-%m-%dT%H:%M:%S')}},
+        ],
+    }
+
+
 async def cleanup_unverified_users(dry_run=False):
     """
     Remove unverified user accounts older than 7 days.
+
+    The log holds counts and account ids only: no user name, no e-mail
+    address, no database error text (decision 8.144 h).
 
     Args:
         dry_run: If True, only print what would be deleted without
@@ -58,20 +77,14 @@ async def cleanup_unverified_users(dry_run=False):
         await client.admin.command('ping')
         print('[CLEANUP] Connected to MongoDB')
 
-        db = client['csc']
+        db = client[get_database_name()]
         users = db['users']
 
         # Calculate cutoff date (7 days ago)
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=7)
         print(f'[CLEANUP] Cutoff date: {cutoff_date.isoformat()}')
 
-        # Find unverified users with expired tokens older than 7 days
-        # We check verification_token_expires to ensure we only delete accounts
-        # where the verification period has definitely expired
-        query = {
-            'email_verified': False,
-            'verification_token_expires': {'$lt': cutoff_date}
-        }
+        query = unverified_query(cutoff_date)
 
         # Count matching users
         count = await users.count_documents(query)
@@ -82,27 +95,8 @@ async def cleanup_unverified_users(dry_run=False):
             print(f'[CLEANUP] {ts} No users to delete.')
             return 0
 
-        # Get details of users to be deleted (for logging)
-        users_to_delete = []
-        cursor = users.find(query)
-        async for user in cursor:
-            users_to_delete.append({
-                'id': user.get('_id'),
-                'username': user.get('username'),
-                'email': user.get('email'),
-                'verification_token_expires': user.get(
-                    'verification_token_expires'
-                )
-            })
-
-        # Log users to be deleted
-        print('\n[CLEANUP] Users to be deleted:')
-        for user in users_to_delete:
-            print(f'  - ID: {user["id"]}')
-            print(f'    Username: {user["username"]}')
-            print(f'    Email: {user["email"]}')
-            print(f'    Token expired: {user["verification_token_expires"]}')
-            print()
+        ids = [user['_id'] async for user in users.find(query, {'_id': 1})]
+        print(f'[CLEANUP] Account ids: {", ".join(str(i) for i in ids)}')
 
         if dry_run:
             print('[CLEANUP] DRY RUN - No users were actually deleted.')
@@ -120,7 +114,7 @@ async def cleanup_unverified_users(dry_run=False):
 
     except Exception as e:
         ts = logts()
-        print(f'[CLEANUP] {ts} Error during cleanup: {str(e)}')
+        print(f'[CLEANUP] {ts} Error during cleanup: {type(e).__name__}')
         raise
 
     finally:
@@ -149,7 +143,7 @@ async def main():
         return 0
 
     except Exception as e:
-        print(f'[CLEANUP] FATAL ERROR: {str(e)}')
+        print(f'[CLEANUP] FATAL ERROR: {type(e).__name__}')
         return 1
 
 

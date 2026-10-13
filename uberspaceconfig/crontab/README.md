@@ -10,7 +10,9 @@
   after it: put the real address only in the server's crontab, never in this
   repository.
 - The heavy jobs (geometry runner, component map) share the lock
-  `/tmp/csc_heavy.lock`, so they never run together: the frequent geometry run
+  `~/csc/shared/locks/heavy.lock` (make the folder once: `mkdir -p
+  ~/csc/shared/locks`; a lock in `/tmp` could be taken by any other account on
+  the host), so they never run together: the frequent geometry run
   skips a run while the lock is held (`flock -n`); the nightly geometry run
   waits up to 15 minutes (`flock -w 900`), the map up to an hour (`flock -w
   3600`), so a long nightly run does not cost it its slot.
@@ -19,6 +21,11 @@
   checks all of them and `--sweep`s the files of deleted snapshots. The component
   map runs once a day (4:15). The database is Atlas' free tier, where every
   read costs bandwidth: do not make the frequent run check everything again.
+- Logs: every job appends to a file of the day in `~/csc/shared/logs/`
+  (`<job>_cronjob.$(date +\%F).log`; cron needs the `%` escaped), and the last
+  line of the file deletes the cron and deploy logs older than 14 days. The
+  admin log pages show the newest dated file. After the first run of the new
+  crontab delete the old undated `*_cronjob.log` files by hand.
 - Adjust timings if you deem it necessary; the file has LF line endings
   (`.gitattributes`), keep them.
 - A `.crontab` file in this folder is a local copy for the maintainer and is

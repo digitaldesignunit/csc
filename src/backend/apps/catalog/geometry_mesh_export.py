@@ -46,7 +46,7 @@ def trimesh_to_bytes(mesh: MeshGeometry, fmt: MeshExportFormat) -> bytes:
 
 def load_trimesh_from_ply_file(path: str) -> trimesh.Trimesh:
     """Load a on-disk PLY mesh file for conversion to another format."""
-    loaded = trimesh.load(path, force='mesh')
+    loaded = trimesh.load(path, force='mesh', skip_materials=True)
     if isinstance(loaded, trimesh.Scene):
         if not loaded.geometry:
             raise ValueError('PLY file contains no mesh geometry')

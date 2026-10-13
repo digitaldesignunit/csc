@@ -29,8 +29,8 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.6.1.0 --- backend, web frontend and Grasshopper interface are released together
-  under one version (tag `v0.6.1.0`); the single source is the `VERSION` file.
+- **CSC**: 0.6.1.1 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.6.1.1`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
 
@@ -206,7 +206,7 @@ gitignored; only the `.example` file is tracked).
 - Edit `.env` and fill in the values following the comments in the file
 - Proceed in the same way with copying `.env.local.example` and renaming it to `.env.local`
 - Set `NEXTAUTH_SECRET` to a long random value of its own: it only encrypts the NextAuth session cookie and is independent of the backend's `JWT_SECRET` (the frontend never verifies the backend token). There is no `API_SECRET`; delete it from older `.env` files.
-- Add your MongoDB credentials so that the frontend can directly authenticate with MongoDB
+- The frontend has no database access and needs no MongoDB variables: the sign-in sends the credentials to the backend's `POST /auth/token`, the only place a password is checked (decision 8.144 f). Older `.env` files may keep `MONGODB_*`; nothing reads them.
 - `NEXT_PUBLIC_STATIC_BASE_URL` is optional and only for public UI files under `/static/` served by Apache. Leave it empty otherwise. Catalogue files (previews, photos, meshes, point clouds, proxies, capture fixtures) are private: they live outside the web root (`~/csc_assets_private/`) and are served only through the authenticated `/snapshots/...` routes of the API (decision 8.125). It is ignored on localhost.
 
 ## Grasshopper Interface Setup
@@ -391,6 +391,9 @@ browser wrote itself stands on the left of that chain and is never believed.
   the rightmost entry that is not itself a trusted proxy. From any other peer
   the header is ignored and the peer is the client. Signed-in callers of the
   exports count per user, everyone else per address.
+- `conf.py` hands the same list to gunicorn as `forwarded_allow_ips`, so the server and
+  the limits agree about who may speak for a client; a bad entry stops the start and
+  `*` is refused. `bind = ':8000'` stays (the Uberspace web backend connects there).
 - Set `FASTAPI_URL=http://127.0.0.1:8000` on the server: the backend then sees
   the web server on loopback. If the web server reaches the backend through the
   public API host instead, the connection comes from the web proxy and the web
@@ -481,7 +484,9 @@ Apache folder still has to be verified on a test subdomain before the first use)
 
 ## Cron jobs
 
-All jobs run the active release (`~/csc/current`) and log to `~/csc/shared/logs/`.
+All jobs run the active release (`~/csc/current`) and log to `~/csc/shared/logs/`,
+each to a file of the day (`<job>_cronjob.<YYYY-MM-DD>.log`); one more line of the
+crontab deletes those older than 14 days (the privacy page promises this).
 The complete crontab, ready to paste into `crontab -e`, is
 `uberspaceconfig/crontab/crontab.example` (it replaces the whole crontab; the
 `MAILTO` line at its top names the maintainer's address, set only on the
@@ -489,12 +494,14 @@ server). Its jobs:
 
 | job | schedule | what |
 |---|---|---|
-| geometry runner | every 20 min (`flock -n /tmp/csc_heavy.lock`, `--due --limit 10`: only the snapshots a write has marked) and nightly at 3:30 (`flock -w 900`, all snapshots, `--limit 200 --sweep`) | geometry runner: frame, shape class, proxies + deviation maps, descriptors, complexity, previews of every snapshot whose derivation is stale. With `CSC_GEOMETRY_HEAVY_STAGES=remote` it runs only frame and shape class, and the rest runs on a worker elsewhere (`main_geometry.py --remote <url> --user <admin>`, password in `CSC_API_PASSWORD`); the recompute route then only marks the heavy stages stale |
-| component map | daily 4:15 (`flock -w 3600 /tmp/csc_heavy.lock`) | precomputes PCA / UMAP layouts for the component map |
-| `usermaintenance.py` | daily 2:00 | removes unverified accounts older than 7 days |
+| geometry runner | every 20 min (`flock -n ~/csc/shared/locks/heavy.lock`, `--due --limit 10`: only the snapshots a write has marked) and nightly at 3:30 (`flock -w 900`, all snapshots, `--limit 200 --sweep`) | geometry runner: frame, shape class, proxies + deviation maps, descriptors, complexity, previews of every snapshot whose derivation is stale. With `CSC_GEOMETRY_HEAVY_STAGES=remote` it runs only frame and shape class, and the rest runs on a worker elsewhere (`main_geometry.py --remote <url> --user <admin>`, password in `CSC_API_PASSWORD`); the recompute route then only marks the heavy stages stale |
+| component map | daily 4:15 (`flock -w 3600 ~/csc/shared/locks/heavy.lock`) | precomputes PCA / UMAP layouts for the component map |
+| `usermaintenance.py` | daily 2:00 | removes unverified accounts older than 7 days (the log holds counts and ids, no names or addresses) |
+| log retention | daily 1:30 | `find` deletes the cron and deploy logs older than 14 days |
 | `geometrymaintenance.py` | daily 3:00 | removes geometry folders without a component |
 
-The geometry runner and the component map share one lock, `/tmp/csc_heavy.lock`,
+The geometry runner and the component map share one lock, `~/csc/shared/locks/heavy.lock`
+(not in `/tmp`, which other accounts on the host can write to; `mkdir -p ~/csc/shared/locks` once),
 so the two heavy jobs never run together (server memory, decision 8.130): the
 frequent geometry run skips its run while the lock is held, the nightly run and
 the map wait up to 15 minutes instead of losing their slot. A write that changes

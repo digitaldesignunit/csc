@@ -203,16 +203,19 @@ def reset_mail(config: Dict[str, str], to: str, full_name: str,
 def invitation_mail(config: Dict[str, str], to: str, code: str,
                     inviter_name: str, inviter_email: Optional[str],
                     dataset_name, roles, expires_at: str) -> Mail:
-    """The single-use registration link of an invitation (8.14). The link
-    goes to the mailbox only, never to the inviter's screen."""
-    url = f'{_base(config)}/auth/register?code={code}'
+    """The single-use link of an invitation (8.14). The link goes to the
+    mailbox only, never to the inviter's screen. It opens ``/invite``, the same
+    page for every recipient: an address with an account signs in and
+    accepts, an address without one creates the account with the code. So the
+    mail is the same whether or not an account exists (8.144 b)."""
+    url = f'{_base(config)}/invite?code={code}'
     return render_mail(
         'invitation', config, to=to,
         subject='You are invited to the Catalog of Second Chances',
         title='You are invited',
         preheader=f'{inviter_name} invited you to the Catalog of Second '
                   'Chances.',
-        button=('Register', url),
+        button=('Accept the invitation', url),
         reason=f'{inviter_name} invited this address to the Catalog of '
                'Second Chances',
         reply_to=_address(inviter_name, inviter_email),
@@ -356,6 +359,13 @@ def send_mails(config: Dict[str, str], mails: Iterable[Mail]
             if not done[index]:
                 results[index] = f'{type(exc).__name__}: {exc}'
     return results
+
+
+def failure_kind(failure: Optional[str]) -> str:
+    """The kind of a send failure (the exception class) and nothing of its
+    text: SMTP errors name the address they refused, and a log holds no
+    address (S8, decision 8.144 h)."""
+    return (failure or '').split(':', 1)[0].strip() or 'failed'
 
 
 def send_mail(config: Dict[str, str], mail: Mail) -> Optional[str]:

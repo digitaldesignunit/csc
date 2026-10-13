@@ -45,7 +45,7 @@ the only copy.
 ```bash
 python3.13 --version                       # Uberspace 7 ships it
 node --version                             # Next 16 needs >= 20.9 (production: 22.23.2)
-mkdir -p ~/csc/{releases,venvs,bin,shared/frontend,shared/logs}
+mkdir -p ~/csc/{releases,venvs,bin,shared/frontend,shared/logs,shared/locks}
 cp -a ~/csc/frontend/.env* ~/csc/shared/frontend/        # frontend secrets (old layout)
 cp -a ~/csc/backend/logs/. ~/csc/shared/logs/ 2>/dev/null || true
 for f in csc_release_deploy.sh csc_deploy_gate.sh; do
@@ -157,7 +157,7 @@ From now on every release deploys this way.
 | release | tag `v<version>` on main, approve the deploy in GitHub |
 | redeploy / roll back / status | Actions --> **Deploy** --> run with `deploy v<version>`, `rollback` or `status` |
 | same on the server | `~/csc/bin/csc_release_deploy.sh v<version>` / `--rollback` / `--status` |
-| deploy log | `~/csc/shared/logs/deploy.log` |
+| deploy log | `~/csc/shared/logs/deploy.<YYYY-MM-DD>.log` (one file a day; the crontab deletes those older than 14 days) |
 | maintenance page | `~/csc/bin/csc_maintenance.sh on` / `off` / `status` (below) |
 
 **The deploy runs the release's own scripts.** After the download is verified,

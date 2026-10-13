@@ -31,10 +31,14 @@ _SNAPSHOT_SORT_FIELDS = frozenset({
 })
 SORT_KEYS = tuple(sorted(_IDENTITY_SORT_FIELDS | _SNAPSHOT_SORT_FIELDS))
 _BBX_AXES = (('x', 0), ('y', 1), ('z', 2))
+# the longest value a text filter accepts (a name, an id, a slug)
+FILTER_MAX_LENGTH = 100
 
 
 def _exact(value: str) -> Dict[str, Any]:
-    return {'$regex': f'^{value}$', '$options': 'i'}
+    """Equal ignoring case. The value is text, not a pattern: a ``.*`` or a
+    nested quantifier in a query string must not reach the regex engine."""
+    return {'$regex': f'^{re.escape(value)}$', '$options': 'i'}
 
 
 @dataclass
@@ -135,10 +139,12 @@ class CatalogFilters:
 
 
 def catalog_filters(
-    original_function: str = Query('', description='IFC class name'),
-    material: str = Query('', description='materials._id'),
+    original_function: str = Query('', max_length=FILTER_MAX_LENGTH,
+                                   description='IFC class name'),
+    material: str = Query('', max_length=FILTER_MAX_LENGTH,
+                          description='materials._id'),
     material_class: str = Query('', description='List of Waste code'),
-    dataset: str = Query(''),
+    dataset: str = Query('', max_length=FILTER_MAX_LENGTH),
     shape_class: str = Query(''),
     status: StatusFilter = Query('published'),
     circulation: Circulation = Query(
@@ -156,7 +162,7 @@ def catalog_filters(
     bbx_max_x: Optional[float] = Query(None),
     bbx_max_y: Optional[float] = Query(None),
     bbx_max_z: Optional[float] = Query(None),
-    q: str = Query('', max_length=100,
+    q: str = Query('', max_length=FILTER_MAX_LENGTH,
                    description='name, catalogue number or id'),
 ) -> CatalogFilters:
     """FastAPI dependency: the catalog filters from the query string."""

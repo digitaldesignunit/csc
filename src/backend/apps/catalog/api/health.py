@@ -2,6 +2,7 @@
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -25,4 +26,6 @@ async def health_check_db(request: Request):
         await request.app.mongodb.command('ping')
         return {'ok': True}
     except PyMongoError as e:
-        return {'ok': False, 'error': str(e)}
+        # the driver's text names hosts and can name accounts: the log only
+        print(f'[ERROR] health check: {type(e).__name__}: {e}')
+        return JSONResponse(status_code=503, content={'ok': False})

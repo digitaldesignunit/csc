@@ -105,6 +105,10 @@ def _site(request: Request) -> str:
     return jsonld_export.site_base(str(request.base_url))
 
 
+def _api(request: Request) -> str:
+    return jsonld_export.api_base(str(request.base_url))
+
+
 # CONTEXT ---------------------------------------------------------------------
 @router.get(
     f'/context/{jsonld_export.CONTEXT_VERSION}.jsonld',
@@ -143,7 +147,8 @@ async def export_cero(
     if not cero_export.is_cero_material(read.identity_doc.get('material')):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail=cero_export.NOT_CONCRETE)
-    etag = _etag_of(read.etag, 'cero', format)
+    # the links in the body use the site base: it belongs in the ETag
+    etag = _etag_of(read.etag, 'cero', format, _site(request))
     headers = viewer_headers(anonymous_public=read.anonymous_public,
                              etag=etag)
     if request.headers.get('if-none-match') == etag:
@@ -261,9 +266,11 @@ async def export_pdf(
     picture = preview_path(request, snapshot_id)
 
     # the PDF holds more than the passport (dataset name, relatives, the
-    # change log, the picture): they belong in the ETag
+    # change log, the picture) and links to the site and the API (S12: where
+    # the API base comes from the request, a request for another host must
+    # not be served a PDF cached for this one): they belong in the ETag
     etag = _etag_of(
-        read.etag, 'pdf', dataset.name, member,
+        read.etag, 'pdf', dataset.name, member, _site(request), _api(request),
         [(r['id'], r['catalog_number']) for r in
          relatives['parents'] + relatives['children']],
         change_info, _file_stamp(picture))
@@ -290,8 +297,7 @@ async def export_pdf(
     pdf = await run_in_threadpool(build_pdf, PassportPdfData(
         body=body, dataset_name=dataset.name,
         material_label=(material or {}).get('label'),
-        base=_site(request), api_base=jsonld_export.api_base(
-            str(request.base_url)),
+        base=_site(request), api_base=_api(request),
         generated_at=now, member=member,
         parents=relatives['parents'], children=relatives['children'],
         change_info=change_info, preview=preview))

@@ -17,6 +17,7 @@ import httpx
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalog.api.auth import get_current_user, get_optional_current_user
+from apps.catalog.api.catalog_common import internal_error
 from apps.catalog.ghreference import build_reference, parse_source
 from apps.catalog.models import User
 from limiter import limiter, signed_in_or_ip
@@ -330,16 +331,16 @@ def _http_exception_from_github(e: httpx.HTTPError) -> HTTPException:
     if isinstance(e, httpx.TimeoutException):
         return HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f'GitHub request timed out: {e}',
+            detail='GitHub request timed out',
         )
     if isinstance(e, httpx.ConnectError):
         return HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f'Cannot connect to GitHub: {e}',
+            detail='Cannot connect to GitHub',
         )
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail=f'GitHub service unavailable ({type(e).__name__}): {e}',
+        detail='GitHub service unavailable',
     )
 
 
@@ -897,10 +898,7 @@ async def list_xml_names(
             headers=headers,
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
-        )
+        raise internal_error(e, 'xml_names')
 
 
 async def _release_xml(name: str) -> Response:
@@ -983,11 +981,7 @@ async def get_xml(
         print(f'[ERROR] get_xml GitHub: {e}')
         raise _http_exception_from_github(e)
     except Exception as e:
-        print(f'[ERROR] get_xml: {e}')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
-        )
+        raise internal_error(e, 'get_xml')
 
 
 @router.get('/ghinterface/userobject_names', response_model=List[str])

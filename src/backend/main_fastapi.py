@@ -90,6 +90,13 @@ if _missing:
     )
     sys.exit(1)
 
+# a short secret lets anyone who has seen one token try to forge others
+from apps.catalog.api.auth import jwt_secret_problem  # noqa: E402
+_jwt_problem = jwt_secret_problem(os.environ['JWT_SECRET'])
+if _jwt_problem:
+    print(f'[FATAL] {_jwt_problem}', file=sys.stderr)
+    sys.exit(1)
+
 
 # FASTAPI SETUP ---------------------------------------------------------------
 @asynccontextmanager
@@ -140,6 +147,9 @@ async def lifespan(app: FastAPI):
     # Create helpful indexes (idempotent)
     await app.mongodb_users.create_index('email', unique=True)
     await app.mongodb_users.create_index('username', unique=True)
+    # verification links are looked up by the hash of their token (S10)
+    await app.mongodb_users.create_index('verification_token_sha256',
+                                         sparse=True)
     await app.mongodb_datasets.create_index('members.user_id')
     await app.mongodb_invitations.create_index('code_sha256', unique=True)
     await app.mongodb_invitations.create_index('email')

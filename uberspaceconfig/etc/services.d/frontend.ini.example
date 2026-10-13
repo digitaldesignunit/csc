@@ -4,8 +4,9 @@
 # ~/csc/current is the active release; csc_release_deploy.sh switches it and
 # restarts this service. Secrets live in ~/csc/shared/frontend/.env and/or
 # .env.local and are linked into each release. Required: NEXTAUTH_SECRET,
-# NEXTAUTH_URL, MONGODB_URI, MONGODB_DB, MONGODB_USERCOLLECTION, FASTAPI_URL
-# (http://127.0.0.1:8000: the backend on the same host, no extra hop).
+# NEXTAUTH_URL, FASTAPI_URL (http://127.0.0.1:8000: the backend on the same
+# host, no extra hop). The frontend has no database access: sign-in goes to the
+# backend only (decision 8.144 f), so MONGODB_* is not needed here.
 # Optional: CSC_PROXY_HOPS = the proxies between a visitor and this server,
 # default 1 (the Uberspace web proxy); the visitor's address goes on to the
 # backend's rate limits (README, "Client addresses and rate limits").

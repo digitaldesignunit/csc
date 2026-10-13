@@ -12,8 +12,17 @@ section 3.7, section 7.7; decisions 8.14, 8.20; plan P3).
 * ``GET /invitations`` --- admin: all; moderator: their datasets'
 * ``DELETE /invitations/{iid}`` --- revoke while unused: its creator,
   ``moderator(D)``, admin
-* ``POST /datasets/{did}/members`` --- ``moderator(D)``: an existing
-  account (exact email) is added and notified, any other address invited
+* ``POST /datasets/{did}/members`` --- ``moderator(D)``: in a reviewed
+  dataset an existing account (exact email) is added and notified, any other
+  address invited; in a dataset an admin has not reviewed yet every address is
+  invited, whether or not it has an account (8.144 b)
+* ``POST /invitations/preview`` and ``POST /invitations/accept`` --- the
+  signed-in account whose address the invitation names: what the invitation
+  offers, and the consent that grants it (the page ``/invite``)
+
+The mails of invitations are capped at 50 per user per day (admins are
+exempt), counted from ``invitations.mail_log`` so that the count survives a
+restart and holds across the workers (8.144 c).
 
 Registration with a code lives in ``auth.py`` and uses ``redeem``.
 """
@@ -27,7 +36,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, EmailStr, Field
 
@@ -40,11 +49,17 @@ from services import email_service
 from .access import deny_write, load_datasets, require, viewer_of
 from .auth import get_current_active_user
 from .catalog_common import now_iso
+from limiter import limiter, signed_in_or_ip
 
 router = APIRouter()
 
 InvitationState = Literal['open', 'used', 'expired', 'revoked']
 DEFAULT_EXPIRES_DAYS = 14
+# invitation mails one non-admin user may send in 24 hours: new, resent and
+# member-by-email invitations (8.144 c)
+INVITATION_MAILS_PER_DAY = 50
+MAIL_LOG_KEEP = 200                  # entries kept per invitation document
+ACCEPT_RATE = '30/hour'              # per user: a code is not guessed
 
 
 # CODES -----------------------------------------------------------------------
@@ -119,9 +134,29 @@ class MemberByEmailResult(BaseModel):
     mail_failed: bool = False
 
 
+class InvitationCode(BaseModel):
+    """The code of the link in the mail."""
+    code: str = Field(min_length=8, max_length=64)
+
+
+class InvitationPreview(BaseModel):
+    """What an invitation offers, for the account it is addressed to."""
+    dataset: Optional[str] = None
+    dataset_name: Optional[str] = None
+    roles: List[DatasetRole]
+    expires_at: str
+    inviter_name: Optional[str] = None
+
+
+class InvitationAccepted(BaseModel):
+    dataset: Optional[str] = None
+    dataset_name: Optional[str] = None
+    roles: List[DatasetRole]            # the roles held in the dataset now
+
+
 def _view(doc: Dict[str, Any]) -> InvitationView:
     return InvitationView(**{k: v for k, v in doc.items()
-                             if k != 'code_sha256'},
+                             if k not in ('code_sha256', 'mail_log')},
                           state=invitation_state(doc))
 
 
@@ -147,6 +182,62 @@ async def _require_invite(request: Request, user: User,
     dataset = await _dataset_or_404(request, dataset_slug)
     await require(request, user, 'invite', dataset=dataset)
     return dataset
+
+
+def invite_only(dataset: Optional[Dataset], user: User) -> bool:
+    """In a dataset an admin has not reviewed yet (8.139 c) a moderator
+    cannot add an account directly: every address is invited and the answer
+    does not tell whether it has an account (8.144 b). An admin keeps the
+    direct add."""
+    return (dataset is not None and not dataset.reviewed
+            and user.role != 'admin')
+
+
+# THE DAILY CAP ---------------------------------------------------------------
+async def mails_sent_since(request: Request, user_id: str,
+                           since: datetime) -> int:
+    """Invitation mails ``user_id`` sent since ``since``, counted from the
+    ``mail_log`` of the invitations (resends included, whoever created the
+    invitation)."""
+    cursor = await request.app.mongodb_invitations.aggregate([
+        {'$match': {'mail_log.by': user_id}},
+        {'$unwind': '$mail_log'},
+        {'$match': {'mail_log.by': user_id,
+                    'mail_log.at': {'$gte': _iso(since)}}},
+        {'$count': 'n'},
+    ])
+    rows = await cursor.to_list(length=1)
+    return int(rows[0]['n']) if rows else 0
+
+
+async def require_mail_budget(request: Request, user: User,
+                              count: int) -> None:
+    """429 when ``count`` more invitation mails would pass the daily cap of
+    a non-admin user."""
+    if user.role == 'admin' or count < 1:
+        return
+    used = await mails_sent_since(
+        request, user.id, datetime.now(timezone.utc) - timedelta(days=1))
+    if used + count > INVITATION_MAILS_PER_DAY:
+        left = max(INVITATION_MAILS_PER_DAY - used, 0)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(f'You can send at most {INVITATION_MAILS_PER_DAY} '
+                    f'invitation mails a day, and {left} are left in the '
+                    f'last 24 hours. Try again later.'))
+
+
+async def _log_mails(request: Request, ids: List[str], user_id: str) -> None:
+    """Remember that ``user_id`` sent a mail for each of these invitations
+    now (an attempt counts, whatever the server said)."""
+    if not ids:
+        return
+    await request.app.mongodb_invitations.update_many(
+        {'_id': {'$in': ids}},
+        {'$push': {'mail_log': {
+            '$each': [{'at': _iso(datetime.now(timezone.utc)),
+                       'by': user_id}],
+            '$slice': -MAIL_LOG_KEEP}}})
 
 
 # CREATE / MAIL ---------------------------------------------------------------
@@ -219,7 +310,7 @@ async def create_invitations(request: Request, user: User,
     try:
         config = email_service.load_email_config()
     except Exception as exc:
-        print(f'[INVITE] mail not configured: {exc}')
+        print(f'[INVITE] mail not configured: {type(exc).__name__}')
         config = {}
     mails = [invitation_mail_of(config, user, doc, code,
                                 dataset.name if dataset else None)
@@ -229,11 +320,15 @@ async def create_invitations(request: Request, user: User,
     for (doc, _code), failure in zip(stored, failures):
         doc['mail_failed'] = failure is not None
         if failure:
-            print(f'[INVITE] mail to {doc["email"]} failed: {failure}')
+            print(f'[INVITE] mail for invitation {doc["_id"]} failed: '
+                  f'{email_service.failure_kind(failure)}')
     await _mark_mail(
         request,
         [d['_id'] for (d, _), f in zip(stored, failures) if f],
         [d['_id'] for (d, _), f in zip(stored, failures) if not f])
+    if mails:
+        await _log_mails(request, [doc['_id'] for doc, _code in stored],
+                         user.id)
     return [doc for doc, _code in stored]
 
 
@@ -322,21 +417,26 @@ async def post_invitations(
     current_user: Annotated[User, Depends(get_current_active_user)],
     body: InvitationCreate,
 ):
-    """One invitation per address; an address that already has an
-    account is reported (``exists``) --- add it with the member editor."""
+    """One invitation per address. For an admin, and in a reviewed dataset, an
+    address that already has an account is reported (``exists``) --- add it
+    with the member editor. In a dataset an admin has not reviewed yet every
+    address is invited and the answer is the same for all: it does not tell
+    whether an address has an account (8.144 b)."""
     if body.roles and not body.dataset:
         raise HTTPException(status_code=422,
                             detail='roles are granted in a dataset')
     dataset = await _require_invite(request, current_user, body.dataset)
+    blind = invite_only(dataset, current_user)
     results: Dict[str, Optional[InviteResult]] = {}
     fresh: List[str] = []
     for email in dict.fromkeys(e.strip().lower() for e in body.emails):
-        if await request.app.mongodb_users.find_one({'email': email},
-                                                    {'_id': 1}):
+        if not blind and await request.app.mongodb_users.find_one(
+                {'email': email}, {'_id': 1}):
             results[email] = InviteResult(email=email, result='exists')
         else:
             results[email] = None            # keeps the order asked for
             fresh.append(email)
+    await require_mail_budget(request, current_user, len(fresh))
     docs = await create_invitations(request, current_user, fresh, dataset,
                                     body.roles, body.expires_days)
     for doc in docs:
@@ -357,20 +457,26 @@ async def resend_invitation(
     invitation_id: str,
     expires_days: int = Query(DEFAULT_EXPIRES_DAYS, ge=1, le=90),
 ):
-    """Whoever may revoke it may resend it. An open or an expired invitation
+    """Whoever may invite now may resend: the caller's current ``invite``
+    permission on the invitation's dataset (an admin for one without a
+    dataset), not the creation of the invitation --- a moderator who was
+    demoted cannot send it again (8.144 e). An open or an expired invitation
     gets a new code (the old one stops working at once) and a new expiry (the
     rule of a new invitation: ``expires_days`` from now, 14 by default), and
-    is mailed again; a used or revoked one is a 409.
+    is mailed again; a used or revoked one is a 409. A resend counts for the
+    daily cap of mails.
     The code is in no response: only the mailbox gets it (8.124 b)."""
     coll = request.app.mongodb_invitations
     doc = await coll.find_one({'_id': invitation_id})
     if doc is None:
         raise HTTPException(status_code=404, detail='Invitation not found')
-    dataset = await _may_manage_invitation(request, current_user, doc)
+    dataset = await _require_invite(request, current_user,
+                                    doc.get('dataset'))
     state = invitation_state(doc)
     if state not in ('open', 'expired'):
         raise HTTPException(status_code=409,
                             detail=f'The invitation is {state}.')
+    await require_mail_budget(request, current_user, 1)
     now = datetime.now(timezone.utc)
     code = new_code()
     updated = {**doc, 'code_sha256': code_sha256(code),
@@ -389,9 +495,11 @@ async def resend_invitation(
         dataset.name if dataset else None)])
     failed = failures[0] is not None
     if failed:
-        print(f'[INVITE] mail to {doc["email"]} failed: {failures[0]}')
+        print(f'[INVITE] mail for invitation {invitation_id} failed: '
+              f'{email_service.failure_kind(failures[0])}')
     await _mark_mail(request, [invitation_id] if failed else [],
                      [] if failed else [invitation_id])
+    await _log_mails(request, [invitation_id], current_user.id)
     updated['mail_failed'] = failed
     return InviteResult(email=doc['email'],
                         result='mail_failed' if failed else 'invited',
@@ -459,16 +567,23 @@ async def add_member_by_email(
     body: MemberByEmail,
 ):
     """
-    The exact address of an existing account: added at once (roles are
-    merged) and notified by mail. Any other address --- any domain ---
-    gets an invitation into D with these roles (8.20).
+    In a reviewed dataset (and for an admin): the exact address of an existing
+    account is added at once (roles are merged) and notified by mail; any
+    other address --- any domain --- gets an invitation into D with these
+    roles (8.20). In a dataset an admin has not reviewed yet every address
+    gets the invitation, with the same answer and the same mail, whether or
+    not it has an account: the account joins by opening the link signed in
+    with that address and accepting (8.144 b).
     """
     dataset = await _dataset_or_404(request, did)
     await require(request, current_user, 'manage_members', dataset=dataset)
     email = body.email.strip().lower()
-    account = await request.app.mongodb_users.find_one(
-        {'email': email}, {'_id': 1, 'full_name': 1, 'username': 1})
+    account = None
+    if not invite_only(dataset, current_user):
+        account = await request.app.mongodb_users.find_one(
+            {'email': email}, {'_id': 1, 'full_name': 1, 'username': 1})
     if account is None:
+        await require_mail_budget(request, current_user, 1)
         doc = await create_invitation(request, current_user, email, dataset,
                                       body.roles)
         return MemberByEmailResult(email=email, result='invited',
@@ -488,8 +603,69 @@ async def add_member_by_email(
             current_user.email)])
         failed = failures[0] is not None
         if failed:
-            print(f'[MEMBERS] notice to {email} failed: {failures[0]}')
+            print(f'[MEMBERS] member notice failed: '
+                  f'{email_service.failure_kind(failures[0])}')
     except Exception as exc:
-        print(f'[MEMBERS] notice to {email} failed: {exc}')
+        print(f'[MEMBERS] member notice failed: {type(exc).__name__}')
     return MemberByEmailResult(email=email, result='added',
                                user_id=account['_id'], mail_failed=failed)
+
+
+# ACCEPT (the page /invite) ---------------------------------------------------
+async def _invitation_for_account(request: Request, user: User, code: str
+                                  ) -> Dict[str, Any]:
+    """The open invitation with this code, addressed to this account's
+    address. An unknown code and another address are the same 400 (``redeem``),
+    so the answer tells nobody whether a code exists."""
+    return await redeem(request, code, user.email or '')
+
+
+@router.post('/invitations/preview', response_model=InvitationPreview,
+             response_model_by_alias=True, response_model_exclude_none=True,
+             summary='What an invitation offers (the account it names)')
+@limiter.limit(ACCEPT_RATE, key_func=signed_in_or_ip)
+async def preview_invitation(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    body: InvitationCode,
+):
+    """For the page ``/invite``: the dataset and the roles, only to the
+    signed-in account whose address the invitation names. The code goes in
+    the body, not in a URL (a URL is logged)."""
+    doc = await _invitation_for_account(request, current_user, body.code)
+    dataset = (await load_datasets(request)).get(doc.get('dataset') or '')
+    creator = await request.app.mongodb_users.find_one(
+        {'_id': doc['created_by_user_id']}, {'full_name': 1, 'username': 1})
+    return InvitationPreview(
+        dataset=doc.get('dataset'),
+        dataset_name=dataset.name if dataset else None,
+        roles=doc.get('roles') or [], expires_at=doc['expires_at'],
+        inviter_name=((creator or {}).get('full_name')
+                      or (creator or {}).get('username')))
+
+
+@router.post('/invitations/accept', response_model=InvitationAccepted,
+             response_model_by_alias=True, response_model_exclude_none=True,
+             summary='Accept an invitation with an existing account')
+@limiter.limit(ACCEPT_RATE, key_func=signed_in_or_ip)
+async def accept_invitation(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    body: InvitationCode,
+):
+    """The consent: the signed-in account whose address the invitation names
+    joins the dataset with the invited roles. An unknown code and another
+    address are the same 400. The invitation works once (the compare-and-set
+    of ``grant_invitation``)."""
+    doc = await _invitation_for_account(request, current_user, body.code)
+    await grant_invitation(request, doc, current_user.id)
+    slug = doc.get('dataset')
+    dataset = (await load_datasets(request)).get(slug or '')
+    held = []
+    if dataset is not None:
+        member = next((m for m in dataset.members
+                       if m.user_id == current_user.id), None)
+        held = _ordered(member.roles) if member else []
+    return InvitationAccepted(
+        dataset=slug, dataset_name=dataset.name if dataset else None,
+        roles=held)

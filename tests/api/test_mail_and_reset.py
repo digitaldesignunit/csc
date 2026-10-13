@@ -236,7 +236,7 @@ def test_a_failed_invitation_mail_is_reported_and_resend_voids_the_old_code(
     assert resent.status_code == 200, resent.text
     assert resent.json()['result'] == 'invited'
     assert resent.json()['invitation']['mail_failed'] is False
-    assert 'register?code=' not in resent.text
+    assert 'invite?code=' not in resent.text
     assert _code_of(box['mails'][0])
     assert box['mails'][0].reply_to                       # the moderator
 
@@ -355,7 +355,7 @@ def test_all_four_mails_share_the_template_and_escape_what_they_insert():
     assert 'mod@x.org' in invitation.reply_to and 'mod@x.org' in member.reply_to
     assert 'auth/verify-email?token=tok' in verification.text
     assert 'auth/reset-password?token=tok' in reset.text
-    assert 'auth/register?code=CODE' in invitation.text
+    assert 'invite?code=CODE' in invitation.text
     # a quote in a link is escaped in the attribute too
     odd = email_service.render(CONFIG, to='a@x.org', subject='s', title='t',
                                paragraphs=['p'], reason='r',

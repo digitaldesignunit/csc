@@ -56,3 +56,25 @@ def test_circulation_splits_in_place_from_deinstalled():
         'exit': None, 'origin.planned': {'$ne': True}, 'withdrawn': None}
     assert CatalogFilters(circulation='exited').identity_match() == {
         'exit': {'$ne': None}, 'withdrawn': None}
+
+
+# S4 (8.144): the exact-match filters are text, not patterns ------------------
+def test_exact_filters_escape_the_value():
+    import re
+    match = CatalogFilters(original_function='.*', material='a(b+)+$',
+                           dataset='x|y').identity_match()
+    for name, value in (('original_function', '.*'), ('material', 'a(b+)+$'),
+                        ('dataset', 'x|y')):
+        assert match[name]['$regex'] == f'^{re.escape(value)}$'
+        assert match[name]['$options'] == 'i'
+
+
+def test_text_filters_have_a_length_cap():
+    from apps.catalog.api.identity_filters import FILTER_MAX_LENGTH
+    import inspect
+    from apps.catalog.api.identity_filters import catalog_filters
+    for name in ('original_function', 'material', 'dataset', 'q'):
+        default = inspect.signature(catalog_filters).parameters[name].default
+        lengths = [m.max_length for m in default.metadata
+                   if hasattr(m, 'max_length')]
+        assert lengths == [FILTER_MAX_LENGTH], name

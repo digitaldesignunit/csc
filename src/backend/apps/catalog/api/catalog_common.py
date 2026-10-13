@@ -14,6 +14,19 @@ from pymongo.errors import BulkWriteError, DuplicateKeyError
 from apps.catalog.etag import compute_snapshot_etag  # noqa: F401 (re-export)
 
 
+INTERNAL_ERROR_TEXT = 'Internal server error'
+
+
+def internal_error(exc: BaseException, where: str) -> HTTPException:
+    """A 500 whose text is always the same. What went wrong goes to the log:
+    the text of an exception can carry a file path, a stored document or a
+    driver message, none of which belongs in an answer (S9, decision 8.144).
+    Use as ``raise internal_error(exc, 'what failed')``."""
+    print(f'[ERROR] {where}: {type(exc).__name__}: {exc}')
+    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                         detail=INTERNAL_ERROR_TEXT)
+
+
 def not_modified_response(etag: str, **extra_headers: str) -> Response:
     """
     Return an empty 304 Not Modified response.

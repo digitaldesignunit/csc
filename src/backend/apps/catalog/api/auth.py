@@ -13,10 +13,12 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 import bcrypt
+from pymongo.errors import DuplicateKeyError
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalog.models import Token, User, UserInDB, UserPublic, RegisterPayload, ChangePasswordPayload # NOQA
 from apps.catalog.models import PasswordResetConfirm, PasswordResetRequest
+from apps.catalog.models import ResendVerificationRequest
 from apps.catalog.models import BCRYPT_MAX_PASSWORD_BYTES
 from apps.catalog.models import normalize_username
 from services import email_service
@@ -70,6 +72,45 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     # Payload validators cap passwords at 72 bytes, so bcrypt never truncates.
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode()
+
+
+VERIFICATION_TOKEN_HOURS = 24
+VERIFICATION_MAILS_PER_HOUR = 3            # per address (the limiter counts per IP)
+
+
+def token_sha256(token: str) -> str:
+    """Only this hash of a mailed token is stored: a leaked database holds no
+    usable link (verification: S10, 8.144; password reset: 8.124 a)."""
+    return hashlib.sha256(token.strip().encode('utf-8')).hexdigest()
+
+
+async def _insert_account(users, doc: dict) -> None:
+    """Insert a new account; a second request for the same e-mail address or
+    user name that passed the check at the same moment meets the unique
+    indexes and gets the 409 of the check, not a 500."""
+    try:
+        await users.insert_one(doc)
+    except DuplicateKeyError:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            'User with this email or username already exists')
+
+
+# a backend that signs tokens with a short secret can have them forged
+MIN_JWT_SECRET_BYTES = 32
+
+
+def jwt_secret_problem(secret: Optional[str]) -> Optional[str]:
+    """Why ``secret`` cannot sign tokens, or None when it can (S10, 8.144)."""
+    if len((secret or '').encode('utf-8')) < MIN_JWT_SECRET_BYTES:
+        return (f'JWT_SECRET must be at least {MIN_JWT_SECRET_BYTES} bytes '
+                f'(openssl rand -hex 32)')
+    return None
+
+
+# checked for a sign-in with an identifier no account has, so that it takes as
+# long as a real check and the answer time does not tell the two apart
+_DUMMY_HASH = bcrypt.hashpw(b'no account has this password',
+                            bcrypt.gensalt()).decode()
 
 
 def _jwt_now():
@@ -146,24 +187,13 @@ async def lookup_user_from_token(
         print(f'{ts()} [AUTH] JWT decode error:', str(e))
         return None
 
+    # the account is the subject; the old username / email claims are gone
+    # (S10): a token names who it was issued to by id only
     sub = payload.get('sub')
-    uname = payload.get('username')
-    email = payload.get('email')
-
-    if not sub and not uname and not email:
+    if not sub or not isinstance(sub, str):
         return None
 
-    users = request.app.mongodb_users
-    doc = None
-
-    if sub:
-        doc = await users.find_one({'_id': sub})
-
-    if not doc and uname:
-        doc = await users.find_one({'username': normalize_username(uname)})
-
-    if not doc and email:
-        doc = await users.find_one({'email': email})
+    doc = await request.app.mongodb_users.find_one({'_id': sub})
 
     if not doc or doc.get('disabled'):
         return None
@@ -245,10 +275,11 @@ async def login_for_access_token(
         '$or': [{'email': identifier}, {'username': identifier}],
         'disabled': {'$ne': True},
     })
-    if (
-        not user or
-        not verify_password(form_data.password, user['hashed_password'])
-    ):
+    # bcrypt runs for an unknown identifier too (against a dummy hash): the
+    # time of the answer does not tell whether the account exists
+    stored = (user or {}).get('hashed_password') or _DUMMY_HASH
+    password_ok = verify_password(form_data.password, stored)
+    if not user or not password_ok or stored is _DUMMY_HASH:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Incorrect username/email or password',
@@ -318,13 +349,13 @@ async def register_user(
             'verification_token': None, 'verification_token_expires': None,
             'invitation_id': invitation['_id'],
         }
-        await users.insert_one(doc)
+        await _insert_account(users, doc)
         await grant_invitation(request, invitation, new_id)
         return User(**doc)
 
-    # Generate verification token
+    # Generate verification token; only its hash is stored
     verification_token = generate_verification_token()
-    verification_token_expires = get_token_expiry(hours=24)
+    verification_token_expires = get_token_expiry(hours=VERIFICATION_TOKEN_HOURS)
 
     new_id = str(__import__('uuid').uuid4())
     doc = {
@@ -336,10 +367,10 @@ async def register_user(
         'disabled': False,
         'role': 'user',
         'email_verified': False,
-        'verification_token': verification_token,
+        'verification_token_sha256': token_sha256(verification_token),
         'verification_token_expires': verification_token_expires,
     }
-    await users.insert_one(doc)
+    await _insert_account(users, doc)
 
     # Send verification email (off the event loop); a failure is logged, the
     # user is created and can ask for it again
@@ -350,9 +381,9 @@ async def register_user(
             email_service.verification_mail(
                 email_config, email, full_name, verification_token))
         if failure:
-            print(f'{ts()} [AUTH] Verification email failed: {failure}')
+            print(f'{ts()} [AUTH] Verification email failed: {email_service.failure_kind(failure)}')
     except Exception as e:
-        print(f'{ts()} [AUTH] Failed to send verification email: {str(e)}')
+        print(f'{ts()} [AUTH] Failed to send verification email: {type(e).__name__}')
 
     return User(**doc)  # maps _id->id
 
@@ -369,10 +400,14 @@ async def verify_email(
     if not token:
         raise HTTPException(400, 'Verification token is required')
 
-    # Find user with this token
+    # Find the user by the hash of the token (stored since 0.6.1.1); a token
+    # mailed before that is stored as it is and works until it expires, at
+    # most 24 hours. TODO 0.6.2: drop the plain-token fallback.
     user = await users.find_one({
-        'verification_token': token,
+        'verification_token_sha256': token_sha256(token),
     })
+    if not user:
+        user = await users.find_one({'verification_token': token})
 
     if not user:
         raise HTTPException(400, 'Invalid or expired verification token')
@@ -401,6 +436,7 @@ async def verify_email(
             '$set': {'email_verified': True},
             '$unset': {
                 'verification_token': '',
+                'verification_token_sha256': '',
                 'verification_token_expires': ''
             }
         }
@@ -455,81 +491,72 @@ async def change_password(
     return {'message': 'Password changed successfully. Sign in again.'}
 
 
+RESEND_ANSWER = {
+    'message': ('If an unverified account exists with this email, '
+                'a verification email has been sent.'),
+}
+
+
+def _send_verification_mail(email: str, full_name: str, token: str) -> None:
+    """Blocking, run as a background task after the answer is out, so the
+    answer takes the same time for a known and an unknown address. A failure
+    goes to the log only: the answer must not tell whether the address has an
+    account."""
+    try:
+        config = load_email_config()
+        failure = email_service.send_mail(
+            config,
+            email_service.verification_mail(config, email, full_name, token))
+        if failure:
+            print(f'{ts()} [AUTH] Verification email failed: {email_service.failure_kind(failure)}')
+    except Exception as exc:
+        print(f'{ts()} [AUTH] Verification email failed: {type(exc).__name__}')
+
+
 @router.post('/resend-verification',
-             summary='Resend verification email')
+             summary='Resend verification email (always the same answer)')
 @limiter.limit('3/minute')
 async def resend_verification(
     request: Request,
-    payload: dict,  # { email }
+    payload: ResendVerificationRequest,
+    background: BackgroundTasks,
     users=Depends(users_coll),
 ):
     """
-    Resend verification email to user.
+    Always the same answer: no account is revealed. For an unverified account
+    a new token is stored (as a hash) and mailed in a background task; at
+    most ``VERIFICATION_MAILS_PER_HOUR`` mails go to one address in an hour
+    (the limiter counts the requests per client address).
     """
-    email = (payload.get('email') or '').strip().lower()
+    email = payload.email.strip().lower()
+    user = await users.find_one({'email': email,
+                                 'disabled': {'$ne': True}})
+    if user is None or user.get('email_verified', False):
+        return RESEND_ANSWER
 
-    if not email:
-        raise HTTPException(400, 'Email is required')
+    now = datetime.now(timezone.utc)
+    horizon = now.timestamp() - 3600
+    recent = [t for t in user.get('verification_requests') or []
+              if isinstance(t, (int, float)) and t > horizon]
+    if len(recent) >= VERIFICATION_MAILS_PER_HOUR:
+        return RESEND_ANSWER
 
-    # Find user
-    user = await users.find_one({'email': email})
-
-    if not user:
-        # Don't reveal if user exists or not (security)
-        return {
-            'message': (
-                'If an unverified account exists with this email, '
-                'a verification email has been sent.'
-            ),
-        }
-
-    # Check if already verified - return the same neutral response as "user not
-    # found" to avoid leaking whether a verified account exists for this email.
-    if user.get('email_verified', False):
-        return {
-            'message': (
-                'If an unverified account exists with this email, '
-                'a verification email has been sent.'
-            ),
-        }
-
-    # Generate new verification token
-    verification_token = generate_verification_token()
-    verification_token_expires = get_token_expiry(hours=24)
-
-    # Update user with new token
+    token = generate_verification_token()
     await users.update_one(
         {'_id': user['_id']},
         {
             '$set': {
-                'verification_token': verification_token,
-                'verification_token_expires': verification_token_expires,
-            }
+                'verification_token_sha256': token_sha256(token),
+                'verification_token_expires':
+                    get_token_expiry(hours=VERIFICATION_TOKEN_HOURS),
+                'verification_requests': [*recent, now.timestamp()],
+            },
+            '$unset': {'verification_token': ''},
         }
     )
-
-    # Send verification email (off the event loop). A failure goes to the
-    # log: the answer must not tell whether the account exists.
-    try:
-        email_config = load_email_config()
-        failure = await run_in_threadpool(
-            email_service.send_mail, email_config,
-            email_service.verification_mail(
-                email_config, email, user.get('full_name', 'User'),
-                verification_token))
-        if failure:
-            print(f'{ts()} [AUTH] Verification email failed: {failure}')
-        else:
-            print(f'{ts()} [AUTH] Verification email resent to user: {user["_id"]}')
-    except Exception as e:
-        print(f'{ts()} [AUTH] Failed to resend verification email: {str(e)}')
-
-    return {
-        'message': (
-            'If an unverified account exists with this email, '
-            'a verification email has been sent.'
-        ),
-    }
+    background.add_task(_send_verification_mail, email,
+                        user.get('full_name') or 'User', token)
+    return RESEND_ANSWER
 
 
 # PASSWORD RESET (decision 8.124 a) -------------------------------------------
@@ -543,7 +570,7 @@ RESET_ANSWER = {
 
 def reset_token_sha256(token: str) -> str:
     """Only this hash is stored: a leaked database holds no usable link."""
-    return hashlib.sha256(token.strip().encode('utf-8')).hexdigest()
+    return token_sha256(token)
 
 
 def _send_reset_mail(email: str, full_name: str, token: str) -> None:
@@ -556,9 +583,9 @@ def _send_reset_mail(email: str, full_name: str, token: str) -> None:
         failure = email_service.send_mail(
             config, email_service.reset_mail(config, email, full_name, token))
         if failure:
-            print(f'{ts()} [AUTH] Password reset mail failed: {failure}')
+            print(f'{ts()} [AUTH] Password reset mail failed: {email_service.failure_kind(failure)}')
     except Exception as exc:
-        print(f'{ts()} [AUTH] Password reset mail failed: {exc}')
+        print(f'{ts()} [AUTH] Password reset mail failed: {type(exc).__name__}')
 
 
 @router.post('/password-reset', status_code=202,
@@ -627,6 +654,7 @@ async def confirm_password_reset(
          '$unset': {'password_reset_sha256': '',
                     'password_reset_expires': '',
                     'verification_token': '',
+                    'verification_token_sha256': '',
                     'verification_token_expires': ''}})
     if user is None:                # used by a second request meanwhile
         raise HTTPException(

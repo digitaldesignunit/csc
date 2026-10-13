@@ -30,8 +30,8 @@ def mails(monkeypatch):
             if mail.to in sent['fail']:
                 out.append('SMTPRecipientsRefused: refused')
                 continue
-            if 'register?code=' in mail.text:
-                code = mail.text.split('register?code=')[1].split()[0]
+            if 'invite?code=' in mail.text:
+                code = mail.text.split('invite?code=')[1].split()[0]
                 sent['invitations'].append({'to': mail.to, 'code': code})
             elif 'added' in mail.subject:
                 sent['added'].append({'to': mail.to})

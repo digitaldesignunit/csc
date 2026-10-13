@@ -1,7 +1,7 @@
 import BrowseView from '@/components/components/overview/BrowseView'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { parseCirculation } from '@/lib/browse'
-import { headers } from 'next/headers'
+import { serverBackend } from '@/lib/serverBackend'
 import { redirect } from 'next/navigation'
 
 export const runtime = 'nodejs'
@@ -44,10 +44,6 @@ export default async function ComponentsPage({
   const sortkey = sp?.sortkey ?? '_id'
   const sortorder: 'asc' | 'desc' = sp?.sortorder === 'desc' ? 'desc' : 'asc'
 
-  const h = await headers()
-  const cookie = h.get('cookie') ?? ''
-  const base = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`
-
   const countParams = new URLSearchParams({ circulation })
   for (const key of FILTER_PARAMS) {
     const value = sp?.[key]
@@ -60,10 +56,9 @@ export default async function ComponentsPage({
   listParams.set('sortorder', sortorder)
   listParams.set('expand', 'shallow')
 
-  const fetchOpts = { cache: 'no-store' as const, headers: { cookie } }
   const [itemsRes, countRes] = await Promise.all([
-    fetch(`${base}/api/backend/identities?${listParams.toString()}`, fetchOpts),
-    fetch(`${base}/api/backend/identities/count?${countParams.toString()}`, fetchOpts),
+    serverBackend(`/identities?${listParams.toString()}`),
+    serverBackend(`/identities/count?${countParams.toString()}`),
   ])
 
   if (itemsRes.status === 401 || countRes.status === 401) {

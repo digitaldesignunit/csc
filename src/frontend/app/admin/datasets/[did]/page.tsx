@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import InviteDialog from '@/components/admin/InviteDialog'
+import { addMemberHint, memberLabel, memberLine } from '@/lib/members'
 import InvitationsTable from '@/components/admin/InvitationsTable'
 import RoleCheckboxes, { type DatasetRole } from '@/components/admin/RoleCheckboxes'
 import type {
@@ -385,8 +386,8 @@ function MembersCard({
   const { confirm, dialog } = useConfirm()
   const setRoles = async (member: DatasetMemberView, roles: DatasetRole[]) => {
     if (roles.length === 0 && !(await confirm({
-      title: `Remove ${member.username ?? member.email}?`,
-      description: `${member.username ?? member.email} loses every role in ${dataset.name} and no longer sees it.`,
+      title: `Remove ${memberLabel(member)}?`,
+      description: `${memberLabel(member)} loses every role in ${dataset.name} and no longer sees it.`,
       confirmLabel: 'Remove',
       destructive: true,
     }))) return
@@ -432,7 +433,7 @@ function MembersCard({
                       {member.full_name || member.username || 'Unknown account'}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {member.username ? `${member.username} · ${member.email ?? ''}` : member.user_id}
+                      {memberLine(member)}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -444,7 +445,7 @@ function MembersCard({
                     />
                   </TableCell>
                   <TableCell>
-                    <Button size="sm" variant="ghost" aria-label={`Remove ${member.username}`}
+                    <Button size="sm" variant="ghost" aria-label={`Remove ${memberLabel(member)}`}
                       onClick={() => void setRoles(member, [])}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -543,7 +544,7 @@ function AddMember({
         <Input id="member-email" type="email" value={email} placeholder="the exact address"
           onChange={(event) => setEmail(event.target.value)} />
         <p className="text-xs text-muted-foreground">
-          An existing account is added right away; any other address gets an invitation.
+          {addMemberHint(dataset.reviewed, isAdmin)}
         </p>
       </div>
       <RoleCheckboxes idPrefix="add-member" compact value={roles} onChange={setRoles} />

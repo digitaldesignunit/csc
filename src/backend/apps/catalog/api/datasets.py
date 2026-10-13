@@ -149,8 +149,11 @@ def _ordered(roles) -> List[str]:
     return [r for r in DATASET_ROLES if r in roles]
 
 
-async def _member_views(request: Request,
-                        dataset: Dataset) -> List[DatasetMemberView]:
+async def _member_views(request: Request, dataset: Dataset, *,
+                        with_email: bool) -> List[DatasetMemberView]:
+    """The members of a dataset. The e-mail addresses are shown to admins
+    and to moderators of a reviewed dataset only (8.144 d): a moderator of a
+    dataset nobody has reviewed sees username and name."""
     ids = [m.user_id for m in dataset.members]
     users = {u['_id']: u for u in await request.app.mongodb_users.find(
         {'_id': {'$in': ids}},
@@ -159,7 +162,7 @@ async def _member_views(request: Request,
         user_id=m.user_id,
         username=users.get(m.user_id, {}).get('username'),
         full_name=users.get(m.user_id, {}).get('full_name'),
-        email=users.get(m.user_id, {}).get('email'),
+        email=users.get(m.user_id, {}).get('email') if with_email else None,
         roles=_ordered(m.roles),
         added_at=m.added_at) for m in dataset.members]
 
@@ -183,7 +186,10 @@ async def _dataset_view(request: Request, user: Optional[User],
     roles = dataset_roles(viewer_of(user), dataset)
     members = None
     if with_members and 'moderator' in roles:
-        members = await _member_views(request, dataset)
+        viewer = viewer_of(user)
+        members = await _member_views(
+            request, dataset,
+            with_email=viewer.is_admin or dataset.reviewed)
     return DatasetView(_id=dataset.id, name=dataset.name,
                        description=dataset.description,
                        visibility=dataset.visibility,
@@ -292,16 +298,17 @@ async def list_datasets(
     viewer = viewer_of(current_user)
     datasets = sorted((await load_datasets(request)).values(),
                       key=lambda d: d.id)
+    counts = await _component_counts(request, viewer)
     if viewer.is_admin:
         shown = datasets
     elif viewer.logged_in:
         shown = [d for d in datasets if dataset_roles(viewer, d)
                  or d.visibility == 'catalog']
     else:
-        public = set(await request.app.mongodb_component_identities.distinct(
-            'dataset', {'is_public': True}))
-        shown = [d for d in datasets if d.id in public]
-    counts = await _component_counts(request, viewer)
+        # an anonymous caller sees a dataset by what the pieces below show:
+        # published, not withdrawn, public (S13, 8.144) --- the match the
+        # counts use, so a list entry never shows a count of zero
+        shown = [d for d in datasets if counts.get(d.id)]
     views = []
     for d in shown:
         view = await _dataset_view(request, current_user, d, with_members=False)
@@ -388,9 +395,9 @@ async def _notify_admins(request: Request, dataset: Dataset,
                 creator.email) for admin in admins])
         for failure in failures:
             if failure is not None:
-                print(f'[DATASETS] "dataset created" mail failed: {failure}')
+                print(f'[DATASETS] "dataset created" mail failed: {email_service.failure_kind(failure)}')
     except Exception as exc:                               # noqa: BLE001
-        print(f'[DATASETS] "dataset created" mail failed: {exc}')
+        print(f'[DATASETS] "dataset created" mail failed: {type(exc).__name__}')
 
 
 @router.post('/datasets', response_model=DatasetView, status_code=201,
@@ -679,6 +686,8 @@ class AccessTypesEnvelope(BaseModel):
     invitation: 'InvitationView'
     invite_result: 'InviteResult'
     member_result: 'MemberByEmailResult'
+    invitation_preview: 'InvitationPreview'
+    invitation_accepted: 'InvitationAccepted'
     admin_user: 'AdminUserRow'
     user_hit: 'UserHit'
 
@@ -686,12 +695,15 @@ class AccessTypesEnvelope(BaseModel):
 @router.get('/schema/access', include_in_schema=False)
 async def get_access_json_schema():
     from apps.catalog.read_models import Tombstone
-    from .invitations import (InvitationView, InviteResult,
+    from .invitations import (InvitationAccepted, InvitationPreview,
+                              InvitationView, InviteResult,
                               MemberByEmailResult)
     from .users import AdminUserRow, UserHit
     AccessTypesEnvelope.model_rebuild(_types_namespace={
         'Tombstone': Tombstone, 'InvitationView': InvitationView,
         'InviteResult': InviteResult,
         'MemberByEmailResult': MemberByEmailResult,
+        'InvitationPreview': InvitationPreview,
+        'InvitationAccepted': InvitationAccepted,
         'AdminUserRow': AdminUserRow, 'UserHit': UserHit})
     return AccessTypesEnvelope.model_json_schema(by_alias=True)

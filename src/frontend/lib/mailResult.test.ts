@@ -36,3 +36,12 @@ test('Resend says that the old link no longer works', () => {
   assert.equal(failed.warning, true)
   assert.match(failed.text, /previous link no longer works/)
 })
+
+test('an invitation notice does not say whether the address has an account (8.144 b)', () => {
+  for (const mail_failed of [false, true]) {
+    const text = memberNotice({ email: 'n@x.org', result: 'invited', mail_failed }).text
+    assert.ok(!/no account/i.test(text), text)
+    assert.match(text, /n@x\.org/)
+  }
+  assert.equal(memberNotice({ email: 'n@x.org', result: 'invited' }).text, 'Invitation sent to n@x.org')
+})

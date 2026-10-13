@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-10T21:28:21.233Z
+// Generated on: 2026-10-13T09:20:27.071Z
 // Source: http://127.0.0.1:8791/schema/access
 
 export interface AdminUserRow {
@@ -33,6 +33,20 @@ export interface DatasetView {
   members?: DatasetMemberView[] | null;
   member_count?: number | null; // list rows only: how many people are members; moderator(D) and admin only, else absent
   component_count?: number | null; // list rows only: published pieces the caller may see
+}
+
+export interface InvitationAccepted {
+  dataset?: string | null;
+  dataset_name?: string | null;
+  roles: ('contributor' | 'reviewer' | 'moderator')[];
+}
+
+export interface InvitationPreview {
+  dataset?: string | null;
+  dataset_name?: string | null;
+  roles: ('contributor' | 'reviewer' | 'moderator')[];
+  expires_at: string;
+  inviter_name?: string | null;
 }
 
 export interface InvitationView {
@@ -116,6 +130,8 @@ export interface AccessTypesEnvelope {
   invitation: InvitationView;
   invite_result: InviteResult;
   member_result: MemberByEmailResult;
+  invitation_preview: InvitationPreview;
+  invitation_accepted: InvitationAccepted;
   admin_user: AdminUserRow;
   user_hit: UserHit;
 }
