@@ -17,6 +17,7 @@ export PATH
 export MONGODB_URI="mongodb+srv://USERNAME:PASSWORD@your.cluster.mongodb.net/csc"
 
 # JWT
+# at least 32 bytes, else the backend refuses to start
 export JWT_SECRET="your-openssl-rand-hex-32-value"
 export JWT_ALGORITHM="HS256"
 export JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60"

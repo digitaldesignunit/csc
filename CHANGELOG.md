@@ -5,6 +5,102 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1.1] - unreleased
+
+A security patch (decision 8.144), from a read-only review of 0.6.1.0 in five areas:
+backend authentication, injection and uploads, authorisation, infrastructure and
+CI, and the frontend. The review found nothing critical or high; this release takes
+the small fixes. The larger structural items (one load-and-authorise helper, a
+shared rate-limit store, a Content-Security-Policy with nonces, signed checksums,
+PyJWT, the module splits) go to 0.6.2. No change to the Grasshopper components and
+no migration of records.
+
+### Security
+
+- **One sign-in verifier**: the web sign-in sends the credentials to `POST /auth/token`
+and nowhere else, so the backend's rate limit sees every attempt. The frontend has
+no database access any more (`mongodb`, `bcryptjs`, `lib/mongodb.ts` and the
+`MONGODB_*` variables are gone), and its log line holds the outcome only, never
+what was typed.
+- **Headers**: the web app sends `frame-ancestors 'none'` with `X-Frame-Options:
+DENY`, `Referrer-Policy: strict-origin-when-cross-origin`,
+`X-Content-Type-Options: nosniff` and, on the canonical host only, HSTS (no
+`includeSubDomains`).
+- **Server-side calls** from the Browse, component and `/id` pages go to
+`FASTAPI_URL` with the session's token, not to a base built from the request's Host
+header.
+- **Invitations**: in a dataset an admin has not reviewed yet, a moderator invites
+only. `POST /invitations` and `POST /datasets/{did}/members` answer `invited` for
+every address and send the same mail, so neither route tells whether an address has
+an account. An existing account joins by opening the link in the mail signed in with
+that address and accepting (`/invite`, `POST /invitations/accept`); a new address
+registers with the code as before. Admins and moderators of a reviewed dataset keep
+the direct add. At most 50 invitation mails per user per day (new, resent and
+member-by-email; admins exempt), counted in the database, answered with 429. Member
+e-mail addresses are shown to admins and to moderators of a reviewed dataset only.
+Resend needs the caller's current `invite` permission, not the creation of the
+invitation.
+- **Logs hold no people**: no user names, e-mail addresses or typed identifiers in
+the cron jobs, the web sign-in or the member notices; mail errors are logged by
+kind. Every site log keeps 14 days, so the privacy page holds as written.
+- **Error answers** carry no file path, stored document or driver message: a 500 has
+one text, `/health/db` answers `{"ok": false}` with 503, and the cause goes to the
+log. Validation messages meant for the client (422) stay.
+- **Sign-in details**: a sign-in with an unknown identifier takes the same password
+check as a real one; the verification token is stored as a SHA-256 hash (a link
+mailed before the deploy works until it expires, at most 24 hours); the resend route
+takes a typed body, always gives the same answer, sends in the background and sends
+at most three mails an hour per address; a second registration for the same address
+meets the unique index and answers 409; a `JWT_SECRET` under 32 bytes stops the
+backend from starting; a token is looked up by its subject only.
+- **Uploads**: photos are sniffed by their first bytes and decoded as JPEG, PNG or
+WebP only, with a 40 megapixel cap checked before any pixel is decoded (also for
+evidence images); meshes are loaded without their materials; the catalogue filters
+`original_function`, `material` and `dataset` match their text exactly and have a
+length cap.
+- **Blocking work off the event loop**: OBJ conversion, mesh exports and photo
+decoding run in worker threads; the mesh downloads are rate limited (120 a minute per
+user or address) and OBJ conversion is refused for files above 50 MB.
+- **Proxies**: gunicorn trusts the same proxies as the rate limiter
+(`CSC_TRUSTED_PROXIES`); the PDF and CERO ETags hold the bases of their links, so a
+request for another host is never served a document cached for this one.
+- **Anonymous dataset list** shows a dataset by the same rule as its count:
+published, not withdrawn, public.
+- **CI**: every action is pinned to a commit (Dependabot proposes updates weekly);
+the release workflow writes to the repository in its publish job only.
+
+### Changed
+
+- The invitation mail links to `/invite?code=...` for every recipient; a new page
+shows what the invitation offers and takes the acceptance.
+- The privacy page says that the sign-in cookie lasts at most 24 hours, that
+accounts are deleted on request and that location data is removed from photos.
+- The cron jobs write one dated log a day (`<job>_cronjob.<date>.log`) and one daily
+line deletes the cron and deploy logs older than 14 days; the geometry runner and
+the component map share a lock in `~/csc/shared/locks/heavy.lock` instead of
+`/tmp`. The deploy gate writes `deploy.<date>.log`.
+- `usermaintenance.py` also removes accounts whose verification expiry is stored as
+text, and uses the configured database name.
+- Pinned in `constraints.txt`: `fastapi`, `starlette`, `uvicorn`, `gunicorn` and
+`reportlab`, to the versions the backend is tested with; `trimesh>=5`.
+
+### Server notes
+
+- Check the production `JWT_SECRET` first: it must be at least 32 bytes
+(`openssl rand -hex 32` gives 64). The backend refuses to start with a shorter one.
+Locally, put a longer `JWT_SECRET` into `src/backend/dev.env` (the example has one).
+- `mkdir -p ~/csc/shared/locks`, then paste the new `crontab.example`; after its
+first runs delete the old undated `~/csc/shared/logs/*_cronjob.log` files.
+- The frontend `.env` loses `MONGODB_URI`, `MONGODB_DB` and `MONGODB_USERCOLLECTION`
+(harmless if left).
+- If `CSC_TRUSTED_PROXIES` is set, gunicorn now reads it too: check that every entry
+is an address or a network (a typo stops the start with its name).
+- The deploy builds a new venv (`trimesh>=5`, new pins).
+- In the GitHub settings: let the `production` environment require a reviewer and
+protect the tags `v*`.
+- Nobody is signed out by this release, unless `JWT_SECRET` is changed.
+
+
 ## [0.6.1.0] - 2026-10-12
 
 The first feature release after the cutover (decisions 8.129 to 8.143): a personal

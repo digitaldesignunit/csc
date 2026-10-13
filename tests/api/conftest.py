@@ -66,7 +66,7 @@ def backend_env(mongod, db_name, tmp_path_factory):
     env = {
         'MONGODB_URI': f'{mongod.uri}/{db_name}',
         'MONGODB_DB': db_name,
-        'JWT_SECRET': 'test-only-secret',
+        'JWT_SECRET': 'test-only-secret-of-at-least-32-bytes',
         'GITHUB_REPO_URL': 'https://github.com/example/csc',
         'SMTP_HOST': 'localhost',
         'SMTP_USER': 'test',

@@ -52,9 +52,6 @@ for (const name of ['.env.local', '.env.production.local']) {
 const required = [
   'NEXTAUTH_SECRET',
   'NEXTAUTH_URL',
-  'MONGODB_URI',
-  'MONGODB_DB',
-  'MONGODB_USERCOLLECTION',
   'FASTAPI_URL',
 ]
 

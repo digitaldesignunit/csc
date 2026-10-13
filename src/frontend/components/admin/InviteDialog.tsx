@@ -102,7 +102,8 @@ export default function InviteDialog({
             <DialogTitle>Invite people</DialogTitle>
             <DialogDescription>
               Each address gets its own link by mail. It works once, for that address
-              only, and expires after 14 days.
+              only, and expires after 14 days. Someone with an account signs in and
+              accepts; someone without one creates it from the link.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

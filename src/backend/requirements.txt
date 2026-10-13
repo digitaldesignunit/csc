@@ -34,7 +34,9 @@ Pillow
 reportlab
 
 # --- Descriptor computation ---
-trimesh>=3.15.0
+# 5+: Mesh loading with skip_materials (a material or texture file next to an
+# uploaded file is never read)
+trimesh>=5
 # trimesh needs it for mesh sections (radial signature); not pulled in by trimesh
 networkx
 scipy

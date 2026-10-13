@@ -39,3 +39,35 @@ def test_the_worker_count_is_a_whole_number_within_limits(conf, raw, expected):
     ('verbose', 'info'), ('trace', 'info'), ('', 'info')])
 def test_the_log_level_is_one_of_gunicorns_or_info(conf, raw, expected):
     assert conf.log_level(raw) == expected
+
+
+# S12 (8.144): the trusted proxies of the server and of the limiter are one list --
+def test_the_default_trusted_proxies_are_the_limiters_default(conf):
+    import limiter
+    assert conf.DEFAULT_TRUSTED_PROXIES == limiter.DEFAULT_TRUSTED_PROXIES
+    assert conf.forwarded_allow_ips == '127.0.0.0/8,::1/128'
+
+
+def test_csc_trusted_proxies_sets_forwarded_allow_ips(conf, monkeypatch):
+    monkeypatch.setenv('CSC_TRUSTED_PROXIES', '127.0.0.0/8, ::1 ,203.0.113.7')
+    module = importlib.reload(conf)
+    assert module.forwarded_allow_ips == \
+        '127.0.0.0/8,::1/128,203.0.113.7/32'
+
+
+@pytest.mark.parametrize('raw', ['*', 'not-an-address', '127.0.0.1,,bogus'])
+def test_a_bad_entry_stops_the_start_and_names_the_variable(conf, raw):
+    with pytest.raises(ValueError, match='CSC_TRUSTED_PROXIES: bad entry'):
+        conf.trusted_proxies(raw)
+
+
+def test_gunicorn_accepts_the_list_and_the_bind_stays(conf, monkeypatch):
+    pytest.importorskip('fcntl')            # gunicorn imports on Unix only
+    from gunicorn.config import Config
+    monkeypatch.setenv('CSC_TRUSTED_PROXIES', '127.0.0.0/8,::1,203.0.113.7')
+    module = importlib.reload(conf)
+    cfg = Config()
+    cfg.set('forwarded_allow_ips', module.forwarded_allow_ips)
+    assert cfg.forwarded_allow_ips == ['127.0.0.0/8', '::1/128',
+                                       '203.0.113.7/32']
+    assert module.bind == ':8000'

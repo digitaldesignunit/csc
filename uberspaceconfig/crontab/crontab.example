@@ -7,7 +7,14 @@
 # line fails before its redirect (e.g. when `source` fails).
 MAILTO="<maintainer email>"
 
-# The heavy jobs share one lock, /tmp/csc_heavy.lock, so they never run
+# Logs: every job appends to its own file of the day, <job>_cronjob.<YYYY-MM-DD>.log
+# (the % is escaped, cron would read it as a line break), and the last line
+# of this file deletes the files older than 14 days (the privacy page promises
+# that no log is kept longer). deploy.<date>.log is written by csc_deploy_gate.sh.
+
+# The heavy jobs share one lock, /home/ddu/csc/shared/locks/heavy.lock (the
+# folder is made once: mkdir -p ~/csc/shared/locks; a lock in /tmp could be
+# replaced by any other account on the host), so they never run
 # together (server memory, decision 8.130): the frequent geometry run skips a
 # run while the lock is held (-n); the nightly run and the component map wait
 # up to 15 minutes (-w 900) instead of losing their slot.
@@ -20,22 +27,26 @@ MAILTO="<maintainer email>"
 # Geometry Runner, frequent: frame, shape class, proxies, descriptors,
 # complexity and previews of the snapshots marked as due; at most 10 per run
 # Runs every 20 minutes
-*/20 * * * * source /home/ddu/.bash_profile && flock -n /tmp/csc_heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_geometry.py --due --limit 10 >> /home/ddu/csc/shared/logs/geometry_cronjob.log 2>&1
+*/20 * * * * source /home/ddu/.bash_profile && flock -n /home/ddu/csc/shared/locks/heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_geometry.py --due --limit 10 >> /home/ddu/csc/shared/logs/geometry_cronjob.$(date +\%F).log 2>&1
 
 # Geometry Runner, nightly: every snapshot is checked (stale ones are derived,
 # at most 200); --sweep deletes the previews and deviation maps of snapshots
 # that no longer exist (8.121)
 # Runs every day at 3:30 AM
-30 3 * * * source /home/ddu/.bash_profile && flock -w 900 /tmp/csc_heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_geometry.py --limit 200 --sweep >> /home/ddu/csc/shared/logs/geometry_cronjob.log 2>&1
+30 3 * * * source /home/ddu/.bash_profile && flock -w 900 /home/ddu/csc/shared/locks/heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_geometry.py --limit 200 --sweep >> /home/ddu/csc/shared/logs/geometry_cronjob.$(date +\%F).log 2>&1
 
 # Component Map: precompute PCA + UMAP layouts into component_map_cache
 # Runs every day at 4:15 AM
-15 4 * * * source /home/ddu/.bash_profile && flock -w 3600 /tmp/csc_heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_component_map.py >> /home/ddu/csc/shared/logs/component_map_cronjob.log 2>&1
+15 4 * * * source /home/ddu/.bash_profile && flock -w 3600 /home/ddu/csc/shared/locks/heavy.lock /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/main_component_map.py >> /home/ddu/csc/shared/logs/component_map_cronjob.$(date +\%F).log 2>&1
 
 # User Maintenance: clean up unverified user accounts
 # Runs every day at 2:00 AM
-0 2 * * * source /home/ddu/.bash_profile && /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/usermaintenance.py >> /home/ddu/csc/shared/logs/usermaintenance_cronjob.log 2>&1
+0 2 * * * source /home/ddu/.bash_profile && /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/usermaintenance.py >> /home/ddu/csc/shared/logs/usermaintenance_cronjob.$(date +\%F).log 2>&1
 
 # Geometry Maintenance: remove mesh / point-cloud folders of deleted snapshots
 # Runs every day at 3:00 AM
-0 3 * * * source /home/ddu/.bash_profile && /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/geometrymaintenance.py >> /home/ddu/csc/shared/logs/geometrymaintenance_cronjob.log 2>&1
+0 3 * * * source /home/ddu/.bash_profile && /home/ddu/csc/current/venv/bin/python /home/ddu/csc/current/backend/geometrymaintenance.py >> /home/ddu/csc/shared/logs/geometrymaintenance_cronjob.$(date +\%F).log 2>&1
+
+# Log retention: delete the cron and deploy logs older than 14 days
+# Runs every day at 1:30 AM
+30 1 * * * find /home/ddu/csc/shared/logs \( -name '*_cronjob.*.log' -o -name 'deploy.*.log' \) -mtime +14 -delete

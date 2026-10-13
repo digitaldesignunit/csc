@@ -5,7 +5,9 @@
 #
 #   deploy v<version>    rollback    status
 #
-# and hands it to csc_release_deploy.sh, logging to ~/csc/shared/logs/deploy.log.
+# and hands it to csc_release_deploy.sh, logging to the file of the day,
+# ~/csc/shared/logs/deploy.<YYYY-MM-DD>.log (the crontab deletes those older
+# than 14 days).
 
 # supervisorctl and python3.13 need the login environment; load it before
 # strict mode, which would abort on any unset variable inside the profile
@@ -14,7 +16,7 @@
 set -euo pipefail
 
 CSC_HOME="${CSC_HOME:-$HOME/csc}"
-LOG="$CSC_HOME/shared/logs/deploy.log"
+LOG="$CSC_HOME/shared/logs/deploy.$(date +%F).log"
 mkdir -p "$(dirname "$LOG")"
 
 request="${SSH_ORIGINAL_COMMAND:-}"

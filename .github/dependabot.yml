@@ -1,0 +1,13 @@
+# Actions in .github/workflows are pinned to a commit (with the tag as a
+# comment); Dependabot proposes the newer commit of a tag once a week, as a
+# pull request that is read before it is merged (decision 8.144, S15).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies

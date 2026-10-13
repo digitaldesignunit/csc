@@ -253,3 +253,13 @@ def test_rows_from_the_projected_join_equal_rows_from_the_full_document(
     assert [d['_id'] for d in page_new] == [d['_id'] for d in page_old]
     assert len(page_new) == 3 or len(old) < 6
     assert _format_list_rows(page_new, expand) ==         _format_list_rows(page_old, expand)
+
+
+# S4 (8.144): a filter value is text, and a long one is refused -----------------
+def test_a_pattern_in_a_filter_matches_nothing_and_a_long_value_is_refused(api, db):
+    for name in ('original_function', 'material', 'dataset'):
+        ok = api.get('/identities', params={name: '.*'})
+        assert ok.status_code == 200
+        assert ok.json() == []                   # '.*' is a text, not "everything"
+        too_long = api.get('/identities', params={name: 'a' * 101})
+        assert too_long.status_code == 422, name

@@ -3,41 +3,18 @@ export const runtime = 'nodejs'
 
 import NextAuth, { type AuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
-import { MongoClient, type Collection, type WithId } from 'mongodb'
 import { CSC_CLIENT_HEADERS } from '@/lib/cscClient'
 import { forwardedFor } from '@/lib/clientAddress'
-import bcrypt from 'bcryptjs'
+import { signInWithBackend, type AuthorizedUser } from '@/lib/signIn'
 import type { JWT } from 'next-auth/jwt'
 import type { Session } from 'next-auth'
 
 // Env
-const MONGODB_URI = process.env.MONGODB_URI!
-const DB_NAME = process.env.MONGODB_DB!
-const DB_USERCOLLECTION = process.env.MONGODB_USERCOLLECTION!
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET!
 const FASTAPI_URL = process.env.FASTAPI_URL!
 
 // Types
-type DBUser = {
-  _id: unknown
-  username: string
-  email?: string
-  full_name?: string
-  role?: string
-  disabled?: boolean
-  hashed_password?: string
-  email_verified?: boolean
-}
-
-type AuthorizedUserPayload = {
-  id: string
-  name?: string
-  email?: string
-  username: string
-  role: string
-  apiToken: string
-  apiTokenExpiresAt: number
-}
+type AuthorizedUserPayload = AuthorizedUser
 
 type CustomJWT = JWT & {
   role?: string
@@ -60,203 +37,22 @@ type SessionUserPatch = {
   error?: 'ApiTokenExpired'
 }
 
-// Mongo singleton (safe for RSC/route handlers)
-declare global {
-  var _mongoClientPromise: Promise<MongoClient> | undefined
-}
-let client: MongoClient
-
-function errorToString(err: unknown): string {
-  if (err instanceof Error) return err.message
-  try {
-    return JSON.stringify(err)
-  } catch {
-    return String(err)
-  }
-}
-
-async function getClient(): Promise<MongoClient> {
-  try {
-    if (!global._mongoClientPromise) {
-      client = new MongoClient(MONGODB_URI)
-      global._mongoClientPromise = client.connect()
-    }
-    client = await global._mongoClientPromise
-    return client
-  } catch (err: unknown) {
-    console.error('[NextAuth][Mongo] Failed to connect:', errorToString(err))
-    throw err
-  }
-}
-
-/** Best-effort decode of JWT `exp` (seconds) -> ms timestamp. No verification. */
-function decodeJwtExpMs(token: string): number | undefined {
-  try {
-    const parts = token.split('.')
-    if (parts.length < 2) return
-    const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
-    const pad = payloadB64.length % 4
-    const padded = pad ? payloadB64 + '='.repeat(4 - pad) : payloadB64
-    const json = Buffer.from(padded, 'base64').toString('utf8')
-    const payload = JSON.parse(json) as { exp?: number }
-    if (typeof payload.exp === 'number') return payload.exp * 1000
-  } catch {
-    // ignore
-  }
-}
-
-// Credentials authorize (Mongo + bcrypt), then exchange for FastAPI token
+// Credentials authorize: the backend is the only verifier (decision 8.144 f)
 async function authorizeUser(
   credentials?: { identifier: string; password: string },
   request?: { headers?: Record<string, string | string[] | undefined> },
 ): Promise<AuthorizedUserPayload | null> {
-  if (!credentials) {
-    console.error('[NextAuth][Auth] No credentials payload received')
-    return null
-  }
-  const rawIdentifier: unknown = credentials.identifier
-  const password: unknown = credentials.password
-
-  if (typeof rawIdentifier !== 'string' || typeof password !== 'string') {
-    console.error('[NextAuth][Auth] Invalid credential types', {
-      hasIdentifier: typeof rawIdentifier === 'string',
-      hasPassword: typeof password === 'string',
-    })
-    return null
-  }
-
-  const identifier = rawIdentifier.trim()
-  const lowerEmail = identifier.includes('@') ? identifier.toLowerCase() : identifier
-
-  // 1) Connect to Mongo
-  let mongo: MongoClient
-  try {
-    mongo = await getClient()
-  } catch {
-    return null
-  }
-
-  // 2) Select DB/collection
-  let usersColl: Collection<DBUser>
-  try {
-    usersColl = mongo.db(DB_NAME).collection<DBUser>(DB_USERCOLLECTION)
-  } catch (err: unknown) {
-    console.error('[NextAuth][Mongo] Invalid DB or collection name', {
-      DB_NAME,
-      DB_USERCOLLECTION,
-      error: errorToString(err),
-    })
-    return null
-  }
-
-  // 3) Find user by username OR email; both are stored lowercase, so any
-  // case signs in (decision 8.28)
-  let user: WithId<DBUser> | null = null
-  try {
-    user = await usersColl.findOne({
-      $or: [{ username: identifier.toLowerCase() }, { email: lowerEmail }],
-      disabled: { $ne: true },
-    })
-  } catch (err: unknown) {
-    console.error('[NextAuth][Mongo] findOne failed:', errorToString(err))
-    return null
-  }
-
-  if (!user) {
-    console.error('[NextAuth][Auth] User not found or disabled', { identifier })
-    return null
-  }
-
-  if (typeof user.hashed_password !== 'string' || user.hashed_password.length === 0) {
-    console.error('[NextAuth][Auth] User record missing hashed_password', { _id: String(user._id) })
-    return null
-  }
-
-  // 4) Compare password
-  let ok = false
-  try {
-    ok = await bcrypt.compare(password, user.hashed_password)
-  } catch (err: unknown) {
-    console.error('[NextAuth][Auth] bcrypt.compare failed:', errorToString(err))
-    return null
-  }
-  if (!ok) {
-    console.error('[NextAuth][Auth] Password mismatch', { identifier })
-    return null
-  }
-
-  // 4.5) Check email verification
-  if (!user.email_verified) {
-    console.error('[NextAuth][Auth] Email not verified', { identifier, _id: String(user._id) })
-    return null
-  }
-
-  // 5) Exchange for FastAPI token
-  const body = new URLSearchParams()
-  body.set('username', user.username)
-  body.set('password', password)
-
-  let resp: Response
-  try {
-    resp = await fetch(`${FASTAPI_URL.replace(/\/+$/, '')}/auth/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
-        ...CSC_CLIENT_HEADERS,
-        // the visitor's address, for the backend's login limit
-        ...forwardedFor(request?.headers ?? {}),
-      },
-      body,
-      cache: 'no-store',
-    })
-  } catch (e: unknown) {
-    console.error('[NextAuth] Failed to reach FASTAPI_URL/auth/token', FASTAPI_URL, errorToString(e))
-    return null
-  }
-
-  if (!resp.ok) {
-    const txt = await resp.text().catch(() => '')
-    console.error('[NextAuth] FastAPI /auth/token failed', {
-      status: resp.status,
-      body: txt,
-      url: `${FASTAPI_URL}/auth/token`,
-      passedUsername: user.username,
-    })
-    return null
-  }
-
-  let apiToken: string | undefined
-  let expiresIn: number | undefined
-  try {
-    const tok = (await resp.json()) as { access_token?: string; token_type?: string; expires_in?: number }
-    apiToken = tok?.access_token
-    expiresIn = typeof tok?.expires_in === 'number' ? tok.expires_in : undefined
-  } catch (e: unknown) {
-    console.error('[NextAuth] FastAPI /auth/token JSON parse failed:', errorToString(e))
-    return null
-  }
-
-  if (!apiToken) {
-    console.error('[NextAuth] FastAPI /auth/token returned no access_token')
-    return null
-  }
-
-  // exp claim in the JWT takes priority, then expires_in from response, then 1h default
-  const apiTokenExpiresAt =
-    decodeJwtExpMs(apiToken) ??
-    (expiresIn ? Date.now() + expiresIn * 1000 : Date.now() + 3600 * 1000)
-
-  // 6) Return user info for NextAuth to embed into its JWT
-  return {
-    id: String(user._id),
-    name: user.full_name ?? user.username,
-    email: user.email,
-    username: user.username,
-    role: user.role ?? 'user',
-    apiToken,
-    apiTokenExpiresAt,
-  }
+  return signInWithBackend(credentials, {
+    fetch,
+    backendUrl: FASTAPI_URL,
+    headers: {
+      ...CSC_CLIENT_HEADERS,
+      // the visitor's address, for the backend's login limit
+      ...forwardedFor(request?.headers ?? {}),
+    },
+    log: (message) => console.error(message),
+    now: Date.now,
+  })
 }
 
 // NextAuth options

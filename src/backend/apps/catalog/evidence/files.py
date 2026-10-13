@@ -83,6 +83,7 @@ def process_upload(raw: bytes, root: str, *, max_image_bytes: int,
     ``root``. Raises ``UnsupportedFile``."""
     # imported here: the api package imports its routers, which import this
     from apps.catalog.api.snapshot_images import (
+        ImageTooLarge,
         compress_and_save_jpeg,
         open_upload_photo,
     )
@@ -100,6 +101,8 @@ def process_upload(raw: bytes, root: str, *, max_image_bytes: int,
     else:
         try:
             image = open_upload_photo(raw)
+        except ImageTooLarge as exc:
+            raise UnsupportedFile(str(exc)) from exc
         except Exception as exc:
             raise UnsupportedFile('not a readable image') from exc
         try:

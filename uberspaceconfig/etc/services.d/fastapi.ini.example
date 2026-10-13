@@ -9,7 +9,8 @@ startsecs=30
 environment=
     PYTHONUNBUFFERED="1",
     MONGODB_URI="mongodb+srv://USERNAME:PASSWORD@your.cluster.mongodb.net/csc",
-    JWT_SECRET="your-secret",
+    # JWT_SECRET: at least 32 bytes (openssl rand -hex 32), else the backend refuses to start
+    JWT_SECRET="your-openssl-rand-hex-32-value",
     JWT_ALGORITHM="HS256",
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60",
     GITHUB_REPO_URL="https://github.com/your-org/your-repo",

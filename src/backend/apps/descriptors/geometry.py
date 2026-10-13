@@ -254,7 +254,7 @@ def load_points_from_ply_file(path: str) -> np.ndarray:
     Raises:
         ValueError: if the file holds no vertices
     """
-    loaded = trimesh.load(path, process=False)
+    loaded = trimesh.load(path, process=False, skip_materials=True)
 
     if isinstance(loaded, trimesh.Scene):
         parts = [
@@ -300,7 +300,7 @@ def load_mesh_from_obj(
     """
     try:
         # Load mesh using trimesh (handles OBJ format natively)
-        loaded = trimesh.load(filepath)
+        loaded = trimesh.load(filepath, skip_materials=True)
     except FileNotFoundError:
         raise FileNotFoundError(f'OBJ file not found: {filepath}')
     except Exception as e:

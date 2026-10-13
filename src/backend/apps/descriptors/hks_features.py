@@ -51,7 +51,7 @@ def load_mesh_from_ply(
         ValueError: if file is not a valid triangle mesh
     """
     try:
-        mesh = trimesh.load(filepath)
+        mesh = trimesh.load(filepath, skip_materials=True)
         if clean_mesh:
             # 3. Remove duplicate faces
             trimesh.repair.fix_inversion(mesh)

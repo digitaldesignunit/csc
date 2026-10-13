@@ -31,6 +31,20 @@ def photo_filename(index: int) -> str:
     return f'{index}{PHOTO_EXTENSION}'
 
 
+# decoded size above which an upload is refused before any pixel is decoded
+# (S6, 8.144): a small file can hold a very large canvas
+MAX_UPLOAD_PIXELS = 40_000_000
+UPLOAD_FORMATS = ['JPEG', 'PNG', 'WEBP']
+
+
+class UnreadableImage(ValueError):
+    """The bytes are not a JPEG, PNG or WebP image the server will decode."""
+
+
+class ImageTooLarge(UnreadableImage):
+    """The image declares more than ``MAX_UPLOAD_PIXELS`` pixels."""
+
+
 def open_upload_photo(raw: bytes) -> Image.Image:
     """
     Load uploaded image bytes without applying EXIF orientation transforms.
@@ -38,9 +52,30 @@ def open_upload_photo(raw: bytes) -> Image.Image:
     Pixel data is kept as stored in the file; orientation metadata (if any)
     survives :func:`compress_and_save_jpeg`, which keeps only the EXIF tags
     listed above.
+
+    The bytes are sniffed (magic numbers, not the declared type), only JPEG,
+    PNG and WebP decoders are tried, and the size in the header is checked
+    against ``MAX_UPLOAD_PIXELS`` before ``load()`` decodes anything.
+    Raises ``UnreadableImage`` (``ImageTooLarge`` for a big canvas).
     """
-    image = Image.open(io.BytesIO(raw))
-    image.load()
+    # imported here: the evidence package imports this module
+    from apps.catalog.evidence.files import sniff
+    if sniff(raw) != 'image':
+        raise UnreadableImage('not a JPEG, PNG or WebP image')
+    try:
+        image = Image.open(io.BytesIO(raw), formats=UPLOAD_FORMATS)
+    except Exception as exc:
+        raise UnreadableImage('not a readable image') from exc
+    width, height = image.size
+    if width * height > MAX_UPLOAD_PIXELS:
+        image.close()
+        raise ImageTooLarge(
+            f'image of {width * height // 1_000_000} megapixels; '
+            f'the limit is {MAX_UPLOAD_PIXELS // 1_000_000}')
+    try:
+        image.load()
+    except Exception as exc:
+        raise UnreadableImage('not a readable image') from exc
     return image
 
 

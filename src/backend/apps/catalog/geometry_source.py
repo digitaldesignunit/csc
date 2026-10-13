@@ -134,7 +134,7 @@ def _load_cloud(snapshot: Mapping[str, Any], index: int, entry: Mapping,
     path = _cloud_file(snapshot, index, point_clouds_dir)
     if path:
         try:
-            loaded = trimesh.load(path, process=False)
+            loaded = trimesh.load(path, process=False, skip_materials=True)
             points = np.asarray(loaded.vertices, dtype=np.float64)
             if len(points):
                 return points, 'original'

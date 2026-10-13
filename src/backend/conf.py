@@ -35,10 +35,38 @@ def log_level(raw=None) -> str:
     return text if text in LOG_LEVELS else 'info'
 
 
+# The proxies whose X-Forwarded-For is believed: the same list the rate
+# limiter reads (``CSC_TRUSTED_PROXIES``, limiter.py), so the server and the
+# limits never disagree about who may speak for a client (S12, decision
+# 8.144). Default: loopback, where the web server reaches the backend.
+DEFAULT_TRUSTED_PROXIES = '127.0.0.0/8,::1'
+
+
+def trusted_proxies(raw=None) -> str:
+    """``CSC_TRUSTED_PROXIES`` as gunicorn's ``forwarded_allow_ips``: comma
+    separated addresses and networks, each checked here so that a typo stops
+    the start with its name in the message. ``*`` (trust everyone) is refused."""
+    import ipaddress
+    text = (os.getenv('CSC_TRUSTED_PROXIES') if raw is None else raw) or ''
+    entries = []
+    for item in (text or DEFAULT_TRUSTED_PROXIES).split(','):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            entries.append(str(ipaddress.ip_network(item, strict=False)))
+        except ValueError as exc:
+            raise ValueError(
+                f'CSC_TRUSTED_PROXIES: bad entry {item!r}') from exc
+    return ','.join(entries) or DEFAULT_TRUSTED_PROXIES
+
+
 # Gunicorn configuration. The two settings come from the environment
 # (fastapi.ini), so a deploy no longer resets them.
 wsgi_app = 'main_fastapi:app'
+# the Uberspace web backend connects to :8000 (all interfaces), so the bind stays
 bind = ':8000'
+forwarded_allow_ips = trusted_proxies()
 chdir = app_path
 workers = worker_count()
 worker_class = 'uvicorn.workers.UvicornWorker'

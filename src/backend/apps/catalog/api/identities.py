@@ -121,6 +121,7 @@ from .public_access import (
     viewer_headers,
 )
 from .catalog_common import (
+    internal_error,
     not_modified_response,
     get_identities_col,
     get_snapshots_col,
@@ -428,10 +429,7 @@ def passport_json(
     try:
         body = passport_body(identity_doc, snapshot_docs)
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f'Stored document failed Pydantic validation: {exc}',
-        )
+        raise internal_error(exc, 'passport body validation')
     if remaining is not None:              # a batch (8.105)
         body['identity']['remaining'] = remaining
     body['identity']['can_undo_deinstall'] = can_undo_deinstall
@@ -493,10 +491,7 @@ def _format_list_rows(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f'List row failed Pydantic validation: {exc}',
-        )
+        raise internal_error(exc, 'list row validation')
     return rows
 
 
@@ -693,9 +688,12 @@ async def get_identities_map(
             method=method,
         )
     except RuntimeError as exc:
+        # the layout needs a package this server may not have; say so, and
+        # keep the exception text (it can be anything) in the log
+        print(f'[ERROR] identities map embed unavailable: {exc}')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail='This layout method is not available on this server',
         ) from exc
     except Exception as exc:
         print(f'[ERROR] identities map embed: {exc}')
@@ -960,10 +958,7 @@ async def list_identity_children(
         content = for_viewer([catalog_row(doc) for doc in docs],
                              current_user)
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f'Child row failed Pydantic validation: {exc}',
-        )
+        raise internal_error(exc, 'child row validation')
     anonymous_public = (
         current_user is None and identity_allows_anonymous_read(identity_doc)
     )
@@ -1202,10 +1197,7 @@ async def list_identity_snapshots(
                 )
             )
         except Exception as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f'Snapshot summary failed validation: {exc}',
-            )
+            raise internal_error(exc, 'snapshot summary validation')
 
     return JSONResponse(status_code=200,
                         content=for_viewer(items, current_user))
@@ -1274,10 +1266,7 @@ async def get_identity(
         try:
             body = identity_body(identity_doc)
         except Exception as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f'Identity failed Pydantic validation: {exc}',
-            )
+            raise internal_error(exc, 'identity validation')
         pieces_left = await remaining_of(request, identity_doc)
         if pieces_left is not None:
             body['remaining'] = pieces_left

@@ -8,7 +8,7 @@ import Link from 'next/link'
 import ComponentAccessNotice from '@/components/components/ComponentAccessNotice'
 import ComponentSnapshotVersionList from '@/components/components/ComponentSnapshotVersionList'
 import { isTombstone } from '@/lib/backend'
-import { headers } from 'next/headers'
+import { serverBackend } from '@/lib/serverBackend'
 import { redirect, notFound } from 'next/navigation'
 
 export const runtime = 'nodejs'
@@ -24,31 +24,19 @@ export default async function ComponentDetailPage({
   params: Promise<PageParams>
   searchParams: Promise<PageSearchParams>
 }) {
-  const h = await headers()
-  const cookie = h.get('cookie') ?? ''
-  const base = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host')}`
-
   const { component_id } = await params
   // `?snapshot=<id>` opens that version; `?snapshots=<id>` is the older spelling of the same
   const query = await searchParams
   const requestedSnapshotId = query.snapshot ?? query.snapshots
 
-  const fetchOpts = { cache: 'no-store' as const, headers: { cookie } }
-
   const passportUrl = requestedSnapshotId
-    ? `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose?${new URLSearchParams({ snapshots: requestedSnapshotId }).toString()}`
-    : `${base}/api/backend/identities/${encodeURIComponent(component_id)}/compose`
+    ? `/identities/${encodeURIComponent(component_id)}/compose?${new URLSearchParams({ snapshots: requestedSnapshotId }).toString()}`
+    : `/identities/${encodeURIComponent(component_id)}/compose`
 
   const [passportRes, snapshotsRes, childrenRes] = await Promise.all([
-    fetch(passportUrl, fetchOpts),
-    fetch(
-      `${base}/api/backend/identities/${encodeURIComponent(component_id)}/snapshots`,
-      fetchOpts,
-    ),
-    fetch(
-      `${base}/api/backend/identities/${encodeURIComponent(component_id)}/children`,
-      fetchOpts,
-    ),
+    serverBackend(passportUrl),
+    serverBackend(`/identities/${encodeURIComponent(component_id)}/snapshots`),
+    serverBackend(`/identities/${encodeURIComponent(component_id)}/children`),
   ])
 
   const res = passportRes

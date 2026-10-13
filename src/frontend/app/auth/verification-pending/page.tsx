@@ -31,7 +31,7 @@ export default function VerificationPendingPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || 'Failed to resend verification email')
+        setError(res.status === 422 ? 'Enter a valid e-mail address.' : data.error || 'Failed to resend verification email')
       } else {
         setMessage('Verification email sent! Please check your inbox.')
         setEmail('')

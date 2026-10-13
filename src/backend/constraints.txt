@@ -26,6 +26,14 @@ shapely<=2.1.2
 # manylinux2014 wheels for 3.13; pinned to what the backend was tested with
 jinja2==3.1.6
 markupsafe==3.0.3
+# the web stack and the PDF library, pinned to the versions the backend is
+# tested with (0.6.1.1, S11): a release of any of them is taken on purpose,
+# after the test run, and not by the next deploy
+fastapi==0.141.1
+starlette==1.7.0
+uvicorn==0.54.0
+gunicorn==26.2.0
+reportlab==5.0.1
 # the transitive geometry stack (via umap-learn), pinned to what the server venv
 # runs, so that plain pip and `invoke check-server-wheels` resolve the same set:
 # unpinned, pip took the newest numba, which has no glibc 2.17 wheel and was

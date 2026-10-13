@@ -310,7 +310,10 @@ def main() -> int:
         env['SNAPSHOT_PROXIES_DIR'] = str(proxies)
         if not args.assets:
             env['EVIDENCE_ATTACHMENTS_DIR'] = str(work / 'evidence')
-        env.setdefault('JWT_SECRET', 'dev-migrated-only')
+        # the backend refuses a secret under 32 bytes (0.6.1.1): a short one in
+        # dev.env is replaced for this throwaway instance
+        if len(env.get('JWT_SECRET', '').encode('utf-8')) < 32:
+            env['JWT_SECRET'] = 'dev-migrated-only-secret-at-least-32-bytes'
         env.setdefault('SMTP_PASSWORD', 'dev')
         os.environ.update(env)
         for key, value in env.items():

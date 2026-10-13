@@ -40,6 +40,7 @@ Routes for the v0.5 `component_snapshots` collection.
     -> user photos (JPEG)
 """
 
+import asyncio
 import hashlib
 import os
 import shutil
@@ -56,6 +57,7 @@ from fastapi import (
     Request,
     UploadFile,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pymongo.errors import PyMongoError
 
@@ -84,6 +86,7 @@ from apps.catalog.geometry_mesh_export import (
 from apps.catalog.proxies.primitives import proxy_mesh
 
 from .auth import get_current_active_user, get_optional_current_user
+from limiter import limiter, signed_in_or_ip
 from .geometry_hooks import derive_sync
 from .access import load_datasets, require_snapshot_file_write, viewer_of
 from .public_access import (
@@ -93,6 +96,7 @@ from .public_access import (
 )
 from .catalog_common import (
     compute_snapshot_etag,
+    internal_error,
     get_identities_col,
     get_snapshots_col,
     not_modified_response,
@@ -102,12 +106,23 @@ from .catalog_common import (
 from .snapshot_images import (
     PHOTO_EXTENSION,
     PHOTO_MEDIA_TYPE,
+    ImageTooLarge,
+    UnreadableImage,
     compress_and_save_jpeg,
     open_upload_photo,
     photo_filename,
 )
 
 router = APIRouter()
+
+# Mesh downloads convert on the fly (OBJ) or read the file: CPU and memory
+# work any anonymous caller can ask for on a public piece (S5, 8.144). Per
+# user for a signed-in caller, per client address otherwise (limiter.py); the
+# viewer loads a handful of files per piece, so the limit is generous. The OBJ
+# conversion of a PLY above the size cap is refused: the PLY itself is served.
+MESH_LIMIT_PER_MINUTE = 120
+MESH_RATE = f'{MESH_LIMIT_PER_MINUTE}/minute'
+OBJ_CONVERSION_MAX_BYTES = 50 * 1024 * 1024
 
 OptionalUser = Annotated[Optional[User], Depends(get_optional_current_user)]
 
@@ -321,9 +336,7 @@ async def list_my_snapshots(
                 'rejection_reason': reason,
             }).model_dump(by_alias=True))
         except Exception as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f'Snapshot row failed validation: {exc}')
+            raise internal_error(exc, 'snapshot row validation')
     return JSONResponse(status_code=200, content=items)
 
 
@@ -409,10 +422,7 @@ async def list_pending_snapshots(
                 )
             )
         except Exception as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f'Pending snapshot row failed validation: {exc}',
-            )
+            raise internal_error(exc, 'pending snapshot row validation')
 
     return JSONResponse(status_code=200, content=items)
 
@@ -454,10 +464,7 @@ async def get_snapshot_by_id(
     try:
         body = snapshot_body(doc)
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f'Stored snapshot failed Pydantic validation: {exc}',
-        )
+        raise internal_error(exc, 'snapshot validation')
 
     return JSONResponse(
         status_code=200,
@@ -513,6 +520,15 @@ def _mesh_export_attachment_response(
     )
 
 
+def _write_bytes(path: str, data: bytes) -> None:
+    with open(path, 'wb') as handle:
+        handle.write(data)
+
+
+def _proxy_mesh_bytes(proxy: dict, fmt: str) -> bytes:
+    return trimesh_to_bytes(proxy_mesh(proxy), fmt)  # type: ignore[arg-type]
+
+
 def _http_mesh_format(format: str) -> str:
     try:
         return normalize_mesh_format(format)
@@ -529,6 +545,7 @@ def _http_mesh_format(format: str) -> str:
     summary='Alias of .../preview until plan P5 (decision 8.23)',
     deprecated=True,
 )
+@limiter.limit(MESH_RATE, key_func=signed_in_or_ip)
 async def get_snapshot_mesh_preview(
     request: Request,
     current_user: OptionalUser,
@@ -553,7 +570,7 @@ async def get_snapshot_mesh_preview(
     )
     try:
         mesh = get_inline_mesh_primitive(doc, primitive_index)
-        body = export_inline_mesh(mesh, fmt)  # type: ignore[arg-type]
+        body = await run_in_threadpool(export_inline_mesh, mesh, fmt)  # type: ignore[arg-type]
     except IndexError:
         raise HTTPException(status_code=404, detail='Mesh preview not found')
     except ValueError as exc:
@@ -574,6 +591,7 @@ async def get_snapshot_mesh_preview(
     '/snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}',
     summary='Get mesh file for snapshot primitive (PLY or OBJ)',
 )
+@limiter.limit(MESH_RATE, key_func=signed_in_or_ip)
 async def get_snapshot_mesh(
     request: Request,
     current_user: OptionalUser,
@@ -627,7 +645,7 @@ async def get_snapshot_mesh(
     if not os.path.isfile(path):
         raise HTTPException(
             status_code=404,
-            detail=f'PLY file not found on disk: {path}',
+            detail='PLY file not found on disk',
         )
 
     ext = mesh_export_extension(fmt)  # type: ignore[arg-type]
@@ -649,10 +667,22 @@ async def get_snapshot_mesh(
             },
         )
 
+    if os.path.getsize(path) > OBJ_CONVERSION_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail='This mesh is too large to convert to OBJ; '
+                   'download the PLY.',
+        )
     try:
-        body = export_mesh_file(path, fmt)  # type: ignore[arg-type]
+        body = await run_in_threadpool(
+            export_mesh_file, path, fmt)  # type: ignore[arg-type]
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        # the parser's text can name the file: the log only
+        print(f'[ERROR] mesh file OBJ conversion: {exc}')
+        raise HTTPException(
+            status_code=400,
+            detail='The mesh file could not be converted to OBJ',
+        )
     except Exception as exc:
         print(f'[ERROR] mesh file OBJ conversion: {exc}')
         raise HTTPException(
@@ -822,8 +852,7 @@ async def put_snapshot_mesh_ply(
     dest = os.path.join(dest_dir, f'{resolution}.ply')
 
     try:
-        with open(dest, 'wb') as handle:
-            handle.write(raw)
+        await asyncio.to_thread(_write_bytes, dest, raw)
     except OSError as exc:
         print(f'[ERROR] put_snapshot_mesh_ply write: {exc}')
         raise HTTPException(
@@ -986,6 +1015,7 @@ async def get_snapshot_capture_fixture(
     '/snapshots/{snapshot_id}/proxies/{index}/mesh',
     summary='Export a proxy as a mesh (PLY or OBJ), in stored coordinates',
 )
+@limiter.limit(MESH_RATE, key_func=signed_in_or_ip)
 async def get_snapshot_proxy_mesh(
     request: Request,
     current_user: OptionalUser,
@@ -1009,7 +1039,7 @@ async def get_snapshot_proxy_mesh(
     if index < 0 or index >= len(proxies):
         raise HTTPException(status_code=404, detail='Proxy not found')
     try:
-        body = trimesh_to_bytes(proxy_mesh(proxies[index]), fmt)
+        body = await run_in_threadpool(_proxy_mesh_bytes, proxies[index], fmt)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -1115,7 +1145,7 @@ async def get_snapshot_point_cloud_ply(
 
     try:
         pc = get_inline_point_cloud_primitive(doc, index)
-        ply_bytes = export_inline_point_cloud_ply(pc)
+        ply_bytes = await run_in_threadpool(export_inline_point_cloud_ply, pc)
     except IndexError:
         raise HTTPException(status_code=404, detail='Point cloud not found')
     except ValueError as exc:
@@ -1202,8 +1232,7 @@ async def put_snapshot_point_cloud_ply(
     dest = _point_cloud_path(request, snapshot_id, index)
 
     try:
-        with open(dest, 'wb') as handle:
-            handle.write(raw)
+        await asyncio.to_thread(_write_bytes, dest, raw)
     except OSError as exc:
         print(f'[ERROR] put_snapshot_point_cloud_ply write: {exc}')
         raise HTTPException(
@@ -1369,8 +1398,14 @@ async def put_snapshot_photo(
         request.app.snapshot_photo_upload_limit_bytes,
     )
 
+    # decoding and encoding are CPU work: off the event loop, as the evidence
+    # path does (S5); sniffed and size-checked before any pixel is decoded (S6)
     try:
-        image = open_upload_photo(raw)
+        image = await asyncio.to_thread(open_upload_photo, raw)
+    except ImageTooLarge as exc:
+        raise HTTPException(status_code=413, detail=str(exc))
+    except UnreadableImage:
+        raise HTTPException(status_code=400, detail='Invalid image file')
     except Exception:
         raise HTTPException(status_code=400, detail='Invalid image file')
 
@@ -1380,7 +1415,8 @@ async def put_snapshot_photo(
     legacy = _legacy_photo_path(request, snapshot_id, index)
 
     try:
-        size_bytes, width, height = compress_and_save_jpeg(
+        size_bytes, width, height = await asyncio.to_thread(
+            compress_and_save_jpeg,
             image,
             dest,
             max_bytes=request.app.snapshot_photo_max_output_bytes,

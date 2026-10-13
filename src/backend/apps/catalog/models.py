@@ -40,7 +40,8 @@ class User(BaseModel):
     disabled: Optional[bool] = None
     role: Role = "user"
     email_verified: bool = False
-    verification_token: Optional[str] = None
+    verification_token: Optional[str] = None       # tokens before 0.6.1.1
+    verification_token_sha256: Optional[str] = None
     verification_token_expires: Optional[datetime] = None
     # a token issued before this moment is refused (8.124 a)
     password_changed_at: Optional[datetime] = None
@@ -120,6 +121,11 @@ class ChangePasswordPayload(BaseModel):
 
 
 class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class ResendVerificationRequest(BaseModel):
+    """The address to send the verification mail to again (S10, 8.144)."""
     email: EmailStr
 
 

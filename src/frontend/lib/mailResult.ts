@@ -36,12 +36,14 @@ export function memberNotice(result: Pick<MemberByEmailResult, 'email' | 'result
       ? { text: `${result.email} added; the notice mail could not be sent (the membership stands)`, warning: true }
       : { text: `${result.email} added and notified`, warning: false }
   }
+  // the same words whether or not the address has an account: in a dataset an
+  // admin has not reviewed yet nothing here may tell the two apart (8.144 b)
   return result.mail_failed
     ? {
-      text: `No account for ${result.email}: the invitation exists but its mail could not be sent. Use Resend in the invitations list`,
+      text: `The invitation to ${result.email} exists but its mail could not be sent. Use Resend in the invitations list`,
       warning: true,
     }
-    : { text: `No account for ${result.email}: invitation sent`, warning: false }
+    : { text: `Invitation sent to ${result.email}`, warning: false }
 }
 
 /** The toast after Resend. */
