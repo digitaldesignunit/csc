@@ -102,6 +102,17 @@ gap.
 - gh-interface cards: 14 components still show the placeholder image (list in the archived 0.5
   plan); the `CSC_RadialSignature` card should say that reproducing a non-panel descriptor needs
   `RestPositionAlign=False` plus the PCA-plane section curve.
+- Convenient and secure sign-in for the GH client (user 2026-10-13). Today the `Session` component takes username
+  and password as Grasshopper inputs, so a Panel wired to them stores the password in clear in the `.gh` file (and
+  in every copy shared with others). Goal: no secret in any input, panel or document, and no retyping per session.
+  Candidate to grill: a device sign-in like `gh auth login`: the component shows a short code and opens the browser
+  at a `/connect` page; the user, signed in on the website, approves the device; the component polls and receives a
+  long-lived, revocable token for the GH client (scoped to the client, stored hashed on the server, last-used date,
+  expiry with renewal, a list with revoke in Settings), exchanged for the short-lived JWT as now. On the machine the
+  token lives in the Windows user's protected store (DPAPI / Credential Manager; macOS Keychain if Rhino for Mac
+  matters), never in the document; a `Sign out` clears it. Fallbacks to weigh: a personal access token pasted once
+  into a Rhino dialog (masked Eto field, not a GH input), or a masked password dialog per Rhino session. Until
+  then: a warning in the component description and the GH docs not to wire a Panel to the password input.
 
 ## Linked data
 
