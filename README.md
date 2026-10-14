@@ -582,6 +582,11 @@ the frontend is checked with `npx tsc --noEmit` and `npm run lint` in
 
 # Credits
 
+## Contributing
+
+Bug reports, requests and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
 ## Public Funding
 
 Part of this research was conducted within the project
