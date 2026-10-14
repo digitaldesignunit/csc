@@ -1,7 +1,8 @@
 name: CI
 
 # Guards what goes live (decision 8.114): pull requests to main, every release
-# (release.yml calls this workflow) and manual runs. No run per push. The wider
+# (release.yml calls this workflow) and manual runs. No run per push. tests/ci
+# runs in the versions job, which never skips. The wider
 # suite (tests/catalog, tests/grasshopper, slow tests) runs locally:
 # `invoke test-all`, and `invoke test-release` before tagging.
 #
@@ -67,6 +68,11 @@ jobs:
       - run: python scripts/ci/check_version.py
       # .zenodo.json carries the version and its CHANGELOG section
       - run: python scripts/ci/zenodo_metadata.py --check
+      # the release and workflow checks (action pins, release permissions,
+      # zenodo metadata): stdlib only, seconds; this job runs on every pull
+      # request, so a workflow or Dependabot change is checked too
+      - run: pip install pytest
+      - run: python -m pytest tests/ci -q -p no:cacheprovider
 
   backend:
     name: Backend tests
