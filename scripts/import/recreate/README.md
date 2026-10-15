@@ -66,7 +66,7 @@ columns), 4010 evidence records and 45474 reinforcement bars.
 lacks (openpyxl, manifold3d, trimesh, shapely), and CI does not run them.
 
     python -m venv ../import-venv
-    ../import-venv/Scripts/python.exe -m pip install -r scripts/import/recreate/requirements-import.txt
+    ../import-venv/Scripts/python.exe -m pip install -r scripts/import/requirements-import.txt
 
 Run the scripts as `python -I -X utf8 <script> ...` (isolated mode: the data is untrusted input). Every
 script takes its paths as arguments; the defaults are the places of the local rehearsal below. Computed

@@ -1,7 +1,10 @@
 """Run the geometry runner on the imported ReCreate snapshots of a LOCAL test instance.
 
-    python derive_local.py [--mongo-uri URI] [--db csc] [--assets DIR]
+    python derive_local.py [--mongo-uri URI] [--db csc] [--assets DIR] [--attribute recreate]
                            [--stages frame,shape_class,proxies,descriptors,complexity,previews] [--limit N]
+
+``--attribute`` names the import: its components carry `attributes.<name>` (default `recreate`; the EPFL
+stones use `epfl_stacking`).
 
 Rehearsal only: the database is the throwaway mongod of scripts/dev/serve_migrated.py (any host that is not
 this machine is refused), and the files go to the asset copy `--assets` of that instance, which must be
@@ -12,6 +15,7 @@ environment (backend packages and pymongo).
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import time
 from pathlib import Path
@@ -33,17 +37,21 @@ def main(argv=None) -> int:
     parser.add_argument('--db', default='csc')
     parser.add_argument('--assets', type=Path, default=common.DEFAULT_ASSETS,
                         help='the instance\'s asset folder (meshes, pointclouds, proxies, snapshot_previews)')
+    parser.add_argument('--attribute', default='recreate',
+                        help='the import: components with attributes.<name> are derived (default: %(default)s)')
     parser.add_argument('--stages', default=','.join(STAGES))
     parser.add_argument('--limit', type=int)
     args = parser.parse_args(argv)
     common.require_local(args.mongo_uri)
+    if not re.fullmatch(r'[a-z][a-z0-9_]*', args.attribute):
+        sys.exit(f'--attribute must be a plain name like recreate or epfl_stacking, not {args.attribute!r}')
     assets = common.require_dot_dev(args.assets, '--assets')
     db = MongoClient(args.mongo_uri)[args.db]
     stages = [s for s in args.stages.split(',') if s]
     env = Env(meshes_dir=str(assets / 'meshes'), point_clouds_dir=str(assets / 'pointclouds'),
               preview_dir=str(assets / 'snapshot_previews') if 'previews' in stages else None)
     identities = {i['_id']: i for i in db['component_identities'].find(
-        {'attributes.recreate': {'$exists': True}})}
+        {f'attributes.{args.attribute}': {'$exists': True}})}
     todo = list(db['component_snapshots'].find({'identity_id': {'$in': list(identities)}}))
     if args.limit:
         todo = todo[:args.limit]

@@ -580,16 +580,26 @@ See "Local development and tests" above: `invoke test` runs the Python tests;
 the frontend is checked with `npx tsc --noEmit` and `npm run lint` in
 `src/frontend`. CI runs the route tests and the frontend checks on a PR (see above for the rest).
 
-## Test data: ReCreate pilot elements
+## Test data: open datasets
 
-`scripts/import/recreate/` imports an open dataset of 1150 reclaimed precast concrete elements (walls,
-hollow-core and solid slabs, beams, columns of three donor buildings; ReCreate, EU Horizon 2020, grant
-958200, <https://doi.org/10.5281/zenodo.16809738>, CC BY 4.0) as a test case: it fetches the files from
-Zenodo (never committed, MD5 checked), computes a mesh per product, plans the components and their evidence
-and writes them through the API into three private datasets. It has its own `requirements-import.txt`
-(not part of the backend requirements and not run by CI) and tests in `tests/import_recreate/`. Purpose,
-licence and attribution, environments, the order of the steps, the local rehearsal and the production
-procedure are in [`scripts/import/recreate/README.md`](scripts/import/recreate/README.md) (decision 8.145).
+Two open datasets are importable as test cases, each with a tool folder in `scripts/import/` (fetch from
+Zenodo, never committed and MD5 checked; prepare; plan; write through the API; spot check), tests in
+`tests/import_*/` and one shared `scripts/import/requirements-import.txt` (not part of the backend
+requirements and not run by CI):
+
+- **ReCreate pilot elements** (`scripts/import/recreate/`, decision 8.145): 1150 reclaimed precast concrete
+  elements (walls, hollow-core and solid slabs, beams, columns of three donor buildings; ReCreate, EU
+  Horizon 2020, grant 958200, <https://doi.org/10.5281/zenodo.16809738>, CC BY 4.0). It computes a mesh per
+  product and plans the components and their evidence into three private datasets.
+  [`scripts/import/recreate/README.md`](scripts/import/recreate/README.md).
+- **EPFL stones for augmented stacking** (`scripts/import/epfl_stacking/`, decision 8.146): 452 quarry offcut
+  stones, each a scanned point cloud and a Poisson mesh (IBOIS and EESD, EPFL,
+  <https://doi.org/10.5281/zenodo.7180964>, MIT licence), prepared by the Grasshopper client's mesh levels
+  (inline preview, reduced and detailed meshes, inline and full point cloud) into one private dataset.
+  [`scripts/import/epfl_stacking/README.md`](scripts/import/epfl_stacking/README.md).
+
+Purpose, licence and attribution, environments, the order of the steps, the local rehearsal and the
+production procedure of each are in its README.
 
 # Credits
 

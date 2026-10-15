@@ -21,7 +21,6 @@ public is a separate, deliberate step.
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import sys
 import time
@@ -34,9 +33,11 @@ import recreate_common as common  # noqa: E402
 REPO = common.REPO
 sys.path.insert(0, str(REPO / 'grasshopper_lib'))
 import numpy as np  # noqa: E402
-import requests  # noqa: E402
 from csc_gh.build import mesh_levels  # noqa: E402
 from csc_gh.ply import write_ply_mesh  # noqa: E402
+
+# the API client, the token's user and the dataset set-up are shared with the other import tools
+from recreate_common import Api, ensure_datasets, user_id_of  # noqa: E402,F401
 
 CLIENT = common.CLIENT
 
@@ -68,37 +69,6 @@ def inline_mesh(out: Path, item):
     xyz, tri = read_ply(out / item['mesh_ply'])
     return {'vertices': [[round(float(c), 2) for c in v] for v in xyz],
             'faces': [[int(i) for i in f] for f in tri]}, xyz, tri
-
-
-class Api:
-    def __init__(self, server, token, renew=None):
-        self.server = server.rstrip('/')
-        self.token = token
-        self.renew = renew
-        self.http = requests.Session()
-        self.calls = 0
-
-    def request(self, method, path, **kw):
-        for attempt in (1, 2):
-            headers = {'Authorization': 'Bearer ' + self.token, 'X-CSC-Client': CLIENT}
-            self.calls += 1
-            response = self.http.request(method, self.server + path, headers=headers, timeout=300, **kw)
-            if response.status_code == 401 and attempt == 1 and self.renew:
-                self.token = self.renew()          # the token ran out during a long run
-                continue
-            return response
-
-    def json(self, method, path, ok=(200, 201), **kw):
-        response = self.request(method, path, **kw)
-        if response.status_code not in ok:
-            raise RuntimeError(f'{method} {path} -> {response.status_code}: {response.text[:400]}')
-        return response.json() if response.content else None
-
-
-def user_id_of(token):
-    payload = token.split('.')[1]
-    payload += '=' * (-len(payload) % 4)
-    return json.loads(base64.urlsafe_b64decode(payload))['sub']
 
 
 def identity_body(item, mesh):
@@ -199,20 +169,6 @@ def run_item(api, out, item, stats, log):
         elif record.get('status') == 'draft':
             api.json('POST', f'/evidence/{record["_id"]}/submit')
             api.json('POST', f'/evidence/{record["_id"]}/publish')
-
-
-def ensure_datasets(api, plan, owner_id, log, wanted):
-    have = {d['_id'] for d in api.json('GET', '/datasets')}
-    for dataset in plan['datasets']:
-        if dataset['id'] not in wanted:
-            continue
-        if dataset['id'] not in have:
-            api.json('POST', '/datasets', ok=(201,), json={
-                'id': dataset['id'], 'name': dataset['name'],
-                'description': dataset['description'], 'visibility': 'members'})
-            log(f'dataset {dataset["id"]} created')
-        api.json('PUT', f'/datasets/{dataset["id"]}/members/{owner_id}',
-                 json={'roles': ['moderator', 'contributor']})
 
 
 def parse_args(argv=None):

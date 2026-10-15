@@ -14,119 +14,20 @@ Collection Guidelines, Templates, & Pilot Element Data", https://doi.org/10.5281
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Callable, Dict, List
-from urllib.parse import urlsplit
-from urllib.request import urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import recreate_common as common  # noqa: E402
 
+# the checks and the download live in recreate_common (the EPFL fetch step uses them too); the names stay
+# here for callers and tests
+from recreate_common import (  # noqa: E402,F401
+    ALLOWED_HOST, API, CHUNK, TIMEOUT, Opener, default_open, download, expected_md5, load_record, md5_of,
+    safe_name, sync, url_problem)
+
 RECORD_ID = '16809738'
-API = 'https://zenodo.org/api/records/{record}'
-CHUNK = 1 << 20
-TIMEOUT = 120
-
-Opener = Callable[[str], object]       # url -> a binary file-like object (context manager)
-
-
-def default_open(url: str):
-    return urlopen(url, timeout=TIMEOUT)             # noqa: S310 -- https, the Zenodo API
-
-
-def expected_md5(checksum: str) -> str:
-    """``md5:<hex>`` of the record, as a bare lower-case hex string. Whitespace and carriage returns are
-    stripped: a list read on Windows carries them (the first version of this check failed on them)."""
-    kind, _, digest = str(checksum).strip().partition(':')
-    if kind.strip().lower() != 'md5' or not digest.strip():
-        raise ValueError(f'not an md5 checksum: {checksum!r}')
-    return digest.strip().lower()
-
-
-def md5_of(path: Path) -> str:
-    digest = hashlib.md5()                           # noqa: S324 -- the record's own sum, not security
-    with open(path, 'rb') as handle:
-        for block in iter(lambda: handle.read(CHUNK), b''):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-ALLOWED_HOST = 'zenodo.org'
-
-
-def url_problem(url: str) -> str:
-    """Why a file URL of the record is not fetched, or '' when it may be: only https, and only from
-    zenodo.org (or a sub-domain of it). A record is data from the network; it must not be able to send
-    this tool to a local file, a plain-http server or another site."""
-    parts = urlsplit(str(url))
-    host = (parts.hostname or '').lower()
-    if parts.scheme != 'https':
-        return f'the URL is not https ({parts.scheme or "no scheme"})'
-    if host != ALLOWED_HOST and not host.endswith('.' + ALLOWED_HOST):
-        return f'the host is not {ALLOWED_HOST} ({host or "none"})'
-    return ''
-
-
-def safe_name(key: str) -> str:
-    """A file name of the record that cannot leave the destination folder."""
-    if not key or key in ('.', '..') or '/' in key or '\\' in key or '\x00' in key:
-        raise ValueError(f'unsafe file name in the record: {key!r}')
-    return key
-
-
-def load_record(record: str, record_file: Path = None, opener: Opener = default_open) -> Dict:
-    """The record metadata: from a local JSON file (offline, tests) or from the Zenodo API."""
-    if record_file is not None:
-        return json.loads(Path(record_file).read_text(encoding='utf-8'))
-    with opener(API.format(record=record)) as response:
-        return json.loads(response.read().decode('utf-8'))
-
-
-def download(url: str, target: Path, opener: Opener = default_open) -> str:
-    """Download ``url`` to ``target`` through a temporary name; returns the MD5 of what arrived."""
-    part = target.with_name(target.name + '.part')
-    digest = hashlib.md5()                           # noqa: S324
-    try:
-        with opener(url) as response, open(part, 'wb') as handle:
-            for block in iter(lambda: response.read(CHUNK), b''):
-                digest.update(block)
-                handle.write(block)
-        part.replace(target)
-    finally:
-        part.unlink(missing_ok=True)
-    return digest.hexdigest()
-
-
-def sync(record: Dict, dest: Path, opener: Opener = default_open, log=print) -> Dict[str, List[str]]:
-    """Bring ``dest`` in line with the record. Returns the names ``fetched``, ``skipped`` (already there
-    with the right sum) and ``refused`` (the sum did not match; the file is deleted)."""
-    dest.mkdir(parents=True, exist_ok=True)
-    done: Dict[str, List[str]] = {'fetched': [], 'skipped': [], 'refused': []}
-    for entry in record['files']:
-        name = safe_name(entry['key'])
-        want = expected_md5(entry['checksum'])
-        target = dest / name
-        if target.is_file() and md5_of(target) == want:
-            log(f'  ok      {name}')
-            done['skipped'].append(name)
-            continue
-        problem = url_problem(entry['links']['self'])
-        if problem:
-            log(f'  REFUSED {name}: {problem}; not fetched')
-            done['refused'].append(name)
-            continue
-        got = download(entry['links']['self'], target, opener)
-        if got != want:
-            target.unlink(missing_ok=True)           # a wrong file is never kept
-            log(f'  REFUSED {name}: md5 {got}, the record says {want}; deleted')
-            done['refused'].append(name)
-        else:
-            log(f'  fetched {name}')
-            done['fetched'].append(name)
-    return done
 
 
 def main(argv=None, opener: Opener = default_open) -> int:
