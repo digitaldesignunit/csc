@@ -928,6 +928,12 @@ Branch `v-0.6.2.0`. No feature work beside the hardening. Items to cut into task
   PyJWT; CSP with nonces; signed `SHA256SUMS`; per-file hashes for user objects; a backend read-only flag for
   maintenance; the username character set after a check of the stored names; the module splits; the test gaps.
 
+**Tasks (cut 2026-10-16; one builds at a time, the user commits after each review):** T1 = A + B (a) (sent
+2026-10-16); T2 = B (b), reproduce first; T3 settings object and logging; T4 load-and-authorise helper, change-log
+writer, module splits; T5 PyJWT, shared rate-limit store, per-account throttle, early body-size rejection, username
+character set; T6 CSP with nonces; T7 signed `SHA256SUMS`, per-file hashes for user objects, read-only flag. The test
+gaps go with the task that touches each area.
+
 **Candidates of 0.6.3 (moved out by 8.150):** Ferroscan to reinforcement layout; the IFC export with the PROV-O /
 JSON-LD / GraphML form of the timeline (8.140 h); HKS v2 and HKS level 2; RL8; the GH device sign-in (`FUTURE.md`).
 The SH descriptor stays blocked on its licence.
