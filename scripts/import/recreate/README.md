@@ -5,6 +5,9 @@ three donor buildings, with their geometry, concrete values and reinforcement, i
 API like any other contribution. The data is **fetched from Zenodo and never committed**; this folder holds
 the tools only.
 
+Purpose: a validation of the CSC data model against a precedent component database (an element inventory
+of reclaimed precast concrete with its own schema), part of the maintainer's doctoral thesis (decision 8.147).
+
 ## Source, licence, attribution
 
 ReCreate (EU Horizon 2020, grant agreement 958200), *Reclaimed Precast Concrete Elements: Data Collection

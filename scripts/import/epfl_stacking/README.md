@@ -6,6 +6,9 @@ data is **fetched from Zenodo and never committed**; this folder holds the tools
 of the ReCreate import (`scripts/import/recreate/`, decision 8.145) and reuses its guards, sign-in and
 Zenodo checks (`recreate_common.py`).
 
+Purpose: a validation of the CSC data model against a precedent component database (a scanned inventory of
+irregular stone offcuts with geometry only), part of the maintainer's doctoral thesis (decision 8.147).
+
 ## Source, licence, attribution
 
 "Dataset of mineral scraps for augmented stacking", IBOIS and EESD, EPFL; GitHub

@@ -582,6 +582,11 @@ the frontend is checked with `npx tsc --noEmit` and `npm run lint` in
 
 ## Test data: open datasets
 
+**Why:** the imports validate the data model. Each dataset is a precedent of another component database or
+inventory, recorded by other researchers with their own schema; importing it without loss, with every
+assumption written into the records, shows that the CSC data model can represent such precedents. This
+validation is part of the maintainer's doctoral thesis (decision 8.147).
+
 Two open datasets are importable as test cases, each with a tool folder in `scripts/import/` (fetch from
 Zenodo, never committed and MD5 checked; prepare; plan; write through the API; spot check), tests in
 `tests/import_*/` and one shared `scripts/import/requirements-import.txt` (not part of the backend
