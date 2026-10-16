@@ -5,7 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.1.1] - unreleased
+## [0.6.2.0] - unreleased
+
+A robustness release (decision 8.150): the structural security items deferred by 8.144,
+the inline geometry budget and the follow-ups of the open-data imports. No new features.
+
+### Changed
+
+- **Inline geometry budget** (decision 8.148): a version keeps at most 1000 mesh faces and
+  1000 points inline. A mesh of more than 1000 faces is reduced to 1000 for the inline
+  preview and its original goes up as `detailed.ply` (the rule "up to 8000 faces fully
+  inline" is gone); every point cloud of more than 1000 points goes up in full. Applies
+  to the shared Grasshopper library `csc_gh` (through `CSC_Update`, no component change),
+  the robot scan processing, the geometry correction script and the open-data imports.
+  The backend still accepts larger inline geometry; existing versions stay as they are.
+  The tooltip of `FetchReducedGeometry` still says "at most 5000 points" until the next
+  export of the components.
+
+### Added
+
+- **Marker for uploaded point clouds**: a snapshot lists the indices of its uploaded full
+  point clouds in `point_cloud_files` (set by the upload, removed by the delete, not
+  writable by clients), so an import resumes without probing the file.
+
+## [0.6.1.1] - 2026-10-13
 
 A security patch (decision 8.144), from a read-only review of 0.6.1.0 in five areas:
 backend authentication, injection and uploads, authorisation, infrastructure and

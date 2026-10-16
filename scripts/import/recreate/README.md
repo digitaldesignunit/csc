@@ -41,7 +41,8 @@ columns), 4010 evidence records and 45474 reinforcement bars.
   interior walls have the plan axes swapped, detected and swapped back; mirrored products are reflected
   about x = L / 2; a void of 16 corners is two hulls of 8; cut hollow-core slabs spread their cores evenly).
   Nothing of this enters the backend or the geometry runner: the mesh is uploaded like a captured mesh
-  (inline, plus `detailed.ply` above 500 faces, decision 8.95).
+  (inline up to 1000 faces, else reduced to 1000 inline and the whole mesh as `detailed.ply`, decisions 8.95
+  and 8.148).
 - **Origin**: `deinstallation`, 2023 (year precision), from the donor building (name and identifier, year
   built, use, `prefabricated`; place with coordinates; position in work = wing, floor, grid, facade
   orientation; connection types; the deconstruction company as organisation). Version 0 is effective from

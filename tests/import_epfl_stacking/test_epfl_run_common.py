@@ -12,35 +12,18 @@ from test_epfl_plan import meta_of
 class FakeApi:
     """Answers the calls of ``run_item`` for a stone that exists in a chosen state; remembers every call."""
 
-    def __init__(self, status='published', resolutions=None, exists=True, cloud='inline', cloud_size=0):
+    def __init__(self, status='published', resolutions=None, exists=True, cloud_files=None):
         self.status, self.resolutions, self.exists = status, resolutions or {}, exists
-        self.cloud, self.cloud_size = cloud, cloud_size            # what GET .../point_clouds/0.ply serves
-        self.calls, self.bodies, self.streamed, self.read, self.closed = [], [], [], [], []
+        self.cloud_files = cloud_files                  # the snapshot's `point_cloud_files` (None: no marker)
+        self.calls, self.bodies = [], []
 
     def request(self, method, path, **kw):
         self.calls.append((method, path))
-        if path.endswith('/point_clouds/0.ply'):
-            return self._cloud_response(path, kw)
         found = 200 if self.exists else 404
 
         class Found:
             status_code = found
         return Found()
-
-    def _cloud_response(self, path, kw):
-        api = self
-        self.streamed.append(bool(kw.get('stream')))
-        file = {'Cache-Control': 'private, max-age=86400', 'Content-Length': str(self.cloud_size)}
-        inline = {'Cache-Control': 'private, max-age=3600', 'Content-Length': '69137'}
-
-        class Cloud:
-            status_code = 404 if api.cloud == 'none' else 200
-            headers = file if api.cloud == 'file' else inline
-            content = property(lambda self: api.read.append(path) or b'the whole file')   # a download
-
-            def close(self):
-                api.closed.append(path)
-        return Cloud()
 
     def json(self, method, path, ok=(200, 201), **kw):
         self.calls.append((method, path))
@@ -50,7 +33,10 @@ class FakeApi:
         if method == 'POST' and path == '/identities':
             return {'snapshot': {'_id': 'SNAP-1'}}
         if path == '/snapshots/SNAP-1':
-            return {'status': self.status, 'mesh_ply_resolutions': self.resolutions}
+            current = {'status': self.status, 'mesh_ply_resolutions': self.resolutions}
+            if self.cloud_files is not None:
+                current['point_cloud_files'] = self.cloud_files
+            return current
         return None
 
 
@@ -110,27 +96,24 @@ def test_a_draft_that_stopped_midway_sends_only_what_is_missing(run_module, plan
     assert ('POST', '/snapshots/SNAP-1/publish?promote=1') in api.calls
 
 
-def test_a_cloud_the_snapshot_already_has_is_not_sent_again(run_module, plan_module, tmp_path):
+def test_a_cloud_the_marker_lists_is_not_sent_again(run_module, plan_module, tmp_path):
     item = one_item(plan_module, tmp_path)
-    size = (tmp_path / item['files']['cloud']).stat().st_size
-    api, counts = FakeApi(status='draft', cloud='file', cloud_size=size), stats()
+    api, counts = FakeApi(status='draft', cloud_files=[0]), stats()
     run_module.run_item(api, tmp_path, item, counts, lambda _m: None)
     puts = [p for m, p in api.calls if m == 'PUT']
     assert '/snapshots/SNAP-1/point_clouds/0.ply' not in puts
     assert puts == ['/snapshots/SNAP-1/meshes/0/reduced', '/snapshots/SNAP-1/meshes/0/detailed']
     assert counts['clouds'] == 0 and counts['published'] == 1
-    assert api.streamed == [True] and api.read == [] and len(api.closed) == 1      # headers only, closed
+    assert not any(p.endswith('/point_clouds/0.ply') for _, p in api.calls)         # the file is not probed
 
 
-@pytest.mark.parametrize('cloud, size_delta', [('inline', 0), ('none', 0), ('file', 1)])
-def test_a_cloud_that_is_not_there_or_not_whole_is_sent(run_module, plan_module, tmp_path, cloud, size_delta):
-    """The inline fallback of the API, no cloud, or a file of another size (a cut-off upload): sent."""
+@pytest.mark.parametrize('cloud_files', [None, [], [1]])
+def test_a_cloud_without_the_marker_is_sent(run_module, plan_module, tmp_path, cloud_files):
+    """No marker (a version of before 0.6.2, or an upload that stopped), or another cloud's: sent."""
     item = one_item(plan_module, tmp_path)
-    size = (tmp_path / item['files']['cloud']).stat().st_size
-    api, counts = FakeApi(status='draft', cloud=cloud, cloud_size=size + size_delta), stats()
+    api, counts = FakeApi(status='draft', cloud_files=cloud_files), stats()
     run_module.run_item(api, tmp_path, item, counts, lambda _m: None)
     assert ('PUT', '/snapshots/SNAP-1/point_clouds/0.ply') in api.calls and counts['clouds'] == 1
-    assert api.read == []                                                          # never downloaded
 
 
 def test_a_stone_without_a_staged_cloud_never_asks_for_one(run_module, plan_module, tmp_path):

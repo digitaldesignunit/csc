@@ -16,7 +16,7 @@ Per stone, as the Grasshopper client does it (decision 8.95): the identity is cr
 preview mesh and the inline point cloud; the `reduced` and `detailed` mesh files go up through
 `PUT /snapshots/{id}/meshes/0/<level>` (a level the snapshot already lists in `mesh_ply_resolutions` is not
 sent again), the full cloud through `PUT /snapshots/{id}/point_clouds/0.ply` (not sent again when the
-snapshot already serves a file of the size of the prepared one); then the version is submitted
+snapshot lists the cloud in `point_cloud_files`, the marker the upload route sets); then the version is submitted
 and published (`publish?promote=1`). Resumable: fixed identity ids (uuid5 of `epfl_stacking:<ID>`); a stone
 that exists and is published is left alone (a published version is frozen), one that stopped in `draft`,
 `rejected` or `pending` goes on from where it was. A second run creates nothing. The dataset is created
@@ -70,20 +70,11 @@ def validate(out: Path, items):
 
 
 # ONE STONE ----------------------------------------------------------------------
-def cloud_is_there(api, snapshot_id, expected_size: int) -> bool:
-    """True when the snapshot already holds its full cloud as a file, found without downloading it. The API
-    has no marker for it: ``GET .../point_clouds/0.ply`` serves the file when there is one (``Cache-Control:
-    private, max-age=86400``, its size as Content-Length) and else builds a small PLY from the inline points
-    (``max-age=3600``, another size). The response is read for its headers only and closed."""
-    response = api.request('GET', f'/snapshots/{snapshot_id}/point_clouds/0.ply', stream=True)
-    try:
-        if response.status_code != 200:
-            return False
-        headers = response.headers
-        return ('max-age=86400' in (headers.get('Cache-Control') or '')
-                and str(headers.get('Content-Length') or '') == str(expected_size))
-    finally:
-        response.close()
+def cloud_is_there(current) -> bool:
+    """True when the snapshot already holds its full cloud as a file: the upload route lists the index in
+    ``point_cloud_files`` once the file is written (a version uploaded before 0.6.2 has no marker: its cloud
+    goes up again, which replaces the file)."""
+    return 0 in (current.get('point_cloud_files') or [])
 
 
 def upload(api, out: Path, item, snapshot_id, current, stats):
@@ -97,7 +88,7 @@ def upload(api, out: Path, item, snapshot_id, current, stats):
             stats['ply'] += 1
     if 'cloud' in item['files']:
         path = out / item['files']['cloud']
-        if not cloud_is_there(api, snapshot_id, path.stat().st_size):
+        if not cloud_is_there(current):
             api.json('PUT', f'/snapshots/{snapshot_id}/point_clouds/0.ply',
                      files={'point_cloud_file': ('cloud.ply', path.read_bytes(), 'application/octet-stream')})
             stats['clouds'] += 1

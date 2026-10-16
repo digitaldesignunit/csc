@@ -860,6 +860,15 @@ class ComponentSnapshot(BaseModel):
             "``.../detailed.ply``. Example: {'0': ['reduced', 'detailed']}."
         ),
     )
+    point_cloud_files: Optional[List[int]] = Field(
+        None,
+        description=(
+            "Indices of ``geometry.point_clouds`` whose full cloud is stored "
+            "as a file (``point_clouds/<snapshot_id>/<i>.ply``); set by the "
+            "upload route. Absent on versions uploaded before the marker "
+            "existed. Example: [0]."
+        ),
+    )
     created: str = Field(
         description="ISO timestamp when this snapshot was created"
     )

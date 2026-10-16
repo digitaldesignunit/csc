@@ -176,9 +176,10 @@ def test_capture_markers_and_fixtures(server):
 # GEOMETRY -------------------------------------------------------------------
 @pytest.mark.parametrize('faces, preview, reduced, original', [
     (100, None, None, False), (500, None, None, False),
-    (501, None, None, True), (8000, None, None, True),
-    (8001, 500, None, True), (15000, 500, None, True),
-    (15001, 500, 10000, True), (600000, 500, 10000, True),
+    (501, None, None, False), (1000, None, None, False),
+    (1001, 1000, None, True), (8000, 1000, None, True),
+    (8001, 1000, None, True), (15000, 1000, None, True),
+    (15001, 1000, 10000, True), (600000, 1000, 10000, True),
 ])
 def test_mesh_levels(faces, preview, reduced, original):
     plan = b.mesh_levels(faces)
@@ -196,7 +197,9 @@ def test_inline_meshes_and_clouds_are_checked():
     with pytest.raises(b.BuildError):
         b.inline_mesh([], [])
     cloud = b.inline_point_cloud(np.random.default_rng(0).random((12000, 3)))
-    assert len(cloud['points']) == b.POINT_CLOUD_INLINE_MAX
+    assert len(cloud['points']) == b.POINT_CLOUD_INLINE_MAX == 1000
+    exact = b.inline_point_cloud(np.zeros((1000, 3)))
+    assert len(exact['points']) == 1000
     small = b.inline_point_cloud(np.zeros((10, 3)), np.ones((10, 3)))
     assert len(small['points']) == 10 and len(small['colors']) == 10
     with pytest.raises(b.BuildError):

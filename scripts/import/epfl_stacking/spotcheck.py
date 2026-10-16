@@ -68,6 +68,7 @@ def main(argv=None) -> int:
             'mesh levels': all(level in resolutions for level in ('reduced', 'detailed') if level in item['files']),
         }
         if 'cloud' in item['files']:
+            checks['cloud marker'] = 0 in (snap.get('point_cloud_files') or [])
             reply = requests.get(f'{server}/snapshots/{snap["_id"]}/point_clouds/0.ply', headers=headers)
             checks['staged cloud'] = reply.status_code == 200 and \
                 len(reply.content) == (out / item['files']['cloud']).stat().st_size

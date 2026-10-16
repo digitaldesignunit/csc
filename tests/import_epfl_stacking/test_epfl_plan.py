@@ -80,8 +80,8 @@ def meta_of(stone_id='A0', faces=24100, watertight=True, reduced=10000, detailed
             'cloud_file': f'pcd_high_res_{stone_id}.ply', 'vertices': faces // 2, 'faces': faces,
             'bbox_mm': [445.0, 304.0, 72.0], 'origin_mm': [-222.0, -152.0, -36.0], 'watertight': watertight,
             'volume_cm3': 1.0 if watertight else None, 'has_colors': True,
-            'levels': {'preview_faces': 500, 'reduced_faces': reduced or None, 'detailed': detailed},
-            'cloud': {'points': 20171, 'scale_to_mesh_unit': scale, 'inline_points': 5000, 'staged': staged},
+            'levels': {'preview_faces': 1000, 'reduced_faces': reduced or None, 'detailed': detailed},
+            'cloud': {'points': 20171, 'scale_to_mesh_unit': scale, 'inline_points': 1000, 'staged': staged},
             'mean_color': list(color) if color else None, 'files': files, 'flags': []}
 
 
@@ -115,7 +115,7 @@ def test_the_version_is_dated_with_the_release_and_says_so(plan_module):
     notes = capture['notes']
     for part in ('publication date of the dataset, not the scan date', 'remeshed_high_res_A0.ply',
                  'pcd_high_res_A0.ply', 'in metres in the source files and multiplied by 1000',
-                 'preview 500 faces, reduced 10000 faces', 'https://doi.org/10.5281/zenodo.7180964'):
+                 'preview 1000 faces, reduced 10000 faces', 'https://doi.org/10.5281/zenodo.7180964'):
         assert part in notes, part
 
 
@@ -170,7 +170,7 @@ def test_a_prepared_stone_validates_against_the_backend_models(plan_module, prep
     assert run.validate(tmp_path / 'out', [item]) == []
     body = run.identity_body(item, run.read_preview(tmp_path / 'out', item))
     assert len(body['snapshot']['geometry']['meshes'][0]['faces']) == meta['levels']['preview_faces']
-    assert len(body['snapshot']['geometry']['point_clouds'][0]['points']) == 5000
+    assert len(body['snapshot']['geometry']['point_clouds'][0]['points']) == 1000
     # and a body the models refuse is refused here too
     bad = {**item, 'identity': {**item['identity'], 'origin': {'kind': 'not-a-kind'}}}
     problems = run.validate(tmp_path / 'out', [bad])

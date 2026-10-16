@@ -1099,6 +1099,51 @@ async def get_snapshot_deviation_map(
         headers={'ETag': etag, 'Cache-Control': 'private, max-age=86400'})
 
 
+async def _mark_point_cloud_file(
+    request: Request,
+    snapshot_id: str,
+    index: int,
+    present: bool,
+) -> list:
+    """
+    Record that the full cloud of ``geometry.point_clouds[index]`` is (or no
+    longer is) stored as a file in ``point_cloud_files``, and refresh the
+    snapshot etag. Reads the stored document again (the upload took its time)
+    and returns the sorted index list.
+    """
+    snapshot_doc = await _load_snapshot(request, snapshot_id)
+    indices = {int(i) for i in snapshot_doc.get('point_cloud_files') or []}
+    if present:
+        indices.add(index)
+    else:
+        indices.discard(index)
+    marked = sorted(indices)
+
+    modified = now_iso()
+    merged = dict(snapshot_doc)
+    merged['point_cloud_files'] = marked
+    merged['lastmodified'] = modified
+    etag = compute_snapshot_etag(merged)
+
+    snapshots = await get_snapshots_col(request)
+    try:
+        await snapshots.update_one(
+            {'_id': snapshot_id},
+            {'$set': {
+                'point_cloud_files': marked,
+                'lastmodified': modified,
+                'etag': etag,
+            }},
+        )
+    except PyMongoError as exc:
+        print(f'[ERROR] _mark_point_cloud_file DB error: {exc}')
+        raise HTTPException(
+            status_code=500,
+            detail='Failed to update snapshot point cloud manifest',
+        )
+    return marked
+
+
 @router.get(
     '/snapshots/{snapshot_id}/point_clouds/{index}.ply',
     summary=(
@@ -1240,6 +1285,9 @@ async def put_snapshot_point_cloud_ply(
             detail='Failed to save point cloud file',
         )
 
+    marked = await _mark_point_cloud_file(
+        request, snapshot_id, index, True)
+
     await derive_sync(request, snapshot_id)
     return JSONResponse(
         status_code=200,
@@ -1247,6 +1295,7 @@ async def put_snapshot_point_cloud_ply(
             'snapshot_id': snapshot_id,
             'index': index,
             'size_bytes': len(raw),
+            'point_cloud_files': marked,
         },
     )
 
@@ -1296,6 +1345,9 @@ async def delete_snapshot_point_cloud_ply(
             detail='Failed to delete point cloud file',
         )
 
+    marked = await _mark_point_cloud_file(
+        request, snapshot_id, index, False)
+
     await derive_sync(request, snapshot_id)
     return JSONResponse(
         status_code=200,
@@ -1303,6 +1355,7 @@ async def delete_snapshot_point_cloud_ply(
             'snapshot_id': snapshot_id,
             'index': index,
             'ok': True,
+            'point_cloud_files': marked,
         },
     )
 

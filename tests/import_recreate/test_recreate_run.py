@@ -98,3 +98,24 @@ def test_an_evidence_record_found_rejected_or_withdrawn_is_logged_with_its_state
     # nothing is published or submitted for it: the behaviour is the one it was
     assert ('POST', f'/evidence/EV-{state}/publish') not in api.calls
     assert ('POST', f'/evidence/EV-{state}/submit') not in api.calls
+
+
+# THE INLINE BUDGET (decision 8.148) -----------------------------------------
+def test_a_mesh_within_the_budget_is_inline_as_it_is(run_module):
+    trimesh = pytest.importorskip('trimesh')
+    box = trimesh.creation.box(extents=(300, 200, 150))
+    xyz, tri = run_module.preview_of(box.vertices, box.faces)
+    assert len(tri) == 12 and len(xyz) == 8
+
+
+def test_a_mesh_above_the_budget_is_reduced_to_it_for_the_preview(run_module, tmp_path):
+    trimesh = pytest.importorskip('trimesh')
+    pytest.importorskip('fast_simplification')
+    sphere = trimesh.creation.icosphere(subdivisions=3, radius=100.0)        # 1280 faces
+    xyz, tri = run_module.preview_of(sphere.vertices, sphere.faces)
+    assert 900 <= len(tri) <= 1000
+    assert tri.max() < len(xyz)
+    path = tmp_path / 'sphere.ply'
+    sphere.export(path, file_type='ply', encoding='binary')
+    read_xyz, read_tri = run_module.read_ply(path)
+    assert len(read_tri) == 1280                                              # the file is read whole

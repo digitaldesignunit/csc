@@ -147,6 +147,25 @@ def test_a_small_mesh_is_its_own_preview(tmp_path):
     assert not (tmp_path / 'meshes').exists()
 
 
+def test_a_mesh_above_the_inline_budget_is_reduced_for_the_preview(tmp_path):
+    mesh = _sphere(3)                      # 1280 faces: above the 1000 of the inline budget
+    assert NS['MESH_PRIMITIVE_TARGET'] < mesh.Faces.Count <= NS['MESH_REDUCED_THRESHOLD']
+    entry, levels = NS['export_mesh'](mesh, str(tmp_path), 0, [1, 2, 3])
+    assert levels == ['detailed']
+    assert len(entry['faces']) <= NS['MESH_PRIMITIVE_TARGET'] * 1.1
+    original = (tmp_path / 'meshes' / '0' / 'detailed.ply').read_bytes()
+    assert len(NS['parse_ply'](original)['faces']) == mesh.Faces.Count
+
+
+def test_a_cloud_up_to_the_budget_is_inline_only(tmp_path):
+    cloud = G.PointCloud()
+    for p in np.random.default_rng(2).random((NS['POINT_CLOUD_INLINE_MAX'], 3)) * 100:
+        cloud.Add(G.Point3d(float(p[0]), float(p[1]), float(p[2])))
+    entry, staged = NS['export_point_cloud'](cloud, str(tmp_path), 0)
+    assert not staged and len(entry['points']) == NS['POINT_CLOUD_INLINE_MAX']
+    assert not (tmp_path / 'point_clouds').exists()
+
+
 def test_a_big_cloud_is_staged_and_thinned(tmp_path):
     cloud = G.PointCloud()
     rng = np.random.default_rng(1)

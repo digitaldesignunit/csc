@@ -60,7 +60,8 @@ PREFIXES: Dict[str, str] = {
 JSON_KEYS = (
     'geometry', 'descriptors', 'derivation', 'frame', 'bbx', 'color',
     'payload', 'attributes', 'position', 'status_history',
-    'mesh_ply_resolutions', 'context', 'verification', 'capture',
+    'mesh_ply_resolutions', 'point_cloud_files', 'context', 'verification',
+    'capture',
 )
 
 _DATETIME_TERMS = {

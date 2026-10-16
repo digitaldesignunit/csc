@@ -239,6 +239,7 @@ def _new_snapshot(body: SnapshotDraftBody, *, identity_id: str, version: int,
         'frame': None, 'bbx': None,
         'added_by_user_id': user.id, 'added_by_username': user.username,
         'photo_count': 0, 'mesh_ply_resolutions': {},
+        'point_cloud_files': [],
         # a new version is new input for every stage (8.136)
         'derivation_due': now,
         'created': now, 'lastmodified': now,
