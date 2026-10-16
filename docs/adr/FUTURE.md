@@ -177,4 +177,6 @@ gap.
 
 ## Housekeeping
 
+- **Transactions for record write plus change-log entry** (8.159 d, 2026-10-16): wrap each write and its `log_change` in a MongoDB transaction once the T4 refactor has put the writes in fewer places; needs a session through the write helpers, a one-node replica set for the test `mongod` and CI, and retry-safe route bodies (no mail or file writes inside `with_transaction`).
+
 - ...
