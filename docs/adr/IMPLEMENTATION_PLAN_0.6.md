@@ -847,6 +847,8 @@ phase F `images.unoptimized` is true everywhere and `sharp` is excluded from the
 binaries need glibc >= 2.25 (0.33 / 0.34) or 2.28 (0.35), the server has 2.17, so it never loaded there; revisit only
 with a server move.
 
+**Inline geometry budget (0.6.2, decision 8.148, user 2026-10-16):** inline meshes at most 1000 faces (original above that as `detailed.ply`, the 8000-faces-inline rule removed), inline clouds at most 1000 points with the staging threshold at 1000; `csc_gh/build.py` constants and `mesh_levels`, the web snapshot form, the import tools, tests; re-run the EPFL stone prepare before its production import.
+
 **Open-data imports, follow-ups (0.6.2, from the reviews of 8.145 / 8.146, 2026-10-15):** (a) a marker for an uploaded full point cloud on the snapshot (like `mesh_ply_resolutions` for meshes), so an import resumes without reading the Cache-Control of `GET /snapshots/{id}/point_clouds/0.ply`; (b) one `POST /snapshots/{id}/submit` answered 500 during the stone import right after the mesh uploads (stone B02, local instance, retry fine; traceback not kept): watch for it on production and reproduce (suspect: the sync derive of the upload against the submit etag).
 
 **HKS v2 (0.6.2, user 2026-10-12, research item next to O25):** the pooled HKS of `apps/descriptors/hks.py` carries
