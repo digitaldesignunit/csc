@@ -50,6 +50,34 @@
       ],
       "port": 3100,
       "url": "http://127.0.0.1:3100"
+    },
+    {
+      "name": "backend-261012",
+      "runtimeExecutable": "C:/Users/EFESTWIN/miniconda3/envs/csc/python.exe",
+      "runtimeArgs": [
+        "-u",
+        "scripts/dev/serve_migrated.py",
+        "--dump",
+        "261012",
+        "--no-migrate",
+        "--assets",
+        ".dev/assets-261012",
+        "--port",
+        "8791",
+        "--mongo-port",
+        "27791"
+      ],
+      "port": 8791
+    },
+    {
+      "name": "frontend-261012",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set FASTAPI_URL=http://127.0.0.1:8791&& set NEXTAUTH_URL=http://127.0.0.1:3100&& set NEXT_DIST_DIR=.next-3100&& npm --prefix src/frontend run dev -- -p 3100"
+      ],
+      "port": 3100,
+      "url": "http://127.0.0.1:3100"
     }
   ]
 }

@@ -99,7 +99,9 @@ run them from the repository root unless stated otherwise.
 | 2 | `cd src/frontend` then `npm run dev` | web app on http://localhost:3000 --- log in with the account from step 5 |
 
 MongoDB needs no terminal: it is the Windows service. The Grasshopper
-UserObjects always talk to production (`CSC_Session` has no base-URL input yet).
+UserObjects talk to production by default; to use a local backend, set the `Server` input of
+`CSC_Session` (e.g. `localhost:8000`; a host without a scheme becomes `http://` for localhost, else
+`https://`). Changing it signs you out and clears the cache.
 
 For browser checks open the web app as `http://127.0.0.1:<port>`, not
 `localhost`: cookies do not separate by port, so a second dev server on another
@@ -123,8 +125,7 @@ Route tests are skipped with a message if no `mongod` is found. Tests marked
 `slow` (`pytest.ini`) are left out by default; `pytest -m ""` runs them too.
 `-n auto` (pytest-xdist) gives every worker its own throwaway `mongod`; against a
 shared server (`CSC_TEST_MONGODB_URI`) every worker gets its own database
-`csc_<worker>`. CI runs only `tests/api`, the frontend and the deploy checks
-(decision 8.114).
+`csc_<worker>`. CI runs only `tests/api`, the frontend and the deploy checks.
 
 ### Troubleshooting
 
@@ -206,8 +207,8 @@ gitignored; only the `.example` file is tracked).
 - Edit `.env` and fill in the values following the comments in the file
 - Proceed in the same way with copying `.env.local.example` and renaming it to `.env.local`
 - Set `NEXTAUTH_SECRET` to a long random value of its own: it only encrypts the NextAuth session cookie and is independent of the backend's `JWT_SECRET` (the frontend never verifies the backend token). There is no `API_SECRET`; delete it from older `.env` files.
-- The frontend has no database access and needs no MongoDB variables: the sign-in sends the credentials to the backend's `POST /auth/token`, the only place a password is checked (decision 8.144 f). Older `.env` files may keep `MONGODB_*`; nothing reads them.
-- `NEXT_PUBLIC_STATIC_BASE_URL` is optional and only for public UI files under `/static/` served by Apache. Leave it empty otherwise. Catalogue files (previews, photos, meshes, point clouds, proxies, capture fixtures) are private: they live outside the web root (`~/csc_assets_private/`) and are served only through the authenticated `/snapshots/...` routes of the API (decision 8.125). It is ignored on localhost.
+- The frontend has no database access and needs no MongoDB variables: the sign-in sends the credentials to the backend's `POST /auth/token`, the only place a password is checked. Older `.env` files may keep `MONGODB_*`; nothing reads them.
+- `NEXT_PUBLIC_STATIC_BASE_URL` is optional and only for public UI files under `/static/` served by Apache. Leave it empty otherwise. Catalogue files (previews, photos, meshes, point clouds, proxies, capture fixtures) are private: they live outside the web root (`~/csc_assets_private/`) and are served only through the authenticated `/snapshots/...` routes of the API. It is ignored on localhost.
 
 ## Grasshopper Interface Setup
 
@@ -457,7 +458,7 @@ match your actual frontend domains. A plain `Header set Access-Control-Allow-Ori
 can only name a single origin, which is why the file reflects a matched origin
 instead.
 
-### Private asset files (decision 8.125)
+### Private asset files
 
 The six `SNAPSHOT_*_DIR` folders (previews, photos, meshes, point clouds,
 proxies, capture fixtures) live in `~/csc_assets_private/`, outside the web
@@ -502,7 +503,7 @@ server). Its jobs:
 
 The geometry runner and the component map share one lock, `~/csc/shared/locks/heavy.lock`
 (not in `/tmp`, which other accounts on the host can write to; `mkdir -p ~/csc/shared/locks` once),
-so the two heavy jobs never run together (server memory, decision 8.130): the
+so the two heavy jobs never run together (server memory): the
 frequent geometry run skips its run while the lock is held, the nightly run and
 the map wait up to 15 minutes instead of losing their slot. A write that changes
 what the geometry stages read (a new version, a file, the geometry, the colour,
@@ -579,6 +580,21 @@ src/frontend/
 See "Local development and tests" above: `invoke test` runs the Python tests;
 the frontend is checked with `npx tsc --noEmit` and `npm run lint` in
 `src/frontend`. CI runs the route tests and the frontend checks on a PR (see above for the rest).
+
+## Test data: open datasets
+
+> **Note:** these imports aare used for validation within a doctoral thesis at the Digital Design Unit (DDU), TU Darmstadt. They
+> validate the CSC data model against precedents: other researchers' component databases, each recorded with
+> its own schema and purpose. Importing them as published, inventing nothing and documenting every assumption,
+> shows what the model can represent and what it cannot.
+
+| Dataset | Source | Tools and instructions |
+|---|---|---|
+| ReCreate pilot elements: 1150 reclaimed precast concrete elements of three donor buildings | <https://doi.org/10.5281/zenodo.16809738>, CC BY 4.0 | [`scripts/import/recreate/`](scripts/import/recreate/README.md) |
+| EPFL stones for augmented stacking: 452 scanned quarry offcut stones | <https://doi.org/10.5281/zenodo.7180964>, MIT | [`scripts/import/epfl_stacking/`](scripts/import/epfl_stacking/README.md) |
+
+The data is fetched from Zenodo and never committed. Everything else (environments, the order of the steps,
+the local rehearsal, the production procedure, attribution) is in each folder's README.
 
 # Credits
 

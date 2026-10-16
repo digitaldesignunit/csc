@@ -1,0 +1,36 @@
+# Packages of the open-data import tools ONLY: scripts/import/recreate (parse.py, geometry.py, preview.py,
+# check_bars.py) and scripts/import/epfl_stacking (prepare.py).
+# Not part of the backend (src/backend/requirements.txt, constraints.txt), not of requirements-dev.txt and
+# not installed by CI (decision 8.114, 8.145): the import runs on a developer's machine, in a virtual
+# environment of its own:
+#
+#   python -m venv <folder>
+#   <folder>/Scripts/python.exe -m pip install -r scripts/import/requirements-import.txt
+#
+# The fetch and plan steps use the standard library only; run.py, derive_local.py and spotcheck.py of both
+# imports run in the backend's environment (the `csc` conda environment), not in this one.
+#
+# Pinned to the versions of the environment the data was imported with (pip freeze, 2026-10-15).
+
+# the tools
+openpyxl==3.1.5
+manifold3d==3.5.4
+trimesh==5.1.1
+shapely==2.1.2
+numpy==2.5.3
+matplotlib==3.11.2
+fast-simplification==0.2.0   # trimesh.simplify_quadric_decimation (epfl_stacking/prepare.py); the csc conda env has 0.2.0
+
+# needed by the tools through the packages above
+et_xmlfile==2.0.0          # openpyxl
+rtree==1.4.1               # trimesh: mesh.contains (check_bars.py)
+scipy==1.18.1              # trimesh
+contourpy==1.4.0           # matplotlib
+cycler==0.12.1
+fonttools==4.67.0
+kiwisolver==1.5.1
+packaging==26.3
+pillow==12.3.0
+pyparsing==3.3.3
+python-dateutil==2.9.0.post0
+six==1.17.0
