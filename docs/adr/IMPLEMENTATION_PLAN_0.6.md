@@ -779,7 +779,7 @@ development, with the partners' logos (five files there). The page itself gets t
 of `text-blue-500` links, light and dark logo handling). To settle: the partners' full names and links, and that
 each partner agrees to its logo being shown.
 
-**Ferroscan to reinforcement layout** (user 2026-10-10; **0.6.2**, user the same day; to grill before): the gitignored prototype
+**Ferroscan to reinforcement layout** (user 2026-10-10; 0.6.2, user the same day; **moved to the candidates of 0.6.3 by 8.150**; to grill before): the gitignored prototype
 `reference/ferromodeller/` (a GH CPython component, MIT) reads a Hilti PROFIS Detection report image (two panels: the
 plan / C-scan strip on top, the cross-section / B-scan below with blue / green cap markers per bar and layer,
 magenta cover arrows and spacings), finds the caps and the magenta datum line, and with typed values (scan length,
@@ -851,7 +851,7 @@ with a server move.
 
 **Open-data imports, follow-ups (0.6.2, from the reviews of 8.145 / 8.146, 2026-10-15):** (a) a marker for an uploaded full point cloud on the snapshot (like `mesh_ply_resolutions` for meshes), so an import resumes without reading the Cache-Control of `GET /snapshots/{id}/point_clouds/0.ply`; (b) one `POST /snapshots/{id}/submit` answered 500 during the stone import right after the mesh uploads (stone B02, local instance, retry fine; traceback not kept): watch for it on production and reproduce (suspect: the sync derive of the upload against the submit etag).
 
-**HKS v2 (0.6.2, user 2026-10-12, research item next to O25):** the pooled HKS of `apps/descriptors/hks.py` carries
+**HKS v2 (user 2026-10-12, research item next to O25; 0.6.2, moved to the candidates of 0.6.3 by 8.150):** the pooled HKS of `apps/descriptors/hks.py` carries
 little meaning: with M-orthonormal eigenvectors the mass-weighted mean per time is the heat trace over the area,
 `sum_i exp(-lambda_i t) / A`, whose leading term after area normalisation is the same for every shape; 64 eigenpairs
 truncate the short times; the global L2 normalisation lets the mean half dominate the variance half. 0.6.1.0 hides
@@ -916,6 +916,21 @@ one review; each item gets a test that fails before the fix. No GH component cha
 
 Server notes for the deploy: the frontend `.env` loses `MONGODB_*` (harmless if left); paste the new crontab;
 `mkdir -p ~/csc/shared/locks`.
+
+### 0.6.2.0 --- robustness release --- scope decided 2026-10-16 (8.150)
+
+Branch `v-0.6.2.0`. No feature work beside the hardening. Items to cut into tasks before the build:
+
+- **A inline geometry budget (8.148):** see "Inline geometry budget" in the 0.6.1.0 backlog above.
+- **B open-data import follow-ups:** see "Open-data imports, follow-ups" above (cloud marker; the submit 500).
+- **C structural items deferred by 8.144 (a):** one load-and-authorise helper; one change-log writer; logging instead
+  of `print`; a settings object; early body-size rejection; a shared rate-limit store and a per-account throttle;
+  PyJWT; CSP with nonces; signed `SHA256SUMS`; per-file hashes for user objects; a backend read-only flag for
+  maintenance; the username character set after a check of the stored names; the module splits; the test gaps.
+
+**Candidates of 0.6.3 (moved out by 8.150):** Ferroscan to reinforcement layout; the IFC export with the PROV-O /
+JSON-LD / GraphML form of the timeline (8.140 h); HKS v2 and HKS level 2; RL8; the GH device sign-in (`FUTURE.md`).
+The SH descriptor stays blocked on its licence.
 
 ---
 
