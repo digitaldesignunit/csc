@@ -931,7 +931,7 @@ Branch `v-0.6.2.0`. No feature work beside the hardening. Items to cut into task
 **Tasks (cut 2026-10-16; one builds at a time, the user commits after each review):** T1 = A + B (a) (sent
 2026-10-16); T2 = B (b), reproduce first; T3 settings object and logging; T4 load-and-authorise helper, change-log
 writer, module splits; T5 PyJWT, shared rate-limit store, per-account throttle, early body-size rejection, username
-character set; T6 CSP with nonces; T7 signed `SHA256SUMS`, per-file hashes for user objects, read-only flag. The test
+character set; T6 CSP with nonces; T7 release attestations (8.153), per-file hashes for user objects and no self-healing in `CSC_Update` (8.155, worked out with the user; one `.ghuser` export, with the "1000 points" text of `FetchReducedGeometry`), read-only flag (8.154). T5 uses the MongoDB rate-limit store (8.152). The test
 gaps go with the task that touches each area.
 
 **Candidates of 0.6.3 (moved out by 8.150):** Ferroscan to reinforcement layout; the IFC export with the PROV-O /
