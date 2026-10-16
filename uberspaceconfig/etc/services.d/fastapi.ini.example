@@ -24,6 +24,8 @@ environment=
     SMTP_FROM_EMAIL="noreply@yourdomain.com",
     SMTP_FROM_NAME="Catalog of Second Chances",
     SMTP_REPLY_TO="support@yourdomain.com",
+    # SMTP_DEV_MODE writes the mails to the log: the backend refuses to start with "true"
+    # unless FRONTEND_URL is localhost; keep it "false" here
     SMTP_DEV_MODE="false",
     # server memory (decision 8.130): the gunicorn workers (each loads the
     # geometry libraries: keep it at 2 on Uberspace) and the log level

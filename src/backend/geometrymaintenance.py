@@ -28,12 +28,15 @@ from pymongo import AsyncMongoClient
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 
+from logging_setup import configure as configure_logging, get_logger
+from settings import get_settings
 from utility import (
     get_db_connectionstring,
     get_snapshot_meshes_directory,
     get_snapshot_point_clouds_directory,
-    create_logging_timestamp as logts,
 )
+
+log = get_logger(__name__)
 
 
 def _snapshot_subdirs(base_dir: str) -> Set[str]:
@@ -93,29 +96,22 @@ def _delete_stale_dirs(
     for snapshot_id in stale_ids:
         dir_path = os.path.join(base_dir, snapshot_id)
         if os.path.isdir(dir_path):
-            ts = logts()
             if dry_run:
-                print(
-                    f'[GEOMMAINT] {ts} DRY RUN: Would delete stale {label} '
-                    f'assets for {snapshot_id}.'
-                )
+                log.info('DRY RUN: would delete stale %s assets for %s',
+                         label, snapshot_id)
             else:
                 shutil.rmtree(dir_path)
-                print(
-                    f'[GEOMMAINT] {ts} Deleted stale {label} assets for '
-                    f'{snapshot_id}.'
-                )
+                log.info('Deleted stale %s assets for %s', label, snapshot_id)
             deleted += 1
     return deleted
 
 
 if __name__ == '__main__':
+    configure_logging(get_settings())
     dry_run = '--dry-run' in sys.argv or '-d' in sys.argv
 
-    ts = logts()
-    print(f'[GEOMMAINT] {ts} Starting geometry maintenance...')
-    print(f'[GEOMMAINT] Mode: {"DRY RUN" if dry_run else "LIVE"}')
-    print('-' * 80)
+    log.info('Starting geometry maintenance (%s)',
+             'DRY RUN' if dry_run else 'LIVE')
 
     meshes_dir = get_snapshot_meshes_directory()
     point_clouds_dir = get_snapshot_point_clouds_directory()
@@ -123,24 +119,18 @@ if __name__ == '__main__':
         initialize_geometry_maintenance()
     )
 
-    ts = logts()
-    print(
-        f'[GEOMMAINT] {ts} Found {len(stale_mesh_ids)} stale mesh '
-        f'director{"y" if len(stale_mesh_ids) == 1 else "ies"}.'
-    )
+    log.info('Found %d stale mesh director%s', len(stale_mesh_ids),
+             'y' if len(stale_mesh_ids) == 1 else 'ies')
     if stale_mesh_ids:
         mesh_deleted = _delete_stale_dirs(
             meshes_dir, stale_mesh_ids, 'mesh', dry_run=dry_run)
     else:
-        ts = logts()
-        print(f'[GEOMMAINT] {ts} No stale mesh asset directories found.')
+        log.info('No stale mesh asset directories found')
         mesh_deleted = 0
 
-    ts = logts()
-    print(
-        f'[GEOMMAINT] {ts} Found {len(stale_point_cloud_ids)} stale point '
-        f'cloud director{"y" if len(stale_point_cloud_ids) == 1 else "ies"}.'
-    )
+    log.info('Found %d stale point cloud director%s',
+             len(stale_point_cloud_ids),
+             'y' if len(stale_point_cloud_ids) == 1 else 'ies')
     if stale_point_cloud_ids:
         point_cloud_deleted = _delete_stale_dirs(
             point_clouds_dir,
@@ -149,28 +139,13 @@ if __name__ == '__main__':
             dry_run=dry_run,
         )
     else:
-        ts = logts()
-        print(
-            f'[GEOMMAINT] {ts} No stale point cloud asset directories found.'
-        )
+        log.info('No stale point cloud asset directories found')
         point_cloud_deleted = 0
 
     if dry_run and (mesh_deleted or point_cloud_deleted):
-        ts = logts()
-        print(
-            f'[GEOMMAINT] {ts} DRY RUN - No directories were actually '
-            f'deleted.'
-        )
+        log.info('DRY RUN: no directories were actually deleted')
 
-    print('-' * 80)
-    ts = logts()
-    print(f'[GEOMMAINT] {ts} Summary:')
-    print(
-        f'  Mesh directories processed: {mesh_deleted} '
-        f'({"would delete" if dry_run else "deleted"})'
-    )
-    print(
-        f'  Point cloud directories processed: {point_cloud_deleted} '
-        f'({"would delete" if dry_run else "deleted"})'
-    )
-    print(f'  Mode: {"DRY RUN" if dry_run else "LIVE"}')
+    action = 'would delete' if dry_run else 'deleted'
+    log.info('Summary: mesh directories processed %d (%s), point cloud '
+             'directories processed %d (%s), mode %s', mesh_deleted, action,
+             point_cloud_deleted, action, 'DRY RUN' if dry_run else 'LIVE')

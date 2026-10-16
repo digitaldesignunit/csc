@@ -33,13 +33,17 @@ from apps.catalog.geometry_stages import (
     short_error,
 )
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 
 def _env(request: Request) -> Env:
     app = request.app
     return Env(meshes_dir=app.snapshot_meshes_dir,
                point_clouds_dir=app.snapshot_point_clouds_dir,
                preview_dir=app.snapshot_preview_dir,
-               log=lambda message: print(f'[GEOMETRY] {message}'))
+               log=lambda message: log.info('%s', message))
 
 
 def fitted_map_files(snapshot: Mapping[str, Any]) -> List[str]:
@@ -83,9 +87,11 @@ async def derive_sync(request: Request, snapshot_id: str) -> Optional[dict]:
     try:
         await derive_and_store(snapshots, snapshot, identity, _env(request),
                                app.snapshot_proxies_dir, SYNC_STAGES)
-    except Exception as exc:                               # noqa: BLE001
-        print(f'[ERROR] stages 1-2 of snapshot {snapshot_id}: '
-              f'{short_error(exc)}')
+    except Exception as exc:                       # noqa: BLE001
+        # the parser text of an uploaded file can hold server paths and
+        # fragments of the upload: the short, path-free text, no traceback
+        log.error('stages 1-2 of snapshot %s: %s', snapshot_id,
+                  short_error(exc))
     return await snapshots.find_one({'_id': snapshot_id})
 
 
@@ -120,8 +126,8 @@ async def recompute_all_stages(request: Request, snapshot_id: str
     except HTTPException:
         raise
     except Exception as exc:                               # noqa: BLE001
-        print(f'[ERROR] recompute of snapshot {snapshot_id}: '
-              f'{short_error(exc)}')
+        log.error('recompute of snapshot %s: %s', snapshot_id,
+                  short_error(exc))
         raise HTTPException(
             status_code=500,
             detail='The recompute failed; see the server log.') from exc

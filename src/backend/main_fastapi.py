@@ -11,13 +11,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pymongo import AsyncMongoClient
+from pymongo.errors import (
+    AutoReconnect,
+    ConnectionFailure,
+    NetworkTimeout,
+    ServerSelectionTimeoutError,
+)
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 # LOCAL IMPORTS (pre-app) -----------------------------------------------------
 from limiter import limiter
 from apps.catalog.client_header import (
-    MIN_VERSIONS_ENV,
     ClientHeaderEnforcementMiddleware,
     ClientHeaderLogMiddleware,
     configure_client_log,
@@ -29,6 +34,7 @@ from apps.catalog.api.catalog_common import (
 )
 from apps.catalog.api.access import TombstoneHit
 from csc_version import CSC_VERSION
+from logging_setup import configure as configure_logging, get_logger
 
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -53,72 +59,36 @@ from utility import (
 
 
 # STARTUP VALIDATION ----------------------------------------------------------
-_REQUIRED_ENV = [
-    'MONGODB_URI',
-    'JWT_SECRET',
-    'GITHUB_REPO_URL',
-    'SMTP_HOST',
-    'SMTP_USER',
-    'SMTP_PASSWORD',
-    'SMTP_FROM_EMAIL',
-    'FRONTEND_URL',
-    'SNAPSHOT_PREVIEW_DIR',
-    'SNAPSHOT_PHOTOS_DIR',
-    'SNAPSHOT_MESHES_DIR',
-    'SNAPSHOT_POINT_CLOUDS_DIR',
-    'SNAPSHOT_PROXIES_DIR',
-    'SNAPSHOT_CAPTURE_DIR',
-    'EVIDENCE_ATTACHMENTS_DIR',
-    'GH_XML_CACHE_DIR',
-    'FASTAPI_CORS_ORIGINS',
-]
-
-# a bad CSC_GEOMETRY_HEAVY_STAGES fails here, not at the first recompute
-from apps.catalog.geometry_stages import heavy_stages_where  # noqa: E402
+# One settings object (decision 8.156): a missing or bad variable stops the
+# start here, with its name and never its value.
 from apps.catalog.geometry_runner import DUE_INDEX  # noqa: E402
+from settings import SettingsError, get_settings  # noqa: E402
 try:
-    heavy_stages_where()
-except ValueError as _exc:
-    print(f'[ERROR] {_exc}')
-    sys.exit(1)
+    settings = get_settings().require_api()
+    parse_min_versions(settings.csc_min_client_versions)
+except (SettingsError, ValueError) as _exc:
+    sys.exit(f'[FATAL] {_exc}')
 
-_missing = [v for v in _REQUIRED_ENV if not os.getenv(v)]
-if _missing:
-    print(
-        f'[FATAL] Missing required environment variables: {_missing}',
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
-# a short secret lets anyone who has seen one token try to forge others
-from apps.catalog.api.auth import jwt_secret_problem  # noqa: E402
-_jwt_problem = jwt_secret_problem(os.environ['JWT_SECRET'])
-if _jwt_problem:
-    print(f'[FATAL] {_jwt_problem}', file=sys.stderr)
-    sys.exit(1)
+log = get_logger(__name__)
 
 
 # FASTAPI SETUP ---------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configure_logging(settings)
+
     # --- Client identification log (X-CSC-Client, spec section 7.4) ---------------
-    configure_client_log(os.getenv(
-        'CLIENT_LOG_PATH',
-        os.path.join(os.path.dirname(__file__), 'logs', 'client_versions.log'),
-    ))
+    configure_client_log(settings.client_log_path)
     # minimum client versions (decision 8.11); unset = log only
     app.state.min_client_versions = parse_min_versions(
-        os.getenv(MIN_VERSIONS_ENV))
+        settings.csc_min_client_versions)
     if app.state.min_client_versions:
-        print(f'[INFO] Client header enforced: '
-              f'{os.getenv(MIN_VERSIONS_ENV)}')
+        log.info('Client header enforced: %s', settings.csc_min_client_versions)
 
     # --- JWT config ----------------------------------------------------------
-    app.state.jwt_secret = os.environ['JWT_SECRET']
-    app.state.jwt_algorithm = os.getenv('JWT_ALGORITHM', 'HS256')
-    app.state.jwt_access_minutes = int(
-        os.getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '30')
-    )
+    app.state.jwt_secret = settings.jwt_secret.get_secret_value()
+    app.state.jwt_algorithm = settings.jwt_algorithm
+    app.state.jwt_access_minutes = settings.jwt_access_token_expire_minutes
 
     # --- MongoDB -------------------------------------------------------------
     app.mongodb_client = AsyncMongoClient(
@@ -201,10 +171,8 @@ async def lifespan(app: FastAPI):
     os.makedirs(app.evidence_attachments_dir, exist_ok=True)
     app.gh_xml_cache_dir = get_gh_xml_cache_directory()
     app.geometry_upload_limit_bytes = get_geometry_upload_limit_bytes()
-    print(
-        f'[INFO] Geometry upload limit: '
-        f'{app.geometry_upload_limit_bytes // (1024 * 1024)} MB'
-    )
+    log.info('Geometry upload limit: %d MB',
+             app.geometry_upload_limit_bytes // (1024 * 1024))
 
     yield
 
@@ -232,6 +200,29 @@ async def _tombstone_handler(request, exc):
 
 
 app.add_exception_handler(TombstoneHit, _tombstone_handler)
+
+DB_UNAVAILABLE_RETRY_SECONDS = 5
+
+
+async def _db_unavailable_handler(request, exc):
+    """The database cannot be reached (a dropped connection after the host
+    slept, an Atlas hiccup): 503 with Retry-After, so a client knows to try
+    again, and the traceback in the log instead of an anonymous 500. The log
+    line names the route template and never the path (it can hold ids typed
+    by users)."""
+    route = request.scope.get('route')
+    log.error('database unavailable: %s %s', request.method,
+              getattr(route, 'path', '-'), exc_info=exc)
+    return JSONResponse(
+        status_code=503,
+        headers={'Retry-After': str(DB_UNAVAILABLE_RETRY_SECONDS)},
+        content={'detail': 'The database is not available; try again in a '
+                           'few seconds.'})
+
+
+for _error in (AutoReconnect, ServerSelectionTimeoutError, NetworkTimeout,
+               ConnectionFailure):
+    app.add_exception_handler(_error, _db_unavailable_handler)
 
 # Innermost: refuses outdated / unidentified clients with 426 (decision 8.11);
 # inside CORS so a refusal still carries CORS headers

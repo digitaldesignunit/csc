@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from apps.catalog.models import User
 from limiter import limiter, signed_in_or_ip
 from services import email_service
+from settings import SettingsError, get_settings
 from .auth import require_admin
 
 router = APIRouter()
@@ -51,10 +52,10 @@ def preview_config() -> dict:
     """The parts of the mail configuration a preview needs: the links and the
     support address. No SMTP settings, so the page works where mail is not
     set up (the test send says so)."""
-    import os
+    settings = get_settings()
     return {
-        'frontend_url': os.getenv('FRONTEND_URL') or 'http://localhost:3000',
-        'reply_to': os.getenv('SMTP_REPLY_TO', '').strip(),
+        'frontend_url': settings.frontend_url or 'http://localhost:3000',
+        'reply_to': settings.smtp_reply_to,
     }
 
 
@@ -94,10 +95,10 @@ async def send_test_mail(
             'Your account has no e-mail address to send the test to')
     try:
         config = email_service.load_email_config()
-    except KeyError as exc:
+    except SettingsError as exc:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
-            f'Mail is not set up on this server: {exc.args[0]} is missing')
+            f'Mail is not set up on this server: {exc}')
     mail = email_service.sample_mail(config, kind, str(admin.email))
     failure = await run_in_threadpool(email_service.send_mail, config, mail)
     if failure:

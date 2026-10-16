@@ -15,7 +15,6 @@ step 11b runs after cutover, once personal accounts exist.
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import os
 import shutil
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -43,6 +42,7 @@ from apps.catalog.properties import (
 )
 from apps.catalog.timeline import live_snapshots
 from apps.catalog.vocab import DATASET_ROLES
+from settings import get_settings
 from apps.catalog.migration06.mappings import (
     ATTRIBUTE_KEYS,
     DATASET_RENAMES,
@@ -972,8 +972,8 @@ def run(ctx: Context, step_ids: Sequence[str]) -> Dict[str, Report]:
 
 def default_dirs() -> Dict[str, Optional[Path]]:
     """Storage directories from the backend's environment variables."""
-    def env(name: str) -> Optional[Path]:
-        value = os.getenv(name)
-        return Path(value) if value else None
-    return {'meshes_dir': env('SNAPSHOT_MESHES_DIR'),
-            'capture_dir': env('SNAPSHOT_CAPTURE_DIR')}
+    settings = get_settings()
+    return {'meshes_dir': Path(settings.snapshot_meshes_dir)
+            if settings.snapshot_meshes_dir else None,
+            'capture_dir': Path(settings.snapshot_capture_dir)
+            if settings.snapshot_capture_dir else None}

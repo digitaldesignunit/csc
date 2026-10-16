@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.models import User
+from settings import get_settings
 from .access import (
     component_visible,
     identity_ever_published,
@@ -293,7 +294,7 @@ async def purge_snapshot_record(request: Request, user: User,
 
 # RESOLVER (section 7.5) ------------------------------------------------------
 def _frontend_url() -> str:
-    return (os.getenv('FRONTEND_URL') or '').rstrip('/')
+    return (get_settings().frontend_url or '').rstrip('/')
 
 
 @router.get('/id/{uuid}', summary='Permanent identifier resolver')

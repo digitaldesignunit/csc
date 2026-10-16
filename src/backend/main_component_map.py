@@ -18,13 +18,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import sys
 from typing import Any, Dict, List, Optional, Sequence
 
 from pymongo import AsyncMongoClient
 
+from logging_setup import configure as configure_logging, get_logger
+from settings import get_settings
 from utility import (
-    create_logging_timestamp as logts,
     get_current_timestamp_z,
     get_db_connectionstring,
 )
@@ -41,8 +43,13 @@ from apps.catalog.component_map import (
 )
 
 
+_log = get_logger(__name__)
+_LEVELS = {'ERROR': logging.ERROR, 'WARNING': logging.WARNING}
+
+
 def log(message: str, prefix: str = 'COMPONENT_MAP') -> None:
-    print(f'[{prefix}] {logts()} {message}')
+    """One line of the run; ``prefix`` ERROR / WARNING sets the level."""
+    _log.log(_LEVELS.get(prefix, logging.INFO), '%s', message)
 
 
 async def load_map_rows(
@@ -131,11 +138,8 @@ async def compute_and_store(
                     basis=basis,
                     method=method,
                 )
-            except Exception as exc:
-                log(
-                    f'Failed basis={basis} method={method}: {exc}',
-                    prefix='ERROR',
-                )
+            except Exception:
+                _log.exception('Failed basis=%s method=%s', basis, method)
                 continue
             await upsert_map_cache(
                 cache_col,
@@ -154,7 +158,6 @@ async def run(
     methods: Sequence[MapMethod],
     dry_run: bool,
 ) -> int:
-    log('-' * 80)
     log(
         f'Starting component map cache '
         f'(bases={list(bases)}, methods={list(methods)}, dry_run={dry_run})'
@@ -181,10 +184,8 @@ async def run(
             dry_run=dry_run,
         )
         log(f'Summary: layouts_written={stored}')
-    except Exception as exc:
-        log(f'Error during component map cache: {exc}', prefix='ERROR')
-        import traceback
-        traceback.print_exc()
+    except Exception:
+        _log.exception('Error during component map cache')
         raise
     finally:
         await client.close()
@@ -216,6 +217,7 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    configure_logging(get_settings())
     args = _parse_args(argv)
     bases: Sequence[MapBasis] = tuple(args.basis) if args.basis else MAP_BASES
     methods: Sequence[MapMethod] = (

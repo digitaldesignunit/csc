@@ -3,7 +3,6 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 from datetime import datetime, timedelta, timezone
 import hashlib
-import os
 import secrets
 from typing import Annotated, Optional
 
@@ -29,6 +28,10 @@ from services.email_service import (
 )
 from limiter import limiter
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 # INIT ROUTER -----------------------------------------------------------------
 
 # create router instance
@@ -45,7 +48,7 @@ oauth2_scheme_optional = OAuth2PasswordBearer(
 def open_registration_domains() -> list:
     """CSC_OPEN_REGISTRATION_DOMAINS (comma-separated, default
     tu-darmstadt.de): self-registration without invitation (8.14)."""
-    raw = os.getenv('CSC_OPEN_REGISTRATION_DOMAINS', 'tu-darmstadt.de')
+    raw = get_settings().csc_open_registration_domains
     return [d.strip().lower().lstrip('.') for d in raw.split(',')
             if d.strip()]
 
@@ -95,16 +98,9 @@ async def _insert_account(users, doc: dict) -> None:
                             'User with this email or username already exists')
 
 
-# a backend that signs tokens with a short secret can have them forged
-MIN_JWT_SECRET_BYTES = 32
-
-
-def jwt_secret_problem(secret: Optional[str]) -> Optional[str]:
-    """Why ``secret`` cannot sign tokens, or None when it can (S10, 8.144)."""
-    if len((secret or '').encode('utf-8')) < MIN_JWT_SECRET_BYTES:
-        return (f'JWT_SECRET must be at least {MIN_JWT_SECRET_BYTES} bytes '
-                f'(openssl rand -hex 32)')
-    return None
+# the check of the JWT secret lives with the settings (decision 8.156); the
+# names stay importable from here
+from settings import MIN_JWT_SECRET_BYTES, get_settings, jwt_secret_problem  # noqa: E402,F401
 
 
 # checked for a sign-in with an identifier no account has, so that it takes as
@@ -115,14 +111,6 @@ _DUMMY_HASH = bcrypt.hashpw(b'no account has this password',
 
 def _jwt_now():
     return datetime.now(timezone.utc)
-
-
-def ts():
-    """
-    Creates a timestamp in YY:MM:DD-HH:MM:SS format.
-    """
-    timestamp = datetime.now().strftime('%y:%m:%d-%H:%M:%S')
-    return timestamp
 
 
 # FASTAPI DEPENDENCIES --------------------------------------------------------
@@ -184,7 +172,7 @@ async def lookup_user_from_token(
             options={'verify_aud': False},
         )
     except JWTError as e:
-        print(f'{ts()} [AUTH] JWT decode error:', str(e))
+        log.info('JWT decode error: %s', e)
         return None
 
     # the account is the subject; the old username / email claims are gone
@@ -206,8 +194,8 @@ async def lookup_user_from_token(
     except Exception as e:
         # the document and the error text hold e-mail addresses and hashes
         fields = [str(err.get('loc')) for err in e.errors()] if hasattr(e, 'errors') else []
-        print(f'{ts()} [AUTH] Failed to parse user doc {doc.get("_id")} into UserInDB: '
-              f'{type(e).__name__} {fields}')
+        log.warning('Failed to parse user doc %s into UserInDB: %s %s',
+                    doc.get('_id'), type(e).__name__, fields)
         return None
 
 
@@ -240,7 +228,7 @@ async def get_current_active_user(
     current_user: Annotated[UserInDB, Depends(get_current_user)]
 ):
     if current_user.disabled:
-        print('[AUTH] Inactive user:', current_user.id)
+        log.info('Inactive user: %s', current_user.id)
         raise HTTPException(status_code=400, detail='Inactive user')
     return current_user
 
@@ -381,9 +369,11 @@ async def register_user(
             email_service.verification_mail(
                 email_config, email, full_name, verification_token))
         if failure:
-            print(f'{ts()} [AUTH] Verification email failed: {email_service.failure_kind(failure)}')
+            log.warning('Verification email failed: %s',
+                        email_service.failure_kind(failure))
     except Exception as e:
-        print(f'{ts()} [AUTH] Failed to send verification email: {type(e).__name__}')
+        log.warning('Failed to send verification email: %s',
+                    type(e).__name__)
 
     return User(**doc)  # maps _id->id
 
@@ -442,7 +432,7 @@ async def verify_email(
         }
     )
 
-    print(f'{ts()} [AUTH] Email verified for user: {user["_id"]}')
+    log.info('Email verified for user: %s', user['_id'])
 
     return {
         'message': 'Email verified successfully. You can now sign in.',
@@ -487,7 +477,7 @@ async def change_password(
                     'password_reset_expires': ''}},
     )
 
-    print(f'{ts()} [AUTH] Password changed for user: {current_user.id}')
+    log.info('Password changed for user: %s', current_user.id)
     return {'message': 'Password changed successfully. Sign in again.'}
 
 
@@ -508,9 +498,10 @@ def _send_verification_mail(email: str, full_name: str, token: str) -> None:
             config,
             email_service.verification_mail(config, email, full_name, token))
         if failure:
-            print(f'{ts()} [AUTH] Verification email failed: {email_service.failure_kind(failure)}')
+            log.warning('Verification email failed: %s',
+                        email_service.failure_kind(failure))
     except Exception as exc:
-        print(f'{ts()} [AUTH] Verification email failed: {type(exc).__name__}')
+        log.warning('Verification email failed: %s', type(exc).__name__)
 
 
 @router.post('/resend-verification',
@@ -583,9 +574,10 @@ def _send_reset_mail(email: str, full_name: str, token: str) -> None:
         failure = email_service.send_mail(
             config, email_service.reset_mail(config, email, full_name, token))
         if failure:
-            print(f'{ts()} [AUTH] Password reset mail failed: {email_service.failure_kind(failure)}')
+            log.warning('Password reset mail failed: %s',
+                        email_service.failure_kind(failure))
     except Exception as exc:
-        print(f'{ts()} [AUTH] Password reset mail failed: {type(exc).__name__}')
+        log.warning('Password reset mail failed: %s', type(exc).__name__)
 
 
 @router.post('/password-reset', status_code=202,
@@ -661,5 +653,5 @@ async def confirm_password_reset(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='This reset link is invalid or has expired. Ask for a '
                    'new one.')
-    print(f'{ts()} [AUTH] Password reset for user: {user["_id"]}')
+    log.info('Password reset for user: %s', user['_id'])
     return {'message': 'Password changed. You can now sign in.'}

@@ -32,8 +32,8 @@ def request(peer, *forwarded, headers=(), app=None):
 
 
 @pytest.fixture(autouse=True)
-def default_trust(monkeypatch):
-    monkeypatch.delenv(lim.TRUSTED_PROXIES_ENV, raising=False)
+def default_trust(env):
+    env(**{lim.TRUSTED_PROXIES_ENV: None})
 
 
 # THE CLIENT ADDRESS ----------------------------------------------------------
@@ -59,12 +59,12 @@ def test_what_the_caller_wrote_on_the_left_is_never_read():
         '203.0.113.9'          # two header lines make one chain
 
 
-def test_the_rightmost_entry_that_is_not_a_trusted_proxy_wins(monkeypatch):
-    monkeypatch.setenv(lim.TRUSTED_PROXIES_ENV, '127.0.0.0/8, ::1, 10.0.0.2')
+def test_the_rightmost_entry_that_is_not_a_trusted_proxy_wins(env):
+    env(**{lim.TRUSTED_PROXIES_ENV: '127.0.0.0/8, ::1, 10.0.0.2'})
     chain = '6.6.6.6, 203.0.113.9, 10.0.0.2, 127.0.0.1'
     assert lim.client_ip(request('127.0.0.1', chain)) == '203.0.113.9'
     # the web server's own address is no proxy unless it is listed
-    monkeypatch.delenv(lim.TRUSTED_PROXIES_ENV)
+    env(**{lim.TRUSTED_PROXIES_ENV: None})
     assert lim.client_ip(request('127.0.0.1', '203.0.113.9, 10.0.0.2')) == \
         '10.0.0.2'
 
@@ -94,8 +94,8 @@ def test_no_peer_at_all():
     assert lim.client_ip(request(None, '203.0.113.9')) == '0.0.0.0'
 
 
-def test_a_bad_trusted_proxy_setting_is_refused(monkeypatch):
-    monkeypatch.setenv(lim.TRUSTED_PROXIES_ENV, '127.0.0.1, not-a-network')
+def test_a_bad_trusted_proxy_setting_is_refused(env):
+    env(**{lim.TRUSTED_PROXIES_ENV: '127.0.0.1, not-a-network'})
     with pytest.raises(ValueError, match='CSC_TRUSTED_PROXIES'):
         lim.client_ip(request('127.0.0.1', '203.0.113.9'))
 

@@ -30,6 +30,10 @@ from .identity_query import (
     build_list_pipeline,
 )
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 router = APIRouter()
 
 
@@ -117,8 +121,8 @@ async def list_reserved_identities(
     try:
         docs = await aggregate_identities(request, pipeline)
         annotate_has_preview(request, docs)
-    except PyMongoError as exc:
-        print(f'[ERROR] list_reserved_identities: {exc}')
+    except PyMongoError:
+        log.exception('list_reserved_identities')
         raise HTTPException(status_code=500, detail='Internal server error')
 
     components = [catalog_row(doc) for doc in docs]
@@ -197,8 +201,8 @@ async def list_identity_datasets(
         return JSONResponse(
             status_code=200, content=sorted(v for v in values if v),
             headers=viewer_headers(anonymous_public=current_user is None))
-    except PyMongoError as exc:
-        print(f'[ERROR] list_identity_datasets: {exc}')
+    except PyMongoError:
+        log.exception('list_identity_datasets')
         raise HTTPException(status_code=500, detail='Internal server error')
 
 
@@ -243,8 +247,8 @@ async def reserve_identity(
             {'_id': identity_id},
             {'$set': {'reserved': current_user.id, 'lastmodified': now_iso()}},
         )
-    except PyMongoError as exc:
-        print(f'[ERROR] reserve_identity: {exc}')
+    except PyMongoError:
+        log.exception('reserve_identity')
         raise HTTPException(status_code=500, detail='Internal server error')
 
     if result.modified_count == 0:
@@ -293,8 +297,8 @@ async def release_identity_reservation(
             {'_id': identity_id},
             {'$set': {'reserved': '', 'lastmodified': now_iso()}},
         )
-    except PyMongoError as exc:
-        print(f'[ERROR] release_identity_reservation: {exc}')
+    except PyMongoError:
+        log.exception('release_identity_reservation')
         raise HTTPException(status_code=500, detail='Internal server error')
 
     if result.modified_count == 0:

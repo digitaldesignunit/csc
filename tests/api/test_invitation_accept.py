@@ -388,7 +388,8 @@ def test_member_addresses_go_to_admins_and_moderators_of_a_reviewed_dataset(
 
 
 # LOGS HOLD NO ADDRESS --------------------------------------------------------
-def test_a_failed_mail_logs_the_kind_and_no_address(world, capsys):
+def test_a_failed_mail_logs_the_kind_and_no_address(world, caplog):
+    caplog.set_level('INFO', logger='csc')
     world['mails']['fail'].add('secret.person@partner.example')
     out = _invite(world, world['moderator'], ['secret.person@partner.example'])
     assert out.json()[0]['result'] == 'mail_failed'
@@ -402,7 +403,7 @@ def test_a_failed_mail_logs_the_kind_and_no_address(world, capsys):
     world['api'].post(f'/datasets/{DS}/members', headers=world['moderator'],
                       json={'email': 'carol@tu-darmstadt.de',
                             'roles': ['contributor']})
-    printed = capsys.readouterr().out
+    printed = caplog.text
     assert 'SMTPRecipientsRefused' in printed
     assert 'secret.person' not in printed and 'carol' not in printed
     assert 'partner.example' not in printed

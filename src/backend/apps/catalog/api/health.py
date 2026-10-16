@@ -8,6 +8,10 @@ from pymongo.errors import PyMongoError
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from csc_version import CSC_VERSION, release_tag
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 
 # INIT ROUTER -----------------------------------------------------------------
 router = APIRouter()
@@ -25,7 +29,7 @@ async def health_check_db(request: Request):
     try:
         await request.app.mongodb.command('ping')
         return {'ok': True}
-    except PyMongoError as e:
+    except PyMongoError:
         # the driver's text names hosts and can name accounts: the log only
-        print(f'[ERROR] health check: {type(e).__name__}: {e}')
+        log.exception('health check')
         return JSONResponse(status_code=503, content={'ok': False})

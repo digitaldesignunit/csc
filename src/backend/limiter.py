@@ -22,7 +22,6 @@ valid token per user, others per address (the expensive reads).
 """
 
 import ipaddress
-import os
 from functools import lru_cache
 from typing import Optional, Tuple, Union
 
@@ -30,8 +29,9 @@ from fastapi import Request
 from jose import JWTError, jwt
 from slowapi import Limiter
 
+from settings import DEFAULT_TRUSTED_PROXIES, get_settings  # noqa: F401
+
 TRUSTED_PROXIES_ENV = 'CSC_TRUSTED_PROXIES'
-DEFAULT_TRUSTED_PROXIES = '127.0.0.0/8,::1'
 
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 IPNetwork = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
@@ -70,7 +70,7 @@ def _networks(value: str) -> Tuple[IPNetwork, ...]:
 
 
 def trusted_proxies() -> Tuple[IPNetwork, ...]:
-    return _networks(os.getenv(TRUSTED_PROXIES_ENV)
+    return _networks(get_settings().csc_trusted_proxies
                      or DEFAULT_TRUSTED_PROXIES)
 
 

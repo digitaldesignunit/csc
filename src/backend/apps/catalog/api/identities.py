@@ -145,6 +145,10 @@ from .identity_query import (
 )
 from .snapshots import refresh_snapshot_photo_count
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 
 router = APIRouter()
 
@@ -354,8 +358,8 @@ async def _resolve_passport_snapshot_docs(
                 {'identity_id': identity_id},
             ).sort('version', 1)
             docs = await cursor.to_list(length=None)
-        except PyMongoError as exc:
-            print(f'[ERROR] passport snapshots=all DB: {exc}')
+        except PyMongoError:
+            log.exception('passport snapshots=all DB')
             raise HTTPException(
                 status_code=500,
                 detail='Internal server error',
@@ -544,8 +548,8 @@ async def count_identities_route(
             include_username=current_user is not None,
         )
         total = await count_identities(request, pipeline)
-    except PyMongoError as exc:
-        print(f'[ERROR] count_identities_route DB error: {exc}')
+    except PyMongoError:
+        log.exception('count_identities_route DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -607,8 +611,8 @@ async def get_identities_map(
         doc_id = cache_doc_id(basis, method)
         try:
             cached = await cache_col.find_one({'_id': doc_id})
-        except PyMongoError as exc:
-            print(f'[ERROR] identities map cache read: {exc}')
+        except PyMongoError:
+            log.exception('identities map cache read')
             cached = None
         if cached is not None:
             return JSONResponse(
@@ -673,8 +677,8 @@ async def get_identities_map(
         )
         pipeline.append(map_rows_project_stage())
         docs = await aggregate_identities(request, pipeline)
-    except PyMongoError as exc:
-        print(f'[ERROR] identities map DB error: {exc}')
+    except PyMongoError:
+        log.exception('identities map DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -690,13 +694,13 @@ async def get_identities_map(
     except RuntimeError as exc:
         # the layout needs a package this server may not have; say so, and
         # keep the exception text (it can be anything) in the log
-        print(f'[ERROR] identities map embed unavailable: {exc}')
+        log.exception('identities map embed unavailable')
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail='This layout method is not available on this server',
         ) from exc
     except Exception as exc:
-        print(f'[ERROR] identities map embed: {exc}')
+        log.exception('identities map embed')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to compute component map embedding',
@@ -785,14 +789,14 @@ async def get_identities_stats(
         return JSONResponse(
             status_code=200, content=content,
             headers=viewer_headers(anonymous_public=current_user is None))
-    except PyMongoError as exc:
-        print(f'[ERROR] identities stats aggregation DB error: {exc}')
+    except PyMongoError:
+        log.exception('identities stats aggregation DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
         )
-    except Exception as exc:
-        print(f'[ERROR] identities stats aggregation: {exc}')
+    except Exception:
+        log.exception('identities stats aggregation')
         raise HTTPException(status_code=500, detail='Internal server error')
 
 
@@ -837,8 +841,8 @@ async def list_identities_route(
         docs = await aggregate_identities(request, pipeline)
         if expand == 'shallow':
             annotate_has_preview(request, docs)
-    except PyMongoError as exc:
-        print(f'[ERROR] list_identities_route DB error: {exc}')
+    except PyMongoError:
+        log.exception('list_identities_route DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -937,8 +941,8 @@ async def list_identity_children(
             reserved_filter=None,
         )
         docs = await aggregate_identities(request, pipeline)
-    except PyMongoError as exc:
-        print(f'[ERROR] list_identity_children DB error: {exc}')
+    except PyMongoError:
+        log.exception('list_identity_children DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -1093,8 +1097,8 @@ async def get_identity_provenance(
                 _SNAPSHOT_LINEAGE_PROJECTION,
             )
             snapshot_docs = await cursor.to_list(length=None)
-    except PyMongoError as exc:
-        print(f'[ERROR] get_identity_provenance DB error: {exc}')
+    except PyMongoError:
+        log.exception('get_identity_provenance DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -1176,8 +1180,8 @@ async def list_identity_snapshots(
         docs = await visible_snapshot_docs(
             request, current_user, identity_doc,
             await cursor.to_list(length=None), tombstones=True)
-    except PyMongoError as exc:
-        print(f'[ERROR] list_identity_snapshots DB error: {exc}')
+    except PyMongoError:
+        log.exception('list_identity_snapshots DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',

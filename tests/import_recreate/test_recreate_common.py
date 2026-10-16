@@ -137,3 +137,87 @@ def test_derive_local_still_defaults_to_the_local_asset_copy(script_loader, comm
     derive = script_loader('derive_local')
     assert derive.common.DEFAULT_ASSETS == common.DEFAULT_ASSETS
     assert common.DEFAULT_ASSETS.relative_to(common.DOT_DEV)           # inside .dev
+
+
+# THE API CLIENT: RETRIES (decision 8.157 f) ---------------------------------------------------------
+class Wire:
+    """A transport that answers from a script: a status code, an exception, or a (status, headers) pair."""
+
+    def __init__(self, *script):
+        self.script, self.calls = list(script), []
+
+    def request(self, method, url, headers=None, timeout=None, **kw):
+        self.calls.append((method, url))
+        step = self.script.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        status, headers = step if isinstance(step, tuple) else (step, {})
+
+        class Response:
+            status_code = status
+            content = b'{}'
+            text = '{}'
+
+            def __init__(self):
+                self.headers = headers
+
+            def json(self):
+                return {}
+        return Response()
+
+
+@pytest.fixture
+def api_with(common):
+    pytest.importorskip('requests')
+
+    def build(*script, renew=None):
+        waits = []
+        api = common.Api('http://x/', 'tok', renew=renew, sleep=waits.append)
+        api.http = Wire(*script)
+        return api, waits
+    return build
+
+
+def test_a_503_is_tried_again_and_the_server_s_retry_after_is_honoured(api_with):
+    api, waits = api_with((503, {'Retry-After': '7'}), 503, 200)
+    assert api.request('GET', '/x').status_code == 200
+    assert waits == [7.0, 2.0]                       # the header, then the growing default (1, 2, 4)
+    assert api.calls == 3 and api.retried == 2
+
+
+def test_a_connection_error_and_a_timeout_are_tried_again(api_with):
+    import requests
+    api, waits = api_with(requests.ConnectionError('reset'), requests.Timeout('slow'), 200)
+    assert api.request('POST', '/x').status_code == 200
+    assert waits == [1.0, 2.0] and api.calls == 3
+
+
+def test_it_gives_up_after_three_retries(api_with):
+    import requests
+    api, waits = api_with(503, 503, 503, 503, 200)
+    assert api.request('GET', '/x').status_code == 503           # the fourth 503 is the answer
+    assert len(waits) == 3 and api.calls == 4
+    api, waits = api_with(*[requests.ConnectionError('gone')] * 4)
+    with pytest.raises(requests.ConnectionError):
+        api.request('GET', '/x')
+    assert len(waits) == 3 and api.calls == 4
+
+
+@pytest.mark.parametrize('status', [500, 502, 504, 400, 404, 409, 422])
+def test_any_other_error_fails_at_once(api_with, status):
+    api, waits = api_with(status, 200)
+    assert api.request('GET', '/x').status_code == status
+    assert waits == [] and api.calls == 1
+    with pytest.raises(RuntimeError, match=str(status)):
+        api_with(status)[0].json('GET', '/x')
+
+
+@pytest.mark.parametrize('header, wait', [('0', 0.0), ('3', 3.0), ('600', 60.0), ('soon', 1.0), (None, 1.0)])
+def test_the_wait_is_bounded_and_falls_back_to_a_short_one(common, header, wait):
+    assert common.retry_wait(0, header) == wait
+
+
+def test_a_renewed_token_and_a_retry_work_together(api_with):
+    api, waits = api_with(401, 503, 200, renew=lambda: 'tok-2')
+    assert api.request('GET', '/x').status_code == 200
+    assert api.token == 'tok-2' and waits == [1.0]

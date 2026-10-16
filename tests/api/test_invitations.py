@@ -114,7 +114,7 @@ def test_registration_by_code(world):
                      username='student').status_code == 201
 
 
-def test_revoke_and_expiry(world, monkeypatch):
+def test_revoke_and_expiry(world, env):
     api, db, mails = world['api'], world['db'], world['mails']
     invited = _invite(api, world['moderator'], ['late@partner.example']).json()
     iid = invited[0]['invitation']['_id']
@@ -141,7 +141,7 @@ def test_revoke_and_expiry(world, monkeypatch):
     assert sorted(states(world['moderator'])[1]) == ['expired', 'revoked']
     assert states(world['admin'], state='expired')[1] == ['expired']
 
-    monkeypatch.setenv('CSC_OPEN_REGISTRATION_DOMAINS', 'partner.example')
+    env(CSC_OPEN_REGISTRATION_DOMAINS='partner.example')
     assert _register(api, 'free@partner.example',
                      username='free').status_code == 201
 

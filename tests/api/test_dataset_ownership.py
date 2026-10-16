@@ -114,9 +114,9 @@ def test_only_a_verified_and_enabled_account_creates(world):
     assert create(w, invited, 'From Invitation').status_code == 201
 
 
-def test_the_limit_counts_the_datasets_one_account_created(world, monkeypatch):
+def test_the_limit_counts_the_datasets_one_account_created(world, env):
     w = world
-    monkeypatch.setenv('CSC_MAX_DATASETS_PER_USER', '2')
+    env(CSC_MAX_DATASETS_PER_USER='2')
     headers, _ = w['account']()
     other, _ = w['account']()
     assert create(w, headers, 'One').status_code == 201
@@ -126,11 +126,11 @@ def test_the_limit_counts_the_datasets_one_account_created(world, monkeypatch):
     assert create(w, other, 'Mine').status_code == 201       # per account
     for n in range(4):                                        # admins: none
         assert create(w, w['admin'], f'Admin {n}').status_code == 201
-    monkeypatch.setenv('CSC_MAX_DATASETS_PER_USER', 'many')
+    env(CSC_MAX_DATASETS_PER_USER='many')
     assert max_datasets_per_user() == 3
-    monkeypatch.delenv('CSC_MAX_DATASETS_PER_USER')
+    env(CSC_MAX_DATASETS_PER_USER=None)
     assert max_datasets_per_user() == 3
-    monkeypatch.setenv('CSC_MAX_DATASETS_PER_USER', '0')
+    env(CSC_MAX_DATASETS_PER_USER='0')
     assert create(w, other, 'Over').status_code == 403
 
 

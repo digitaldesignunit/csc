@@ -51,6 +51,10 @@ from .auth import get_current_active_user
 from .catalog_common import now_iso
 from limiter import limiter, signed_in_or_ip
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 router = APIRouter()
 
 InvitationState = Literal['open', 'used', 'expired', 'revoked']
@@ -310,7 +314,7 @@ async def create_invitations(request: Request, user: User,
     try:
         config = email_service.load_email_config()
     except Exception as exc:
-        print(f'[INVITE] mail not configured: {type(exc).__name__}')
+        log.warning('mail not configured: %s', type(exc).__name__)
         config = {}
     mails = [invitation_mail_of(config, user, doc, code,
                                 dataset.name if dataset else None)
@@ -320,8 +324,8 @@ async def create_invitations(request: Request, user: User,
     for (doc, _code), failure in zip(stored, failures):
         doc['mail_failed'] = failure is not None
         if failure:
-            print(f'[INVITE] mail for invitation {doc["_id"]} failed: '
-                  f'{email_service.failure_kind(failure)}')
+            log.warning('mail for invitation %s failed: %s', doc['_id'],
+                        email_service.failure_kind(failure))
     await _mark_mail(
         request,
         [d['_id'] for (d, _), f in zip(stored, failures) if f],
@@ -495,8 +499,8 @@ async def resend_invitation(
         dataset.name if dataset else None)])
     failed = failures[0] is not None
     if failed:
-        print(f'[INVITE] mail for invitation {invitation_id} failed: '
-              f'{email_service.failure_kind(failures[0])}')
+        log.warning('mail for invitation %s failed: %s', invitation_id,
+                    email_service.failure_kind(failures[0]))
     await _mark_mail(request, [invitation_id] if failed else [],
                      [] if failed else [invitation_id])
     await _log_mails(request, [invitation_id], current_user.id)
@@ -603,10 +607,10 @@ async def add_member_by_email(
             current_user.email)])
         failed = failures[0] is not None
         if failed:
-            print(f'[MEMBERS] member notice failed: '
-                  f'{email_service.failure_kind(failures[0])}')
+            log.warning('member notice failed: %s',
+                        email_service.failure_kind(failures[0]))
     except Exception as exc:
-        print(f'[MEMBERS] member notice failed: {type(exc).__name__}')
+        log.warning('member notice failed: %s', type(exc).__name__)
     return MemberByEmailResult(email=email, result='added',
                                user_id=account['_id'], mail_failed=failed)
 

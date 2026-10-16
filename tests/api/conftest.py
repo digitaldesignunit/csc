@@ -85,14 +85,17 @@ def backend_env(mongod, db_name, tmp_path_factory):
         'FASTAPI_CORS_ORIGINS': 'http://localhost:3000',
         'CLIENT_LOG_PATH': str(root / 'logs' / 'client_versions.log'),
     }
+    from settings import get_settings
     previous = {key: os.environ.get(key) for key in env}
     os.environ.update(env)
+    get_settings.cache_clear()
     yield env
     for key, value in previous.items():
         if value is None:
             os.environ.pop(key, None)
         else:
             os.environ[key] = value
+    get_settings.cache_clear()
 
 
 @pytest.fixture(scope='session')

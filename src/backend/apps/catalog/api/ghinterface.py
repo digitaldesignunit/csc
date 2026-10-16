@@ -23,6 +23,11 @@ from apps.catalog.models import User
 from limiter import limiter, signed_in_or_ip
 from services.github_service import GitHubService
 from csc_version import release_tag
+from settings import get_settings
+
+from logging_setup import get_logger
+
+log = get_logger(__name__)
 
 # INIT ROUTER -----------------------------------------------------------------
 router = APIRouter()
@@ -55,7 +60,7 @@ GH_INTERFACE_ASSET_PREFIX = 'csc-gh-interface-'
 
 
 def default_update_ref() -> str:
-    return (os.getenv('GH_UPDATE_REF') or '').strip() or release_tag()
+    return get_settings().gh_update_ref or release_tag()
 
 
 async def _release_of_this_backend(github_service: GitHubService) -> dict:
@@ -76,6 +81,16 @@ async def _release_of_this_backend(github_service: GitHubService) -> dict:
 
 
 # INTERNAL HELPERS ------------------------------------------------------------
+def _failure_text(exc: BaseException) -> str:
+    """What a GitHub failure may put in the log: the class of the error and,
+    for an answer, its status. Never the URL (the ``ref`` in it is the
+    channel the client typed, a download URL is pre-signed), the body or the
+    traceback (decision 8.144 h)."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f'{type(exc).__name__} (status {exc.response.status_code})'
+    return type(exc).__name__
+
+
 def _extract_api_url(repo_url: str) -> str:
     pattern = r'https://github\.com/([^/]+)/([^/]+)/?'
     match = re.match(pattern, repo_url)
@@ -89,7 +104,7 @@ def _github_token() -> Optional[str]:
     """
     Optional PAT. Public repos work without it; a token increases rate limits.
     """
-    token = (os.getenv('GITHUB_CSC_GH_TOKEN') or '').strip()
+    token = get_settings().github_csc_gh_token.get_secret_value().strip()
     return token or None
 
 
@@ -238,8 +253,8 @@ async def _get_repo_file(
         return resp2.content
     try:
         return base64.b64decode(content_b64)
-    except Exception as e:
-        print(f'[ERROR] _get_repo_file base64 decode: {e}')
+    except Exception:
+        log.exception('_get_repo_file base64 decode')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to decode file content',
@@ -422,7 +437,7 @@ async def get_gh_interface_version(
 ):
     """The Grasshopper interface release that belongs to this backend."""
     try:
-        repo_url = os.environ['GITHUB_REPO_URL']
+        repo_url = get_settings().need('GITHUB_REPO_URL')
         token = _github_token()
         github_service = GitHubService(repo_url, token)
         release_info = await _release_of_this_backend(github_service)
@@ -454,10 +469,10 @@ async def get_gh_interface_version(
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        print(f'[ERROR] get_gh_interface_version GitHub: {e}')
+        log.error('get_gh_interface_version GitHub: %s', _failure_text(e))
         raise _http_exception_from_github(e)
-    except Exception as e:
-        print(f'[ERROR] get_gh_interface_version: {e}')
+    except Exception:
+        log.exception('get_gh_interface_version')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error'
@@ -486,7 +501,7 @@ async def get_component_reference(
         # new ref costs up to ~50 GitHub calls on the server's token, and ref
         # cycling by anyone could use up the quota CSC_Update needs too
         ref = resolve_update_channel(channel if current_user is not None else '')
-        repo_url = os.environ['GITHUB_REPO_URL']
+        repo_url = get_settings().need('GITHUB_REPO_URL')
         token = _github_token()
         api_base = _extract_api_url(repo_url)
 
@@ -516,8 +531,8 @@ async def get_component_reference(
                 raise failures[0]
             for item, result in zip(todo, results):
                 if isinstance(result, Exception):
-                    print(f'[ERROR] component reference {item.get("name")}: '
-                          f'{result}')
+                    log.error('component reference %s: %s', item.get('name'),
+                              _failure_text(result))
             parsed = []
             for item in files:
                 entry = _blob_reference_cache.get(item['sha'])
@@ -531,10 +546,10 @@ async def get_component_reference(
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        print(f'[ERROR] get_component_reference GitHub: {e}')
+        log.error('get_component_reference GitHub: %s', _failure_text(e))
         raise _http_exception_from_github(e)
-    except Exception as e:
-        print(f'[ERROR] get_component_reference: {e}')
+    except Exception:
+        log.exception('get_component_reference')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -547,7 +562,7 @@ async def download_gh_interface(
 ):
     """Download this backend's Grasshopper interface release as a ZIP."""
     try:
-        repo_url = os.environ['GITHUB_REPO_URL']
+        repo_url = get_settings().need('GITHUB_REPO_URL')
         token = _github_token()
         github_service = GitHubService(repo_url, token)
         release_info = await _release_of_this_backend(github_service)
@@ -585,12 +600,9 @@ async def download_gh_interface(
                         ):
                             yield chunk
                 except httpx.HTTPStatusError as e:
-                    print(f"HTTP error: {e}")
-                    try:
-                        response_text = await e.response.aread()
-                        print(f"Response text: {response_text}")
-                    except Exception as read_error:
-                        print(f"Could not read response: {read_error}")
+                    # the URL is pre-signed and the body is GitHub's: neither
+                    # goes to the log
+                    log.warning('GitHub download failed: %s', _failure_text(e))
                     raise
 
         return StreamingResponse(
@@ -606,16 +618,17 @@ async def download_gh_interface(
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        print(f'[ERROR] download_gh_interface GitHub: {e}')
+        log.error('download_gh_interface GitHub: %s', _failure_text(e))
         raise _http_exception_from_github(e)
     except ValueError as e:
-        print(f'[ERROR] download_gh_interface asset lookup: {e}')
+        log.warning('download_gh_interface asset lookup: %s',
+                    type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='Release asset not found'
         )
-    except Exception as e:
-        print(f'[ERROR] download_gh_interface: {e}')
+    except Exception:
+        log.exception('download_gh_interface')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error'
@@ -629,7 +642,7 @@ async def list_src_names(
 ):
     try:
         ref = resolve_update_channel(channel)
-        repo_url = os.environ['GITHUB_REPO_URL']
+        repo_url = get_settings().need('GITHUB_REPO_URL')
         token = _github_token()
         api_base = _extract_api_url(repo_url)
 
@@ -673,9 +686,8 @@ async def list_src_names(
                 raise failures[0]
             for item, result in zip(to_fetch, fetched):
                 if isinstance(result, Exception):
-                    print(
-                        f'[ERROR] cache_version {item.get("name")}: {result}'
-                    )
+                    log.error('cache_version %s: %s', item.get('name'),
+                              _failure_text(result))
 
             result: List[List[object]] = [
                 [
@@ -691,10 +703,10 @@ async def list_src_names(
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        print(f'[ERROR] list_src_names GitHub: {e}')
+        log.error('list_src_names GitHub: %s', _failure_text(e))
         raise _http_exception_from_github(e)
-    except Exception as e:
-        print(f'[ERROR] list_src_names: {e}')
+    except Exception:
+        log.exception('list_src_names')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -709,7 +721,7 @@ async def get_src_code(
 ):
     try:
         ref = resolve_update_channel(channel)
-        repo_url = os.environ['GITHUB_REPO_URL']
+        repo_url = get_settings().need('GITHUB_REPO_URL')
         token = _github_token()
         api_base = _extract_api_url(repo_url)
 
@@ -740,10 +752,10 @@ async def get_src_code(
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        print(f'[ERROR] get_src_code GitHub: {e}')
+        log.error('get_src_code GitHub: %s', _failure_text(e))
         raise _http_exception_from_github(e)
-    except Exception as e:
-        print(f'[ERROR] get_src_code: {e}')
+    except Exception:
+        log.exception('get_src_code')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -799,7 +811,7 @@ async def get_library_manifest(
     """Version and checksums of the ``csc_gh`` package of the release."""
     try:
         ref = resolve_update_channel(channel)
-        repo_url = os.environ['GITHUB_REPO_URL']
+        repo_url = get_settings().need('GITHUB_REPO_URL')
         token = _github_token()
         api_base = _extract_api_url(repo_url)
         async with httpx.AsyncClient(follow_redirects=True) as client:
@@ -823,10 +835,10 @@ async def get_library_manifest(
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        print(f'[ERROR] get_library_manifest GitHub: {e}')
+        log.error('get_library_manifest GitHub: %s', _failure_text(e))
         raise _http_exception_from_github(e)
-    except Exception as e:
-        print(f'[ERROR] get_library_manifest: {e}')
+    except Exception:
+        log.exception('get_library_manifest')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -846,7 +858,7 @@ async def get_library_file(
             detail='Library file not found')
     try:
         ref = resolve_update_channel(channel)
-        repo_url = os.environ['GITHUB_REPO_URL']
+        repo_url = get_settings().need('GITHUB_REPO_URL')
         token = _github_token()
         api_base = _extract_api_url(repo_url)
         async with httpx.AsyncClient(follow_redirects=True) as client:
@@ -862,10 +874,10 @@ async def get_library_file(
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        print(f'[ERROR] get_library_file GitHub: {e}')
+        log.error('get_library_file GitHub: %s', _failure_text(e))
         raise _http_exception_from_github(e)
-    except Exception as e:
-        print(f'[ERROR] get_library_file: {e}')
+    except Exception:
+        log.exception('get_library_file')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -908,7 +920,7 @@ async def _release_xml(name: str) -> Response:
     is content addressed.
     """
     ref = default_update_ref()
-    repo_url = os.environ['GITHUB_REPO_URL']
+    repo_url = get_settings().need('GITHUB_REPO_URL')
     token = _github_token()
     api_base = _extract_api_url(repo_url)
     async with httpx.AsyncClient(follow_redirects=True) as client:
@@ -978,7 +990,7 @@ async def get_xml(
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        print(f'[ERROR] get_xml GitHub: {e}')
+        log.error('get_xml GitHub: %s', _failure_text(e))
         raise _http_exception_from_github(e)
     except Exception as e:
         raise internal_error(e, 'get_xml')
@@ -991,7 +1003,7 @@ async def list_userobject_names(
 ):
     try:
         ref = resolve_update_channel(channel)
-        repo_url = os.environ['GITHUB_REPO_URL']
+        repo_url = get_settings().need('GITHUB_REPO_URL')
         token = _github_token()
         api_base = _extract_api_url(repo_url)
 
@@ -1009,10 +1021,10 @@ async def list_userobject_names(
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        print(f'[ERROR] list_userobject_names GitHub: {e}')
+        log.error('list_userobject_names GitHub: %s', _failure_text(e))
         raise _http_exception_from_github(e)
-    except Exception as e:
-        print(f'[ERROR] list_userobject_names: {e}')
+    except Exception:
+        log.exception('list_userobject_names')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -1027,7 +1039,7 @@ async def get_userobject(
 ):
     try:
         ref = resolve_update_channel(channel)
-        repo_url = os.environ['GITHUB_REPO_URL']
+        repo_url = get_settings().need('GITHUB_REPO_URL')
         token = _github_token()
         api_base = _extract_api_url(repo_url)
 
@@ -1060,10 +1072,10 @@ async def get_userobject(
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        print(f'[ERROR] get_userobject GitHub: {e}')
+        log.error('get_userobject GitHub: %s', _failure_text(e))
         raise _http_exception_from_github(e)
-    except Exception as e:
-        print(f'[ERROR] get_userobject: {e}')
+    except Exception:
+        log.exception('get_userobject')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',

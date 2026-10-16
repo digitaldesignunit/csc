@@ -4,6 +4,8 @@
 
 # --- Server ---
 fastapi
+# the one settings object of the backend (settings.py); pure Python
+pydantic-settings
 gunicorn
 uvicorn[standard]
 python-multipart

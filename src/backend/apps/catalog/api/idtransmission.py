@@ -30,6 +30,10 @@ from .catalog_common import (
     validate_uuid,
 )
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 router = APIRouter()
 
 MAX_IDENTITY_ID_LEN = 128
@@ -162,8 +166,8 @@ async def get_pending_transmission(
             status_code=status.HTTP_200_OK,
             content={'pending': _serialize_item(doc)},
         )
-    except PyMongoError as e:
-        print(f'[ERROR] get_pending_transmission DB error: {e}')
+    except PyMongoError:
+        log.exception('get_pending_transmission DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -240,8 +244,8 @@ async def transmit_identity_id(
                 'item': _serialize_item(new_doc),
             },
         )
-    except PyMongoError as e:
-        print(f'[ERROR] transmit_identity_id DB error: {e}')
+    except PyMongoError:
+        log.exception('transmit_identity_id DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -266,8 +270,8 @@ async def clear_pending_transmission(
                 'deleted': int(result.deleted_count or 0),
             },
         )
-    except PyMongoError as e:
-        print(f'[ERROR] clear_pending_transmission DB error: {e}')
+    except PyMongoError:
+        log.exception('clear_pending_transmission DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',
@@ -302,8 +306,8 @@ async def consume_pending_transmission(
                 'consumed': consumed,
             },
         )
-    except PyMongoError as e:
-        print(f'[ERROR] consume_pending_transmission DB error: {e}')
+    except PyMongoError:
+        log.exception('consume_pending_transmission DB error')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Internal server error',

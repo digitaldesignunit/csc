@@ -8,10 +8,15 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, Request, status
 from fastapi.responses import Response
+from pydantic import ValidationError
 from pymongo import ReturnDocument
 from pymongo.errors import BulkWriteError, DuplicateKeyError
 
 from apps.catalog.etag import compute_snapshot_etag  # noqa: F401 (re-export)
+
+from logging_setup import get_logger
+
+log = get_logger(__name__)
 
 
 INTERNAL_ERROR_TEXT = 'Internal server error'
@@ -22,7 +27,13 @@ def internal_error(exc: BaseException, where: str) -> HTTPException:
     the text of an exception can carry a file path, a stored document or a
     driver message, none of which belongs in an answer (S9, decision 8.144).
     Use as ``raise internal_error(exc, 'what failed')``."""
-    print(f'[ERROR] {where}: {type(exc).__name__}: {exc}')
+    if isinstance(exc, ValidationError):
+        # the error text holds the rejected input (a stored document, typed
+        # values): the fields only (decision 8.144 h)
+        log.error('%s: %s %s', where, type(exc).__name__,
+                  [str(err.get('loc')) for err in exc.errors()])
+    else:
+        log.error('%s', where, exc_info=exc)
     return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                          detail=INTERNAL_ERROR_TEXT)
 
@@ -211,8 +222,8 @@ async def validate_snapshot_and_promote(
                 {'_id': snapshot_id},
                 {'$set': snap_update},
             )
-        except PyMongoError as exc:
-            print(f'[ERROR] validate_snapshot_and_promote snapshot: {exc}')
+        except PyMongoError:
+            log.exception('validate_snapshot_and_promote snapshot')
             raise HTTPException(
                 status_code=500,
                 detail='Internal server error',
@@ -230,8 +241,8 @@ async def validate_snapshot_and_promote(
                 {'_id': identity_id},
                 {'$set': identity_update},
             )
-        except PyMongoError as exc:
-            print(f'[ERROR] validate_snapshot_and_promote identity: {exc}')
+        except PyMongoError:
+            log.exception('validate_snapshot_and_promote identity')
             raise HTTPException(
                 status_code=500,
                 detail='Internal server error',

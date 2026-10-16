@@ -47,6 +47,10 @@ from .public_access import (
     viewer_headers,
 )
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 router = APIRouter()
 
 IDENTITY_FIELDS = {
@@ -180,8 +184,8 @@ async def get_identity_history(
         evidence = await request.app.mongodb_component_evidence.find(
             {'identity_id': {'$in': full_ids}},
             EVIDENCE_FIELDS).to_list(length=None)
-    except PyMongoError as exc:
-        print(f'[ERROR] get_identity_history DB error: {exc}')
+    except PyMongoError:
+        log.exception('get_identity_history DB error')
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail='Internal server error')
 

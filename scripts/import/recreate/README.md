@@ -112,7 +112,9 @@ Paths below are the defaults (`--data` = `.dev/open_datasets/recreate/zenodo-168
   stored or printed. `--config FILE` may hold defaults for `server` and `username` (a local file, never
   committed). `--dataset recreate_nl`, `--only recreate:NL:` and `--limit N` narrow a run. It is
   **idempotent**: a second run finds every component by its id and creates nothing. It writes
-  `<out>/run-<time>.log`.
+  `<out>/run-<time>.log`. A request that gets a 503 (the database is not available) or a dropped connection
+  is repeated up to three times, after the server's `Retry-After` or 1, 2 and 4 seconds; any other error
+  (a 500 included) fails that item at once.
 - `derive_local.py` runs the geometry runner on the imported snapshots of a local instance (production: the
   cron of decision 8.136, `main_geometry.py --due`). It refuses a database that is not on this machine (one
   plain `mongodb://` host, no `+srv`, no host list) and an `--assets` folder that is not inside `.dev/`: it

@@ -106,7 +106,8 @@ output goes outside the repository or into `.dev/`; a path anywhere else in the 
   `PUT` the `reduced` and `detailed` levels and the full cloud, submit, publish. **Idempotent**: a
   published stone is left alone; one that stopped in `draft`, `rejected` or `pending` goes on from where it
   was (a level the snapshot already lists in `mesh_ply_resolutions` is not sent again); a `rejected` or
-  `withdrawn` snapshot is logged with its state and id. The dataset is created **private**.
+  `withdrawn` snapshot is logged with its state and id. The dataset is created **private**. A request is
+  repeated up to three times after a 503 or a dropped connection, as in `recreate/run.py`.
 - `spotcheck.py` (local rehearsal only: it reads a local database) checks the count (452) and one stone per
   group: published, location none, origin `offcut`, material, the inline preview and cloud, the listed mesh
   levels and the staged cloud as the API serves it.

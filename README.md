@@ -141,7 +141,18 @@ to a backend is logged with its `X-CSC-Client` header in
 client name and version (or the browser's name), the method, the path and the
 status: no IP address and no user name. Both this file and gunicorn's
 `logs/fastapi.log` (the error log; the access log is off) rotate at midnight and
-keep 14 days (`logrotation.py`), the retention the privacy page names.
+keep 14 days (`logrotation.py`), the retention the privacy page names. The
+backend logs through the `csc` logger (`logging_setup.py`): in the API into
+`logs/fastapi.log`, in the cron scripts to stderr, which their cron lines append
+to the dated `*_cronjob.<date>.log` files; `CSC_LOG_LEVEL` sets the level. A log
+line holds counts and ids only, never a user name, an e-mail address or a typed
+value. When the database cannot be reached the API answers 503 with
+`Retry-After` and logs the traceback.
+
+Every environment variable of the backend is named once, with its type, default
+and purpose, in `src/backend/settings.py`; it is the only place that reads the
+environment. A missing or wrong value stops the start and names the variable,
+never its value.
 
 ---
 

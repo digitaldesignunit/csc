@@ -10,55 +10,49 @@ if app_path not in sys.path:
     sys.path.insert(0, app_path)
 
 
-LOG_LEVELS = ('debug', 'info', 'warning', 'error', 'critical')
-DEFAULT_WORKERS = 2
-MAX_WORKERS = 8
+# The values come from settings.py (decision 8.156): the same class the
+# application reads, so gunicorn and the app never disagree. The two helpers
+# keep their form for a raw text (tests, tools).
+import settings as _settings  # noqa: E402
+from settings import (  # noqa: E402,F401
+    DEFAULT_TRUSTED_PROXIES,
+    DEFAULT_WORKERS,
+    LOG_LEVELS,
+    MAX_WORKERS,
+)
 
 
 def worker_count(raw=None) -> int:
     """``CSC_WORKERS`` (decision 8.130): a whole number from 1 to 8; two when
     it is unset or not a number. Every worker loads the geometry libraries, so
     the number follows the memory of the account, not the number of cores."""
-    text = (os.getenv('CSC_WORKERS') if raw is None else raw) or ''
-    try:
-        value = int(text.strip())
-    except ValueError:
-        return DEFAULT_WORKERS
-    return min(max(value, 1), MAX_WORKERS)
+    if raw is None:
+        return _settings.get_settings().csc_workers
+    return _settings.worker_count(raw)
 
 
 def log_level(raw=None) -> str:
     """``CSC_LOG_LEVEL`` (decision 8.130): one of gunicorn's levels, ``info``
     when it is unset or unknown."""
-    text = ((os.getenv('CSC_LOG_LEVEL') if raw is None else raw) or '')
-    text = text.strip().lower()
-    return text if text in LOG_LEVELS else 'info'
+    if raw is None:
+        return _settings.get_settings().csc_log_level
+    return _settings.log_level(raw)
 
 
 # The proxies whose X-Forwarded-For is believed: the same list the rate
 # limiter reads (``CSC_TRUSTED_PROXIES``, limiter.py), so the server and the
 # limits never disagree about who may speak for a client (S12, decision
 # 8.144). Default: loopback, where the web server reaches the backend.
-DEFAULT_TRUSTED_PROXIES = '127.0.0.0/8,::1'
 
 
 def trusted_proxies(raw=None) -> str:
     """``CSC_TRUSTED_PROXIES`` as gunicorn's ``forwarded_allow_ips``: comma
-    separated addresses and networks, each checked here so that a typo stops
-    the start with its name in the message. ``*`` (trust everyone) is refused."""
-    import ipaddress
-    text = (os.getenv('CSC_TRUSTED_PROXIES') if raw is None else raw) or ''
-    entries = []
-    for item in (text or DEFAULT_TRUSTED_PROXIES).split(','):
-        item = item.strip()
-        if not item:
-            continue
-        try:
-            entries.append(str(ipaddress.ip_network(item, strict=False)))
-        except ValueError as exc:
-            raise ValueError(
-                f'CSC_TRUSTED_PROXIES: bad entry {item!r}') from exc
-    return ','.join(entries) or DEFAULT_TRUSTED_PROXIES
+    separated addresses and networks, each checked so that a typo stops the
+    start with its name in the message. ``*`` (trust everyone) is refused."""
+    text = (_settings.get_settings().csc_trusted_proxies
+            if raw is None else raw) or ''
+    networks = _settings.parse_trusted_proxies(text or DEFAULT_TRUSTED_PROXIES)
+    return ','.join(str(n) for n in networks) or DEFAULT_TRUSTED_PROXIES
 
 
 # Gunicorn configuration. The two settings come from the environment

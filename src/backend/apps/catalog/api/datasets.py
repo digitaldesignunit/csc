@@ -16,7 +16,6 @@ section 7.7; plan P3).
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import os
 import re
 import unicodedata
 from typing import Annotated, Any, Dict, List, Optional
@@ -28,6 +27,7 @@ from pymongo.errors import DuplicateKeyError
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.documents import Dataset
+from settings import get_settings
 from apps.catalog.models import User
 from apps.catalog.profile import (
     clean_text,
@@ -56,6 +56,10 @@ from .invitations import deliver
 from .catalog_common import now_iso
 from .identity_edit import _validated as _validated_identity
 from .identity_edit import _write as _write_identity
+
+from logging_setup import get_logger
+
+log = get_logger(__name__)
 
 router = APIRouter()
 
@@ -340,17 +344,13 @@ async def get_dataset(
                                with_members=True)
 
 
-DEFAULT_MAX_DATASETS = 3
 MAX_DATASETS_ENV = 'CSC_MAX_DATASETS_PER_USER'
 
 
 def max_datasets_per_user() -> int:
     """How many datasets one account may create (8.139 e); admins have no
     limit. ``CSC_MAX_DATASETS_PER_USER``, 3 when unset or not a number."""
-    try:
-        return max(0, int((os.getenv(MAX_DATASETS_ENV) or '').strip()))
-    except ValueError:
-        return DEFAULT_MAX_DATASETS
+    return get_settings().csc_max_datasets_per_user
 
 
 def slug_from_name(name: str) -> str:
@@ -395,9 +395,10 @@ async def _notify_admins(request: Request, dataset: Dataset,
                 creator.email) for admin in admins])
         for failure in failures:
             if failure is not None:
-                print(f'[DATASETS] "dataset created" mail failed: {email_service.failure_kind(failure)}')
+                log.warning('"dataset created" mail failed: %s',
+                            email_service.failure_kind(failure))
     except Exception as exc:                               # noqa: BLE001
-        print(f'[DATASETS] "dataset created" mail failed: {type(exc).__name__}')
+        log.warning('"dataset created" mail failed: %s', type(exc).__name__)
 
 
 @router.post('/datasets', response_model=DatasetView, status_code=201,

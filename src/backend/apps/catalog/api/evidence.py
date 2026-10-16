@@ -79,6 +79,10 @@ from .evidence_service import (
     viewer_context,
 )
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 router = APIRouter()
 
 DEFAULT_PAGE = 100
@@ -364,8 +368,8 @@ async def list_identity_evidence(
         docs = await request.app.mongodb_component_evidence.find(
             {'identity_id': identity_id, **match}).sort(
             [('observed_at', 1), ('_id', 1)]).to_list(length=None)
-    except PyMongoError as exc:
-        print(f'[ERROR] list_identity_evidence DB error: {exc}')
+    except PyMongoError:
+        log.exception('list_identity_evidence DB error')
         raise HTTPException(status_code=500, detail='Internal server error')
     viewer = viewer_of(current_user)
     project = await _projector(request, viewer, identity)

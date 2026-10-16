@@ -22,11 +22,33 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
   The tooltip of `FetchReducedGeometry` still says "at most 5000 points" until the next
   export of the components.
 
+- **Settings** (decision 8.156): the backend reads its environment in one place,
+  `src/backend/settings.py` (pydantic-settings), and checks it at start: required
+  variables, `JWT_SECRET` of at least 32 bytes, positive upload limits, http(s) URLs,
+  the worker count and log level. Secrets never appear in a printed or logged settings
+  object. Variable names and defaults are unchanged.
+- **Logging** (decision 8.157): the backend logs through Python's `logging` instead of
+  `print`, into gunicorn's daily error log (API) or the dated cron logs; errors keep their
+  traceback. No line holds user names, e-mail addresses, typed values, GitHub request
+  URLs or the text of a rejected document.
+- **Database outages** answer 503 with `Retry-After` instead of a bare 500, and the
+  cause goes to the log.
+- **Import tools** retry a request up to three times on 503 and on connection errors,
+  honouring `Retry-After`; every other error stops at once.
+
 ### Added
 
 - **Marker for uploaded point clouds**: a snapshot lists the indices of its uploaded full
   point clouds in `point_cloud_files` (set by the upload, removed by the delete, not
   writable by clients), so an import resumes without probing the file.
+
+### Server notes
+
+- Before the deploy, check the backend environment: `FRONTEND_URL`, `GITHUB_REPO_URL`
+  and `CSC_PUBLIC_API_URL` must be http(s) URLs, the upload and photo limit variables
+  positive, and `SMTP_DEV_MODE` off. The backend refuses to start otherwise and names
+  the variable.
+- The deploy installs one new package, `pydantic-settings`.
 
 ## [0.6.1.1] - 2026-10-13
 

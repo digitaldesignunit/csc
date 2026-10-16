@@ -21,11 +21,14 @@ import asyncio
 from pymongo import AsyncMongoClient
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
+from logging_setup import configure as configure_logging, get_logger
+from settings import get_settings
 from utility import (
     get_database_name,
     get_db_connectionstring,
-    create_logging_timestamp as logts
 )
+
+log = get_logger(__name__)
 
 
 # MAIN CLEANUP LOGIC ----------------------------------------------------------
@@ -59,10 +62,8 @@ async def cleanup_unverified_users(dry_run=False):
     Returns:
         Number of users deleted (or would be deleted in dry run).
     """
-    ts = logts()
-    print(f'[CLEANUP] {ts} Starting unverified user cleanup...')
-    print(f'[CLEANUP] Mode: {"DRY RUN" if dry_run else "LIVE"}')
-    print('-' * 80)
+    log.info('Starting unverified user cleanup (%s)',
+             'DRY RUN' if dry_run else 'LIVE')
 
     # Load config and connect to MongoDB
     connection_string = get_db_connectionstring()
@@ -75,52 +76,47 @@ async def cleanup_unverified_users(dry_run=False):
     try:
         await client.aconnect()
         await client.admin.command('ping')
-        print('[CLEANUP] Connected to MongoDB')
+        log.info('Connected to MongoDB')
 
         db = client[get_database_name()]
         users = db['users']
 
         # Calculate cutoff date (7 days ago)
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=7)
-        print(f'[CLEANUP] Cutoff date: {cutoff_date.isoformat()}')
+        log.info('Cutoff date: %s', cutoff_date.isoformat())
 
         query = unverified_query(cutoff_date)
 
         # Count matching users
         count = await users.count_documents(query)
-        ts = logts()
-        print(f'[CLEANUP] {ts} Found {count} unverified user(s) to delete')
+        log.info('Found %d unverified user(s) to delete', count)
 
         if count == 0:
-            print(f'[CLEANUP] {ts} No users to delete.')
+            log.info('No users to delete')
             return 0
 
         ids = [user['_id'] async for user in users.find(query, {'_id': 1})]
-        print(f'[CLEANUP] Account ids: {", ".join(str(i) for i in ids)}')
+        log.info('Account ids: %s', ', '.join(str(i) for i in ids))
 
         if dry_run:
-            print('[CLEANUP] DRY RUN - No users were actually deleted.')
+            log.info('DRY RUN: no users were actually deleted')
         else:
             # Delete the users
             result = await users.delete_many(query)
-            ts = logts()
-            print(f'[CLEANUP] {ts} Deleted {result.deleted_count} user(s)')
+            log.info('Deleted %d user(s)', result.deleted_count)
 
-        print('-' * 80)
-        ts = logts()
-        print(f'[CLEANUP] {ts} Cleanup completed successfully')
+        log.info('Cleanup completed successfully')
 
         return count
 
     except Exception as e:
-        ts = logts()
-        print(f'[CLEANUP] {ts} Error during cleanup: {type(e).__name__}')
+        # the type only: a database error text can name accounts (8.144 h)
+        log.error('Error during cleanup: %s', type(e).__name__)
         raise
 
     finally:
         await client.close()
-        ts = logts()
-        print(f'[CLEANUP] {ts} MongoDB connection closed')
+        log.info('MongoDB connection closed')
 
 
 # MAIN ENTRY POINT ------------------------------------------------------------
@@ -129,21 +125,20 @@ async def main():
     """
     Main entry point for the cleanup script.
     """
+    configure_logging(get_settings())
     # Check for dry-run flag
     dry_run = '--dry-run' in sys.argv or '-d' in sys.argv
 
     try:
         deleted_count = await cleanup_unverified_users(dry_run=dry_run)
 
-        print()
-        print('[CLEANUP] Summary:')
-        print(f'  Users processed: {deleted_count}')
-        print(f'  Mode: {"DRY RUN" if dry_run else "LIVE"}')
+        log.info('Summary: users processed %d, mode %s', deleted_count,
+                 'DRY RUN' if dry_run else 'LIVE')
 
         return 0
 
     except Exception as e:
-        print(f'[CLEANUP] FATAL ERROR: {type(e).__name__}')
+        log.error('FATAL ERROR: %s', type(e).__name__)
         return 1
 
 

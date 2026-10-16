@@ -59,6 +59,7 @@ the API of a running server, with no database access. Needs an admin account
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import argparse
 import asyncio
+import logging
 import os
 import re
 import shutil
@@ -85,8 +86,9 @@ from apps.catalog.geometry_stages import (
     server_stages,
     stale_stages,
 )
+from logging_setup import configure as configure_logging, get_logger
+from settings import SettingsError, get_settings
 from utility import (
-    create_logging_timestamp as logts,
     get_database_name,
     get_db_connectionstring,
     get_snapshot_meshes_directory,
@@ -102,14 +104,19 @@ SNAPSHOT_BATCH = 10
 _SNAPSHOT_ID = re.compile(r'^[0-9a-fA-F-]{36}$')
 
 
+_log = get_logger(__name__)
+_LEVELS = {'ERROR': logging.ERROR, 'WARNING': logging.WARNING}
+
+
 def log(message: str, prefix: str = 'GEOMETRY') -> None:
-    print(f'[{prefix}] {logts()} {message}', flush=True)
+    """One line of the run; ``prefix`` ERROR / WARNING sets the level."""
+    _log.log(_LEVELS.get(prefix, logging.INFO), '%s', message)
 
 
 def _optional(getter) -> Optional[str]:
     try:
         return getter()
-    except KeyError:
+    except (KeyError, SettingsError):
         return None
 
 
@@ -194,7 +201,7 @@ async def _picked(snapshots, args: argparse.Namespace,
 def _limit(args: argparse.Namespace) -> Optional[int]:
     if args.limit is not None:
         if args.limit <= 0:
-            print('--limit must be a positive integer', file=sys.stderr)
+            log('--limit must be a positive integer', 'ERROR')
             sys.exit(2)
         return args.limit
     if args.process_all or args.snapshot:
@@ -381,13 +388,14 @@ def run_remote_mode(args: argparse.Namespace) -> int:
     )
     stages = [s for s in STAGES if s in (args.stages or HEAVY_STAGES)]
     if args.due:
-        print('--due is for the local runner; --remote asks the server for '
-              'stale snapshots', file=sys.stderr)
+        log('--due is for the local runner; --remote asks the server for '
+            'stale snapshots', 'ERROR')
         return 2
     try:
         runner = RemoteRunner(
-            args.remote, token=os.environ.get('CSC_API_TOKEN'),
-            user=args.user, password=os.environ.get('CSC_API_PASSWORD'),
+            args.remote, token=_secret(get_settings().csc_api_token),
+            user=args.user,
+            password=_secret(get_settings().csc_api_password),
             log=log,
             cache=ResultCache(args.cache_dir) if args.cache_dir else None)
         visited, uploaded, refused = run_remote(
@@ -405,8 +413,13 @@ def run_remote_mode(args: argparse.Namespace) -> int:
     return 0 if not refused else 1
 
 
+def _secret(value):
+    return value.get_secret_value() if value is not None else None
+
+
 if __name__ == '__main__':
     arguments = _parse_args()
+    configure_logging(get_settings())
     if arguments.remote:
         sys.exit(run_remote_mode(arguments))
     sys.exit(asyncio.run(run(arguments)))

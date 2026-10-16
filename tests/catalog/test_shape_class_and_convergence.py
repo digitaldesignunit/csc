@@ -110,12 +110,12 @@ def test_stored_errors_are_short_and_carry_no_paths():
     assert len(short_error(ValueError('x' * 1000))) <= 160
 
 
-def test_the_heavy_stage_setting(monkeypatch):
-    monkeypatch.delenv('CSC_GEOMETRY_HEAVY_STAGES', raising=False)
+def test_the_heavy_stage_setting(env):
+    env(CSC_GEOMETRY_HEAVY_STAGES=None)
     assert server_stages() == STAGES
-    monkeypatch.setenv('CSC_GEOMETRY_HEAVY_STAGES', 'remote')
+    env(CSC_GEOMETRY_HEAVY_STAGES='remote')
     assert server_stages() == ('frame', 'shape_class')
-    monkeypatch.setenv('CSC_GEOMETRY_HEAVY_STAGES', 'cloud')
+    env(CSC_GEOMETRY_HEAVY_STAGES='cloud')
     with pytest.raises(ValueError):
         server_stages()
 

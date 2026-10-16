@@ -18,12 +18,29 @@ from support import seed_05_catalog, sid
 SECRET = 'driver says: mongodb://user:pw@host/db at /srv/csc/meshes/x.ply'
 
 
-def test_internal_error_has_one_constant_text_and_logs_the_cause(capsys):
+def test_internal_error_has_one_constant_text_and_logs_the_cause(caplog):
     exc = internal_error(ValueError(SECRET), 'a thing')
     assert exc.status_code == 500
     assert exc.detail == INTERNAL_ERROR_TEXT == 'Internal server error'
-    out = capsys.readouterr().out
+    out = caplog.text
     assert 'a thing' in out and 'ValueError' in out and SECRET in out
+
+
+def test_internal_error_logs_only_the_fields_of_a_validation_error(caplog):
+    from pydantic import BaseModel, ValidationError
+
+    class Doc(BaseModel):
+        email: int
+
+    try:
+        Doc(email=SECRET)
+    except ValidationError as error:
+        problem = error
+    exc = internal_error(problem, 'a stored document')
+    assert exc.detail == INTERNAL_ERROR_TEXT
+    assert SECRET not in caplog.text and 'Traceback' not in caplog.text
+    assert 'a stored document: ValidationError' in caplog.text and 'email' in caplog.text
+    assert all(r.exc_info is None for r in caplog.records)
 
 
 class _BrokenDatabase:
@@ -32,13 +49,13 @@ class _BrokenDatabase:
 
 
 def test_health_db_answers_503_without_the_driver_text(api, app, monkeypatch,
-                                                      capsys):
+                                                      caplog):
     monkeypatch.setattr(app, 'mongodb', _BrokenDatabase())
     response = api.get('/health/db')
     assert response.status_code == 503
     assert response.json() == {'ok': False}
     assert SECRET not in response.text
-    assert SECRET in capsys.readouterr().out                 # logged
+    assert SECRET in caplog.text                             # logged
 
 
 @pytest.fixture

@@ -21,6 +21,12 @@ from typing import Any
 RETENTION_DAYS = 14
 
 
+def _complain(handler: logging.Handler, exc: OSError) -> None:
+    """A failed rotation goes to stderr: a log handler cannot report its own
+    trouble through the logging it serves."""
+    sys.stderr.write(f'[LOG] rotate {handler.baseFilename}: {exc}\n')
+
+
 class DailyFileHandler(logging.handlers.TimedRotatingFileHandler):
     """Midnight rotation, ``backupCount`` dated files, UTF-8."""
 
@@ -38,23 +44,21 @@ class DailyFileHandler(logging.handlers.TimedRotatingFileHandler):
             except FileExistsError:
                 return                      # another process was first
             except OSError as exc:
-                print(f'[LOG] rotate {self.baseFilename}: {exc}',
-                      file=sys.stderr)
+                _complain(self, exc)
             else:
                 try:
                     if os.stat(self.baseFilename).st_ino \
                             == os.stat(target).st_ino:
                         os.remove(self.baseFilename)
                 except OSError as exc:
-                    print(f'[LOG] rotate {self.baseFilename}: {exc}',
-                          file=sys.stderr)
+                    _complain(self, exc)
                 return
         if os.path.exists(target):
             return
         try:                                # no hard links: rename
             self.rotate(self.baseFilename, target)
         except OSError as exc:
-            print(f'[LOG] rotate {self.baseFilename}: {exc}', file=sys.stderr)
+            _complain(self, exc)
 
     def doRollover(self) -> None:           # noqa: N802 (stdlib name)
         if self.stream:

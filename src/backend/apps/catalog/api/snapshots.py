@@ -113,6 +113,10 @@ from .snapshot_images import (
     photo_filename,
 )
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 router = APIRouter()
 
 # Mesh downloads convert on the fly (OBJ) or read the file: CPU and memory
@@ -161,8 +165,9 @@ def _delete_snapshot_disk_assets(request: Request, snapshot_id: str) -> None:
     if os.path.exists(preview_path):
         try:
             os.remove(preview_path)
-        except OSError as exc:
-            print(f'[WARN] delete snapshot preview {snapshot_id}: {exc}')
+        except OSError:
+            log.warning('delete snapshot preview %s', snapshot_id,
+                        exc_info=True)
 
     for parent in (
         request.app.snapshot_photos_dir,
@@ -173,8 +178,9 @@ def _delete_snapshot_disk_assets(request: Request, snapshot_id: str) -> None:
         if os.path.isdir(target):
             try:
                 shutil.rmtree(target)
-            except OSError as exc:
-                print(f'[WARN] delete snapshot assets {target}: {exc}')
+            except OSError:
+                log.warning('delete snapshot assets %s', target,
+                            exc_info=True)
 
 
 def _resolve_preview_path(request: Request, snapshot_id: str) -> str:
@@ -249,8 +255,8 @@ async def refresh_snapshot_photo_count(
             {'_id': snapshot_id},
             {'$set': {'photo_count': count}},
         )
-    except PyMongoError as exc:
-        print(f'[ERROR] refresh_snapshot_photo_count DB error: {exc}')
+    except PyMongoError:
+        log.exception('refresh_snapshot_photo_count DB error')
     if snapshot_doc is not None:
         snapshot_doc['photo_count'] = count
     return count
@@ -311,8 +317,8 @@ async def list_my_snapshots(
                 {'_id': {'$in': ids}},
                 {'_id': 1, 'current_snapshot_id': 1, 'catalog_number': 1,
                  'original_function': 1, 'material': 1, 'dataset': 1})}
-    except PyMongoError as exc:
-        print(f'[ERROR] list_my_snapshots: {exc}')
+    except PyMongoError:
+        log.exception('list_my_snapshots')
         raise HTTPException(status_code=500, detail='Internal server error')
     items: List[Dict[str, Any]] = []
     for snap in docs:
@@ -372,8 +378,8 @@ async def list_pending_snapshots(
                 'added_by_username': 1,
             },
         ).sort('created', 1).to_list(length=None)
-    except PyMongoError as exc:
-        print(f'[ERROR] list_pending_snapshots: {exc}')
+    except PyMongoError:
+        log.exception('list_pending_snapshots')
         raise HTTPException(status_code=500, detail='Internal server error')
 
     items: List[Dict[str, Any]] = []
@@ -575,8 +581,8 @@ async def get_snapshot_mesh_preview(
         raise HTTPException(status_code=404, detail='Mesh preview not found')
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:
-        print(f'[ERROR] mesh preview export ({fmt}): {exc}')
+    except Exception:
+        log.exception('mesh preview export')
         raise HTTPException(
             status_code=500,
             detail=f'Failed to export mesh preview as {fmt.upper()}',
@@ -676,15 +682,15 @@ async def get_snapshot_mesh(
     try:
         body = await run_in_threadpool(
             export_mesh_file, path, fmt)  # type: ignore[arg-type]
-    except ValueError as exc:
+    except ValueError:
         # the parser's text can name the file: the log only
-        print(f'[ERROR] mesh file OBJ conversion: {exc}')
+        log.exception('mesh file OBJ conversion')
         raise HTTPException(
             status_code=400,
             detail='The mesh file could not be converted to OBJ',
         )
-    except Exception as exc:
-        print(f'[ERROR] mesh file OBJ conversion: {exc}')
+    except Exception:
+        log.exception('mesh file OBJ conversion')
         raise HTTPException(
             status_code=500,
             detail='Failed to convert mesh file to OBJ',
@@ -727,8 +733,8 @@ async def _register_mesh_ply_resolution(
                 'etag': etag,
             }},
         )
-    except PyMongoError as exc:
-        print(f'[ERROR] _register_mesh_ply_resolution DB error: {exc}')
+    except PyMongoError:
+        log.exception('_register_mesh_ply_resolution DB error')
         raise HTTPException(
             status_code=500,
             detail='Failed to update snapshot mesh manifest',
@@ -773,8 +779,8 @@ async def _unregister_mesh_ply_resolution(
                 'etag': etag,
             }},
         )
-    except PyMongoError as exc:
-        print(f'[ERROR] _unregister_mesh_ply_resolution DB error: {exc}')
+    except PyMongoError:
+        log.exception('_unregister_mesh_ply_resolution DB error')
         raise HTTPException(
             status_code=500,
             detail='Failed to update snapshot mesh manifest',
@@ -853,8 +859,8 @@ async def put_snapshot_mesh_ply(
 
     try:
         await asyncio.to_thread(_write_bytes, dest, raw)
-    except OSError as exc:
-        print(f'[ERROR] put_snapshot_mesh_ply write: {exc}')
+    except OSError:
+        log.exception('put_snapshot_mesh_ply write')
         raise HTTPException(
             status_code=500,
             detail='Failed to save mesh file',
@@ -935,8 +941,8 @@ async def delete_snapshot_mesh_ply(
     if on_disk:
         try:
             os.remove(path)
-        except OSError as exc:
-            print(f'[ERROR] delete_snapshot_mesh_ply: {exc}')
+        except OSError:
+            log.exception('delete_snapshot_mesh_ply')
             raise HTTPException(
                 status_code=500,
                 detail='Failed to delete mesh file',
@@ -1042,8 +1048,8 @@ async def get_snapshot_proxy_mesh(
         body = await run_in_threadpool(_proxy_mesh_bytes, proxies[index], fmt)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:
-        print(f'[ERROR] proxy export ({fmt}): {exc}')
+    except Exception:
+        log.exception('proxy export')
         raise HTTPException(
             status_code=500,
             detail=f'Failed to export proxy as {fmt.upper()}',
@@ -1135,8 +1141,8 @@ async def _mark_point_cloud_file(
                 'etag': etag,
             }},
         )
-    except PyMongoError as exc:
-        print(f'[ERROR] _mark_point_cloud_file DB error: {exc}')
+    except PyMongoError:
+        log.exception('_mark_point_cloud_file DB error')
         raise HTTPException(
             status_code=500,
             detail='Failed to update snapshot point cloud manifest',
@@ -1195,8 +1201,8 @@ async def get_snapshot_point_cloud_ply(
         raise HTTPException(status_code=404, detail='Point cloud not found')
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:
-        print(f'[ERROR] point cloud PLY export: {exc}')
+    except Exception:
+        log.exception('point cloud PLY export')
         raise HTTPException(
             status_code=500,
             detail='Failed to export point cloud as PLY',
@@ -1278,8 +1284,8 @@ async def put_snapshot_point_cloud_ply(
 
     try:
         await asyncio.to_thread(_write_bytes, dest, raw)
-    except OSError as exc:
-        print(f'[ERROR] put_snapshot_point_cloud_ply write: {exc}')
+    except OSError:
+        log.exception('put_snapshot_point_cloud_ply write')
         raise HTTPException(
             status_code=500,
             detail='Failed to save point cloud file',
@@ -1338,8 +1344,8 @@ async def delete_snapshot_point_cloud_ply(
 
     try:
         os.remove(path)
-    except OSError as exc:
-        print(f'[ERROR] delete_snapshot_point_cloud_ply: {exc}')
+    except OSError:
+        log.exception('delete_snapshot_point_cloud_ply')
         raise HTTPException(
             status_code=500,
             detail='Failed to delete point cloud file',
@@ -1475,8 +1481,8 @@ async def put_snapshot_photo(
             max_bytes=request.app.snapshot_photo_max_output_bytes,
             max_long_edge_px=request.app.snapshot_photo_max_long_edge_px,
         )
-    except Exception as exc:
-        print(f'[ERROR] put_snapshot_photo encode: {exc}')
+    except Exception:
+        log.exception('put_snapshot_photo encode')
         raise HTTPException(
             status_code=500,
             detail='Failed to process image',
@@ -1485,8 +1491,8 @@ async def put_snapshot_photo(
     if os.path.exists(legacy):
         try:
             os.remove(legacy)
-        except OSError as exc:
-            print(f'[WARN] put_snapshot_photo legacy remove: {exc}')
+        except OSError:
+            log.warning('put_snapshot_photo legacy remove', exc_info=True)
 
     count = await _sync_photo_count(request, snapshot_id)
     return JSONResponse(
@@ -1527,8 +1533,8 @@ async def delete_snapshot_photo(
             try:
                 os.remove(path)
                 removed = True
-            except OSError as exc:
-                print(f'[ERROR] delete_snapshot_photo: {exc}')
+            except OSError:
+                log.exception('delete_snapshot_photo')
                 raise HTTPException(
                     status_code=500,
                     detail='Failed to delete photo file',
