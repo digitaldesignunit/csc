@@ -1,6 +1,6 @@
 // Auto-generated from backend GET /vocab
-// Generated on: 2026-10-05T18:37:45.706Z
-// Source: http://127.0.0.1:8791/vocab
+// Generated on: 2026-10-17T09:24:39.835Z
+// Source: http://127.0.0.1:8899/vocab
 
 export type OriginalFunction = 'IfcBeam' | 'IfcColumn' | 'IfcSlab' | 'IfcPlate' | 'IfcWall' | 'IfcMember' | 'IfcPipeSegment' | 'IfcFooting' | 'IfcDiscreteAccessory' | 'IfcBuildingElementPart' | 'IfcWindow' | 'IfcDoor' | 'IfcStair' | 'IfcRailing' | 'IfcDuctSegment' | 'IfcBuildingElementProxy' | 'CscDebris'
 export const ORIGINAL_FUNCTION_LABELS: Record<OriginalFunction, string> = {
@@ -150,7 +150,7 @@ export const INHERIT_UNIT_LABELS: Record<InheritUnit, string> = {
   "original_function": "Original function",
 }
 
-export type ChangeCause = 'patch' | 'inherited_from_parent' | 'material_merge' | 'exit' | 'reenter' | 'withdraw' | 'reinstate' | 'migration' | 'derived_exit' | 'deinstall' | 'undo_deinstall'
+export type ChangeCause = 'patch' | 'inherited_from_parent' | 'material_merge' | 'exit' | 'reenter' | 'withdraw' | 'reinstate' | 'migration' | 'derived_exit' | 'deinstall' | 'undo_deinstall' | 'verify' | 'publish' | 'attach' | 'redact'
 export const CHANGE_CAUSE_LABELS: Record<ChangeCause, string> = {
   "patch": "Edited",
   "inherited_from_parent": "Taken over from a parent",
@@ -163,6 +163,10 @@ export const CHANGE_CAUSE_LABELS: Record<ChangeCause, string> = {
   "derived_exit": "Cut into pieces",
   "deinstall": "Deinstalled",
   "undo_deinstall": "Deinstallation undone",
+  "verify": "Verification changed",
+  "publish": "Published",
+  "attach": "File attached",
+  "redact": "File removed",
 }
 
 export type EvidenceMethod = 'rebound_hammer' | 'core_compression' | 'archival_document' | 'visual_inspection' | 'era_heuristic' | 'manufacturer_datasheet' | 'reinforcement_layout'

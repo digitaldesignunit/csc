@@ -27,11 +27,7 @@ from apps.catalog.documents import (
     Vec3,
 )
 from apps.catalog.etag import compute_snapshot_etag
-from apps.catalog.evidence.projection import (
-    evidence_tombstone,
-    project_evidence,
-    viewer_tier,
-)
+from apps.catalog.evidence.projection import project_evidence, viewer_tier
 from apps.catalog.evidence.registry import (
     RESULT_FIELDS,
     PreparedRecord,
@@ -62,17 +58,8 @@ from apps.catalog.vocab import (
     UncertaintyType,
 )
 from apps.catalog.timeutil import parse_ts
-from .access import (
-    TombstoneHit,
-    component_visible,
-    dataset_of,
-    deny_read,
-    load_identity,
-    raise_if_purged,
-    require,
-    viewer_of,
-)
-from .catalog_common import now_iso, validate_uuid
+from .access import component_visible, dataset_of, require, viewer_of
+from .catalog_common import now_iso
 
 MAX_BULK = 200
 Scalar = Union[float, int, str]
@@ -253,55 +240,6 @@ def validated_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # LOADING AND VISIBILITY ------------------------------------------------------
-async def load_evidence(request: Request, evidence_id: str) -> Dict[str, Any]:
-    validate_uuid(evidence_id, label='evidence id')
-    doc = await request.app.mongodb_component_evidence.find_one(
-        {'_id': evidence_id})
-    if doc is None:
-        await raise_if_purged(request, evidence_id, 'Evidence')
-    return doc
-
-
-async def evidence_projection(request: Request, viewer: Viewer,
-                              record: Dict[str, Any],
-                              identity: Dict[str, Any]) -> Optional[str]:
-    """'full', 'tombstone' or None. The records of a withdrawn identity
-    are tombstones outside D whatever their own status (8.17)."""
-    dataset = await dataset_of(request, identity.get('dataset'))
-    visible = await component_visible(request, viewer, identity)
-    projection = record_projection(
-        viewer, dataset, kind='evidence',
-        status=record.get('status') or 'published',
-        author_id=record.get('recorded_by_user_id'),
-        component_visible=visible)
-    if projection == 'full' and identity.get('withdrawn'):
-        projection = withdrawn_projection(viewer, dataset,
-                                          component_visible=visible)
-    return projection
-
-
-async def ensure_evidence_visible(
-    request: Request, evidence_id: str, user: Optional[User], *,
-    allow_tombstone: bool = False
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """``(record, identity)`` for a record the caller sees in full. A
-    tombstone viewer gets the tombstone where JSON is served; files and
-    writes are for members only (8.17)."""
-    viewer = viewer_of(user)
-    record = await load_evidence(request, evidence_id)
-    identity = await load_identity(request, str(record['identity_id']))
-    projection = await evidence_projection(request, viewer, record, identity)
-    if projection == 'full':
-        return record, identity
-    if projection == 'tombstone':
-        if allow_tombstone:
-            raise TombstoneHit(evidence_tombstone(record, identity))
-        raise HTTPException(
-            status_code=403,
-            detail='Withdrawn: its files are for dataset members only.')
-    raise deny_read(viewer)
-
-
 async def viewer_context(request: Request, viewer: Viewer,
                          identity: Dict[str, Any]) -> Tuple[str, bool]:
     """``(tier, email_ok)``: how much of the people in a record this viewer

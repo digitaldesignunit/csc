@@ -30,9 +30,8 @@ from apps.catalog.read_models import (
     snapshot_body,
 )
 from .auth import get_current_active_user
-from .access import load_datasets, viewer_of
+from .access import load_datasets, load_snapshot, viewer_of
 from .public_access import (
-    ensure_snapshot_read_access,
     viewer_etag,
     viewer_headers,
 )
@@ -231,12 +230,8 @@ async def get_snapshot_by_id(
 ):
     """Return a single snapshot document. ETag == stored `etag` field.
     A withdrawn one outside its dataset answers with its tombstone (8.17)."""
-    doc = await ensure_snapshot_read_access(
-        request,
-        snapshot_id,
-        current_user,
-        allow_tombstone=True,
-    )
+    doc = (await load_snapshot(
+        request, current_user, snapshot_id, allow_tombstone=True)).record
 
     etag = doc.get('etag')
     if not etag:

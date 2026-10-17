@@ -175,6 +175,9 @@ ChangeCause = Literal[
     'patch', 'inherited_from_parent', 'material_merge', 'exit', 'reenter',
     'withdraw', 'reinstate', 'migration', 'derived_exit', 'deinstall',
     'undo_deinstall',
+    # the evidence writes name their action (8.159); its status steps are in
+    # status_history, not in the change log
+    'verify', 'publish', 'attach', 'redact',
 ]
 CHANGE_CAUSES: Tuple[str, ...] = get_args(ChangeCause)
 CHANGE_CAUSE_LABELS: Dict[str, str] = {
@@ -189,6 +192,10 @@ CHANGE_CAUSE_LABELS: Dict[str, str] = {
     'derived_exit': 'Cut into pieces',
     'deinstall': 'Deinstalled',
     'undo_deinstall': 'Deinstallation undone',
+    'verify': 'Verification changed',
+    'publish': 'Published',
+    'attach': 'File attached',
+    'redact': 'File removed',
 }
 
 # MODERATION AND VERIFICATION (section 3.3.3) ---------------------------------

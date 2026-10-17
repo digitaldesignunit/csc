@@ -20,7 +20,7 @@ from apps.catalog.geometry_mesh_export import (
 )
 from apps.catalog.proxies.primitives import proxy_mesh
 from limiter import limiter, signed_in_or_ip
-from .public_access import ensure_snapshot_read_access
+from .access import load_snapshot
 from .catalog_common import not_modified_response
 from logging_setup import get_logger
 from .snapshot_common import (
@@ -59,11 +59,7 @@ async def get_snapshot_proxy_mesh(
     on the fly.
     """
     fmt = _http_mesh_format(format)
-    doc = await ensure_snapshot_read_access(
-        request,
-        snapshot_id,
-        current_user,
-    )
+    doc = (await load_snapshot(request, current_user, snapshot_id)).record
     proxies = (doc.get('geometry') or {}).get('proxies') or []
     if index < 0 or index >= len(proxies):
         raise HTTPException(status_code=404, detail='Proxy not found')
@@ -101,11 +97,7 @@ async def get_snapshot_deviation_map(
     deviation (hundredths of a degree), B = occupancy. The face must be
     listed in the proxy's ``deviation_maps``; nothing else is served.
     """
-    doc = await ensure_snapshot_read_access(
-        request,
-        snapshot_id,
-        current_user,
-    )
+    doc = (await load_snapshot(request, current_user, snapshot_id)).record
     proxies = (doc.get('geometry') or {}).get('proxies') or []
     faces = ((proxies[index].get('deviation_maps') or {}).get('faces')
              if 0 <= index < len(proxies) else None) or {}

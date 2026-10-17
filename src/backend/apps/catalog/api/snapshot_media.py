@@ -31,8 +31,7 @@ from pymongo.errors import PyMongoError
 from apps.catalog.models import User
 from utility import ensure_file, read_upload_limited
 from .auth import get_current_active_user
-from .access import require_snapshot_file_write
-from .public_access import ensure_snapshot_read_access
+from .access import load_snapshot
 from .catalog_common import get_snapshots_col, not_modified_response
 from .snapshot_images import (
     PHOTO_EXTENSION,
@@ -44,7 +43,7 @@ from .snapshot_images import (
     photo_filename,
 )
 from logging_setup import get_logger
-from .snapshot_common import OptionalUser, _load_snapshot, _mesh_etag
+from .snapshot_common import OptionalUser, _mesh_etag
 
 
 log = get_logger(__name__)
@@ -160,11 +159,7 @@ async def get_snapshot_capture_fixture(
     fixtures/<i>.ply`` under ``SNAPSHOT_CAPTURE_DIR``). Fixtures are capture
     context, never the component: no derivation reads them.
     """
-    doc = await ensure_snapshot_read_access(
-        request,
-        snapshot_id,
-        current_user,
-    )
+    doc = (await load_snapshot(request, current_user, snapshot_id)).record
     fixtures = ((doc.get('capture') or {}).get('fixtures')) or []
     if index < 0 or index >= len(fixtures):
         raise HTTPException(status_code=404, detail='Fixture not found')
@@ -202,7 +197,7 @@ async def get_snapshot_preview(
     snapshot_id: str,
 ):
     """Serve snapshot_previews/{snapshot_id}.webp only."""
-    await ensure_snapshot_read_access(request, snapshot_id, current_user)
+    await load_snapshot(request, current_user, snapshot_id)
     path = _resolve_preview_path(request, snapshot_id)
     return FileResponse(
         ensure_file(path),
@@ -221,7 +216,7 @@ async def list_snapshot_photos(
     snapshot_id: str,
 ):
     """Return sorted slot indices and count from disk (one directory read)."""
-    await ensure_snapshot_read_access(request, snapshot_id, current_user)
+    await load_snapshot(request, current_user, snapshot_id)
     indices = _list_photo_indices(request, snapshot_id)
     return JSONResponse(
         status_code=200,
@@ -239,7 +234,7 @@ async def get_snapshot_photo(
     snapshot_id: str,
     index: int,
 ):
-    await ensure_snapshot_read_access(request, snapshot_id, current_user)
+    await load_snapshot(request, current_user, snapshot_id)
     path, media_type = _resolve_photo_path(request, snapshot_id, index)
     filename = os.path.basename(path)
     return FileResponse(
@@ -263,10 +258,9 @@ async def put_snapshot_photo(
     """
     Accept up to upload limit; store JPEG scaled/compressed to max output.
     """
-    doc = await _load_snapshot(request, snapshot_id)
-    await require_snapshot_file_write(
-        request, current_user, doc, 'add_photo',
-        frozen_when_published=False)
+    await load_snapshot(
+        request, current_user, snapshot_id, 'add_photo', files=True,
+        frozen=False)
 
     content_type = (photo.content_type or '').split(';', 1)[0].strip().lower()
     if content_type not in _ALLOWED_PHOTO_TYPES:
@@ -345,10 +339,9 @@ async def delete_snapshot_photo(
     snapshot_id: str,
     index: int,
 ):
-    doc = await _load_snapshot(request, snapshot_id)
-    await require_snapshot_file_write(
-        request, current_user, doc, 'delete_photo',
-        frozen_when_published=False)
+    await load_snapshot(
+        request, current_user, snapshot_id, 'delete_photo', files=True,
+        frozen=False)
 
     removed = False
     for path in (

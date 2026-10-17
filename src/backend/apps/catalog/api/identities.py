@@ -52,6 +52,9 @@ from apps.catalog.api.access import (
     and_match,
     dataset_of,
     deny_read,
+    load_current_snapshot,
+    load_identity,
+    require,
     viewer_of,
     visible_identity_match,
     visible_snapshot_docs,
@@ -64,7 +67,6 @@ from apps.catalog.provenance import (
 from .auth import get_optional_current_user
 from .batches import remaining_of
 from .public_access import (
-    ensure_identity_read_access,
     identity_allows_anonymous_read,
     viewer_etag,
     viewer_headers,
@@ -193,16 +195,7 @@ async def _resolve_passport_snapshot_docs(
         current_snapshot_id = identity_doc.get('current_snapshot_id')
         if not current_snapshot_id:
             return []                 # no published snapshot left (8.17)
-        doc = await snapshots_col.find_one({'_id': current_snapshot_id})
-        if doc is None:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    f'current_snapshot_id={current_snapshot_id} of identity '
-                    f'{identity_id} not found in component_snapshots.'
-                ),
-            )
-        docs = [doc]
+        docs = [await load_current_snapshot(request, identity_doc)]
 
     for doc in docs:
         await refresh_snapshot_photo_count(
@@ -263,45 +256,6 @@ def _passport_response(
     )
 
 
-async def _next_snapshot_version(
-    snapshots,
-    identity_id: str,
-) -> int:
-    """Return max(existing version) + 1 for one identity."""
-    doc = await snapshots.find_one(
-        {'identity_id': identity_id},
-        sort=[('version', -1)],
-        projection={'version': 1},
-    )
-    if doc is None:
-        return 0
-    return int(doc['version']) + 1
-
-
-async def _resolve_snapshot_name(
-    snapshots,
-    identity_doc: dict,
-    requested_name: Optional[str],
-) -> str:
-    trimmed = (requested_name or '').strip()
-    if trimmed and trimmed.lower() != 'unnamed component':
-        return trimmed
-
-    current_snapshot_id = identity_doc.get('current_snapshot_id')
-    if current_snapshot_id:
-        current = await snapshots.find_one(
-            {'_id': current_snapshot_id},
-            {'name': 1},
-        )
-        if current and current.get('name'):
-            return str(current['name'])
-
-    catalog_number = identity_doc.get('catalog_number')
-    if catalog_number is not None:
-        return f'Component #{catalog_number}'
-    return 'Unnamed Component'
-
-
 @router.get(
     '/identities/{identity_id}/children',
     summary='List identities that list this identity as a parent',
@@ -318,13 +272,9 @@ async def list_identity_children(
     including exited and unpublished children. Anonymous callers who can read a public parent only see
     public children.
     """
-    validate_uuid(identity_id, label='identity id')
-    identity_doc = await ensure_identity_read_access(
-        request,
-        identity_id,
-        current_user,
-        projection={'_id': 1, 'is_public': 1},
-    )
+    identity_doc = (await load_identity(
+        request, current_user, identity_id,
+        projection={'_id': 1, 'is_public': 1})).record
 
     identity_match = and_match(
         children_identity_match(identity_id),
@@ -473,13 +423,9 @@ async def get_identity_provenance(
     each identity's snapshot versions. Anonymous callers who can read a
     public root only see public relatives.
     """
-    validate_uuid(identity_id, label='identity id')
-    identity_doc = await ensure_identity_read_access(
-        request,
-        identity_id,
-        current_user,
-        projection=_IDENTITY_LINEAGE_PROJECTION,
-    )
+    identity_doc = (await load_identity(
+        request, current_user, identity_id,
+        projection=_IDENTITY_LINEAGE_PROJECTION)).record
     visibility = await visible_identity_match(request,
                                               viewer_of(current_user))
     identities_col = await get_identities_col(request)
@@ -546,14 +492,9 @@ async def list_identity_snapshots(
     identity_id: str,
 ):
     """Return all snapshots for one identity, ordered by version ascending."""
-    validate_uuid(identity_id, label='identity id')
-
-    identity_doc = await ensure_identity_read_access(
-        request,
-        identity_id,
-        current_user,
-        projection={'_id': 1, 'current_snapshot_id': 1, 'is_public': 1},
-    )
+    identity_doc = (await load_identity(
+        request, current_user, identity_id,
+        projection={'_id': 1, 'current_snapshot_id': 1, 'is_public': 1})).record
 
     snapshots = await get_snapshots_col(request)
     current_snapshot_id = identity_doc.get('current_snapshot_id')
@@ -611,17 +552,10 @@ async def list_identity_snapshots(
 
 
 async def _identity_as_of(request: Request, user: Optional[User],
-                          identity_id: str, at: str) -> JSONResponse:
+                          doc: Dict[str, Any], at: str) -> JSONResponse:
     """Old values may name people: members of D and admin only (8.36)."""
     from .change_log import as_of_body
-    doc = await (await get_identities_col(request)).find_one(
-        {'_id': identity_id})
-    viewer = viewer_of(user)
-    dataset = await dataset_of(request, doc.get('dataset'))
-    if not dataset_roles(viewer, dataset):
-        raise HTTPException(status_code=403,
-                            detail='Earlier versions are for members of the '
-                                   'dataset.')
+    await require(request, user, 'view_history', identity=doc)
     return JSONResponse(status_code=200,
                         content=await as_of_body(request, 'identity', doc, at))
 
@@ -645,25 +579,16 @@ async def get_identity(
         None, description='the identity as it was at this ISO date '
                           '(members of D and admin; section 3.8)'),
 ):
-    validate_uuid(identity_id, label='identity id')
-
-    await ensure_identity_read_access(request, identity_id, current_user)
+    identity_doc = (await load_identity(request, current_user,
+                                         identity_id)).record
     if as_of is not None:
-        return await _identity_as_of(request, current_user, identity_id,
+        return await _identity_as_of(request, current_user, identity_doc,
                                      as_of)
 
     if expand == 'shallow':
         row = await shallow_row_for_identity(request, identity_id)
         return JSONResponse(status_code=200,
                             content=for_viewer(row, current_user))
-
-    identities = await get_identities_col(request)
-    identity_doc = await identities.find_one({'_id': identity_id})
-    if identity_doc is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Identity {identity_id} not found',
-        )
 
     anonymous_public = (
         current_user is None and identity_allows_anonymous_read(identity_doc)
@@ -685,19 +610,13 @@ async def get_identity(
             headers=viewer_headers(anonymous_public=anonymous_public),
         )
 
-    snapshots = await get_snapshots_col(request)
     current_snapshot_id = identity_doc.get('current_snapshot_id')
     if not current_snapshot_id:              # no published snapshot (8.17)
         return _passport_response(identity_doc, [],
                                   anonymous_public=anonymous_public,
                                   user=current_user)
     pieces_left = await remaining_of(request, identity_doc)
-    snapshot_doc = await snapshots.find_one({'_id': current_snapshot_id})
-    if snapshot_doc is None:
-        raise HTTPException(
-            status_code=500,
-            detail=f'current_snapshot_id={current_snapshot_id} not found',
-        )
+    snapshot_doc = await load_current_snapshot(request, identity_doc)
     await refresh_snapshot_photo_count(
         request, str(snapshot_doc['_id']), snapshot_doc
     )
@@ -755,15 +674,10 @@ async def read_passport(
     snapshots the caller may see, the evidence as the caller sees it and the
     viewer-specific ETag. Compose and every export (8.116 f) read through
     it, so they answer 401 / 403 alike and never show more."""
-    validate_uuid(identity_id, label='identity id')
-
     snapshots_col = await get_snapshots_col(request)
 
-    identity_doc = await ensure_identity_read_access(
-        request,
-        identity_id,
-        current_user,
-    )
+    identity_doc = (await load_identity(
+        request, current_user, identity_id)).record
     anonymous_public = (
         current_user is None and identity_allows_anonymous_read(identity_doc)
     )

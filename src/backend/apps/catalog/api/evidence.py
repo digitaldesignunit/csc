@@ -45,21 +45,20 @@ from apps.catalog.vocab import STATUSES, SOURCE_TIERS, VerificationState
 from .access import (
     and_match,
     dataset_of,
-    ensure_identity_visible,
-    ensure_snapshot_visible,
     identity_ever_published,
     load_datasets,
+    find_identity,
+    load_evidence,
     load_identity,
+    load_snapshot,
+    require,
     viewer_of,
     visible_identity_match,
     visible_snapshot_docs,
 )
 from .auth import get_current_active_user, get_optional_current_user
 from .public_access import viewer_headers
-from .catalog_common import (
-    not_modified_response,
-    validate_uuid,
-)
+from .catalog_common import not_modified_response
 from .evidence_fold import evidence_fold_view
 from .profiles import fill_actors
 from .evidence_service import (
@@ -70,7 +69,6 @@ from .evidence_service import (
     ReasonBody,
     client_data,
     evidence_body,
-    ensure_evidence_visible,
     projector as _projector,
     require_contributor,
     gate_identity,
@@ -195,8 +193,7 @@ async def create_evidence(
     (median, F / A, l/d class, grid points ...) and refuses a value that
     disagrees; warnings come back with the record. 409 for a withdrawn
     component or an observation after a terminal exit (I28)."""
-    validate_uuid(identity_id, label='identity id')
-    identity = await load_identity(request, identity_id)
+    identity = await find_identity(request, identity_id)
     viewer = await require_contributor(request, current_user,
                                        'create_evidence', identity)
     gate_identity(identity)
@@ -232,10 +229,9 @@ async def create_evidence_bulk(
     docs: List[Dict[str, Any]] = []
     viewer = viewer_of(current_user)
     for index, item in enumerate(body.records):
-        validate_uuid(item.identity_id, label='identity id')
         identity = identities.get(item.identity_id)
         if identity is None:
-            identity = await load_identity(request, item.identity_id)
+            identity = await find_identity(request, item.identity_id)
             viewer = await require_contributor(
                 request, current_user, 'create_evidence', identity)
             gate_identity(identity)
@@ -357,9 +353,8 @@ async def list_identity_evidence(
     """Published, non-superseded records by default; what the caller may
     see of the others follows section 7.0 (a withdrawn record outside D is
     a tombstone row)."""
-    validate_uuid(identity_id, label='identity id')
-    identity = await ensure_identity_visible(request, identity_id,
-                                             current_user)
+    identity = (await load_identity(request, current_user,
+                                    identity_id)).record
     flags = {part.strip() for part in (include or '').split(',')}
     match = _record_filters(method=method, tier=tier, quantity=quantity,
                             since=since, until=until, status=status,
@@ -573,15 +568,13 @@ async def get_evidence(
     """200 with the record as the caller may see it; a tombstone for a
     withdrawn record outside the dataset (8.17); ``ETag`` / ``304``."""
     viewer = viewer_of(current_user)
-    record, identity = await ensure_evidence_visible(
-        request, evidence_id, current_user, allow_tombstone=True)
+    loaded = await load_evidence(request, current_user, evidence_id,
+                                 allow_tombstone=True)
+    record, identity = loaded.record, loaded.identity
     if as_of is not None:
         from .change_log import as_of_body
-        dataset = await dataset_of(request, identity.get('dataset'))
-        if not dataset_roles(viewer, dataset):
-            raise HTTPException(status_code=403,
-                                detail='Earlier versions are for members of '
-                                       'the dataset.')
+        await require(request, current_user, 'view_history',
+                      identity=identity)
         rolled = await as_of_body(request, 'evidence', record, as_of)
         tier, email_ok = await viewer_context(request, viewer, identity)
         # the same projection as every other read (8.70 d): the roll-back
@@ -623,9 +616,8 @@ async def get_identity_properties(
     """The identity block of section 4.4 and ``outranked_evidence_ids``:
     per quantity, the records a higher source tier outranked --- an archival
     claim next to a core test, not a correction."""
-    validate_uuid(identity_id, label='identity id')
-    identity = await ensure_identity_visible(request, identity_id,
-                                             current_user)
+    identity = (await load_identity(request, current_user,
+                                    identity_id)).record
     return JSONResponse(status_code=200, content=await evidence_fold_view(
         request, identity, as_of=_when('as_of', as_of)))
 
@@ -639,10 +631,8 @@ async def get_snapshot_properties(
 ):
     """The snapshot block (the materialized as-of fold): the snapshot-scoped
     quantities whose records resolve to this state."""
-    validate_uuid(snapshot_id, label='snapshot id')
-    snapshot = await ensure_snapshot_visible(request, snapshot_id,
-                                             current_user,
-                                             allow_tombstone=True)
+    snapshot = (await load_snapshot(request, current_user, snapshot_id,
+                                    allow_tombstone=True)).record
     return JSONResponse(status_code=200, content={
         'snapshot_id': snapshot_id, 'identity_id': snapshot['identity_id'],
         'properties': snapshot.get('properties') or {}})
@@ -662,9 +652,8 @@ async def get_timeline(
     What the caller may not see is left out; a withdrawn record outside the
     dataset is a bare row; outside the dataset a metadata change shows only
     its date (8.36)."""
-    validate_uuid(identity_id, label='identity id')
-    identity = await ensure_identity_visible(request, identity_id,
-                                             current_user)
+    identity = (await load_identity(request, current_user,
+                                    identity_id)).record
     viewer = viewer_of(current_user)
     dataset = await dataset_of(request, identity.get('dataset'))
     member = bool(dataset_roles(viewer, dataset))

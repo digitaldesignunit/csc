@@ -22,7 +22,6 @@ from fastapi import (
 )
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, Response
-from pymongo.errors import PyMongoError
 
 from apps.catalog.models import User
 from utility import read_upload_limited
@@ -32,20 +31,14 @@ from apps.catalog.geometry_mesh_export import (
 )
 from .auth import get_current_active_user
 from .geometry_hooks import derive_sync
-from .access import require_snapshot_file_write
-from .public_access import ensure_snapshot_read_access
-from .catalog_common import (
-    compute_snapshot_etag,
-    get_snapshots_col,
-    not_modified_response,
-    now_iso,
-)
+from .access import load_snapshot
+from .catalog_common import not_modified_response
 from logging_setup import get_logger
 from .snapshot_common import (
     OptionalUser,
-    _load_snapshot,
     _mesh_etag,
     _write_bytes,
+    mark_file,
 )
 
 
@@ -64,51 +57,6 @@ def _point_cloud_path(
         snapshot_id,
         f'{index}.ply',
     )
-
-
-async def _mark_point_cloud_file(
-    request: Request,
-    snapshot_id: str,
-    index: int,
-    present: bool,
-) -> list:
-    """
-    Record that the full cloud of ``geometry.point_clouds[index]`` is (or no
-    longer is) stored as a file in ``point_cloud_files``, and refresh the
-    snapshot etag. Reads the stored document again (the upload took its time)
-    and returns the sorted index list.
-    """
-    snapshot_doc = await _load_snapshot(request, snapshot_id)
-    indices = {int(i) for i in snapshot_doc.get('point_cloud_files') or []}
-    if present:
-        indices.add(index)
-    else:
-        indices.discard(index)
-    marked = sorted(indices)
-
-    modified = now_iso()
-    merged = dict(snapshot_doc)
-    merged['point_cloud_files'] = marked
-    merged['lastmodified'] = modified
-    etag = compute_snapshot_etag(merged)
-
-    snapshots = await get_snapshots_col(request)
-    try:
-        await snapshots.update_one(
-            {'_id': snapshot_id},
-            {'$set': {
-                'point_cloud_files': marked,
-                'lastmodified': modified,
-                'etag': etag,
-            }},
-        )
-    except PyMongoError:
-        log.exception('_mark_point_cloud_file DB error')
-        raise HTTPException(
-            status_code=500,
-            detail='Failed to update snapshot point cloud manifest',
-        )
-    return marked
 
 
 @router.get(
@@ -131,11 +79,7 @@ async def get_snapshot_point_cloud_ply(
     if index < 0:
         raise HTTPException(status_code=400, detail='index must be >= 0')
 
-    doc = await ensure_snapshot_read_access(
-        request,
-        snapshot_id,
-        current_user,
-    )
+    doc = (await load_snapshot(request, current_user, snapshot_id)).record
     path = _point_cloud_path(request, snapshot_id, index)
     filename = f'{snapshot_id}_point_cloud_{index}.ply'
     if_none_match = request.headers.get('if-none-match')
@@ -212,10 +156,9 @@ async def put_snapshot_point_cloud_ply(
             detail='Point cloud file must be a .ply file',
         )
 
-    doc = await _load_snapshot(request, snapshot_id)
-    await require_snapshot_file_write(
-        request, current_user, doc, 'upload_geometry',
-        frozen_when_published=True)
+    doc = (await load_snapshot(
+        request, current_user, snapshot_id, 'upload_geometry', files=True,
+        frozen=True)).record
     point_clouds = (doc.get('geometry') or {}).get('point_clouds') or []
     if index >= len(point_clouds):
         raise HTTPException(
@@ -252,8 +195,8 @@ async def put_snapshot_point_cloud_ply(
             detail='Failed to save point cloud file',
         )
 
-    marked = await _mark_point_cloud_file(
-        request, snapshot_id, index, True)
+    marked = await mark_file(request, snapshot_id, 'point_cloud_files', index,
+                             present=True)
 
     await derive_sync(request, snapshot_id)
     return JSONResponse(
@@ -281,10 +224,9 @@ async def delete_snapshot_point_cloud_ply(
     if index < 0:
         raise HTTPException(status_code=400, detail='index must be >= 0')
 
-    doc = await _load_snapshot(request, snapshot_id)
-    await require_snapshot_file_write(
-        request, current_user, doc, 'delete_geometry',
-        frozen_when_published=True)
+    doc = (await load_snapshot(
+        request, current_user, snapshot_id, 'delete_geometry', files=True,
+        frozen=True)).record
     point_clouds = (doc.get('geometry') or {}).get('point_clouds') or []
     if index >= len(point_clouds):
         raise HTTPException(
@@ -312,8 +254,8 @@ async def delete_snapshot_point_cloud_ply(
             detail='Failed to delete point cloud file',
         )
 
-    marked = await _mark_point_cloud_file(
-        request, snapshot_id, index, False)
+    marked = await mark_file(request, snapshot_id, 'point_cloud_files', index,
+                             present=False)
 
     await derive_sync(request, snapshot_id)
     return JSONResponse(

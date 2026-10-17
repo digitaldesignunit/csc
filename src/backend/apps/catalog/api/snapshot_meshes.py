@@ -28,7 +28,6 @@ from fastapi import (
 )
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
-from pymongo.errors import PyMongoError
 
 from apps.catalog.models import User
 from utility import read_upload_limited
@@ -41,23 +40,17 @@ from apps.catalog.geometry_mesh_export import (
 from .auth import get_current_active_user
 from limiter import limiter, signed_in_or_ip
 from .geometry_hooks import derive_sync
-from .access import require_snapshot_file_write
-from .public_access import ensure_snapshot_read_access
-from .catalog_common import (
-    compute_snapshot_etag,
-    get_snapshots_col,
-    not_modified_response,
-    now_iso,
-)
+from .access import load_snapshot
+from .catalog_common import not_modified_response
 from logging_setup import get_logger
 from .snapshot_common import (
     MESH_RATE,
     OptionalUser,
     _http_mesh_format,
-    _load_snapshot,
     _mesh_etag,
     _mesh_export_attachment_response,
     _write_bytes,
+    mark_file,
 )
 
 
@@ -113,11 +106,7 @@ async def get_snapshot_mesh_preview(
             status_code=400,
             detail='primitive_index must be >= 0',
         )
-    doc = await ensure_snapshot_read_access(
-        request,
-        snapshot_id,
-        current_user,
-    )
+    doc = (await load_snapshot(request, current_user, snapshot_id)).record
     try:
         mesh = get_inline_mesh_primitive(doc, primitive_index)
         body = await run_in_threadpool(export_inline_mesh, mesh, fmt)  # type: ignore[arg-type]
@@ -173,11 +162,7 @@ async def get_snapshot_mesh(
             )
         )
 
-    doc = await ensure_snapshot_read_access(
-        request,
-        snapshot_id,
-        current_user,
-    )
+    doc = (await load_snapshot(request, current_user, snapshot_id)).record
 
     resolutions_map: dict = doc.get('mesh_ply_resolutions') or {}
     key = str(primitive_index)
@@ -242,97 +227,6 @@ async def get_snapshot_mesh(
     return _mesh_export_attachment_response(body, filename, fmt)
 
 
-async def _register_mesh_ply_resolution(
-    request: Request,
-    snapshot_id: str,
-    snapshot_doc: dict,
-    primitive_index: int,
-    resolution: str,
-) -> dict:
-    """
-    Record one on-disk PLY resolution and refresh snapshot etag.
-    """
-    key = str(primitive_index)
-    resolutions_map = dict(snapshot_doc.get('mesh_ply_resolutions') or {})
-    current = list(resolutions_map.get(key) or [])
-    if resolution not in current:
-        current.append(resolution)
-    order = {'reduced': 0, 'detailed': 1}
-    current.sort(key=lambda r: order.get(r, 99))
-    resolutions_map[key] = current
-
-    modified = now_iso()
-    merged = dict(snapshot_doc)
-    merged['mesh_ply_resolutions'] = resolutions_map
-    merged['lastmodified'] = modified
-    etag = compute_snapshot_etag(merged)
-
-    snapshots = await get_snapshots_col(request)
-    try:
-        await snapshots.update_one(
-            {'_id': snapshot_id},
-            {'$set': {
-                'mesh_ply_resolutions': resolutions_map,
-                'lastmodified': modified,
-                'etag': etag,
-            }},
-        )
-    except PyMongoError:
-        log.exception('_register_mesh_ply_resolution DB error')
-        raise HTTPException(
-            status_code=500,
-            detail='Failed to update snapshot mesh manifest',
-        )
-
-    return resolutions_map
-
-
-async def _unregister_mesh_ply_resolution(
-    request: Request,
-    snapshot_id: str,
-    snapshot_doc: dict,
-    primitive_index: int,
-    resolution: str,
-) -> dict:
-    """
-    Remove one on-disk PLY resolution from the manifest and refresh etag.
-    """
-    key = str(primitive_index)
-    resolutions_map = dict(snapshot_doc.get('mesh_ply_resolutions') or {})
-    current = list(resolutions_map.get(key) or [])
-    if resolution in current:
-        current = [item for item in current if item != resolution]
-    if current:
-        resolutions_map[key] = current
-    else:
-        resolutions_map.pop(key, None)
-
-    modified = now_iso()
-    merged = dict(snapshot_doc)
-    merged['mesh_ply_resolutions'] = resolutions_map
-    merged['lastmodified'] = modified
-    etag = compute_snapshot_etag(merged)
-
-    snapshots = await get_snapshots_col(request)
-    try:
-        await snapshots.update_one(
-            {'_id': snapshot_id},
-            {'$set': {
-                'mesh_ply_resolutions': resolutions_map,
-                'lastmodified': modified,
-                'etag': etag,
-            }},
-        )
-    except PyMongoError:
-        log.exception('_unregister_mesh_ply_resolution DB error')
-        raise HTTPException(
-            status_code=500,
-            detail='Failed to update snapshot mesh manifest',
-        )
-
-    return resolutions_map
-
-
 @router.put(
     '/snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}',
     summary='Upload or replace mesh PLY for snapshot primitive',
@@ -369,10 +263,9 @@ async def put_snapshot_mesh_ply(
             detail='Mesh file must be a .ply file',
         )
 
-    doc = await _load_snapshot(request, snapshot_id)
-    await require_snapshot_file_write(
-        request, current_user, doc, 'upload_geometry',
-        frozen_when_published=True)
+    doc = (await load_snapshot(
+        request, current_user, snapshot_id, 'upload_geometry', files=True,
+        frozen=True)).record
     meshes = (doc.get('geometry') or {}).get('meshes') or []
     if primitive_index >= len(meshes):
         raise HTTPException(
@@ -410,13 +303,9 @@ async def put_snapshot_mesh_ply(
             detail='Failed to save mesh file',
         )
 
-    resolutions_map = await _register_mesh_ply_resolution(
-        request,
-        snapshot_id,
-        doc,
-        primitive_index,
-        resolution,
-    )
+    resolutions_map = await mark_file(
+        request, snapshot_id, 'mesh_ply_resolutions', resolution,
+        present=True, key=str(primitive_index), descending=True)
 
     await derive_sync(request, snapshot_id)
     return JSONResponse(
@@ -459,10 +348,9 @@ async def delete_snapshot_mesh_ply(
             ),
         )
 
-    doc = await _load_snapshot(request, snapshot_id)
-    await require_snapshot_file_write(
-        request, current_user, doc, 'delete_geometry',
-        frozen_when_published=True)
+    doc = (await load_snapshot(
+        request, current_user, snapshot_id, 'delete_geometry', files=True,
+        frozen=True)).record
     meshes = (doc.get('geometry') or {}).get('meshes') or []
     if primitive_index >= len(meshes):
         raise HTTPException(
@@ -493,13 +381,9 @@ async def delete_snapshot_mesh_ply(
             )
 
     if in_manifest:
-        resolutions_map = await _unregister_mesh_ply_resolution(
-            request,
-            snapshot_id,
-            doc,
-            primitive_index,
-            resolution,
-        )
+        resolutions_map = await mark_file(
+            request, snapshot_id, 'mesh_ply_resolutions', resolution,
+            present=False, key=str(primitive_index))
 
     await derive_sync(request, snapshot_id)
     return JSONResponse(

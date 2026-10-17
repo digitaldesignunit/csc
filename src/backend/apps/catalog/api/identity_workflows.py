@@ -3,7 +3,7 @@
 Identity lifecycle workflows for the v0.5 model (reserve, validate, consume).
 """
 
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -12,17 +12,12 @@ from pymongo.errors import PyMongoError
 from apps.catalog import vocab
 from apps.catalog.models import User, normalize_username
 from apps.catalog.api.access import (
-    and_match, require, viewer_of, visible_identity_match)
+    and_match, load_identity, require, viewer_of, visible_identity_match)
 from apps.catalog.read_models import catalog_row
 from .auth import get_current_active_user, get_optional_current_user
 from limiter import limiter, signed_in_or_ip
 from .public_access import viewer_headers
-from .catalog_common import (
-    get_identities_col,
-    get_snapshots_col,
-    now_iso,
-    validate_uuid,
-)
+from .catalog_common import get_identities_col, now_iso
 from .identity_filters import CatalogFilters, Circulation
 from .identity_query import (
     aggregate_identities,
@@ -35,38 +30,6 @@ from logging_setup import get_logger
 log = get_logger(__name__)
 
 router = APIRouter()
-
-
-async def _load_identity(request: Request, identity_id: str) -> Dict[str, Any]:
-    validate_uuid(identity_id, label='identity id')
-    identities = await get_identities_col(request)
-    doc = await identities.find_one({'_id': identity_id})
-    if doc is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Identity {identity_id} not found',
-        )
-    return doc
-
-
-async def _load_current_snapshot(
-    request: Request,
-    identity_doc: Dict[str, Any],
-) -> Dict[str, Any]:
-    snapshot_id = identity_doc.get('current_snapshot_id')
-    if not snapshot_id:
-        raise HTTPException(
-            status_code=500,
-            detail='Identity has no current_snapshot_id',
-        )
-    snapshots = await get_snapshots_col(request)
-    snap = await snapshots.find_one({'_id': snapshot_id})
-    if snap is None:
-        raise HTTPException(
-            status_code=500,
-            detail=f'current_snapshot_id={snapshot_id} not found',
-        )
-    return snap
 
 
 async def _resolve_user_id(
@@ -215,7 +178,10 @@ async def reserve_identity(
     current_user: Annotated[User, Depends(get_current_active_user)],
     identity_id: str,
 ):
-    identity = await _load_identity(request, identity_id)
+    # the permission follows the reservation checks (409 / 200 first), so the
+    # route calls require itself
+    identity = (await load_identity(request, current_user, identity_id,
+                                    None)).record
     if identity.get('exit'):
         raise HTTPException(
             status_code=409,
@@ -276,7 +242,8 @@ async def release_identity_reservation(
     current_user: Annotated[User, Depends(get_current_active_user)],
     identity_id: str,
 ):
-    identity = await _load_identity(request, identity_id)
+    identity = (await load_identity(request, current_user, identity_id,
+                                    None)).record
     reserved = identity.get('reserved') or ''
     if not reserved:
         return JSONResponse(

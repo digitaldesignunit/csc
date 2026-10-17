@@ -277,6 +277,11 @@ def _nobody(viewer: Viewer, roles: Roles, target: Target) -> bool:
     return False
 
 
+def _member(viewer: Viewer, roles: Roles, target: Target) -> bool:
+    """Any role in the dataset."""
+    return bool(roles)
+
+
 def _any_signed_in(viewer: Viewer, roles: Roles, target: Target) -> bool:
     """Every signed-in account; the route adds what the rule cannot see
     (a verified address, the limit per user)."""
@@ -347,6 +352,9 @@ RULES: Dict[str, Rule] = {
     'move_identity': _move_identity,
     'reserve': _reserve,
     'release': _release,
+    # old values may name people: the change log and the as-of views are for
+    # the members of D (8.36)
+    'view_history': _member,
     # datasets
     'manage_members': _role('moderator'),
     'edit_dataset': _role('moderator'),

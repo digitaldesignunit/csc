@@ -39,6 +39,28 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
 - **Import tools** retry a request up to three times on 503 and on connection errors,
   honouring `Retry-After`; every other error stops at once.
 
+- **One way to load a record** (decision 8.158): identities, versions, evidence, datasets,
+  invitations and materials are loaded and checked by one helper per kind, so every route
+  answers alike. Changed answers (paths and schemas are unchanged):
+  - a path id that is not a UUID answers 404 "<Kind> not found" instead of 400 "Invalid ... id";
+    a UUID in a body or query value stays 400;
+  - "not found" texts no longer repeat the id ("Snapshot not found");
+  - the file routes of a purged version answer 410 with the purge notice instead of 404;
+  - a component whose current version is missing answers 409 "The component has no current
+    state." instead of 500 (passport, compose and the exports reading through them);
+  - the change log and earlier versions answer 401 to anonymous callers and 403 "Not allowed:
+    view_history" to non-members; an outsider no longer gets a withdrawn piece's tombstone
+    from `/changes`;
+  - a material that does not exist answers 404 before the admin check (403 before).
+  An unknown invitation code still answers 400, the same as a code for another address.
+- **Change log** (decision 8.159): evidence entries name their action (`verify`, `attach`,
+  `redact`, `publish`, `withdraw`, `reinstate`) instead of `patch`; status steps stay in each
+  record's status history. Entries carry the record's modification time and are written
+  after it; a log entry that cannot be written no longer fails the request. Existing
+  entries are unchanged.
+- **File markers** (mesh levels, `point_cloud_files`) are updated atomically, so uploads to
+  the same version at once no longer lose each other's marker.
+
 ### Added
 
 - **Marker for uploaded point clouds**: a snapshot lists the indices of its uploaded full

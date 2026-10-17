@@ -20,25 +20,32 @@ from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from pymongo.errors import PyMongoError
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.documents import ChangeLogEntry, Material
 from apps.catalog.history import as_of, diff
 from apps.catalog.models import User
-from apps.catalog.permissions import dataset_roles
-from .access import dataset_of, ensure_identity_visible, viewer_of
+from apps.catalog.vocab import ChangeCause
+from logging_setup import get_logger
+from .access import load_identity
 from .auth import get_current_active_user
-from .catalog_common import now_iso, validate_uuid
+
+log = get_logger(__name__)
 
 router = APIRouter()
 
 
 async def log_change(request: Request, kind: str, before: Dict[str, Any],
                      after: Dict[str, Any], *, by_user_id: Optional[str],
-                     cause: str, source_record_id: Optional[str] = None,
-                     at: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Append one entry for a write (I30); a write that changes no logged
-    field appends nothing. Returns the entry."""
+                     cause: ChangeCause, at: str,
+                     source_record_id: Optional[str] = None
+                     ) -> Optional[Dict[str, Any]]:
+    """Append one entry for a write (I30, decision 8.159); the one writer of
+    the change log. ``at`` is the ``lastmodified`` the write gave the record,
+    and the entry is written after the record. A write that changes no logged
+    field appends nothing. A failed append is logged and swallowed: the
+    record stands and the request succeeds. Returns the entry."""
     changes = diff(kind, before, after)
     if not changes:
         return None
@@ -47,9 +54,13 @@ async def log_change(request: Request, kind: str, before: Dict[str, Any],
         (after.get('identity_id') or before.get('identity_id'))
     entry = {'_id': str(uuid.uuid4()), 'record_kind': kind,
              'record_id': record_id, 'identity_id': identity_id,
-             'at': at or now_iso(), 'by_user_id': by_user_id, 'cause': cause,
+             'at': at, 'by_user_id': by_user_id, 'cause': cause,
              'source_record_id': source_record_id, 'changes': changes}
-    await request.app.mongodb_change_log.insert_one(dict(entry))
+    try:
+        await request.app.mongodb_change_log.insert_one(dict(entry))
+    except PyMongoError:
+        log.exception('change log entry lost: %s %s', kind, record_id)
+        return None
     return entry
 
 
@@ -90,15 +101,7 @@ async def list_changes(
 ):
     """Entries of the identity, its snapshots and evidence, newest first.
     Old values may name people, so the log is for members only (8.36)."""
-    validate_uuid(identity_id, label='identity id')
-    identity = await ensure_identity_visible(request, identity_id,
-                                             current_user)
-    viewer = viewer_of(current_user)
-    dataset = await dataset_of(request, identity.get('dataset'))
-    if not dataset_roles(viewer, dataset):
-        raise HTTPException(status_code=403,
-                            detail='The change log is for members of the '
-                                   'dataset.')
+    await load_identity(request, current_user, identity_id, 'view_history')
     entries = await request.app.mongodb_change_log.find(
         {'identity_id': identity_id}).sort('at', -1).limit(limit).to_list(
         length=None)

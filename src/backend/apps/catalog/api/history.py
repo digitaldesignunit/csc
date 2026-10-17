@@ -38,11 +38,9 @@ from apps.catalog.permissions import (
     record_projection,
     withdrawn_projection,
 )
-from .access import EVER_PUBLISHED, dataset_of, viewer_of
+from .access import EVER_PUBLISHED, dataset_of, load_identity, viewer_of
 from .auth import get_optional_current_user
-from .catalog_common import validate_uuid
 from .public_access import (
-    ensure_identity_read_access,
     identity_allows_anonymous_read,
     viewer_headers,
 )
@@ -134,10 +132,10 @@ async def get_identity_history(
     join a parent and a child lane (``cut``: one parent; ``assemble``:
     several) at the child's first version. ``more`` counts the lanes left
     out beyond twelve."""
-    validate_uuid(identity_id, label='identity id')
     viewer = viewer_of(current_user)
-    root = await ensure_identity_read_access(
-        request, identity_id, current_user, projection=IDENTITY_FIELDS)
+    root = (await load_identity(
+        request, current_user, identity_id,
+        projection=IDENTITY_FIELDS)).record
     identities = request.app.mongodb_component_identities
     try:
         found: Dict[str, Dict[str, Any]] = {root['_id']: {

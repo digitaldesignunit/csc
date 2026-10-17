@@ -140,6 +140,8 @@ TABLE = [
     ('reserve', Target(D, reserved_by='contrib'), {'admin'}),
     ('reserve', Target(D, readable=False), {'admin'}),
     ('release', Target(D, reserved_by='contrib'), {'contrib', 'mod', 'admin'}),
+    # old values may name people: the members of D (8.36)
+    ('view_history', Target(D), {'author', 'contrib', 'review', 'mod', 'admin'}),
     # datasets
     ('manage_members', Target(D, kind='dataset'), {'mod', 'admin'}),
     ('edit_dataset', Target(D, kind='dataset'), {'mod', 'admin'}),

@@ -26,9 +26,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from apps.catalog.documents import LowCode, Material, Slug
 from apps.catalog.models import User
 from apps.catalog.vocab import MaterialGroup
-from .access import require
+from .access import load_material, require
 from .auth import get_current_active_user
 from .catalog_common import now_iso
+from apps.catalog.history import diff
 from .change_log import log_change
 
 router = APIRouter()
@@ -72,13 +73,6 @@ def _validated(doc: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(status_code=422, detail=first['msg']) from exc
 
 
-async def _load(request: Request, mid: str) -> Dict[str, Any]:
-    doc = await _materials(request).find_one({'_id': mid})
-    if doc is None:
-        raise HTTPException(status_code=404, detail=f'Material {mid} not found')
-    return doc
-
-
 async def _rewrite_identities(request: Request, query: Dict[str, Any],
                               updates: Dict[str, Any], *, user: User,
                               cause: str, source: str) -> int:
@@ -88,14 +82,17 @@ async def _rewrite_identities(request: Request, query: Dict[str, Any],
     changed = 0
     async for before in identities.find(query):
         after = {**before, **updates}
-        entry = await log_change(request, 'identity', before, after,
-                                 by_user_id=user.id, cause=cause,
-                                 source_record_id=source)
-        if entry is None:
+        if not diff('identity', before, after):
             continue
+        # the write first, the entry once it stands (8.159)
+        at = now_iso()
         await identities.update_one(
             {'_id': before['_id']},
-            {'$set': {**updates, 'lastmodified': entry['at']}})
+            {'$set': {**updates, 'lastmodified': at}})
+        await log_change(request, 'identity', before,
+                         {**after, 'lastmodified': at},
+                         by_user_id=user.id, cause=cause,
+                         source_record_id=source, at=at)
         changed += 1
     return changed
 
@@ -140,8 +137,8 @@ async def patch_material(
 ):
     """``_id`` is immutable (a rename is a merge into a new id). A new
     ``default_class`` re-derives every derived ``material_class`` (I25)."""
-    await require(request, current_user, 'manage_materials')
-    before = await _load(request, mid)
+    before = (await load_material(request, current_user, mid,
+                                  'manage_materials')).record
     if before.get('merged_into'):
         raise HTTPException(status_code=409,
                             detail=f'{mid} is merged into '
@@ -165,8 +162,7 @@ async def delete_material(
     mid: str,
 ):
     """Only while no identity references it, withdrawn ones included."""
-    await require(request, current_user, 'manage_materials')
-    await _load(request, mid)
+    await load_material(request, current_user, mid, 'manage_materials')
     used = await request.app.mongodb_component_identities.count_documents(
         {'material': mid})
     if used:
@@ -193,9 +189,10 @@ async def merge_material(
     """Every identity moves to the target; derived classes follow the
     target's default, assigned ones stay; ``mid`` remains as an alias
     ``{_id, merged_into}`` so old references resolve (8.35)."""
-    await require(request, current_user, 'manage_materials')
-    source = await _load(request, mid)
-    target = await _load(request, body.into)
+    source = (await load_material(request, current_user, mid,
+                                  'manage_materials')).record
+    target = (await load_material(request, current_user, body.into,
+                                  'manage_materials')).record
     if mid == body.into:
         raise HTTPException(status_code=422,
                             detail='A material cannot merge into itself.')

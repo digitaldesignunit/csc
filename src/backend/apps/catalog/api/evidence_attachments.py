@@ -41,24 +41,11 @@ from apps.catalog.evidence.projection import attachment_list
 from apps.catalog.models import User
 from apps.catalog.permissions import dataset_roles
 from utility import read_upload_limited
-from .access import (
-    dataset_of,
-    deny_read,
-    load_identity,
-    require,
-    viewer_of,
-)
+from .access import dataset_of, load_evidence, viewer_of
 from .auth import get_current_active_user, get_optional_current_user
-from .catalog_common import (
-    not_modified_response,
-    now_iso,
-    validate_uuid,
-)
+from .catalog_common import not_modified_response, now_iso
 from .change_log import log_change
 from .evidence_service import (
-    ensure_evidence_visible,
-    evidence_projection,
-    load_evidence,
     validated_doc,
     viewer_context,
 )
@@ -101,7 +88,7 @@ async def _add_entry(request: Request, user: User, record_id: str,
             {'_id': record_id, 'etag': doc.get('etag')}, updated)
         if result.matched_count:
             await log_change(request, 'evidence', doc, updated,
-                             by_user_id=user.id, cause='patch', at=now)
+                             by_user_id=user.id, cause='attach', at=now)
             return entry
         await asyncio.to_thread(evidence_files.remove_file, root, record_id,
                                 index, copy.media_type)
@@ -163,11 +150,8 @@ async def attach_file(
                             detail=f'record_ids: 1 to {MAX_RECORDS} records')
     records = []
     for rid in ids:
-        validate_uuid(rid, label='record id')
-        record = await load_evidence(request, rid)
-        identity = await load_identity(request, str(record['identity_id']))
-        await require(request, current_user, 'add_attachment',
-                      identity=identity, evidence=record)
+        record = (await load_evidence(request, current_user, rid,
+                                      'add_attachment')).record
         if record.get('status') == 'withdrawn':
             raise HTTPException(status_code=409,
                                 detail=f'{rid} is withdrawn.')
@@ -239,8 +223,9 @@ async def list_attachments(
     """The list as the viewer may see it. Anonymous readers of a public
     piece get media type, size, checksum and date --- no names, no
     uploaders --- and "sign in to download" (8.13)."""
-    record, identity = await ensure_evidence_visible(
-        request, evidence_id, current_user, allow_tombstone=True)
+    loaded = await load_evidence(request, current_user, evidence_id,
+                                 allow_tombstone=True)
+    record, identity = loaded.record, loaded.identity
     tier, _ = await viewer_context(request, viewer_of(current_user), identity)
     dataset = await dataset_of(request, identity.get('dataset'))
     member = bool(dataset_roles(viewer_of(current_user), dataset))
@@ -264,8 +249,7 @@ async def download_attachment(
         raise HTTPException(
             status_code=401, headers={'WWW-Authenticate': 'Bearer'},
             detail='Sign in to download attachments.')
-    record, _ = await ensure_evidence_visible(request, evidence_id,
-                                              current_user)
+    record = (await load_evidence(request, current_user, evidence_id)).record
     entry = next((a for a in record.get('attachments') or []
                   if a['index'] == index), None)
     if entry is None:
@@ -309,14 +293,9 @@ async def remove_attachment(
     file is deleted and the entry stays with ``removed {at, by_user_id,
     reason}`` --- an index is never reused (I24). The reason ``gdpr`` blanks
     the name, also in the change log; the checksum stays (decision 8.13)."""
-    record = await load_evidence(request, evidence_id)
-    identity = await load_identity(request, str(record['identity_id']))
-    viewer = viewer_of(current_user)
-    if await evidence_projection(request, viewer, record, identity) \
-            != 'full':
-        raise deny_read(viewer)
-    await require(request, current_user, 'remove_attachment',
-                  identity=identity, evidence=record)
+    loaded = await load_evidence(request, current_user, evidence_id,
+                                 'remove_attachment', files=True)
+    record = loaded.record
     published = record.get('status') in ('published', 'withdrawn')
     if published and not (reason or '').strip():
         raise HTTPException(status_code=422,
@@ -351,7 +330,7 @@ async def remove_attachment(
             {'_id': evidence_id, 'etag': doc.get('etag')}, updated)
         if result.matched_count:
             await log_change(request, 'evidence', doc, updated,
-                             by_user_id=current_user.id, cause='patch',
+                             by_user_id=current_user.id, cause='redact',
                              at=now)
             if gdpr:
                 await blank_attachment_name(request, evidence_id, index)

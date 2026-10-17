@@ -43,10 +43,16 @@ from pydantic import BaseModel, EmailStr, Field
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.documents import Dataset, Invitation
 from apps.catalog.models import User
-from apps.catalog.permissions import Target, can, dataset_roles
+from apps.catalog.permissions import dataset_roles
 from apps.catalog.vocab import DATASET_ROLES, DatasetRole
 from services import email_service
-from .access import deny_write, load_datasets, require, viewer_of
+from .access import (
+    deny_write,
+    load_dataset,
+    load_datasets,
+    load_invitation,
+    viewer_of,
+)
 from .auth import get_current_active_user
 from .catalog_common import now_iso
 from limiter import limiter, signed_in_or_ip
@@ -168,14 +174,6 @@ def _ordered(roles) -> List[str]:
     return [r for r in DATASET_ROLES if r in roles]
 
 
-async def _dataset_or_404(request: Request, slug: str) -> Dataset:
-    dataset = (await load_datasets(request)).get(slug)
-    if dataset is None:
-        raise HTTPException(status_code=404,
-                            detail=f'Dataset {slug} not found')
-    return dataset
-
-
 async def _require_invite(request: Request, user: User,
                           dataset_slug: Optional[str]) -> Optional[Dataset]:
     """Into a dataset: moderator(D); without one: admin (8.14)."""
@@ -183,9 +181,7 @@ async def _require_invite(request: Request, user: User,
         if user.role != 'admin':
             raise deny_write(viewer_of(user), 'invite without a dataset')
         return None
-    dataset = await _dataset_or_404(request, dataset_slug)
-    await require(request, user, 'invite', dataset=dataset)
-    return dataset
+    return (await load_dataset(request, user, dataset_slug, 'invite')).record
 
 
 def invite_only(dataset: Optional[Dataset], user: User) -> bool:
@@ -349,6 +345,8 @@ async def redeem(request: Request, code: str, email: str) -> Dict[str, Any]:
     """The open invitation for this code and address, or 400 (8.14)."""
     doc = await request.app.mongodb_invitations.find_one(
         {'code_sha256': code_sha256(code)})
+    # an unknown code and a known one for another address answer alike: the
+    # answer is no oracle for codes (8.144), so this one stays a 400
     if doc is None or doc['email'] != email.strip().lower():
         raise HTTPException(
             status_code=400,
@@ -394,22 +392,6 @@ async def _merge_roles(request: Request, slug: str, user_id: str,
                                  'lastmodified': now_iso()}})
     request.state.csc_datasets = None
     return existing['roles']
-
-
-async def _may_manage_invitation(request: Request, user: User,
-                                 doc: Dict[str, Any]) -> Optional[Dataset]:
-    """Revoke and resend: the creator, moderator(D), admin. Returns the
-    invitation's dataset (or None)."""
-    viewer = viewer_of(user)
-    dataset = (await load_datasets(request)).get(doc.get('dataset') or '')
-    target_dataset = dataset or Dataset.model_validate({
-        '_id': 'none', 'name': 'none', 'created': now_iso(),
-        'lastmodified': now_iso()})
-    if not can(viewer, 'revoke_invitation', Target(
-            dataset=target_dataset, kind='invitation',
-            author_id=doc['created_by_user_id'])):
-        raise deny_write(viewer, 'revoke invitation')
-    return dataset
 
 
 # ROUTES ----------------------------------------------------------------------
@@ -471,11 +453,9 @@ async def resend_invitation(
     daily cap of mails.
     The code is in no response: only the mailbox gets it (8.124 b)."""
     coll = request.app.mongodb_invitations
-    doc = await coll.find_one({'_id': invitation_id})
-    if doc is None:
-        raise HTTPException(status_code=404, detail='Invitation not found')
-    dataset = await _require_invite(request, current_user,
-                                    doc.get('dataset'))
+    loaded = await load_invitation(request, current_user, invitation_id,
+                                   'invite')
+    doc, dataset = loaded.record, loaded.dataset
     state = invitation_state(doc)
     if state not in ('open', 'expired'):
         raise HTTPException(status_code=409,
@@ -544,11 +524,8 @@ async def revoke_invitation(
     current_user: Annotated[User, Depends(get_current_active_user)],
     invitation_id: str,
 ):
-    doc = await request.app.mongodb_invitations.find_one(
-        {'_id': invitation_id})
-    if doc is None:
-        raise HTTPException(status_code=404, detail='Invitation not found')
-    await _may_manage_invitation(request, current_user, doc)
+    doc = (await load_invitation(request, current_user, invitation_id,
+                                 'revoke_invitation')).record
     if invitation_state(doc) != 'open':
         raise HTTPException(status_code=409,
                             detail=f'The invitation is '
@@ -579,8 +556,8 @@ async def add_member_by_email(
     not it has an account: the account joins by opening the link signed in
     with that address and accepting (8.144 b).
     """
-    dataset = await _dataset_or_404(request, did)
-    await require(request, current_user, 'manage_members', dataset=dataset)
+    dataset = (await load_dataset(request, current_user, did,
+                                  'manage_members')).record
     email = body.email.strip().lower()
     account = None
     if not invite_only(dataset, current_user):

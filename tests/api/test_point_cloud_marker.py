@@ -121,3 +121,53 @@ def test_a_client_cannot_set_the_marker(story):
                              headers=story['c'])
     assert got.status_code in (400, 422), got.text
     assert stored(story, created['_id'])['point_cloud_files'] == []
+
+
+def test_uploads_at_once_do_not_lose_each_others_markers(story):
+    """Each marker is one atomic update of its own list entry: eight clouds
+    uploaded at the same time are all marked (decision 8.160, the lost update
+    of the T1 review)."""
+    from concurrent.futures import ThreadPoolExecutor
+    created = draft(story, clouds=8)
+    with ThreadPoolExecutor(8) as pool:
+        replies = list(pool.map(lambda i: put(story, created['_id'], i), range(8)))
+    assert [r.status_code for r in replies] == [200] * 8, [r.text for r in replies]
+    assert stored(story, created['_id'])['point_cloud_files'] == list(range(8))
+    with ThreadPoolExecutor(8) as pool:
+        gone = list(pool.map(lambda i: story['api'].delete(
+            f'/snapshots/{created["_id"]}/point_clouds/{i}.ply', headers=story['c']), range(0, 8, 2)))
+    assert [r.status_code for r in gone] == [200] * 4
+    assert stored(story, created['_id'])['point_cloud_files'] == [1, 3, 5, 7]
+
+
+def test_the_etag_follows_the_markers(story):
+    from apps.catalog.etag import compute_snapshot_etag
+    created = draft(story, clouds=2)
+    put(story, created['_id'], 0)
+    put(story, created['_id'], 1)
+    doc = stored(story, created['_id'])
+    assert doc['point_cloud_files'] == [0, 1] and doc['etag'] == compute_snapshot_etag(doc)
+
+
+def test_mesh_manifests_of_one_snapshot_survive_uploads_at_once(story):
+    from concurrent.futures import ThreadPoolExecutor
+    created = draft(story)
+    mesh = trimesh.creation.box(extents=(300, 200, 150)).export(file_type='ply')
+
+    def upload(resolution):
+        return story['api'].put(
+            f'/snapshots/{created["_id"]}/meshes/0/{resolution}',
+            files={'mesh_file': (f'{resolution}.ply', mesh, 'application/octet-stream')},
+            headers=story['c'])
+
+    with ThreadPoolExecutor(2) as pool:
+        replies = list(pool.map(upload, ['detailed', 'reduced']))
+    assert [r.status_code for r in replies] == [200, 200], [r.text for r in replies]
+    doc = stored(story, created['_id'])
+    assert doc['mesh_ply_resolutions'] == {'0': ['reduced', 'detailed']}
+    from apps.catalog.etag import compute_snapshot_etag
+    assert doc['etag'] == compute_snapshot_etag(doc)
+    gone = story['api'].delete(f'/snapshots/{created["_id"]}/meshes/0/reduced', headers=story['c'])
+    assert gone.status_code == 200 and stored(story, created['_id'])['mesh_ply_resolutions'] == {'0': ['detailed']}
+    gone = story['api'].delete(f'/snapshots/{created["_id"]}/meshes/0/detailed', headers=story['c'])
+    assert gone.status_code == 200 and stored(story, created['_id'])['mesh_ply_resolutions'] == {}

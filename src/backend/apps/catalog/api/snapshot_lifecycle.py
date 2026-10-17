@@ -54,17 +54,15 @@ from apps.catalog.vocab import Precision, ShapeClass
 from .access import (
     EVER_PUBLISHED,
     dataset_of,
-    deny_read,
     deny_write,
     load_identity,
     load_snapshot,
     require,
-    snapshot_projection,
     viewer_of,
 )
 from .auth import get_current_active_user
 from .identity_lifecycle import PurgeBody, purge_snapshot_record
-from .catalog_common import compute_snapshot_etag, now_iso, validate_uuid
+from .catalog_common import compute_snapshot_etag, now_iso
 from .change_log import log_change
 from .evidence_fold import recompute_properties
 from .geometry_hooks import (
@@ -307,13 +305,6 @@ def _transition_or_409(snapshot: dict, to: str) -> str:
     return action
 
 
-async def _load(request: Request, snapshot_id: str):
-    validate_uuid(snapshot_id, label='snapshot id')
-    snapshot = await load_snapshot(request, snapshot_id)
-    identity = await load_identity(request, str(snapshot['identity_id']))
-    return snapshot, identity
-
-
 def _ok(doc: dict) -> JSONResponse:
     return JSONResponse(status_code=200, content=snapshot_body(doc))
 
@@ -434,10 +425,8 @@ async def create_snapshot(
 ):
     """contributor(D). ``effective_from`` defaults to now. Only for a piece
     in circulation: an exited piece re-enters first (section 3.1.3)."""
-    validate_uuid(identity_id, label='identity id')
-    identity = await load_identity(request, identity_id)
-    await require(request, current_user, 'create_snapshot',
-                  identity=identity)
+    identity = (await load_identity(request, current_user, identity_id,
+                                    'create_snapshot')).record
     if identity.get('withdrawn'):
         raise HTTPException(status_code=409,
                             detail='The component is withdrawn.')
@@ -488,9 +477,9 @@ async def supersede_snapshot(
 ):
     """contributor(D). The correction inherits ``effective_from``; on
     publish it marks the old one superseded (section 3.2.2, I21)."""
-    old, identity = await _load(request, snapshot_id)
-    await require(request, current_user, 'supersede_snapshot',
-                  identity=identity, snapshot=old)
+    loaded = await load_snapshot(request, current_user, snapshot_id,
+                                 'supersede_snapshot')
+    old, identity = loaded.record, loaded.identity
     if old.get('status') != 'published' or old.get('superseded_by'):
         raise HTTPException(
             status_code=409,
@@ -536,10 +525,10 @@ async def submit_snapshot(
     (moderator(D)), also for a moderator's own submission. The old
     ``?publish=1&promote=1`` of earlier clients is not a parameter any more
     and is ignored, so such a client still gets its plain submit."""
-    snapshot, identity = await _load(request, snapshot_id)
-    action = _transition_or_409(snapshot, 'pending')
-    await require(request, current_user, action, identity=identity,
-                  snapshot=snapshot)
+    loaded = await load_snapshot(
+        request, current_user, snapshot_id,
+        lambda s: _transition_or_409(s, 'pending'))
+    snapshot = loaded.record
     # the frame and the class are current when it goes to review (6.14)
     snapshot = await derive_sync(request, snapshot_id) or snapshot
     return _ok(await _change_status(request, current_user, snapshot,
@@ -553,10 +542,10 @@ async def recall_snapshot(
     current_user: Annotated[User, Depends(get_current_active_user)],
     snapshot_id: str,
 ):
-    snapshot, identity = await _load(request, snapshot_id)
-    action = _transition_or_409(snapshot, 'draft')
-    await require(request, current_user, action, identity=identity,
-                  snapshot=snapshot)
+    loaded = await load_snapshot(
+        request, current_user, snapshot_id,
+        lambda s: _transition_or_409(s, 'draft'))
+    snapshot = loaded.record
     return _ok(await _change_status(request, current_user, snapshot, 'draft'))
 
 
@@ -567,10 +556,10 @@ async def resubmit_snapshot(
     current_user: Annotated[User, Depends(get_current_active_user)],
     snapshot_id: str,
 ):
-    snapshot, identity = await _load(request, snapshot_id)
-    action = _transition_or_409(snapshot, 'draft')
-    await require(request, current_user, action, identity=identity,
-                  snapshot=snapshot)
+    loaded = await load_snapshot(
+        request, current_user, snapshot_id,
+        lambda s: _transition_or_409(s, 'draft'))
+    snapshot, identity = loaded.record, loaded.identity
     _ensure_nothing_in_flight(await _snapshots_of(request, identity['_id']),
                               except_id=snapshot['_id'])
     return _ok(await _change_status(request, current_user, snapshot, 'draft'))
@@ -585,7 +574,8 @@ async def publish_snapshot(
     snapshot_id: str,
     promote: bool = Query(False, description='also make it current'),
 ):
-    snapshot, identity = await _load(request, snapshot_id)
+    loaded = await load_snapshot(request, current_user, snapshot_id, None)
+    snapshot, identity = loaded.record, loaded.identity
     _transition_or_409(snapshot, 'published')
     return _ok(await _publish(request, current_user, snapshot, identity,
                               promote=promote))
@@ -599,10 +589,10 @@ async def reject_snapshot(
     snapshot_id: str,
     body: ReasonBody,
 ):
-    snapshot, identity = await _load(request, snapshot_id)
-    action = _transition_or_409(snapshot, 'rejected')
-    await require(request, current_user, action, identity=identity,
-                  snapshot=snapshot)
+    loaded = await load_snapshot(
+        request, current_user, snapshot_id,
+        lambda s: _transition_or_409(s, 'rejected'))
+    snapshot = loaded.record
     return _ok(await _change_status(request, current_user, snapshot,
                                     'rejected', reason=body.reason))
 
@@ -614,9 +604,9 @@ async def promote_snapshot(
     current_user: Annotated[User, Depends(get_current_active_user)],
     snapshot_id: str,
 ):
-    snapshot, identity = await _load(request, snapshot_id)
-    await require(request, current_user, 'promote', identity=identity,
-                  snapshot=snapshot)
+    loaded = await load_snapshot(request, current_user, snapshot_id,
+                                 'promote')
+    snapshot, identity = loaded.record, loaded.identity
     if snapshot.get('status') != 'published' or snapshot.get('superseded_by'):
         raise HTTPException(
             status_code=409,
@@ -636,10 +626,10 @@ async def withdraw_snapshot(
 ):
     """The current snapshot falls back to ``replacement_id`` or the latest
     remaining live one, else null (section 3.1.4, 8.17)."""
-    snapshot, identity = await _load(request, snapshot_id)
-    action = _transition_or_409(snapshot, 'withdrawn')
-    await require(request, current_user, action, identity=identity,
-                  snapshot=snapshot)
+    loaded = await load_snapshot(
+        request, current_user, snapshot_id,
+        lambda s: _transition_or_409(s, 'withdrawn'))
+    snapshot, identity = loaded.record, loaded.identity
     snapshots = await _snapshots_of(request, identity['_id'])
     remaining = [s for s in _live(snapshots) if s['_id'] != snapshot['_id']]
     replacement = None
@@ -669,10 +659,10 @@ async def reinstate_snapshot(
     current_user: Annotated[User, Depends(get_current_active_user)],
     snapshot_id: str,
 ):
-    snapshot, identity = await _load(request, snapshot_id)
-    action = _transition_or_409(snapshot, 'published')
-    await require(request, current_user, action, identity=identity,
-                  snapshot=snapshot)
+    loaded = await load_snapshot(
+        request, current_user, snapshot_id,
+        lambda s: _transition_or_409(s, 'published'))
+    snapshot, identity = loaded.record, loaded.identity
     published = await _change_status(request, current_user, snapshot,
                                      'published')
     if not identity.get('current_snapshot_id') \
@@ -699,12 +689,10 @@ async def patch_snapshot(
     frozen ``capture`` field that is still empty, once (8.123 a); other
     frozen fields --> 409 pointing at /supersede; derived fields --> 422.
     """
-    snapshot, identity = await _load(request, snapshot_id)
-    viewer = viewer_of(current_user)
-    projection, _ = await snapshot_projection(request, viewer, snapshot,
-                                              identity)
-    if projection != 'full':
-        raise deny_read(viewer)
+    loaded = await load_snapshot(request, current_user, snapshot_id, None,
+                                 files=True)
+    snapshot, identity = loaded.record, loaded.identity
+    viewer = loaded.viewer
     dataset = await dataset_of(request, identity.get('dataset'))
     roles = dataset_roles(viewer, dataset)
     fields = {k: (list(v) if k == 'capture' and isinstance(v, dict) else [])
@@ -807,9 +795,9 @@ async def recompute_geometry(
     snapshot, stale or not: frame, shape class (unless assigned), proxies
     and deviation maps, descriptors, complexity (unless assigned) and the
     preview. Overrides stay. Works while the snapshot is a draft too."""
-    snapshot, identity = await _load(request, snapshot_id)
-    await require(request, current_user, 'override_derived',
-                  identity=identity, snapshot=snapshot)
+    loaded = await load_snapshot(request, current_user, snapshot_id,
+                                 'override_derived')
+    snapshot = loaded.record
     return _ok(await recompute_all_stages(request, snapshot_id) or snapshot)
 
 
@@ -827,7 +815,8 @@ async def delete_snapshot(
     """Only draft / pending / rejected (I15); a published one is
     withdrawn instead. Files go with it. ``?purge=1``: admin, anything,
     leaves a 410 stub."""
-    snapshot, identity = await _load(request, snapshot_id)
+    loaded = await load_snapshot(request, current_user, snapshot_id, None)
+    snapshot, identity = loaded.record, loaded.identity
     if purge:
         return await purge_snapshot_record(request, current_user, snapshot,
                                            identity, body)

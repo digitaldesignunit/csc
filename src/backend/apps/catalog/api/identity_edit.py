@@ -73,7 +73,6 @@ from .access import (
     identity_ever_published,
     load_datasets,
     load_identity,
-    require,
     viewer_of,
 )
 from .auth import get_current_active_user
@@ -199,11 +198,6 @@ async def _material_class(request: Request, values: Dict[str, Any],
     else:
         values['material_class'] = material['default_class']
         values['material_class_source'] = 'derived'
-
-
-async def _identity(request: Request, identity_id: str) -> Dict[str, Any]:
-    validate_uuid(identity_id, label='identity id')
-    return await load_identity(request, identity_id)
 
 
 async def _write(request: Request, before: Dict[str, Any],
@@ -510,9 +504,9 @@ async def patch_identity(
     (8.31). ``material`` without ``material_class`` re-derives the class;
     ``material_class: null`` returns it to derived (I25).
     """
-    identity = await _identity(request, identity_id)
-    viewer = viewer_of(current_user)
-    await require(request, current_user, 'patch_identity', identity=identity)
+    loaded = await load_identity(request, current_user, identity_id,
+                                 'patch_identity')
+    identity, viewer = loaded.record, loaded.viewer
     dataset = await dataset_of(request, identity.get('dataset'))
     if body.get('is_public') is True and not identity.get('is_public'):
         refuse_unreviewed(dataset, viewer)                       # 8.139 c
@@ -603,8 +597,8 @@ async def exit_identity(
     """Installed, recycled, disposed, returned, lost --- or a hand-set
     ``split`` without catalogued pieces. ``merged`` is only ever set by the
     server (8.8). ``construction_work`` only for ``installed`` (I18)."""
-    identity = await _identity(request, identity_id)
-    await require(request, current_user, 'exit', identity=identity)
+    identity = (await load_identity(request, current_user, identity_id,
+                                    'exit')).record
     if identity.get('withdrawn'):
         raise HTTPException(status_code=409, detail='The component is '
                                                     'withdrawn.')
@@ -645,8 +639,8 @@ async def undo_exit(
 ):
     """Not for a split / merge the server keeps from published children:
     withdraw the child instead (8.8)."""
-    identity = await _identity(request, identity_id)
-    await require(request, current_user, 'exit', identity=identity)
+    identity = (await load_identity(request, current_user, identity_id,
+                                    'exit')).record
     exit_ = identity.get('exit')
     if not exit_:
         raise HTTPException(status_code=409, detail='The component is in '
@@ -677,8 +671,8 @@ async def reenter_identity(
     cannot re-enter (I18). The next snapshot defaults to the new
     ``origin.at`` (8.19). A re-entered child owns its new origin.
     """
-    identity = await _identity(request, identity_id)
-    await require(request, current_user, 'reenter', identity=identity)
+    identity = (await load_identity(request, current_user, identity_id,
+                                    'reenter')).record
     exit_ = identity.get('exit')
     if not exit_:
         raise HTTPException(status_code=409, detail='The component is in '
@@ -799,8 +793,8 @@ async def deinstall_identity(
     descendant that still inherits it follows, like a parent's PATCH of
     ``origin`` (3.1.2, 8.110).
     """
-    identity = await _identity(request, identity_id)
-    await require(request, current_user, 'deinstall', identity=identity)
+    identity = (await load_identity(request, current_user, identity_id,
+                                    'deinstall')).record
     origin = identity.get('origin') or {}
     if not origin.get('planned'):
         raise HTTPException(status_code=409,
@@ -836,8 +830,8 @@ async def undo_deinstall(
     evidence is valid after the deinstallation's ``at``; later than that a
     moderator corrects the origin by PATCH (8.104). Propagates like the
     deinstall."""
-    identity = await _identity(request, identity_id)
-    await require(request, current_user, 'deinstall', identity=identity)
+    identity = (await load_identity(request, current_user, identity_id,
+                                    'deinstall')).record
     origin = identity.get('origin') or {}
     reason = await undo_deinstall_refusal(request, identity)
     if reason:

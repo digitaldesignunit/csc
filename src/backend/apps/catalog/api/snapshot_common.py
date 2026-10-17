@@ -9,10 +9,12 @@ import hashlib
 import os
 import shutil
 import stat
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.responses import Response
+from pymongo import ReturnDocument
+from pymongo.errors import PyMongoError
 
 from apps.catalog.models import User
 from apps.catalog.geometry_mesh_export import (
@@ -20,7 +22,11 @@ from apps.catalog.geometry_mesh_export import (
     normalize_mesh_format,
 )
 from .auth import get_optional_current_user
-from .catalog_common import get_snapshots_col, validate_uuid
+from .catalog_common import (
+    compute_snapshot_etag,
+    get_snapshots_col,
+    now_iso,
+)
 from logging_setup import get_logger
 
 
@@ -37,21 +43,6 @@ MESH_RATE = f'{MESH_LIMIT_PER_MINUTE}/minute'
 
 
 OptionalUser = Annotated[Optional[User], Depends(get_optional_current_user)]
-
-
-async def _load_snapshot(
-    request: Request,
-    snapshot_id: str,
-) -> dict:
-    validate_uuid(snapshot_id, label='snapshot id')
-    snapshots = await get_snapshots_col(request)
-    doc = await snapshots.find_one({'_id': snapshot_id})
-    if doc is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f'Snapshot {snapshot_id} not found',
-        )
-    return doc
 
 
 def _delete_snapshot_disk_assets(request: Request, snapshot_id: str) -> None:
@@ -112,3 +103,58 @@ def _http_mesh_format(format: str) -> str:
         return normalize_mesh_format(format)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+async def mark_file(request: Request, snapshot_id: str, field: str,
+                    value: Any, *, present: bool, key: Optional[str] = None,
+                    descending: bool = False) -> Any:
+    """Record that a file is (or no longer is) stored, in the marker list
+    ``field`` (``key``: the list under that key of a map, like
+    ``mesh_ply_resolutions.<index>``), and refresh ``lastmodified`` and the
+    etag. One atomic update of just that list (``$push`` guarded against a
+    duplicate and sorted, or ``$pull``; an emptied key of a map is unset), so
+    two uploads at once cannot overwrite each other's marker. Returns the
+    marker as stored: the list, or the whole map. A repeated upload of a file
+    that is marked already changes nothing: ``lastmodified`` and the etag stay
+    as they are (the snapshot etag never covered file bytes; the file routes
+    have their own ETag).
+    """
+    snapshots = await get_snapshots_col(request)
+    path = field if key is None else f'{field}.{key}'
+    now = now_iso()
+    try:
+        if present:
+            doc = await snapshots.find_one_and_update(
+                {'_id': snapshot_id, path: {'$ne': value}},
+                {'$push': {path: {'$each': [value],
+                                  '$sort': -1 if descending else 1}},
+                 '$set': {'lastmodified': now}},
+                return_document=ReturnDocument.AFTER)
+        else:
+            doc = await snapshots.find_one_and_update(
+                {'_id': snapshot_id},
+                {'$pull': {path: value}, '$set': {'lastmodified': now}},
+                return_document=ReturnDocument.AFTER)
+        if doc is None:
+            # the value is in the list already, or the snapshot is gone
+            doc = await snapshots.find_one({'_id': snapshot_id})
+            if doc is None:
+                raise HTTPException(status_code=404,
+                                    detail='Snapshot not found')
+            return doc.get(field)
+        if not present and key is not None and \
+                doc.get(field, {}).get(key) == []:
+            await snapshots.update_one({'_id': snapshot_id, path: {'$size': 0}},
+                                       {'$unset': {path: ''}})
+            doc[field].pop(key, None)
+        # the etag follows the content; a write that came in between has
+        # its own etag, which covers this marker as well
+        await snapshots.update_one(
+            {'_id': snapshot_id, 'lastmodified': now},
+            {'$set': {'etag': compute_snapshot_etag(doc)}})
+    except PyMongoError:
+        log.exception('file marker %s of snapshot %s', field, snapshot_id)
+        raise HTTPException(
+            status_code=500,
+            detail='Failed to update the snapshot file manifest')
+    return doc.get(field)

@@ -65,6 +65,7 @@ from apps.catalog.models import User
 from apps.catalog.vocab import ShapeClass
 from apps.descriptors.registry import collect_output_keys
 from apps.descriptors.specs import ALL_SPECS
+from .access import load_snapshot
 from .auth import require_admin
 
 router = APIRouter(tags=['geometry runner'])
@@ -152,19 +153,6 @@ class RemoteResult(BaseModel):
     set: RemoteSet = RemoteSet()
 
 
-async def _load(request: Request, snapshot_id: str):
-    app = request.app
-    snapshot = await app.mongodb_component_snapshots.find_one(
-        {'_id': snapshot_id})
-    if snapshot is None:
-        raise HTTPException(status_code=404, detail='Snapshot not found')
-    identity = await app.mongodb_component_identities.find_one(
-        {'_id': snapshot['identity_id']})
-    if identity is None:
-        raise HTTPException(status_code=404, detail='Identity not found')
-    return snapshot, identity
-
-
 @router.get('/geometry/stale',
             summary='Snapshots with stale geometry stages (admin)')
 async def list_stale(
@@ -244,7 +232,8 @@ async def get_work(
     stages: str = Query(','.join(HEAVY_STAGES)),
     retry_errors: bool = Query(False),
 ):
-    snapshot, identity = await _load(request, snapshot_id)
+    loaded = await load_snapshot(request, _admin, snapshot_id, None)
+    snapshot, identity = loaded.record, loaded.identity
     env = _env(request)
     return jsonable_encoder({
         'snapshot': snapshot,
@@ -425,7 +414,8 @@ async def post_results(
     except (ValueError, ValidationError) as exc:
         raise HTTPException(status_code=422,
                             detail='The result is malformed.') from exc
-    snapshot, identity = await _load(request, snapshot_id)
+    loaded = await load_snapshot(request, _admin, snapshot_id, None)
+    snapshot, identity = loaded.record, loaded.identity
     env = _env(request)
     _check_result(body, snapshot, identity, env)
     merged = _apply(body, snapshot)
