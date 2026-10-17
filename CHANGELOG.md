@@ -36,6 +36,9 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
 - **Backend modules split** (decision 8.160): the snapshot routes into five modules, the identity routes into
   three, the Grasshopper interface routes into a package; unused 0.5 API models removed. Paths and
   answers are unchanged (the OpenAPI document is identical).
+- **Database outages** also answer 503 on the routes that handled database errors themselves; other
+  database errors keep their answer. The client log no longer holds the text of a malformed client
+  header, and the request line holds the path without the query string.
 - **Import tools** retry a request up to three times on 503 and on connection errors,
   honouring `Retry-After`; every other error stops at once.
 

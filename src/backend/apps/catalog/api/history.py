@@ -19,7 +19,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Set
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from pymongo.errors import PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.lanes import (
@@ -182,6 +182,8 @@ async def get_identity_history(
         evidence = await request.app.mongodb_component_evidence.find(
             {'identity_id': {'$in': full_ids}},
             EVIDENCE_FIELDS).to_list(length=None)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('get_identity_history DB error')
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -34,7 +34,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from pymongo.errors import PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError
 
 from apps.catalog.models import User
 from apps.catalog.read_models import (
@@ -155,6 +155,8 @@ async def _resolve_passport_snapshot_docs(
                 {'identity_id': identity_id},
             ).sort('version', 1)
             docs = await cursor.to_list(length=None)
+        except ConnectionFailure:
+            raise            # the 503 handler of main_fastapi.py
         except PyMongoError:
             log.exception('passport snapshots=all DB')
             raise HTTPException(
@@ -294,6 +296,8 @@ async def list_identity_children(
             reserved_filter=None,
         )
         docs = await aggregate_identities(request, pipeline)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('list_identity_children DB error')
         raise HTTPException(
@@ -446,6 +450,8 @@ async def get_identity_provenance(
                 _SNAPSHOT_LINEAGE_PROJECTION,
             )
             snapshot_docs = await cursor.to_list(length=None)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('get_identity_provenance DB error')
         raise HTTPException(
@@ -524,6 +530,8 @@ async def list_identity_snapshots(
         docs = await visible_snapshot_docs(
             request, current_user, identity_doc,
             await cursor.to_list(length=None), tombstones=True)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('list_identity_snapshots DB error')
         raise HTTPException(

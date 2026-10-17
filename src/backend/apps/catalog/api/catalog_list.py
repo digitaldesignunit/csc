@@ -19,7 +19,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from pymongo.errors import PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError
 
 from apps.catalog.component_map import (
     MapBasis,
@@ -156,6 +156,8 @@ async def count_identities_route(
             include_username=current_user is not None,
         )
         total = await count_identities(request, pipeline)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('count_identities_route DB error')
         raise HTTPException(
@@ -285,6 +287,8 @@ async def get_identities_map(
         )
         pipeline.append(map_rows_project_stage())
         docs = await aggregate_identities(request, pipeline)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('identities map DB error')
         raise HTTPException(
@@ -397,6 +401,8 @@ async def get_identities_stats(
         return JSONResponse(
             status_code=200, content=content,
             headers=viewer_headers(anonymous_public=current_user is None))
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('identities stats aggregation DB error')
         raise HTTPException(
@@ -449,6 +455,8 @@ async def list_identities_route(
         docs = await aggregate_identities(request, pipeline)
         if expand == 'shallow':
             annotate_has_preview(request, docs)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('list_identities_route DB error')
         raise HTTPException(

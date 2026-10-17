@@ -14,6 +14,11 @@ from apps.catalog.api.ghinterface import library
 PACKAGE = Path(__file__).resolve().parents[2] / 'grasshopper_lib' / 'csc_gh'
 
 
+@pytest.fixture(autouse=True)
+def repo(env):
+    env(GITHUB_REPO_URL='https://github.com/example/csc')
+
+
 def _files():
     return {p.name: p.read_bytes() for p in PACKAGE.glob('*.py')}
 
@@ -61,7 +66,6 @@ def github(monkeypatch):
 
     monkeypatch.setattr(library, '_list_repo_dir_cached', listing)
     monkeypatch.setattr(library, '_get_repo_entry_content', content)
-    monkeypatch.setenv('GITHUB_REPO_URL', 'https://github.com/example/csc')
     return files
 
 

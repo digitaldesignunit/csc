@@ -20,7 +20,7 @@ from typing import Annotated, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from pymongo.errors import PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError
 
 from apps.catalog.models import User  # NOQA
 from .auth import get_current_active_user
@@ -166,6 +166,8 @@ async def get_pending_transmission(
             status_code=status.HTTP_200_OK,
             content={'pending': _serialize_item(doc)},
         )
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('get_pending_transmission DB error')
         raise HTTPException(
@@ -244,6 +246,8 @@ async def transmit_identity_id(
                 'item': _serialize_item(new_doc),
             },
         )
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('transmit_identity_id DB error')
         raise HTTPException(
@@ -270,6 +274,8 @@ async def clear_pending_transmission(
                 'deleted': int(result.deleted_count or 0),
             },
         )
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('clear_pending_transmission DB error')
         raise HTTPException(
@@ -306,6 +312,8 @@ async def consume_pending_transmission(
                 'consumed': consumed,
             },
         )
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('consume_pending_transmission DB error')
         raise HTTPException(

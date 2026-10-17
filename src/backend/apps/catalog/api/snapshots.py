@@ -18,7 +18,7 @@ from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pymongo.errors import PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError
 
 from apps.catalog.models import User
 from apps.catalog.people import for_viewer
@@ -101,6 +101,8 @@ async def list_my_snapshots(
                 {'_id': {'$in': ids}},
                 {'_id': 1, 'current_snapshot_id': 1, 'catalog_number': 1,
                  'original_function': 1, 'material': 1, 'dataset': 1})}
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('list_my_snapshots')
         raise HTTPException(status_code=500, detail='Internal server error')
@@ -162,6 +164,8 @@ async def list_pending_snapshots(
                 'added_by_username': 1,
             },
         ).sort('created', 1).to_list(length=None)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('list_pending_snapshots')
         raise HTTPException(status_code=500, detail='Internal server error')

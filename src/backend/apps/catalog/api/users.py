@@ -6,7 +6,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
-from pymongo.errors import PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError
 
 from apps.catalog.models import AdminUserUpdate, User, UserPublic
 from apps.catalog.vocab import DATASET_ROLES, DatasetRole
@@ -114,6 +114,8 @@ async def list_users(
         docs = await users.find(
             match, {**_USER_LIST_PROJECTION, 'invitation_id': 1}).sort(
             'username', 1).to_list(length=None)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('list_users DB error')
         raise HTTPException(
@@ -232,6 +234,8 @@ async def update_user(
         return _user_public(result)
     except HTTPException:
         raise
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('update_user DB error')
         raise HTTPException(

@@ -45,7 +45,8 @@ def describe_client(
     if parsed is not None:
         return f'client={parsed[0]} version={parsed[1]}'
     if header_value:
-        return f'client=invalid raw={header_value[:60]!r}'
+        # what the client typed is not logged (8.144 h)
+        return 'client=invalid'
     return f'client=unknown agent={(user_agent or "")[:80]!r}'
 
 

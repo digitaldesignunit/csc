@@ -23,7 +23,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from pymongo.errors import PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.evidence.projection import (
@@ -363,6 +363,8 @@ async def list_identity_evidence(
         docs = await request.app.mongodb_component_evidence.find(
             {'identity_id': identity_id, **match}).sort(
             [('observed_at', 1), ('_id', 1)]).to_list(length=None)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('list_identity_evidence DB error')
         raise HTTPException(status_code=500, detail='Internal server error')

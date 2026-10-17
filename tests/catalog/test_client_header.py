@@ -21,7 +21,8 @@ def test_describe_names_client_or_falls_back_to_user_agent():
         'client=web version=0.5.1.0')
     assert describe_client(None, 'python-requests/2.32') == (
         "client=unknown agent='python-requests/2.32'")
-    assert describe_client('nonsense', None) == "client=invalid raw='nonsense'"
+    assert describe_client('nonsense', None) == 'client=invalid'
+    assert 'nonsense' not in describe_client('nonsense', 'agent')
 
 
 # ENFORCEMENT (decision 8.11) -------------------------------------------------

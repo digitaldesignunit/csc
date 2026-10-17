@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pymongo.errors import PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError
 
 from apps.catalog import vocab
 from apps.catalog.models import User, normalize_username
@@ -84,6 +84,8 @@ async def list_reserved_identities(
     try:
         docs = await aggregate_identities(request, pipeline)
         annotate_has_preview(request, docs)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('list_reserved_identities')
         raise HTTPException(status_code=500, detail='Internal server error')
@@ -164,6 +166,8 @@ async def list_identity_datasets(
         return JSONResponse(
             status_code=200, content=sorted(v for v in values if v),
             headers=viewer_headers(anonymous_public=current_user is None))
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('list_identity_datasets')
         raise HTTPException(status_code=500, detail='Internal server error')
@@ -213,6 +217,8 @@ async def reserve_identity(
             {'_id': identity_id},
             {'$set': {'reserved': current_user.id, 'lastmodified': now_iso()}},
         )
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('reserve_identity')
         raise HTTPException(status_code=500, detail='Internal server error')
@@ -264,6 +270,8 @@ async def release_identity_reservation(
             {'_id': identity_id},
             {'$set': {'reserved': '', 'lastmodified': now_iso()}},
         )
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('release_identity_reservation')
         raise HTTPException(status_code=500, detail='Internal server error')

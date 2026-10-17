@@ -26,11 +26,20 @@ def test_missing_or_invalid_header_is_logged_never_rejected(api, backend_env):
     response = api.get('/health/db', headers={
         'X-CSC-Client': '', 'User-Agent': 'python-requests/2.32'})
     assert response.status_code == 200
-    response = api.get('/health/db', headers={'X-CSC-Client': 'garbage'})
+    response = api.get('/health/db', headers={'X-CSC-Client': 'garbage-typed-text'})
     assert response.status_code == 200
     log = _client_log(backend_env)
     assert "client=unknown agent='python-requests/2.32'" in log
-    assert "client=invalid raw='garbage'" in log
+    assert 'client=invalid GET /health/db 200' in log
+    assert 'garbage-typed-text' not in log                  # what the client typed stays out (8.144 h)
+
+
+def test_the_request_line_has_the_path_and_no_query(api, backend_env):
+    # a query can hold a search term or another typed value
+    api.get('/health/db?q=typed-search-term&token=abc123')
+    log = _client_log(backend_env)
+    assert ' GET /health/db 200' in log
+    assert 'typed-search-term' not in log and 'abc123' not in log
 
 
 def test_enforcement_refuses_outdated_clients_with_426(api, app, backend_env):

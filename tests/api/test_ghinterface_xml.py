@@ -4,10 +4,17 @@ else; a signed-in caller keeps the server's XML directory."""
 
 from __future__ import annotations
 
+import pytest
+
 from apps.catalog.api.ghinterface import github as gh_github
 from apps.catalog.api.ghinterface import sources as gh_sources
 
 XML = b'<?xml version="1.0"?><Archive name="DDU_CSC_Sample"/>'
+
+
+@pytest.fixture(autouse=True)
+def repo(env):
+    env(GITHUB_REPO_URL='https://github.com/example/csc')
 
 
 def _github(monkeypatch):
@@ -25,7 +32,6 @@ def _github(monkeypatch):
 
     monkeypatch.setattr(gh_sources, '_list_repo_dir_cached', listing)
     monkeypatch.setattr(gh_sources, '_get_repo_entry_content', content)
-    monkeypatch.setenv('GITHUB_REPO_URL', 'https://github.com/example/csc')
     gh_github._blob_xml_cache.clear()
     return seen
 

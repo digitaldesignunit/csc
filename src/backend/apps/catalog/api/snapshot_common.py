@@ -14,7 +14,7 @@ from typing import Annotated, Any, Optional
 from fastapi import Depends, HTTPException, Request
 from fastapi.responses import Response
 from pymongo import ReturnDocument
-from pymongo.errors import PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError
 
 from apps.catalog.models import User
 from apps.catalog.geometry_mesh_export import (
@@ -152,6 +152,8 @@ async def mark_file(request: Request, snapshot_id: str, field: str,
         await snapshots.update_one(
             {'_id': snapshot_id, 'lastmodified': now},
             {'$set': {'etag': compute_snapshot_etag(doc)}})
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
         log.exception('file marker %s of snapshot %s', field, snapshot_id)
         raise HTTPException(

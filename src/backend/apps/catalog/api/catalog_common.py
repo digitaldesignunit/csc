@@ -10,7 +10,7 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import Response
 from pydantic import ValidationError
 from pymongo import ReturnDocument
-from pymongo.errors import BulkWriteError, DuplicateKeyError
+from pymongo.errors import BulkWriteError, ConnectionFailure, DuplicateKeyError
 
 from apps.catalog.etag import compute_snapshot_etag  # noqa: F401 (re-export)
 
@@ -222,6 +222,8 @@ async def validate_snapshot_and_promote(
                 {'_id': snapshot_id},
                 {'$set': snap_update},
             )
+        except ConnectionFailure:
+            raise            # the 503 handler of main_fastapi.py
         except PyMongoError:
             log.exception('validate_snapshot_and_promote snapshot')
             raise HTTPException(
@@ -241,6 +243,8 @@ async def validate_snapshot_and_promote(
                 {'_id': identity_id},
                 {'$set': identity_update},
             )
+        except ConnectionFailure:
+            raise            # the 503 handler of main_fastapi.py
         except PyMongoError:
             log.exception('validate_snapshot_and_promote identity')
             raise HTTPException(
