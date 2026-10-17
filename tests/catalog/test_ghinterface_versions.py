@@ -6,11 +6,13 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
-from apps.catalog.api.ghinterface import (
+from apps.catalog.api.ghinterface.github import (
     _get_repo_entry_content,
+    resolve_update_channel,
+)
+from apps.catalog.api.ghinterface.sources import (
     compare_versions,
     get_source_version,
-    resolve_update_channel,
 )
 
 
@@ -142,7 +144,7 @@ def test_entry_content_with_token_uses_blobs_api():
 
 
 def test_github_timeout_is_described_in_503():
-    from apps.catalog.api.ghinterface import _http_exception_from_github
+    from apps.catalog.api.ghinterface.github import _http_exception_from_github
 
     exc = _http_exception_from_github(httpx.TimeoutException('timed out'))
     assert exc.status_code == 503

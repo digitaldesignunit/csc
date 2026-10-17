@@ -53,7 +53,7 @@ class PurgeBody(BaseModel):
 
 
 def _snapshot_files(request: Request, snapshot_id: str) -> None:
-    from .snapshots import _delete_snapshot_disk_assets  # avoid a cycle
+    from .snapshot_common import _delete_snapshot_disk_assets  # avoid a cycle
     _delete_snapshot_disk_assets(request, snapshot_id)
     capture = getattr(request.app, 'snapshot_capture_dir', None)
     if capture:

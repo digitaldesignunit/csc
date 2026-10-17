@@ -839,7 +839,7 @@ async def delete_snapshot(
                    '(I15).')
     await require(request, current_user, 'delete_record', identity=identity,
                   snapshot=snapshot)
-    from .snapshots import _delete_snapshot_disk_assets  # avoid a cycle
+    from .snapshot_common import _delete_snapshot_disk_assets  # avoid a cycle
     _delete_snapshot_disk_assets(request, snapshot_id)
     await request.app.mongodb_component_snapshots.delete_one(
         {'_id': snapshot_id, 'status': {'$in': ['draft', 'pending',

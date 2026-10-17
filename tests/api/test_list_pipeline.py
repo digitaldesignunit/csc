@@ -18,7 +18,7 @@ import bson
 import pytest
 from pymongo.errors import OperationFailure
 
-from apps.catalog.api.identities import _format_list_rows
+from apps.catalog.api.catalog_list import _format_list_rows
 from apps.catalog.api.identity_query import (
     MAP_SNAPSHOT_FIELDS,
     ROW_SNAPSHOT_FIELDS,

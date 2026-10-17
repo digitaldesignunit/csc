@@ -1,362 +1,56 @@
 #!/usr/bin/env python3.13
+"""
+Release, reference, ZIP, component sources and XML of the Grasshopper
+interface.
 
-# PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
+* `GET /ghinterface/version`, `/ghinterface/reference`,
+  `/ghinterface/download`
+* `GET /ghinterface/src_names`, `/ghinterface/src/{name}`
+* `GET /ghinterface/xml_names`, `/ghinterface/xml/{name}`
+"""
+
 import asyncio
-import base64
 import hashlib
 import json
 import os
 import re
-import time
-from typing import Annotated, Dict, List, Optional, Tuple
+from typing import Annotated, List, Optional
 
-# THIRD PARTY MODULE IMPORTS --------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 import httpx
 
-# LOCAL MODULE IMPORTS --------------------------------------------------------
 from apps.catalog.api.auth import get_current_user, get_optional_current_user
 from apps.catalog.api.catalog_common import internal_error
 from apps.catalog.ghreference import build_reference, parse_source
 from apps.catalog.models import User
 from limiter import limiter, signed_in_or_ip
 from services.github_service import GitHubService
-from csc_version import release_tag
 from settings import get_settings
-
 from logging_setup import get_logger
+from .github import (
+    GH_INTERFACE_ASSET_PREFIX,
+    GH_PUBLIC_RATE,
+    SRC_FETCH_CONCURRENCY,
+    _blob_reference_cache,
+    _blob_version_cache,
+    _blob_xml_cache,
+    _extract_api_url,
+    _failure_text,
+    _get_repo_entry_content,
+    _github_headers,
+    _github_token,
+    _http_exception_from_github,
+    _list_repo_dir_cached,
+    _release_of_this_backend,
+    default_update_ref,
+    resolve_update_channel,
+)
+
 
 log = get_logger(__name__)
 
-# INIT ROUTER -----------------------------------------------------------------
 router = APIRouter()
-
-# GITHUB LOOKUP CACHES --------------------------------------------------------
-# Directory listings are re-read constantly during a single CSC_Update run
-# (once per source file and once per UserObject), so they are cached briefly.
-REPO_DIR_CACHE_TTL_SECONDS = 120.0
-
-
-# Blob shas are content addressed, so a version parsed from one never changes.
-SRC_FETCH_CONCURRENCY = 8
-
-_repo_dir_cache: Dict[str, Tuple[float, List[dict]]] = {}
-_blob_version_cache: Dict[str, Optional[tuple]] = {}
-# the parse of a source, by blob sha (content addressed, so it never changes)
-_blob_reference_cache: Dict[str, dict] = {}
-# the user object XML of the release, by blob sha
-_blob_xml_cache: Dict[str, bytes] = {}
-
-# the two reads an anonymous visitor may make (the page's download card and
-# component reference): release information that is public on GitHub
-GH_PUBLIC_RATE = '30/minute'
-
-# UserObjects, sources and the interface ZIP are served from the GitHub release
-# this backend belongs to (tag v<CSC_VERSION>), so a deploy updates backend, web
-# and Grasshopper together and merging to main publishes nothing. Testers pick a
-# branch with `?channel=`; GH_UPDATE_REF overrides the default (e.g. staging).
-GH_INTERFACE_ASSET_PREFIX = 'csc-gh-interface-'
-
-
-def default_update_ref() -> str:
-    return get_settings().gh_update_ref or release_tag()
-
-
-async def _release_of_this_backend(github_service: GitHubService) -> dict:
-    """The GitHub release tagged v<CSC_VERSION>; 404 if it does not exist."""
-    tag = release_tag()
-    try:
-        return await github_service.get_release_by_tag(tag)
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    f'No GitHub release {tag}: this backend runs a version '
-                    'that has not been released (local or pre-release build).'
-                ),
-            )
-        raise
-
-
-# INTERNAL HELPERS ------------------------------------------------------------
-def _failure_text(exc: BaseException) -> str:
-    """What a GitHub failure may put in the log: the class of the error and,
-    for an answer, its status. Never the URL (the ``ref`` in it is the
-    channel the client typed, a download URL is pre-signed), the body or the
-    traceback (decision 8.144 h)."""
-    if isinstance(exc, httpx.HTTPStatusError):
-        return f'{type(exc).__name__} (status {exc.response.status_code})'
-    return type(exc).__name__
-
-
-def _extract_api_url(repo_url: str) -> str:
-    pattern = r'https://github\.com/([^/]+)/([^/]+)/?'
-    match = re.match(pattern, repo_url)
-    if not match:
-        raise ValueError(f'Invalid GitHub repository URL: {repo_url}')
-    owner, repo = match.groups()
-    return f'https://api.github.com/repos/{owner}/{repo}'
-
-
-def _github_token() -> Optional[str]:
-    """
-    Optional PAT. Public repos work without it; a token increases rate limits.
-    """
-    token = get_settings().github_csc_gh_token.get_secret_value().strip()
-    return token or None
-
-
-def _github_headers(
-    token: Optional[str],
-    accept: str = 'application/vnd.github.v3+json',
-) -> dict:
-    headers = {
-        'Accept': accept,
-        'User-Agent': 'CSC-Backend/1.0',
-    }
-    if token:
-        headers['Authorization'] = f'token {token}'
-    return headers
-
-
-def resolve_update_channel(channel: Optional[str]) -> str:
-    """
-    Git ref (release tag or branch) to read Grasshopper sources/UserObjects
-    from.
-
-    Empty/None means this backend's own release (``default_update_ref``). A
-    given name is passed to GitHub as `ref` and must match a remote branch or
-    tag exactly.
-    """
-    if channel is None or channel == '':
-        return default_update_ref()
-    if (
-        len(channel) > 250
-        or any(c.isspace() or ord(c) < 32 for c in channel)
-        or '..' in channel
-        or '\\' in channel
-        or '?' in channel
-        or '#' in channel
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                'Invalid update channel. It must match a GitHub branch or '
-                'tag exactly.'
-            ),
-        )
-    return channel
-
-
-def _github_path_not_found(channel: str, what: str) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=(
-            f'{what} not found for update channel "{channel}". '
-            'The GitHub branch name must match exactly.'
-        ),
-    )
-
-
-async def _list_repo_dir(
-    client: httpx.AsyncClient,
-    api_base: str,
-    token: Optional[str],
-    path: str,
-    ref: str,
-) -> List[dict]:
-    resp = await client.get(
-        f'{api_base}/contents/{path}',
-        headers=_github_headers(token),
-        params={'ref': ref},
-        timeout=30.0,
-    )
-    if resp.status_code == 404:
-        raise _github_path_not_found(ref, f'Repository path "{path}"')
-    resp.raise_for_status()
-    data = resp.json()
-    if not isinstance(data, list):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Unexpected response from GitHub contents API',
-        )
-    return data
-
-
-async def _list_repo_dir_cached(
-    client: httpx.AsyncClient,
-    api_base: str,
-    token: Optional[str],
-    path: str,
-    ref: str,
-) -> List[dict]:
-    now = time.monotonic()
-    cache_key = f'{ref}:{path}'
-    cached = _repo_dir_cache.get(cache_key)
-    if cached and (now - cached[0]) < REPO_DIR_CACHE_TTL_SECONDS:
-        return cached[1]
-    entries = await _list_repo_dir(client, api_base, token, path, ref)
-    _repo_dir_cache[cache_key] = (now, entries)
-    return entries
-
-
-async def _get_repo_blob(
-    client: httpx.AsyncClient,
-    api_base: str,
-    token: Optional[str],
-    sha: str,
-) -> bytes:
-    resp = await client.get(
-        f'{api_base}/git/blobs/{sha}',
-        headers=_github_headers(
-            token, accept='application/vnd.github.v3.raw'
-        ),
-        timeout=30.0,
-    )
-    resp.raise_for_status()
-    return resp.content
-
-
-async def _get_repo_file(
-    client: httpx.AsyncClient,
-    api_base: str,
-    token: Optional[str],
-    path: str,
-    ref: str,
-) -> bytes:
-    resp = await client.get(
-        f'{api_base}/contents/{path}',
-        headers=_github_headers(token),
-        params={'ref': ref},
-        timeout=30.0,
-    )
-    if resp.status_code == 404:
-        raise _github_path_not_found(ref, f'File "{path}"')
-    resp.raise_for_status()
-    payload = resp.json()
-    content_b64: Optional[str] = payload.get('content')
-    if not content_b64:
-        download_url = payload.get('download_url')
-        if not download_url:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='File content not found in GitHub response',
-            )
-        resp2 = await client.get(
-            download_url,
-            headers={'User-Agent': 'CSC-Backend/1.0'},
-            timeout=30.0,
-        )
-        resp2.raise_for_status()
-        return resp2.content
-    try:
-        return base64.b64decode(content_b64)
-    except Exception:
-        log.exception('_get_repo_file base64 decode')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to decode file content',
-        )
-
-
-async def _download_raw(
-    client: httpx.AsyncClient,
-    download_url: str,
-) -> bytes:
-    resp = await client.get(
-        download_url,
-        headers={'User-Agent': 'CSC-Backend/1.0'},
-        timeout=30.0,
-        follow_redirects=True,
-    )
-    resp.raise_for_status()
-    return resp.content
-
-
-async def _get_repo_entry_content(
-    client: httpx.AsyncClient,
-    api_base: str,
-    token: Optional[str],
-    entry: dict,
-    ref: str,
-) -> bytes:
-    """Read one file from a contents listing entry.
-
-    With a token, prefer /git/blobs on api.github.com (5000 req/hour).
-    Without a token, prefer download_url (raw.githubusercontent.com) so
-    CSC_Update does not burn the unauthenticated 60 req/hour REST quota.
-    Fall back to the other method if the first fails.
-    """
-    download_url = entry.get('download_url')
-    sha = entry.get('sha')
-
-    async def via_raw() -> bytes:
-        return await _download_raw(client, download_url)
-
-    async def via_blob() -> bytes:
-        if not sha:
-            return await _get_repo_file(
-                client, api_base, token, entry['path'], ref
-            )
-        return await _get_repo_blob(client, api_base, token, sha)
-
-    if token:
-        try:
-            return await via_blob()
-        except httpx.HTTPError:
-            if download_url:
-                return await via_raw()
-            raise
-    if download_url:
-        try:
-            return await via_raw()
-        except httpx.HTTPError:
-            return await via_blob()
-    return await via_blob()
-
-
-def _http_exception_from_github(e: httpx.HTTPError) -> HTTPException:
-    """Map GitHub HTTP failures to a CSC_Update-visible error."""
-    if isinstance(e, httpx.HTTPStatusError):
-        code = e.response.status_code
-        remaining = e.response.headers.get('X-RateLimit-Remaining')
-        url = str(e.request.url) if e.request is not None else ''
-        if code == 401:
-            return HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=(
-                    'GitHub rejected the request. Remove an invalid '
-                    'GITHUB_CSC_GH_TOKEN, or omit it for the public repo.'
-                ),
-            )
-        if code == 403 or remaining == '0':
-            return HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=(
-                    'GitHub API rate limit exceeded. Wait for the hourly '
-                    'reset, or set GITHUB_CSC_GH_TOKEN for a higher limit.'
-                ),
-            )
-        return HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f'GitHub HTTP {code} for {url}',
-        )
-    if isinstance(e, httpx.TimeoutException):
-        return HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='GitHub request timed out',
-        )
-    if isinstance(e, httpx.ConnectError):
-        return HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Cannot connect to GitHub',
-        )
-    return HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail='GitHub service unavailable',
-    )
 
 
 # Matches an actual version declaration - the word "version", a ":" or "=",
@@ -762,128 +456,6 @@ async def get_src_code(
         )
 
 
-# THE SHARED LIBRARY (decision 8.111) ----------------------------------------
-# The package ``csc_gh`` (grasshopper_lib/csc_gh) is installed by CSC_Update next
-# to the UserObjects: a manifest of the files of the release with the sha256 of
-# each, and the files one by one. The client checks every file against the
-# manifest before it replaces the installed package.
-GH_LIBRARY_DIR = 'grasshopper_lib/csc_gh'
-LIBRARY_FILE_RE = re.compile(r'^[a-z][a-z_]*\.py$')
-LIBRARY_VERSION_RE = re.compile(
-    r"^__version__\s*=\s*'(\d+[a-zA-Z]?)'\s*$", re.M)
-
-
-def is_library_file(name: str) -> bool:
-    """A ``.py`` file of the package folder (no path, no hidden file)."""
-    return name == '__init__.py' or bool(LIBRARY_FILE_RE.match(name))
-
-
-def library_manifest(ref: str, files: Dict[str, bytes]) -> dict:
-    """The manifest of the library files (``{name: bytes}``): the version of
-    ``__init__.py``, and per file its size and sha256."""
-    init = files.get('__init__.py')
-    match = LIBRARY_VERSION_RE.search(init.decode('utf-8')) if init else None
-    return {
-        'ref': ref,
-        'version': match.group(1) if match else None,
-        'files': [
-            {'path': name, 'size': len(data),
-             'sha256': hashlib.sha256(data).hexdigest()}
-            for name, data in sorted(files.items())
-        ],
-    }
-
-
-async def _library_entries(
-    client: httpx.AsyncClient, api_base: str, token: Optional[str], ref: str
-) -> List[dict]:
-    entries = await _list_repo_dir_cached(
-        client, api_base, token, GH_LIBRARY_DIR, ref)
-    return [it for it in entries if it.get('type') == 'file'
-            and is_library_file(it.get('name', ''))]
-
-
-@router.get('/ghinterface/library_manifest')
-async def get_library_manifest(
-    current_user: Annotated[User, Depends(get_current_user)],
-    channel: str = Query(default=''),
-):
-    """Version and checksums of the ``csc_gh`` package of the release."""
-    try:
-        ref = resolve_update_channel(channel)
-        repo_url = get_settings().need('GITHUB_REPO_URL')
-        token = _github_token()
-        api_base = _extract_api_url(repo_url)
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            entries = await _library_entries(client, api_base, token, ref)
-            if not entries:
-                raise _github_path_not_found(ref, GH_LIBRARY_DIR)
-            semaphore = asyncio.Semaphore(SRC_FETCH_CONCURRENCY)
-
-            async def fetch(entry):
-                async with semaphore:
-                    return entry['name'], await _get_repo_entry_content(
-                        client, api_base, token, entry, ref)
-
-            files = dict(await asyncio.gather(*(fetch(e) for e in entries)))
-        manifest = library_manifest(ref, files)
-        if manifest['version'] is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='The library of this release has no __version__.')
-        return manifest
-    except HTTPException:
-        raise
-    except httpx.HTTPError as e:
-        log.error('get_library_manifest GitHub: %s', _failure_text(e))
-        raise _http_exception_from_github(e)
-    except Exception:
-        log.exception('get_library_manifest')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Internal server error',
-        )
-
-
-@router.get('/ghinterface/library/{name}', response_class=Response)
-async def get_library_file(
-    name: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    channel: str = Query(default=''),
-):
-    """One file of the ``csc_gh`` package (a ``.py`` of the package folder)."""
-    if not is_library_file(name):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Library file not found')
-    try:
-        ref = resolve_update_channel(channel)
-        repo_url = get_settings().need('GITHUB_REPO_URL')
-        token = _github_token()
-        api_base = _extract_api_url(repo_url)
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            entries = await _library_entries(client, api_base, token, ref)
-            matches = [it for it in entries if it.get('name') == name]
-            if not matches:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail='Library file not found')
-            content = await _get_repo_entry_content(
-                client, api_base, token, matches[0], ref)
-        return Response(content, media_type='application/octet-stream')
-    except HTTPException:
-        raise
-    except httpx.HTTPError as e:
-        log.error('get_library_file GitHub: %s', _failure_text(e))
-        raise _http_exception_from_github(e)
-    except Exception:
-        log.exception('get_library_file')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Internal server error',
-        )
-
-
 @router.get('/ghinterface/xml_names', response_model=List[str])
 async def list_xml_names(
     request: Request,
@@ -994,89 +566,3 @@ async def get_xml(
         raise _http_exception_from_github(e)
     except Exception as e:
         raise internal_error(e, 'get_xml')
-
-
-@router.get('/ghinterface/userobject_names', response_model=List[str])
-async def list_userobject_names(
-    current_user: Annotated[User, Depends(get_current_user)],
-    channel: str = Query(default=''),
-):
-    try:
-        ref = resolve_update_channel(channel)
-        repo_url = get_settings().need('GITHUB_REPO_URL')
-        token = _github_token()
-        api_base = _extract_api_url(repo_url)
-
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            entries = await _list_repo_dir_cached(
-                client, api_base, token, 'grasshopper_userobjects', ref
-            )
-        names: List[str] = []
-        for item in entries:
-            if item.get('type') == 'file':
-                name = item.get('name', '')
-                if name.lower().endswith('.ghuser'):
-                    names.append(name[:-7])
-        return sorted(list(dict.fromkeys(names)))
-    except HTTPException:
-        raise
-    except httpx.HTTPError as e:
-        log.error('list_userobject_names GitHub: %s', _failure_text(e))
-        raise _http_exception_from_github(e)
-    except Exception:
-        log.exception('list_userobject_names')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Internal server error',
-        )
-
-
-@router.get('/ghinterface/userobject/{name}')
-async def get_userobject(
-    name: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    channel: str = Query(default=''),
-):
-    try:
-        ref = resolve_update_channel(channel)
-        repo_url = get_settings().need('GITHUB_REPO_URL')
-        token = _github_token()
-        api_base = _extract_api_url(repo_url)
-
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            entries = await _list_repo_dir_cached(
-                client, api_base, token, 'grasshopper_userobjects', ref
-            )
-            target_name = f'{name}.ghuser'
-            matches = [
-                it for it in entries
-                if it.get('type') == 'file' and it.get('name') == target_name
-            ]
-            if not matches:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail='UserObject (.ghuser) not found',
-                )
-            content = await _get_repo_entry_content(
-                client, api_base, token, matches[0], ref
-            )
-
-        headers = {
-            'Content-Disposition': f'attachment; filename="{name}.ghuser"'
-        }
-        return StreamingResponse(
-            iter([content]),
-            media_type='application/octet-stream',
-            headers=headers,
-        )
-    except HTTPException:
-        raise
-    except httpx.HTTPError as e:
-        log.error('get_userobject GitHub: %s', _failure_text(e))
-        raise _http_exception_from_github(e)
-    except Exception:
-        log.exception('get_userobject')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Internal server error',
-        )

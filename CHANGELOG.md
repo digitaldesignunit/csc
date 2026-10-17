@@ -33,6 +33,9 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
   URLs or the text of a rejected document.
 - **Database outages** answer 503 with `Retry-After` instead of a bare 500, and the
   cause goes to the log.
+- **Backend modules split** (decision 8.160): the snapshot routes into five modules, the identity routes into
+  three, the Grasshopper interface routes into a package; unused 0.5 API models removed. Paths and
+  answers are unchanged (the OpenAPI document is identical).
 - **Import tools** retry a request up to three times on 503 and on connection errors,
   honouring `Retry-After`; every other error stops at once.
 

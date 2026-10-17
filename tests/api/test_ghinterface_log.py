@@ -10,7 +10,7 @@ import logging
 import httpx
 import pytest
 
-from apps.catalog.api import ghinterface
+from apps.catalog.api.ghinterface import github, sources
 
 CHANNEL = 'typed-by-the-client-channel'
 SIGNED = ('https://objects.githubusercontent.com/asset?X-Amz-Signature='
@@ -36,17 +36,17 @@ def repo(env):
 
 
 def test_the_helper_names_the_class_and_the_status_only():
-    text = ghinterface._failure_text(failure(SIGNED, 502))
+    text = github._failure_text(failure(SIGNED, 502))
     assert text == 'HTTPStatusError (status 502)'
-    assert ghinterface._failure_text(httpx.ConnectError('boom ' + CHANNEL)) == 'ConnectError'
-    assert ghinterface._failure_text(ValueError(CHANNEL)) == 'ValueError'
+    assert github._failure_text(httpx.ConnectError('boom ' + CHANNEL)) == 'ConnectError'
+    assert github._failure_text(ValueError(CHANNEL)) == 'ValueError'
 
 
 def test_a_listing_error_with_the_clients_channel_leaves_no_channel_in_the_log(
         api, auth_headers, monkeypatch, caplog):
     async def listing(client, api_base, token, path, ref):
         raise failure(f'https://api.github.com/repos/example/csc/contents/x?ref={ref}')
-    monkeypatch.setattr(ghinterface, '_list_repo_dir_cached', listing)
+    monkeypatch.setattr(sources, '_list_repo_dir_cached', listing)
     with caplog.at_level(logging.INFO, logger='csc'):
         response = api.get('/ghinterface/src_names', params={'channel': CHANNEL},
                            headers=auth_headers('user'))
@@ -60,13 +60,13 @@ def test_a_download_error_logs_neither_the_signed_url_nor_the_body(
         api, auth_headers, monkeypatch, caplog):
     async def release(_service):
         return {'assets': [], 'tag_name': 'v1'}
-    monkeypatch.setattr(ghinterface, '_release_of_this_backend', release)
-    monkeypatch.setattr(ghinterface.GitHubService, 'get_release_asset_download_url',
+    monkeypatch.setattr(sources, '_release_of_this_backend', release)
+    monkeypatch.setattr(sources.GitHubService, 'get_release_asset_download_url',
                         lambda self, info, prefix: SIGNED)
 
     async def filename(self, info, prefix):
         return 'csc-gh-interface-1.zip'
-    monkeypatch.setattr(ghinterface.GitHubService, 'get_asset_filename', filename)
+    monkeypatch.setattr(sources.GitHubService, 'get_asset_filename', filename)
 
     class Stream:
         async def __aenter__(self):

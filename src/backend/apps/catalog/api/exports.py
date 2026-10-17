@@ -53,7 +53,7 @@ from .identities import (
 from .identity_filters import children_identity_match
 from .public_access import viewer_headers
 from limiter import limiter, signed_in_or_ip
-from .snapshots import _list_photo_indices, _resolve_photo_path
+from .snapshot_media import _list_photo_indices, _resolve_photo_path
 
 router = APIRouter()
 
