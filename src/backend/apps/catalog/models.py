@@ -79,6 +79,12 @@ def _check_password_bytes(v: str) -> str:
     return v
 
 
+# the character set of a new username (decision 8.161): lowercase letters and
+# digits, then dots, underscores and hyphens; 3 to 32 characters. Names that
+# exist stay as they are; the rule is checked where a name is set.
+USERNAME_PATTERN = r'^[a-z0-9][a-z0-9._-]{2,31}$'
+
+
 def normalize_username(value: str) -> str:
     """Usernames are stored lowercase and unique; every lookup by
     username goes through this, so login ignores case (decision 8.28)."""
@@ -86,7 +92,7 @@ def normalize_username(value: str) -> str:
 
 
 class RegisterPayload(BaseModel):
-    username: str = Field(min_length=3, max_length=50)
+    username: str = Field(min_length=3, max_length=32, pattern=USERNAME_PATTERN)
     full_name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     # max_length=72 matches bcrypt's hard truncation limit, also prevents DoS
@@ -94,10 +100,11 @@ class RegisterPayload(BaseModel):
     # an invitation code (8.14): required outside the open domains
     code: Optional[str] = Field(None, max_length=64)
 
-    @field_validator('username')
+    @field_validator('username', mode='before')
     @classmethod
-    def _lowercase(cls, v: str) -> str:
-        return normalize_username(v)
+    def _lowercase(cls, v):
+        # lowercased before the pattern is checked, so "Sample.User" is fine
+        return normalize_username(v) if isinstance(v, str) else v
 
     @field_validator('password')
     @classmethod

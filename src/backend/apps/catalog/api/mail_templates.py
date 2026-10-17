@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.models import User
-from limiter import limiter, signed_in_or_ip
+from limiter import local_limiter, signed_in_or_ip
 from services import email_service
 from settings import SettingsError, get_settings
 from .auth import require_admin
@@ -78,7 +78,7 @@ async def preview_mail_templates(
 
 @router.post('/admin/mail-templates/{kind}/test', response_model=TestSent,
              summary='Send one sample mail to the signed-in admin (admin)')
-@limiter.limit(TEST_SEND_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(TEST_SEND_RATE, key_func=signed_in_or_ip)
 async def send_test_mail(
     request: Request,
     kind: str,

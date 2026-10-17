@@ -44,3 +44,9 @@ pynndescent==0.6.0
 umap-learn==0.5.12
 # the settings object (settings.py, decision 8.156): pure Python, pinned to the version the tests ran with
 pydantic-settings==2.16.0
+# access tokens (tokens.py, T5 of 0.6.2.0): pure Python; replaced python-jose
+PyJWT==2.15.1
+# the rate limiter and its counter store (limiter.py, rate_store.py) reach into
+# both libraries: pinned to the versions the tests ran with
+slowapi==0.1.10
+limits==5.8.0

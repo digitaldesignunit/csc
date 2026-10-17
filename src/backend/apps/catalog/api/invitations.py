@@ -55,7 +55,7 @@ from .access import (
 )
 from .auth import get_current_active_user
 from .catalog_common import now_iso
-from limiter import limiter, signed_in_or_ip
+from limiter import shared_limiter, signed_in_or_ip
 
 from logging_setup import get_logger
 
@@ -604,7 +604,7 @@ async def _invitation_for_account(request: Request, user: User, code: str
 @router.post('/invitations/preview', response_model=InvitationPreview,
              response_model_by_alias=True, response_model_exclude_none=True,
              summary='What an invitation offers (the account it names)')
-@limiter.limit(ACCEPT_RATE, key_func=signed_in_or_ip)
+@shared_limiter.limit(ACCEPT_RATE, key_func=signed_in_or_ip)
 async def preview_invitation(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -628,7 +628,7 @@ async def preview_invitation(
 @router.post('/invitations/accept', response_model=InvitationAccepted,
              response_model_by_alias=True, response_model_exclude_none=True,
              summary='Accept an invitation with an existing account')
-@limiter.limit(ACCEPT_RATE, key_func=signed_in_or_ip)
+@shared_limiter.limit(ACCEPT_RATE, key_func=signed_in_or_ip)
 async def accept_invitation(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],

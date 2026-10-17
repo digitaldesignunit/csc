@@ -38,7 +38,7 @@ from apps.catalog.geometry_mesh_export import (
     mesh_export_extension,
 )
 from .auth import get_current_active_user
-from limiter import limiter, signed_in_or_ip
+from limiter import local_limiter, signed_in_or_ip
 from .geometry_hooks import derive_sync
 from .access import load_snapshot
 from .catalog_common import not_modified_response
@@ -88,7 +88,7 @@ def _mesh_path(
     summary='Alias of .../preview until plan P5 (decision 8.23)',
     deprecated=True,
 )
-@limiter.limit(MESH_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(MESH_RATE, key_func=signed_in_or_ip)
 async def get_snapshot_mesh_preview(
     request: Request,
     current_user: OptionalUser,
@@ -130,7 +130,7 @@ async def get_snapshot_mesh_preview(
     '/snapshots/{snapshot_id}/meshes/{primitive_index}/{resolution}',
     summary='Get mesh file for snapshot primitive (PLY or OBJ)',
 )
-@limiter.limit(MESH_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(MESH_RATE, key_func=signed_in_or_ip)
 async def get_snapshot_mesh(
     request: Request,
     current_user: OptionalUser,

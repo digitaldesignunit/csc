@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PASSWORD_CHANGED_PARAM, PASSWORD_CHANGED_VALUE } from '@/lib/password'
+import { RATE_LIMITED, RATE_LIMITED_TEXT } from '@/lib/signInErrors'
 
 function toSafePathClient(raw: string): string {
   const fallback = '/components'
@@ -43,6 +44,10 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
       switch (errorParam) {
         case 'CredentialsSignin':
           setError('Invalid email/username or password. Please try again.')
+          setIsVerificationError(false)
+          break
+        case RATE_LIMITED:
+          setError(RATE_LIMITED_TEXT)
           setIsVerificationError(false)
           break
         case 'AccessDenied':
@@ -104,6 +109,10 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
         switch (result.error) {
           case 'CredentialsSignin':
             setError('Invalid email/username or password. Please check your credentials and try again.')
+            setIsVerificationError(false)
+            break
+          case RATE_LIMITED:
+            setError(RATE_LIMITED_TEXT)
             setIsVerificationError(false)
             break
           case 'AccessDenied':

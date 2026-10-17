@@ -300,14 +300,14 @@ def test_mail_that_is_not_set_up_says_so(api, auth_headers, sent, monkeypatch):
 
 
 def test_the_test_send_is_rate_limited(api, auth_headers, sent):
-    from limiter import limiter
+    from limiter import local_limiter
     admin = auth_headers('admin')
-    limiter.enabled = True
+    local_limiter.enabled = True
     try:
-        limiter.reset()
+        local_limiter.reset()
         codes = [api.post('/admin/mail-templates/reset/test',
                           headers=admin).status_code for _ in range(11)]
     finally:
-        limiter.enabled = False
-        limiter.reset()
+        local_limiter.enabled = False
+        local_limiter.reset()
     assert codes[:10] == [200] * 10 and codes[10] == 429

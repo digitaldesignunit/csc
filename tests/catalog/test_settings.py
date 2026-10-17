@@ -56,6 +56,8 @@ def test_the_defaults_are_the_ones_the_backend_always_had(clean):
     assert (s.geometry_upload_limit_mb, s.evidence_upload_limit_mb) == (250, 25)
     assert (s.snapshot_photo_upload_limit_mb, s.snapshot_photo_max_output_mb,
             s.snapshot_photo_max_long_edge_px) == (10, 2, 4096)
+    assert s.csc_json_body_limit_mb == 16
+    assert s.csc_rate_limit_storage is None
     assert s.csc_min_client_versions == '' and s.csc_public_api_url == ''
     assert s.client_log_path.endswith('client_versions.log')
     assert s.github_csc_gh_token.get_secret_value() == ''
@@ -127,6 +129,7 @@ def test_a_bad_url_stops_the_start_with_its_name(clean, env, name, value):
     ('SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB', '0'), ('SNAPSHOT_PHOTO_MAX_OUTPUT_MB', '0'),
     ('SNAPSHOT_PHOTO_MAX_LONG_EDGE_PX', '0'), ('SNAPSHOT_PHOTO_MAX_LONG_EDGE_PX', 'wide'),
     ('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '0'), ('SMTP_PORT', '70000'),
+    ('CSC_JSON_BODY_LIMIT_MB', '0'), ('CSC_JSON_BODY_LIMIT_MB', 'big'),
 ])
 def test_a_limit_must_be_a_positive_number(clean, env, name, value):
     env(**{name: value})
@@ -173,6 +176,31 @@ def test_the_heavy_stage_setting_is_server_or_remote(clean, env):
     env(CSC_GEOMETRY_HEAVY_STAGES='cloud')
     with pytest.raises(SettingsError, match='CSC_GEOMETRY_HEAVY_STAGES must be server or remote'):
         get_settings()
+
+
+def test_the_rate_limit_store_defaults_to_the_database_of_the_api(full, env):
+    s = get_settings()
+    assert s.rate_limit_uri == s.need('MONGODB_URI')
+    env(CSC_RATE_LIMIT_STORAGE='memory://')
+    assert get_settings().rate_limit_uri == 'memory://'
+    env(CSC_RATE_LIMIT_STORAGE='mongodb://other.example.org:27017/counters')
+    assert get_settings().rate_limit_uri == 'mongodb://other.example.org:27017/counters'
+
+
+def test_a_rate_limit_store_with_credentials_does_not_reach_a_message(clean, env):
+    env(CSC_RATE_LIMIT_STORAGE='redis://user:store-password@host')
+    with pytest.raises(SettingsError) as stop:
+        get_settings()
+    assert 'CSC_RATE_LIMIT_STORAGE' in str(stop.value)
+    assert 'store-password' not in str(stop.value)
+
+
+def test_only_hs256_is_a_signing_algorithm(clean, env):
+    env(JWT_ALGORITHM='HS512')
+    with pytest.raises(SettingsError, match='JWT_ALGORITHM must be HS256'):
+        get_settings()
+    env(JWT_ALGORITHM='HS256')
+    assert get_settings().jwt_algorithm == 'HS256'
 
 
 def test_a_bad_trusted_proxy_entry_names_the_variable(clean, env):

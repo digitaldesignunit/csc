@@ -165,6 +165,7 @@ async def run(
     client = AsyncMongoClient(
         get_db_connectionstring(),
         serverSelectionTimeoutMS=5000,
+        maxPoolSize=20,
     )
     stored = 0
     try:

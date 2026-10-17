@@ -11,12 +11,12 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
-from jose import jwt
+import jwt
 from starlette.requests import Request
 
 import limiter as lim
 
-SECRET = 'a-test-secret'
+SECRET = 'a-test-secret-of-at-least-32-bytes'
 
 
 def request(peer, *forwarded, headers=(), app=None):
@@ -27,7 +27,7 @@ def request(peer, *forwarded, headers=(), app=None):
              'path': '/', 'query_string': b'',
              'client': (peer, 4711) if peer else None,
              'app': app or SimpleNamespace(state=SimpleNamespace(
-                 jwt_secret=SECRET, jwt_algorithm='HS256'))}
+                 jwt_secret=SECRET))}
     return Request(scope)
 
 

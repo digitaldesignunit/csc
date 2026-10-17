@@ -21,7 +21,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 # LOCAL IMPORTS (pre-app) -----------------------------------------------------
-from limiter import limiter
+from limiter import shared_limiter, use_store
+from apps.catalog.body_limit import BodyLimitMiddleware
 from apps.catalog.client_header import (
     ClientHeaderEnforcementMiddleware,
     ClientHeaderLogMiddleware,
@@ -87,13 +88,16 @@ async def lifespan(app: FastAPI):
 
     # --- JWT config ----------------------------------------------------------
     app.state.jwt_secret = settings.jwt_secret.get_secret_value()
-    app.state.jwt_algorithm = settings.jwt_algorithm
     app.state.jwt_access_minutes = settings.jwt_access_token_expire_minutes
+
+    # --- Rate limit counters (decision 8.152) ----------------------------------
+    use_store(settings)
 
     # --- MongoDB -------------------------------------------------------------
     app.mongodb_client = AsyncMongoClient(
         get_db_connectionstring(),
         serverSelectionTimeoutMS=5000,
+        maxPoolSize=20,
     )
     await app.mongodb_client.aconnect()
     await app.mongodb_client.admin.command('ping')
@@ -135,10 +139,6 @@ async def lifespan(app: FastAPI):
     await app.mongodb_component_evidence.create_index(
         'payload.sampling.paired_rebound_id', sparse=True)
     await seed_materials(app.mongodb_materials)
-    # every dataset that exists is reviewed (8.139 c): the datasets of before
-    # the field have no flag; idempotent, a no-op once they have it
-    await app.mongodb_datasets.update_many(
-        {'reviewed': {'$exists': False}}, {'$set': {'reviewed': True}})
     await ensure_catalog_number_counter(app.mongodb)
 
     # --- Directories ---------------------------------------------------------
@@ -190,7 +190,7 @@ app = FastAPI(
     version=CSC_VERSION,
     lifespan=lifespan,
 )
-app.state.limiter = limiter
+app.state.limiter = shared_limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
@@ -227,6 +227,10 @@ for _error in (AutoReconnect, ServerSelectionTimeoutError, NetworkTimeout,
 # Innermost: refuses outdated / unidentified clients with 426 (decision 8.11);
 # inside CORS so a refusal still carries CORS headers
 app.add_middleware(ClientHeaderEnforcementMiddleware)
+
+# Request bodies are capped before a route reads them (decision 8.163); inside
+# CORS, so the 413 carries the CORS headers
+app.add_middleware(BodyLimitMiddleware)
 
 # CORS ------------------------------------------------------------------------
 app.add_middleware(

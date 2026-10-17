@@ -71,6 +71,7 @@ async def cleanup_unverified_users(dry_run=False):
     client = AsyncMongoClient(
         connection_string,
         serverSelectionTimeoutMS=5000,
+        maxPoolSize=20,
     )
 
     try:

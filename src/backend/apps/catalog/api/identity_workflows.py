@@ -15,7 +15,7 @@ from apps.catalog.api.access import (
     and_match, load_identity, require, viewer_of, visible_identity_match)
 from apps.catalog.read_models import catalog_row
 from .auth import get_current_active_user, get_optional_current_user
-from limiter import limiter, signed_in_or_ip
+from limiter import local_limiter, signed_in_or_ip
 from .public_access import viewer_headers
 from .catalog_common import get_identities_col, now_iso
 from .identity_filters import CatalogFilters, Circulation
@@ -151,7 +151,7 @@ async def get_vocabularies():
     '/identities/meta/datasets',
     summary='Datasets that hold identities (dropdowns)',
 )
-@limiter.limit('120/minute', key_func=signed_in_or_ip)
+@local_limiter.limit('120/minute', key_func=signed_in_or_ip)
 async def list_identity_datasets(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],

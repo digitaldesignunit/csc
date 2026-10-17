@@ -224,7 +224,7 @@ async def run(args: argparse.Namespace) -> int:
         log=lambda message: log(f'    {message}'))
     proxies_root = get_snapshot_proxies_directory()
     client = AsyncMongoClient(get_db_connectionstring(),
-                              serverSelectionTimeoutMS=5000)
+                              serverSelectionTimeoutMS=5000, maxPoolSize=20)
     visited = changed = failed = 0
     started = time.time()
     cache = ResultCache(args.cache_dir) if args.cache_dir else None

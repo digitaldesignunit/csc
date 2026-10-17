@@ -11,7 +11,7 @@ import smtplib
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from jose import jwt
+import jwt
 
 from apps.catalog.api.auth import (
     reset_token_sha256,
@@ -146,7 +146,7 @@ def _old_token(app, user_id: str, seconds_ago: int = 100) -> str:
     return jwt.encode(
         {'sub': user_id, 'role': 'user', 'iat': int(now.timestamp()),
          'exp': int((now + timedelta(hours=1)).timestamp())},
-        app.state.jwt_secret, algorithm=app.state.jwt_algorithm)
+        app.state.jwt_secret, algorithm='HS256')
 
 
 def test_a_token_issued_before_a_reset_or_a_change_is_refused(

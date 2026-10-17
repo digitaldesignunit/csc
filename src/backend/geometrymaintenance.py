@@ -68,6 +68,7 @@ async def initialize_geometry_maintenance() -> Tuple[List[str], List[str]]:
     mongodb_client = AsyncMongoClient(
         get_db_connectionstring(),
         serverSelectionTimeoutMS=5000,
+        maxPoolSize=20,
     )
     try:
         await mongodb_client.aconnect()

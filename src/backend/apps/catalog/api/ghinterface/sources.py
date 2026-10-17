@@ -24,7 +24,7 @@ from apps.catalog.api.auth import get_current_user, get_optional_current_user
 from apps.catalog.api.catalog_common import internal_error
 from apps.catalog.ghreference import build_reference, parse_source
 from apps.catalog.models import User
-from limiter import limiter, signed_in_or_ip
+from limiter import local_limiter, signed_in_or_ip
 from services.github_service import GitHubService
 from settings import get_settings
 from logging_setup import get_logger
@@ -124,7 +124,7 @@ def _compute_dir_etag(dir_path: str) -> str:
 # ROUTES ----------------------------------------------------------------------
 
 @router.get('/ghinterface/version')
-@limiter.limit(GH_PUBLIC_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(GH_PUBLIC_RATE, key_func=signed_in_or_ip)
 async def get_gh_interface_version(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
@@ -174,7 +174,7 @@ async def get_gh_interface_version(
 
 
 @router.get('/ghinterface/reference')
-@limiter.limit(GH_PUBLIC_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(GH_PUBLIC_RATE, key_func=signed_in_or_ip)
 async def get_component_reference(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
@@ -518,7 +518,7 @@ async def _release_xml(name: str) -> Response:
 
 
 @router.get('/ghinterface/xml/{name}', response_class=Response)
-@limiter.limit(GH_PUBLIC_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(GH_PUBLIC_RATE, key_func=signed_in_or_ip)
 async def get_xml(
     request: Request,
     name: str,

@@ -83,6 +83,7 @@ def backend_env(mongod, db_name, tmp_path_factory):
         'EVIDENCE_ATTACHMENTS_DIR': str(root / 'evidence'),
         'GH_XML_CACHE_DIR': str(root / 'ghxml'),
         'FASTAPI_CORS_ORIGINS': 'http://localhost:3000',
+        'CSC_RATE_LIMIT_STORAGE': 'memory://',
         'CLIENT_LOG_PATH': str(root / 'logs' / 'client_versions.log'),
     }
     from settings import get_settings
@@ -101,8 +102,9 @@ def backend_env(mongod, db_name, tmp_path_factory):
 @pytest.fixture(scope='session')
 def app(backend_env):
     import main_fastapi  # imported late: it validates the env on import
-    from limiter import limiter
-    limiter.enabled = False  # login tests would hit the 10/minute limit
+    from limiter import local_limiter, shared_limiter
+    for each in (local_limiter, shared_limiter):
+        each.enabled = False  # login tests would hit the 10/minute limit
     return main_fastapi.app
 
 

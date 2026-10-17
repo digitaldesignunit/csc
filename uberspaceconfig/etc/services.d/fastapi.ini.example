@@ -41,6 +41,12 @@ environment=
     # frontend reaches this backend at FASTAPI_URL=http://127.0.0.1:8000; add the
     # server's own address if it goes through the public API host.
     CSC_TRUSTED_PROXIES="127.0.0.0/8,::1",
+    # The rate limit counters live in the MongoDB of MONGODB_URI (collection
+    # rate_limit_counters, expired by a TTL index), so that both workers count the
+    # same requests. Set CSC_RATE_LIMIT_STORAGE only to point them elsewhere
+    # (a mongodb:// URI) or to keep them in the process (memory://).
+    # CSC_JSON_BODY_LIMIT_MB: largest request body of the routes that take no file
+    CSC_JSON_BODY_LIMIT_MB="16",
     CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de",
     CSC_MAX_DATASETS_PER_USER="3",
     GH_XML_CACHE_DIR="/home/ddu/csc/current/backend/static/ghxml",

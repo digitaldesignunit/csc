@@ -1,3 +1,5 @@
+import { uploadErrorText } from './uploadError'
+
 const MAX_PHOTO_SLOTS = 32
 export const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 
@@ -79,7 +81,7 @@ export async function uploadSnapshotPhoto(
   })
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    throw new Error(body || `Upload failed (${res.status})`)
+    throw new Error(uploadErrorText(res.status, body))
   }
   try {
     const data = (await res.json()) as { photo_count?: unknown }

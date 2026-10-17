@@ -10,7 +10,6 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
 import bcrypt
 from pymongo.errors import DuplicateKeyError
 
@@ -26,7 +25,9 @@ from services.email_service import (
     get_token_expiry,
     load_email_config
 )
-from limiter import limiter
+from limiter import local_limiter, shared_limiter
+import signin_limit
+from tokens import encode_token, verified_payload
 
 from logging_setup import get_logger
 
@@ -123,7 +124,6 @@ async def users_coll(request: Request):
 
 def create_access_token(
     secret: str,
-    algorithm: str,
     sub: str,
     role: str,
     minutes: int
@@ -136,7 +136,7 @@ def create_access_token(
         'iat': int(now.timestamp()),
         'exp': int(exp.timestamp())
     }
-    return jwt.encode(payload, secret, algorithm=algorithm)
+    return encode_token(secret, payload)
 
 
 # AUTHENTICATION DEPENDENCIES -------------------------------------------------
@@ -164,15 +164,9 @@ async def lookup_user_from_token(
     request: Request,
     token: str,
 ) -> Optional[UserInDB]:
-    try:
-        payload = jwt.decode(
-            token,
-            request.app.state.jwt_secret,
-            algorithms=[request.app.state.jwt_algorithm],
-            options={'verify_aud': False},
-        )
-    except JWTError as e:
-        log.info('JWT decode error: %s', e)
+    # checked once per request: the limiter key has read it already
+    payload = verified_payload(request, token)
+    if payload is None:
         return None
 
     # the account is the subject; the old username / email claims are gone
@@ -250,7 +244,7 @@ async def require_admin(
     response_model=Token,
     summary='Login (email or username) -> JWT'
 )
-@limiter.limit('10/minute')
+@shared_limiter.limit('10/minute')
 async def login_for_access_token(
     request: Request,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -259,6 +253,16 @@ async def login_for_access_token(
     # OAuth2 form uses `.username` as the identifier field
     # any case is accepted: emails and usernames are stored lowercase (8.28)
     identifier = form_data.username.strip().lower()
+    # failed sign-ins per account (8.162): the 429 comes before any password
+    # work, for an identifier no account has as for one that has
+    counter = signin_limit.counter_key(request.app.state.jwt_secret,
+                                       identifier)
+    locked = signin_limit.seconds_until_open(counter)
+    if locked is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=signin_limit.LOCKED_DETAIL,
+            headers={'Retry-After': str(locked)})
     user = await users.find_one({
         '$or': [{'email': identifier}, {'username': identifier}],
         'disabled': {'$ne': True},
@@ -268,6 +272,7 @@ async def login_for_access_token(
     stored = (user or {}).get('hashed_password') or _DUMMY_HASH
     password_ok = verify_password(form_data.password, stored)
     if not user or not password_ok or stored is _DUMMY_HASH:
+        signin_limit.record_failure(counter)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Incorrect username/email or password',
@@ -286,7 +291,6 @@ async def login_for_access_token(
 
     token = create_access_token(
         secret=request.app.state.jwt_secret,
-        algorithm=request.app.state.jwt_algorithm,
         sub=user['_id'],                      # subject = GUID _id
         role=user.get('role', 'user'),
         minutes=request.app.state.jwt_access_minutes,
@@ -299,7 +303,7 @@ async def login_for_access_token(
              response_model=UserPublic,
              status_code=201,
              summary='Register (open domains, or with an invitation code)')
-@limiter.limit('5/minute')
+@shared_limiter.limit('5/minute')
 async def register_user(
     request: Request,
     payload: RegisterPayload,
@@ -443,7 +447,8 @@ async def verify_email(
 @router.post('/change-password',
              status_code=200,
              summary='Change password for the authenticated user')
-@limiter.limit('5/minute')
+# a signed-in caller guessing the current password: not in the shared group
+@local_limiter.limit('5/minute')
 async def change_password(
     request: Request,
     payload: ChangePasswordPayload,
@@ -506,7 +511,7 @@ def _send_verification_mail(email: str, full_name: str, token: str) -> None:
 
 @router.post('/resend-verification',
              summary='Resend verification email (always the same answer)')
-@limiter.limit('3/minute')
+@shared_limiter.limit('3/minute')
 async def resend_verification(
     request: Request,
     payload: ResendVerificationRequest,
@@ -582,7 +587,7 @@ def _send_reset_mail(email: str, full_name: str, token: str) -> None:
 
 @router.post('/password-reset', status_code=202,
              summary='Ask for a password reset mail (always 202)')
-@limiter.limit('20/hour')
+@shared_limiter.limit('20/hour')
 async def request_password_reset(
     request: Request,
     payload: PasswordResetRequest,
@@ -619,7 +624,7 @@ async def request_password_reset(
 
 @router.post('/password-reset/confirm', status_code=200,
              summary='Choose a new password with the mailed token')
-@limiter.limit('10/hour')
+@shared_limiter.limit('10/hour')
 async def confirm_password_reset(
     request: Request,
     payload: PasswordResetConfirm,

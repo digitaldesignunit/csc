@@ -34,7 +34,7 @@ from apps.catalog.component_map import (
 from apps.catalog.models import ComponentCount, User
 from apps.catalog.read_models import catalog_row, identity_body, passport_body
 from apps.catalog.people import for_viewer
-from limiter import limiter, signed_in_or_ip
+from limiter import local_limiter, signed_in_or_ip
 from apps.catalog.api.access import (
     and_match,
     viewer_of,
@@ -140,7 +140,7 @@ async def _visible_map_payload(request: Request, user: Optional[User],
     summary='Count identities (current snapshot filters)',
     response_model=ComponentCount,
 )
-@limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
 async def count_identities_route(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
@@ -176,7 +176,7 @@ async def count_identities_route(
         '(cached UMAP/PCA by default; live compute optional)'
     ),
 )
-@limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
 async def get_identities_map(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
@@ -345,7 +345,7 @@ def _normalize_stats_facet_lists(items):
         '(identities joined to current snapshots)'
     ),
 )
-@limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
 async def get_identities_stats(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
@@ -418,7 +418,7 @@ async def get_identities_stats(
     '/identities',
     summary='List identities (join current snapshot)',
 )
-@limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
 async def list_identities_route(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],

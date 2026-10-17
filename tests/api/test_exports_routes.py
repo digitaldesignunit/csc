@@ -8,6 +8,7 @@ processors (pyld expands the JSON-LD, rdflib parses the Turtle).
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import re
@@ -576,7 +577,7 @@ def test_the_file_name_falls_back_to_the_identity_id():
 
 
 def test_the_export_routes_are_rate_limited(world):
-    from limiter import limiter
+    from limiter import local_limiter as limiter
     api = world['api']
     _public(world, BEAM)
     limiter.reset()
@@ -596,12 +597,14 @@ def test_the_export_routes_are_rate_limited(world):
 # WHO A LIMIT COUNTS FOR (P10 review, 8.117 e) --------------------------------
 @pytest.fixture
 def limits_on():
-    from limiter import limiter
-    limiter.reset()
-    limiter.enabled = True              # the fixtures switch it off
+    from limiter import local_limiter, shared_limiter
+    for each in (local_limiter, shared_limiter):
+        each.reset()
+        each.enabled = True             # the fixtures switch it off
     yield
-    limiter.enabled = False
-    limiter.reset()
+    for each in (local_limiter, shared_limiter):
+        each.enabled = False
+        each.reset()
 
 
 @pytest.fixture
@@ -663,10 +666,13 @@ def test_behind_the_trusted_proxy_each_visitor_has_a_bucket(world, limits_on,
 def test_the_login_limit_counts_per_client_address(world, limits_on,
                                                    web_server):
     web = web_server
+    names = itertools.count()
 
     def attempt(client_address):
+        # a new identifier each time: the limit of failed sign-ins per
+        # account (8.162) must not answer before the one per address does
         return web.post('/auth/token',
-                        data={'username': 'nobody', 'password': 'wrong'},
+                        data={'username': f'nobody-{next(names)}', 'password': 'wrong'},
                         headers={'X-Forwarded-For': client_address}
                         ).status_code
 
@@ -677,7 +683,7 @@ def test_the_login_limit_counts_per_client_address(world, limits_on,
     web_server._transport.client = ('198.51.100.7', 50002)
     direct = web_server
     spoof = [direct.post('/auth/token',
-                         data={'username': 'nobody', 'password': 'wrong'},
+                         data={'username': f'nobody-{next(names)}', 'password': 'wrong'},
                          headers={'X-Forwarded-For': f'198.51.100.{n}'}
                          ).status_code for n in range(11)]
     assert spoof[:10] == [401] * 10 and spoof[10] == 429

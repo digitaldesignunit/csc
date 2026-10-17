@@ -185,15 +185,15 @@ def test_a_mesh_above_the_cap_is_not_converted_to_obj(world, monkeypatch):
 
 
 def test_the_mesh_routes_are_rate_limited(world):
-    from limiter import limiter
+    from limiter import local_limiter
     _upload_mesh(world)
     url = f'/snapshots/{DRAFT}/meshes/0/reduced'
-    limiter.reset()
-    limiter.enabled = True              # the fixtures switch it off
+    local_limiter.reset()
+    local_limiter.enabled = True              # the fixtures switch it off
     try:
         codes = [world['api'].get(url, headers=world['admin']).status_code
                  for _ in range(snapshot_common.MESH_LIMIT_PER_MINUTE + 1)]
         assert set(codes[:-1]) == {200} and codes[-1] == 429
     finally:
-        limiter.enabled = False
-        limiter.reset()
+        local_limiter.enabled = False
+        local_limiter.reset()

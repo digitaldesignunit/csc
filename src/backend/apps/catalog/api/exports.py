@@ -52,7 +52,7 @@ from .identities import (
 )
 from .identity_filters import children_identity_match
 from .public_access import viewer_headers
-from limiter import limiter, signed_in_or_ip
+from limiter import local_limiter, signed_in_or_ip
 from .snapshot_media import _list_photo_indices, _resolve_photo_path
 
 router = APIRouter()
@@ -133,7 +133,7 @@ async def get_jsonld_context(request: Request):
     '/identities/{identity_id}/export/cero',
     summary='The component in CERO (Turtle or JSON-LD)',
 )
-@limiter.limit(CERO_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(CERO_RATE, key_func=signed_in_or_ip)
 async def export_cero(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
@@ -246,7 +246,7 @@ async def _change_info(request: Request, identity_id: str
     '/identities/{identity_id}/export/pdf',
     summary='The passport summary as a PDF (at most two pages)',
 )
-@limiter.limit(PDF_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(PDF_RATE, key_func=signed_in_or_ip)
 async def export_pdf(
     request: Request,
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],

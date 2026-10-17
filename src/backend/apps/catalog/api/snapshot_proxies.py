@@ -19,7 +19,7 @@ from apps.catalog.geometry_mesh_export import (
     trimesh_to_bytes,
 )
 from apps.catalog.proxies.primitives import proxy_mesh
-from limiter import limiter, signed_in_or_ip
+from limiter import local_limiter, signed_in_or_ip
 from .access import load_snapshot
 from .catalog_common import not_modified_response
 from logging_setup import get_logger
@@ -44,7 +44,7 @@ def _proxy_mesh_bytes(proxy: dict, fmt: str) -> bytes:
     '/snapshots/{snapshot_id}/proxies/{index}/mesh',
     summary='Export a proxy as a mesh (PLY or OBJ), in stored coordinates',
 )
-@limiter.limit(MESH_RATE, key_func=signed_in_or_ip)
+@local_limiter.limit(MESH_RATE, key_func=signed_in_or_ip)
 async def get_snapshot_proxy_mesh(
     request: Request,
     current_user: OptionalUser,

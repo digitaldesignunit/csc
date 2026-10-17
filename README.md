@@ -406,6 +406,18 @@ browser wrote itself stands on the left of that chain and is never believed.
 - `conf.py` hands the same list to gunicorn as `forwarded_allow_ips`, so the server and
   the limits agree about who may speak for a client; a bad entry stops the start and
   `*` is refused. `bind = ':8000'` stays (the Uberspace web backend connects there).
+- The counters live in MongoDB (`CSC_RATE_LIMIT_STORAGE`; unset, the database of
+  `MONGODB_URI`, in the collection `rate_limit_counters`, which a TTL index
+  empties), so that every gunicorn worker counts the same requests. If the
+  database does not answer, requests pass uncounted and the log says so once;
+  `memory://` keeps the counters in the process (tests, local runs). Failed
+  sign-ins are counted per account as well: ten in fifteen minutes, then 429
+  with `Retry-After`, until the window is over.
+- Request bodies are capped before a route reads them: the mesh and point cloud
+  uploads at `GEOMETRY_UPLOAD_LIMIT_MB`, evidence attachments at
+  `EVIDENCE_UPLOAD_LIMIT_MB`, photos at `SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB` (each plus
+  1 MB for the multipart framing), every other route at `CSC_JSON_BODY_LIMIT_MB`
+  (default 16). The result route of the remote runner has its own limits.
 - Set `FASTAPI_URL=http://127.0.0.1:8000` on the server: the backend then sees
   the web server on loopback. If the web server reaches the backend through the
   public API host instead, the connection comes from the web proxy and the web

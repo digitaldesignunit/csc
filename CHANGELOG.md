@@ -70,8 +70,31 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
   point clouds in `point_cloud_files` (set by the upload, removed by the delete, not
   writable by clients), so an import resumes without probing the file.
 
+### Security
+
+- **Tokens** are read with PyJWT instead of python-jose: `HS256` only, `exp` and `sub`
+  required, one verification per request. Tokens issued before the update stay valid.
+- **Shared rate limits** (decision 8.152): sign-in, registration, verification mails, password
+  reset and invitations count in the database, across all workers and restarts. The read
+  limits (lists, map, downloads, exports) count per worker; they only shed load.
+- **Failed sign-ins** (decision 8.162): at most 10 in 15 minutes per account, then 429 with
+  `Retry-After`; an unknown account is answered the same way, and the counter holds no user
+  name or address.
+- **Request size** (decision 8.163): a body over its limit is refused with 413 before it is
+  read (uploads by their upload limit, everything else 16 MB, `CSC_JSON_BODY_LIMIT_MB`).
+- **Usernames** (decision 8.161): 3 to 32 characters, lowercase letters, digits, `.`, `_`, `-`,
+  starting with a letter or digit. Every existing name already fits.
+- Database connections are capped at 20 per client; a one-off dataset update no longer
+  runs at every start.
+
 ### Server notes
 
+- `JWT_ALGORITHM`, if set, must be `HS256`; any other value stops the start.
+- The database user needs `createIndex`, `insert`, `update` and `remove` on the new collection
+  `rate_limit_counters` (its TTL index is created on first use). `CSC_RATE_LIMIT_STORAGE`
+  (default: the MongoDB URI) selects the store of the shared limits.
+- The read limits count per worker: the effective limit is the stated one times `CSC_WORKERS`.
+- The deploy installs PyJWT and removes python-jose.
 - Before the deploy, check the backend environment: `FRONTEND_URL`, `GITHUB_REPO_URL`
   and `CSC_PUBLIC_API_URL` must be http(s) URLs, the upload and photo limit variables
   positive, and `SMTP_DEV_MODE` off. The backend refuses to start otherwise and names

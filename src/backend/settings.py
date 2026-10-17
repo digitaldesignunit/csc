@@ -45,6 +45,7 @@ DEFAULT_TRUSTED_PROXIES = '127.0.0.0/8,::1'
 DEFAULT_MAX_DATASETS = 3
 EVIDENCE_UPLOAD_MAX_MB = 25
 LOCAL_HOSTS = ('localhost', '127.0.0.1', '::1')
+RATE_LIMIT_SCHEMES = ('memory://', 'mongodb://', 'mongodb+srv://')
 
 # what the API cannot start without (the list that main_fastapi.py carried)
 REQUIRED_FOR_API = (
@@ -117,7 +118,8 @@ class Settings(BaseSettings):
     jwt_secret: Optional[SecretStr] = Field(
         None, description=f'key that signs the JWTs, at least '
                           f'{MIN_JWT_SECRET_BYTES} bytes')
-    jwt_algorithm: str = Field('HS256', description='JWT signing algorithm')
+    jwt_algorithm: str = Field(
+        'HS256', description='JWT signing algorithm (only HS256 is accepted)')
     jwt_access_token_expire_minutes: int = Field(
         30, ge=1, description='lifetime of an access token in minutes')
     csc_open_registration_domains: str = Field(
@@ -172,6 +174,10 @@ class Settings(BaseSettings):
     csc_trusted_proxies: str = Field(
         DEFAULT_TRUSTED_PROXIES, description='peers whose X-Forwarded-For '
         'is believed (addresses and networks, comma separated)')
+    csc_rate_limit_storage: Optional[SecretStr] = Field(
+        None, description='where the rate limit counters live: memory:// or a '
+        'MongoDB URI (holds credentials); the MongoDB URI of MONGODB_URI when '
+        'not set (decision 8.152)')
 
     # FILES ------------------------------------------------------------------
     snapshot_preview_dir: Optional[str] = Field(
@@ -197,6 +203,9 @@ class Settings(BaseSettings):
         description='largest evidence attachment in MB (may only lower 25)')
     snapshot_photo_upload_limit_mb: int = Field(
         10, ge=1, description='largest photo upload in MB')
+    csc_json_body_limit_mb: int = Field(
+        16, ge=1, description='largest request body of every route that takes '
+        'no file, in MB (decision 8.163)')
     snapshot_photo_max_output_mb: int = Field(
         2, ge=1, description='largest stored photo in MB')
     snapshot_photo_max_long_edge_px: int = Field(
@@ -225,6 +234,24 @@ class Settings(BaseSettings):
             problem = jwt_secret_problem(value.get_secret_value())
             if problem:
                 raise ValueError(problem)
+        return value
+
+    @field_validator('jwt_algorithm', mode='after')
+    @classmethod
+    def _jwt_algorithm(cls, value: str) -> str:
+        if value != 'HS256':
+            raise ValueError(
+                f'JWT_ALGORITHM must be HS256, got {value!r}')
+        return value
+
+    @field_validator('csc_rate_limit_storage', mode='after')
+    @classmethod
+    def _rate_limit_storage(cls, value: Optional[SecretStr]
+                            ) -> Optional[SecretStr]:
+        if value is not None and not value.get_secret_value().startswith(
+                RATE_LIMIT_SCHEMES):
+            raise ValueError('CSC_RATE_LIMIT_STORAGE must be memory:// or a '
+                             'mongodb:// URI')
         return value
 
     @field_validator('frontend_url', 'github_repo_url', mode='after')
@@ -325,6 +352,14 @@ class Settings(BaseSettings):
         value = getattr(self, name.lower())
         return value.get_secret_value() if isinstance(value, SecretStr) \
             else value
+
+    @property
+    def rate_limit_uri(self) -> str:
+        """The store of the rate limit counters (decision 8.152): the
+        variable, else the database of the API."""
+        if self.csc_rate_limit_storage is not None:
+            return self.csc_rate_limit_storage.get_secret_value()
+        return self.need('MONGODB_URI')
 
     def trusted_networks(self) -> Tuple[Any, ...]:
         return parse_trusted_proxies(self.csc_trusted_proxies)

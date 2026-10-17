@@ -227,18 +227,18 @@ def test_the_code_is_not_a_short_guess(world):
 
 
 def test_accepting_is_limited_per_user(world):
-    from limiter import limiter
+    from limiter import shared_limiter
     carol, _ = _headers_of(world, 'carol')
-    limiter.reset()
-    limiter.enabled = True              # the fixtures switch it off
+    shared_limiter.reset()
+    shared_limiter.enabled = True              # the fixtures switch it off
     try:
         codes = [world['api'].post(
             '/invitations/accept', json={'code': 'ABCDEFGHABCDEFGH'},
             headers=carol).status_code for _ in range(31)]
         assert set(codes[:30]) == {400} and codes[30] == 429
     finally:
-        limiter.enabled = False
-        limiter.reset()
+        shared_limiter.enabled = False
+        shared_limiter.reset()
 
 
 # RESEND NEEDS THE CURRENT PERMISSION -----------------------------------------
