@@ -86,6 +86,10 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
   starting with a letter or digit. Every existing name already fits.
 - Database connections are capped at 20 per client; a one-off dataset update no longer
   runs at every start.
+- **Content-Security-Policy** (decision 8.164): every page carries a policy built per
+  request with a fresh nonce. Scripts run only by nonce, styles inline, everything else
+  from the app's own origin; the exceptions are the Google map frame and images from the
+  static host. The policy is enforced at once.
 
 ### Server notes
 
@@ -100,6 +104,13 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
   positive, and `SMTP_DEV_MODE` off. The backend refuses to start otherwise and names
   the variable.
 - The deploy installs one new package, `pydantic-settings`.
+- `CSC_CSP_REPORT_ONLY=1` in the frontend `.env` is the emergency switch for the
+  Content-Security-Policy: the same policy is then sent as report-only (violations are
+  logged in the browser console, nothing is blocked). Restart the frontend after setting
+  it, and remove it once the cause is fixed.
+- `NEXT_PUBLIC_STATIC_BASE_URL` is fixed when the frontend is built (in CI): set it there,
+  or set `NEXT_STATIC_BASE_URL` in the frontend environment, which is read at run time.
+  Otherwise the policy blocks the images from the static host (the sidebar logo).
 
 ## [0.6.1.1] - 2026-10-13
 

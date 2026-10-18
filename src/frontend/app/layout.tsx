@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import './globals.css'
 import AppSidebar from '@/components/layout/AppSidebar'
 import TopBar from '@/components/layout/TopBar'
@@ -32,11 +32,15 @@ export default async function RootLayout({
   // the sidebar choice is read on the server, so the first paint has the
   // right width (decision 8.29)
   const sidebarChoice = parseSidebarChoice((await cookies()).get(SIDEBAR_COOKIE)?.value)
+  // the nonce of this request's Content-Security-Policy (proxy.ts, 8.164): the
+  // inline script of next-themes carries it
+  const nonce = (await headers()).get('x-nonce') ?? undefined
 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} min-h-screen`}>
         <ThemeProvider
+          nonce={nonce}
           attribute="class"         // adds "light"/"dark" on <html>
           defaultTheme="system"     // server renders neutral; client sets "system"
           enableSystem={true}       // enable system theme detection

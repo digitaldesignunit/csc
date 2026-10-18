@@ -10,6 +10,9 @@
 # Optional: CSC_PROXY_HOPS = the proxies between a visitor and this server,
 # default 1 (the Uberspace web proxy); the visitor's address goes on to the
 # backend's rate limits (README, "Client addresses and rate limits").
+# CSC_CSP_REPORT_ONLY=1 = emergency switch: the Content-Security-Policy is sent
+# as Report-Only (violations are logged in the browser, nothing is blocked);
+# restart the frontend after setting it.
 
 [program:frontend]
 directory=%(ENV_HOME)s/csc/current/frontend

@@ -1,7 +1,8 @@
 /**
  * Response headers of the web app (decision 8.144 g), sent for every path by
- * `headers()` in next.config.ts. A Content-Security-Policy with nonces follows
- * in 0.6.2; until then only the framing part is set.
+ * `headers()` in next.config.ts. The Content-Security-Policy is not here: it
+ * carries a nonce per request and is built in `proxy.ts` (lib/csp.ts, decision
+ * 8.164), `frame-ancestors 'none'` among its directives.
  */
 
 /** The canonical host: HSTS is sent there only, never on the legacy host
@@ -13,7 +14,6 @@ export const HSTS = 'max-age=31536000'
 
 /** Sent on every response. */
 export const SECURITY_HEADERS: ReadonlyArray<{ key: string; value: string }> = [
-  { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },

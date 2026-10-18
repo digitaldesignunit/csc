@@ -18,11 +18,16 @@ test('every path gets the framing, referrer and sniffing headers', () => {
   assert.equal(all.source, '/:path*')
   assert.equal(all.has, undefined)
   assert.deepEqual(flat(all), {
-    'Content-Security-Policy': "frame-ancestors 'none'",
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'X-Content-Type-Options': 'nosniff',
   })
+})
+
+test('no static CSP: the one policy comes from the proxy with a nonce', () => {
+  for (const rule of headerRules()) {
+    assert.ok(!Object.keys(flat(rule)).some((key) => /content-security-policy/i.test(key)))
+  }
 })
 
 test('HSTS is sent on the canonical host only, without includeSubDomains', () => {
