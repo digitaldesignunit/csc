@@ -70,6 +70,9 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
   component is no longer repaired automatically: it shows a remark that its inputs and
   outputs may have changed and that it needs a recompute.
 - `FetchReducedGeometry` states the inline limit correctly (at most 1000 points).
+- **Maintenance page**: `csc_maintenance.sh on` creates the domain's own document root
+  (`/var/www/virtual/$USER/<domain>`) when it is missing and `off` removes it again; it no
+  longer stops on a server whose only document root is `~/html`, and never writes there.
 
 ### Added
 

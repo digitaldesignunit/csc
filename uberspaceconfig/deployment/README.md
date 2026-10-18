@@ -222,11 +222,29 @@ template and the `.htaccess`):
 `/var/www/virtual/$USER/<domain>/`, and runs
 `uberspace web backend set <domain>/ --apache`; `off` runs
 `uberspace web backend set <domain>/ --http --port <port>` and removes the two
-files. Everything else under `~/html`, the static host and the API domain stay
-as they are, so the import and the geometry runner keep working. Every path
-answers `503` with `Retry-After`, `Cache-Control: no-store` and `noindex`.
-The domain and the port are settings (`CSC_MAINT_DOMAIN`, default
-`2ndchances.build`; `CSC_MAINT_PORT`, default `3000`; `CSC_MAINT_DOCROOT`).
+files. Every path answers `503` with `Retry-After`, `Cache-Control: no-store`
+and `noindex`.
+
+**The document root.** On Uberspace 7 a folder `/var/www/virtual/$USER/<domain>`
+is the document root of that domain alone (manual, "DocumentRoot", section
+"Additional DocumentRoots": "You can create folders (and symlinks) in the form
+of `/var/www/virtual/<username>/<domain>`"); `~/html` (that is
+`/var/www/virtual/$USER/html`) stays the root of every other domain and is
+never written by the script: nothing in it, the static host and the API domain
+included, is touched, so the import and the geometry runner keep working. A
+production account usually has no such folder yet, so `on` creates it (only
+that folder, never the one above) and records that in
+`~/csc/shared/.maintenance_docroot_created`; `off` removes the two files and
+then the folder, but only if the script created it and nothing else is in it.
+A folder that was there before stays, with its other files, and `on` refuses to
+overwrite an `index.html` or `.htaccess` it did not write. `status` names the
+document root and says whether the script created it; `--dry-run` prints the
+`mkdir` and `rmdir` as well. Do not delete `~/html` (the manual warns that the
+additional document roots depend on it).
+
+The domain, the port and the folder are settings (`CSC_MAINT_DOMAIN`, default
+`2ndchances.build`; `CSC_MAINT_PORT`, default `3000`; `CSC_MAINT_DOCROOT`, which
+is treated the same way).
 
 The text of the page is `~/csc/shared/maintenance.txt` when it exists, else a
 default. Plain text: every line is a paragraph (HTML-escaped); a line
@@ -287,8 +305,8 @@ it is; remove it yourself when the work is done. Check it with
 `curl -s http://127.0.0.1:8000/version`.
 
 **To verify once on the server, before the first use:** that Apache serves
-the per-domain folder `/var/www/virtual/$USER/<domain>/` for a domain whose
-backend is `--apache`. Try it on a test subdomain
-(`uberspace web domain add test.<domain>`, `csc_maintenance.sh on` with
-`CSC_MAINT_DOMAIN=test.<domain>`, open it, then `off`); this has not been
-checked on the production account yet.
+the per-domain folder for a domain whose backend is `--apache` (the manual says
+the folder form is allowed, it does not show this exact use). Try it on a test
+subdomain (`uberspace web domain add test.<domain>`, `csc_maintenance.sh on`
+with `CSC_MAINT_DOMAIN=test.<domain>`, open it, then `off`: the folder it made
+is gone again); this has not been checked on the production account yet.

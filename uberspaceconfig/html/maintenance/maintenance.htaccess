@@ -11,6 +11,9 @@ ErrorDocument 503 /index.html
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  # an additional DocumentRoot of Uberspace 7 needs it for RewriteRules (manual,
+  # "DocumentRoot", section "Additional DocumentRoots")
+  RewriteBase /
   RewriteCond %{REQUEST_URI} !=/index.html
   RewriteRule ^ - [R=503,L]
 </IfModule>
