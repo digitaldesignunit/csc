@@ -14,7 +14,6 @@ import shutil  # NOQA
 import stat  # NOQA
 import sys  # NOQA
 import uuid  # NOQA
-from pathlib import Path  # NOQA
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 import requests  # NOQA
@@ -249,6 +248,180 @@ def local_library_manifest(root, folder_name='grasshopper_lib'):
              'files': files}, data.get)
 
 
+# THE USER OBJECTS (decision 8.155) ---------------------------------------------
+# The server lists name, size and sha256 of every .ghuser of the release. A file
+# whose installed copy has that sha256 is skipped; the others are downloaded,
+# checked (size, sha256) and only then written; a failed file keeps the old one
+# and does not stop the run.
+USEROBJECT_NAME_RE = re.compile(r'^[A-Za-z0-9_][A-Za-z0-9_.-]*$')
+
+STATE_INCOMPLETE = 'Update incomplete, run again'
+
+SOURCE_REMARK = (
+    'Source updated to v{version}. Inputs and outputs may have changed: open '
+    'the script editor and click Apply (or paste the source again) to update '
+    'them, then recompute.')
+
+
+class UserObjectError(Exception):
+    """The user object manifest cannot be used."""
+
+
+def check_userobject_manifest(manifest):
+    """The manifest as the updater takes it: per file a plain name and a
+    sha256; raises UserObjectError."""
+    if not isinstance(manifest, dict) or not manifest.get('files'):
+        raise UserObjectError('the UserObject manifest lists no files')
+    names = set()
+    for entry in manifest['files']:
+        name = str(entry.get('name', ''))
+        if not USEROBJECT_NAME_RE.match(name) or name in names:
+            raise UserObjectError('not a UserObject name: %r' % name)
+        if not re.match(r'^[0-9a-f]{64}$', str(entry.get('sha256', ''))):
+            raise UserObjectError('no sha256 for %s' % name)
+        names.add(name)
+    return manifest
+
+
+def file_sha256(path):
+    """The sha256 of a file, None when it cannot be read."""
+    try:
+        digest = hashlib.sha256()
+        with open(path, 'rb') as handle:
+            for block in iter(lambda: handle.read(65536), b''):
+                digest.update(block)
+        return digest.hexdigest()
+    except OSError:
+        return None
+
+
+def plan_userobjects(manifest, installed_paths, sha_of=file_sha256):
+    """``(unchanged, to_fetch)``: the names whose installed file has the sha256
+    of the manifest, and the manifest entries to download (new or changed).
+    ``installed_paths`` is ``{name: path of the installed file}``."""
+    unchanged, to_fetch = [], []
+    for entry in manifest['files']:
+        path = installed_paths.get(entry['name'])
+        if path and sha_of(path) == entry['sha256']:
+            unchanged.append(entry['name'])
+        else:
+            to_fetch.append(entry)
+    return unchanged, to_fetch
+
+
+def userobject_problem(entry, data):
+    """Why downloaded bytes may not be written, or None: nothing came, the
+    size is not the manifest's, the sha256 is not."""
+    if data is None:
+        return 'download failed'
+    if 'size' in entry and entry['size'] is not None \
+            and len(data) != entry['size']:
+        return 'size mismatch'
+    if hashlib.sha256(data).hexdigest() != entry['sha256']:
+        return 'checksum mismatch'
+    return None
+
+
+def write_userobject(path, data):
+    """Write a file in one step: a temporary file beside it, then a rename,
+    so a failure never leaves a half-written .ghuser."""
+    folder = os.path.dirname(path)
+    os.makedirs(folder, exist_ok=True)
+    temporary = os.path.join(folder, '.%s.%s.tmp' % (
+        os.path.basename(path), uuid.uuid4().hex[:8]))
+    try:
+        with open(temporary, 'wb') as handle:
+            handle.write(data)
+        os.replace(temporary, path)
+    except Exception:
+        try:
+            os.remove(temporary)
+        except OSError:
+            pass
+        raise
+
+
+def install_userobjects(entries, path_of, read_file, write=write_userobject):
+    """Install the manifest ``entries`` (new and changed files).
+
+    ``path_of(name)`` is where the file goes, ``read_file(name)`` returns its
+    bytes (None or an exception when the download failed). Every file is
+    checked before it is written; a failure (download, size, sha256, write)
+    leaves the old file and goes on with the next. Returns
+    ``(installed names, [(name, reason)] of the failed)``."""
+    installed, failed = [], []
+    for entry in entries:
+        name = entry['name']
+        try:
+            data = read_file(name)
+            problem = userobject_problem(entry, data)
+            if problem is None:
+                write(path_of(name), data)
+        except Exception as error:
+            problem = 'error: %s' % error
+        if problem is None:
+            installed.append(name)
+        else:
+            failed.append((name, problem))
+    return installed, failed
+
+
+def userobject_counts_text(installed, unchanged, failed):
+    return 'UserObjects: %d installed, %d unchanged, %d failed.' % (
+        installed, unchanged, failed)
+
+
+def failed_userobjects_text(failed):
+    """The error that names the failed files."""
+    return 'UserObjects that failed: %s. The old files are kept.' % ', '.join(
+        '%s (%s)' % item for item in failed)
+
+
+def update_state(failed_files, library_failed, restart):
+    """The one state under the component after an install run."""
+    if failed_files or library_failed:
+        return STATE_INCOMPLETE
+    return 'Restart Rhino' if restart else 'Updated'
+
+
+def version_text(version):
+    """The text of a parsed source version: (251009, 0, 0) -> '251009',
+    (251009, 1, 0) -> '251009.1', (251009, 0, 1) -> '251009a'."""
+    if not version:
+        return '?'
+    text = str(version[0])
+    if len(version) > 1 and version[1]:
+        text += '.%d' % version[1]
+    if len(version) > 2 and version[2]:
+        text += chr(ord('a') + version[2] - 1)
+    return text
+
+
+def source_remark(version):
+    """The remark under a component whose source was replaced."""
+    return SOURCE_REMARK.format(version=version_text(version))
+
+
+def replaced_summary(names):
+    """The end-of-run line that lists the components with a new source."""
+    return 'Replaced the source of %d components: %s. Each needs a recompute.' % (
+        len(names), ', '.join(names))
+
+
+def local_userobject_manifest(root, folder_name='grasshopper_userobjects'):
+    """The manifest of the user objects in a local checkout."""
+    folder = os.path.join(root, folder_name)
+    files = []
+    for name in sorted(os.listdir(folder)):
+        if not name.lower().endswith('.ghuser'):
+            continue
+        with open(os.path.join(folder, name), 'rb') as handle:
+            data = handle.read()
+        files.append({'name': name[:-len('.ghuser')], 'size': len(data),
+                      'sha256': hashlib.sha256(data).hexdigest()})
+    return {'ref': 'local', 'version': 'local', 'files': files}
+
+
 # The two folders of the repository the updater reads from a local copy
 # (decision 8.93: the bridge is tested against a local checkout).
 SRC_DIR_NAME = 'grasshopper_userobjects_src'
@@ -259,7 +432,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261018
     """
 
     def __init__(self):
@@ -328,25 +501,6 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         return auth_core
 
     # THE LIBRARY (8.111) ---------------------------------------------------
-    def expire_replaced(self, objects):
-        """Solve the components whose code was replaced. The swap alone does
-        not run them, and a component with declared outputs sets them up in its
-        first solve (decision 8.112): schedule an expire, which runs between
-        solutions."""
-        document = self.Component.OnPingDocument()
-        if not objects or document is None:
-            return
-
-        def callback(_document):
-            for obj in objects:
-                try:
-                    obj.ExpireSolution(False)
-                except Exception as error:
-                    print(f'Could not expire {obj}: {error}')
-
-        document.ScheduleSolution(
-            1, Grasshopper.Kernel.GH_Document.GH_ScheduleDelegate(callback))
-
     def get_api_library_manifest(self, auth_core):
         response = auth_core.authorized_get(
             '/ghinterface/library_manifest', params=self._channel_params(),
@@ -515,9 +669,11 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         return os.path.expandvars(path)
 
     def replace_scriptcomp_source(
-            self, old_script_comp_values, new_source):
+            self, old_script_comp_values, new_source, version=None):
         """
-        Replaces source code of gh scriptable components.
+        Replaces source code of gh scriptable components. Only the source is
+        set and a remark says what is left to do: the inputs and outputs
+        follow when the user applies the script (decision 8.155).
         """
         # extract data
         script_type, nickname, name, obj, source = old_script_comp_values
@@ -525,15 +681,10 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         if (script_type == "PY3" or
                 script_type == 'IPY2' or
                 script_type == 'CS9'):
-            # set the source code
+            # set the source code, nothing else
             obj.SetSource(new_source)
-            # infer component param inputs from RunScript signature
-            obj.SetParametersFromScript()
-            # call parameter maintenance helper
-            obj.VariableParameterMaintenance()
-            rml = obj.RuntimeMessageLevel.Warning
-            msg = 'My source just got replaced with a new version!'
-            obj.AddRuntimeMessage(rml, msg)
+            obj.AddRuntimeMessage(obj.RuntimeMessageLevel.Remark,
+                                  source_remark(version))
         elif script_type == 'GHPY':
             return False
         elif script_type == 'CS':
@@ -721,11 +872,6 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
         self._addError(msg)
         return None
 
-    def local_userobject_names(self):
-        folder = os.path.join(self.local_root, UO_DIR_NAME)
-        return sorted(os.path.splitext(n)[0] for n in os.listdir(folder)
-                      if n.lower().endswith('.ghuser'))
-
     def local_userobject_bytes(self, uo_name):
         path = os.path.join(self.local_root, UO_DIR_NAME, uo_name + '.ghuser')
         if not os.path.isfile(path):
@@ -789,23 +935,31 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
             return None
         return api_src_versions
 
-    def get_api_userobject_names(self, auth_core):
-        """Get userobject names from API (or the local checkout)."""
+    def get_api_userobject_manifest(self, auth_core):
+        """Get the userobject manifest from API (or the local checkout):
+        name, size and sha256 of every .ghuser of the release (8.155)."""
         if self.local_root:
-            return self.local_userobject_names()
-        api_uo_names = []
+            return local_userobject_manifest(self.local_root)
+        manifest = None
         response = auth_core.authorized_get(
-            '/ghinterface/userobject_names',
+            '/ghinterface/userobject_manifest',
             params=self._channel_params(),
-            timeout=60
+            timeout=120
         )
         if response.status_code == 200:
-            api_uo_names = list(response.json())
+            manifest = response.json()
+            try:
+                check_userobject_manifest(manifest)
+            except UserObjectError as error:
+                self._addError(str(error))
+                return None
         elif response.status_code == 404:
             msg = (
                 f'Update channel "{UPDATE_CHANNEL or "server release"}" was '
-                'not found on GitHub. A branch or tag name must match '
-                'exactly; the server release exists once it is published.'
+                'not found on GitHub, or the server is older than 0.6.2.0 '
+                'and has no UserObject manifest. A branch or tag name must '
+                'match exactly; the server release exists once it is '
+                'published.'
             )
             self._addError(msg)
             return None
@@ -826,7 +980,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                    f'{response.status_code}')
             self._addError(msg)
             return None
-        return api_uo_names
+        return manifest
 
     def get_api_source_file_text(self, auth_core, full_name):
         """Get source file from API (or the local checkout)."""
@@ -1061,32 +1215,32 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addRemark(msg)
                 Status.Add(msg)
 
-                # check for userobjects on server
-                api_uo_names = self.get_api_userobject_names(auth_core)
-                if api_uo_names is None:
-                    msg = 'Failed to get userobject names from server.'
+                # check for userobjects on server (manifest: name, size, sha256)
+                uo_manifest = self.get_api_userobject_manifest(auth_core)
+                if uo_manifest is None:
+                    msg = 'Failed to get the UserObject manifest from server.'
                     self._addError(msg)
                     Status.Add(msg)
                     return Status
+                api_uo_names = [f['name'] for f in uo_manifest['files']]
                 msg = f'Found {len(api_uo_names)} UserObjects on server.'
                 self._addRemark(msg)
                 Status.Add(msg)
 
-                # identify missing userobjects on disk
+                # the installed files that are the ones of the server are
+                # skipped; the new and the changed ones are installed
                 set_installed_uo_names = set(installed_uo_names)
-                missing_uo_names = [
-                    uo for uo in api_uo_names
-                    if uo not in set_installed_uo_names
-                ]
+                unchanged_uo_names, uo_to_fetch = plan_userobjects(
+                    uo_manifest, installed_uo_paths)
                 stale_uo_names = [
                     uo for uo in set_installed_uo_names
                     if uo not in api_uo_names
                 ]
-                if missing_uo_names:
+                if uo_to_fetch:
                     msg = (
-                        f'Found {len(missing_uo_names)} UserObjects that '
-                        'are not installed! Run InstallUpdates to install'
-                        'them.'
+                        f'Found {len(uo_to_fetch)} UserObjects that are new '
+                        f'or changed ({len(unchanged_uo_names)} unchanged). '
+                        'Run InstallUpdates to install them.'
                     )
                     self._addRemark(msg)
                     Status.Add(msg)
@@ -1100,7 +1254,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     Status.Add(msg)
                 library = self.check_library(auth_core)
                 Status.Add(library['text'])
-                if (scripts_to_update or missing_uo_names or stale_uo_names
+                if (scripts_to_update or uo_to_fetch or stale_uo_names
                         or library['install']):
                     self._state('Updates available')
                 else:
@@ -1114,6 +1268,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
 
                 # loop over scripts that need updates
                 replaced = []
+                replaced_names = []
                 if len(scripts_to_update) > 0:
                     for iguid, values in scripts_to_update:
                         (script_type,
@@ -1136,7 +1291,8 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                             return Status
                         res = self.replace_scriptcomp_source(
                             values,
-                            new_source
+                            new_source,
+                            api_src_versions.get(full_name)
                         )
                         if not res:
                             msg = (
@@ -1148,16 +1304,16 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                             Status.Add(msg)
                             return Status
                         replaced.append(obj)
+                        replaced_names.append(nickname)
                         msg = (
                             f'Replaced source for {nickname} with new version!'
                         )
                         self._addRemark(msg)
                         Status.Add(msg)
-                    self.expire_replaced(replaced)
+                    msg = replaced_summary(replaced_names)
+                    self._addRemark(msg)
+                    Status.Add(msg)
 
-                # currently, we need to install/replace all userobjects
-                # since we can't check userobjects file versions
-                # TODO: add userobject file version checking
                 # first, we delete all stale user objects, using the actual
                 # path each userobject was discovered at (they may live in
                 # different subfolders due to the recursive glob)
@@ -1184,39 +1340,39 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
                     )
                     self._addRemark(msg)
                     Status.Add(msg)
-                missing_uo_names = api_uo_names
-                # loop over missing userobjects and save them
-                written_uo_files = []
-                for uo_name in missing_uo_names:
-                    # get new userobject bytes from api server
-                    new_uo_bytes = self.get_api_userobject_bytes(
-                        auth_core,
-                        uo_name
-                    )
-                    if new_uo_bytes is None:
-                        msg = (
-                            f'Failed to get userobject {uo_name} from server.'
-                        )
-                        self._addError(msg)
-                        Status.Add(msg)
-                        return Status
-                    os.makedirs(uo_install_dir, exist_ok=True)
-                    out_file = Path(
-                        os.path.join(uo_install_dir, uo_name + '.ghuser')
-                    )
-                    with open(out_file, 'wb') as f:
-                        f.write(new_uo_bytes)
-                    written_uo_files.append(str(out_file.resolve()))
-                msg = f'Installed {len(written_uo_files)} UserObject files!'
+                # download the new and changed userobjects, each checked
+                # (size, sha256) before it is written; a failed file keeps
+                # the old one and does not stop the run
+                installed_uos, failed_uos = install_userobjects(
+                    uo_to_fetch,
+                    lambda uo_name: installed_uo_paths.get(uo_name) or
+                    os.path.join(uo_install_dir, uo_name + '.ghuser'),
+                    lambda uo_name: self.get_api_userobject_bytes(
+                        auth_core, uo_name)
+                )
+                msg = userobject_counts_text(
+                    len(installed_uos), len(unchanged_uo_names),
+                    len(failed_uos))
                 self._addRemark(msg)
                 Status.Add(msg)
+                if failed_uos:
+                    msg = failed_userobjects_text(failed_uos)
+                    self._addError(msg)
+                    Status.Add(msg)
                 restart = False
+                library_failed = False
                 if library['install']:
                     restart = self.install_library_now(library, Status)
-                msg = 'All updates installed successfully!'
-                self._addRemark(msg)
+                    library_failed = not restart
+                state = update_state(failed_uos, library_failed, restart)
+                if state == STATE_INCOMPLETE:
+                    msg = 'Update incomplete: run it again.'
+                    self._addWarning(msg)
+                else:
+                    msg = 'All updates installed successfully!'
+                    self._addRemark(msg)
                 Status.Add(msg)
-                self._state('Restart Rhino' if restart else 'Updated')
+                self._state(state)
 
         except requests.exceptions.ConnectionError as e:
             msg = 'Cannot connect to server. Please check your connection.'

@@ -34,7 +34,7 @@ ghenv.Component.Description = (  # NOQA
     '- A raw snapshot_id\n\n'
     'Falls back to the inline snapshot geometry (preview meshes) when no '
     'reduced PLY is available. Point clouds have no reduced PLY; the inline '
-    'preview (at most 5000 points) is returned instead. A piece that has '
+    'preview (at most 1000 points) is returned instead. A piece that has '
     'only an authored shape (a box or prism, no scan) is built from its '
     'parameters.'
 )
@@ -87,7 +87,7 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261018
     """
 
     # Resolution preference chain (reduced only; inline fallback otherwise)

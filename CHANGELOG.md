@@ -63,6 +63,13 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
   entries are unchanged.
 - **File markers** (mesh levels, `point_cloud_files`) are updated atomically, so uploads to
   the same version at once no longer lose each other's marker.
+- **`CSC_Update`** (decision 8.155): user objects are checked against a list of hashes from
+  the server; unchanged files are skipped, each download is checked before it is written,
+  and a failed file keeps the old one while the rest goes on ("Update incomplete, run
+  again"). The result counts installed, unchanged and failed files. A replaced script
+  component is no longer repaired automatically: it shows a remark that its inputs and
+  outputs may have changed and that it needs a recompute.
+- `FetchReducedGeometry` states the inline limit correctly (at most 1000 points).
 
 ### Added
 
@@ -124,6 +131,9 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
 - Put `touch ~/csc/shared/READ_ONLY` before and `rm ~/csc/shared/READ_ONLY` after every
   maintenance step (restore, purge, migration, deploy). The path is set by
   `CSC_READ_ONLY_FLAG`.
+- Deploy the server before anyone runs the new `CSC_Update`: it needs
+  `/ghinterface/userobject_manifest` and stops with a 404 against an older server. The old
+  `CSC_Update` still updates itself through the old endpoints.
 - `NEXT_PUBLIC_STATIC_BASE_URL` is fixed when the frontend is built (in CI): set it there,
   or set `NEXT_STATIC_BASE_URL` in the frontend environment, which is read at run time.
   Otherwise the policy blocks the images from the static host (the sidebar logo).
