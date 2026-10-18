@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -304,10 +305,10 @@ export default function AdminUsersPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Button variant="outline" size="sm" onClick={() => openEditDialog(user)}
+                          <WriteButton variant="outline" size="sm" onClick={() => openEditDialog(user)}
                             aria-label={`Edit ${user.username}`}>
                             <Pencil className="h-4 w-4" />
-                          </Button>
+                          </WriteButton>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -385,7 +386,7 @@ export default function AdminUsersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditUser(null)} disabled={saving}>Cancel</Button>
-            <Button onClick={() => void handleSave()} disabled={saving}>Save changes</Button>
+            <WriteButton onClick={() => void handleSave()} disabled={saving}>Save changes</WriteButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

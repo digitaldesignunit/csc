@@ -9,6 +9,7 @@ import Providers from './providers'
 import SessionMonitor from '@/components/auth/SessionMonitor'
 import CookieNotice from '@/components/common/CookieNotice'
 import BetaPhaseLoginNotice from '@/components/common/BetaPhaseLoginNotice'
+import { ReadOnlyBanner } from '@/components/common/ReadOnlyProvider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { SIDEBAR_COOKIE, parseSidebarChoice } from '@/lib/sidebarState'
 import { getBetaBannerText, getBetaLoginMessage, isBetaPhaseEnabled } from '@/lib/beta'
@@ -57,6 +58,7 @@ export default async function RootLayout({
                 betaBannerText={betaPhaseEnabled ? getBetaBannerText() : undefined}
               />
               <SidebarInset>
+                <ReadOnlyBanner />
                 <TopBar betaBannerText={betaPhaseEnabled ? getBetaBannerText() : undefined} />
                 <main className="w-full max-w-full flex-1 overflow-x-hidden">{children}</main>
                 <footer className="w-full">

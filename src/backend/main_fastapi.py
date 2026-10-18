@@ -23,6 +23,7 @@ from slowapi.errors import RateLimitExceeded
 # LOCAL IMPORTS (pre-app) -----------------------------------------------------
 from limiter import shared_limiter, use_store
 from apps.catalog.body_limit import BodyLimitMiddleware
+from apps.catalog.read_only_middleware import ReadOnlyMiddleware
 from apps.catalog.client_header import (
     ClientHeaderEnforcementMiddleware,
     ClientHeaderLogMiddleware,
@@ -231,6 +232,10 @@ app.add_middleware(ClientHeaderEnforcementMiddleware)
 # Request bodies are capped before a route reads them (decision 8.163); inside
 # CORS, so the 413 carries the CORS headers
 app.add_middleware(BodyLimitMiddleware)
+
+# While the read-only flag file exists every write answers 503, before any body
+# is read (decision 8.154); outside the body limit, inside CORS
+app.add_middleware(ReadOnlyMiddleware)
 
 # CORS ------------------------------------------------------------------------
 app.add_middleware(

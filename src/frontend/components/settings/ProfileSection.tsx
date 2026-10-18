@@ -5,7 +5,7 @@ import { Loader2, Save, UserCog } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Field, NativeSelect } from '@/components/evidence/controls'
-import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { BackendError, backendJson } from '@/lib/backend'
@@ -157,10 +157,10 @@ export default function ProfileSection() {
           </Field>
           {general && <p className="text-xs text-destructive" role="alert">{general}</p>}
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={saving || !changed}>
+            <WriteButton type="submit" disabled={saving || !changed}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Save the profile
-            </Button>
+            </WriteButton>
             {!changed && <span className="text-xs text-muted-foreground">Nothing changed.</span>}
           </div>
         </form>

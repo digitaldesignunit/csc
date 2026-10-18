@@ -177,3 +177,17 @@ def test_a_limited_route_counts_in_mongodb_when_no_store_is_named(
     assert counted and all('expireAt' in doc for doc in counted)
     assert max(doc['count'] for doc in counted) == 3
     assert not [doc for doc in counted if 'inmongo' in str(doc['_id'])]   # no identifier
+
+
+def test_under_the_read_only_flag_a_count_stays_in_memory_and_reads_see_mongodb(
+        store, read_only_flag):
+    assert store.incr('before', 60) == 1               # a count made before the flag
+    read_only_flag.on()
+    assert store.incr('before', 60) == 1               # this process's own count, not 2
+    assert store.incr('before', 60) == 2
+    assert store.get('before') == 1                    # the read asks MongoDB: still 1 there
+    assert store.counters.find_one({'_id': 'only-in-memory'}) is None
+    store.incr('only-in-memory', 60)
+    assert store.counters.find_one({'_id': 'only-in-memory'}) is None, 'written under the flag'
+    read_only_flag.off()
+    assert store.incr('before', 60) == 2               # MongoDB again

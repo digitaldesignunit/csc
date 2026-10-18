@@ -15,6 +15,7 @@ import { CheckCircle, Loader2, MailOpen, XCircle } from 'lucide-react'
 
 import BackgroundMesh from '@/components/components/BackgroundMesh'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { InvitationAccepted, InvitationPreview } from '@/generated/AccessModels'
 import { backendJson } from '@/lib/backend'
@@ -170,9 +171,9 @@ function InviteContent() {
       </p>
       {error && <p role="alert" className="text-center text-sm text-destructive">{error}</p>}
       <div className="flex flex-col gap-2">
-        <Button onClick={() => void accept()} disabled={busy}>
+        <WriteButton onClick={() => void accept()} disabled={busy}>
           {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}Accept the invitation
-        </Button>
+        </WriteButton>
         <Link href="/components"><Button variant="ghost" className="w-full">Not now</Button></Link>
       </div>
     </Frame>

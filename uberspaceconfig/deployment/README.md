@@ -55,6 +55,43 @@ done
 chmod +x ~/csc/bin/*.sh
 ```
 
+### 2b. On the server: the `gh` CLI (verifies the release attestations)
+
+The deploy checks the backend tar and the frontend zip with
+`gh attestation verify` before it installs anything, and stops when `gh` is
+missing. Install the static release binary once (it is a single Go binary and
+runs on the glibc 2.17 of Uberspace 7); do this **before the first deploy of a
+release that carries the check**, because that deploy repeats itself with the new
+script and the repeat needs `gh`:
+
+```bash
+ver=2.101.0     # the newest release at https://github.com/cli/cli/releases
+cd "$(mktemp -d)"
+curl -fsSLO https://github.com/cli/cli/releases/download/v$ver/gh_${ver}_linux_amd64.tar.gz
+curl -fsSLO https://github.com/cli/cli/releases/download/v$ver/gh_${ver}_checksums.txt
+grep " gh_${ver}_linux_amd64.tar.gz\$" gh_${ver}_checksums.txt | sha256sum -c -
+tar -xzf gh_${ver}_linux_amd64.tar.gz
+mkdir -p ~/bin && install -m 755 gh_${ver}_linux_amd64/bin/gh ~/bin/gh
+~/bin/gh --version
+```
+
+`gh` needs a token even to read the attestations of a public repository (without
+one it stops with "gh auth login"). Create a fine-grained personal access token
+on GitHub with **no permissions** (public read is enough; set a long expiry and
+note it in your calendar) and store it once for the server account:
+
+```bash
+printf '%s' '<the token>' | ~/bin/gh auth login --with-token
+~/bin/gh auth status
+```
+
+The deploy script puts `~/bin` on its `PATH` itself, so the forced SSH command
+finds `gh`; it uses the stored login, or `GITHUB_CSC_DEPLOY_TOKEN` if that
+variable is set. Check by hand with
+`~/bin/gh attestation verify <file> --repo digitaldesignunit/csc --signer-workflow digitaldesignunit/csc/.github/workflows/release.yml`.
+`SHA256SUMS` stays as the check of the download; the attestation is the check
+of who built the file.
+
 ### 3. On the server: authorize the deploy key (restricted)
 
 Append **one line** to `~/.ssh/authorized_keys` --- the prefix limits the key to
@@ -203,11 +240,51 @@ contact: a mail address or a phone number
 
 A deploy leaves the mode as it is and says so at the end of its log.
 
-**Runbook of a cutover or a migration:** start with `csc_maintenance.sh on`,
-do the work (stop the frontend, migrate, deploy), check the site through an SSH
-tunnel (`ssh -L 3000:127.0.0.1:3000 <account>`, then
-`http://127.0.0.1:3000`; the frontend answers there while the domain shows the
-page), end with `csc_maintenance.sh off`.
+**Runbook of a cutover or a migration:** start with `csc_maintenance.sh on`
+and `touch ~/csc/shared/READ_ONLY` (below), do the work (stop the frontend,
+migrate, deploy), check the site through an SSH tunnel
+(`ssh -L 3000:127.0.0.1:3000 <account>`, then `http://127.0.0.1:3000`; the
+frontend answers there while the domain shows the page), end with
+`rm ~/csc/shared/READ_ONLY` and `csc_maintenance.sh off`.
+
+## Read-only mode
+
+A maintenance step that touches the database or the asset folders (restore,
+purge, migration, cutover, a script from `scripts/db_maintenance/`) must not run
+while users write. The switch is a file:
+
+```bash
+touch ~/csc/shared/READ_ONLY        # before the step: every write is refused
+# ... the maintenance step ...
+rm ~/csc/shared/READ_ONLY           # after it: writes are accepted again
+```
+
+While the file exists:
+
+- every request other than GET, HEAD and OPTIONS is answered `503` with a
+  `Retry-After` header and `{"detail": "read-only: maintenance"}`, before its
+  body is read: registration, uploads, the web app's changes and the Grasshopper
+  writes included. Reads keep working. Every gunicorn worker looks at the file on
+  every request, so `touch` and `rm` take effect at once, with no restart;
+- sign-in (`POST /auth/token`) stays open so you can check the site, and writes
+  nothing to the database: the per-address limit still holds but is counted in
+  the memory of each worker, the failed-sign-in count per account is paused (an
+  account that was locked before stays locked), and the account is not changed;
+- `/version` and `/health/db` report `"read_only": true`; the web app shows a
+  banner on every page and disables its write buttons (it asks `/version` once a
+  minute); a Grasshopper component that writes shows `read-only: maintenance`
+  as its error;
+- the geometry runner, the component map job, `usermaintenance.py` and
+  `geometrymaintenance.py` skip their run and log one line ("skipped, the
+  read-only flag is set"); a `--dry-run` still runs. The next cron run after
+  `rm` picks the work up.
+
+The path is `CSC_READ_ONLY_FLAG` (default `~/csc/shared/READ_ONLY`); leave it
+unset on the server. The flag does not replace the maintenance page: `touch`
+stops the writes, `csc_maintenance.sh on` hides the frontend; use both for a
+cutover, the flag alone for a short database step. A deploy leaves the flag as
+it is; remove it yourself when the work is done. Check it with
+`curl -s http://127.0.0.1:8000/version`.
 
 **To verify once on the server, before the first use:** that Apache serves
 the per-domain folder `/var/www/virtual/$USER/<domain>/` for a domain whose

@@ -69,6 +69,11 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
 - **Marker for uploaded point clouds**: a snapshot lists the indices of its uploaded full
   point clouds in `point_cloud_files` (set by the upload, removed by the delete, not
   writable by clients), so an import resumes without probing the file.
+- **Read-only mode for maintenance** (decision 8.154): while the file `~/csc/shared/READ_ONLY`
+  exists, the backend answers every write with 503 and `Retry-After`; reads and the sign-in
+  stay up. All workers switch at once, without a restart. The web shows a banner and
+  disables its write buttons, `/version` and `/health/db` report `read_only`, and the
+  geometry runner, the component map, the user and the geometry maintenance skip their run.
 
 ### Security
 
@@ -84,6 +89,11 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
   read (uploads by their upload limit, everything else 16 MB, `CSC_JSON_BODY_LIMIT_MB`).
 - **Usernames** (decision 8.161): 3 to 32 characters, lowercase letters, digits, `.`, `_`, `-`,
   starting with a letter or digit. Every existing name already fits.
+- **Release attestations** (decision 8.153): every release asset carries a GitHub build
+  attestation, and the deploy checks the backend and the frontend bundle against it
+  before it unpacks them; it stops if the check fails or `gh` is missing.
+- In read-only mode the sign-in writes nothing; its per-address limit then counts in each
+  worker's memory, and an existing account lock still holds.
 - Database connections are capped at 20 per client; a one-off dataset update no longer
   runs at every start.
 - **Content-Security-Policy** (decision 8.164): every page carries a policy built per
@@ -108,6 +118,12 @@ the inline geometry budget and the follow-ups of the open-data imports. No new f
   Content-Security-Policy: the same policy is then sent as report-only (violations are
   logged in the browser console, nothing is blocked). Restart the frontend after setting
   it, and remove it once the cause is fixed.
+- Before the first deploy of 0.6.2.0, install the `gh` CLI binary in `~/bin` and store a
+  token for it (deployment README). The 0.6.1.1 deploy script runs first and repeats
+  itself with the new one, which needs `gh`.
+- Put `touch ~/csc/shared/READ_ONLY` before and `rm ~/csc/shared/READ_ONLY` after every
+  maintenance step (restore, purge, migration, deploy). The path is set by
+  `CSC_READ_ONLY_FLAG`.
 - `NEXT_PUBLIC_STATIC_BASE_URL` is fixed when the frontend is built (in CI): set it there,
   or set `NEXT_STATIC_BASE_URL` in the frontend environment, which is read at run time.
   Otherwise the policy blocks the images from the static host (the sidebar logo).

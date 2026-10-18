@@ -26,6 +26,7 @@ from services.email_service import (
     load_email_config
 )
 from limiter import local_limiter, shared_limiter
+import read_only
 import signin_limit
 from tokens import encode_token, verified_payload
 
@@ -244,6 +245,9 @@ async def require_admin(
     response_model=Token,
     summary='Login (email or username) -> JWT'
 )
+# the per-address limit of the sign-in counts in the shared store; while the
+# read-only flag is set that store counts in this process's memory instead
+# (rate_store.py), so the limit holds and nothing is written to MongoDB (8.154)
 @shared_limiter.limit('10/minute')
 async def login_for_access_token(
     request: Request,
@@ -272,7 +276,8 @@ async def login_for_access_token(
     stored = (user or {}).get('hashed_password') or _DUMMY_HASH
     password_ok = verify_password(form_data.password, stored)
     if not user or not password_ok or stored is _DUMMY_HASH:
-        signin_limit.record_failure(counter)
+        if not read_only.is_on():       # the failed-sign-in count is a write
+            signin_limit.record_failure(counter)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Incorrect username/email or password',

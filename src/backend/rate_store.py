@@ -11,6 +11,10 @@ collection and the index are created on first use.
 ``CSC_RATE_LIMIT_STORAGE`` selects the store: unset, it is the MongoDB URI of
 the API; ``memory://`` keeps the counters in the process (tests, local runs).
 
+While the read-only flag is set (``read_only.py``, decision 8.154) a count
+(``incr``) is kept in the memory of the process instead of MongoDB, so the
+limits hold, per worker, with no database write; reads still ask MongoDB.
+
 The store fails open: when MongoDB does not answer, the request passes
 uncounted, one log line says so (no address, no URI, nothing about the
 request), and for ``COOLDOWN_SECONDS`` the store is not asked again, so a down
@@ -26,6 +30,7 @@ from typing import Any, Optional
 from limits.storage import MemoryStorage
 from limits.storage.mongodb import MongoDBStorageBase
 
+import read_only
 from logging_setup import get_logger
 
 log = get_logger(__name__)
@@ -52,6 +57,11 @@ class GuardedMongoStorage(MongoDBStorageBase):
             **{**CLIENT_OPTIONS, **options})
         self._down_until = 0.0
         self._lock = threading.Lock()
+        # while the read-only flag is set nothing may be written to MongoDB:
+        # a count (``incr``) then goes to this process's memory, the limit holds
+        # per worker; reads still ask MongoDB, so a lock made before the flag
+        # stays visible (decision 8.154)
+        self._memory = MemoryStorage()
 
     def _init_mongo_client(self, uri, **options):
         return self.lib.MongoClient(uri, **options)
@@ -97,6 +107,8 @@ class GuardedMongoStorage(MongoDBStorageBase):
         return result
 
     def incr(self, key: str, expiry: int, amount: int = 1) -> int:
+        if read_only.is_on():
+            return self._memory.incr(key, expiry, amount)
         return self._guard(
             lambda: MongoDBStorageBase.incr(self, key, expiry, amount), 0)
 

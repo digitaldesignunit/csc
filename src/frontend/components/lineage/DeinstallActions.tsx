@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import type { Actor, ComponentIdentity } from '@/generated/CatalogModels'
 import { ORIGIN_KIND_LABELS, PRECISION_LABELS } from '@/generated/Vocab'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import {
   Dialog,
   DialogContent,
@@ -124,7 +125,7 @@ export function DeinstallDialog({ identity, open, onOpenChange }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-          <Button onClick={() => void submit()} disabled={busy}>Record deinstallation</Button>
+          <WriteButton onClick={() => void submit()} disabled={busy}>Record deinstallation</WriteButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -74,11 +74,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write      # creates the GitHub Release and uploads the bundles
+      id-token: write      # the keyless signature of the attestation (Sigstore)
+      attestations: write  # stores the attestation (decision 8.153)
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: release
           path: dist
+      # every release asset gets a provenance attestation; the deploy script
+      # verifies the backend tar and the frontend zip with `gh attestation verify`
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/csc-backend-*.tar.gz
+            dist/csc-frontend-*.zip
+            dist/csc-gh-interface-*.zip
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ github.ref_name }}

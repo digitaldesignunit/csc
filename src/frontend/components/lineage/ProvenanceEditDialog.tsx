@@ -24,6 +24,7 @@ import {
   type OriginalFunction,
 } from '@/generated/Vocab'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
@@ -381,7 +382,7 @@ export default function ProvenanceEditDialog({ identity, open, onOpenChange }: P
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-          <Button onClick={() => void save()} disabled={busy}>Save</Button>
+          <WriteButton onClick={() => void save()} disabled={busy}>Save</WriteButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

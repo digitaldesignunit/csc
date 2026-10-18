@@ -7,6 +7,7 @@
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import {
   Dialog,
   DialogContent,
@@ -81,13 +82,13 @@ export default function ReasonDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
           </Button>
-          <Button
+          <WriteButton
             variant={destructive ? 'destructive' : 'default'}
             onClick={() => void submit()}
             disabled={busy || reason.trim().length === 0}
           >
             {confirmLabel}
-          </Button>
+          </WriteButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

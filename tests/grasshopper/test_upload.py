@@ -140,6 +140,17 @@ def test_error_texts():
     assert 'frame' in fields and 'Server-maintained' in fields
 
 
+def test_the_read_only_answer_reaches_the_component_output():
+    """While the backend is read-only (maintenance) every write answers 503 with
+    this detail; the components show http_error_text, so the text is the
+    component's error (decision 8.154)."""
+    for what in ('Create', 'Add evidence', 'Upload of x'):
+        text = up.http_error_text(
+            Response(503, {'detail': 'read-only: maintenance'}), what)
+        assert text.startswith('%s failed (HTTP 503):' % what)
+        assert text.endswith('read-only: maintenance')
+
+
 def test_the_passport_after_a_create_is_the_servers_or_assembled():
     passport = {'identity': {'_id': 'i'}, 'snapshots': [{'_id': 's'}]}
     core = FakeCore({('GET', '/identities/i/compose'): Response(200, passport)})

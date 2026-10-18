@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import type { Exit, Origin } from '@/generated/CatalogModels'
 import { EXIT_KIND_LABELS, PRECISION_LABELS, type ExitKind } from '@/generated/Vocab'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import {
   Dialog,
   DialogContent,
@@ -123,7 +124,7 @@ export function ExitDialog({ identityId, inPlace, open, onOpenChange }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-          <Button onClick={() => void submit()} disabled={busy}>Record exit</Button>
+          <WriteButton onClick={() => void submit()} disabled={busy}>Record exit</WriteButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -178,7 +179,7 @@ export function ReenterDialog({ identityId, exit, open, onOpenChange }: {
         {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-          <Button onClick={() => void submit()} disabled={busy}>Re-enter</Button>
+          <WriteButton onClick={() => void submit()} disabled={busy}>Re-enter</WriteButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

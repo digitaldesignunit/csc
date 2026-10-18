@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import ReasonDialog from '@/components/moderation/ReasonDialog'
 import { backendJson } from '@/lib/backend'
 import { useMe } from '@/lib/me'
@@ -112,40 +113,40 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
 
   if (isAuthor && status === 'draft') {
     add('submit', (
-      <Button size="sm" className={buttonClass} disabled={busy}
+      <WriteButton size="sm" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('submitted', `${base}/submit`))}>
         <Send className="mr-1 h-3 w-3" />Submit
-      </Button>
+      </WriteButton>
     ))
   }
   if (isAuthor && status === 'pending') {
     add('recall', (
-      <Button size="sm" variant="outline" className={buttonClass} disabled={busy}
+      <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('recalled to draft', `${base}/recall`))}>
         <Undo2 className="mr-1 h-3 w-3" />Recall
-      </Button>
+      </WriteButton>
     ))
   }
   if (isAuthor && status === 'rejected') {
     add('resubmit', (
-      <Button size="sm" variant="outline" className={buttonClass} disabled={busy}
+      <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('back to draft', `${base}/resubmit`))}>
         <Undo2 className="mr-1 h-3 w-3" />Back to draft
-      </Button>
+      </WriteButton>
     ))
   }
   if (isModerator && status === 'pending') {
     add('publish', (
-      <Button size="sm" className={buttonClass} disabled={busy}
+      <WriteButton size="sm" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('published', `${base}/publish?promote=1`))}>
         <Check className="mr-1 h-3 w-3" />Publish
-      </Button>
+      </WriteButton>
     ))
     add('reject', (
-      <Button size="sm" variant="outline" className={buttonClass} disabled={busy}
+      <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={() => setDialog('reject')}>
         <X className="mr-1 h-3 w-3" />Reject
-      </Button>
+      </WriteButton>
     ))
   }
   if (identityId && live && rolesIn(dataset).includes('contributor')) {
@@ -159,34 +160,34 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
   }
   if (isModerator && live && !snapshot.is_current) {
     add('promote', (
-      <Button size="sm" variant="outline" className={buttonClass} disabled={busy}
+      <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('made current', `${base}/promote`))}>
         <Star className="mr-1 h-3 w-3" />Make current
-      </Button>
+      </WriteButton>
     ))
   }
   if (isModerator && status === 'published') {
     add('withdraw', (
-      <Button size="sm" variant="outline" className={buttonClass} disabled={busy}
+      <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={() => setDialog('withdraw')}>
         <Archive className="mr-1 h-3 w-3" />Withdraw
-      </Button>
+      </WriteButton>
     ))
   }
   if (isModerator && status === 'withdrawn') {
     add('reinstate', (
-      <Button size="sm" variant="outline" className={buttonClass} disabled={busy}
+      <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('reinstated', `${base}/reinstate`))}>
         <ArchiveRestore className="mr-1 h-3 w-3" />Reinstate
-      </Button>
+      </WriteButton>
     ))
   }
   if ((isAuthor || isModerator) && ['draft', 'pending', 'rejected'].includes(status)) {
     add('delete', (
-      <Button size="sm" variant="ghost" className={`${buttonClass} text-destructive`} disabled={busy}
+      <WriteButton size="sm" variant="ghost" className={`${buttonClass} text-destructive`} disabled={busy}
         onClick={() => void remove()} aria-label={`Delete v${snapshot.version}`}>
         <Trash2 className="h-3 w-3" />
-      </Button>
+      </WriteButton>
     ))
   }
 

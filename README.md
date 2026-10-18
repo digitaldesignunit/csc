@@ -261,11 +261,14 @@ push is automated.
    `git tag v0.5.1.1 && git push origin v0.5.1.1`.
 5. `.github/workflows/release.yml` runs CI again (every job, whatever changed), builds
    `csc-backend-<v>.tar.gz`, `csc-frontend-<v>.zip`, `csc-gh-interface-<v>.zip`
-   and `SHA256SUMS`, and publishes GitHub Release `v<v>` (pre-release if the
-   version has a `-suffix`).
+   and `SHA256SUMS`, attests each of the three bundles (a signed statement that
+   this repository's release workflow built exactly that file), and publishes
+   GitHub Release `v<v>` (pre-release if the version has a `-suffix`).
 6. The deploy job waits for your approval (environment `production`), then runs
    `csc_release_deploy.sh v<v>` on Uberspace over a restricted SSH key: download
-   and verify the bundles, unpack to `~/csc/releases/<v>/`, build a venv only if
+   the bundles and verify them (`SHA256SUMS`, then `gh attestation verify` for the
+   backend tar and the frontend zip; the deploy stops if `gh` is missing or a check
+   fails), unpack to `~/csc/releases/<v>/`, build a venv only if
    the requirements changed, switch `~/csc/current`, restart, health-check
    (`/version` must report `<v>`, the frontend must answer) --- or roll back to
    the previous release by itself.
@@ -506,6 +509,15 @@ images the release deploy copies there).
 web domain while the frontend is stopped or deployed (cutovers, migrations); see
 `uberspaceconfig/deployment/README.md`, "Maintenance mode" (the per-domain
 Apache folder still has to be verified on a test subdomain before the first use).
+
+**Read-only mode:** `touch ~/csc/shared/READ_ONLY` before and `rm
+~/csc/shared/READ_ONLY` after every maintenance step that writes to the database
+or the asset folders (restore, purge, migration, cutover). While the file
+exists the backend answers every write with 503 (`read-only: maintenance`),
+sign-in stays open and writes nothing, the web app shows a banner and disables
+its write buttons, and the cron jobs that write skip their run. Every worker
+checks the file per request, so no restart is needed. Details:
+`uberspaceconfig/deployment/README.md`, "Read-only mode".
 
 ## Cron jobs
 

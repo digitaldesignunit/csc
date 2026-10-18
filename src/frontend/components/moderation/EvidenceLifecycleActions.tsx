@@ -16,6 +16,8 @@ import { Archive, ArchiveRestore, Check, MoreHorizontal, Pencil, Send, SquarePen
 
 import ReasonDialog from '@/components/moderation/ReasonDialog'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
+import { useReadOnly } from '@/components/common/ReadOnlyProvider'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +51,7 @@ export default function EvidenceLifecycleActions({ record, dataset, onChanged, s
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<'reject' | 'withdraw' | null>(null)
   const { confirm, dialog: confirmDialog } = useConfirm()
+  const readOnly = useReadOnly()
 
   if (!me) return null
   const isAuthor = record.recorded_by_user_id === me._id
@@ -142,6 +145,14 @@ export default function EvidenceLifecycleActions({ record, dataset, onChanged, s
   const buttons: React.ReactNode[] = entries.map((entry) => {
     const Icon = entry.icon
     const inner = <><Icon className={entry.iconOnly ? 'h-3 w-3' : 'mr-1 h-3 w-3'} />{entry.iconOnly ? null : entry.label}</>
+    if (entry.href && readOnly) {
+      // a link to a write form: unavailable while the backend is read-only (8.154)
+      return (
+        <span key={entry.key}>
+          <WriteButton size="sm" variant="outline" className={buttonClass}>{inner}</WriteButton>
+        </span>
+      )
+    }
     if (entry.href) {
       return (
         <span key={entry.key}>
@@ -153,11 +164,11 @@ export default function EvidenceLifecycleActions({ record, dataset, onChanged, s
     }
     return (
       <span key={entry.key}>
-        <Button size="sm" variant={entry.primary ? 'default' : entry.destructive ? 'ghost' : 'outline'}
+        <WriteButton size="sm" variant={entry.primary ? 'default' : entry.destructive ? 'ghost' : 'outline'}
           className={`${buttonClass}${entry.destructive ? ' text-destructive' : ''}`} disabled={busy}
           aria-label={entry.iconOnly ? 'Delete record' : undefined} onClick={entry.run}>
           {inner}
-        </Button>
+        </WriteButton>
       </span>
     )
   })
@@ -176,10 +187,10 @@ export default function EvidenceLifecycleActions({ record, dataset, onChanged, s
         {entries.map((entry) => {
           const Icon = entry.icon
           const body = <><Icon className="h-4 w-4" /><span className={entry.destructive ? 'text-destructive' : undefined}>{entry.label}</span></>
-          return entry.href ? (
+          return entry.href && !readOnly ? (
             <DropdownMenuItem key={entry.key} asChild><Link href={entry.href}>{body}</Link></DropdownMenuItem>
           ) : (
-            <DropdownMenuItem key={entry.key} onSelect={() => entry.run?.()}>{body}</DropdownMenuItem>
+            <DropdownMenuItem key={entry.key} disabled={readOnly} onSelect={() => entry.run?.()}>{body}</DropdownMenuItem>
           )
         })}
       </DropdownMenuContent>

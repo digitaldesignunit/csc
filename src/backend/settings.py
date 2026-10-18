@@ -211,6 +211,10 @@ class Settings(BaseSettings):
     snapshot_photo_max_long_edge_px: int = Field(
         4096, ge=1, description='longest edge of a stored photo in pixels')
 
+    csc_read_only_flag: str = Field(
+        '~/csc/shared/READ_ONLY', description='path of the maintenance file: '
+        'while it exists the API refuses every write (decision 8.154)')
+
     # SERVER AND RUNNER ------------------------------------------------------
     csc_workers: int = Field(
         DEFAULT_WORKERS, description='gunicorn workers, 1 to 8 (decision '
@@ -319,6 +323,11 @@ class Settings(BaseSettings):
                 f'CSC_GEOMETRY_HEAVY_STAGES must be server or remote, '
                 f'got {value!r}')
         return value
+
+    @field_validator('csc_read_only_flag', mode='after')
+    @classmethod
+    def _read_only_flag(cls, value: str) -> str:
+        return os.path.expanduser(value)
 
     @field_validator('csc_trusted_proxies', mode='after')
     @classmethod

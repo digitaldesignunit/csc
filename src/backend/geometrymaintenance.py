@@ -29,6 +29,7 @@ from pymongo import AsyncMongoClient
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 
 from logging_setup import configure as configure_logging, get_logger
+import read_only
 from settings import get_settings
 from utility import (
     get_db_connectionstring,
@@ -110,6 +111,9 @@ def _delete_stale_dirs(
 if __name__ == '__main__':
     configure_logging(get_settings())
     dry_run = '--dry-run' in sys.argv or '-d' in sys.argv
+    # the read-only flag (decision 8.154): the clean-up deletes, so it waits
+    if read_only.skip_job(log.info, 'geometry maintenance', dry_run):
+        sys.exit(0)
 
     log.info('Starting geometry maintenance (%s)',
              'DRY RUN' if dry_run else 'LIVE')

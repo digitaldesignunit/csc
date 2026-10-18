@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { WriteButton } from "@/components/ui/write-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -182,7 +182,7 @@ export default function RegisterPage() {
                 .
               </p>
 
-              <Button type="submit" className="w-full">Register</Button>
+              <WriteButton type="submit" className="w-full">Register</WriteButton>
             </form>
             
             <div className="mt-4 text-center text-sm text-muted-foreground">

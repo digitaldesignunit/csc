@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 
 import ReasonDialog from '@/components/moderation/ReasonDialog'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import type { EvidenceView } from '@/generated'
 import { BackendError } from '@/lib/backend'
 import { attachmentUrl, removeAttachment, uploadAttachment, type AttachmentEntry } from '@/lib/evidence/api'
@@ -125,10 +126,10 @@ export default function EvidenceAttachments({
                 <span className="text-xs text-muted-foreground">Sign in to download</span>
               )}
               {canRemove && (
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"
+                <WriteButton variant="ghost" size="icon" className="h-8 w-8 text-destructive"
                   onClick={() => setRemoving(entry)} aria-label={`Remove ${entry.name || entry.index}`}>
                   <Trash2 className="h-4 w-4" />
-                </Button>
+                </WriteButton>
               )}
             </li>
           )
@@ -145,11 +146,11 @@ export default function EvidenceAttachments({
         <div className="flex flex-wrap items-center gap-2">
           <input ref={input} type="file" multiple accept={ATTACHMENT_ACCEPT} className="sr-only"
             aria-label="Add files" onChange={(e) => void add(e.target.files)} />
-          <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={busy}
+          <WriteButton type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={busy}
             onClick={() => input.current?.click()}>
             {busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Paperclip className="mr-1 h-3.5 w-3.5" />}
             Add a file (up to {MAX_ATTACHMENT_TEXT})
-          </Button>
+          </WriteButton>
           {uploadHelp && <p className="text-xs text-muted-foreground">{uploadHelp}</p>}
         </div>
       )}

@@ -36,6 +36,7 @@ import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,6 +76,7 @@ import {
 } from '@/lib/componentDetail'
 import { downloadExport, isCeroMaterial, passportExports } from '@/lib/exports'
 import { useMe } from '@/lib/me'
+import { useReadOnly } from '@/components/common/ReadOnlyProvider'
 import { buildGeometryDownloadItems } from '@/lib/snapshotGeometryDownloads'
 import ComponentSnapshotGeometryDownload from '../ComponentSnapshotGeometryDownload'
 import { type ExtendedUser } from '../componentDetailShared'
@@ -111,19 +113,19 @@ export function ReserveButton({ catalog }: { catalog: CatalogComponent }) {
 
   if (!reserved) {
     return (
-      <Button size="sm" className="h-8 text-xs" disabled={busy} title="Reserve for your project"
+      <WriteButton size="sm" className="h-8 text-xs" disabled={busy} title="Reserve for your project"
         onClick={() => void run('POST', 'Reserved for you')}>
         Reserve
-      </Button>
+      </WriteButton>
     )
   }
   const canRelease = !!reservedBy && (userId === reservedBy || moderates(identity.dataset))
   return canRelease ? (
-    <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={busy}
+    <WriteButton size="sm" variant="destructive" className="h-8 text-xs" disabled={busy}
       title={userId === reservedBy ? 'Release this component' : 'Release this reservation (moderator)'}
       onClick={() => void run('DELETE', 'Released')}>
       Release
-    </Button>
+    </WriteButton>
   ) : (
     <Button size="sm" variant="destructive" className="h-8 text-xs" disabled title="Reserved by another user">
       Reserved
@@ -217,6 +219,8 @@ type MenuItem = {
   destructive?: boolean
 }
 
+const READ_ACTIONS: ActionKey[] = ['pdf', 'cero', 'geometry', 'locate']
+
 type Dialogs = 'exit' | 'reenter' | 'deinstall' | 'withdraw-component' | 'geometry' | VersionMode | null
 
 export default function ComponentActionsMenu({ catalog, snapshots }: {
@@ -230,6 +234,7 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
   const { data: session } = useSession()
   const { me, isAdmin, moderates, rolesIn } = useMe()
   const wide = useMediaQuery('(min-width: 640px)')
+  const readOnly = useReadOnly()
   const [dialog, setDialog] = useState<Dialogs>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
 
@@ -294,8 +299,14 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
     'reinstate-component': { key: 'reinstate-component', label: 'Reinstate component', icon: ArchiveRestore,
       onSelect: () => void reinstateComponent(identityId, refresh) },
   }
-  const record = actions.record.map((key) => catalogue[key])
-  const moderate = actions.moderate.map((key) => catalogue[key])
+  // while the backend is read-only (maintenance, 8.154) only the downloads and
+  // the locate link stay usable; every other action is a write or leads to one
+  const locked = (item: MenuItem): MenuItem =>
+    readOnly && !READ_ACTIONS.includes(item.key)
+      ? { ...item, href: undefined, onSelect: undefined, disabled: true }
+      : item
+  const record = actions.record.map((key) => locked(catalogue[key]))
+  const moderate = actions.moderate.map((key) => locked(catalogue[key]))
   if (record.length === 0 && moderate.length === 0) return null
 
   const trigger = (

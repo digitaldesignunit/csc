@@ -87,6 +87,7 @@ from apps.catalog.geometry_stages import (
     stale_stages,
 )
 from logging_setup import configure as configure_logging, get_logger
+import read_only
 from settings import SettingsError, get_settings
 from utility import (
     get_database_name,
@@ -417,9 +418,16 @@ def _secret(value):
     return value.get_secret_value() if value is not None else None
 
 
-if __name__ == '__main__':
-    arguments = _parse_args()
+def main(arguments: Optional[argparse.Namespace] = None) -> int:
+    arguments = arguments or _parse_args()
     configure_logging(get_settings())
+    # the read-only flag (decision 8.154): a run writes, so it waits
+    if read_only.skip_job(log, 'geometry runner', arguments.dry_run):
+        return 0
     if arguments.remote:
-        sys.exit(run_remote_mode(arguments))
-    sys.exit(asyncio.run(run(arguments)))
+        return run_remote_mode(arguments)
+    return asyncio.run(run(arguments))
+
+
+if __name__ == '__main__':
+    sys.exit(main())

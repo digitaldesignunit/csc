@@ -11,7 +11,7 @@ def _client_log(backend_env):
 def test_health_reaches_the_database(api):
     response = api.get('/health/db')
     assert response.status_code == 200
-    assert response.json() == {'ok': True}
+    assert response.json() == {'ok': True, 'read_only': False}
 
 
 def test_requests_are_logged_with_their_client(api, backend_env):

@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { RefreshCw, TriangleAlert } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Card, CardContent } from '@/components/ui/card'
 import { backendJson } from '@/lib/backend'
 import { useMe } from '@/lib/me'
@@ -108,13 +109,13 @@ export default function GeometryFailuresPage() {
                     </p>
                   ))}
                 </div>
-                <Button
+                <WriteButton
                   size="sm"
                   disabled={retrying === row.snapshot_id}
                   onClick={() => void retry(row)}
                 >
                   Retry
-                </Button>
+                </WriteButton>
               </CardContent>
             </Card>
           ))}

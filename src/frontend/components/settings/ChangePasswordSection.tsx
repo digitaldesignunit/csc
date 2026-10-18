@@ -6,7 +6,7 @@ import { PASSWORD_CHANGED_PARAM, PASSWORD_CHANGED_VALUE } from '@/lib/password'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
 
 type Status = { type: 'success' | 'error'; message: string } | null
@@ -192,7 +192,7 @@ export default function ChangePasswordSection() {
             </div>
           )}
 
-          <Button type="submit" disabled={!canSubmit || loading}>
+          <WriteButton type="submit" disabled={!canSubmit || loading}>
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
@@ -201,7 +201,7 @@ export default function ChangePasswordSection() {
             ) : (
               'Change password'
             )}
-          </Button>
+          </WriteButton>
         </form>
 
         <div className="text-xs text-muted-foreground space-y-1 pt-6 mt-4 border-t max-w-sm">

@@ -22,6 +22,7 @@ from pymongo import AsyncMongoClient
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from logging_setup import configure as configure_logging, get_logger
+import read_only
 from settings import get_settings
 from utility import (
     get_database_name,
@@ -129,6 +130,9 @@ async def main():
     configure_logging(get_settings())
     # Check for dry-run flag
     dry_run = '--dry-run' in sys.argv or '-d' in sys.argv
+    # the read-only flag (decision 8.154): the clean-up deletes, so it waits
+    if read_only.skip_job(log.info, 'user maintenance', dry_run):
+        return 0
 
     try:
         deleted_count = await cleanup_unverified_users(dry_run=dry_run)

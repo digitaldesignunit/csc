@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from pymongo import AsyncMongoClient
 
 from logging_setup import configure as configure_logging, get_logger
+import read_only
 from settings import get_settings
 from utility import (
     get_current_timestamp_z,
@@ -220,6 +221,9 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[List[str]] = None) -> int:
     configure_logging(get_settings())
     args = _parse_args(argv)
+    # the read-only flag (decision 8.154): the job writes, so it waits
+    if read_only.skip_job(log, 'component map', args.dry_run):
+        return 0
     bases: Sequence[MapBasis] = tuple(args.basis) if args.basis else MAP_BASES
     methods: Sequence[MapMethod] = (
         tuple(args.method) if args.method else MAP_METHODS

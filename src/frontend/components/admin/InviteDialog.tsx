@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { MailPlus, MailWarning, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import {
   Dialog,
   DialogContent,
@@ -93,9 +94,9 @@ export default function InviteDialog({
 
   return (
     <>
-      <Button size="sm" onClick={() => { setResults(null); setOpen(true) }}>
+      <WriteButton size="sm" onClick={() => { setResults(null); setOpen(true) }}>
         <MailPlus className="mr-2 h-4 w-4" />Invite
-      </Button>
+      </WriteButton>
       <Dialog open={open} onOpenChange={(next) => { if (!busy) setOpen(next) }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -149,9 +150,9 @@ export default function InviteDialog({
                   {results.filter((r) => r.result === 'mail_failed').map((r) => (
                     <li key={r.email} className="flex items-center justify-between gap-2">
                       <span className="break-all">{r.email}</span>
-                      <Button size="sm" variant="outline" onClick={() => void resend(r)}>
+                      <WriteButton size="sm" variant="outline" onClick={() => void resend(r)}>
                         <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden />Resend
-                      </Button>
+                      </WriteButton>
                     </li>
                   ))}
                 </ul>
@@ -167,12 +168,12 @@ export default function InviteDialog({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Close</Button>
-            <Button
+            <WriteButton
               onClick={() => void submit()}
               disabled={busy || addresses.length === 0 || (!fixedDataset && !allowNoDataset && !dataset)}
             >
               Send {addresses.length > 1 ? `${addresses.length} invitations` : 'invitation'}
-            </Button>
+            </WriteButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

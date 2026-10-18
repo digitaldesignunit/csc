@@ -15,6 +15,10 @@ Mongo connection: ``--uri``, else ``MONGO_URI`` env, else
 ``scripts/config/dbconfig.json`` (``{"uri": ...}``). Storage directories
 default to ``SNAPSHOT_MESHES_DIR`` / ``SNAPSHOT_CAPTURE_DIR``.
 
+On a server run it with the read-only flag set (``touch ~/csc/shared/READ_ONLY``
+before, ``rm`` after; ``uberspaceconfig/deployment/README.md``, "Read-only
+mode"), so that no user writes while the steps run.
+
 Usage
 -----
 ::

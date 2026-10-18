@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -121,9 +122,9 @@ export default function ResetPasswordForm({ token }: { token: string }) {
                   <Link href="/auth/forgot-password" className="text-primary hover:underline">Ask for a new link</Link>
                 </div>
               )}
-              <Button type="submit" className="w-full" disabled={!ready || busy}>
+              <WriteButton type="submit" className="w-full" disabled={!ready || busy}>
                 {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : 'Change the password'}
-              </Button>
+              </WriteButton>
             </form>
           )}
           {!done && (

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Mail, CheckCircle, AlertCircle } from 'lucide-react'
@@ -134,9 +134,9 @@ export default function VerificationPendingPage() {
                 </div>
               )}
 
-              <Button type='submit' className='w-full' disabled={loading}>
+              <WriteButton type='submit' className='w-full' disabled={loading}>
                 {loading ? 'Sending...' : 'Resend Verification Email'}
-              </Button>
+              </WriteButton>
             </form>
           </div>
 

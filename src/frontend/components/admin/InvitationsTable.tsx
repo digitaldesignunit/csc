@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { Ban, MailWarning, RefreshCw } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import {
   Table,
   TableBody,
@@ -96,7 +96,7 @@ export default function InvitationsTable({
             <TableCell className="text-xs">{formatDay(invitation.expires_at)}</TableCell>
             <TableCell className="whitespace-nowrap">
               {(invitation.state === 'open' || invitation.state === 'expired') && (
-                <Button
+                <WriteButton
                   size="sm"
                   variant={invitation.mail_failed ? 'outline' : 'ghost'}
                   aria-label={`Resend the invitation to ${invitation.email}`}
@@ -104,10 +104,10 @@ export default function InvitationsTable({
                   onClick={() => void resend(invitation)}
                 >
                   <RefreshCw className="h-4 w-4" />
-                </Button>
+                </WriteButton>
               )}
               {invitation.state === 'open' && (
-                <Button
+                <WriteButton
                   size="sm"
                   variant="ghost"
                   aria-label={`Revoke invitation for ${invitation.email}`}
@@ -115,7 +115,7 @@ export default function InvitationsTable({
                   onClick={() => void revoke(invitation)}
                 >
                   <Ban className="h-4 w-4" />
-                </Button>
+                </WriteButton>
               )}
             </TableCell>
           </TableRow>
