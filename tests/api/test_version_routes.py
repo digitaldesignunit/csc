@@ -8,7 +8,8 @@ from csc_version import CSC_VERSION, release_tag
 def test_version_is_public(api):
     response = api.get('/version')
     assert response.status_code == 200
-    assert response.json() == {'version': CSC_VERSION, 'tag': release_tag()}
+    assert response.json() == {'version': CSC_VERSION, 'tag': release_tag(),
+                               'read_only': False}
 
 
 def test_missing_release_is_a_clear_404(api, auth_headers, monkeypatch):

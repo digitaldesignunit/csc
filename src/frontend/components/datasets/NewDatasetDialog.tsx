@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 
 import { Field } from '@/components/evidence/controls'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import {
   Dialog,
   DialogContent,
@@ -72,9 +73,9 @@ export default function NewDatasetDialog({
 
   return (
     <>
-      <Button size="sm" variant={variant} onClick={() => setOpen(true)}>
+      <WriteButton size="sm" variant={variant} onClick={() => setOpen(true)}>
         <Plus className="mr-2 h-4 w-4" />{label}
-      </Button>
+      </WriteButton>
       <Dialog open={open} onOpenChange={(next) => { if (!busy) setOpen(next) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -110,9 +111,9 @@ export default function NewDatasetDialog({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
-            <Button onClick={() => void create()} disabled={busy || !name.trim()}>
+            <WriteButton onClick={() => void create()} disabled={busy || !name.trim()}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create
-            </Button>
+            </WriteButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

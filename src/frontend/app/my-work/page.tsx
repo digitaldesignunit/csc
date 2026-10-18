@@ -9,6 +9,7 @@ import ChipView from '@/components/common/ChipView'
 import ComponentPreviewImage from '@/components/components/ComponentPreviewImage'
 import YourDatasets from '@/components/datasets/YourDatasets'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { EvidenceView } from '@/generated'
@@ -162,9 +163,9 @@ function Reservations({ userId }: { userId: string | null }) {
                     </span>
                   </span>
                 </Link>
-                <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => void release(row._id)}>
+                <WriteButton type="button" variant="outline" size="sm" className="shrink-0" onClick={() => void release(row._id)}>
                   Release
-                </Button>
+                </WriteButton>
               </li>
             ))}
           </ul>
@@ -279,10 +280,10 @@ function MyRecords({ enabled }: { enabled: boolean }) {
                   onClick={() => setChosen(new Set())}>
                   None
                 </Button>
-                <Button type="button" size="sm" disabled={busy || selected === 0} onClick={() => void submitChosen()}>
+                <WriteButton type="button" size="sm" disabled={busy || selected === 0} onClick={() => void submitChosen()}>
                   <Send className="mr-1 h-3.5 w-3.5" />
                   Submit selected ({selected})
-                </Button>
+                </WriteButton>
               </div>
             )}
             {results.length > 0 && (

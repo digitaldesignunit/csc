@@ -41,6 +41,11 @@ gap.
   and a point cloud of the same L-panel landed a quarter turn apart). Changing the descriptor
   invalidates every stored signature.
 - **Open3D** --- mesh quality analysis, better preprocessing for the geometry runner.
+- **Stale file markers after a geometry PATCH** (review of 0.6.2.0 T1, 2026-10-16): a
+  `PATCH /snapshots/{sid}` with new `geometry` on a draft removes the fitted maps but keeps the mesh
+  and point cloud files and both markers (`mesh_ply_resolutions`, `point_cloud_files`), so an index
+  can point past the new primitives. Reads fall back to the inline copy, so nothing fails; clear the
+  markers (and the files) of indices the new geometry no longer has.
 
 ## Component map
 
@@ -72,6 +77,21 @@ gap.
   timber grading, steel coupons) --- one `EvidenceMethodSpec` each, list in spec section 2.5.
 - **DIN SPEC 91484** cross-check against the identity record and Appendix A once the standard is
   obtained.
+- **Timber evidence: what does not map yet** (user 2026-10-16; analytical case for the thesis, not imported, decision
+  8.149). Reference: the multimodal reclaimed timber dataset, <https://doi.org/10.5281/zenodo.17682666> (CC BY 4.0;
+  56 reclaimed structural beams with CT volumes, visual grading, dynamic excitation, four-point bending, CM and FE
+  models, a per-beam and per-zone summary table). Maps today: the identity (`IfcBeam`, `timber`, origin
+  deinstallation without date or works, since species, building and age are not stated), a box or the CT surface
+  mesh as geometry, and as archival claims density (also at 12 % moisture), moisture content and modulus of
+  elasticity. Does not map: (a) quantities --- bending strength (`f_m`, `F_max`), a timber strength class or visual
+  grade (INSTA 142, UNI 11119, prNS 3691-3; only `concrete_class` exists), static vs dynamic MOE as distinct
+  quantities, the first eigenfrequency; (b) methods --- four-point bending (EN 408, with EN 384 adjustment),
+  dynamic excitation, visual strength grading; the method set is concrete-oriented (rebound, cores, reinforcement);
+  (c) values along the piece --- zone-wise results would need region positions along the beam axis or a profile
+  result type; (d) fields --- CT volumes, density and stiffness fields, FE results have no representation beyond a
+  link (a typed "field" attachment with units, grid and orientation would be the general answer). Future work: grill
+  a timber method set (EN 408 / EN 384 / EN 338 / EN 14081 visual grading, dynamic MOE) with its quantities and
+  tiers, then re-run this case as the before / after.
 
 ## Moderation
 
@@ -156,5 +176,7 @@ gap.
   Plausible CE (ClickHouse, too heavy), Umami (one more service and database), hosted analytics (consent needed).
 
 ## Housekeeping
+
+- **Transactions for record write plus change-log entry** (8.159 d, 2026-10-16): wrap each write and its `log_change` in a MongoDB transaction once the T4 refactor has put the writes in fewer places; needs a session through the write helpers, a one-node replica set for the test `mongod` and CI, and retry-safe route bodies (no mail or file writes inside `with_transaction`).
 
 - ...

@@ -14,10 +14,17 @@
 #
 #   uberspace web backend set <domain>/ --apache
 #
-# `off` points it back (`--http --port <port>`) and removes the two files. The
-# rest of ~/html, the static host and the API domain are not touched; the
-# frontend may be stopped, restarted or deployed meanwhile (a deploy leaves the
-# mode as it is and says so in its log).
+# On Uberspace 7 a folder /var/www/virtual/$USER/<domain> is the document root of
+# that domain alone ("Additional DocumentRoots", manual.uberspace.de/web-
+# documentroot/); ~/html stays the root of every other domain and is never
+# written. When the folder does not exist `on` creates it and records that in
+# ~/csc/shared/.maintenance_docroot_created; `off` removes the two files and,
+# only if the script created the folder and it is empty then, the folder. A
+# folder that was there before stays.
+#
+# `off` points the backend back (`--http --port <port>`). The static host and
+# the API domain are not touched; the frontend may be stopped, restarted or
+# deployed meanwhile (a deploy leaves the mode as it is and says so in its log).
 #
 # The text file (optional) is plain text: every line becomes a paragraph (HTML-
 # escaped); a line "end: <when>" sets the expected end, a line "contact: <how>"
@@ -25,7 +32,8 @@
 #
 # Settings (environment): CSC_MAINT_DOMAIN (default 2ndchances.build),
 # CSC_MAINT_PORT (the frontend, default 3000), CSC_MAINT_DOCROOT (default
-# /var/www/virtual/$USER/<domain>), CSC_MAINT_TEXT, CSC_HOME (default ~/csc).
+# /var/www/virtual/$USER/<domain>; an override is treated the same way),
+# CSC_MAINT_TEXT, CSC_HOME (default ~/csc).
 #
 # Checking the site during maintenance: ssh -L 3000:127.0.0.1:3000 <account> and
 # open http://127.0.0.1:3000 (the frontend answers there while the domain shows
@@ -39,6 +47,7 @@ PORT="${CSC_MAINT_PORT:-3000}"
 DOCROOT="${CSC_MAINT_DOCROOT:-/var/www/virtual/${USER:-$(id -un)}/$DOMAIN}"
 TEXT_FILE="${CSC_MAINT_TEXT:-$CSC_HOME/shared/maintenance.txt}"
 FLAG="$CSC_HOME/shared/.maintenance_on"   # read by csc_release_deploy.sh
+CREATED="$CSC_HOME/shared/.maintenance_docroot_created"   # the folder this script made
 MARKER="CSC maintenance mode"             # first words of our .htaccess
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 DRY=0
@@ -46,7 +55,7 @@ DRY=0
 log() { echo "[$(date -Iseconds)] $*"; }
 die() { log "ERROR: $*" >&2; exit 1; }
 
-usage() { sed -n '2,31p' "$0"; exit 2; }
+usage() { sed -n '2,40p' "$0"; exit 2; }
 
 # where the page sources are: next to this script when installed in ~/csc/bin
 # (maintenance/), else in the repository (uberspaceconfig/html/maintenance/)
@@ -101,14 +110,33 @@ sys.stdout.write(page)
 PY
 }
 
+created_by_us() {  # the folder this script created for DOCROOT, not yet removed
+  [ -f "$CREATED" ] && [ "$(cat "$CREATED")" = "$DOCROOT" ]
+}
+
 installed() { [ -f "$DOCROOT/index.html" ] && grep -q "$MARKER" "$DOCROOT/.htaccess" 2>/dev/null; }
 
 maintenance_on() {
   local dir page
   dir=$(template_dir)
-  [ -d "$DOCROOT" ] || die "the document root $DOCROOT does not exist (set CSC_MAINT_DOCROOT)"
   page=$(render "$dir")
   log "maintenance ON for $DOMAIN (document root $DOCROOT)"
+  if [ ! -d "$DOCROOT" ]; then
+    # the folder becomes the document root of this domain alone; only its own
+    # folder is made, never the folder above it
+    [ -d "$(dirname "$DOCROOT")" ]       || die "$(dirname "$DOCROOT") does not exist: not an Uberspace account? (set CSC_MAINT_DOCROOT)"
+    run mkdir "$DOCROOT"
+    if [ "$DRY" = 1 ]; then
+      echo "+ record the new folder in $CREATED"
+    else
+      mkdir -p "$(dirname "$CREATED")"
+      printf '%s\n' "$DOCROOT" > "$CREATED"
+    fi
+  fi
+  # never over somebody else's files: `off` deletes the two names again
+  if ! installed && { [ -e "$DOCROOT/index.html" ] || [ -e "$DOCROOT/.htaccess" ]; }; then
+    die "$DOCROOT already has an index.html or .htaccess that this script did not write: not overwritten"
+  fi
   if [ "$DRY" = 1 ]; then
     echo "+ write $DOCROOT/index.html ($(printf '%s' "$page" | wc -c) bytes, text: ${TEXT_FILE})"
     echo "+ write $DOCROOT/.htaccess (from $dir/maintenance.htaccess)"
@@ -130,13 +158,31 @@ maintenance_off() {
     # only the files this script wrote
     run rm -f "$DOCROOT/index.html" "$DOCROOT/.htaccess"
   fi
+  # the folder only when this script made it and nothing else is in it now
+  if created_by_us || { [ "$DRY" = 1 ] && [ ! -d "$DOCROOT" ]; }; then
+    if [ "$DRY" = 1 ]; then
+      echo "+ rmdir $DOCROOT (only if empty), and forget it in $CREATED"
+    elif [ -z "$(ls -A "$DOCROOT" 2>/dev/null)" ]; then
+      rmdir "$DOCROOT" 2>/dev/null || true
+      rm -f "$CREATED"
+    else
+      log "$DOCROOT is not empty: the folder stays"
+      rm -f "$CREATED"
+    fi
+  fi
   if [ "$DRY" = 1 ]; then echo "+ rm -f $FLAG"; else rm -f "$FLAG"; fi
   log "the domain points to the frontend on port $PORT again"
 }
 
 maintenance_status() {
   echo "domain:        $DOMAIN"
-  echo "document root: $DOCROOT"
+  if [ ! -d "$DOCROOT" ]; then
+    echo "document root: $DOCROOT (does not exist yet: 'on' creates it)"
+  elif created_by_us; then
+    echo "document root: $DOCROOT (created by this script; 'off' removes it when empty)"
+  else
+    echo "document root: $DOCROOT (existing folder; 'off' keeps it)"
+  fi
   if installed; then echo "page:          installed"; else echo "page:          not installed"; fi
   if [ -f "$FLAG" ]; then echo "mode:          ON since $(cat "$FLAG")"; else echo "mode:          off"; fi
   echo "backends:"

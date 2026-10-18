@@ -19,7 +19,6 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.py_modules.csc_robot_rubble_scan_processing.process_robot_scan import (  # noqa:E402
     MESH_PRIMITIVE_TARGET,
-    MESH_PRIMITIVE_THRESHOLD,
     MESH_REDUCED_TARGET,
     MESH_REDUCED_THRESHOLD,
     compute_obb_3d,
@@ -189,7 +188,7 @@ def build_primitive_mesh(mesh_obj: Dict) -> Dict:
         temp_mesh['vertices'] = viewer_vertices.tolist()
         return build_mesh_data(temp_mesh)
     faces_array = np.array(triangulated)
-    if len(faces_array) <= MESH_PRIMITIVE_THRESHOLD:
+    if len(faces_array) <= MESH_PRIMITIVE_TARGET:
         viewer_vertices = rotate_for_viewer(vertices_array)
         temp_mesh = mesh_obj.copy()
         temp_mesh['vertices'] = viewer_vertices.tolist()

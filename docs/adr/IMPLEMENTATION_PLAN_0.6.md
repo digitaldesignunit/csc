@@ -779,7 +779,7 @@ development, with the partners' logos (five files there). The page itself gets t
 of `text-blue-500` links, light and dark logo handling). To settle: the partners' full names and links, and that
 each partner agrees to its logo being shown.
 
-**Ferroscan to reinforcement layout** (user 2026-10-10; **0.6.2**, user the same day; to grill before): the gitignored prototype
+**Ferroscan to reinforcement layout** (user 2026-10-10; 0.6.2, user the same day; **moved to the candidates of 0.6.3 by 8.150**; to grill before): the gitignored prototype
 `reference/ferromodeller/` (a GH CPython component, MIT) reads a Hilti PROFIS Detection report image (two panels: the
 plan / C-scan strip on top, the cross-section / B-scan below with blue / green cap markers per bar and layer,
 magenta cover arrows and spacings), finds the caps and the magenta datum line, and with typed values (scan length,
@@ -847,9 +847,11 @@ phase F `images.unoptimized` is true everywhere and `sharp` is excluded from the
 binaries need glibc >= 2.25 (0.33 / 0.34) or 2.28 (0.35), the server has 2.17, so it never loaded there; revisit only
 with a server move.
 
-**Open-data imports, follow-ups (0.6.2, from the reviews of 8.145 / 8.146, 2026-10-15):** (a) a marker for an uploaded full point cloud on the snapshot (like `mesh_ply_resolutions` for meshes), so an import resumes without reading the Cache-Control of `GET /snapshots/{id}/point_clouds/0.ply`; (b) one `POST /snapshots/{id}/submit` answered 500 during the stone import right after the mesh uploads (stone B02, local instance, retry fine; traceback not kept): watch for it on production and reproduce (suspect: the sync derive of the upload against the submit etag).
+**Inline geometry budget (0.6.2, decision 8.148, user 2026-10-16):** inline meshes at most 1000 faces (original above that as `detailed.ply`, the 8000-faces-inline rule removed), inline clouds at most 1000 points with the staging threshold at 1000; `csc_gh/build.py` constants and `mesh_levels`, the web snapshot form, the import tools, tests; re-run the EPFL stone prepare before its production import.
 
-**HKS v2 (0.6.2, user 2026-10-12, research item next to O25):** the pooled HKS of `apps/descriptors/hks.py` carries
+**Open-data imports, follow-ups (0.6.2, from the reviews of 8.145 / 8.146, 2026-10-15):** (a) a marker for an uploaded full point cloud on the snapshot (like `mesh_ply_resolutions` for meshes), so an import resumes without reading the Cache-Control of `GET /snapshots/{id}/point_clouds/0.ply`; (b) one `POST /snapshots/{id}/submit` answered 500 during the stone import right after the mesh uploads (stone B02, local instance, retry fine; traceback not kept): watch for it on production and reproduce (suspect: the sync derive of the upload against the submit etag). **Closed 2026-10-16 (T2):** the 500 came one second after the importing machine resumed from a 16-minute standby (system event log against the import log); no application defect; not reproduced with B02 alone, all 452 stones in sequence, or concurrent uploads and double submits. An unhandled pymongo error still ends as a bare 500: a handler answering 503 with `Retry-After` and a logged traceback goes with T3.
+
+**HKS v2 (user 2026-10-12, research item next to O25; 0.6.2, moved to the candidates of 0.6.3 by 8.150):** the pooled HKS of `apps/descriptors/hks.py` carries
 little meaning: with M-orthonormal eigenvectors the mass-weighted mean per time is the heat trace over the area,
 `sum_i exp(-lambda_i t) / A`, whose leading term after area normalisation is the same for every shape; 64 eigenpairs
 truncate the short times; the global L2 normalisation lets the mean half dominate the variance half. 0.6.1.0 hides
@@ -914,6 +916,29 @@ one review; each item gets a test that fails before the fix. No GH component cha
 
 Server notes for the deploy: the frontend `.env` loses `MONGODB_*` (harmless if left); paste the new crontab;
 `mkdir -p ~/csc/shared/locks`.
+
+### 0.6.2.0 --- robustness release --- scope decided 2026-10-16 (8.150)
+
+Branch `v-0.6.2.0`. No feature work beside the hardening. Items to cut into tasks before the build:
+
+- **A inline geometry budget (8.148):** see "Inline geometry budget" in the 0.6.1.0 backlog above.
+- **B open-data import follow-ups:** see "Open-data imports, follow-ups" above (cloud marker; the submit 500).
+- **C structural items deferred by 8.144 (a):** one load-and-authorise helper; one change-log writer; logging instead
+  of `print`; a settings object; early body-size rejection; a shared rate-limit store and a per-account throttle;
+  PyJWT; CSP with nonces; signed `SHA256SUMS`; per-file hashes for user objects; a backend read-only flag for
+  maintenance; the username character set after a check of the stored names; the module splits; the test gaps.
+
+**Tasks (cut 2026-10-16; one builds at a time, the user commits after each review):** T1 = A + B (a) (sent
+2026-10-16); T2 = B (b), reproduce first; T3 settings object and logging; T4 load-and-authorise helper, change-log
+writer, module splits; T5 PyJWT, shared rate-limit store, per-account throttle, early body-size rejection, username
+character set; T6 CSP with nonces; T7 release attestations (8.153), per-file hashes for user objects and no self-healing in `CSC_Update` (8.155, worked out with the user; one `.ghuser` export, with the "1000 points" text of `FetchReducedGeometry`), read-only flag (8.154). T5 uses the MongoDB rate-limit store (8.152) and takes three items of a performance check (user 2026-10-17): `maxPoolSize=20` on both `AsyncMongoClient`s and the rate-limit store's client (M0 allows 500 connections); the one-off `reviewed` backfill (8.139 c) leaves the API startup (all 7 datasets carry the flag, dump 261016); the token is decoded once per request and kept in `request.state` (never a decode without verification). The test
+gaps go with the task that touches each area.
+
+**Release steps of 0.6.2.0 (the maintainer runs each one):** (1) once on the server: the `gh` CLI binary in `~/bin` and a stored token for it (deployment README, step 2b); (2) the backend environment checked against the server notes of the changelog (URLs, limits, `SMTP_DEV_MODE` off, `JWT_ALGORITHM`), the database user's rights on `rate_limit_counters`, and `NEXT_PUBLIC_STATIC_BASE_URL` set in the CI build or `NEXT_STATIC_BASE_URL` in the frontend environment; (3) a dump and an assets backup; (4) `touch ~/csc/shared/READ_ONLY`; (5) the deploy: the 0.6.1.1 deploy script runs first and repeats itself with the new one, which verifies the attestations; (6) checks in read-only mode (sign-in, the pages, `/health/db` reports `read_only: true`, the banner shows); (7) `rm ~/csc/shared/READ_ONLY`, one write checked, the crons run once without the skip line.
+
+**Candidates of 0.6.3 (moved out by 8.150):** Ferroscan to reinforcement layout; the IFC export with the PROV-O /
+JSON-LD / GraphML form of the timeline (8.140 h); HKS v2 and HKS level 2; RL8; the GH device sign-in (`FUTURE.md`).
+The SH descriptor stays blocked on its licence.
 
 ---
 

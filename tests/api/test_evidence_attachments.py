@@ -152,7 +152,7 @@ def test_record_ids_are_validated(world):
     assert w['api'].post('/evidence/attachments',
                          files={'file': ('a.pdf', PDF, 'application/pdf')},
                          headers=w['c']).status_code == 422
-    assert attach(w, ['not-a-uuid']).status_code in (400, 422)
+    assert attach(w, ['not-a-uuid']).status_code in (404, 422)
     assert attach(w, ['11111111-2222-4333-8444-555555555555']
                   ).status_code == 404
     a = record(w)

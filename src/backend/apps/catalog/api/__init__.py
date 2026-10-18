@@ -5,11 +5,17 @@ from .utility import router as utility_router
 from .ghinterface import router as ghinterface_router
 from .idtransmission import router as idtransmission_router
 from .identity_workflows import router as identity_workflows_router
+from .schema_routes import router as schema_routes_router
+from .catalog_list import router as catalog_list_router
 from .identities import router as identities_router
 from .exports import router as exports_router
 from .snapshot_lifecycle import router as snapshot_lifecycle_router
 from .identity_lifecycle import router as identity_lifecycle_router
 from .snapshots import router as snapshots_router
+from .snapshot_meshes import router as snapshot_meshes_router
+from .snapshot_media import router as snapshot_media_router
+from .snapshot_proxies import router as snapshot_proxies_router
+from .snapshot_point_clouds import router as snapshot_point_clouds_router
 from .users import router as users_router
 from .datasets import router as datasets_router
 from .invitations import router as invitations_router
@@ -43,6 +49,8 @@ api_router.include_router(evidence_lifecycle_router, tags=['evidence'])
 api_router.include_router(actors_router, tags=['evidence'])
 api_router.include_router(history_router, tags=['identities'])
 api_router.include_router(mail_templates_router, tags=['admin'])
+api_router.include_router(schema_routes_router, tags=['identities'])
+api_router.include_router(catalog_list_router, tags=['identities'])
 api_router.include_router(identities_router, tags=['identities'])
 api_router.include_router(exports_router, tags=['exports'])
 # before the snapshots router: /snapshots/{sid} must not catch the
@@ -50,6 +58,10 @@ api_router.include_router(exports_router, tags=['exports'])
 api_router.include_router(snapshot_lifecycle_router, tags=['snapshots'])
 api_router.include_router(identity_lifecycle_router, tags=['identities'])
 api_router.include_router(snapshots_router, tags=['snapshots'])
+api_router.include_router(snapshot_meshes_router, tags=['snapshots'])
+api_router.include_router(snapshot_media_router, tags=['snapshots'])
+api_router.include_router(snapshot_proxies_router, tags=['snapshots'])
+api_router.include_router(snapshot_point_clouds_router, tags=['snapshots'])
 # datasets first: it owns /users/me, which the admin /users/{user_id} would take
 api_router.include_router(datasets_router, tags=['datasets'])
 api_router.include_router(users_router, tags=['users'])

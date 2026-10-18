@@ -37,17 +37,16 @@ import trimesh
 from scipy.spatial import cKDTree
 from PIL import Image
 
-# MESH REDUCTION SETTINGS
-# If mesh has face count above this but below reduced threshold,
-# only the primitive version will be computed
-MESH_PRIMITIVE_THRESHOLD = 8000
+# MESH REDUCTION SETTINGS (inline geometry budget, decision 8.148)
 # If mesh has face count above this, reduced and primitive versions
 # will be created
 MESH_REDUCED_THRESHOLD = 15000
 # Target face count for reduced mesh
 MESH_REDUCED_TARGET = 10000
-# Target face count for primitive mesh (inline snapshot geometry)
-MESH_PRIMITIVE_TARGET = 500
+# Face count of the primitive mesh (inline snapshot geometry): a mesh with
+# more faces is reduced to this many for the inline version; a mesh with
+# up to this many faces is inline as it is
+MESH_PRIMITIVE_TARGET = 1000
 
 # DATASET / IDENTITY DEFAULTS
 DATASET_NAME = "ddu_build_with_debris"
@@ -841,7 +840,7 @@ def prepare_mesh_versions(
             f"   [OK] Reduced={len(reduced_faces)} "
             f"primitive={len(primitive_faces)}"
         )
-    elif face_count > MESH_PRIMITIVE_THRESHOLD:
+    elif face_count > MESH_PRIMITIVE_TARGET:
         logger.info(
             f"   [PROCESSING] Reducing from {face_count} to "
             f"{MESH_PRIMITIVE_TARGET} faces (primitive)..."
@@ -855,7 +854,7 @@ def prepare_mesh_versions(
     else:
         logger.info(
             f"   [OK] Mesh already small enough ({face_count} faces, "
-            f"<{MESH_PRIMITIVE_THRESHOLD})"
+            f"<={MESH_PRIMITIVE_TARGET})"
         )
 
     primitive_mesh = create_snapshot_mesh(

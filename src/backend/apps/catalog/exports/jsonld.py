@@ -28,6 +28,8 @@ import hashlib
 import json
 from typing import Any, Dict, List, Optional
 
+from settings import get_settings
+
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.vocab import (
     EVIDENCE_METHOD_SOSA_TYPE,
@@ -60,7 +62,8 @@ PREFIXES: Dict[str, str] = {
 JSON_KEYS = (
     'geometry', 'descriptors', 'derivation', 'frame', 'bbx', 'color',
     'payload', 'attributes', 'position', 'status_history',
-    'mesh_ply_resolutions', 'context', 'verification', 'capture',
+    'mesh_ply_resolutions', 'point_cloud_files', 'context', 'verification',
+    'capture',
 )
 
 _DATETIME_TERMS = {
@@ -75,8 +78,7 @@ _DATETIME_TERMS = {
 def site_base(request_base: Optional[str] = None) -> str:
     """The public base of the site: ``FRONTEND_URL`` (decision 8.116 h);
     the request's own base only where it is not set (tests, local use)."""
-    import os
-    base = (os.getenv('FRONTEND_URL') or request_base or '').rstrip('/')
+    base = (get_settings().frontend_url or request_base or '').rstrip('/')
     return base
 
 
@@ -85,8 +87,7 @@ def api_base(request_base: Optional[str] = None) -> str:
     ``CSC_PUBLIC_API_URL`` (behind the Uberspace proxy the request's own base
     is ``http://``, the forwarded scheme is not honoured); the request's own
     base only where it is not set (tests, local use)."""
-    import os
-    return (os.getenv('CSC_PUBLIC_API_URL') or request_base or '').strip(
+    return (get_settings().csc_public_api_url or request_base or '').strip(
         ).rstrip('/')
 
 

@@ -13,7 +13,8 @@ printed. `--config FILE` (optional, never committed) is a JSON object with defau
 `username`, for a local rehearsal. The account becomes moderator and contributor of the datasets it creates.
 
 Meshes follow the Grasshopper client's rules (csc_gh.build.mesh_levels, decision 8.95): the mesh is the
-inline geometry, and a mesh above 500 faces also goes up as `detailed.ply`. Resumable: fixed identity ids
+inline geometry up to 1000 faces; a bigger mesh is reduced to 1000 faces inline and goes up whole as
+`detailed.ply` (decision 8.148). Resumable: fixed identity ids
 (uuid5 of `recreate:<pilot>:<element id>`), evidence found again by its document reference; a second run
 creates nothing. Writes `<out>/run-<time>.log`. Datasets are created private (members only); making them
 public is a separate, deliberate step.
@@ -65,10 +66,23 @@ def read_ply(path: Path):
     return xyz, faces['i'].astype(int)
 
 
+def preview_of(xyz, tri):
+    """The inline Preview: the mesh itself up to the client's inline budget, else quadric decimation to it
+    (decision 8.148; trimesh with fast-simplification, as in the stone tool)."""
+    target = mesh_levels(len(tri))['preview_target']
+    if not target:
+        return xyz, tri
+    import trimesh
+    small = trimesh.Trimesh(vertices=xyz, faces=tri, process=False).simplify_quadric_decimation(
+        face_count=int(target))
+    return np.asarray(small.vertices, dtype=float), np.asarray(small.faces, dtype=int)
+
+
 def inline_mesh(out: Path, item):
     xyz, tri = read_ply(out / item['mesh_ply'])
-    return {'vertices': [[round(float(c), 2) for c in v] for v in xyz],
-            'faces': [[int(i) for i in f] for f in tri]}, xyz, tri
+    pv, pt = preview_of(xyz, tri)
+    return {'vertices': [[round(float(c), 2) for c in v] for v in pv],
+            'faces': [[int(i) for i in f] for f in pt]}, xyz, tri
 
 
 def identity_body(item, mesh):

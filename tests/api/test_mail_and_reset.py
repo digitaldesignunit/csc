@@ -11,7 +11,7 @@ import smtplib
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from jose import jwt
+import jwt
 
 from apps.catalog.api.auth import (
     reset_token_sha256,
@@ -146,7 +146,7 @@ def _old_token(app, user_id: str, seconds_ago: int = 100) -> str:
     return jwt.encode(
         {'sub': user_id, 'role': 'user', 'iat': int(now.timestamp()),
          'exp': int((now + timedelta(hours=1)).timestamp())},
-        app.state.jwt_secret, algorithm=app.state.jwt_algorithm)
+        app.state.jwt_secret, algorithm='HS256')
 
 
 def test_a_token_issued_before_a_reset_or_a_change_is_refused(
@@ -423,7 +423,8 @@ def test_a_bulk_goes_over_one_connection_and_says_per_mail_what_happened(
 
 
 def test_support_gets_the_replies_to_verification_and_reset_when_it_is_set(
-        capsys):
+        caplog):
+    caplog.set_level('INFO', logger='csc')
     """Amends 8.124 c: mails come from the noreply mailbox; a reply to the
     verification or the reset goes to SMTP_REPLY_TO, a reply to an invitation
     or a member notice to the moderator who sent it."""
@@ -436,15 +437,19 @@ def test_support_gets_the_replies_to_verification_and_reset_when_it_is_set(
         assert 'Replies to this email reach the support' in mail.html
         assert 'do not reply' not in (mail.text + mail.html).lower()
     assert email_service.send_mails(dev, mails) == [None, None]
-    shown = capsys.readouterr().out
-    assert shown.count('Reply-To: support@x.org') == 2
+    # dev mode writes the subject and the text to the log, no address
+    # (decision 8.144 h)
+    shown = caplog.text
+    assert shown.count('DEV MODE: mail not sent via SMTP') == 2
+    assert 'a@x.org' not in shown and 'support@x.org' not in shown
+    caplog.clear()
     # not set (or empty): no header, as before
     for unset in ({**CONFIG, 'dev_mode': True},
                   {**CONFIG, 'dev_mode': True, 'reply_to': ''}):
         mail = email_service.reset_mail(unset, 'a@x.org', 'Ada', 'tok')
         assert mail.reply_to is None
         email_service.send_mails(unset, [mail])
-        assert 'Reply-To' not in capsys.readouterr().out
+        assert 'Reply-To' not in caplog.text
     # the acting moderator stays the reply address of the other two
     invitation = email_service.invitation_mail(
         dev, 'a@x.org', 'C', 'Mod', 'mod@x.org', 'D', ['contributor'],
@@ -456,19 +461,19 @@ def test_support_gets_the_replies_to_verification_and_reset_when_it_is_set(
         assert 'Replies to this email reach Mod.' in mail.text
 
 
-def test_the_reply_address_is_read_from_the_environment(monkeypatch):
-    for key, value in (('SMTP_HOST', 'h'), ('SMTP_USER', 'u'),
-                       ('SMTP_PASSWORD', 'p'), ('SMTP_FROM_EMAIL', 'n@x.org'),
-                       ('FRONTEND_URL', 'https://csc.example.org')):
-        monkeypatch.setenv(key, value)
-    monkeypatch.delenv('SMTP_REPLY_TO', raising=False)
+def test_the_reply_address_is_read_from_the_environment(env):
+    env(SMTP_HOST='h', SMTP_USER='u', SMTP_PASSWORD='p',
+        SMTP_FROM_EMAIL='n@x.org', FRONTEND_URL='https://csc.example.org',
+        SMTP_REPLY_TO=None, SMTP_DEV_MODE=None)
     assert email_service.load_email_config()['reply_to'] == ''
-    monkeypatch.setenv('SMTP_REPLY_TO', ' support@x.org ')
+    env(SMTP_REPLY_TO=' support@x.org ')
     assert email_service.load_email_config()['reply_to'] == 'support@x.org'
 
 
-def test_dev_mode_prints_instead_of_sending(capsys):
+def test_dev_mode_logs_instead_of_sending(caplog):
+    caplog.set_level('INFO', logger='csc')
     mail = email_service.reset_mail({**CONFIG, 'dev_mode': True}, 'a@x.org',
                                     'Ada', 'tok')
     assert email_service.send_mails({**CONFIG, 'dev_mode': True}, [mail]) == [None]
-    assert 'auth/reset-password?token=tok' in capsys.readouterr().out
+    assert 'auth/reset-password?token=tok' in caplog.text
+    assert 'a@x.org' not in caplog.text

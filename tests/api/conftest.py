@@ -83,23 +83,29 @@ def backend_env(mongod, db_name, tmp_path_factory):
         'EVIDENCE_ATTACHMENTS_DIR': str(root / 'evidence'),
         'GH_XML_CACHE_DIR': str(root / 'ghxml'),
         'FASTAPI_CORS_ORIGINS': 'http://localhost:3000',
+        'CSC_RATE_LIMIT_STORAGE': 'memory://',
+        'CSC_READ_ONLY_FLAG': str(root / 'READ_ONLY'),
         'CLIENT_LOG_PATH': str(root / 'logs' / 'client_versions.log'),
     }
+    from settings import get_settings
     previous = {key: os.environ.get(key) for key in env}
     os.environ.update(env)
+    get_settings.cache_clear()
     yield env
     for key, value in previous.items():
         if value is None:
             os.environ.pop(key, None)
         else:
             os.environ[key] = value
+    get_settings.cache_clear()
 
 
 @pytest.fixture(scope='session')
 def app(backend_env):
     import main_fastapi  # imported late: it validates the env on import
-    from limiter import limiter
-    limiter.enabled = False  # login tests would hit the 10/minute limit
+    from limiter import local_limiter, shared_limiter
+    for each in (local_limiter, shared_limiter):
+        each.enabled = False  # login tests would hit the 10/minute limit
     return main_fastapi.app
 
 
@@ -121,6 +127,27 @@ def db(mongod, api, db_name):
     # what the app created at startup must exist again for the next test
     database['counters'].insert_one({'_id': 'catalog_number', 'next_value': 1})
     client.close()
+
+
+@pytest.fixture
+def read_only_flag(backend_env):
+    """Switch the read-only flag file (decision 8.154): ``flag.on()`` /
+    ``flag.off()``; always off again after the test."""
+    path = backend_env['CSC_READ_ONLY_FLAG']
+
+    class Flag:
+        def on(self):
+            with open(path, 'w'):
+                pass
+
+        def off(self):
+            if os.path.exists(path):
+                os.remove(path)
+
+    flag = Flag()
+    flag.off()
+    yield flag
+    flag.off()
 
 
 @pytest.fixture

@@ -4,6 +4,8 @@
 
 # --- Server ---
 fastapi
+# the one settings object of the backend (settings.py); pure Python
+pydantic-settings
 gunicorn
 uvicorn[standard]
 python-multipart
@@ -15,12 +17,15 @@ jinja2
 pymongo
 
 # --- Auth ---
-python-jose[cryptography]
+# PyJWT: pure Python, HS256 only (tokens.py); replaced python-jose in 0.6.2.0
+PyJWT
 # direct bcrypt; passlib (unmaintained) breaks on bcrypt >= 5
 bcrypt
 # EmailStr in the user models needs it
 email-validator
 slowapi
+# the counter store of slowapi; rate_store.py subclasses its MongoDB storage
+limits
 
 # --- HTTP client (GitHub service) ---
 httpx

@@ -15,7 +15,7 @@ import { ArrowLeft, Database, Globe, Lock, Search, Trash2, UserPlus } from 'luci
 
 import PublicConfirmDialog from '@/components/common/PublicConfirmDialog'
 import { useConfirm } from '@/components/common/ConfirmDialog'
-import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -231,7 +231,7 @@ function DatasetSettings({ dataset, isAdmin, onSaved }: {
           </Select>
           {waiting && <p className="text-xs text-muted-foreground">Visible to all signed-in users needs the review (above).</p>}
         </div>
-        <Button size="sm" onClick={() => void save()} disabled={busy || !dirty || !name.trim()}>Save</Button>
+        <WriteButton size="sm" onClick={() => void save()} disabled={busy || !dirty || !name.trim()}>Save</WriteButton>
       </CardContent>
     </Card>
   )
@@ -298,15 +298,15 @@ function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
           </p>
         )}
         <div className="space-y-1">
-          <Button size="sm" variant="outline" disabled={waiting || busy || !counts.toPublic} onClick={() => setConfirm(true)}>
+          <WriteButton size="sm" variant="outline" disabled={waiting || busy || !counts.toPublic} onClick={() => setConfirm(true)}>
             <Globe className="mr-1 h-3.5 w-3.5" />{datasetPublicLabel(true, counts.toPublic)}
-          </Button>
+          </WriteButton>
           {!waiting && <p className="text-xs text-muted-foreground">{datasetPublicHelp(counts.toPublic, true)}</p>}
         </div>
         <div className="space-y-1">
-          <Button size="sm" variant="outline" disabled={waiting || busy || !counts.toPrivate} onClick={() => void apply(false)}>
+          <WriteButton size="sm" variant="outline" disabled={waiting || busy || !counts.toPrivate} onClick={() => void apply(false)}>
             <Lock className="mr-1 h-3.5 w-3.5" />{datasetPublicLabel(false, counts.toPrivate)}
-          </Button>
+          </WriteButton>
           {!waiting && <p className="text-xs text-muted-foreground">{datasetPublicHelp(counts.toPrivate, false)}</p>}
         </div>
         <PublicConfirmDialog
@@ -365,9 +365,9 @@ function DeleteDatasetCard({ dataset }: { dataset: DatasetView }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Button size="sm" variant="outline" className="text-destructive" disabled={busy} onClick={() => void remove()}>
+        <WriteButton size="sm" variant="outline" className="text-destructive" disabled={busy} onClick={() => void remove()}>
           <Trash2 className="mr-1 h-3.5 w-3.5" />Delete the dataset
-        </Button>
+        </WriteButton>
       </CardContent>
     </Card>
   )
@@ -445,10 +445,10 @@ function MembersCard({
                     />
                   </TableCell>
                   <TableCell>
-                    <Button size="sm" variant="ghost" aria-label={`Remove ${memberLabel(member)}`}
+                    <WriteButton size="sm" variant="ghost" aria-label={`Remove ${memberLabel(member)}`}
                       onClick={() => void setRoles(member, [])}>
                       <Trash2 className="h-4 w-4" />
-                    </Button>
+                    </WriteButton>
                   </TableCell>
                 </TableRow>
               ))}
@@ -548,9 +548,9 @@ function AddMember({
         </p>
       </div>
       <RoleCheckboxes idPrefix="add-member" compact value={roles} onChange={setRoles} />
-      <Button size="sm" onClick={() => void add()} disabled={busy || !email.trim() || roles.length === 0}>
+      <WriteButton size="sm" onClick={() => void add()} disabled={busy || !email.trim() || roles.length === 0}>
         Add
-      </Button>
+      </WriteButton>
     </div>
   )
 }

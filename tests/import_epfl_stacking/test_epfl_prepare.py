@@ -101,13 +101,13 @@ def test_a_cloud_that_fits_neither_unit_is_left_out_and_flagged(prepare_module, 
 
 # THE LEVELS OF THE CLIENT (decision 8.95) -----------------------------------------------
 def test_the_levels_follow_mesh_levels(prepare_module):
-    from csc_gh.build import (MESH_PRIMITIVE_TARGET, MESH_PRIMITIVE_THRESHOLD, MESH_REDUCED_TARGET,
-                              MESH_REDUCED_THRESHOLD, mesh_levels)
-    assert (MESH_PRIMITIVE_TARGET, MESH_PRIMITIVE_THRESHOLD) == (500, 8000)
+    from csc_gh.build import MESH_PRIMITIVE_TARGET, MESH_REDUCED_TARGET, MESH_REDUCED_THRESHOLD, mesh_levels
+    assert MESH_PRIMITIVE_TARGET == 1000
     assert (MESH_REDUCED_TARGET, MESH_REDUCED_THRESHOLD) == (10000, 15000)
     assert mesh_levels(400) == {'preview_target': None, 'reduced_target': None, 'save_original': False}
-    assert mesh_levels(5000)['reduced_target'] is None and mesh_levels(5000)['save_original']
-    assert mesh_levels(20000) == {'preview_target': 500, 'reduced_target': 10000, 'save_original': True}
+    assert mesh_levels(1000) == {'preview_target': None, 'reduced_target': None, 'save_original': False}
+    assert mesh_levels(5000) == {'preview_target': 1000, 'reduced_target': None, 'save_original': True}
+    assert mesh_levels(20000) == {'preview_target': 1000, 'reduced_target': 10000, 'save_original': True}
 
 
 def test_a_small_mesh_goes_up_inline_only(prepare_module, tmp_path):
@@ -117,9 +117,12 @@ def test_a_small_mesh_goes_up_inline_only(prepare_module, tmp_path):
     assert len(json.loads((folder / 'preview.json').read_text())['mesh']['faces']) == 320
 
 
-def test_a_middle_mesh_is_its_own_preview_and_has_a_detailed_file(prepare_module, tmp_path):
+def test_a_middle_mesh_is_reduced_for_the_preview_and_has_a_detailed_file(prepare_module, tmp_path):
     meta, folder = run(prepare_module, tmp_path, subdivisions=4)                         # 5120 faces
-    assert meta['levels'] == {'preview_faces': 5120, 'reduced_faces': None, 'detailed': True}
+    assert meta['levels']['reduced_faces'] is None and meta['levels']['detailed'] is True
+    assert abs(meta['levels']['preview_faces'] - 1000) <= 50
+    assert len(json.loads((folder / 'preview.json').read_text())['mesh']['faces']) == meta['levels']['preview_faces']
+    assert len(trimesh.load(folder / 'detailed.ply', process=False).faces) == 5120       # the original, whole
     assert (folder / 'detailed.ply').is_file() and not (folder / 'reduced.ply').exists()
 
 
@@ -127,7 +130,7 @@ def test_a_big_mesh_has_preview_reduced_and_detailed(prepare_module, tmp_path):
     meta, folder = run(prepare_module, tmp_path, subdivisions=5)                         # 20480 faces
     assert meta['faces'] == 20480
     assert meta['levels']['detailed'] is True
-    assert abs(meta['levels']['preview_faces'] - 500) <= 25
+    assert abs(meta['levels']['preview_faces'] - 1000) <= 50
     assert abs(meta['levels']['reduced_faces'] - 10000) <= 500
     preview = json.loads((folder / 'preview.json').read_text())
     assert len(preview['mesh']['faces']) == meta['levels']['preview_faces']
@@ -166,24 +169,30 @@ def test_decimate_keeps_a_mesh_that_is_small_enough(prepare_module):
 # THE CLOUD (thinning and staging) -------------------------------------------------------
 def test_a_big_cloud_is_thinned_inline_and_staged_whole(prepare_module, tmp_path):
     meta, folder = run(prepare_module, tmp_path, cloud_points=20000)
-    assert meta['cloud'] == {'points': 20000, 'scale_to_mesh_unit': 1000.0, 'inline_points': 5000,
+    assert meta['cloud'] == {'points': 20000, 'scale_to_mesh_unit': 1000.0, 'inline_points': 1000,
                              'staged': True, 'bbox_mm': meta['cloud']['bbox_mm']}
     inline = json.loads((folder / 'preview.json').read_text())['cloud']
-    assert len(inline['points']) == 5000 and len(inline['colors']) == 5000
+    assert len(inline['points']) == 1000 and len(inline['colors']) == 1000
     full = trimesh.load(folder / 'cloud.ply', process=False)
     assert len(full.vertices) == 20000 and len(full.colors) == 20000                      # whole, coloured
     assert max(abs(full.vertices.min()), full.vertices.max()) == pytest.approx(100.0, abs=1)
 
 
 def test_a_small_cloud_goes_up_inline_only(prepare_module, tmp_path):
-    meta, folder = run(prepare_module, tmp_path, cloud_points=3000)
-    assert meta['cloud']['inline_points'] == 3000 and meta['cloud']['staged'] is False
+    meta, folder = run(prepare_module, tmp_path, cloud_points=800)
+    assert meta['cloud']['inline_points'] == 800 and meta['cloud']['staged'] is False
     assert not (folder / 'cloud.ply').exists()
+
+
+def test_a_cloud_of_3000_points_is_thinned_and_staged_whole(prepare_module, tmp_path):
+    meta, folder = run(prepare_module, tmp_path, cloud_points=3000)                       # no cloud without its file
+    assert meta['cloud']['inline_points'] == 1000 and meta['cloud']['staged'] is True
+    assert len(trimesh.load(folder / 'cloud.ply', process=False).vertices) == 3000
 
 
 def test_the_staging_threshold_is_the_clients(prepare_module):
     from csc_gh.build import POINT_CLOUD_INLINE_MAX, POINT_CLOUD_STAGING_THRESHOLD
-    assert (POINT_CLOUD_INLINE_MAX, POINT_CLOUD_STAGING_THRESHOLD) == (5000, 5000)
+    assert (POINT_CLOUD_INLINE_MAX, POINT_CLOUD_STAGING_THRESHOLD) == (1000, 1000)
 
 
 # THE STONE'S OWN FACTS ------------------------------------------------------------------

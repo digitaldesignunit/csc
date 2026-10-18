@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { WriteButton } from "@/components/ui/write-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import BackgroundMesh from "@/components/components/BackgroundMesh";
+import { USERNAME_HINT, usernameProblem } from "@/lib/username";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
@@ -26,8 +27,9 @@ export default function RegisterPage() {
     setError("");
 
     // Client-side validation
-    if (!username.trim()) {
-      setError("Username is required.");
+    const nameProblem = usernameProblem(username);
+    if (nameProblem) {
+      setError(nameProblem);
       return;
     }
     if (!fullName.trim()) {
@@ -137,7 +139,7 @@ export default function RegisterPage() {
                   className="backdrop-blur placeholder:opacity-40"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Lowercase; you can sign in with any case.
+                  {USERNAME_HINT}
                 </p>
               </div>
 
@@ -180,7 +182,7 @@ export default function RegisterPage() {
                 .
               </p>
 
-              <Button type="submit" className="w-full">Register</Button>
+              <WriteButton type="submit" className="w-full">Register</WriteButton>
             </form>
             
             <div className="mt-4 text-center text-sm text-muted-foreground">

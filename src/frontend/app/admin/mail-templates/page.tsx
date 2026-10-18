@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, Mail, Monitor, Moon, Send, Smartphone, Sun } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Card } from '@/components/ui/card'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -113,11 +113,11 @@ export default function MailTemplatesPage() {
                   <div className="flex gap-2"><dt className="w-16 shrink-0 text-muted-foreground">Subject</dt><dd className="min-w-0 break-words font-medium">{mail.subject}</dd></div>
                   <div className="flex gap-2"><dt className="w-16 shrink-0 text-muted-foreground">Reply-To</dt><dd className="min-w-0 break-words">{mail.reply_to || 'none'}</dd></div>
                 </dl>
-                <Button type="button" size="sm" onClick={() => void sendTest()} disabled={sending || !data.to}
+                <WriteButton type="button" size="sm" onClick={() => void sendTest()} disabled={sending || !data.to}
                   title={data.to ? `Sends to ${data.to}` : 'Your account has no e-mail address'}>
                   {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
                   Send me a test
-                </Button>
+                </WriteButton>
               </div>
               {data.to && <p className="text-xs text-muted-foreground">The test goes to {data.to}.</p>}
               {sendError && <p className="text-sm text-destructive" role="alert">{sendError}</p>}

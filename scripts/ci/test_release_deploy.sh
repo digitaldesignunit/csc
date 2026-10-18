@@ -75,6 +75,7 @@ make_release 9.9.9.2
 make_release 9.9.9.3 broken
 make_release 9.9.9.4 selfupdate
 make_release 9.9.9.5 selfupdate
+make_release 9.9.9.6
 (cd "$t/api" && exec python3 -m http.server "$api_port" --bind 127.0.0.1 >/dev/null 2>&1) &
 pids+=($!)
 # the server starts in the background: wait until it answers
@@ -116,6 +117,15 @@ class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 EOF
+# gh stub: `gh attestation verify` succeeds or fails as $t/gh.mode says (ok / fail);
+# every call is recorded
+cat > "$t/bin/gh" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$t/gh.calls"
+[ "\${1:-}" = attestation ] && [ "\${2:-}" = verify ] || exit 2
+[ "\$(cat "$t/gh.mode" 2>/dev/null || echo ok)" = ok ]
+EOF
+chmod +x "$t/bin/gh"
 export PATH="$t/bin:$PATH"
 cp "$root/uberspaceconfig/deployment/"*.sh "$CSC_HOME/bin/"
 chmod +x "$CSC_HOME/bin/"*.sh   # as on the server (step 2 of the deploy README)
@@ -127,6 +137,32 @@ deploy --install v9.9.9.1 > "$t/log0" 2>&1 || { cat "$t/log0"; fail "install onl
 [ -f "$CSC_HOME/releases/9.9.9.1/.complete" ] || fail "install-only did not install"
 [ ! -e "$CSC_HOME/current" ] || fail "install-only switched current"
 ok "install only (server conversion)"
+
+# the attestations (decision 8.153): the backend tar and the frontend zip are
+# verified against this repository's release workflow before anything is unpacked
+[ "$(wc -l < "$t/gh.calls")" = 2 ] || fail "expected two attestation checks, got $(wc -l < "$t/gh.calls")"
+grep -q "attestation verify .*csc-backend-9.9.9.1.tar.gz --repo owner/repo --signer-workflow owner/repo/.github/workflows/release.yml" "$t/gh.calls"   || fail "backend tar not verified with the signer workflow"
+grep -q "attestation verify .*csc-frontend-9.9.9.1.zip --repo owner/repo --signer-workflow owner/repo/.github/workflows/release.yml" "$t/gh.calls"   || fail "frontend zip not verified with the signer workflow"
+ok "attestations verified for the backend tar and the frontend zip"
+
+echo fail > "$t/gh.mode"
+if deploy --install v9.9.9.6 > "$t/log0b" 2>&1; then cat "$t/log0b"; fail "installed although the attestation failed"; fi
+grep -q "attestation verification failed" "$t/log0b" || fail "failed attestation not reported"
+[ ! -e "$CSC_HOME/releases/9.9.9.6" ] || fail "a release with a failed attestation was unpacked"
+echo ok > "$t/gh.mode"
+ok "a failed attestation stops the install"
+
+# gh missing from PATH (the function alone, PATH emptied: the real gh of a runner must not hide it)
+verify_fn=$(sed -n '/^verify_attestations()/,/^}/p' "$root/uberspaceconfig/deployment/csc_release_deploy.sh")
+# PATH is emptied on purpose; GITHUB_TOKEN and REPO are read by the eval
+# shellcheck disable=SC2123,SC2034
+( PATH=/nonexistent
+  log() { :; }; die() { echo "ERROR: $*"; exit 1; }
+  GITHUB_TOKEN=""; REPO=owner/repo
+  eval "$verify_fn"
+  verify_attestations /dev/null ) > "$t/log0c" 2>&1 && fail "no error without gh"
+grep -q "gh CLI is not on PATH" "$t/log0c" || { cat "$t/log0c"; fail "missing gh not reported"; }
+ok "a missing gh stops the deploy with a clear message"
 
 deploy v9.9.9.1 > "$t/log1" 2>&1 || { cat "$t/log1"; fail "first deploy"; }
 [ "$(active)" = 9.9.9.1 ] || fail "9.9.9.1 not active"

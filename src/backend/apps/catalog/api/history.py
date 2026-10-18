@@ -19,7 +19,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Set
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from pymongo.errors import PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.lanes import (
@@ -38,14 +38,16 @@ from apps.catalog.permissions import (
     record_projection,
     withdrawn_projection,
 )
-from .access import EVER_PUBLISHED, dataset_of, viewer_of
+from .access import EVER_PUBLISHED, dataset_of, load_identity, viewer_of
 from .auth import get_optional_current_user
-from .catalog_common import validate_uuid
 from .public_access import (
-    ensure_identity_read_access,
     identity_allows_anonymous_read,
     viewer_headers,
 )
+
+from logging_setup import get_logger
+
+log = get_logger(__name__)
 
 router = APIRouter()
 
@@ -130,10 +132,10 @@ async def get_identity_history(
     join a parent and a child lane (``cut``: one parent; ``assemble``:
     several) at the child's first version. ``more`` counts the lanes left
     out beyond twelve."""
-    validate_uuid(identity_id, label='identity id')
     viewer = viewer_of(current_user)
-    root = await ensure_identity_read_access(
-        request, identity_id, current_user, projection=IDENTITY_FIELDS)
+    root = (await load_identity(
+        request, current_user, identity_id,
+        projection=IDENTITY_FIELDS)).record
     identities = request.app.mongodb_component_identities
     try:
         found: Dict[str, Dict[str, Any]] = {root['_id']: {
@@ -180,8 +182,10 @@ async def get_identity_history(
         evidence = await request.app.mongodb_component_evidence.find(
             {'identity_id': {'$in': full_ids}},
             EVIDENCE_FIELDS).to_list(length=None)
-    except PyMongoError as exc:
-        print(f'[ERROR] get_identity_history DB error: {exc}')
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
+    except PyMongoError:
+        log.exception('get_identity_history DB error')
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail='Internal server error')
 

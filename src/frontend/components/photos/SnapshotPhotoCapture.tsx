@@ -7,6 +7,7 @@ import { Camera, ImagePlus, Loader2, Trash2, ZoomIn } from 'lucide-react'
 import PhotoLightboxDialog, { type PhotoLightboxItem } from '@/components/photos/PhotoLightboxDialog'
 import { Button } from '@/components/ui/button'
 import { THUMB_BOX, THUMB_IMG, thumbRow } from '@/lib/photoThumbs'
+import { useReadOnly } from '@/components/common/ReadOnlyProvider'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -71,7 +72,9 @@ function resetFileInput(input: HTMLInputElement | null) {
 
 export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
   const maxPhotos = props.maxPhotos ?? MAX_PHOTO_SLOTS
-  const disabled = props.disabled ?? false
+  // a live photo is stored at once: not while the backend is read-only (8.154)
+  const readOnly = useReadOnly()
+  const disabled = (props.disabled ?? false) || (props.mode === 'live' && readOnly)
   const compact = props.mode === 'live' ? (props.compact ?? false) : false
   const dense = props.mode === 'live' ? (props.dense ?? false) : false
   const rowHeight = dense ? 'h-24' : 'h-[200px] lg:h-[140px]'

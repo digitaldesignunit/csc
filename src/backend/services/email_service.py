@@ -19,7 +19,6 @@ invitation, "added to a dataset" and the admin's "dataset created" notice.
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import os
 import secrets
 import smtplib
 from dataclasses import dataclass
@@ -29,6 +28,8 @@ from email.utils import formataddr
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
+from settings import get_settings
+
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from jinja2 import (
     Environment,
@@ -36,6 +37,10 @@ from jinja2 import (
     StrictUndefined,
     select_autoescape,
 )
+
+from logging_setup import get_logger
+
+log = get_logger(__name__)
 
 SUBJECT_PREFIX = '[CSC]'
 
@@ -53,16 +58,19 @@ def load_email_config() -> Dict[str, str]:
     a password-reset mail goes; none when unset), SMTP_DEV_MODE (default
     false).
     """
+    settings = get_settings().require(
+        'SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM_EMAIL',
+        'FRONTEND_URL')
     return {
-        'smtp_host': os.environ['SMTP_HOST'],
-        'smtp_port': os.getenv('SMTP_PORT', '587'),
-        'smtp_user': os.environ['SMTP_USER'],
-        'smtp_password': os.environ['SMTP_PASSWORD'],
-        'from_email': os.environ['SMTP_FROM_EMAIL'],
-        'from_name': os.getenv('SMTP_FROM_NAME', 'Catalog of Second Chances'),
-        'reply_to': os.getenv('SMTP_REPLY_TO', '').strip(),
-        'frontend_url': os.environ['FRONTEND_URL'],
-        'dev_mode': os.getenv('SMTP_DEV_MODE', 'false').lower() == 'true',
+        'smtp_host': settings.smtp_host,
+        'smtp_port': settings.smtp_port,
+        'smtp_user': settings.smtp_user,
+        'smtp_password': settings.smtp_password.get_secret_value(),
+        'from_email': settings.smtp_from_email,
+        'from_name': settings.smtp_from_name,
+        'reply_to': settings.smtp_reply_to,
+        'frontend_url': settings.frontend_url,
+        'dev_mode': settings.smtp_dev_mode,
     }
 
 
@@ -315,14 +323,12 @@ def _message(config: Dict[str, str], mail: Mail) -> EmailMessage:
 
 
 def _show(mail: Mail) -> None:
-    print('\n' + '=' * 80)
-    print(f'DEV MODE: mail not sent via SMTP --- To: {mail.to}')
-    if mail.reply_to:
-        print(f'Reply-To: {mail.reply_to}')
-    print(f'Subject: {mail.subject}')
-    print('-' * 80)
-    print(mail.text)
-    print('=' * 80 + '\n')
+    """Development mode (SMTP_DEV_MODE): the mail goes to the log instead of
+    the server, so a verification link can be followed. The recipient and
+    reply-to addresses are left out (decision 8.144 h); the text is the point
+    of this mode and is never written on a server (dev mode is off there)."""
+    log.info('DEV MODE: mail not sent via SMTP\nSubject: %s\n%s\n%s',
+             mail.subject, '-' * 40, mail.text)
 
 
 def send_mails(config: Dict[str, str], mails: Iterable[Mail]

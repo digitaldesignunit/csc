@@ -9,9 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from apps.catalog.api import ghinterface
+from apps.catalog.api.ghinterface import library
 
 PACKAGE = Path(__file__).resolve().parents[2] / 'grasshopper_lib' / 'csc_gh'
+
+
+@pytest.fixture(autouse=True)
+def repo(env):
+    env(GITHUB_REPO_URL='https://github.com/example/csc')
 
 
 def _files():
@@ -20,14 +25,14 @@ def _files():
 
 def test_only_python_files_of_the_package_folder_are_library_files():
     for name in ('__init__.py', 'build.py', 'ply.py', 'doc.py'):
-        assert ghinterface.is_library_file(name), name
+        assert library.is_library_file(name), name
     for name in ('', '.hidden.py', 'a/b.py', '..\\x.py', 'build.pyc',
                  'Build.py', 'x.txt', '__pycache__'):
-        assert not ghinterface.is_library_file(name), name
+        assert not library.is_library_file(name), name
 
 
 def test_the_manifest_has_the_version_and_a_checksum_per_file():
-    manifest = ghinterface.library_manifest('v0.6.0.0', _files())
+    manifest = library.library_manifest('v0.6.0.0', _files())
     init = (PACKAGE / '__init__.py').read_text(encoding='utf-8')
     version = re.search(r"^__version__ = '(\w+)'$", init, re.M).group(1)
     assert manifest['version'] == version and manifest['ref'] == 'v0.6.0.0'
@@ -40,9 +45,9 @@ def test_the_manifest_has_the_version_and_a_checksum_per_file():
 
 
 def test_a_library_without_a_version_has_none():
-    assert ghinterface.library_manifest('r', {'__init__.py': b'x = 1\n'})[
+    assert library.library_manifest('r', {'__init__.py': b'x = 1\n'})[
         'version'] is None
-    assert ghinterface.library_manifest('r', {})['version'] is None
+    assert library.library_manifest('r', {})['version'] is None
 
 
 @pytest.fixture
@@ -59,9 +64,8 @@ def github(monkeypatch):
     async def content(client, api_base, token, entry, ref):
         return files[entry['name']]
 
-    monkeypatch.setattr(ghinterface, '_list_repo_dir_cached', listing)
-    monkeypatch.setattr(ghinterface, '_get_repo_entry_content', content)
-    monkeypatch.setenv('GITHUB_REPO_URL', 'https://github.com/example/csc')
+    monkeypatch.setattr(library, '_list_repo_dir_cached', listing)
+    monkeypatch.setattr(library, '_get_repo_entry_content', content)
     return files
 
 

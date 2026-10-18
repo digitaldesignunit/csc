@@ -61,13 +61,14 @@ SNAPSHOT_METADATA_KEYS = (
 
 ORIGIN_KINDS_WITH_WORK = ('deinstallation', 'demolition')
 
-# mesh levels (8.23, 8.95 1): Preview = inline, Reduced and Original = files
-MESH_PRIMITIVE_THRESHOLD = 8000
+# mesh levels (8.23, 8.95 1) and the inline budget (8.148): Preview = inline,
+# at most MESH_PRIMITIVE_TARGET faces / POINT_CLOUD_INLINE_MAX points;
+# Reduced and Original = files
 MESH_REDUCED_THRESHOLD = 15000
 MESH_REDUCED_TARGET = 10000
-MESH_PRIMITIVE_TARGET = 500
-POINT_CLOUD_INLINE_MAX = 5000
-POINT_CLOUD_STAGING_THRESHOLD = 5000
+MESH_PRIMITIVE_TARGET = 1000
+POINT_CLOUD_INLINE_MAX = 1000
+POINT_CLOUD_STAGING_THRESHOLD = 1000
 
 _UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}'
                    r'-[0-9a-f]{12}$')
@@ -471,22 +472,23 @@ def capture(method=None, device=None, software=None, captured_at=None,
 
 # GEOMETRY --------------------------------------------------------------------
 def mesh_levels(face_count):
-    """What to keep of a mesh of ``face_count`` faces (8.23, 8.95 1).
+    """What to keep of a mesh of ``face_count`` faces (8.23, 8.95 1, 8.148).
 
     ``preview_target``: reduce the inline Preview to that many faces (None:
     the mesh itself is the preview); ``reduced_target``: write a Reduced
     file with that many faces (None: none); ``save_original``: write the
-    Original file.
+    Original file. A mesh of at most ``MESH_PRIMITIVE_TARGET`` faces is
+    inline as it is and has no file; any bigger mesh keeps its Original.
     """
     if face_count > MESH_REDUCED_THRESHOLD:
         return {'preview_target': MESH_PRIMITIVE_TARGET,
                 'reduced_target': MESH_REDUCED_TARGET,
                 'save_original': True}
-    if face_count > MESH_PRIMITIVE_THRESHOLD:
+    if face_count > MESH_PRIMITIVE_TARGET:
         return {'preview_target': MESH_PRIMITIVE_TARGET,
                 'reduced_target': None, 'save_original': True}
     return {'preview_target': None, 'reduced_target': None,
-            'save_original': face_count > MESH_PRIMITIVE_TARGET}
+            'save_original': False}
 
 
 def inline_mesh(vertices, faces, colors=None):

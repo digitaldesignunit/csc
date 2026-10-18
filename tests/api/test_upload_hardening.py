@@ -15,7 +15,10 @@ import zlib
 import pytest
 from PIL import Image
 
-from apps.catalog.api import snapshots as snapshots_api
+from apps.catalog.api import snapshot_common
+from apps.catalog.api import snapshot_media
+from apps.catalog.api import snapshot_meshes
+from apps.catalog.api import snapshot_proxies
 from apps.catalog.api.snapshot_images import (
     MAX_UPLOAD_PIXELS,
     ImageTooLarge,
@@ -125,10 +128,10 @@ def _off_the_loop(record):
 def test_photo_decoding_and_encoding_run_off_the_event_loop(world, monkeypatch):
     seen = []
     wrap = _off_the_loop(seen)
-    monkeypatch.setattr(snapshots_api, 'open_upload_photo',
-                        wrap(snapshots_api.open_upload_photo))
-    monkeypatch.setattr(snapshots_api, 'compress_and_save_jpeg',
-                        wrap(snapshots_api.compress_and_save_jpeg))
+    monkeypatch.setattr(snapshot_media, 'open_upload_photo',
+                        wrap(snapshot_media.open_upload_photo))
+    monkeypatch.setattr(snapshot_media, 'compress_and_save_jpeg',
+                        wrap(snapshot_media.compress_and_save_jpeg))
     response = world['api'].put(
         f'/snapshots/{DRAFT}/photos/0', headers=world['admin'],
         files={'photo': ('p.jpg', _jpeg(), 'image/jpeg')})
@@ -147,8 +150,8 @@ def test_the_obj_conversion_runs_off_the_event_loop(world, monkeypatch):
     _upload_mesh(world)
     seen = []
     monkeypatch.setattr(
-        snapshots_api, 'export_mesh_file',
-        _off_the_loop(seen)(snapshots_api.export_mesh_file))
+        snapshot_meshes, 'export_mesh_file',
+        _off_the_loop(seen)(snapshot_meshes.export_mesh_file))
     response = world['api'].get(
         f'/snapshots/{DRAFT}/meshes/0/reduced?format=obj',
         headers=world['admin'])
@@ -160,8 +163,8 @@ def test_the_obj_conversion_runs_off_the_event_loop(world, monkeypatch):
 def test_the_proxy_export_runs_off_the_event_loop(world, monkeypatch):
     seen = []
     monkeypatch.setattr(
-        snapshots_api, '_proxy_mesh_bytes',
-        _off_the_loop(seen)(snapshots_api._proxy_mesh_bytes))
+        snapshot_proxies, '_proxy_mesh_bytes',
+        _off_the_loop(seen)(snapshot_proxies._proxy_mesh_bytes))
     response = world['api'].get(
         f'/snapshots/{sid("panel")}/proxies/0/mesh?format=obj',
         headers=world['admin'])
@@ -172,7 +175,7 @@ def test_the_proxy_export_runs_off_the_event_loop(world, monkeypatch):
 def test_a_mesh_above_the_cap_is_not_converted_to_obj(world, monkeypatch):
     _upload_mesh(world)
     url = f'/snapshots/{DRAFT}/meshes/0/reduced'
-    monkeypatch.setattr(snapshots_api, 'OBJ_CONVERSION_MAX_BYTES',
+    monkeypatch.setattr(snapshot_meshes, 'OBJ_CONVERSION_MAX_BYTES',
                         len(PLY) - 1)
     refused = world['api'].get(f'{url}?format=obj', headers=world['admin'])
     assert refused.status_code == 413
@@ -182,15 +185,15 @@ def test_a_mesh_above_the_cap_is_not_converted_to_obj(world, monkeypatch):
 
 
 def test_the_mesh_routes_are_rate_limited(world):
-    from limiter import limiter
+    from limiter import local_limiter
     _upload_mesh(world)
     url = f'/snapshots/{DRAFT}/meshes/0/reduced'
-    limiter.reset()
-    limiter.enabled = True              # the fixtures switch it off
+    local_limiter.reset()
+    local_limiter.enabled = True              # the fixtures switch it off
     try:
         codes = [world['api'].get(url, headers=world['admin']).status_code
-                 for _ in range(snapshots_api.MESH_LIMIT_PER_MINUTE + 1)]
+                 for _ in range(snapshot_common.MESH_LIMIT_PER_MINUTE + 1)]
         assert set(codes[:-1]) == {200} and codes[-1] == 429
     finally:
-        limiter.enabled = False
-        limiter.reset()
+        local_limiter.enabled = False
+        local_limiter.reset()

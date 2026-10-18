@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 import { ExternalLink, ShieldCheck } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Textarea } from '@/components/ui/textarea'
 import type { Accreditation, Actor } from '@/generated'
 import type { EvidenceView } from '@/generated'
@@ -140,10 +140,10 @@ export default function VerificationPanel({
       )}
 
       {canSelfAttest && (
-        <Button size="sm" variant="outline" className="h-8 text-xs" disabled={busy}
+        <WriteButton size="sm" variant="outline" className="h-8 text-xs" disabled={busy}
           onClick={() => void set(state === 'self_attested' ? 'unverified' : 'self_attested')}>
           {state === 'self_attested' ? 'Withdraw my attestation' : 'I performed this and stand by the result'}
-        </Button>
+        </WriteButton>
       )}
 
       {canReview && (
@@ -161,11 +161,11 @@ export default function VerificationPanel({
           />
           <div className="flex flex-wrap gap-1.5">
             {reviewable.map((target) => (
-              <Button key={target} size="sm" variant={target === 'unverified' ? 'ghost' : 'outline'}
+              <WriteButton key={target} size="sm" variant={target === 'unverified' ? 'ghost' : 'outline'}
                 className="h-8 text-xs" disabled={busy || (target === 'accredited' && !note.trim())}
                 onClick={() => void set(target, note.trim())}>
                 {target === 'unverified' ? 'Step back to unverified' : `Mark ${vocabLabel(VERIFICATION_STATE_LABELS, target).toLowerCase()}`}
-              </Button>
+              </WriteButton>
             ))}
           </div>
         </div>

@@ -3,10 +3,14 @@
  * `POST /auth/token` and nowhere else. The backend is the only verifier of
  * the password, so its rate limit sees every attempt, and this server holds no
  * database access. A 401 (wrong credentials) and a 403 (address not verified)
- * both end as a failed sign-in; the answer on the page is the same.
+ * both end as a failed sign-in; the answer on the page is the same. A 429
+ * (the limit of the address, or of failed sign-ins of the account, 8.162)
+ * ends as the `RateLimited` error, which the page words.
  *
  * The log line holds the outcome and never the identifier the visitor typed.
  */
+
+import { RATE_LIMITED } from './signInErrors'
 
 export type AuthorizedUser = {
   id: string
@@ -84,8 +88,11 @@ export async function signInWithBackend(
   }
 
   if (!resp.ok) {
-    // 401: wrong credentials; 403: address not verified; 429: too many attempts
+    // 401: wrong credentials; 403: address not verified
     log(`[NextAuth][Auth] rejected: backend answered ${resp.status}`)
+    // 429: too many attempts for the address or the account; the page says so
+    // (an error thrown here reaches the sign-in page as its error code)
+    if (resp.status === 429) throw new Error(RATE_LIMITED)
     return null
   }
 

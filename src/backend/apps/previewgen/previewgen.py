@@ -14,11 +14,9 @@ import numpy as np
 from PIL import Image, ImageOps
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
-try:
-    from utility import create_logging_timestamp as logts
-except ImportError:
-    print('Import Error: utility module not found, '
-          'continuing without logging...')
+from logging_setup import get_logger
+
+log = get_logger(__name__)
 
 
 # FUNCTION DEFINITIONS --------------------------------------------------------
@@ -300,11 +298,7 @@ def save_preview_image(image: Image, folder: str, filename: str) -> bool:
     file_path = os.path.join(folder, filename)
     # Save the image in .webp format
     image.save(file_path, format='webp')
-    try:
-        ts = logts()
-        print(f'[PREVIEWGEN] {ts} Preview for {filename} saved to {folder}')
-    except NameError:
-        print(f'[PREVIEWGEN] Preview for {filename} saved to {folder}')
+    log.info('Preview for %s saved to %s', filename, folder)
     return True
 
 

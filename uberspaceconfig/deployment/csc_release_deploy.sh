@@ -17,6 +17,11 @@
 #   ~/csc/bin/                 this script, csc_deploy_gate.sh, csc_maintenance.sh and
 #                              maintenance/ (updated by each deploy)
 #
+# The backend tar and the frontend zip are checked twice before anything is
+# installed: against SHA256SUMS (the download) and with `gh attestation verify`
+# (they were built by this repository's release workflow). The deploy stops when
+# gh is missing or a check fails.
+#
 # A deploy never touches the database. If the new release fails its health check the
 # previous one is switched back and restarted.
 #
@@ -28,6 +33,10 @@
 # not one release late.
 
 set -euo pipefail
+
+# the gh CLI lives in ~/bin (README, "Releases and deployment"); a forced SSH
+# command does not always have it on PATH
+PATH="$HOME/bin:$PATH"
 
 CSC_HOME="${CSC_HOME:-$HOME/csc}"
 REPO="${CSC_GITHUB_REPO:-digitaldesignunit/csc}"
@@ -61,6 +70,17 @@ github() {  # github <url> <outfile>: public repo; a token only raises rate limi
   else
     curl -fsSL --retry 3 -o "$2" "$1"
   fi
+}
+
+verify_attestations() {  # verify_attestations <file>...: made by this repo's release workflow (8.153)
+  command -v gh >/dev/null 2>&1     || die "the gh CLI is not on PATH: install it once into ~/bin (README, \"Releases and deployment\"); the deploy verifies the release attestations with it"
+  local file
+  for file in "$@"; do
+    log "verifying the attestation of $(basename "$file")"
+    # gh needs a token even for a public repository: the deploy token (no scope
+    # needed) or a stored `gh auth login`
+    GH_TOKEN="${GH_TOKEN:-$GITHUB_TOKEN}" gh attestation verify "$file" --repo "$REPO"       --signer-workflow "$REPO/.github/workflows/release.yml" >/dev/null       || die "attestation verification failed for $(basename "$file"): not installed (is gh logged in, or GITHUB_CSC_DEPLOY_TOKEN set?)"
+  done
 }
 
 version_of() { cat "$1/VERSION"; }
@@ -157,6 +177,9 @@ PY
   done
   (cd "$work" && grep -E " (\*)?($backend|$frontend)\$" SHA256SUMS | sha256sum -c -) \
     || die "checksum mismatch"
+  # the sums travel with the files; the attestation binds each file to this
+  # repository's release workflow (decision 8.153)
+  verify_attestations "$work/$backend" "$work/$frontend"
 
   log "unpacking into $target"
   DEPLOY_TARGET_TMP="$target.tmp"   # a half-unpacked release never survives

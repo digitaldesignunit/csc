@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 
 import { Field } from '@/components/evidence/controls'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { DateField } from '@/components/ui/date-field'
 import {
   Dialog,
@@ -92,9 +93,9 @@ export default function LayoutDetails({
       </dl>
       {mayFill && (
         <>
-          <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialog(true)}>
+          <WriteButton type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => setDialog(true)}>
             <FilePen className="mr-1 h-3.5 w-3.5" />Fill in the document details
-          </Button>
+          </WriteButton>
           <FillDialog
             open={dialog}
             onOpenChange={setDialog}
@@ -182,9 +183,9 @@ function FillDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="button" onClick={() => void save()} disabled={saving}>
+          <WriteButton type="button" onClick={() => void save()} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save
-          </Button>
+          </WriteButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

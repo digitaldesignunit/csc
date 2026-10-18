@@ -24,11 +24,13 @@ from pydantic import BaseModel, Field
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.models import User
+from settings import get_settings
 from .access import (
     component_visible,
+    find_identity,
     identity_ever_published,
     load_identity,
-    raise_if_purged,
+    not_found,
     require,
     viewer_of,
 )
@@ -52,7 +54,7 @@ class PurgeBody(BaseModel):
 
 
 def _snapshot_files(request: Request, snapshot_id: str) -> None:
-    from .snapshots import _delete_snapshot_disk_assets  # avoid a cycle
+    from .snapshot_common import _delete_snapshot_disk_assets  # avoid a cycle
     _delete_snapshot_disk_assets(request, snapshot_id)
     capture = getattr(request.app, 'snapshot_capture_dir', None)
     if capture:
@@ -96,10 +98,8 @@ async def withdraw_identity(
     resolver and the component page lead to the canonical piece; pieces
     that named this one as their canonical piece follow along (I19).
     """
-    validate_uuid(identity_id, label='identity id')
-    identity = await load_identity(request, identity_id)
-    await require(request, current_user, 'withdraw_identity',
-                  identity=identity)
+    identity = (await load_identity(request, current_user, identity_id,
+                                    'withdraw_identity')).record
     if identity.get('withdrawn'):
         raise HTTPException(status_code=409, detail='Already withdrawn.')
     if not await identity_ever_published(request, identity):
@@ -165,10 +165,8 @@ async def reinstate_identity(
     current_user: Annotated[User, Depends(get_current_active_user)],
     identity_id: str,
 ):
-    validate_uuid(identity_id, label='identity id')
-    identity = await load_identity(request, identity_id)
-    await require(request, current_user, 'reinstate_identity',
-                  identity=identity)
+    identity = (await load_identity(request, current_user, identity_id,
+                                    'reinstate_identity')).record
     if not identity.get('withdrawn'):
         raise HTTPException(status_code=409, detail='Not withdrawn.')
     now = now_iso()
@@ -201,8 +199,8 @@ async def delete_identity(
     ``?purge=1`` (admin; the body repeats the id and gives a reason):
     anything, evidence included, leaving 410 stubs for every id.
     """
-    validate_uuid(identity_id, label='identity id')
-    identity = await load_identity(request, identity_id)
+    identity = (await load_identity(request, current_user, identity_id,
+                                    None)).record
     db = request.app
     if purge:
         await require(request, current_user, 'purge', identity=identity)
@@ -293,7 +291,7 @@ async def purge_snapshot_record(request: Request, user: User,
 
 # RESOLVER (section 7.5) ------------------------------------------------------
 def _frontend_url() -> str:
-    return (os.getenv('FRONTEND_URL') or '').rstrip('/')
+    return (get_settings().frontend_url or '').rstrip('/')
 
 
 @router.get('/id/{uuid}', summary='Permanent identifier resolver')
@@ -311,13 +309,11 @@ async def resolve_id(
     --> 410; unknown or never published (unless the caller may see it)
     --> 404. Visibility applies after the redirect (8.11).
     """
-    validate_uuid(uuid, label='id')
-    doc = await request.app.mongodb_component_identities.find_one(
-        {'_id': uuid}, {'withdrawn': 1, 'current_snapshot_id': 1,
+    doc = await find_identity(
+        request, uuid, {'withdrawn': 1, 'current_snapshot_id': 1,
                         'dataset': 1, 'is_public': 1,
-                        'created_by_user_id': 1, 'catalog_number': 1})
-    if doc is None:
-        await raise_if_purged(request, uuid, 'Component')
+                        'created_by_user_id': 1, 'catalog_number': 1},
+        what='Component')
     withdrawn = doc.get('withdrawn') or {}
     if withdrawn.get('duplicate_of'):
         return RedirectResponse(f'/id/{withdrawn["duplicate_of"]}',
@@ -325,8 +321,7 @@ async def resolve_id(
     if not await identity_ever_published(request, doc) and \
             not await component_visible(request, viewer_of(current_user),
                                         doc):
-        raise HTTPException(status_code=404,
-                            detail=f'Component {uuid} not found')
+        raise not_found('Component')
     if 'text/html' in (request.headers.get('accept') or ''):
         return RedirectResponse(f'{_frontend_url()}/components/{uuid}',
                                 status_code=302)

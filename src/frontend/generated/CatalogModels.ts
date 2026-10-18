@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-10T21:28:21.187Z
-// Source: http://127.0.0.1:8791/schema/catalog-compose
+// Generated on: 2026-10-16T18:45:17.626Z
+// Source: http://127.0.0.1:8899/schema/catalog-compose
 
 import type {
   Frame,
@@ -118,6 +118,7 @@ export interface ComponentSnapshot {
   added_by_username?: string | null;
   photo_count?: number;
   mesh_ply_resolutions?: Record<string, unknown>;
+  point_cloud_files?: number[];
   etag?: string | null;
   created: string;
   lastmodified: string;

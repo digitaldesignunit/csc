@@ -226,8 +226,8 @@ def test_patching_the_geometry_of_a_draft_runs_the_cheap_stages(story):
 
 
 def test_recompute_on_a_remote_setup_only_marks_the_heavy_stages(
-        story, monkeypatch):
-    monkeypatch.setenv('CSC_GEOMETRY_HEAVY_STAGES', 'remote')
+        story, env):
+    env(CSC_GEOMETRY_HEAVY_STAGES='remote')
     draft = create_draft(story)
     url = f'/snapshots/{draft["_id"]}/proxies/recompute'
     done = story['api'].post(url, headers=story['moderator'])
@@ -309,8 +309,8 @@ def test_a_clean_snapshot_is_not_flagged(story):
                             headers=story['admin']).json() == []
 
 
-def test_a_lost_race_when_marking_stale_is_a_409(story, monkeypatch):
-    monkeypatch.setenv('CSC_GEOMETRY_HEAVY_STAGES', 'remote')
+def test_a_lost_race_when_marking_stale_is_a_409(story, monkeypatch, env):
+    env(CSC_GEOMETRY_HEAVY_STAGES='remote')
     draft = create_draft(story)
     import apps.catalog.api.geometry_hooks as hooks
     real = hooks.compute_snapshot_etag

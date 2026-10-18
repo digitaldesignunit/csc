@@ -21,6 +21,7 @@ import { ORIGINAL_FUNCTION_LABELS, type OriginalFunction } from '@/generated/Voc
 import SnapshotPhotoCapture from '@/components/photos/SnapshotPhotoCapture'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Field } from '@/components/lineage/fields'
 import { backendJson, isTombstone } from '@/lib/backend'
 import { cleanOrigin, useMaterials } from '@/lib/lineage'
@@ -698,9 +699,9 @@ export default function SnapshotForm(props: SnapshotFormProps) {
             {blocking[0] && <p className="max-w-xs text-right text-xs text-muted-foreground">{blocking[0].message}</p>}
           </div>
         ) : (
-          <Button type="button" onClick={() => void submit()} disabled={busy || scanned}>
+          <WriteButton type="button" onClick={() => void submit()} disabled={busy || scanned}>
             {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</> : <><PackagePlus className="mr-2 h-4 w-4" />{mode === 'new' ? 'Create component' : mode === 'cut' ? (batch ? 'Draw pieces' : 'Record piece') : mode === 'state' ? 'Record state' : 'Record correction'}</>}
-          </Button>
+          </WriteButton>
         )}
       </div>
     </div>

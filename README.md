@@ -29,7 +29,7 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.6.1.1 --- backend, web frontend and Grasshopper interface are released together
+- **CSC**: 0.6.2.0 --- backend, web frontend and Grasshopper interface are released together
   under one version (tag `v0.6.1.1`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
@@ -141,7 +141,18 @@ to a backend is logged with its `X-CSC-Client` header in
 client name and version (or the browser's name), the method, the path and the
 status: no IP address and no user name. Both this file and gunicorn's
 `logs/fastapi.log` (the error log; the access log is off) rotate at midnight and
-keep 14 days (`logrotation.py`), the retention the privacy page names.
+keep 14 days (`logrotation.py`), the retention the privacy page names. The
+backend logs through the `csc` logger (`logging_setup.py`): in the API into
+`logs/fastapi.log`, in the cron scripts to stderr, which their cron lines append
+to the dated `*_cronjob.<date>.log` files; `CSC_LOG_LEVEL` sets the level. A log
+line holds counts and ids only, never a user name, an e-mail address or a typed
+value. When the database cannot be reached the API answers 503 with
+`Retry-After` and logs the traceback.
+
+Every environment variable of the backend is named once, with its type, default
+and purpose, in `src/backend/settings.py`; it is the only place that reads the
+environment. A missing or wrong value stops the start and names the variable,
+never its value.
 
 ---
 
@@ -208,6 +219,7 @@ gitignored; only the `.example` file is tracked).
 - Proceed in the same way with copying `.env.local.example` and renaming it to `.env.local`
 - Set `NEXTAUTH_SECRET` to a long random value of its own: it only encrypts the NextAuth session cookie and is independent of the backend's `JWT_SECRET` (the frontend never verifies the backend token). There is no `API_SECRET`; delete it from older `.env` files.
 - The frontend has no database access and needs no MongoDB variables: the sign-in sends the credentials to the backend's `POST /auth/token`, the only place a password is checked. Older `.env` files may keep `MONGODB_*`; nothing reads them.
+- The pages carry a Content-Security-Policy built per request with a fresh nonce (`proxy.ts`, `lib/csp.ts`): scripts only by nonce, styles inline, everything else from the app's own origin; the Google map frame and the static host of `NEXT_PUBLIC_STATIC_BASE_URL` (images only) are the exceptions. If a page breaks on a server because of it, set `CSC_CSP_REPORT_ONLY=1` in the frontend `.env` and restart the frontend: the same policy is then sent as `Content-Security-Policy-Report-Only`, which only logs violations in the browser console. Remove the line again once fixed.
 - `NEXT_PUBLIC_STATIC_BASE_URL` is optional and only for public UI files under `/static/` served by Apache. Leave it empty otherwise. Catalogue files (previews, photos, meshes, point clouds, proxies, capture fixtures) are private: they live outside the web root (`~/csc_assets_private/`) and are served only through the authenticated `/snapshots/...` routes of the API. It is ignored on localhost.
 
 ## Grasshopper Interface Setup
@@ -249,11 +261,14 @@ push is automated.
    `git tag v0.5.1.1 && git push origin v0.5.1.1`.
 5. `.github/workflows/release.yml` runs CI again (every job, whatever changed), builds
    `csc-backend-<v>.tar.gz`, `csc-frontend-<v>.zip`, `csc-gh-interface-<v>.zip`
-   and `SHA256SUMS`, and publishes GitHub Release `v<v>` (pre-release if the
-   version has a `-suffix`).
+   and `SHA256SUMS`, attests each of the three bundles (a signed statement that
+   this repository's release workflow built exactly that file), and publishes
+   GitHub Release `v<v>` (pre-release if the version has a `-suffix`).
 6. The deploy job waits for your approval (environment `production`), then runs
    `csc_release_deploy.sh v<v>` on Uberspace over a restricted SSH key: download
-   and verify the bundles, unpack to `~/csc/releases/<v>/`, build a venv only if
+   the bundles and verify them (`SHA256SUMS`, then `gh attestation verify` for the
+   backend tar and the frontend zip; the deploy stops if `gh` is missing or a check
+   fails), unpack to `~/csc/releases/<v>/`, build a venv only if
    the requirements changed, switch `~/csc/current`, restart, health-check
    (`/version` must report `<v>`, the frontend must answer) --- or roll back to
    the previous release by itself.
@@ -395,6 +410,18 @@ browser wrote itself stands on the left of that chain and is never believed.
 - `conf.py` hands the same list to gunicorn as `forwarded_allow_ips`, so the server and
   the limits agree about who may speak for a client; a bad entry stops the start and
   `*` is refused. `bind = ':8000'` stays (the Uberspace web backend connects there).
+- The counters live in MongoDB (`CSC_RATE_LIMIT_STORAGE`; unset, the database of
+  `MONGODB_URI`, in the collection `rate_limit_counters`, which a TTL index
+  empties), so that every gunicorn worker counts the same requests. If the
+  database does not answer, requests pass uncounted and the log says so once;
+  `memory://` keeps the counters in the process (tests, local runs). Failed
+  sign-ins are counted per account as well: ten in fifteen minutes, then 429
+  with `Retry-After`, until the window is over.
+- Request bodies are capped before a route reads them: the mesh and point cloud
+  uploads at `GEOMETRY_UPLOAD_LIMIT_MB`, evidence attachments at
+  `EVIDENCE_UPLOAD_LIMIT_MB`, photos at `SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB` (each plus
+  1 MB for the multipart framing), every other route at `CSC_JSON_BODY_LIMIT_MB`
+  (default 16). The result route of the remote runner has its own limits.
 - Set `FASTAPI_URL=http://127.0.0.1:8000` on the server: the backend then sees
   the web server on loopback. If the web server reaches the backend through the
   public API host instead, the connection comes from the web proxy and the web
@@ -480,8 +507,19 @@ images the release deploy copies there).
 
 `~/csc/bin/csc_maintenance.sh on | off | status` shows a static 503 page for the
 web domain while the frontend is stopped or deployed (cutovers, migrations); see
-`uberspaceconfig/deployment/README.md`, "Maintenance mode" (the per-domain
-Apache folder still has to be verified on a test subdomain before the first use).
+`uberspaceconfig/deployment/README.md`, "Maintenance mode" (the script uses the
+domain's own folder `/var/www/virtual/$USER/<domain>`, creates it when missing and
+removes it again, and never writes to `~/html`; verify it on a test subdomain
+before the first use).
+
+**Read-only mode:** `touch ~/csc/shared/READ_ONLY` before and `rm
+~/csc/shared/READ_ONLY` after every maintenance step that writes to the database
+or the asset folders (restore, purge, migration, cutover). While the file
+exists the backend answers every write with 503 (`read-only: maintenance`),
+sign-in stays open and writes nothing, the web app shows a banner and disables
+its write buttons, and the cron jobs that write skip their run. Every worker
+checks the file per request, so no restart is needed. Details:
+`uberspaceconfig/deployment/README.md`, "Read-only mode".
 
 ## Cron jobs
 

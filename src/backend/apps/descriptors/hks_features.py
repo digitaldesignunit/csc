@@ -29,6 +29,10 @@ import scipy.sparse.linalg as sla
 import robust_laplacian
 import trimesh
 
+from logging_setup import get_logger
+
+log = get_logger(__name__)
+
 
 # FUNCTION DEFINITIONS --------------------------------------------------------
 
@@ -438,10 +442,10 @@ def visualize_descriptor_values(descriptors: np.ndarray, shape_indices=[0, 1]):
     if descriptors.ndim == 1:
         # Single descriptor - reshape to (1, D)
         descriptors = descriptors.reshape(1, -1)
-        print(f'Reshaped single descriptor to {descriptors.shape}')
+        log.debug('Reshaped single descriptor to %s', descriptors.shape)
 
-    print(f'Descriptors shape: {descriptors.shape}')
-    print(f'Shape indices: {shape_indices}')
+    log.debug('Descriptors shape: %s', descriptors.shape)
+    log.debug('Shape indices: %s', shape_indices)
 
     N, D = descriptors.shape
 
@@ -531,8 +535,8 @@ def compute_pooled_hks_for_mesh(
         H = hks_from_eigendecomp(evals, evecs, times, M_diag=M.diagonal())
         pooled_H = pool_hks(H, M_diag=M.diagonal())
         return pooled_H
-    except Exception as e:
-        print(f'Error: {e}')
+    except Exception:
+        log.exception('HKS pooling failed')
         return None
 
 

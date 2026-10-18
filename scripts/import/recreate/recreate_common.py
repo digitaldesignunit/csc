@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlparse, urlsplit
@@ -224,20 +225,55 @@ def sync(record: Dict, dest: Path, opener: Opener = default_open, log=print,
     return done
 
 # THE API (shared by the run steps of the import tools) ------------------------------------------
+RETRIES = 3                  # retries of one request after the first try (decision 8.157 f)
+RETRY_AFTER_MAX = 60         # seconds: a longer Retry-After of the server is not waited for
+
+
+def retry_wait(retry: int, retry_after: Optional[str]) -> float:
+    """Seconds to wait before retry number ``retry`` (0, 1, 2): the server's ``Retry-After`` (whole seconds,
+    at most RETRY_AFTER_MAX) when it sends one, else 1, 2, 4 seconds."""
+    try:
+        return float(min(max(int(str(retry_after).strip()), 0), RETRY_AFTER_MAX))
+    except ValueError:
+        return float(2 ** retry)
+
+
 class Api:
-    def __init__(self, server, token, renew=None):
+    def __init__(self, server, token, renew=None, sleep=time.sleep):
         self.server = server.rstrip('/')
         self.token = token
         self.renew = renew
         import requests
         self.http = requests.Session()
         self.calls = 0
+        self.retried = 0
+        self.sleep = sleep
+
+    def _send(self, method, url, headers, **kw):
+        """One request. A 503 (the database is not available, decision 8.157 e) and a connection error
+        (requests ConnectionError / Timeout) are tried again, at most RETRIES times; any other answer,
+        a 500 included, comes back at once, so a real defect is not hidden. The steps of the import tools
+        are idempotent, so a repeated request is safe."""
+        import requests
+        for retry in range(RETRIES + 1):
+            try:
+                self.calls += 1
+                response = self.http.request(method, url, headers=headers, timeout=300, **kw)
+            except (requests.ConnectionError, requests.Timeout):
+                if retry == RETRIES:
+                    raise
+                wait = retry_wait(retry, None)
+            else:
+                if response.status_code != 503 or retry == RETRIES:
+                    return response
+                wait = retry_wait(retry, response.headers.get('Retry-After'))
+            self.retried += 1
+            self.sleep(wait)
 
     def request(self, method, path, **kw):
         for attempt in (1, 2):
             headers = {'Authorization': 'Bearer ' + self.token, 'X-CSC-Client': CLIENT}
-            self.calls += 1
-            response = self.http.request(method, self.server + path, headers=headers, timeout=300, **kw)
+            response = self._send(method, self.server + path, headers, **kw)
             if response.status_code == 401 and attempt == 1 and self.renew:
                 self.token = self.renew()          # the token ran out during a long run
                 continue

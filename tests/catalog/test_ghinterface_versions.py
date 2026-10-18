@@ -6,11 +6,13 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
-from apps.catalog.api.ghinterface import (
+from apps.catalog.api.ghinterface.github import (
     _get_repo_entry_content,
+    resolve_update_channel,
+)
+from apps.catalog.api.ghinterface.sources import (
     compare_versions,
     get_source_version,
-    resolve_update_channel,
 )
 
 
@@ -47,14 +49,14 @@ def test_newer_server_version_compares_greater():
     assert compare_versions(server, server) == 0
 
 
-def test_resolve_update_channel_defaults_to_this_release(monkeypatch):
+def test_resolve_update_channel_defaults_to_this_release(env):
     # CSC_Update follows the release the running backend belongs to
     from csc_version import release_tag
-    monkeypatch.delenv('GH_UPDATE_REF', raising=False)
+    env(GH_UPDATE_REF=None)
     assert resolve_update_channel(None) == release_tag()
     assert resolve_update_channel('') == release_tag()
     assert resolve_update_channel('main') == 'main'
-    monkeypatch.setenv('GH_UPDATE_REF', 'staging')
+    env(GH_UPDATE_REF='staging')
     assert resolve_update_channel('') == 'staging'
 
 
@@ -142,7 +144,7 @@ def test_entry_content_with_token_uses_blobs_api():
 
 
 def test_github_timeout_is_described_in_503():
-    from apps.catalog.api.ghinterface import _http_exception_from_github
+    from apps.catalog.api.ghinterface.github import _http_exception_from_github
 
     exc = _http_exception_from_github(httpx.TimeoutException('timed out'))
     assert exc.status_code == 503

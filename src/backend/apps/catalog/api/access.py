@@ -13,13 +13,16 @@ callers get 401 ("not public, sign in"), signed-in callers 403 ("no access").
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-from typing import Any, Dict, Iterable, Optional, Tuple
+import uuid
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from fastapi import HTTPException, Request, status
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.documents import Dataset
+from apps.catalog.evidence.projection import evidence_tombstone
 from apps.catalog.models import User
 from apps.catalog.permissions import (
     ANONYMOUS,
@@ -153,6 +156,21 @@ class TombstoneHit(Exception):
         self.body = body
 
 
+def not_found(what: str) -> HTTPException:
+    """The one wording of a record that is not there (decision 8.158)."""
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                         detail=f'{what} not found')
+
+
+def check_id(value: Any, what: str) -> str:
+    """A malformed id is a record that is not there: 404, not 400."""
+    try:
+        uuid.UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        raise not_found(what)
+    return str(value)
+
+
 async def raise_if_purged(request: Request, record_id: str,
                           what: str) -> None:
     """A purged id answers 410 Gone, an unknown one 404 (3.1.4)."""
@@ -162,13 +180,15 @@ async def raise_if_purged(request: Request, record_id: str,
         raise HTTPException(status_code=status.HTTP_410_GONE,
                             detail=f'{what} {record_id} was purged on '
                                    f'{stub.get("purged_at")}')
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f'{what} {record_id} not found')
+    raise not_found(what)
 
 
-async def load_identity(request: Request, identity_id: str,
-                        projection: Optional[Dict[str, int]] = None
-                        ) -> Dict[str, Any]:
+async def find_identity(request: Request, identity_id: str,
+                        projection: Optional[Dict[str, int]] = None,
+                        what: str = 'Identity') -> Dict[str, Any]:
+    """The identity document; 404 / 410 when it is not there. No access
+    check: ``load_identity`` is the entry for a route."""
+    check_id(identity_id, what)
     if projection is not None:
         projection = {**projection, 'dataset': 1, 'is_public': 1,
                       'current_snapshot_id': 1, 'created_by_user_id': 1,
@@ -176,7 +196,7 @@ async def load_identity(request: Request, identity_id: str,
     doc = await request.app.mongodb_component_identities.find_one(
         {'_id': identity_id}, projection)
     if doc is None:
-        await raise_if_purged(request, identity_id, 'Identity')
+        await raise_if_purged(request, identity_id, what)
     return doc
 
 
@@ -219,20 +239,46 @@ async def identity_projection(request: Request, viewer: Viewer,
     return withdrawn_projection(viewer, dataset, component_visible=True)
 
 
-async def ensure_identity_visible(request: Request, identity_id: str,
-                                  user: Optional[User], *,
-                                  projection: Optional[Dict[str, int]] = None
-                                  ) -> Dict[str, Any]:
-    """The identity document, if the caller sees it in full; a withdrawn
-    one outside its dataset answers with its tombstone (8.17)."""
+@dataclass
+class Loaded:
+    """What a ``load_<kind>`` returns: the record, the identity it belongs to
+    (loaded once, passed on), the viewer, and for a dataset the dataset."""
+    record: Any
+    viewer: Viewer
+    identity: Optional[Dict[str, Any]] = None
+    dataset: Optional[Dataset] = None
+
+
+Action = Union[str, Callable[[Dict[str, Any]], str]]
+
+
+def _action_of(action: Action, record: Dict[str, Any]) -> str:
+    """The action, or a function of the record where the action depends on
+    its state (a submit is ``submit_snapshot`` of a draft, ...)."""
+    return action(record) if callable(action) else action
+
+
+async def load_identity(request: Request, user: Optional[User],
+                        identity_id: str, action: Optional[Action] = 'read',
+                        *, projection: Optional[Dict[str, int]] = None
+                        ) -> Loaded:
+    """One identity for a route (decision 8.158). A malformed id is 404, a
+    missing one 404 "Identity not found", a purged one 410. ``read``: the
+    visibility rule (401 / 403) and the tombstone of a withdrawn piece
+    outside its dataset (8.17); any other action: ``require(action, ...)``;
+    ``action=None``: the route does the permission check itself (a delete is
+    a purge or not)."""
     viewer = viewer_of(user)
-    doc = await load_identity(request, identity_id, projection)
-    seen = await identity_projection(request, viewer, doc)
-    if seen is None:
-        raise deny_read(viewer)
-    if seen == 'tombstone':
-        raise TombstoneHit(identity_tombstone(doc))
-    return doc
+    doc = await find_identity(request, identity_id, projection)
+    if action == 'read':
+        seen = await identity_projection(request, viewer, doc)
+        if seen is None:
+            raise deny_read(viewer)
+        if seen == 'tombstone':
+            raise TombstoneHit(identity_tombstone(doc))
+    elif action is not None:
+        await require(request, user, _action_of(action, doc), identity=doc)
+    return Loaded(record=doc, identity=doc, viewer=viewer)
 
 
 async def snapshot_projection(request: Request, viewer: Viewer,
@@ -243,7 +289,7 @@ async def snapshot_projection(request: Request, viewer: Viewer,
     None), and its identity. The snapshots of a withdrawn identity are
     tombstones outside D, whatever their own status (8.17)."""
     if identity is None:
-        identity = await load_identity(request, str(snapshot['identity_id']))
+        identity = await find_identity(request, str(snapshot['identity_id']))
     dataset = await dataset_of(request, identity.get('dataset'))
     visible = await component_visible(request, viewer, identity)
     projection = record_projection(
@@ -257,7 +303,10 @@ async def snapshot_projection(request: Request, viewer: Viewer,
     return projection, identity
 
 
-async def load_snapshot(request: Request, snapshot_id: str) -> Dict[str, Any]:
+async def find_snapshot(request: Request, snapshot_id: str) -> Dict[str, Any]:
+    """The snapshot document; 404 / 410 when it is not there. No access
+    check: ``load_snapshot`` is the entry for a route."""
+    check_id(snapshot_id, 'Snapshot')
     doc = await request.app.mongodb_component_snapshots.find_one(
         {'_id': snapshot_id})
     if doc is None:
@@ -269,25 +318,40 @@ async def load_snapshot(request: Request, snapshot_id: str) -> Dict[str, Any]:
     return doc
 
 
-async def ensure_snapshot_visible(request: Request, snapshot_id: str,
-                                  user: Optional[User], *,
-                                  allow_tombstone: bool = False
-                                  ) -> Dict[str, Any]:
-    """The snapshot document, if the caller sees it in full. A tombstone
-    viewer gets the tombstone where JSON is served (``allow_tombstone``);
-    files of withdrawn records are for members only (8.17)."""
+async def load_snapshot(request: Request, user: Optional[User],
+                        snapshot_id: str, action: Optional[Action] = 'read',
+                        *, allow_tombstone: bool = False, files: bool = False,
+                        frozen: bool = False) -> Loaded:
+    """One snapshot and its identity for a route (decision 8.158). ``read``:
+    the snapshot if the caller sees it in full; a tombstone viewer gets the
+    tombstone where JSON is served (``allow_tombstone``), files of withdrawn
+    records are for members only (8.17). Any other action: ``require``.
+    ``files``: a write to the snapshot's files, which needs the snapshot to
+    be visible in full; ``frozen`` adds that the geometry of a published
+    snapshot is frozen for everyone (409, 6.6). ``action=None``: the route
+    does the permission check itself (a publish needs the parents' datasets,
+    a delete is a purge or not)."""
     viewer = viewer_of(user)
-    doc = await load_snapshot(request, snapshot_id)
+    doc = await find_snapshot(request, snapshot_id)
     projection, identity = await snapshot_projection(request, viewer, doc)
-    if projection == 'full':
-        return doc
-    if projection == 'tombstone':
-        if allow_tombstone:
-            raise TombstoneHit(snapshot_tombstone(doc, identity))
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='Withdrawn: its files are for dataset members only.')
-    raise deny_read(viewer)
+    if action == 'read':
+        if projection == 'tombstone':
+            if allow_tombstone:
+                raise TombstoneHit(snapshot_tombstone(doc, identity))
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='Withdrawn: its files are for dataset members only.')
+        if projection != 'full':
+            raise deny_read(viewer)
+        return Loaded(record=doc, identity=identity, viewer=viewer)
+    if files and projection != 'full':
+        raise deny_read(viewer)
+    if frozen:
+        ensure_unfrozen(doc)
+    if action is not None:
+        await require(request, user, _action_of(action, doc),
+                      identity=identity, snapshot=doc)
+    return Loaded(record=doc, identity=identity, viewer=viewer)
 
 
 # WRITES ----------------------------------------------------------------------
@@ -304,7 +368,8 @@ async def require(request: Request, user: Optional[User], action: str, *,
                   identity: Optional[Dict[str, Any]] = None,
                   snapshot: Optional[Dict[str, Any]] = None,
                   evidence: Optional[Dict[str, Any]] = None,
-                  dataset: Optional[Dataset] = None) -> Viewer:
+                  dataset: Optional[Dataset] = None,
+                  invitation: Optional[Dict[str, Any]] = None) -> Viewer:
     """
     Section 7.0 for one action: builds the ``Target`` from the documents
     and raises 401 / 403 unless ``can`` allows it. Read access to the
@@ -312,9 +377,9 @@ async def require(request: Request, user: Optional[User], action: str, *,
     """
     viewer = viewer_of(user)
     if snapshot is not None and identity is None:
-        identity = await load_identity(request, str(snapshot['identity_id']))
+        identity = await find_identity(request, str(snapshot['identity_id']))
     if evidence is not None and identity is None:
-        identity = await load_identity(request, str(evidence['identity_id']))
+        identity = await find_identity(request, str(evidence['identity_id']))
     if dataset is None:
         dataset = await dataset_of(request, (identity or {}).get('dataset'))
     readable = True
@@ -337,6 +402,9 @@ async def require(request: Request, user: Optional[User], action: str, *,
     elif identity is not None:
         kind, status_, author = ('identity', None,
                                  identity.get('created_by_user_id'))
+    elif invitation is not None:
+        kind, status_, author = ('invitation', None,
+                                 invitation.get('created_by_user_id'))
     else:
         kind, status_, author = ('dataset', None, None)
     target = Target(
@@ -407,18 +475,146 @@ async def visible_identity_ids(request: Request, viewer: Viewer,
     return {d['_id'] for d in docs}
 
 
-async def require_snapshot_file_write(request: Request, user: Optional[User],
-                                      snapshot: Dict[str, Any], action: str,
-                                      *, frozen_when_published: bool) -> None:
-    """
-    Writes to a snapshot's files: whoever cannot see the snapshot gets
-    401 / 403; geometry of a published snapshot is frozen for everyone
-    (409); then the 7.0 rule for ``action``.
-    """
+# THE OTHER KINDS -------------------------------------------------------------
+async def evidence_projection(request: Request, viewer: Viewer,
+                              record: Dict[str, Any],
+                              identity: Dict[str, Any]) -> Optional[str]:
+    """'full', 'tombstone' or None. The records of a withdrawn identity
+    are tombstones outside D whatever their own status (8.17)."""
+    dataset = await dataset_of(request, identity.get('dataset'))
+    visible = await component_visible(request, viewer, identity)
+    projection = record_projection(
+        viewer, dataset, kind='evidence',
+        status=record.get('status') or 'published',
+        author_id=record.get('recorded_by_user_id'),
+        component_visible=visible)
+    if projection == 'full' and identity.get('withdrawn'):
+        projection = withdrawn_projection(viewer, dataset,
+                                          component_visible=visible)
+    return projection
+
+
+async def find_evidence(request: Request, evidence_id: str) -> Dict[str, Any]:
+    """The evidence record; 404 / 410 when it is not there. No access
+    check: ``load_evidence`` is the entry for a route."""
+    check_id(evidence_id, 'Evidence')
+    doc = await request.app.mongodb_component_evidence.find_one(
+        {'_id': evidence_id})
+    if doc is None:
+        await raise_if_purged(request, evidence_id, 'Evidence')
+    return doc
+
+
+async def load_evidence(request: Request, user: Optional[User],
+                        evidence_id: str, action: Optional[Action] = 'read',
+                        *, allow_tombstone: bool = False,
+                        files: bool = False) -> Loaded:
+    """One evidence record and its identity for a route (decision 8.158).
+    ``read``: the record if the caller sees it in full; a tombstone viewer
+    gets the tombstone where JSON is served, files and writes are for members
+    only (8.17). Any other action: ``require``; ``files`` adds that the
+    record has to be visible in full; ``action=None``: the route does the
+    permission check itself."""
     viewer = viewer_of(user)
-    projection, identity = await snapshot_projection(request, viewer, snapshot)
-    if projection != 'full':
-        raise deny_read(viewer)
-    if frozen_when_published:
-        ensure_unfrozen(snapshot)
-    await require(request, user, action, identity=identity, snapshot=snapshot)
+    record = await find_evidence(request, evidence_id)
+    identity = await find_identity(request, str(record['identity_id']))
+    if action != 'read':
+        if files and await evidence_projection(
+                request, viewer, record, identity) != 'full':
+            raise deny_read(viewer)
+        if action is not None:
+            await require(request, user, _action_of(action, record),
+                          identity=identity, evidence=record)
+        return Loaded(record=record, identity=identity, viewer=viewer)
+    projection = await evidence_projection(request, viewer, record, identity)
+    if projection == 'full':
+        return Loaded(record=record, identity=identity, viewer=viewer)
+    if projection == 'tombstone':
+        if allow_tombstone:
+            raise TombstoneHit(evidence_tombstone(record, identity))
+        raise HTTPException(
+            status_code=403,
+            detail='Withdrawn: its files are for dataset members only.')
+    raise deny_read(viewer)
+
+
+NO_CURRENT_STATE = 'The component has no current state.'
+
+
+async def load_current_snapshot(request: Request,
+                                identity: Dict[str, Any]) -> Dict[str, Any]:
+    """The current snapshot of an identity, which has to be there: 409 when
+    the identity names none or names one that is gone (decision 8.158)."""
+    snapshot_id = identity.get('current_snapshot_id')
+    doc = None
+    if snapshot_id:
+        doc = await request.app.mongodb_component_snapshots.find_one(
+            {'_id': snapshot_id})
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=NO_CURRENT_STATE)
+    return doc
+
+
+NO_DATASET_ACCESS = 'You have no access to this dataset.'
+
+
+async def load_dataset(request: Request, user: Optional[User], slug: str,
+                       action: Action = 'read') -> Loaded:
+    """One dataset for a route (decision 8.158): 404 "Dataset not found".
+    ``read``: members, and everyone signed in for a ``catalog`` dataset (an
+    admin always); any other action: ``require``."""
+    viewer = viewer_of(user)
+    dataset = (await load_datasets(request)).get(slug)
+    if dataset is None:
+        raise not_found('Dataset')
+    if action == 'read':
+        if not (viewer.is_admin or dataset_roles(viewer, dataset)
+                or (viewer.logged_in and dataset.visibility == 'catalog')):
+            raise HTTPException(
+                status_code=401 if not viewer.logged_in else 403,
+                detail=NO_DATASET_ACCESS)
+    else:
+        await require(request, user, _action_of(action, dataset),
+                      dataset=dataset)
+    return Loaded(record=dataset, viewer=viewer, dataset=dataset)
+
+
+async def load_invitation(request: Request, user: Optional[User],
+                          invitation_id: str, action: Action
+                          ) -> Loaded:
+    """One invitation for a route (decision 8.158): 404 "Invitation not
+    found". ``invite``: the caller's current invite permission on the
+    invitation's dataset (an admin for one without a dataset);
+    ``revoke_invitation``: its creator, moderator(D) or an admin."""
+    viewer = viewer_of(user)
+    check_id(invitation_id, 'Invitation')
+    doc = await request.app.mongodb_invitations.find_one(
+        {'_id': invitation_id})
+    if doc is None:
+        raise not_found('Invitation')
+    dataset = (await load_datasets(request)).get(doc.get('dataset') or '')
+    action = _action_of(action, doc)
+    if action == 'invite' and dataset is None:
+        if not viewer.is_admin:
+            raise deny_write(viewer, 'invite without a dataset')
+    elif action == 'invite':
+        await require(request, user, 'invite', dataset=dataset)
+    else:
+        await require(request, user, action, invitation=doc,
+                      dataset=dataset or _unknown_dataset('none'))
+    return Loaded(record=doc, viewer=viewer, dataset=dataset)
+
+
+async def load_material(request: Request, user: Optional[User], mid: str,
+                        action: Action = 'read') -> Loaded:
+    """One material of the controlled list for a route (decision 8.158): 404
+    "Material not found". Any other action: ``require`` (``manage_materials``
+    is for an admin)."""
+    viewer = viewer_of(user)
+    doc = await request.app.mongodb_materials.find_one({'_id': mid})
+    if doc is None:
+        raise not_found('Material')
+    if action != 'read':
+        await require(request, user, _action_of(action, doc))
+    return Loaded(record=doc, viewer=viewer)

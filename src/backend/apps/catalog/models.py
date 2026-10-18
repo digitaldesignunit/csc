@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.13
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-from typing import Optional, List, Dict, Union, Literal
+from typing import Optional, List, Dict, Literal
 import uuid
 from datetime import datetime
 
@@ -22,11 +22,6 @@ Role = Literal["user", "admin"]
 class Token(BaseModel):
     access_token: str
     token_type: str = "Bearer"
-
-
-class TokenData(BaseModel):
-    sub: Union[str, None] = None  # subject (we use user _id / GUID)
-    role: Role = "user"
 
 
 class User(BaseModel):
@@ -84,6 +79,12 @@ def _check_password_bytes(v: str) -> str:
     return v
 
 
+# the character set of a new username (decision 8.161): lowercase letters and
+# digits, then dots, underscores and hyphens; 3 to 32 characters. Names that
+# exist stay as they are; the rule is checked where a name is set.
+USERNAME_PATTERN = r'^[a-z0-9][a-z0-9._-]{2,31}$'
+
+
 def normalize_username(value: str) -> str:
     """Usernames are stored lowercase and unique; every lookup by
     username goes through this, so login ignores case (decision 8.28)."""
@@ -91,7 +92,7 @@ def normalize_username(value: str) -> str:
 
 
 class RegisterPayload(BaseModel):
-    username: str = Field(min_length=3, max_length=50)
+    username: str = Field(min_length=3, max_length=32, pattern=USERNAME_PATTERN)
     full_name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     # max_length=72 matches bcrypt's hard truncation limit, also prevents DoS
@@ -99,10 +100,11 @@ class RegisterPayload(BaseModel):
     # an invitation code (8.14): required outside the open domains
     code: Optional[str] = Field(None, max_length=64)
 
-    @field_validator('username')
+    @field_validator('username', mode='before')
     @classmethod
-    def _lowercase(cls, v: str) -> str:
-        return normalize_username(v)
+    def _lowercase(cls, v):
+        # lowercased before the pattern is checked, so "Sample.User" is fine
+        return normalize_username(v) if isinstance(v, str) else v
 
     @field_validator('password')
     @classmethod
@@ -172,21 +174,6 @@ ALLOWED_COMPONENT_TYPES = [
 ]
 
 
-ALLOWED_COMPONENT_SORTKEYS = [
-    "_id",
-    "name",
-    "type",
-    "material",
-    "dataset",
-    "color",
-    "bbx.0",
-    "bbx.1",
-    "bbx.2",
-    "created",
-    "lastmodified",
-]
-
-
 ALLOWED_COMPLEXITY_LEVELS = [0, 1, 2, 3]
 
 
@@ -241,138 +228,6 @@ class ComponentBoundingBox(RootModel[List[float]]):
         return len(self.root)
 
 
-class ComponentPolylinePoints(RootModel[List[List[float]]]):
-    """Polyline points as array of [x, y] coordinates"""
-    root: List[List[float]] = Field(
-        description="Array of [x, y] coordinate pairs"
-    )
-
-    def __init__(self, root: List[List[float]]):
-        if not all(
-            isinstance(point, list) and len(point) == 2
-            and all(isinstance(coord, (int, float)) for coord in point)
-            for point in root
-        ):
-            raise ValueError(
-                'All polyline points must be [x, y] coordinate pairs'
-            )
-        super().__init__(root=root)
-
-    def __iter__(self):
-        return iter(self.root)
-
-    def __getitem__(self, item):
-        return self.root[item]
-
-    def __len__(self):
-        return len(self.root)
-
-
-class ComponentMeshVertices(RootModel[List[List[float]]]):
-    """Mesh vertices as array of [x, y, z] coordinates"""
-    root: List[List[float]] = Field(
-        description="Array of [x, y, z] vertex coordinates"
-    )
-
-    def __init__(self, root: List[List[float]]):
-        if not all(
-            isinstance(vertex, list) and len(vertex) == 3
-            and all(isinstance(coord, (int, float)) for coord in vertex)
-            for vertex in root
-        ):
-            raise ValueError(
-                'All mesh vertices must be [x, y, z] coordinate triplets'
-            )
-        super().__init__(root=root)
-
-    def __iter__(self):
-        return iter(self.root)
-
-    def __getitem__(self, item):
-        return self.root[item]
-
-    def __len__(self):
-        return len(self.root)
-
-
-class ComponentMeshFaces(RootModel[List[List[int]]]):
-    """Mesh faces as array of vertex indices"""
-    root: List[List[int]] = Field(
-        description="Array of face vertex indices"
-    )
-
-    def __init__(self, root: List[List[int]]):
-        if not all(
-            isinstance(face, list) and len(face) >= 3
-            and all(isinstance(idx, int) for idx in face)
-            for face in root
-        ):
-            raise ValueError(
-                'All mesh faces must be arrays of integer vertex indices'
-            )
-        super().__init__(root=root)
-
-    def __iter__(self):
-        return iter(self.root)
-
-    def __getitem__(self, item):
-        return self.root[item]
-
-    def __len__(self):
-        return len(self.root)
-
-
-class ComponentMeshColors(RootModel[List[List[int]]]):
-    """Mesh vertex colors as array of [r, g, b] values"""
-    root: List[List[int]] = Field(
-        description="Array of [r, g, b] color values (0-255)"
-    )
-
-    def __init__(self, root: List[List[int]]):
-        if not all(
-            isinstance(color, list) and len(color) == 3
-            and all(isinstance(c, int) and 0 <= c <= 255 for c in color)
-            for color in root
-        ):
-            raise ValueError(
-                'All mesh colors must be [r, g, b] values (0-255)'
-            )
-        super().__init__(root=root)
-
-    def __iter__(self):
-        return iter(self.root)
-
-    def __getitem__(self, item):
-        return self.root[item]
-
-    def __len__(self):
-        return len(self.root)
-
-
-class ComponentMesh(BaseModel):
-    v: ComponentMeshVertices = Field(description="Mesh vertices")
-    f: ComponentMeshFaces = Field(description="Mesh faces")
-    c: Optional[ComponentMeshColors] = Field(
-        None, description="Mesh vertex colors"
-    )
-
-
-class ComponentExtrusion(BaseModel):
-    profile: ComponentPolylinePoints = Field(
-        description="Extrusion profile points"
-    )
-    height: float = Field(description="Extrusion height")
-
-
-class ComponentGeometry(BaseModel):
-    meshes: Optional[List[ComponentMesh]] = Field(
-        None, description="Array of mesh geometries"
-    )
-    extrusion: Optional[ComponentExtrusion] = Field(
-        None, description="Extrusion geometry"
-    )
-
-
 class ComponentFrame(BaseModel):
     o: List[float] = Field(description="Origin point [x, y, z]")
     x: List[float] = Field(description="X axis vector [x, y, z]")
@@ -382,14 +237,6 @@ class ComponentFrame(BaseModel):
 
 class ComponentCount(BaseModel):
     count: int
-
-
-class ComponentDescriptors(BaseModel):
-    id: str = Field(alias="_id")
-    descriptors: Dict = Field(default_factory=dict)
-
-    class Config:
-        populate_by_name = True
 
 
 # COMPONENTS - IDENTITY / SNAPSHOT MODEL ---------------------------------
@@ -860,6 +707,15 @@ class ComponentSnapshot(BaseModel):
             "``.../detailed.ply``. Example: {'0': ['reduced', 'detailed']}."
         ),
     )
+    point_cloud_files: Optional[List[int]] = Field(
+        None,
+        description=(
+            "Indices of ``geometry.point_clouds`` whose full cloud is stored "
+            "as a file (``point_clouds/<snapshot_id>/<i>.ply``); set by the "
+            "upload route. Absent on versions uploaded before the marker "
+            "existed. Example: [0]."
+        ),
+    )
     created: str = Field(
         description="ISO timestamp when this snapshot was created"
     )
@@ -907,224 +763,3 @@ class ComponentSnapshot(BaseModel):
         extra = "ignore"
         populate_by_name = True
 
-
-class CatalogSharedTypesEnvelope(BaseModel):
-    """
-    Codegen-only envelope exporting shared catalog value types.
-
-    Not used as a request/response body. Referenced by
-    ``GET /schema/catalog-shared`` for frontend model generation.
-    """
-    frame: ComponentFrame
-    location: ComponentLocation
-    bbx: ComponentBoundingBox
-    geometry: ComponentGeometry
-
-
-class ComponentPassport(BaseModel):
-    """
-    Component passport: an identity plus one or more snapshot versions.
-
-    Returned by `GET /identities/{identity_id}/compose` - the primary read
-    path for the new data model. A single-snapshot response uses
-    ``snapshots`` with length 1 (default: current live snapshot).
-    """
-    identity: ComponentIdentity
-    snapshots: List[ComponentSnapshot] = Field(min_length=1)
-
-
-class SnapshotSummaryItem(BaseModel):
-    """Lightweight row for ``GET /identities/{id}/snapshots``."""
-    id: str = Field(alias='_id')
-    identity_id: str
-    version: int
-    validated: bool
-    virtual: bool = False
-    is_current: bool
-    name: Optional[str] = None
-    created: str
-    lastmodified: str
-
-    class Config:
-        populate_by_name = True
-
-
-class PendingValidationSnapshotItem(BaseModel):
-    """Row for admin ``GET /snapshots/pending-validation`` queue."""
-    id: str = Field(alias='_id')
-    identity_id: str
-    version: int
-    validated: bool = False
-    is_current: bool
-    name: Optional[str] = None
-    created: str
-    catalog_number: Optional[int] = None
-    componenttype: Optional[str] = Field(default=None, alias='type')
-    material: Optional[str] = None
-    live_version: Optional[int] = Field(
-        default=None,
-        description='Version of the identity current (live) snapshot, if any',
-    )
-
-    class Config:
-        populate_by_name = True
-
-
-class UpdateComponentIdentityModel(BaseModel):
-    """PATCH payload for identity-side metadata (admin only).
-
-    Snapshot fields (name, geometry, validated, color, etc.) belong on
-    ``PATCH /identities/{id}/current-snapshot`` or a new snapshot version.
-    """
-    componenttype: Optional[str] = Field(
-        default=None,
-        alias='type',
-        description='Component type (one of ALLOWED_COMPONENT_TYPES)',
-    )
-    material: Optional[str] = Field(default=None, max_length=100)
-    dataset: Optional[str] = Field(default=None, max_length=200)
-    manufactured_at: Optional[str] = Field(default=None, max_length=40)
-    manufactured_precision: Optional[str] = Field(default=None)
-    salvage_source: Optional[str] = Field(default=None, max_length=500)
-    salvaged_at: Optional[str] = Field(default=None, max_length=40)
-    reserved: Optional[str] = Field(
-        default=None,
-        description=(
-            'User UUID who reserved this identity; empty string clears'
-        ),
-    )
-    attributes: Optional[Dict] = Field(default=None)
-    parent_identities: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            'Parent identity UUIDs. Empty list or null clears lineage.'
-        ),
-    )
-    consumed_at: Optional[str] = Field(
-        default=None,
-        max_length=40,
-        description='ISO timestamp when consumed; null clears for active',
-    )
-    is_public: Optional[bool] = Field(
-        default=None,
-        description=(
-            'When true, allow anonymous read of all snapshots on '
-            'the public component detail page'
-        ),
-    )
-
-    @field_validator('componenttype')
-    @classmethod
-    def _validate_componenttype(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        if v not in ALLOWED_COMPONENT_TYPES:
-            raise ValueError(
-                f'type must be one of {ALLOWED_COMPONENT_TYPES}'
-            )
-        return v
-
-    @field_validator('manufactured_precision')
-    @classmethod
-    def _validate_manufactured_precision(
-        cls, v: Optional[str]
-    ) -> Optional[str]:
-        if v is None:
-            return v
-        if v not in ALLOWED_MANUFACTURED_PRECISIONS:
-            raise ValueError(
-                'manufactured_precision must be one of '
-                f'{ALLOWED_MANUFACTURED_PRECISIONS}'
-            )
-        return v
-
-    @field_validator('salvage_source')
-    @classmethod
-    def _normalize_salvage_source(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        v = v.strip()
-        return v or None
-
-    @field_validator('parent_identities')
-    @classmethod
-    def _validate_parent_identities(
-        cls, v: Optional[List[str]]
-    ) -> Optional[List[str]]:
-        if v is None:
-            return None
-        if len(v) == 0:
-            return None
-        for item in v:
-            try:
-                uuid.UUID(str(item))
-            except (ValueError, AttributeError, TypeError):
-                raise ValueError(
-                    'parent_identities entries must be valid UUID strings'
-                )
-        return [str(item) for item in v]
-
-    @field_validator('material', 'dataset')
-    @classmethod
-    def _strip_non_empty_strings(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        v = v.strip()
-        if v == '':
-            raise ValueError('value must not be empty')
-        return v
-
-    class Config:
-        extra = 'ignore'
-        populate_by_name = True
-
-
-class UpdateComponentSnapshotModel(BaseModel):
-    """PATCH payload for the current snapshot of an identity.
-
-    Per ADR-015 write granularity: only metadata fields can be updated in
-    place on the current snapshot. Geometry and any field derived from
-    geometry (`bbx`, `bbx_origin`, `complexity`, `iframe`, `pca_frame`)
-    MUST instead drive a new snapshot version, so those fields are
-    intentionally absent from this model.
-
-    Server-managed fields (`id`, `identity_id`, `version`, `virtual`,
-    `created`, `lastmodified`, `etag`) are not exposed here either.
-
-    Only fields explicitly present in the request payload are applied
-    (`exclude_unset=True` semantics on the consumer side).
-    """
-    name: Optional[str] = None
-    descriptors: Optional[Dict] = None
-    fragment: Optional[bool] = None
-    assembly: Optional[bool] = None
-    condition: Optional[int] = None
-    color: Optional[List[int]] = None
-    location: Optional[ComponentLocation] = None
-    processes: Optional[Dict] = None
-    validated: Optional[bool] = None
-    notes: Optional[str] = Field(default=None, max_length=5000)
-    quantity: Optional[int] = Field(default=None, ge=1, le=999_999)
-
-    @field_validator('condition')
-    @classmethod
-    def _validate_condition(cls, v: Optional[int]) -> Optional[int]:
-        if v is None:
-            return v
-        if v not in ALLOWED_CONDITION_VALUES:
-            raise ValueError(
-                f'condition must be one of {ALLOWED_CONDITION_VALUES}'
-            )
-        return v
-
-    @field_validator('notes')
-    @classmethod
-    def _normalize_patch_notes(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        v = v.strip()
-        return v or None
-
-    class Config:
-        extra = "ignore"
-        populate_by_name = True

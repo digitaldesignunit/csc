@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from apps.catalog.api import ghinterface
+from apps.catalog.api.ghinterface import github as gh_github
+from apps.catalog.api.ghinterface import sources as gh_sources
 from apps.catalog.ghreference import build_reference, parse_source
 
 SOURCES = Path(__file__).resolve().parents[2] / 'grasshopper_userobjects_src'
@@ -30,6 +31,11 @@ OUTPUTS = [
      'Identity UUIDs'),
     ('Names', 'Nm', 'Names, parallel to Ids'),
 ]
+
+
+@pytest.fixture(autouse=True)
+def repo(env):
+    env(GITHUB_REPO_URL='https://github.com/example/csc')
 
 
 class CSC_Sample(Grasshopper.Kernel.GH_ScriptInstance):
@@ -141,10 +147,9 @@ def github(monkeypatch):
         calls['content'] += 1
         return sources[entry['name']].encode('utf-8')
 
-    monkeypatch.setattr(ghinterface, '_list_repo_dir_cached', listing)
-    monkeypatch.setattr(ghinterface, '_get_repo_entry_content', content)
-    monkeypatch.setenv('GITHUB_REPO_URL', 'https://github.com/example/csc')
-    ghinterface._blob_reference_cache.clear()
+    monkeypatch.setattr(gh_sources, '_list_repo_dir_cached', listing)
+    monkeypatch.setattr(gh_sources, '_get_repo_entry_content', content)
+    gh_github._blob_reference_cache.clear()
     return calls
 
 
@@ -170,11 +175,10 @@ def test_an_anonymous_caller_cannot_choose_the_ref(api, auth_headers, monkeypatc
     async def content(client, api_base, token, entry, ref):
         return SAMPLE.encode('utf-8')
 
-    monkeypatch.setattr(ghinterface, '_list_repo_dir_cached', listing)
-    monkeypatch.setattr(ghinterface, '_get_repo_entry_content', content)
-    monkeypatch.setenv('GITHUB_REPO_URL', 'https://github.com/example/csc')
-    ghinterface._blob_reference_cache.clear()
-    release = ghinterface.default_update_ref()
+    monkeypatch.setattr(gh_sources, '_list_repo_dir_cached', listing)
+    monkeypatch.setattr(gh_sources, '_get_repo_entry_content', content)
+    gh_github._blob_reference_cache.clear()
+    release = gh_github.default_update_ref()
     anonymous = api.get('/ghinterface/reference', params={'channel': 'main'})
     assert anonymous.status_code == 200, anonymous.text
     assert anonymous.json()['ref'] == release
@@ -205,8 +209,7 @@ def test_the_version_route_answers_anonymous_callers(api, monkeypatch):
                 'published_at': '2026-10-01T00:00:00Z', 'html_url': 'https://example.org/r',
                 'assets': [{'name': 'csc-gh-interface-0.6.0.0.zip', 'size': 10}]}
 
-    monkeypatch.setattr(ghinterface, '_release_of_this_backend', release)
-    monkeypatch.setenv('GITHUB_REPO_URL', 'https://github.com/example/csc')
+    monkeypatch.setattr(gh_sources, '_release_of_this_backend', release)
     got = api.get('/ghinterface/version')
     assert got.status_code == 200, got.text
     assert got.json()['version'] == 'v0.6.0.0'

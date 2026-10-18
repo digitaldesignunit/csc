@@ -59,6 +59,7 @@ import PositionPickerDialog, { type PickerResult } from '@/components/evidence/P
 import SchemaFields from '@/components/evidence/SchemaFields'
 import type { ViewerMark } from '@/components/viewer/EvidenceMarks'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DateField } from '@/components/ui/date-field'
 import { Input } from '@/components/ui/input'
@@ -600,9 +601,9 @@ export default function EvidenceForm({
         <div className="sticky bottom-0 -mx-4 flex flex-wrap gap-2 border-t border-border bg-background/95 p-3 backdrop-blur">
           {drafts.length > 0 && (
             <>
-              <Button disabled={saving} onClick={() => void submitAll()}>
+              <WriteButton disabled={saving} onClick={() => void submitAll()}>
                 Submit {drafts.length > 1 ? `all ${drafts.length}` : ''}
-              </Button>
+              </WriteButton>
               {!corrected && (
                 <Button variant="ghost" disabled={saving} onClick={() => void editAgain()}>
                   Back to the form
@@ -899,10 +900,10 @@ export default function EvidenceForm({
               </FormSection>
 
               <div className="sticky bottom-0 z-30 -mx-4 flex flex-wrap items-center gap-2 border-t border-border bg-background/95 px-4 py-2.5 backdrop-blur lg:mx-0 lg:rounded-md lg:border">
-                <Button onClick={() => void save()} disabled={saving}>
+                <WriteButton onClick={() => void save()} disabled={saving}>
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                   {saveLabel}
-                </Button>
+                </WriteButton>
                 {issues.length > 0 ? (
                   <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-amber-800 dark:text-amber-300"
                     onClick={() => jumpToSection('check')}>

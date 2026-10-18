@@ -55,6 +55,43 @@ done
 chmod +x ~/csc/bin/*.sh
 ```
 
+### 2b. On the server: the `gh` CLI (verifies the release attestations)
+
+The deploy checks the backend tar and the frontend zip with
+`gh attestation verify` before it installs anything, and stops when `gh` is
+missing. Install the static release binary once (it is a single Go binary and
+runs on the glibc 2.17 of Uberspace 7); do this **before the first deploy of a
+release that carries the check**, because that deploy repeats itself with the new
+script and the repeat needs `gh`:
+
+```bash
+ver=2.101.0     # the newest release at https://github.com/cli/cli/releases
+cd "$(mktemp -d)"
+curl -fsSLO https://github.com/cli/cli/releases/download/v$ver/gh_${ver}_linux_amd64.tar.gz
+curl -fsSLO https://github.com/cli/cli/releases/download/v$ver/gh_${ver}_checksums.txt
+grep " gh_${ver}_linux_amd64.tar.gz\$" gh_${ver}_checksums.txt | sha256sum -c -
+tar -xzf gh_${ver}_linux_amd64.tar.gz
+mkdir -p ~/bin && install -m 755 gh_${ver}_linux_amd64/bin/gh ~/bin/gh
+~/bin/gh --version
+```
+
+`gh` needs a token even to read the attestations of a public repository (without
+one it stops with "gh auth login"). Create a fine-grained personal access token
+on GitHub with **no permissions** (public read is enough; set a long expiry and
+note it in your calendar) and store it once for the server account:
+
+```bash
+printf '%s' '<the token>' | ~/bin/gh auth login --with-token
+~/bin/gh auth status
+```
+
+The deploy script puts `~/bin` on its `PATH` itself, so the forced SSH command
+finds `gh`; it uses the stored login, or `GITHUB_CSC_DEPLOY_TOKEN` if that
+variable is set. Check by hand with
+`~/bin/gh attestation verify <file> --repo digitaldesignunit/csc --signer-workflow digitaldesignunit/csc/.github/workflows/release.yml`.
+`SHA256SUMS` stays as the check of the download; the attestation is the check
+of who built the file.
+
 ### 3. On the server: authorize the deploy key (restricted)
 
 Append **one line** to `~/.ssh/authorized_keys` --- the prefix limits the key to
@@ -185,11 +222,29 @@ template and the `.htaccess`):
 `/var/www/virtual/$USER/<domain>/`, and runs
 `uberspace web backend set <domain>/ --apache`; `off` runs
 `uberspace web backend set <domain>/ --http --port <port>` and removes the two
-files. Everything else under `~/html`, the static host and the API domain stay
-as they are, so the import and the geometry runner keep working. Every path
-answers `503` with `Retry-After`, `Cache-Control: no-store` and `noindex`.
-The domain and the port are settings (`CSC_MAINT_DOMAIN`, default
-`2ndchances.build`; `CSC_MAINT_PORT`, default `3000`; `CSC_MAINT_DOCROOT`).
+files. Every path answers `503` with `Retry-After`, `Cache-Control: no-store`
+and `noindex`.
+
+**The document root.** On Uberspace 7 a folder `/var/www/virtual/$USER/<domain>`
+is the document root of that domain alone (manual, "DocumentRoot", section
+"Additional DocumentRoots": "You can create folders (and symlinks) in the form
+of `/var/www/virtual/<username>/<domain>`"); `~/html` (that is
+`/var/www/virtual/$USER/html`) stays the root of every other domain and is
+never written by the script: nothing in it, the static host and the API domain
+included, is touched, so the import and the geometry runner keep working. A
+production account usually has no such folder yet, so `on` creates it (only
+that folder, never the one above) and records that in
+`~/csc/shared/.maintenance_docroot_created`; `off` removes the two files and
+then the folder, but only if the script created it and nothing else is in it.
+A folder that was there before stays, with its other files, and `on` refuses to
+overwrite an `index.html` or `.htaccess` it did not write. `status` names the
+document root and says whether the script created it; `--dry-run` prints the
+`mkdir` and `rmdir` as well. Do not delete `~/html` (the manual warns that the
+additional document roots depend on it).
+
+The domain, the port and the folder are settings (`CSC_MAINT_DOMAIN`, default
+`2ndchances.build`; `CSC_MAINT_PORT`, default `3000`; `CSC_MAINT_DOCROOT`, which
+is treated the same way).
 
 The text of the page is `~/csc/shared/maintenance.txt` when it exists, else a
 default. Plain text: every line is a paragraph (HTML-escaped); a line
@@ -203,15 +258,55 @@ contact: a mail address or a phone number
 
 A deploy leaves the mode as it is and says so at the end of its log.
 
-**Runbook of a cutover or a migration:** start with `csc_maintenance.sh on`,
-do the work (stop the frontend, migrate, deploy), check the site through an SSH
-tunnel (`ssh -L 3000:127.0.0.1:3000 <account>`, then
-`http://127.0.0.1:3000`; the frontend answers there while the domain shows the
-page), end with `csc_maintenance.sh off`.
+**Runbook of a cutover or a migration:** start with `csc_maintenance.sh on`
+and `touch ~/csc/shared/READ_ONLY` (below), do the work (stop the frontend,
+migrate, deploy), check the site through an SSH tunnel
+(`ssh -L 3000:127.0.0.1:3000 <account>`, then `http://127.0.0.1:3000`; the
+frontend answers there while the domain shows the page), end with
+`rm ~/csc/shared/READ_ONLY` and `csc_maintenance.sh off`.
+
+## Read-only mode
+
+A maintenance step that touches the database or the asset folders (restore,
+purge, migration, cutover, a script from `scripts/db_maintenance/`) must not run
+while users write. The switch is a file:
+
+```bash
+touch ~/csc/shared/READ_ONLY        # before the step: every write is refused
+# ... the maintenance step ...
+rm ~/csc/shared/READ_ONLY           # after it: writes are accepted again
+```
+
+While the file exists:
+
+- every request other than GET, HEAD and OPTIONS is answered `503` with a
+  `Retry-After` header and `{"detail": "read-only: maintenance"}`, before its
+  body is read: registration, uploads, the web app's changes and the Grasshopper
+  writes included. Reads keep working. Every gunicorn worker looks at the file on
+  every request, so `touch` and `rm` take effect at once, with no restart;
+- sign-in (`POST /auth/token`) stays open so you can check the site, and writes
+  nothing to the database: the per-address limit still holds but is counted in
+  the memory of each worker, the failed-sign-in count per account is paused (an
+  account that was locked before stays locked), and the account is not changed;
+- `/version` and `/health/db` report `"read_only": true`; the web app shows a
+  banner on every page and disables its write buttons (it asks `/version` once a
+  minute); a Grasshopper component that writes shows `read-only: maintenance`
+  as its error;
+- the geometry runner, the component map job, `usermaintenance.py` and
+  `geometrymaintenance.py` skip their run and log one line ("skipped, the
+  read-only flag is set"); a `--dry-run` still runs. The next cron run after
+  `rm` picks the work up.
+
+The path is `CSC_READ_ONLY_FLAG` (default `~/csc/shared/READ_ONLY`); leave it
+unset on the server. The flag does not replace the maintenance page: `touch`
+stops the writes, `csc_maintenance.sh on` hides the frontend; use both for a
+cutover, the flag alone for a short database step. A deploy leaves the flag as
+it is; remove it yourself when the work is done. Check it with
+`curl -s http://127.0.0.1:8000/version`.
 
 **To verify once on the server, before the first use:** that Apache serves
-the per-domain folder `/var/www/virtual/$USER/<domain>/` for a domain whose
-backend is `--apache`. Try it on a test subdomain
-(`uberspace web domain add test.<domain>`, `csc_maintenance.sh on` with
-`CSC_MAINT_DOMAIN=test.<domain>`, open it, then `off`); this has not been
-checked on the production account yet.
+the per-domain folder for a domain whose backend is `--apache` (the manual says
+the folder form is allowed, it does not show this exact use). Try it on a test
+subdomain (`uberspace web domain add test.<domain>`, `csc_maintenance.sh on`
+with `CSC_MAINT_DOMAIN=test.<domain>`, open it, then `off`: the folder it made
+is gone again); this has not been checked on the production account yet.

@@ -7,8 +7,9 @@ Per stone `<ID>`: the mesh (`remeshed_high_res_<ID>.ply`) and the point cloud (`
 read (ASCII PLY exported by Rhino 7, with normals, scan colours and an extra `material` element), and
 written to `<out>/stones/<ID>/` by the rules of `csc_gh.build` (decision 8.95):
 
-- `preview.json`: the inline preview mesh (the mesh itself up to MESH_PRIMITIVE_THRESHOLD faces, else
-  reduced to MESH_PRIMITIVE_TARGET faces) and the inline point cloud (evenly thinned to 5000 points);
+- `preview.json`: the inline preview mesh (the mesh itself up to MESH_PRIMITIVE_TARGET faces, else
+  reduced to MESH_PRIMITIVE_TARGET faces) and the inline point cloud (evenly thinned to
+  POINT_CLOUD_INLINE_MAX points); the inline budget is 1000 faces and 1000 points (decision 8.148);
 - `reduced.ply`: the mesh reduced to MESH_REDUCED_TARGET faces, when it has more than
   MESH_REDUCED_THRESHOLD faces;
 - `detailed.ply`: the original mesh, binary, with its colours, when it has more than MESH_PRIMITIVE_TARGET

@@ -59,6 +59,7 @@ from apps.catalog.proxies.registry import PROXIES_VERSION
 from apps.catalog.shape_class import SHAPE_CLASS_VERSION, derive_shape_class
 from apps.descriptors.hks import HKS_VERSION
 from apps.descriptors.registry import compute_descriptor
+from settings import get_settings
 from apps.descriptors.specs import ALL_SPECS
 
 DESCRIPTORS_VERSION = 2          # 1 = 0.5 (PCA aligned); 2 = frame, + HKS
@@ -110,11 +111,7 @@ _POSIX_PATH = re.compile(r'(?<![\w/])/[^\s\'"):,;/]+(?:/[^\s\'"):,;/]+)+')
 
 def heavy_stages_where() -> str:
     """``server`` (default) or ``remote``."""
-    value = (os.environ.get(HEAVY_STAGES_ENV) or 'server').strip().lower()
-    if value not in ('server', 'remote'):
-        raise ValueError(f'{HEAVY_STAGES_ENV} must be server or remote, '
-                         f'got {value!r}')
-    return value
+    return get_settings().csc_geometry_heavy_stages
 
 
 def server_stages() -> Tuple[str, ...]:

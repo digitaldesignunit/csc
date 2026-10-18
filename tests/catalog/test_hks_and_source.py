@@ -142,10 +142,10 @@ def test_default_is_cron_mode_with_a_small_limit():
     assert _limit(_parse_args(['--limit', '7'])) == 7
 
 
-def test_limit_must_be_positive(capsys):
+def test_limit_must_be_positive(caplog):
     with pytest.raises(SystemExit):
         _limit(_parse_args(['--limit', '0']))
-    assert '--limit' in capsys.readouterr().err
+    assert '--limit' in caplog.text
 
 
 def test_stages_can_be_given_with_an_equals_sign():

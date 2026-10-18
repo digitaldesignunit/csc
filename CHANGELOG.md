@@ -5,7 +5,143 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.1.1] - unreleased
+## [0.6.2.0] - 2026-10-18
+
+A robustness release (decision 8.150): the structural security items deferred by 8.144,
+the inline geometry budget and the follow-ups of the open-data imports. No new features.
+
+### Changed
+
+- **Inline geometry budget** (decision 8.148): a version keeps at most 1000 mesh faces and
+  1000 points inline. A mesh of more than 1000 faces is reduced to 1000 for the inline
+  preview and its original goes up as `detailed.ply` (the rule "up to 8000 faces fully
+  inline" is gone); every point cloud of more than 1000 points goes up in full. Applies
+  to the shared Grasshopper library `csc_gh` (through `CSC_Update`, no component change),
+  the robot scan processing, the geometry correction script and the open-data imports.
+  The backend still accepts larger inline geometry; existing versions stay as they are.
+  The tooltip of `FetchReducedGeometry` still says "at most 5000 points" until the next
+  export of the components.
+
+- **Settings** (decision 8.156): the backend reads its environment in one place,
+  `src/backend/settings.py` (pydantic-settings), and checks it at start: required
+  variables, `JWT_SECRET` of at least 32 bytes, positive upload limits, http(s) URLs,
+  the worker count and log level. Secrets never appear in a printed or logged settings
+  object. Variable names and defaults are unchanged.
+- **Logging** (decision 8.157): the backend logs through Python's `logging` instead of
+  `print`, into gunicorn's daily error log (API) or the dated cron logs; errors keep their
+  traceback. No line holds user names, e-mail addresses, typed values, GitHub request
+  URLs or the text of a rejected document.
+- **Database outages** answer 503 with `Retry-After` instead of a bare 500, and the
+  cause goes to the log.
+- **Backend modules split** (decision 8.160): the snapshot routes into five modules, the identity routes into
+  three, the Grasshopper interface routes into a package; unused 0.5 API models removed. Paths and
+  answers are unchanged (the OpenAPI document is identical).
+- **Database outages** also answer 503 on the routes that handled database errors themselves; other
+  database errors keep their answer. The client log no longer holds the text of a malformed client
+  header, and the request line holds the path without the query string.
+- **Import tools** retry a request up to three times on 503 and on connection errors,
+  honouring `Retry-After`; every other error stops at once.
+
+- **One way to load a record** (decision 8.158): identities, versions, evidence, datasets,
+  invitations and materials are loaded and checked by one helper per kind, so every route
+  answers alike. Changed answers (paths and schemas are unchanged):
+  - a path id that is not a UUID answers 404 "<Kind> not found" instead of 400 "Invalid ... id";
+    a UUID in a body or query value stays 400;
+  - "not found" texts no longer repeat the id ("Snapshot not found");
+  - the file routes of a purged version answer 410 with the purge notice instead of 404;
+  - a component whose current version is missing answers 409 "The component has no current
+    state." instead of 500 (passport, compose and the exports reading through them);
+  - the change log and earlier versions answer 401 to anonymous callers and 403 "Not allowed:
+    view_history" to non-members; an outsider no longer gets a withdrawn piece's tombstone
+    from `/changes`;
+  - a material that does not exist answers 404 before the admin check (403 before).
+  An unknown invitation code still answers 400, the same as a code for another address.
+- **Change log** (decision 8.159): evidence entries name their action (`verify`, `attach`,
+  `redact`, `publish`, `withdraw`, `reinstate`) instead of `patch`; status steps stay in each
+  record's status history. Entries carry the record's modification time and are written
+  after it; a log entry that cannot be written no longer fails the request. Existing
+  entries are unchanged.
+- **File markers** (mesh levels, `point_cloud_files`) are updated atomically, so uploads to
+  the same version at once no longer lose each other's marker.
+- **`CSC_Update`** (decision 8.155): user objects are checked against a list of hashes from
+  the server; unchanged files are skipped, each download is checked before it is written,
+  and a failed file keeps the old one while the rest goes on ("Update incomplete, run
+  again"). The result counts installed, unchanged and failed files. A replaced script
+  component is no longer repaired automatically: it shows a remark that its inputs and
+  outputs may have changed and that it needs a recompute.
+- `FetchReducedGeometry` states the inline limit correctly (at most 1000 points).
+- **Maintenance page**: `csc_maintenance.sh on` creates the domain's own document root
+  (`/var/www/virtual/$USER/<domain>`) when it is missing and `off` removes it again; it no
+  longer stops on a server whose only document root is `~/html`, and never writes there.
+
+### Added
+
+- **Marker for uploaded point clouds**: a snapshot lists the indices of its uploaded full
+  point clouds in `point_cloud_files` (set by the upload, removed by the delete, not
+  writable by clients), so an import resumes without probing the file.
+- **Read-only mode for maintenance** (decision 8.154): while the file `~/csc/shared/READ_ONLY`
+  exists, the backend answers every write with 503 and `Retry-After`; reads and the sign-in
+  stay up. All workers switch at once, without a restart. The web shows a banner and
+  disables its write buttons, `/version` and `/health/db` report `read_only`, and the
+  geometry runner, the component map, the user and the geometry maintenance skip their run.
+
+### Security
+
+- **Tokens** are read with PyJWT instead of python-jose: `HS256` only, `exp` and `sub`
+  required, one verification per request. Tokens issued before the update stay valid.
+- **Shared rate limits** (decision 8.152): sign-in, registration, verification mails, password
+  reset and invitations count in the database, across all workers and restarts. The read
+  limits (lists, map, downloads, exports) count per worker; they only shed load.
+- **Failed sign-ins** (decision 8.162): at most 10 in 15 minutes per account, then 429 with
+  `Retry-After`; an unknown account is answered the same way, and the counter holds no user
+  name or address.
+- **Request size** (decision 8.163): a body over its limit is refused with 413 before it is
+  read (uploads by their upload limit, everything else 16 MB, `CSC_JSON_BODY_LIMIT_MB`).
+- **Usernames** (decision 8.161): 3 to 32 characters, lowercase letters, digits, `.`, `_`, `-`,
+  starting with a letter or digit. Every existing name already fits.
+- **Release attestations** (decision 8.153): every release asset carries a GitHub build
+  attestation, and the deploy checks the backend and the frontend bundle against it
+  before it unpacks them; it stops if the check fails or `gh` is missing.
+- In read-only mode the sign-in writes nothing; its per-address limit then counts in each
+  worker's memory, and an existing account lock still holds.
+- Database connections are capped at 20 per client; a one-off dataset update no longer
+  runs at every start.
+- **Content-Security-Policy** (decision 8.164): every page carries a policy built per
+  request with a fresh nonce. Scripts run only by nonce, styles inline, everything else
+  from the app's own origin; the exceptions are the Google map frame and images from the
+  static host. The policy is enforced at once.
+
+### Server notes
+
+- `JWT_ALGORITHM`, if set, must be `HS256`; any other value stops the start.
+- The database user needs `createIndex`, `insert`, `update` and `remove` on the new collection
+  `rate_limit_counters` (its TTL index is created on first use). `CSC_RATE_LIMIT_STORAGE`
+  (default: the MongoDB URI) selects the store of the shared limits.
+- The read limits count per worker: the effective limit is the stated one times `CSC_WORKERS`.
+- The deploy installs PyJWT and removes python-jose.
+- Before the deploy, check the backend environment: `FRONTEND_URL`, `GITHUB_REPO_URL`
+  and `CSC_PUBLIC_API_URL` must be http(s) URLs, the upload and photo limit variables
+  positive, and `SMTP_DEV_MODE` off. The backend refuses to start otherwise and names
+  the variable.
+- The deploy installs one new package, `pydantic-settings`.
+- `CSC_CSP_REPORT_ONLY=1` in the frontend `.env` is the emergency switch for the
+  Content-Security-Policy: the same policy is then sent as report-only (violations are
+  logged in the browser console, nothing is blocked). Restart the frontend after setting
+  it, and remove it once the cause is fixed.
+- Before the first deploy of 0.6.2.0, install the `gh` CLI binary in `~/bin` and store a
+  token for it (deployment README). The 0.6.1.1 deploy script runs first and repeats
+  itself with the new one, which needs `gh`.
+- Put `touch ~/csc/shared/READ_ONLY` before and `rm ~/csc/shared/READ_ONLY` after every
+  maintenance step (restore, purge, migration, deploy). The path is set by
+  `CSC_READ_ONLY_FLAG`.
+- Deploy the server before anyone runs the new `CSC_Update`: it needs
+  `/ghinterface/userobject_manifest` and stops with a 404 against an older server. The old
+  `CSC_Update` still updates itself through the old endpoints.
+- `NEXT_PUBLIC_STATIC_BASE_URL` is fixed when the frontend is built (in CI): set it there,
+  or set `NEXT_STATIC_BASE_URL` in the frontend environment, which is read at run time.
+  Otherwise the policy blocks the images from the static host (the sidebar logo).
+
+## [0.6.1.1] - 2026-10-13
 
 A security patch (decision 8.144), from a read-only review of 0.6.1.0 in five areas:
 backend authentication, injection and uploads, authorisation, infrastructure and

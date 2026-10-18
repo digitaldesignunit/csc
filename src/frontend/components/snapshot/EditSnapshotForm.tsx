@@ -20,6 +20,7 @@ import { PRECISION_LABELS } from '@/generated/Vocab'
 import { DateWithPrecision, Field, VocabSelect } from '@/components/lineage/fields'
 import PublicConfirmDialog from '@/components/common/PublicConfirmDialog'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DateField } from '@/components/ui/date-field'
@@ -349,9 +350,9 @@ export default function EditSnapshotForm({
               </Link>
             </Button>
           )}
-          <Button type="button" onClick={() => void save()} disabled={!allowed || busy}>
+          <WriteButton type="button" onClick={() => void save()} disabled={!allowed || busy}>
             {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : 'Save'}
-          </Button>
+          </WriteButton>
         </div>
       </div>
     </div>

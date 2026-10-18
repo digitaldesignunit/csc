@@ -38,10 +38,10 @@ from apps.catalog.models import User
 from apps.catalog.permissions import dataset_roles
 from apps.catalog.vocab import VERIFICATION_STATES
 from .access import (
-    deny_read,
     deny_write,
     dataset_of,
     identity_ever_published,
+    load_evidence,
     require,
     viewer_of,
 )
@@ -56,10 +56,8 @@ from .evidence_service import (
     VerificationBody,
     client_data,
     evidence_body,
-    evidence_projection,
     gate_identity,
     history_entry,
-    load_evidence,
     new_evidence_doc,
     prepare,
     problem_http,
@@ -68,7 +66,6 @@ from .evidence_service import (
     stored_input,
     validated_doc,
 )
-from .access import load_identity
 
 router = APIRouter()
 
@@ -76,12 +73,6 @@ OPEN = ('draft', 'pending')
 
 
 # HELPERS ---------------------------------------------------------------------
-async def _load(request: Request, evidence_id: str):
-    record = await load_evidence(request, evidence_id)
-    identity = await load_identity(request, str(record['identity_id']))
-    return record, identity
-
-
 async def _ok(request: Request, user: User, record: Dict[str, Any],
               identity: Dict[str, Any], status: int = 200) -> JSONResponse:
     # the document is re-read: a recompute may have changed nothing on it,
@@ -100,11 +91,10 @@ def _transition_or_409(record: Dict[str, Any], to: str) -> str:
     return action
 
 
-async def _step(request: Request, user: User, record: Dict[str, Any],
-                identity: Dict[str, Any], verb: str, to: str) -> None:
-    """The permission of ``verb`` first (401 / 403), the status after (409):
-    a caller who may not act never learns the record's status."""
-    await require(request, user, verb, identity=identity, evidence=record)
+def _step(record: Dict[str, Any], verb: str, to: str) -> None:
+    """The status after the permission of ``verb`` (401 / 403, checked by
+    ``load_evidence``): a caller who may not act never learns the record's
+    status."""
     if _transition_or_409(record, to) != verb:
         raise HTTPException(
             status_code=409,
@@ -159,7 +149,8 @@ async def _open_correction(request: Request, old_id: str,
 async def _link_predecessor(request: Request, user: User,
                             predecessor_id: str,
                             superseded_by: Optional[str], *,
-                            expect: Optional[str]) -> Dict[str, Any]:
+                            expect: Optional[str],
+                            cause: str) -> Dict[str, Any]:
     """Set (or clear) ``superseded_by`` of the corrected record, guarded by
     its current value; logged (I30)."""
     coll = request.app.mongodb_component_evidence
@@ -178,7 +169,7 @@ async def _link_predecessor(request: Request, user: User,
     await coll.update_one({'_id': predecessor_id},
                           {'$set': {'etag': after['etag']}})
     await log_change(request, 'evidence', before, after,
-                     by_user_id=user.id, cause='patch', at=now)
+                     by_user_id=user.id, cause=cause, at=now)
     return after
 
 
@@ -193,9 +184,10 @@ async def submit_evidence(
     """Nobody publishes directly (8.120): for every role the submit only moves
     draft --> pending; ``/publish`` (moderator(D)) is the separate step. The
     old ``?publish=1`` of earlier clients is ignored."""
-    record, identity = await _load(request, evidence_id)
-    await _step(request, current_user, record, identity, 'submit',
-                'pending')
+    loaded = await load_evidence(request, current_user, evidence_id,
+                                 'submit')
+    record, identity = loaded.record, loaded.identity
+    _step(record, 'submit', 'pending')
     gate_identity(identity, record['observed_at'])
     pending = await _change_status(request, current_user, record, 'pending')
     return await _ok(request, current_user, pending, identity)
@@ -208,8 +200,10 @@ async def recall_evidence(
     current_user: Annotated[User, Depends(get_current_active_user)],
     evidence_id: str,
 ):
-    record, identity = await _load(request, evidence_id)
-    await _step(request, current_user, record, identity, 'recall', 'draft')
+    loaded = await load_evidence(request, current_user, evidence_id,
+                                 'recall')
+    record, identity = loaded.record, loaded.identity
+    _step(record, 'recall', 'draft')
     return await _ok(request, current_user, await _change_status(
         request, current_user, record, 'draft'), identity)
 
@@ -221,9 +215,10 @@ async def resubmit_evidence(
     current_user: Annotated[User, Depends(get_current_active_user)],
     evidence_id: str,
 ):
-    record, identity = await _load(request, evidence_id)
-    await _step(request, current_user, record, identity, 'resubmit',
-                'draft')
+    loaded = await load_evidence(request, current_user, evidence_id,
+                                 'resubmit')
+    record, identity = loaded.record, loaded.identity
+    _step(record, 'resubmit', 'draft')
     if record.get('supersedes'):
         await _open_correction(request, record['supersedes'],
                                except_id=record['_id'])
@@ -261,13 +256,13 @@ async def _publish(request: Request, user: User, record: Dict[str, Any],
     predecessor = record.get('supersedes')
     if predecessor:
         await _link_predecessor(request, user, predecessor, record['_id'],
-                                expect=None)
+                                expect=None, cause='publish')
     try:
         published = await _change_status(request, user, record, 'published')
     except HTTPException:
         if predecessor:
             await _link_predecessor(request, user, predecessor, None,
-                                    expect=record['_id'])
+                                    expect=record['_id'], cause='publish')
         raise
     await recompute_properties(request, identity['_id'])
     return published
@@ -280,9 +275,10 @@ async def publish_evidence(
     current_user: Annotated[User, Depends(get_current_active_user)],
     evidence_id: str,
 ):
-    record, identity = await _load(request, evidence_id)
-    await _step(request, current_user, record, identity, 'publish',
-                'published')
+    loaded = await load_evidence(request, current_user, evidence_id,
+                                 'publish')
+    record, identity = loaded.record, loaded.identity
+    _step(record, 'publish', 'published')
     return await _ok(request, current_user, await _publish(
         request, current_user, record, identity), identity)
 
@@ -295,9 +291,10 @@ async def reject_evidence(
     evidence_id: str,
     body: ReasonBody,
 ):
-    record, identity = await _load(request, evidence_id)
-    await _step(request, current_user, record, identity, 'reject',
-                'rejected')
+    loaded = await load_evidence(request, current_user, evidence_id,
+                                 'reject')
+    record, identity = loaded.record, loaded.identity
+    _step(record, 'reject', 'rejected')
     return await _ok(request, current_user, await _change_status(
         request, current_user, record, 'rejected', reason=body.reason),
         identity)
@@ -314,9 +311,10 @@ async def withdraw_evidence(
     """Out of the fold and the public tier; members keep the full record
     (8.17). Withdrawing a correction gives the record it corrected back its
     place (it stays superseded only while its correction is live)."""
-    record, identity = await _load(request, evidence_id)
-    await _step(request, current_user, record, identity, 'withdraw',
-                'withdrawn')
+    loaded = await load_evidence(request, current_user, evidence_id,
+                                 'withdraw')
+    record, identity = loaded.record, loaded.identity
+    _step(record, 'withdraw', 'withdrawn')
     withdrawn = await _change_status(request, current_user, record,
                                      'withdrawn', reason=body.reason)
     predecessor = record.get('supersedes')
@@ -326,7 +324,8 @@ async def withdraw_evidence(
         if old and old.get('superseded_by') == record['_id'] \
                 and old.get('status') == 'published':
             await _link_predecessor(request, current_user, predecessor,
-                                    None, expect=record['_id'])
+                                    None, expect=record['_id'],
+                                    cause='withdraw')
     await recompute_properties(request, identity['_id'])
     return await _ok(request, current_user, withdrawn, identity)
 
@@ -338,9 +337,10 @@ async def reinstate_evidence(
     current_user: Annotated[User, Depends(get_current_active_user)],
     evidence_id: str,
 ):
-    record, identity = await _load(request, evidence_id)
-    await _step(request, current_user, record, identity, 'reinstate',
-                'published')
+    loaded = await load_evidence(request, current_user, evidence_id,
+                                 'reinstate')
+    record, identity = loaded.record, loaded.identity
+    _step(record, 'reinstate', 'published')
     predecessor = record.get('supersedes')
     old = None
     if predecessor:
@@ -359,7 +359,8 @@ async def reinstate_evidence(
         if old and old.get('status') == 'published' \
                 and old.get('superseded_by') is None:
             await _link_predecessor(request, current_user, predecessor,
-                                    record['_id'], expect=None)
+                                    record['_id'], expect=None,
+                                    cause='reinstate')
     published = await _change_status(request, current_user, record,
                                      'published')
     await recompute_properties(request, identity['_id'])
@@ -398,7 +399,8 @@ async def supersede_evidence(
     method; it enters as ``pending``. On publish the old record is marked
     superseded and leaves the fold and the default lists (3.3.4). 409 if a
     correction of it is already open (I14, 8.16)."""
-    old, identity = await _load(request, evidence_id)
+    loaded = await load_evidence(request, current_user, evidence_id, None)
+    old, identity = loaded.record, loaded.identity
     await require_contributor(request, current_user, 'supersede_evidence',
                               identity, evidence=old)
     if old.get('status') != 'published' or old.get('superseded_by'):
@@ -452,11 +454,10 @@ async def put_verification(
     never sets ``self_attested``. The server sets ``by`` and ``at``;
     ``accredited`` needs a note and an accreditation covering the standard
     (I22). Changing the state of a published record recomputes the fold."""
-    record, identity = await _load(request, evidence_id)
-    viewer = viewer_of(current_user)
-    projection = await evidence_projection(request, viewer, record, identity)
-    if projection != 'full':
-        raise deny_read(viewer)
+    loaded = await load_evidence(request, current_user, evidence_id, None,
+                                 files=True)
+    record, identity = loaded.record, loaded.identity
+    viewer = loaded.viewer
     if body.state not in VERIFICATION_STATES:
         raise problem_http('state', f'one of {list(VERIFICATION_STATES)}')
     current = (record.get('verification') or {}).get('state') or 'unverified'
@@ -489,7 +490,7 @@ async def put_verification(
     await _replace(request, record, updated,
                    guard={'etag': record.get('etag')})
     await log_change(request, 'evidence', record, updated,
-                     by_user_id=current_user.id, cause='patch', at=now)
+                     by_user_id=current_user.id, cause='verify', at=now)
     if record.get('status') == 'published' and not record.get(
             'superseded_by'):
         await recompute_properties(request, identity['_id'])
@@ -538,11 +539,10 @@ async def patch_evidence(
     --> 409 pointing at ``/supersede`` (I13), server-maintained fields
     --> 422.
     """
-    record, identity = await _load(request, evidence_id)
-    viewer = viewer_of(current_user)
-    if await evidence_projection(request, viewer, record, identity) \
-            != 'full':
-        raise deny_read(viewer)
+    loaded = await load_evidence(request, current_user, evidence_id, None,
+                                 files=True)
+    record, identity = loaded.record, loaded.identity
+    viewer = loaded.viewer
     dataset = await dataset_of(request, identity.get('dataset'))
     roles = dataset_roles(viewer, dataset)
     fields = {k: (list(v) if k == 'position' and isinstance(v, dict) else [])
@@ -642,11 +642,9 @@ async def delete_evidence(
     """Only draft / pending / rejected (I15); a published one is withdrawn
     instead. Its files go with it. Refused while a core names it as its
     pair."""
-    record, identity = await _load(request, evidence_id)
-    viewer = viewer_of(current_user)
-    if await evidence_projection(request, viewer, record, identity) \
-            != 'full':
-        raise deny_read(viewer)
+    loaded = await load_evidence(request, current_user, evidence_id, None,
+                                 files=True)
+    record, identity = loaded.record, loaded.identity
     if record.get('status') not in ('draft', 'pending', 'rejected'):
         # for everyone who can read it, admin included (I15)
         raise HTTPException(

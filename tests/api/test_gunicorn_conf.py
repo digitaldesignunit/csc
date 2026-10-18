@@ -9,9 +9,8 @@ import pytest
 
 
 @pytest.fixture
-def conf(monkeypatch):
-    monkeypatch.delenv('CSC_WORKERS', raising=False)
-    monkeypatch.delenv('CSC_LOG_LEVEL', raising=False)
+def conf(env):
+    env(CSC_WORKERS=None, CSC_LOG_LEVEL=None, CSC_TRUSTED_PROXIES=None)
     import conf as module
     return importlib.reload(module)
 
@@ -20,9 +19,8 @@ def test_the_defaults_are_two_workers_and_info(conf):
     assert conf.workers == 2 and conf.loglevel == 'info'
 
 
-def test_the_environment_sets_both(conf, monkeypatch):
-    monkeypatch.setenv('CSC_WORKERS', '3')
-    monkeypatch.setenv('CSC_LOG_LEVEL', 'WARNING')
+def test_the_environment_sets_both(conf, env):
+    env(CSC_WORKERS='3', CSC_LOG_LEVEL='WARNING')
     module = importlib.reload(conf)
     assert module.workers == 3 and module.loglevel == 'warning'
 
@@ -48,8 +46,8 @@ def test_the_default_trusted_proxies_are_the_limiters_default(conf):
     assert conf.forwarded_allow_ips == '127.0.0.0/8,::1/128'
 
 
-def test_csc_trusted_proxies_sets_forwarded_allow_ips(conf, monkeypatch):
-    monkeypatch.setenv('CSC_TRUSTED_PROXIES', '127.0.0.0/8, ::1 ,203.0.113.7')
+def test_csc_trusted_proxies_sets_forwarded_allow_ips(conf, env):
+    env(CSC_TRUSTED_PROXIES='127.0.0.0/8, ::1 ,203.0.113.7')
     module = importlib.reload(conf)
     assert module.forwarded_allow_ips == \
         '127.0.0.0/8,::1/128,203.0.113.7/32'
@@ -61,10 +59,10 @@ def test_a_bad_entry_stops_the_start_and_names_the_variable(conf, raw):
         conf.trusted_proxies(raw)
 
 
-def test_gunicorn_accepts_the_list_and_the_bind_stays(conf, monkeypatch):
+def test_gunicorn_accepts_the_list_and_the_bind_stays(conf, env):
     pytest.importorskip('fcntl')            # gunicorn imports on Unix only
     from gunicorn.config import Config
-    monkeypatch.setenv('CSC_TRUSTED_PROXIES', '127.0.0.0/8,::1,203.0.113.7')
+    env(CSC_TRUSTED_PROXIES='127.0.0.0/8,::1,203.0.113.7')
     module = importlib.reload(conf)
     cfg = Config()
     cfg.set('forwarded_allow_ips', module.forwarded_allow_ips)

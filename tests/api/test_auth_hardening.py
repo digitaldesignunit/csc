@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 from fastapi import Request
-from jose import jwt
+import jwt
 
 from apps.catalog.api import auth as auth_api
 from apps.catalog.api.auth import jwt_secret_problem, token_sha256
@@ -228,7 +228,7 @@ def test_the_backend_refuses_to_start_with_a_short_secret(backend_env):
 
 def test_a_token_is_looked_up_by_its_subject_only(api, app, make_user):
     user = make_user('alice')
-    secret, algorithm = app.state.jwt_secret, app.state.jwt_algorithm
+    secret, algorithm = app.state.jwt_secret, 'HS256'
     now = int(datetime.now(timezone.utc).timestamp())
     base = {'iat': now, 'exp': now + 600, 'role': 'user'}
     # the account named by a legacy claim is not found

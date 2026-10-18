@@ -15,6 +15,8 @@ import { Combine, Layers, MoreHorizontal, Pencil, Plus, Search, Trash2 } from 'l
 import { Badge } from '@/components/ui/badge'
 import { useConfirm } from '@/components/common/ConfirmDialog'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
+import { useReadOnly } from '@/components/common/ReadOnlyProvider'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -145,7 +147,7 @@ function MaterialDialog({ editing, onClose, onSaved }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button onClick={() => void save()} disabled={busy}>Save</Button>
+          <WriteButton onClick={() => void save()} disabled={busy}>Save</WriteButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -205,7 +207,7 @@ function MergeDialog({ source, materials, onClose, onSaved }: {
         {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button variant="destructive" onClick={() => void merge()} disabled={busy || !into}>Merge</Button>
+          <WriteButton variant="destructive" onClick={() => void merge()} disabled={busy || !into}>Merge</WriteButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -213,6 +215,7 @@ function MergeDialog({ source, materials, onClose, onSaved }: {
 }
 
 export default function MaterialsPage() {
+  const readOnly = useReadOnly()
   const { confirm, dialog } = useConfirm()
   const router = useRouter()
   const { me, loading: meLoading, isAdmin } = useMe()
@@ -281,13 +284,13 @@ export default function MaterialsPage() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => setEditing({ mode: 'edit', material })}>
+        <DropdownMenuItem disabled={readOnly} onSelect={() => setEditing({ mode: 'edit', material })}>
           <Pencil className="mr-2 h-4 w-4" />Edit
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => setMerging(material)}>
+        <DropdownMenuItem disabled={readOnly} onSelect={() => setMerging(material)}>
           <Combine className="mr-2 h-4 w-4" />Merge into another material
         </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onSelect={() => void remove(material)}>
+        <DropdownMenuItem variant="destructive" disabled={readOnly} onSelect={() => void remove(material)}>
           <Trash2 className="mr-2 h-4 w-4" />Delete (only while unused)
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -302,9 +305,9 @@ export default function MaterialsPage() {
           <Layers className="h-6 w-6 text-primary" />
           <h1 className="text-xl font-bold sm:text-2xl">Materials</h1>
         </div>
-        <Button size="sm" onClick={() => setEditing({ mode: 'create' })}>
+        <WriteButton size="sm" onClick={() => setEditing({ mode: 'create' })}>
           <Plus className="mr-1 h-4 w-4" />Add material
-        </Button>
+        </WriteButton>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-0 flex-1 sm:max-w-sm">

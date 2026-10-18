@@ -18,20 +18,28 @@ server's own address when it reaches it through the public API host.
 
 Keys: ``limiter`` counts per client address (the login and registration
 routes: nobody is signed in yet). ``signed_in_or_ip`` counts a caller with a
-valid token per user, others per address (the expensive reads).
+valid token per user, others per address (the expensive reads). The token is
+checked once per request (``tokens.verified_payload``), here and in the
+authentication dependency alike.
+
+Where the counters live: the shared limiter's move from the process to the
+store ``CSC_RATE_LIMIT_STORAGE`` names, MongoDB by default (``rate_store.py``,
+``use_store``); the local limiter's stay in the process (see "TWO LIMITERS").
 """
 
 import ipaddress
-import os
 from functools import lru_cache
 from typing import Optional, Tuple, Union
 
 from fastapi import Request
-from jose import JWTError, jwt
+from limits.strategies import FixedWindowRateLimiter
 from slowapi import Limiter
 
+from rate_store import make_store
+from settings import DEFAULT_TRUSTED_PROXIES, get_settings  # noqa: F401
+from tokens import verified_payload
+
 TRUSTED_PROXIES_ENV = 'CSC_TRUSTED_PROXIES'
-DEFAULT_TRUSTED_PROXIES = '127.0.0.0/8,::1'
 
 IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 IPNetwork = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
@@ -70,7 +78,7 @@ def _networks(value: str) -> Tuple[IPNetwork, ...]:
 
 
 def trusted_proxies() -> Tuple[IPNetwork, ...]:
-    return _networks(os.getenv(TRUSTED_PROXIES_ENV)
+    return _networks(get_settings().csc_trusted_proxies
                      or DEFAULT_TRUSTED_PROXIES)
 
 
@@ -100,18 +108,43 @@ def signed_in_or_ip(request: Request) -> str:
     """``user:<id>`` for a caller with a valid token, else the address."""
     header = request.headers.get('authorization') or ''
     scheme, _, token = header.partition(' ')
-    state = request.app.state
-    if scheme.lower() == 'bearer' and token and \
-            getattr(state, 'jwt_secret', None):
-        try:
-            payload = jwt.decode(
-                token, state.jwt_secret, algorithms=[state.jwt_algorithm],
-                options={'verify_aud': False})
-        except JWTError:
-            payload = {}
-        if payload.get('sub'):
+    if scheme.lower() == 'bearer' and token:
+        payload = verified_payload(request, token)
+        if payload and payload.get('sub'):
             return f'user:{payload["sub"]}'
     return client_ip(request)
 
 
-limiter = Limiter(key_func=client_ip)
+# TWO LIMITERS ----------------------------------------------------------------
+# ``shared_limiter`` counts in the store CSC_RATE_LIMIT_STORAGE names (MongoDB
+# by default), so that every gunicorn worker counts the same requests. It is
+# for the routes where counting across workers is the point: the sign-in, the
+# registration, the mails that can be asked for, the password reset and the
+# invitation acceptance (the guessing and mail-flooding limits).
+# ``local_limiter`` counts in the process. It is for every other limited
+# route: the mesh downloads, the catalogue reads, the exports, the public
+# GH reads, the test send of a mail template. The ``limits`` MongoDB storage is
+# synchronous, so each count it makes blocks the event loop of its worker for a
+# database round trip; the high-frequency reads would pay that on every call,
+# and they only shed load: a limit per worker, times CSC_WORKERS, is enough.
+# The decorator on a route says which it uses; a test pins the shared list
+# (tests/api/test_limiter_groups.py). Both start in the process; the API
+# moves the shared one to its store when it starts (use_store).
+shared_limiter = Limiter(key_func=client_ip, storage_uri='memory://')
+local_limiter = Limiter(key_func=client_ip, storage_uri='memory://')
+
+
+def use_store(settings=None):
+    """Count in the store ``CSC_RATE_LIMIT_STORAGE`` names (decision 8.152),
+    for the routes and for ``store()``. Called when the API starts, once per
+    worker; the connection opens on first use."""
+    settings = settings or get_settings()
+    new = make_store(settings.rate_limit_uri, settings.mongodb_db)
+    shared_limiter._storage = new
+    shared_limiter._limiter = FixedWindowRateLimiter(new)
+    return new
+
+
+def store():
+    """The store the shared limiter counts in."""
+    return shared_limiter._storage

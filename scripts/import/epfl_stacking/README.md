@@ -39,9 +39,9 @@ mesh file also has an unused `material` element). Nothing else: no dimensions, n
   says so in the capture notes; a stone whose cloud fits neither keeps no cloud and is flagged. The meshes
   are never rescaled. Every stone is checked against 20 mm to 3000 mm on each side and flagged outside.
 - **Levels, by the Grasshopper client's rules** (`csc_gh.build`, decision 8.95): the inline preview mesh is
-  the mesh up to 8000 faces and 500 faces above that; a `reduced.ply` of 10000 faces for meshes of more than
-  15000 faces; the original as `detailed.ply` (binary, with its colours) above 500 faces; the cloud inline
-  thinned to 5000 points and, above 5000 points, the whole cloud as `cloud.ply`. All 452 meshes have more
+  the mesh up to 1000 faces and 1000 faces above that (decision 8.148); a `reduced.ply` of 10000 faces for
+  meshes of more than 15000 faces; the original as `detailed.ply` (binary, with its colours) above 1000
+  faces; the cloud inline thinned to 1000 points and, above 1000 points, the whole cloud as `cloud.ply`. All 452 meshes have more
   than 15000 faces. Reductions are quadric decimation (`fast-simplification` through trimesh); the colours
   of a reduced mesh are those of the nearest original vertex.
 - **Not watertight**: about a quarter of the meshes have holes (122 of 452 in the first run). They go up as
@@ -106,7 +106,8 @@ output goes outside the repository or into `.dev/`; a path anywhere else in the 
   `PUT` the `reduced` and `detailed` levels and the full cloud, submit, publish. **Idempotent**: a
   published stone is left alone; one that stopped in `draft`, `rejected` or `pending` goes on from where it
   was (a level the snapshot already lists in `mesh_ply_resolutions` is not sent again); a `rejected` or
-  `withdrawn` snapshot is logged with its state and id. The dataset is created **private**.
+  `withdrawn` snapshot is logged with its state and id. The dataset is created **private**. A request is
+  repeated up to three times after a 503 or a dropped connection, as in `recreate/run.py`.
 - `spotcheck.py` (local rehearsal only: it reads a local database) checks the count (452) and one stone per
   group: published, location none, origin `offcut`, material, the inline preview and cloud, the listed mesh
   levels and the staged cloud as the API serves it.

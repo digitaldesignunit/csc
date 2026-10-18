@@ -8,6 +8,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { signInWithBackend, type SignInDeps } from './signIn'
+import { RATE_LIMITED } from './signInErrors'
 
 const b64 = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
 const jwt = (exp: number) => `${b64({ alg: 'HS256' })}.${b64({ sub: 'u1', exp })}.sig`
@@ -55,12 +56,22 @@ test('the credentials go to /auth/token only, with the client header', async () 
   assert.equal(user?.apiTokenExpiresAt, exp * 1000)
 })
 
-test('401 and 403 are a failed sign-in, 429 too', async () => {
-  for (const status of [401, 403, 429, 500]) {
+test('401, 403 and 500 are a failed sign-in', async () => {
+  for (const status of [401, 403, 500]) {
     const { deps, calls } = setup([json(status, { detail: 'no' })])
     assert.equal(await signInWithBackend({ identifier: 'a', password: 'b' }, deps), null)
     assert.equal(calls.length, 1, 'no profile call after a refusal')
   }
+})
+
+test('a 429 reaches the page as the RateLimited error, without what was typed', async () => {
+  const { deps, calls, logs } = setup([json(429, { detail: 'Too many failed sign-ins' })])
+  await assert.rejects(
+    signInWithBackend({ identifier: 'typed@example.org', password: 'pw' }, deps),
+    (err: Error) => err.message === RATE_LIMITED,
+  )
+  assert.equal(calls.length, 1, 'no profile call after a refusal')
+  assert.ok(!logs.join('\n').includes('typed@example.org'))
 })
 
 test('an unreachable backend is a failed sign-in', async () => {

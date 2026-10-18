@@ -16,7 +16,6 @@ section 7.7; plan P3).
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-import os
 import re
 import unicodedata
 from typing import Annotated, Any, Dict, List, Optional
@@ -28,6 +27,7 @@ from pymongo.errors import DuplicateKeyError
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.documents import Dataset
+from settings import get_settings
 from apps.catalog.models import User
 from apps.catalog.profile import (
     clean_text,
@@ -45,6 +45,7 @@ from services import email_service
 from .access import (
     EVER_PUBLISHED,
     and_match,
+    load_dataset,
     load_datasets,
     refuse_unreviewed,
     require,
@@ -56,6 +57,10 @@ from .invitations import deliver
 from .catalog_common import now_iso
 from .identity_edit import _validated as _validated_identity
 from .identity_edit import _write as _write_identity
+
+from logging_setup import get_logger
+
+log = get_logger(__name__)
 
 router = APIRouter()
 
@@ -197,13 +202,6 @@ async def _dataset_view(request: Request, user: Optional[User],
                        roles=_ordered(roles), members=members)
 
 
-async def _dataset_or_404(request: Request, did: str) -> Dataset:
-    dataset = (await load_datasets(request)).get(did)
-    if dataset is None:
-        raise HTTPException(status_code=404, detail=f'Dataset {did} not found')
-    return dataset
-
-
 # ROUTES ----------------------------------------------------------------------
 @router.get('/users/me', response_model=Me, response_model_by_alias=True,
             summary='The caller, with the roles per dataset')
@@ -328,29 +326,18 @@ async def get_dataset(
                             Depends(get_optional_current_user)],
     did: str,
 ):
-    viewer = viewer_of(current_user)
-    dataset = await _dataset_or_404(request, did)
-    visible = viewer.is_admin or dataset_roles(viewer, dataset) or (
-        viewer.logged_in and dataset.visibility == 'catalog')
-    if not visible:
-        raise HTTPException(
-            status_code=401 if not viewer.logged_in else 403,
-            detail='You have no access to this dataset.')
+    dataset = (await load_dataset(request, current_user, did)).record
     return await _dataset_view(request, current_user, dataset,
                                with_members=True)
 
 
-DEFAULT_MAX_DATASETS = 3
 MAX_DATASETS_ENV = 'CSC_MAX_DATASETS_PER_USER'
 
 
 def max_datasets_per_user() -> int:
     """How many datasets one account may create (8.139 e); admins have no
     limit. ``CSC_MAX_DATASETS_PER_USER``, 3 when unset or not a number."""
-    try:
-        return max(0, int((os.getenv(MAX_DATASETS_ENV) or '').strip()))
-    except ValueError:
-        return DEFAULT_MAX_DATASETS
+    return get_settings().csc_max_datasets_per_user
 
 
 def slug_from_name(name: str) -> str:
@@ -395,9 +382,10 @@ async def _notify_admins(request: Request, dataset: Dataset,
                 creator.email) for admin in admins])
         for failure in failures:
             if failure is not None:
-                print(f'[DATASETS] "dataset created" mail failed: {email_service.failure_kind(failure)}')
+                log.warning('"dataset created" mail failed: %s',
+                            email_service.failure_kind(failure))
     except Exception as exc:                               # noqa: BLE001
-        print(f'[DATASETS] "dataset created" mail failed: {type(exc).__name__}')
+        log.warning('"dataset created" mail failed: %s', type(exc).__name__)
 
 
 @router.post('/datasets', response_model=DatasetView, status_code=201,
@@ -489,8 +477,8 @@ async def patch_dataset(
     did: str,
     body: DatasetPatch,
 ):
-    dataset = await _dataset_or_404(request, did)
-    await require(request, current_user, 'edit_dataset', dataset=dataset)
+    dataset = (await load_dataset(request, current_user, did,
+                                  'edit_dataset')).record
     viewer = viewer_of(current_user)
     changes: Dict[str, Any] = body.model_dump(exclude_unset=True)
     if 'name' in changes and changes['name'] is None:
@@ -512,8 +500,10 @@ async def patch_dataset(
         await request.app.mongodb_datasets.update_one({'_id': did},
                                                       {'$set': changes})
         request.state.csc_datasets = None
+    # the stored state, whatever the caller may still read of it: a moderator
+    # who removed their own roles gets the answer, not a 403 after the write
     return await _dataset_view(request, current_user,
-                               await _dataset_or_404(request, did),
+                               (await load_datasets(request))[did],
                                with_members=True)
 
 
@@ -527,8 +517,8 @@ async def put_dataset_member(
     user_id: str,
     body: MemberRoles,
 ):
-    dataset = await _dataset_or_404(request, did)
-    await require(request, current_user, 'manage_members', dataset=dataset)
+    dataset = (await load_dataset(request, current_user, did,
+                                  'manage_members')).record
     if await request.app.mongodb_users.find_one({'_id': user_id},
                                                 {'_id': 1}) is None:
         raise HTTPException(status_code=404, detail='User not found')
@@ -560,8 +550,10 @@ async def put_dataset_member(
         {'_id': did}, {'$set': {'members': members,
                                 'lastmodified': now_iso()}})
     request.state.csc_datasets = None
+    # the stored state, whatever the caller may still read of it: a moderator
+    # who removed their own roles gets the answer, not a 403 after the write
     return await _dataset_view(request, current_user,
-                               await _dataset_or_404(request, did),
+                               (await load_datasets(request))[did],
                                with_members=True)
 
 
@@ -596,9 +588,8 @@ async def set_dataset_public(
     each change like a metadata PATCH (``cause: patch``). Unpublished and
     withdrawn pieces are left alone, and so are children: no piece follows
     another (6.2). ``dry_run`` only counts."""
-    dataset = await _dataset_or_404(request, did)
-    await require(request, current_user, 'set_dataset_public',
-                  dataset=dataset)
+    dataset = (await load_dataset(request, current_user, did,
+                                  'set_dataset_public')).record
     if body.is_public and not body.dry_run:
         refuse_unreviewed(dataset, viewer_of(current_user))      # 8.139 c
     identities = request.app.mongodb_component_identities
@@ -658,8 +649,7 @@ async def delete_dataset(
     """Only while the dataset holds no piece at all (no identity, whatever
     its state; for an admin too: move the pieces first, ``move_identity``).
     The open invitations into it are revoked with it (8.139 f)."""
-    dataset = await _dataset_or_404(request, did)
-    await require(request, current_user, 'delete_dataset', dataset=dataset)
+    await load_dataset(request, current_user, did, 'delete_dataset')
     pieces = await request.app.mongodb_component_identities.count_documents(
         {'dataset': did}, limit=1)
     if pieces:

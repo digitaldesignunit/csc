@@ -5,6 +5,7 @@ import { AlertTriangle, Check, Send, Trash2, X } from 'lucide-react'
 
 import UnknownTagLink from '@/components/snapshot/UnknownTagLink'
 import { Button } from '@/components/ui/button'
+import { WriteButton } from '@/components/ui/write-button'
 import {
   Dialog,
   DialogContent,
@@ -348,10 +349,10 @@ const ComponentIdTransmitter: React.FC = () => {
             )}
           </div>
           {pending && !isLoadingPending && (
-            <Button variant="outline" size="sm" onClick={handleClearPending} className="flex-shrink-0">
+            <WriteButton variant="outline" size="sm" onClick={handleClearPending} className="flex-shrink-0">
               <Trash2 className="mr-1 h-4 w-4" />
               Clear
-            </Button>
+            </WriteButton>
           )}
         </div>
       </div>
@@ -392,10 +393,10 @@ const ComponentIdTransmitter: React.FC = () => {
             if (e.key === 'Enter') handleTransmitClick()
           }}
         />
-        <Button onClick={handleTransmitClick} disabled={!canTransmit} className="gap-1.5">
+        <WriteButton onClick={handleTransmitClick} disabled={!canTransmit} className="gap-1.5">
           <Send className="h-4 w-4" aria-hidden />
           {isCheckingId ? 'Checking...' : status === 'transmitting' ? 'Sending...' : 'Transmit'}
-        </Button>
+        </WriteButton>
       </div>
 
       {effectiveId && (
@@ -475,9 +476,9 @@ const ComponentIdTransmitter: React.FC = () => {
             <Button variant="outline" onClick={handleCancelOverwrite}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleConfirmOverwrite}>
+            <WriteButton variant="destructive" onClick={handleConfirmOverwrite}>
               Overwrite
-            </Button>
+            </WriteButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

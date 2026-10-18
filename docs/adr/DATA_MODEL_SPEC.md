@@ -699,6 +699,7 @@ Migration: `created_by_user_id` = the `added_by_user_id` of the identity's v0 (s
   "added_by_user_id": "...", "added_by_username": "...",
   "photo_count": 0,
   "mesh_ply_resolutions": { "0": ["reduced", "detailed"] },
+  "point_cloud_files": [0],                    // DERIVED, 0.6.2: the indices of `geometry.point_clouds` whose full cloud is stored as a file (`point_clouds/<snapshot_id>/<i>.ply`); set by the upload route, removed by the delete route; absent on versions uploaded before 0.6.2 (8.148)
   "derivation_due": "...",                     // DERIVED, optional: a timestamp set by every write that changes a stage input (a new version or correction, a PLY upload or removal, a PATCH of `geometry`, `color`, `shape_class` or `complexity`, a change of the piece's `original_function`); the frequent geometry cron (`main_geometry.py --due`) reads only marked snapshots (partial index) and unsets it after a run without errors if it still holds the value read; not in the etag, not in the change log (8.136)
   "etag": "...", "created": "...", "lastmodified": "..."   // CPR: etag = integrity hash --- Art 78(h)
 }
@@ -770,7 +771,7 @@ until it is resubmitted as a draft (decision 8.18; same for evidence).
 |---|---|---|---|
 | **frozen** --- claims about the piece's state | inline `geometry.*` (meshes, point_clouds, authored proxies); mesh + point-cloud PLY files; `capture` except `capture.notes` (incl. fixture files); `fragment`, `quantity` | author / `moderator(D)` | never in place --> correction (below) |
 | **overrides** | `shape_class` / `complexity` set by hand (`*_source: assigned`) | author / `moderator(D)` | `moderator(D)` in place (8.3); never overwritten by a recompute |
-| **derived** --- server only | `descriptors`, fitted proxies + `deviation_maps`, `shape_class` / `complexity` when `derived`, `properties`, `frame`, `bbx`, previews, `mesh_ply_resolutions` | server | server, any time (crons, recompute routes). **Never accepted from a client** --- `descriptors` leaves `UpdateComponentSnapshotModel` |
+| **derived** --- server only | `descriptors`, fitted proxies + `deviation_maps`, `shape_class` / `complexity` when `derived`, `properties`, `frame`, `bbx`, previews, `mesh_ply_resolutions`, `point_cloud_files` | server | server, any time (crons, recompute routes). **Never accepted from a client** --- `descriptors` leaves `UpdateComponentSnapshotModel` |
 | **mutable metadata** | `name`, `notes`, `location`, `color`, `photo_credit` (8.128) | author / `moderator(D)` | `moderator(D)` in place |
 | **photos** | `photos/<sid>/*` | author / `moderator(D)` | append: `contributor(D)`; delete: `moderator(D)` |
 | **valid time** | `effective_from(+precision)` | --- | `moderator(D)` (a correction of *when*, not *what*; triggers snapshot-fold recompute, section 4.4) |

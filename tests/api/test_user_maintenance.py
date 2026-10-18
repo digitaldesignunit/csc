@@ -56,13 +56,14 @@ def test_old_unverified_accounts_go_whatever_the_type_of_their_expiry(
                     'g-no-expiry']
 
 
-def test_the_log_holds_no_user_name_and_no_address(db, maintenance, capsys):
+def test_the_log_holds_no_user_name_and_no_address(db, maintenance, caplog):
+    caplog.set_level('INFO', logger='csc')
     db['users'].insert_many([
         _user('old-1', expires=OLD, name='secret-person-one'),
         _user('old-2', expires=OLD.isoformat(), name='secret-person-two'),
     ])
     maintenance()
-    out = capsys.readouterr().out
+    out = caplog.text
     assert 'old-1' in out and 'old-2' in out           # ids are logged
     assert 'Deleted 2 user(s)' in out
     for private in ('secret-person', '@mail-', 'Full old', 'example.org'):
@@ -70,12 +71,13 @@ def test_the_log_holds_no_user_name_and_no_address(db, maintenance, capsys):
 
 
 def test_a_failure_logs_the_kind_of_error_and_not_its_text(
-        monkeypatch, capsys):
+        monkeypatch, caplog):
+    caplog.set_level('INFO', logger='csc')
     monkeypatch.setattr(usermaintenance, 'get_db_connectionstring',
                         lambda: 'mongodb://user:password-text@127.0.0.1:1/x')
     with pytest.raises(Exception):
         asyncio.run(usermaintenance.cleanup_unverified_users(dry_run=True))
-    out = capsys.readouterr().out
+    out = caplog.text
     assert 'Error during cleanup:' in out
     assert 'password-text' not in out and '127.0.0.1' not in out
 

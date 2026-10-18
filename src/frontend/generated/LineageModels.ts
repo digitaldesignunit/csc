@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-05T18:37:45.604Z
-// Source: http://127.0.0.1:8791/schema/lineage
+// Generated on: 2026-10-17T09:24:39.747Z
+// Source: http://127.0.0.1:8899/schema/lineage
 
 export interface ChangeLogEntryView {
   _id: string;
@@ -9,7 +9,7 @@ export interface ChangeLogEntryView {
   identity_id: string;
   at: string;
   by_user_id?: string | null;
-  cause: 'patch' | 'inherited_from_parent' | 'material_merge' | 'exit' | 'reenter' | 'withdraw' | 'reinstate' | 'migration' | 'derived_exit' | 'deinstall' | 'undo_deinstall';
+  cause: 'patch' | 'inherited_from_parent' | 'material_merge' | 'exit' | 'reenter' | 'withdraw' | 'reinstate' | 'migration' | 'derived_exit' | 'deinstall' | 'undo_deinstall' | 'verify' | 'publish' | 'attach' | 'redact';
   source_record_id?: string | null;
   changes: FieldChange[];
   by_username?: string | null;

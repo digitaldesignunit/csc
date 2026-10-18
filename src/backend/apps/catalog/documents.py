@@ -704,6 +704,10 @@ class ComponentSnapshot(_Document):
     added_by_username: Optional[str] = None
     photo_count: int = Field(0, ge=0)
     mesh_ply_resolutions: Dict[str, List[str]] = Field(default_factory=dict)
+    # indices of ``geometry.point_clouds`` whose full cloud is stored as a
+    # file (``point_clouds/<snapshot_id>/<i>.ply``, set by the upload route,
+    # decision 8.148 / 0.6.2); absent on versions that predate the marker
+    point_cloud_files: List[int] = Field(default_factory=list)
     etag: Optional[str] = None
     created: Timestamp
     lastmodified: Timestamp
