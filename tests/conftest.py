@@ -16,8 +16,13 @@ import pytest  # noqa: E402
 @pytest.fixture(autouse=True)
 def _fresh_settings():
     """The settings are read once per process (decision 8.156): every test
-    starts, and ends, with a new read of the environment."""
-    from settings import get_settings
+    starts, and ends, with a new read of the environment. tests/ci runs
+    without the backend dependencies (pytest only), so it skips this."""
+    try:
+        from settings import get_settings
+    except ImportError:
+        yield
+        return
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

@@ -154,6 +154,8 @@ ok "a failed attestation stops the install"
 
 # gh missing from PATH (the function alone, PATH emptied: the real gh of a runner must not hide it)
 verify_fn=$(sed -n '/^verify_attestations()/,/^}/p' "$root/uberspaceconfig/deployment/csc_release_deploy.sh")
+# PATH is emptied on purpose; GITHUB_TOKEN and REPO are read by the eval
+# shellcheck disable=SC2123,SC2034
 ( PATH=/nonexistent
   log() { :; }; die() { echo "ERROR: $*"; exit 1; }
   GITHUB_TOKEN=""; REPO=owner/repo
