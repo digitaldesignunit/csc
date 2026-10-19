@@ -917,7 +917,7 @@ one review; each item gets a test that fails before the fix. No GH component cha
 Server notes for the deploy: the frontend `.env` loses `MONGODB_*` (harmless if left); paste the new crontab;
 `mkdir -p ~/csc/shared/locks`.
 
-### 0.6.2.0 --- robustness release --- scope decided 2026-10-16 (8.150)
+### 0.6.2.0 --- robustness release --- scope decided 2026-10-16 (8.150) --- released 2026-10-18
 
 Branch `v-0.6.2.0`. No feature work beside the hardening. Items to cut into tasks before the build:
 
