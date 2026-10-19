@@ -220,10 +220,10 @@ template and the `.htaccess`):
 
 `on` writes `index.html` and an `.htaccess` into the domain's own document root,
 `/var/www/virtual/$USER/<domain>/`, and runs
-`uberspace web backend set <domain>/ --apache`; `off` runs
-`uberspace web backend set <domain>/ --http --port <port>` and removes the two
-files. Every path answers `503` with `Retry-After`, `Cache-Control: no-store`
-and `noindex`.
+`uberspace web backend set <domain>/ --apache` (the same for `www.<domain>`,
+below); `off` puts the backends back as they were and removes the two files.
+Every path answers `503` with `Retry-After`, `Cache-Control: no-store` and
+`noindex`.
 
 **The document root.** On Uberspace 7 a folder `/var/www/virtual/$USER/<domain>`
 is the document root of that domain alone (manual, "DocumentRoot", section
@@ -242,9 +242,39 @@ document root and says whether the script created it; `--dry-run` prints the
 `mkdir` and `rmdir` as well. Do not delete `~/html` (the manual warns that the
 additional document roots depend on it).
 
-The domain, the port and the folder are settings (`CSC_MAINT_DOMAIN`, default
-`2ndchances.build`; `CSC_MAINT_PORT`, default `3000`; `CSC_MAINT_DOCROOT`, which
-is treated the same way).
+**The www subdomain** (`CSC_MAINT_INCLUDE_WWW`, default `1`; `0` leaves www
+alone). Apache serves `www.<domain>` from `/var/www/virtual/$USER/www.<domain>`
+when that path exists, and (by our reading; the manual does not say it) from `~/html`
+otherwise; with only the domain's folder the www
+address could show `~/html` instead of the page. So `on` makes
+`/var/www/virtual/$USER/www.<domain>` a symlink to the domain's document root
+when nothing is there, and records that in
+`~/csc/shared/.maintenance_www_docroot_created`; `off` removes the link, only
+if the script made it. A folder or link that was there before stays untouched;
+`on` uses it only when it resolves to the same folder and otherwise stops
+before changing anything. The manual allows symlinks in this place ("folders
+(and symlinks)") but not into `/home` (Apache has no access there), and does
+not mention `FollowSymLinks`: the target here is below `/var/www/virtual`, and
+the page for www is part of the test on a test subdomain below.
+
+**The backends.** `on` reads `uberspace web backend list` and records the line
+of the domain and (with www) of `www.<domain>` in
+`~/csc/shared/.maintenance_backends`: no backend of its own, Apache, or an
+http port. `off` restores exactly that: the same port, Apache, or
+`uberspace web backend del <host>/` when there was none. If a host has a
+backend the script cannot restore (a redirect, for instance), `on` stops before
+it changes anything; set `CSC_MAINT_INCLUDE_WWW=0` or handle the host by hand.
+A second `on` keeps the first record. Without a record (an `on` of an older
+version of the script, or a second `off`) `off` sets the domain to the frontend
+port, as before; www is changed only while the maintenance flag
+(`~/csc/shared/.maintenance_on`) exists, else the log says "www left as it is",
+so a second `off` never creates a www backend. `status` shows
+the www backend (now, and before the maintenance), the www document root and
+who made it.
+
+The domain, the port and the folders are settings (`CSC_MAINT_DOMAIN`, default
+`2ndchances.build`; `CSC_MAINT_PORT`, default `3000`; `CSC_MAINT_DOCROOT` and
+`CSC_MAINT_WWW_DOCROOT`, which are treated the same way).
 
 The text of the page is `~/csc/shared/maintenance.txt` when it exists, else a
 default. Plain text: every line is a paragraph (HTML-escaped); a line
@@ -307,6 +337,9 @@ it is; remove it yourself when the work is done. Check it with
 **To verify once on the server, before the first use:** that Apache serves
 the per-domain folder for a domain whose backend is `--apache` (the manual says
 the folder form is allowed, it does not show this exact use). Try it on a test
-subdomain (`uberspace web domain add test.<domain>`, `csc_maintenance.sh on`
-with `CSC_MAINT_DOMAIN=test.<domain>`, open it, then `off`: the folder it made
-is gone again); this has not been checked on the production account yet.
+subdomain (`uberspace web domain add test.<domain>` and `www.test.<domain>`,
+`csc_maintenance.sh on` with `CSC_MAINT_DOMAIN=test.<domain>`, open both
+addresses, then `off`: the folder and the link it made are gone again, the
+backends are as before); this has not been checked on the production account
+yet. If Apache does not follow the link, `on` shows `~/html` at the www address:
+then use a real folder with the two files instead of the link (change the script) or set `CSC_MAINT_INCLUDE_WWW=0`.

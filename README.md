@@ -509,8 +509,8 @@ images the release deploy copies there).
 web domain while the frontend is stopped or deployed (cutovers, migrations); see
 `uberspaceconfig/deployment/README.md`, "Maintenance mode" (the script uses the
 domain's own folder `/var/www/virtual/$USER/<domain>`, creates it when missing and
-removes it again, and never writes to `~/html`; verify it on a test subdomain
-before the first use).
+removes it again, links `www.<domain>` to it, restores the backends it found, and
+never writes to `~/html`; verify it on a test subdomain before the first use).
 
 **Read-only mode:** `touch ~/csc/shared/READ_ONLY` before and `rm
 ~/csc/shared/READ_ONLY` after every maintenance step that writes to the database
