@@ -34,6 +34,7 @@
 # CSC_MAINT_PORT (the frontend, default 3000), CSC_MAINT_DOCROOT (default
 # /var/www/virtual/$USER/<domain>; an override is treated the same way),
 # CSC_MAINT_TEXT, CSC_HOME (default ~/csc).
+# CSC_MAINT_INCLUDE_WWW=1 also sets the www subdomain to maintenance (default 1).
 #
 # Checking the site during maintenance: ssh -L 3000:127.0.0.1:3000 <account> and
 # open http://127.0.0.1:3000 (the frontend answers there while the domain shows
@@ -43,6 +44,7 @@ set -euo pipefail
 
 CSC_HOME="${CSC_HOME:-$HOME/csc}"
 DOMAIN="${CSC_MAINT_DOMAIN:-2ndchances.build}"
+INCLUDE_WWW="${CSC_MAINT_INCLUDE_WWW:-1}"  # also set the www subdomain to maintenance
 PORT="${CSC_MAINT_PORT:-3000}"
 DOCROOT="${CSC_MAINT_DOCROOT:-/var/www/virtual/${USER:-$(id -un)}/$DOMAIN}"
 TEXT_FILE="${CSC_MAINT_TEXT:-$CSC_HOME/shared/maintenance.txt}"
@@ -147,6 +149,9 @@ maintenance_on() {
     mv -f "$DOCROOT/.htaccess.new" "$DOCROOT/.htaccess"
   fi
   run uberspace web backend set "$DOMAIN/" --apache
+  if [ "$INCLUDE_WWW" = 1 ]; then
+    run uberspace web backend set "www.$DOMAIN/" --apache
+  fi
   if [ "$DRY" = 1 ]; then echo "+ touch $FLAG"; else mkdir -p "$(dirname "$FLAG")"; date -Iseconds > "$FLAG"; fi
   log "the site shows the maintenance page; run '$(basename "$0") off' when it is ready"
 }
@@ -154,6 +159,9 @@ maintenance_on() {
 maintenance_off() {
   log "maintenance OFF for $DOMAIN"
   run uberspace web backend set "$DOMAIN/" --http --port "$PORT"
+  if [ "$INCLUDE_WWW" = 1 ]; then
+    run uberspace web backend set "www.$DOMAIN/" --http --port "$PORT"
+  fi
   if installed || [ "$DRY" = 1 ]; then
     # only the files this script wrote
     run rm -f "$DOCROOT/index.html" "$DOCROOT/.htaccess"

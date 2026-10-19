@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -17,12 +18,12 @@ import pytest  # noqa: E402
 def _fresh_settings():
     """The settings are read once per process (decision 8.156): every test
     starts, and ends, with a new read of the environment. tests/ci runs
-    without the backend dependencies (pytest only), so it skips this."""
-    try:
-        from settings import get_settings
-    except ImportError:
+    without the backend dependencies (pytest only), so it skips this; any
+    other import error of the settings fails the test as it should."""
+    if importlib.util.find_spec('pydantic') is None:
         yield
         return
+    from settings import get_settings
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
