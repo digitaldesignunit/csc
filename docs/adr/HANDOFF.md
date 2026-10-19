@@ -1,5 +1,7 @@
 # Handoff --- CSC data model / evidence system design
 
+**Update 2026-10-19:** **0.6.2.0 is released and live** (tag `v0.6.2.0`, 2026-10-18; robustness release, decisions 8.150--8.164): settings object, logging, 503 on database outages, one record loader, change-log writer, PyJWT, shared rate limits, failed sign-in limit, body limits, username rule, CSP with nonces, release attestations, read-only flag, `CSC_Update` hashes without self-healing. Checked after the deploy: read-only mode, CSP, sign-in, `CSC_Update`. Open: the maintenance script's `www` handling (branch `fix-maintenance`) needs one check on a test subdomain. Next: the 0.6.3 candidates (`IMPLEMENTATION_PLAN_0.6.md`).
+
 **Update 2026-09-28 (end of day):** **0.5.1.0 is released and live** (tag `v0.5.1.0`, deployed on
 Uberspace through the tag-driven release + approval-gated deploy pipeline, decision 8.5; server
 converted to `~/csc/releases` + `current`, cron and `.bash_profile` moved, photo metadata
