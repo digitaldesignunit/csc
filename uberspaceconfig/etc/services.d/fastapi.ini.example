@@ -13,6 +13,7 @@ environment=
     JWT_SECRET="your-openssl-rand-hex-32-value",
     JWT_ALGORITHM="HS256",
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES="60",
+    # CSC_GH_TOKEN_HOURS: lifetime of the token of a Grasshopper sign-in (default 6, 1 to 24)
     GITHUB_REPO_URL="https://github.com/your-org/your-repo",
     # GITHUB_CSC_GH_TOKEN is optional (public repo). Set it only if you need
     # higher GitHub API rate limits for CSC_Update.

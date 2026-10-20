@@ -86,7 +86,7 @@ test('only the text 1 switches report-only on, and it renames the header', () =>
 const matcher = new RegExp(`^${config.matcher[0]}$`)
 
 test('the proxy runs for every page path and skips build output and public files', () => {
-  for (const page of ['/', '/auth/signin', '/auth/register', '/components', '/components/map',
+  for (const page of ['/', '/auth/signin', '/auth/register', '/components', '/components/similarity-map',
     '/components/3f2c0c86-6b5b-4a6a-8b7e-0d9d3a2d6e11', '/admin/users', '/privacy', '/invite',
     '/api/backend/identities', '/api/auth/session', '/gh-interface', '/gh-interface/',
     '/gh-interface/csc_addcomponent.jpg', '/gh-interface/csc_fetchallsnapshots.png']) {
@@ -110,7 +110,7 @@ test('the matcher runs for every path under a protected prefix, whatever it ends
 })
 
 test('the sign-in gate covers the prefixes it always did, and public pages stay public', () => {
-  for (const protectedPath of ['/components', '/components/map', '/dashboard', '/dashboard/x',
+  for (const protectedPath of ['/components', '/components/similarity-map', '/dashboard', '/dashboard/x',
     '/admin', '/admin/users', '/api/backend/identities', '/gh-interface', '/locate-by-id',
     '/locate-by-id/x', '/scan', '/my-work', '/identify', '/analytics', '/transmit-id',
     '/add-component', '/add-component/x']) {

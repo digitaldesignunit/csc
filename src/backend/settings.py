@@ -122,6 +122,9 @@ class Settings(BaseSettings):
         'HS256', description='JWT signing algorithm (only HS256 is accepted)')
     jwt_access_token_expire_minutes: int = Field(
         30, ge=1, description='lifetime of an access token in minutes')
+    csc_gh_token_hours: int = Field(
+        6, ge=1, le=24, description='lifetime in hours of the access token '
+        'of a sign-in from the Grasshopper client (8.166)')
     csc_open_registration_domains: str = Field(
         'tu-darmstadt.de', description='comma separated e-mail domains that '
                                        'may register without an invitation')

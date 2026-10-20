@@ -31,8 +31,8 @@ const LOG_ENDPOINTS: Array<{ key: LogKey; title: string; description: string }> 
   },
   {
     key: 'component_map_log',
-    title: 'Component Map',
-    description: 'Component map PCA/UMAP cache cronjob log.',
+    title: 'Similarity Map',
+    description: 'Similarity map PCA/UMAP cache cronjob log.',
   },
 ]
 
@@ -156,7 +156,7 @@ export default function AdminLogsPage() {
         <TabsList className="h-auto flex-wrap gap-1.5">
           <TabsTrigger value="fastapi_log">FastAPI</TabsTrigger>
           <TabsTrigger value="geometry_log">Geometry Runner</TabsTrigger>
-          <TabsTrigger value="component_map_log">Component Map</TabsTrigger>
+          <TabsTrigger value="component_map_log">Similarity Map</TabsTrigger>
         </TabsList>
 
         {LOG_ENDPOINTS.map(({ key, title, description }) => (

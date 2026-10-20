@@ -588,7 +588,7 @@ function ComponentMapCanvas({
           ref={canvasRef}
           className="absolute inset-0 touch-none"
           role="img"
-          aria-label={`Component map (${method})`}
+          aria-label={`Similarity map (${method})`}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -695,7 +695,7 @@ export default function ComponentMapPageClient() {
           throw new Error(
             res.status === 404
               ? `No cached ${method.toUpperCase()} layout. Run main_component_map.py, then reload.`
-              : `Map request failed (${res.status})`,
+              : `Similarity map request failed (${res.status})`,
           )
         }
         const json = (await res.json()) as ComponentMapResponse
@@ -747,7 +747,7 @@ export default function ComponentMapPageClient() {
       ? 'Layout computed live.'
       : ''
   const mapHelp = [
-    'The map arranges components by how similar their shape descriptors are: points close together look alike.',
+    'The similarity map arranges components by how similar their shape descriptors are: points close together look alike.',
     coverage,
     cacheNote,
   ].filter(Boolean).join(' ')
@@ -800,14 +800,14 @@ export default function ComponentMapPageClient() {
           {(loading || switching) ? (
             <span className="inline-flex items-center gap-1 text-xs">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              {switching ? 'Switching layout...' : 'Loading map...'}
+              {switching ? 'Switching layout...' : 'Loading similarity map...'}
             </span>
           ) : (
             <>
               <span className={cn(error && 'text-amber-700 dark:text-amber-300')}>
                 {error ?? countText}
               </span>
-              {data && <Help label="About this map" text={mapHelp} />}
+              {data && <Help label="About the similarity map" text={mapHelp} />}
             </>
           )}
         </div>
@@ -840,7 +840,7 @@ export default function ComponentMapPageClient() {
           )}
         >
           {loading
-            ? 'Loading map...'
+            ? 'Loading similarity map...'
             : data
               ? coverage
               : error || 'No points to display'}

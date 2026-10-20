@@ -25,6 +25,7 @@ from services.email_service import (
     get_token_expiry,
     load_email_config
 )
+from apps.catalog.client_header import CLIENT_HEADER, parse_client_header
 from limiter import local_limiter, shared_limiter
 import read_only
 import signin_limit
@@ -138,6 +139,20 @@ def create_access_token(
         'exp': int(exp.timestamp())
     }
     return encode_token(secret, payload)
+
+
+GH_CLIENT = 'gh-userobjects'
+
+
+def token_minutes(request: Request) -> int:
+    """The lifetime of the token this sign-in gets: the Grasshopper client
+    (``X-CSC-Client: gh-userobjects/...``) gets ``CSC_GH_TOKEN_HOURS``, every
+    other caller, with a missing or malformed header too, the standard one
+    (8.166). The header is a claim, not a proof."""
+    parsed = parse_client_header(request.headers.get(CLIENT_HEADER))
+    if parsed is not None and parsed[0] == GH_CLIENT:
+        return request.app.state.gh_token_minutes
+    return request.app.state.jwt_access_minutes
 
 
 # AUTHENTICATION DEPENDENCIES -------------------------------------------------
@@ -298,7 +313,7 @@ async def login_for_access_token(
         secret=request.app.state.jwt_secret,
         sub=user['_id'],                      # subject = GUID _id
         role=user.get('role', 'user'),
-        minutes=request.app.state.jwt_access_minutes,
+        minutes=token_minutes(request),
     )
     return Token(access_token=token)
 

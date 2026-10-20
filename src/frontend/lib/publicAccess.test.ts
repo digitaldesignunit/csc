@@ -15,5 +15,5 @@ test('an anonymous visitor reads the Grasshopper page and its screenshots, nothi
 test('the other pages stay behind the sign-in', () => {
   assert.equal(allowsAnonymousCatalogRead('/my-work', 'GET'), false)
   assert.equal(allowsAnonymousCatalogRead('/admin/validation', 'GET'), false)
-  assert.equal(allowsAnonymousCatalogRead('/components/map', 'GET'), true)
+  assert.equal(allowsAnonymousCatalogRead('/components/similarity-map', 'GET'), true)
 })
