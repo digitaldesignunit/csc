@@ -90,6 +90,7 @@ async def lifespan(app: FastAPI):
     # --- JWT config ----------------------------------------------------------
     app.state.jwt_secret = settings.jwt_secret.get_secret_value()
     app.state.jwt_access_minutes = settings.jwt_access_token_expire_minutes
+    app.state.gh_token_minutes = settings.csc_gh_token_hours * 60
 
     # --- Rate limit counters (decision 8.152) ----------------------------------
     use_store(settings)

@@ -129,12 +129,24 @@ def test_a_bad_url_stops_the_start_with_its_name(clean, env, name, value):
     ('SNAPSHOT_PHOTO_UPLOAD_LIMIT_MB', '0'), ('SNAPSHOT_PHOTO_MAX_OUTPUT_MB', '0'),
     ('SNAPSHOT_PHOTO_MAX_LONG_EDGE_PX', '0'), ('SNAPSHOT_PHOTO_MAX_LONG_EDGE_PX', 'wide'),
     ('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '0'), ('SMTP_PORT', '70000'),
+    ('CSC_GH_TOKEN_HOURS', '0'), ('CSC_GH_TOKEN_HOURS', '25'),
+    ('CSC_GH_TOKEN_HOURS', 'long'),
     ('CSC_JSON_BODY_LIMIT_MB', '0'), ('CSC_JSON_BODY_LIMIT_MB', 'big'),
 ])
 def test_a_limit_must_be_a_positive_number(clean, env, name, value):
     env(**{name: value})
     with pytest.raises(SettingsError, match=name):
         get_settings()
+
+
+def test_the_grasshopper_token_lifetime_is_six_hours_up_to_a_day(clean, env):
+    assert get_settings().csc_gh_token_hours == 6
+    env(CSC_GH_TOKEN_HOURS='1')
+    assert get_settings().csc_gh_token_hours == 1
+    env(CSC_GH_TOKEN_HOURS='24')
+    assert get_settings().csc_gh_token_hours == 24
+    env(CSC_GH_TOKEN_HOURS='2')
+    assert get_settings().csc_gh_token_hours == 2
 
 
 def test_the_evidence_limit_may_only_lower_the_maximum(clean, env):

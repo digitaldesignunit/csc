@@ -163,6 +163,12 @@ In `~/.bash_profile` set
 `GITHUB_DEPLOY_URL`, `GITHUB_USERNAME`, `GITHUB_CSC_DEPLOY_TOKEN` (the old
 clone-based deploy). Compare with `../.bash_profile.example`.
 
+Optional, in the service environment of the backend (`fastapi.ini`):
+`CSC_GH_TOKEN_HOURS` (default `6`, from 1 to 24) is the lifetime in hours of the
+token of a sign-in from the Grasshopper client (`X-CSC-Client:
+gh-userobjects/...`); every other sign-in keeps
+`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`. Leave it unset unless the 6 hours are wrong.
+
 ### 6. Approve the waiting deploy
 
 In GitHub --> Actions --> the release run --> **Review deployments** --> approve. It

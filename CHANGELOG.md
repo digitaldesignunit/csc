@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Similarity Map**: the component map is now called "Similarity Map" in the navigation, on
   the page and in the admin logs, so it is not mistaken for a location map. Its address is
   `/components/similarity-map`; the old `/components/map` is not redirected.
+- **Grasshopper sign-ins last 6 hours** (decision 8.166) instead of 30 minutes, so longer
+  sessions no longer need the Refresh input; the web keeps 30 minutes.
+
+### Server notes
+
+- `CSC_GH_TOKEN_HOURS` (optional, 1 to 24, default 6) sets the lifetime of Grasshopper sign-ins;
+  no change is needed for the default.
 
 ## [0.6.2.0] - 2026-10-18
 
