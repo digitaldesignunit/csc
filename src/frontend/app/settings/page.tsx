@@ -1,3 +1,4 @@
+import AccessTokensSection from '@/components/settings/AccessTokensSection'
 import AccountSection from '@/components/settings/AccountSection'
 import ChangePasswordSection from '@/components/settings/ChangePasswordSection'
 import CookieSettingsSection from '@/components/settings/CookieSettingsSection'
@@ -12,6 +13,7 @@ export default function SettingsPage() {
       <AccountSection />
       <ProfileSection />
       <ChangePasswordSection />
+      <AccessTokensSection />
       <ThemeSettingsSection />
       <CookieSettingsSection />
     </div>

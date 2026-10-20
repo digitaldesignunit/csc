@@ -168,6 +168,9 @@ Optional, in the service environment of the backend (`fastapi.ini`):
 token of a sign-in from the Grasshopper client (`X-CSC-Client:
 gh-userobjects/...`); every other sign-in keeps
 `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`. Leave it unset unless the 6 hours are wrong.
+`CSC_PAT_ROLES` (default `admin`) lists the global roles (`admin`, `user`) that
+may create personal access tokens (see "Access tokens" in the main README);
+leave it unset to keep them to administrators.
 
 ### 6. Approve the waiting deploy
 

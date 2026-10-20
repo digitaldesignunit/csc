@@ -430,6 +430,43 @@ browser wrote itself stands on the left of that chain and is never believed.
   share a limit (the Uberspace manual does not state which headers its proxy
   sets or from which address it connects).
 
+## Access tokens
+
+A personal access token lets a tool other than the web app (for instance an AI
+assistant through the MCP layer) read the catalog as its owner, and nothing
+more. It is not the JWT of a sign-in: a token only works where its scope says,
+and a JWT does not work in place of it.
+
+- **Who.** Administrators at first. `CSC_PAT_ROLES` (default `admin`, a comma
+  list of the global roles `admin` and `user`) opens it to more; the role is
+  checked again on every request, so an account that loses it stops working at
+  once. Everyone sees and revokes the tokens they hold in Settings, "Access
+  tokens"; administrators see every token under Admin, "Access tokens", and can
+  revoke any.
+- **Create.** Settings, "Access tokens": a name and a lifetime of 30 days, 90
+  days (the default) or 1 year; there is no token without an expiry. The token
+  (`csc_pat_` and 43 characters) is shown once, with a copy button; copy it
+  then. The list shows only its first 8 characters, name, scope, created, last
+  used and expiry. At most 10 active tokens per account.
+- **Renew.** Within 14 days of the expiry (and after it) the list offers
+  "Renew": a new token with the same name is made and shown once, the old one
+  is revoked.
+- **Revoke.** "Revoke" in the list stops the token at once. Revoked and expired
+  tokens, a lost role, an unverified, disabled or deleted account all stop it
+  at once: the database is asked on every request, nothing is cached.
+- **Try a token.** `curl -H "Authorization: Bearer csc_pat_..."
+  https://<api host>/auth/token-check` answers the owner, the scope and the
+  expiry; every other answer is the same 401, whatever the reason. This path
+  and `/mcp` need no `X-CSC-Client` header (the connectors of Claude cannot
+  send one); every other route still does.
+- **Limits and the log.** 120 requests a minute per token (counted per worker,
+  like the read limits); the last use is written at most once a minute and not
+  at all while the maintenance flag is set; creating, renewing and revoking are
+  writes and get the 503 of that flag. The log has one line per use: the first
+  8 characters of the token and the route, no personal data.
+- **Stored.** Only the SHA-256 of a token is stored (collection
+  `access_tokens`), so a leaked database holds no usable token.
+
 ## Custom domain (`2ndchances.build`)
 
 `2ndchances.build` is the canonical frontend origin; The old address `ddu.uber.space`

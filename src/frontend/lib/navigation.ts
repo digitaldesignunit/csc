@@ -10,6 +10,7 @@ import {
   ChartColumn,
   Database,
   Inbox,
+  KeyRound,
   Layers,
   LayoutGrid,
   LogIn,
@@ -95,6 +96,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   { id: 'materials', label: 'Materials', href: '/admin/materials', icon: Layers, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'geometry', label: 'Geometry failures', href: '/admin/geometry', icon: TriangleAlert, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'mailtemplates', label: 'Mail templates', href: '/admin/mail-templates', icon: Mail, group: 'admin', visible: (v) => v.isAdmin },
+  { id: 'access-tokens', label: 'Access tokens', href: '/admin/access-tokens', icon: KeyRound, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'logs', label: 'Backend logs', href: '/admin/logs', icon: ScrollText, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'gh', label: 'Grasshopper', href: '/gh-interface', icon: Workflow, group: 'tools', visible: anyone },
   {

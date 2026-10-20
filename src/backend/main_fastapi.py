@@ -119,6 +119,7 @@ async def lifespan(app: FastAPI):
     app.mongodb_invitations = app.mongodb['invitations']
     app.mongodb_materials = app.mongodb['materials']
     app.mongodb_change_log = app.mongodb['change_log']
+    app.mongodb_access_tokens = app.mongodb['access_tokens']
 
     # Create helpful indexes (idempotent)
     await app.mongodb_users.create_index('email', unique=True)
@@ -127,6 +128,10 @@ async def lifespan(app: FastAPI):
     await app.mongodb_users.create_index('verification_token_sha256',
                                          sparse=True)
     await app.mongodb_datasets.create_index('members.user_id')
+    # access tokens (8.167): found by the hash of the token presented
+    await app.mongodb_access_tokens.create_index('token_sha256', unique=True)
+    await app.mongodb_access_tokens.create_index('owner_user_id')
+    await app.mongodb_access_tokens.create_index('expires')
     await app.mongodb_invitations.create_index('code_sha256', unique=True)
     await app.mongodb_invitations.create_index('email')
     await app.mongodb_change_log.create_index([('record_id', 1), ('at', 1)])

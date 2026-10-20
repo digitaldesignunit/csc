@@ -180,6 +180,10 @@ async def lookup_user_from_token(
     request: Request,
     token: str,
 ) -> Optional[UserInDB]:
+    # an access token (csc_pat_..., csc_dev_...) is not a JWT: it has its own
+    # check (access_tokens.access_token_user) and is refused here (8.167)
+    if token.startswith('csc_'):
+        return None
     # checked once per request: the limiter key has read it already
     payload = verified_payload(request, token)
     if payload is None:

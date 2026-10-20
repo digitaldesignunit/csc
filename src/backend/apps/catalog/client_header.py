@@ -112,10 +112,13 @@ class ClientHeaderLogMiddleware:
 MIN_VERSIONS_ENV = 'CSC_MIN_CLIENT_VERSIONS'
 # the updater must reach everything under /ghinterface/, even when outdated;
 # an outdated client must also be able to log in (``/auth/token``, which
-# carries no data and gives no access by itself) to reach the updater
+# carries no data and gives no access by itself) to reach the updater.
+# ``/mcp`` (the path itself and below) and ``/auth/token-check`` take access
+# tokens only, and the connectors of Claude cannot send ``X-CSC-Client`` (8.167
+# h); a JWT route still needs the header.
 EXEMPT_PREFIXES: Tuple[str, ...] = (
-    '/ghinterface/', '/auth/token', '/docs', '/redoc', '/openapi.json',
-    '/health', '/version',
+    '/ghinterface/', '/auth/token', '/auth/token-check', '/mcp/', '/docs',
+    '/redoc', '/openapi.json', '/health', '/version',
 )
 ANONYMOUS_READ_METHODS: Tuple[str, ...] = ('GET', 'HEAD')
 _UPDATE_HINT: Dict[str, str] = {

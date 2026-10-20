@@ -82,6 +82,21 @@ def test_exempt_paths_and_preflight(path):
     assert rejection('OPTIONS', '/identities', None, False, TABLE) is None
 
 
+@pytest.mark.parametrize('path', ['/mcp', '/mcp/', '/mcp/tools', '/auth/token-check'])
+def test_the_token_only_paths_need_no_client_header(path):
+    """8.167 h: Claude's connectors cannot send X-CSC-Client."""
+    for method in ('GET', 'POST'):
+        assert rejection(method, path, None, True, TABLE) is None
+        assert rejection(method, path, 'garbage', True, TABLE) is None
+        assert rejection(method, path, 'gh-userobjects/0.5.1.0', True, TABLE) is None
+
+
+@pytest.mark.parametrize('path', ['/mcpx', '/mcp-other', '/auth/access-tokens',
+                                  '/admin/access-tokens', '/users/me'])
+def test_nothing_near_those_paths_is_exempt(path):
+    assert rejection('GET', path, None, True, TABLE)
+
+
 def test_refusal_names_the_fix():
     reason = rejection('GET', '/identities', 'gh-userobjects/0.5.1.0', True,
                        TABLE)
