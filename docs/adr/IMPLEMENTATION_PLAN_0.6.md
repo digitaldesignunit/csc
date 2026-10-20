@@ -936,8 +936,8 @@ gaps go with the task that touches each area.
 
 **Release steps of 0.6.2.0 (the maintainer runs each one):** (1) once on the server: the `gh` CLI binary in `~/bin` and a stored token for it (deployment README, step 2b); (2) the backend environment checked against the server notes of the changelog (URLs, limits, `SMTP_DEV_MODE` off, `JWT_ALGORITHM`), the database user's rights on `rate_limit_counters`, and `NEXT_PUBLIC_STATIC_BASE_URL` set in the CI build or `NEXT_STATIC_BASE_URL` in the frontend environment; (3) a dump and an assets backup; (4) `touch ~/csc/shared/READ_ONLY`; (5) the deploy: the 0.6.1.1 deploy script runs first and repeats itself with the new one, which verifies the attestations; (6) checks in read-only mode (sign-in, the pages, `/health/db` reports `read_only: true`, the banner shows); (7) `rm ~/csc/shared/READ_ONLY`, one write checked, the crons run once without the skip line.
 
-**Candidates of 0.6.3 (moved out by 8.150):** Ferroscan to reinforcement layout; the IFC export with the PROV-O /
-JSON-LD / GraphML form of the timeline (8.140 h); HKS v2 and HKS level 2; RL8; the GH device sign-in (`FUTURE.md`).
+**0.6.3 scope (8.165): the read-only MCP layer and the GH device sign-in; the rest moves to 0.6.4 or later.** Candidates of 0.6.3 (moved out by 8.150): Ferroscan to reinforcement layout; the IFC export with the PROV-O /
+JSON-LD / GraphML form of the timeline (8.140 h); HKS v2 and HKS level 2; RL8; the GH device sign-in (`FUTURE.md`); a read-only MCP layer (user 2026-10-20): an MCP endpoint in the backend (`/mcp`, stateless HTTP) whose tools reuse the record loaders and serialisers of the REST API (search, component, versions, evidence, datasets, timeline, similar components; geometry as summary and link), reached with personal access tokens (stored hashed, scoped `read:catalog`, expiry, revoke, last used; admins only at first), a token page in the admin settings, and `/mcp` exempt from the read-only flag; the tokens are the same foundation the GH device sign-in needs.
 The SH descriptor stays blocked on its licence.
 
 ---

@@ -63,12 +63,12 @@ const anyone = () => true
 
 /**
  * The entries of the sidebar (decision 8.118 S3): every entry is a page, none
- * a filter or a mode. An anonymous visitor sees Browse, Map, Analytics (the
+ * a filter or a mode. An anonymous visitor sees Browse, Similarity Map, Analytics (the
  * public tier), Grasshopper, API docs and Sign in.
  */
 export const NAV_ENTRIES: NavEntry[] = [
   { id: 'browse', label: 'Browse', href: '/components', icon: LayoutGrid, group: 'catalog', visible: anyone },
-  { id: 'map', label: 'Map', href: '/components/map', icon: Waypoints, group: 'catalog', visible: anyone },
+  { id: 'similarity-map', label: 'Similarity Map', href: '/components/similarity-map', icon: Waypoints, group: 'catalog', visible: anyone },
   { id: 'analytics', label: 'Analytics', href: '/analytics', icon: ChartColumn, group: 'catalog', visible: anyone },
   { id: 'scan', label: 'Scan', href: '/scan', icon: ScanQrCode, group: 'capture', visible: signedIn },
   { id: 'add', label: 'Add component', href: '/add-component', icon: PackagePlus, group: 'capture', visible: signedIn },
@@ -159,7 +159,7 @@ const EXTRA_TITLES: [RegExp, string][] = [
   [/^\/components\/[^/]+\/edit$/, 'Component'],
   [/^\/components\/[^/]+\/evidence\/new$/, 'Add evidence'],
   [/^\/components\/[^/]+\/snapshot\/new$/, 'Component'],
-  [/^\/components\/(?!map$)[^/]+$/, 'Component'],
+  [/^\/components\/(?!similarity-map$)[^/]+$/, 'Component'],
   [/^\/auth\//, 'Account'],
   [/^\/add-component/, 'Add component'],
   [/^\/admin\/(validation|review)/, 'Moderation'],

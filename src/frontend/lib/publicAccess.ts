@@ -4,7 +4,7 @@ export const PUBLIC_COMPONENT_DETAIL_PATH = /^\/components\/[0-9a-f-]{36}$/i
 /** The pages an anonymous visitor may open besides a component's page: Browse,
  *  the map and Analytics show the public tier only (decision 8.118 Q8); the
  *  Grasshopper page has no account data. */
-export const PUBLIC_CATALOG_PAGES = ['/components', '/components/map', '/analytics', '/gh-interface']
+export const PUBLIC_CATALOG_PAGES = ['/components', '/components/similarity-map', '/analytics', '/gh-interface']
 
 export function isPublicComponentDetailPath(pathname: string): boolean {
   return PUBLIC_COMPONENT_DETAIL_PATH.test(pathname)
