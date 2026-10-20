@@ -113,7 +113,7 @@ test('the sign-in gate covers the prefixes it always did, and public pages stay 
   for (const protectedPath of ['/components', '/components/similarity-map', '/dashboard', '/dashboard/x',
     '/admin', '/admin/users', '/api/backend/identities', '/gh-interface', '/locate-by-id',
     '/locate-by-id/x', '/scan', '/my-work', '/identify', '/analytics', '/transmit-id',
-    '/add-component', '/add-component/x']) {
+    '/add-component', '/add-component/x', '/oauth/consent']) {
     assert.ok(isProtectedPath(protectedPath), protectedPath)
   }
   for (const open of ['/', '/auth/signin', '/auth/register', '/auth/forgot-password', '/invite',

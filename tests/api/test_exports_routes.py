@@ -739,7 +739,8 @@ def test_the_pdf_passport_names_the_photo_credit_with_its_link(world, pdf_spy):
 
 # S12 (8.144): the links of an export come from the request where no public
 # base is configured, so a request for another host is another document ------
-def test_the_pdf_and_cero_etags_hold_the_bases_of_their_links(world, pdf_spy):
+def test_the_pdf_and_cero_etags_hold_the_bases_of_their_links(world, pdf_spy, env):
+    env(CSC_PUBLIC_API_URL=None)      # the test app sets it for the OAuth server
     api = world['api']
     other = {'Host': 'other.example'}
     for path in (f'/identities/{BEAM}/export/pdf',

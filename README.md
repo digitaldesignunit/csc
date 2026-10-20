@@ -467,6 +467,57 @@ and a JWT does not work in place of it.
 - **Stored.** Only the SHA-256 of a token is stored (collection
   `access_tokens`), so a leaked database holds no usable token.
 
+## Using CSC from Claude
+
+Claude can read the catalog as you: ask it to find components, show one with its
+versions and measurements, compare, or look at what happened to a piece. It
+only reads, and it sees what you see on the website; nothing it can reach is
+private to anybody else. Administrators can connect it for now (the roles are
+`CSC_PAT_ROLES`).
+
+**Connect.** In Claude, add a custom connector (claude.ai: Settings, Connectors,
+Add custom connector; Claude Code: `claude mcp add --transport http csc
+https://<api host>/mcp`) and give it the address `https://<api host>/mcp`, for
+the production server `https://api.2ndchances.build/mcp`. Claude opens the CSC
+consent page: sign in if asked, check the address it says you will be sent back
+to (for Claude on the web that is `claude.ai`), and press Allow. Deny, or closing
+the page, connects nothing. Nothing is remembered: every connection asks again.
+Allow only connections you started yourself: anyone can start an authorization
+and send you the link, so look at the large address line (the host you will be
+sent back to) before you press Allow, and press Deny when it is not the tool you
+just connected.
+
+**What it can do.** Nine read-only tools: `search_components` (the filters of
+Browse, a page at a time), `get_component`, `list_versions`, `get_version`
+(geometry as counts and a link, never the meshes), `get_evidence`,
+`list_datasets`, `get_dataset`, `get_timeline` and `similar_components` (the
+nearest neighbours on the similarity map, with their distance). Every answer
+carries the web link of the record, and a record that is not public is marked
+(`visibility` private, `status` other than published). There are no write tools
+and no tool for users, invitations or tokens; no answer holds an e-mail address
+or an account id.
+
+**How long it lasts.** The connection gives Claude an access token of one hour
+and a refresh token that Claude renews by itself: the refresh token is good for
+30 days after its last use and is replaced on every use (using an old one ends
+the connection), and a connection never lasts more than 90 days from your
+consent, then Allow again. Each connection is a line under Settings, "Access
+tokens" (and under Admin for administrators): "Revoke" ends it at once, access
+and refresh. An account that loses its role, is disabled or is deleted stops
+working at once, because every call asks the database.
+
+**For scripts and other clients.** A personal access token (Settings, "Access
+tokens") works on `/mcp` too, as `Authorization: Bearer csc_pat_...`, for a
+client that sends a header and cannot sign in through a browser.
+
+**On the server.** `CSC_PUBLIC_API_URL` must be the API address (`https://<api
+host>`); the MCP endpoint and the OAuth server (`/.well-known/...`, `/register`,
+`/authorize`, `/token`, `/revoke`, `/mcp`) are served by the backend and are off
+without it. During maintenance (the read-only flag) `/mcp` and the refreshing of
+tokens keep working; a new connection, a new registration and a revoke wait. The
+limits: 120 requests a minute per token, and per address on registering,
+authorizing and the token endpoint.
+
 ## Custom domain (`2ndchances.build`)
 
 `2ndchances.build` is the canonical frontend origin; The old address `ddu.uber.space`

@@ -61,6 +61,15 @@ test('a list shows the prefix and the first 8 characters, then dots', () => {
   assert.equal(tokenPreview(row({ kind: 'device', short_id: 'ZZZZ1111' })), 'csc_dev_ZZZZ1111...')
 })
 
+test('a connection of a tool through OAuth shows a steady label, never a token prefix', () => {
+  assert.equal(tokenPreview(row({ kind: 'oauth', short_id: '0a1b2c3d' })), 'Connection 0a1b2c3d')
+  const html = table([row({ kind: 'oauth', short_id: '0a1b2c3d', name: 'Claude (claude.ai)' })])
+  assert.ok(html.includes('Connection 0a1b2c3d') && html.includes('Claude (claude.ai)'))
+  assert.ok(!html.includes('csc_oat_') && !html.includes('csc_ort_'))
+  // no Renew for a connection, even near its end: a new consent makes a new one
+  assert.ok(!table([row({ kind: 'oauth', renew_due: true })]).includes('Renew'))
+})
+
 test('the scope is named in words', () => {
   assert.equal(scopeText(['read:catalog']), 'Read the catalog (MCP)')
   assert.equal(scopeText(['gh:client']), 'Grasshopper client')

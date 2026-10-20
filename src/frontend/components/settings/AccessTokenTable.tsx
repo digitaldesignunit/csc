@@ -18,7 +18,8 @@ import { formatTimestamp } from '@/lib/utils'
  * (every token, with the owner). A row shows the first 8 characters of the
  * token, never the token itself: the rows hold no token, and only the answer of
  * a create or a renew does (once). The buttons are write buttons, so they stop
- * while the backend is read-only.
+ * while the backend is read-only. In a narrow card the table scrolls sideways
+ * and the buttons stay in view at its right edge.
  */
 export default function AccessTokenTable({
   rows,
@@ -44,7 +45,7 @@ export default function AccessTokenTable({
           <TableHead>Created</TableHead>
           <TableHead>Last used</TableHead>
           <TableHead>Expires</TableHead>
-          <TableHead className="w-[150px]" />
+          <TableHead className="sticky right-0 w-[150px] bg-card" />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -68,7 +69,7 @@ export default function AccessTokenTable({
                 <Badge variant="outline" className="ml-2 text-[10px]">expires soon</Badge>
               )}
             </TableCell>
-            <TableCell className="space-x-1 text-right">
+            <TableCell className="sticky right-0 space-x-1 bg-card text-right">
               {onRenew && canRenew(row) && (
                 <WriteButton size="sm" variant="outline" disabled={busyId === row.id} onClick={() => onRenew(row)}>
                   Renew

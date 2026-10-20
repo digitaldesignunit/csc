@@ -46,6 +46,13 @@ umap-learn==0.5.12
 pydantic-settings==2.16.0
 # access tokens (tokens.py, T5 of 0.6.2.0): pure Python; replaced python-jose
 PyJWT==2.15.1
+# the MCP layer (decision 8.168): pure Python, pinned to the versions the tests
+# ran with; cryptography (via pyjwt[crypto]) has manylinux2014 wheels for 3.13
+# (checked 2026-10-20 with `pip download --only-binary=:all:`)
+mcp==1.30.0
+sse-starlette==3.5.0
+httpx-sse==0.4.3
+cryptography==50.0.1
 # the rate limiter and its counter store (limiter.py, rate_store.py) reach into
 # both libraries: pinned to the versions the tests ran with
 slowapi==0.1.10

@@ -111,3 +111,18 @@ def test_login_is_open_to_an_outdated_client_but_only_login():
     assert rejection('POST', '/auth/token', None, False, TABLE) is None
     assert rejection('POST', '/auth/change-password', old, True, TABLE)
     assert rejection('POST', '/auth/register', old, False, TABLE)
+
+
+@pytest.mark.parametrize('path', ['/.well-known/oauth-protected-resource/mcp',
+                                  '/.well-known/oauth-authorization-server', '/register', '/authorize',
+                                  '/token', '/revoke'])
+def test_the_oauth_server_of_the_connectors_needs_no_client_header(path):
+    """8.168: Claude's client sends no X-CSC-Client."""
+    for method in ('GET', 'POST'):
+        assert rejection(method, path, None, False, TABLE) is None
+        assert rejection(method, path, None, True, TABLE) is None
+
+
+def test_the_consent_routes_belong_to_the_web_app_and_keep_the_header_rule():
+    assert rejection('GET', '/oauth/requests/abc', None, True, TABLE)
+    assert rejection('POST', '/oauth/requests/abc/decision', None, True, TABLE)

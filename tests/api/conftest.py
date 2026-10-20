@@ -74,6 +74,8 @@ def backend_env(mongod, db_name, tmp_path_factory):
         'SMTP_FROM_EMAIL': 'noreply@example.org',
         'SMTP_DEV_MODE': 'true',
         'FRONTEND_URL': 'http://localhost:3000',
+        # the issuer and the resource of the OAuth server and the MCP layer
+        'CSC_PUBLIC_API_URL': 'http://localhost',
         'SNAPSHOT_PREVIEW_DIR': str(root / 'previews'),
         'SNAPSHOT_PHOTOS_DIR': str(root / 'photos'),
         'SNAPSHOT_MESHES_DIR': str(root / 'meshes'),

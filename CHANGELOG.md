@@ -14,12 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   them; admins see and revoke every token on a new admin page. A token reads the catalog only
   where its scope allows; `GET /auth/token-check` tests one. The ground for the MCP layer and the
   Grasshopper device sign-in of this release.
+- **Using CSC from Claude** (decision 8.168): an MCP endpoint at `https://<api host>/mcp` with
+  nine read-only tools (search, components, versions, evidence, datasets, timeline, similar
+  components). Add it as a custom connector in Claude; a browser window opens the consent
+  page on the website, where an admin allows read access to the catalog as they see it in the
+  web app. The connection renews itself for up to 90 days and can be revoked in the token
+  list. Answers carry no e-mail addresses and mark everything that is not public.
 
 ### Server notes
 
 - `CSC_PAT_ROLES` (optional, default `admin`) names the roles that may create access tokens.
-- The new collection `access_tokens` needs the same database rights as the others; its indexes
-  are created at the start.
+- The new collections `access_tokens`, `oauth_clients`, `oauth_requests`, `oauth_codes` and
+  `oauth_used_refresh` need the same database rights as the others; their indexes are created
+  at the start.
+- Set `CSC_PUBLIC_API_URL=https://<api host>` (no path) in the backend environment: it turns on
+  `/mcp` and the OAuth server and is the address the connector is given. It also becomes the
+  base of the links in the JSON-LD export (if it was unset so far, those links took the request's own address).
+  After the restart, check that `https://<api host>/.well-known/oauth-protected-resource/mcp`
+  answers, then add the connector once in claude.ai.
+- The deploy installs the MCP Python SDK (`mcp`) and its dependencies (`cryptography` among them).
+- In read-only mode `/mcp` and the token renewal keep working; a code issued just before the
+  switch can still be exchanged once. New consents are refused until the flag is gone.
 
 ## [0.6.2.1] - 2026-10-20
 

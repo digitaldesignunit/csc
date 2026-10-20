@@ -40,8 +40,13 @@ export function lifetimeLabel(days: number): string {
   return days === 365 ? '1 year' : `${days} days`
 }
 
-/** What the list shows of a token: the prefix, the first 8 characters, dots. */
+/**
+ * What the list shows of a token: the prefix, the first 8 characters, dots. A
+ * connection of a tool through OAuth changes its token every hour, so it shows
+ * a steady label and the first 8 characters of the connection.
+ */
 export function tokenPreview(row: Pick<AccessTokenRow, 'kind' | 'short_id'>): string {
+  if (row.kind === 'oauth') return `Connection ${row.short_id}`
   return `${TOKEN_PREFIX[row.kind] ?? 'csc_'}${row.short_id}...`
 }
 

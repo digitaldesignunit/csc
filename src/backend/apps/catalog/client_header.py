@@ -116,9 +116,13 @@ MIN_VERSIONS_ENV = 'CSC_MIN_CLIENT_VERSIONS'
 # ``/mcp`` (the path itself and below) and ``/auth/token-check`` take access
 # tokens only, and the connectors of Claude cannot send ``X-CSC-Client`` (8.167
 # h); a JWT route still needs the header.
+# The OAuth server of the connectors (8.168) is exempt too: Claude's client
+# sends no such header. A call of the backend to itself (the MCP tools) carries
+# the scope key ``csc_internal``, which no outside caller can set.
 EXEMPT_PREFIXES: Tuple[str, ...] = (
     '/ghinterface/', '/auth/token', '/auth/token-check', '/mcp/', '/docs',
     '/redoc', '/openapi.json', '/health', '/version',
+    '/.well-known/', '/register', '/authorize', '/token', '/revoke',
 )
 ANONYMOUS_READ_METHODS: Tuple[str, ...] = ('GET', 'HEAD')
 _UPDATE_HINT: Dict[str, str] = {
@@ -200,6 +204,9 @@ class ClientHeaderEnforcementMiddleware:
 
     async def __call__(self, scope, receive, send):
         if scope['type'] != 'http':
+            await self.app(scope, receive, send)
+            return
+        if scope.get('csc_internal'):
             await self.app(scope, receive, send)
             return
         state = getattr(scope.get('app'), 'state', None)

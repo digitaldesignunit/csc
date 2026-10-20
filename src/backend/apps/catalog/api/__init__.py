@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from .auth import router as auth_router
 from .access_tokens import router as access_tokens_router
+from .oauth_consent import router as oauth_consent_router
 from .health import router as health_router
 from .utility import router as utility_router
 from .ghinterface import router as ghinterface_router
@@ -34,6 +35,7 @@ from .mail_templates import router as mail_templates_router
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix='/auth', tags=['auth'])
 api_router.include_router(access_tokens_router, tags=['access tokens'])
+api_router.include_router(oauth_consent_router, tags=['access tokens'])
 api_router.include_router(health_router, tags=['health'])
 api_router.include_router(utility_router, tags=['utility'])
 api_router.include_router(ghinterface_router, tags=['ghinterface'])

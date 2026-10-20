@@ -5,8 +5,9 @@ An ASGI middleware next to the body limit (``body_limit.py``), outside it, so
 the 503 comes before any body is read: every request whose method is not GET,
 HEAD or OPTIONS gets 503, ``Retry-After`` and ``{"detail": "read-only:
 maintenance"}``. Registration, uploads and the Grasshopper writes are included.
-The one exception is the sign-in (``POST /auth/token``): it stays open for
-checks and writes nothing while the flag is set (see ``auth.py``). Added inside
+The exceptions are the sign-in (``POST /auth/token``): it stays open for
+checks and writes nothing while the flag is set (see ``auth.py``), and the MCP
+layer (``POST /mcp``, ``POST /token``), which only reads the catalog. Added inside
 CORS, so the refusal carries the CORS headers and the web app can read it.
 
 ``read_only.is_on()`` looks at the file on every request.
@@ -19,7 +20,10 @@ import json
 import read_only
 
 SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
-OPEN_WRITES = (('POST', '/auth/token'),)
+# the sign-in, and the MCP layer (8.168): every MCP call is a POST, and a
+# refresh rotates a token (a token write, allowed); a new registration, a new
+# consent and a revoke are not open and get the 503 like every write
+OPEN_WRITES = (('POST', '/auth/token'), ('POST', '/mcp'), ('POST', '/token'))
 
 
 class ReadOnlyMiddleware:

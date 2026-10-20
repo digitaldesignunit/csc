@@ -27,23 +27,23 @@ tokens. 120 requests a minute per token are allowed, counted per worker in
 memory (8.152) after the token has proved itself.
 """
 
-import time
 import uuid
-from datetime import timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from limits import parse
-from limits.storage import MemoryStorage
-from limits.strategies import FixedWindowRateLimiter
 from pydantic import BaseModel, ConfigDict, Field
 
-import read_only
 from apps.catalog import access_tokens as tk
 from apps.catalog.documents import AccessToken
 from apps.catalog.models import UserInDB
+from apps.catalog.token_check import (
+    RateLimited,
+    TokenRefused,
+    lookup_access_token,
+    may_hold_pat,
+    note_use,
+)
 from logging_setup import get_logger
-from settings import get_settings
 from .auth import get_current_active_user, require_admin
 
 log = get_logger(__name__)
@@ -113,7 +113,7 @@ def _row(doc: dict, moment=None) -> dict:
         'created': doc['created'], 'expires': doc['expires'],
         'last_used': doc.get('last_used'), 'revoked': doc.get('revoked'),
         'status': state,
-        'renew_due': state == 'active'
+        'renew_due': doc['kind'] == 'pat' and state == 'active'
         and left.days < tk.RENEW_WITHIN_DAYS,
     }
 
@@ -123,12 +123,14 @@ def _tokens(request: Request):
 
 
 def _may_hold_pat(role: str) -> bool:
-    return role in get_settings().pat_roles
+    return may_hold_pat(role)
 
 
 async def _count_active(request: Request, user_id: str,
                         except_id: Optional[str] = None) -> int:
-    query = {'owner_user_id': user_id, 'revoked': None,
+    # the limit counts personal access tokens only: a Claude connection
+    # (kind oauth) is made by consent, not by the account's own request
+    query = {'owner_user_id': user_id, 'kind': 'pat', 'revoked': None,
              'expires': {'$gt': tk.stamp(tk.now())}}
     if except_id:
         query['_id'] = {'$ne': except_id}
@@ -323,87 +325,40 @@ async def revoke_any_access_token(
 
 
 # THE CHECK -------------------------------------------------------------------
-_counters = FixedWindowRateLimiter(MemoryStorage())
-
-
-def _refuse(reason: str, short_id: str = '-') -> HTTPException:
+# the lookup half lives in apps/catalog/token_check.py (the MCP layer's token
+# verifier uses it too); this is the HTTP half
+def _refuse(reason: str, short_id: str = '-',
+            www_authenticate: str = 'Bearer') -> HTTPException:
     """The one answer for every failed check; the log has the reason."""
     log.info('access token refused: %s (%s)', reason, short_id)
     return HTTPException(
         status.HTTP_401_UNAUTHORIZED, REFUSED,
-        headers={'WWW-Authenticate': 'Bearer'})
+        headers={'WWW-Authenticate': www_authenticate})
 
 
 def _bearer(request: Request) -> str:
-    scheme, _, token = (request.headers.get('authorization') or '') \
-        .partition(' ')
+    scheme, _, token = (request.headers.get('authorization') or '')         .partition(' ')
     return token.strip() if scheme.lower() == 'bearer' else ''
 
 
-async def _touch(request: Request, doc: dict) -> None:
-    """``last_used``, at most once a minute per token and never while the
-    read-only flag is set. The condition is in the update, so two workers do
-    not both write."""
-    if read_only.is_on():
-        return
-    moment = tk.now()
-    due = tk.stamp(moment - timedelta(
-        seconds=tk.LAST_USED_INTERVAL_SECONDS))
-    await _tokens(request).update_one(
-        {'_id': doc['_id'], '$or': [{'last_used': None},
-                                    {'last_used': {'$lt': due}}]},
-        {'$set': {'last_used': tk.stamp(moment)}})
-
-
-def _within_rate(short_id: str) -> Optional[int]:
-    """None when the token may go on, else the seconds to wait."""
-    item = parse(f'{tk.REQUESTS_PER_MINUTE}/minute')
-    if _counters.hit(item, short_id):
-        return None
-    reset = _counters.get_window_stats(item, short_id).reset_time
-    return max(1, int(reset - time.time()) + 1)
-
-
-def access_token_user(scope: str):
-    """A dependency: the user an access token of ``scope`` belongs to."""
+def access_token_user(scope: str, www_authenticate: str = 'Bearer'):
+    """A dependency: the user an access token of ``scope`` belongs to.
+    ``www_authenticate`` is the challenge of the 401 (the MCP layer sends
+    ``Bearer resource_metadata="..."``)."""
 
     async def dependency(request: Request) -> UserInDB:
-        token = _bearer(request)
-        if not token or tk.prefix_of(token) is None:
-            raise _refuse('not an access token')      # a JWT lands here
-        doc = await _tokens(request).find_one(
-            {'token_sha256': tk.token_hash(token)})
-        if doc is None:
-            raise _refuse('unknown token')
-        short = doc['short_id']
-        if doc.get('revoked'):
-            raise _refuse('revoked', short)
-        if doc['expires'] <= tk.stamp(tk.now()):
-            raise _refuse('expired', short)
-        if scope not in doc.get('scopes', ()):
-            raise _refuse('wrong scope', short)
-        owner = await request.app.mongodb_users.find_one(
-            {'_id': doc['owner_user_id']})
-        if not owner or owner.get('disabled') \
-                or not owner.get('email_verified', False):
-            raise _refuse('owner missing, disabled or unverified', short)
-        if doc['kind'] == 'pat' and not _may_hold_pat(
-                owner.get('role', 'user')):
-            raise _refuse('owner has lost the role', short)
         try:
-            user = UserInDB(**owner)
-        except Exception:
-            raise _refuse('owner record unreadable', short)
-        wait = _within_rate(short)
-        if wait is not None:
-            log.info('access token over its rate limit: %s', short)
+            doc, user = await lookup_access_token(
+                request.app, _bearer(request), scope)
+            route = getattr(request.scope.get('route'), 'path', '-')
+            await note_use(request.app, doc, route)
+        except TokenRefused as refusal:
+            raise _refuse(refusal.reason, refusal.short_id, www_authenticate)
+        except RateLimited as limited:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS,
                 'Too many requests for this access token.',
-                headers={'Retry-After': str(wait)})
-        await _touch(request, doc)
-        route = getattr(request.scope.get('route'), 'path', '-')
-        log.info('access token used: %s %s', short, route)
+                headers={'Retry-After': str(limited.wait)})
         request.state.access_token = doc
         return user
 
