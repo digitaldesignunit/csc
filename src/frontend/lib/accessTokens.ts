@@ -43,10 +43,11 @@ export function lifetimeLabel(days: number): string {
 /**
  * What the list shows of a token: the prefix, the first 8 characters, dots. A
  * connection of a tool through OAuth changes its token every hour, so it shows
- * a steady label and the first 8 characters of the connection.
+ * a steady label and the first 8 characters of the connection; the refresh
+ * token of a Grasshopper sign-in (kind device) is never shown either.
  */
 export function tokenPreview(row: Pick<AccessTokenRow, 'kind' | 'short_id'>): string {
-  if (row.kind === 'oauth') return `Connection ${row.short_id}`
+  if (row.kind === 'oauth' || row.kind === 'device') return `Connection ${row.short_id}`
   return `${TOKEN_PREFIX[row.kind] ?? 'csc_'}${row.short_id}...`
 }
 

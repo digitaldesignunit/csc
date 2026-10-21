@@ -19,7 +19,12 @@ What lives where:
 * ``access_tokens``   one row of kind ``oauth`` per connection (see
   ``access_tokens.py``): the current access token (1 hour) and refresh token
   (30 days after its last use, rotated on every use, at most 90 days from the
-  consent) as two hashes
+  consent) as two hashes. The Grasshopper client signs in the same way with the
+  fixed public client ``csc-grasshopper`` (no registration, loopback redirect
+  on 127.0.0.1 only) and scope ``gh:client``, open to every verified account:
+  its row is of kind ``device``, its refresh token is ``csc_dev_...`` and its
+  access token is the normal CSC JWT of one hour, so every route the Session
+  and the other components call keeps working (8.168 f)
 * ``oauth_used_refresh`` the hashes of rotated refresh tokens, kept 91 days:
   the use of a dead one ends the whole connection
 
@@ -28,6 +33,7 @@ PKCE S256 is required by the SDK. Redirect URIs: exactly
 and ``http://127.0.0.1/callback`` with any port.
 """
 
+import contextvars
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -72,6 +78,25 @@ CLIENT_UNCONSENTED_DAYS = 1       # a registration nobody consented to
 CLIENT_UNUSED_DAYS = 30           # a client that was consented to, unused
 USED_REFRESH_DAYS = tk.OAUTH_GRANT_DAYS + 1
 CLIENT_NAME_MAX = 100
+
+# the Grasshopper client (8.168 f): one fixed public client, no DCR row
+GH_CLIENT_ID = 'csc-grasshopper'
+GH_SCOPE = tk.SCOPE_GH
+GH_CALLBACK = 'http://127.0.0.1/callback'
+GH_ACCESS_TEXT = ('Grasshopper on this computer: act as you in the '
+                  'Grasshopper interface')
+COMPUTER_MAX = 60
+# the computer name the client sends with /authorize (a query parameter the
+# SDK does not read): the wrapper of the route sets it for provider.authorize
+REQUEST_COMPUTER = contextvars.ContextVar('csc_request_computer', default=None)
+
+
+def clean_computer(value) -> Optional[str]:
+    """A computer name as text to show: printable, no markup, cut."""
+    text = ''.join(ch for ch in str(value or '') if ch.isprintable()
+                   and ch not in '<>"\'&\\')
+    text = ' '.join(text.split())[:COMPUTER_MAX]
+    return text or None
 
 
 # REDIRECT URIS ---------------------------------------------------------------
@@ -140,6 +165,13 @@ class CscAccessToken(SdkAccessToken):
     grant_id: str = ''
 
 
+GH_CLIENT = CscClient(
+    client_id=GH_CLIENT_ID, redirect_uris=[AnyUrl(GH_CALLBACK)],
+    token_endpoint_auth_method='none',
+    grant_types=['authorization_code', 'refresh_token'],
+    response_types=['code'], scope=GH_SCOPE, client_name='Grasshopper')
+
+
 def hash_secret(value: str) -> str:
     """The SHA-256 under which a request id, a code or a token is stored."""
     return tk.token_hash(value)
@@ -182,6 +214,8 @@ class CscOAuthProvider:
 
     # clients -----------------------------------------------------------------
     async def get_client(self, client_id: str) -> Optional[CscClient]:
+        if client_id == GH_CLIENT_ID:
+            return GH_CLIENT
         doc = await self.clients.find_one({'_id': client_id})
         if doc is None:
             return None
@@ -237,12 +271,24 @@ class CscOAuthProvider:
             raise AuthorizeError(
                 'temporarily_unavailable',
                 'The catalog is in maintenance; try again later.')
-        if params.resource and params.resource.rstrip('/') != self.resource:
-            raise AuthorizeError('invalid_request',
-                                 'resource is not this server')
-        scopes = params.scopes or [SCOPE]
-        if scopes != [SCOPE]:
-            raise AuthorizeError('invalid_scope', f'only {SCOPE} is offered')
+        gh = client.client_id == GH_CLIENT_ID
+        if gh:
+            if params.resource:
+                raise AuthorizeError('invalid_request',
+                                     'this client sends no resource')
+            scopes = params.scopes or [GH_SCOPE]
+            if scopes != [GH_SCOPE]:
+                raise AuthorizeError('invalid_scope',
+                                     f'only {GH_SCOPE} is offered')
+        else:
+            if params.resource and params.resource.rstrip('/') \
+                    != self.resource:
+                raise AuthorizeError('invalid_request',
+                                     'resource is not this server')
+            scopes = params.scopes or [SCOPE]
+            if scopes != [SCOPE]:
+                raise AuthorizeError('invalid_scope',
+                                     f'only {SCOPE} is offered')
         request_id = secrets.token_urlsafe(32)
         now = datetime.now(timezone.utc)
         await self.requests.insert_one({
@@ -252,6 +298,7 @@ class CscOAuthProvider:
                 params.redirect_uri_provided_explicitly,
             'code_challenge': params.code_challenge, 'state': params.state,
             'scopes': scopes, 'resource': params.resource,
+            'computer': clean_computer(REQUEST_COMPUTER.get()) if gh else None,
             'created': tk.stamp(now), 'bound_user': None, 'decided': False,
             'expire_at': now + timedelta(seconds=REQUEST_SECONDS)})
         return f'{self.frontend_url}/oauth/consent?request={request_id}'
@@ -269,6 +316,7 @@ class CscOAuthProvider:
             'code_challenge': request_doc['code_challenge'],
             'scopes': request_doc['scopes'],
             'resource': request_doc.get('resource'),
+            'computer': request_doc.get('computer'),
             'expires_at': now.timestamp() + CODE_SECONDS,
             'expire_at': now + timedelta(seconds=CODE_SECONDS + 3600),
             'used': False, 'grant_id': None})
@@ -300,46 +348,76 @@ class CscOAuthProvider:
             {'_id': h, 'used': False}, {'$set': {'used': True}})
         if claimed.modified_count != 1:
             raise TokenError('invalid_grant', 'authorization code used')
+        gh = GH_SCOPE in authorization_code.scopes
         owner = await self.app.mongodb_users.find_one(
             {'_id': authorization_code.subject})
-        if not self._owner_may(owner):
+        if not (self._owner_ok(owner) if gh else self._owner_may(owner)):
             raise TokenError('invalid_grant', 'authorization is no longer '
                              'possible for this account')
         now = tk.now()
-        access = tk.new_token('oauth')
-        refresh = tk.new_refresh_token()
         hard = now + timedelta(days=tk.OAUTH_GRANT_DAYS)
         grant_id = secrets.token_hex(16)
         host = redirect_host(str(authorization_code.redirect_uri))
-        label = (client.client_name or 'Unnamed client')
-        await self.tokens.insert_one({
-            '_id': grant_id, 'kind': 'oauth',
-            'owner_user_id': authorization_code.subject,
-            'scopes': [SCOPE], 'name': f'{label} ({host})'[:80],
-            'token_sha256': hash_secret(access), 'short_id': grant_id[:8],
-            'created': tk.stamp(now), 'expires': tk.stamp(hard),
-            'last_used': None, 'revoked': None,
-            'access_expires': tk.stamp(
-                min(now + timedelta(seconds=tk.OAUTH_ACCESS_SECONDS), hard)),
-            'refresh_sha256': hash_secret(refresh),
+        row = {
+            '_id': grant_id, 'owner_user_id': authorization_code.subject,
+            'short_id': grant_id[:8], 'created': tk.stamp(now),
+            'expires': tk.stamp(hard), 'last_used': None, 'revoked': None,
             'refresh_expires': tk.stamp(
                 min(now + timedelta(days=tk.OAUTH_REFRESH_DAYS), hard)),
-            'client_id': client.client_id, 'redirect_host': host})
+            'client_id': client.client_id, 'redirect_host': host}
+        if gh:
+            # the Grasshopper client: the access token is the normal JWT of an
+            # hour (every route keeps working), the row keeps only the refresh
+            # token (csc_dev_...); token_sha256 holds the hash of a token nobody
+            # has, so that no bearer can ever find this row as an access token
+            code_doc = await self.codes.find_one({'_id': h}) or {}
+            refresh = tk.new_token('device')
+            access, seconds = self._gh_access_token(owner, now, hard)
+            label = code_doc.get('computer') or 'an unnamed computer'
+            row.update({
+                'kind': 'device', 'scopes': [GH_SCOPE],
+                'name': f'Grasshopper on {label}'[:80],
+                'token_sha256': hash_secret(tk.new_token('device')),
+                'refresh_sha256': hash_secret(refresh)})
+            scope = GH_SCOPE
+        else:
+            access = tk.new_token('oauth')
+            refresh = tk.new_refresh_token()
+            label = (client.client_name or 'Unnamed client')
+            seconds = tk.OAUTH_ACCESS_SECONDS
+            row.update({
+                'kind': 'oauth', 'scopes': [SCOPE],
+                'name': f'{label} ({host})'[:80],
+                'token_sha256': hash_secret(access),
+                'access_expires': tk.stamp(min(
+                    now + timedelta(seconds=seconds), hard)),
+                'refresh_sha256': hash_secret(refresh)})
+            scope = SCOPE
+        await self.tokens.insert_one(row)
         await self.codes.update_one({'_id': h}, {'$set': {'grant_id': grant_id}})
-        log.info('oauth connection made: %s (%s)', grant_id[:8], host)
+        log.info('oauth connection made: %s (%s, %s)', grant_id[:8],
+                 row['kind'], host)
         return OAuthToken(
-            access_token=access, token_type='Bearer',
-            expires_in=tk.OAUTH_ACCESS_SECONDS, scope=SCOPE,
-            refresh_token=refresh)
+            access_token=access, token_type='Bearer', expires_in=seconds,
+            scope=scope, refresh_token=refresh)
 
     # refresh ---------------------------------------------------------------------------
+    @staticmethod
+    def _refresh_kind(token: str) -> Optional[str]:
+        """The kind of grant a refresh token belongs to, by its prefix."""
+        if token.startswith(tk.OAUTH_REFRESH_PREFIX):
+            return 'oauth'
+        if token.startswith(tk.DEVICE_PREFIX):
+            return 'device'
+        return None
+
     async def load_refresh_token(self, client, refresh_token: str
                                  ) -> Optional[CscRefreshToken]:
-        if not refresh_token.startswith(tk.OAUTH_REFRESH_PREFIX):
+        kind = self._refresh_kind(refresh_token)
+        if kind is None:
             return None
         h = hash_secret(refresh_token)
-        doc = await self.tokens.find_one({'kind': 'oauth',
-                                          'refresh_sha256': h})
+        doc = await self.tokens.find_one({'kind': kind, 'refresh_sha256': h})
         if doc is None:
             dead = await self.used_refresh.find_one({'_id': h})
             if dead is not None:
@@ -360,32 +438,39 @@ class CscOAuthProvider:
     async def exchange_refresh_token(self, client, refresh_token, scopes
                                      ) -> OAuthToken:
         h = hash_secret(refresh_token.token)
+        kind = self._refresh_kind(refresh_token.token) or 'oauth'
+        gh = kind == 'device'
         owner = await self.app.mongodb_users.find_one(
             {'_id': refresh_token.subject})
-        if not self._owner_may(owner):
+        if not (self._owner_ok(owner) if gh else self._owner_may(owner)):
             raise TokenError('invalid_grant', 'the account may no longer '
                              'authorize')
         now = tk.now()
         stamp_now = tk.stamp(now)
-        access = tk.new_token('oauth')
-        refresh = tk.new_refresh_token()
+        refresh = tk.new_token('device') if gh else tk.new_refresh_token()
         hard = tk.parse_stamp(
             (await self.tokens.find_one({'_id': refresh_token.grant_id},
                                         {'expires': 1}) or {}
              ).get('expires', stamp_now))
-        access_expires = min(
-            now + timedelta(seconds=tk.OAUTH_ACCESS_SECONDS), hard)
+        changes = {
+            'refresh_sha256': hash_secret(refresh),
+            'refresh_expires': tk.stamp(
+                min(now + timedelta(days=tk.OAUTH_REFRESH_DAYS), hard)),
+            'last_used': stamp_now}
+        if gh:
+            access, seconds = self._gh_access_token(owner, now, hard)
+        else:
+            access = tk.new_token('oauth')
+            access_expires = min(
+                now + timedelta(seconds=tk.OAUTH_ACCESS_SECONDS), hard)
+            seconds = max(1, int((access_expires - now).total_seconds()))
+            changes.update({'token_sha256': hash_secret(access),
+                            'access_expires': tk.stamp(access_expires)})
         claimed = await self.tokens.update_one(
-            {'_id': refresh_token.grant_id, 'kind': 'oauth',
+            {'_id': refresh_token.grant_id, 'kind': kind,
              'refresh_sha256': h, 'revoked': None,
              'expires': {'$gt': stamp_now}},
-            {'$set': {
-                'token_sha256': hash_secret(access),
-                'access_expires': tk.stamp(access_expires),
-                'refresh_sha256': hash_secret(refresh),
-                'refresh_expires': tk.stamp(
-                    min(now + timedelta(days=tk.OAUTH_REFRESH_DAYS), hard)),
-                'last_used': stamp_now}})
+            {'$set': changes})
         if claimed.modified_count != 1:
             # lost a race with another use of the same token, or revoked
             raise TokenError('invalid_grant', 'refresh token is not valid')
@@ -393,9 +478,19 @@ class CscOAuthProvider:
             '_id': h, 'grant_id': refresh_token.grant_id,
             'at': datetime.now(timezone.utc)})
         return OAuthToken(
-            access_token=access, token_type='Bearer',
-            expires_in=max(1, int((access_expires - now).total_seconds())),
-            scope=SCOPE, refresh_token=refresh)
+            access_token=access, token_type='Bearer', expires_in=seconds,
+            scope=GH_SCOPE if gh else SCOPE, refresh_token=refresh)
+
+    def _gh_access_token(self, owner: dict, now: datetime, hard: datetime):
+        """The normal CSC JWT for the Grasshopper client: an hour, never past
+        the hard limit of the connection. ``(token, seconds)``."""
+        from apps.catalog.api.auth import create_access_token
+        seconds = max(60, min(tk.OAUTH_ACCESS_SECONDS,
+                              int((hard - now).total_seconds())))
+        token = create_access_token(
+            secret=self.app.state.jwt_secret, sub=owner['_id'],
+            role=owner.get('role', 'user'), minutes=seconds // 60)
+        return token, seconds
 
     # access tokens and revocation -----------------------------------------------
     async def load_access_token(self, token: str) -> Optional[CscAccessToken]:
@@ -418,6 +513,13 @@ class CscOAuthProvider:
 
     # helpers ----------------------------------------------------------------------------
     @staticmethod
+    def _owner_ok(owner: Optional[dict]) -> bool:
+        """An account that may sign Grasshopper in: it exists, is not
+        disabled and has a verified address (no role needed, 8.167 e)."""
+        return bool(owner and not owner.get('disabled')
+                    and owner.get('email_verified', False))
+
+    @staticmethod
     def _owner_may(owner: Optional[dict]) -> bool:
         return bool(owner and not owner.get('disabled')
                     and owner.get('email_verified', False)
@@ -425,7 +527,8 @@ class CscOAuthProvider:
 
     async def _revoke_grant(self, grant_id: str, why: str) -> None:
         done = await self.tokens.update_one(
-            {'_id': grant_id, 'kind': 'oauth', 'revoked': None},
+            {'_id': grant_id, 'kind': {'$in': ['oauth', 'device']},
+             'revoked': None},
             {'$set': {'revoked': tk.stamp(tk.now())}})
         if done.modified_count:
             log.warning('oauth connection ended: %s (%s)', grant_id[:8], why)

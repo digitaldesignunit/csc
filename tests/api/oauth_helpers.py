@@ -118,3 +118,24 @@ def tool(api, token, name, **arguments):
     is_error, content = tool_result(api, token, name, **arguments)
     assert not is_error, content
     return content
+
+
+GH_CLIENT = 'csc-grasshopper'
+GH_REDIRECT = 'http://127.0.0.1:54321/callback'
+
+
+def gh_sign_in(api, user_headers, computer='WORKSTATION-7'):
+    """The Grasshopper client's flow (fixed client, loopback redirect): returns
+    the parts of the token answer."""
+    verifier, challenge = pkce()
+    response = api.get('/authorize', params={
+        'response_type': 'code', 'client_id': GH_CLIENT, 'redirect_uri': GH_REDIRECT,
+        'code_challenge': challenge, 'code_challenge_method': 'S256', 'state': 'gh',
+        'scope': 'gh:client', 'computer': computer}, follow_redirects=False)
+    rid = request_id_of(response)
+    decision = api.post(f'/oauth/requests/{rid}/decision', json={'allow': True}, headers=user_headers)
+    assert decision.status_code == 200, decision.text
+    token = exchange(api, GH_CLIENT, code_of(decision.json()['redirect_to']), verifier, GH_REDIRECT)
+    assert token.status_code == 200, token.text
+    body = token.json()
+    return {'access': body['access_token'], 'refresh': body['refresh_token'], 'body': body}

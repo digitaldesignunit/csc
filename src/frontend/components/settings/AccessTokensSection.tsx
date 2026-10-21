@@ -128,7 +128,10 @@ export default function AccessTokensSection() {
       <CardContent className="space-y-4 text-sm">
         <p className="text-muted-foreground">
           A personal access token lets a tool such as an AI assistant read the catalog as you,
-          and nothing more. It expires, and you can revoke it here at any time.
+          and nothing more. It expires, and you can revoke it here at any time. A
+          Grasshopper that you signed in with SignIn is listed here too, as
+          &quot;Grasshopper on&quot; the name of that computer: revoke it to sign that
+          computer out.
         </p>
 
         {error && <p className="text-destructive" role="alert">{error}</p>}
@@ -174,7 +177,7 @@ export default function AccessTokensSection() {
         {options && !options.can_create && (
           <p className="text-muted-foreground">
             Personal access tokens are available to administrators for now.
-            {rows && rows.length > 0 ? ' The tokens you hold are listed below.' : ''}
+            {rows && rows.length > 0 ? ' The connections you hold are listed below.' : ''}
           </p>
         )}
 

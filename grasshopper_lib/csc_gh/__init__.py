@@ -10,8 +10,9 @@ Modules (importing the package imports none of them, so a component without
 Rhino, or without numpy, can still check the version):
 
 * ``ply``, ``build``, ``read``, ``convention``, ``layout``, ``frame``,
-  ``upload`` --- pure
-  Python (numpy for arrays), no Rhino;
+  ``upload``, ``signin`` --- pure
+  Python (numpy for arrays), no Rhino; ``signin`` is the sign-in without a
+  password (8.168 f: OAuth with PKCE and a loopback listener, DPAPI);
 * ``rhino``, ``doc`` --- RhinoCommon: geometry, the document convention;
 * ``ports`` --- the declared outputs of a script component (8.112);
 * ``messages`` --- the runtime message levels and the state text (8.113).
@@ -26,11 +27,11 @@ import os
 import re
 import sys
 
-__version__ = '261012'
+__version__ = '261020'
 
 # in dependency order: a module is reloaded after the ones it imports from
 MODULES = ('ply', 'build', 'read', 'convention', 'layout', 'frame', 'upload',
-           'rhino',
+           'signin', 'rhino',
            'doc', 'messages', 'ports')
 
 _VERSION = re.compile(r'^(\d+)([a-zA-Z]?)$')

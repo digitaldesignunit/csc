@@ -298,7 +298,8 @@ def test_the_consent_view_names_the_host_and_the_tool_and_binds_the_request(api,
     assert view.status_code == 200 and view.headers['cache-control'] == 'no-store'
     assert view.json() == {
         'redirect_host': 'claude.ai', 'redirect_is_loopback': False,
-        'client_name': 'Claude', 'access': 'Read access to the catalog, as you see it',
+        'client_name': 'Claude', 'scope': 'read:catalog', 'computer': None,
+        'access': 'Read access to the catalog, as you see it',
         'can_allow': True, 'refusal': None}
     assert api.get(f'/oauth/requests/{rid}', headers=admin['headers']).status_code == 200
     # bound to the first account: another one gets the answer of an unknown id

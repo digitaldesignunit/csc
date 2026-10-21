@@ -20,6 +20,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page on the website, where an admin allows read access to the catalog as they see it in the
   web app. The connection renews itself for up to 90 days and can be revoked in the token
   list. Answers carry no e-mail addresses and mark everything that is not public.
+- **Grasshopper signs in without a password** (decision 8.168): the Session component has a
+  `SignIn` button (Windows). It opens the browser, you allow "Grasshopper on this computer" on
+  the website, and the sign-in is stored for your Windows user (encrypted with DPAPI, one per
+  server), outside every Grasshopper file. Later runs sign in by themselves and renew their
+  token; `SignOut` ends the sign-in on the computer and the server. Each sign-in appears in the
+  token list in Settings, where it can be revoked.
+
+### Changed
+
+- **Session component:** new inputs `SignIn` and `SignOut`; `Refresh` is gone, because the sign-in
+  renews itself. Connected `Username` and `Password` still win and stay the way to sign in on
+  macOS; with them the component signs in again by itself when its 6-hour token runs out.
+  Update the components with `CSC_Update`.
+
+### Security
+
+- **A password change or reset ends every access token of the account**: personal access
+  tokens, Claude connections and Grasshopper sign-ins. Afterwards create a new token, allow
+  Claude again and press `SignIn` again.
 
 ### Server notes
 

@@ -25,6 +25,7 @@ from services.email_service import (
     get_token_expiry,
     load_email_config
 )
+from apps.catalog import access_tokens
 from apps.catalog.client_header import CLIENT_HEADER, parse_client_header
 from limiter import local_limiter, shared_limiter
 import read_only
@@ -114,6 +115,20 @@ _DUMMY_HASH = bcrypt.hashpw(b'no account has this password',
 
 def _jwt_now():
     return datetime.now(timezone.utc)
+
+
+async def revoke_all_access_tokens(app, user_id: str) -> int:
+    """Revoke every access token of an account, all kinds (pat, oauth,
+    device): one update, ``revoked`` set where it is None. A Claude connection
+    and a Grasshopper sign-in end with their refresh token, which the same
+    row holds. Returns how many were revoked."""
+    done = await app.mongodb_access_tokens.update_many(
+        {'owner_user_id': user_id, 'revoked': None},
+        {'$set': {'revoked': access_tokens.stamp(access_tokens.now())}})
+    if done.modified_count:
+        log.info('access tokens revoked after a password change: %d',
+                 done.modified_count)
+    return done.modified_count
 
 
 # FASTAPI DEPENDENCIES --------------------------------------------------------
@@ -496,8 +511,10 @@ async def change_password(
         )
 
     new_hashed = get_password_hash(payload.new_password)
-    # every other device and the Grasshopper session are signed out (8.124);
-    # an open reset link is void too
+    # every JWT issued before is signed out (8.124); every access token of the
+    # account, of every kind (personal access tokens, Claude connections,
+    # Grasshopper sign-ins), is revoked with its refresh token, so nothing
+    # renews past the change (8.124, 8.168 f); an open reset link is void too
     await users.update_one(
         {'_id': current_user.id},
         {'$set': {'hashed_password': new_hashed,
@@ -505,6 +522,7 @@ async def change_password(
          '$unset': {'password_reset_sha256': '',
                     'password_reset_expires': ''}},
     )
+    await revoke_all_access_tokens(request.app, current_user.id)
 
     log.info('Password changed for user: %s', current_user.id)
     return {'message': 'Password changed successfully. Sign in again.'}
@@ -655,7 +673,9 @@ async def confirm_password_reset(
     users=Depends(users_coll),
 ):
     """The token works once and for an hour. It sets the password, signs out
-    every token issued before (``password_changed_at``) and, because the mail
+    every JWT issued before (``password_changed_at``), revokes every access
+    token of the account (personal access tokens, Claude connections and
+    Grasshopper sign-ins, refresh tokens included) and, because the mail
     reached the mailbox, counts as the verification of the address."""
     digest = reset_token_sha256(payload.token)
     now = datetime.now(timezone.utc)
@@ -682,5 +702,6 @@ async def confirm_password_reset(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='This reset link is invalid or has expired. Ask for a '
                    'new one.')
+    await revoke_all_access_tokens(request.app, user['_id'])
     log.info('Password reset for user: %s', user['_id'])
     return {'message': 'Password changed. You can now sign in.'}

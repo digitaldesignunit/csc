@@ -6,6 +6,10 @@ export type ConsentView = {
   redirect_host: string
   redirect_is_loopback: boolean
   client_name?: string | null
+  /** read:catalog (a tool such as Claude) or gh:client (Grasshopper on this computer) */
+  scope?: string
+  /** the computer name Grasshopper sent: shown as text nobody checked */
+  computer?: string | null
   access: string
   can_allow: boolean
   refusal?: string | null
@@ -54,7 +58,24 @@ export const LOOPBACK_WARNING =
 export const GONE_TEXT =
   'This connection request is no longer valid. Start the connection again in the tool.'
 
+export const GH_SCOPE = 'gh:client'
+
+export const GH_LOOPBACK_WARNING =
+  'This address is on your own computer. Allow only if you pressed SignIn in Grasshopper on this computer just now.'
+
+export function isGrasshopper(view: Pick<ConsentView, 'scope'>): boolean {
+  return view.scope === GH_SCOPE
+}
+
+/** The title of the card. */
+export function consentTitle(view: Pick<ConsentView, 'scope'>): string {
+  return isGrasshopper(view) ? 'Sign in Grasshopper on this computer' : 'Connect a tool to the catalog'
+}
+
 /** The sentence under the host: what Allow does. */
-export function allowText(host: string): string {
+export function allowText(host: string, view: Pick<ConsentView, 'scope'> = {}): string {
+  if (isGrasshopper(view)) {
+    return `If you allow, you are sent back to ${host}, this computer, and Grasshopper here can act as you in the Grasshopper interface, until you sign out in Grasshopper or revoke it under Settings, Access tokens.`
+  }
   return `If you allow, you are sent back to ${host} and that tool can read the catalog as you, until you revoke it under Settings, Access tokens.`
 }

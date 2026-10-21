@@ -6,7 +6,15 @@ import { Loader2, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { WriteButton } from '@/components/ui/write-button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ACCESS_LINE, LOOPBACK_WARNING, allowText, type ConsentView } from '@/lib/oauthConsent'
+import {
+  ACCESS_LINE,
+  GH_LOOPBACK_WARNING,
+  LOOPBACK_WARNING,
+  allowText,
+  consentTitle,
+  isGrasshopper,
+  type ConsentView,
+} from '@/lib/oauthConsent'
 
 /**
  * What the consent page draws (decision 8.168 b): the host Allow sends the
@@ -38,7 +46,7 @@ export default function ConsentCard({
               ? <ShieldAlert className="h-10 w-10 text-amber-600" aria-hidden />
               : <ShieldCheck className="h-10 w-10 text-primary" aria-hidden />}
           </div>
-          <CardTitle className="text-xl">Connect a tool to the catalog</CardTitle>
+          <CardTitle className="text-xl">{view ? consentTitle(view) : 'Connect a tool to the catalog'}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           {!view && !problem && (
@@ -60,10 +68,15 @@ export default function ConsentCard({
                     The tool calls itself &quot;{view.client_name}&quot;. It chose that name; it is not checked.
                   </p>
                 )}
+                {isGrasshopper(view) && view.computer && (
+                  <p className="text-xs text-muted-foreground">
+                    The computer calls itself &quot;{view.computer}&quot;. Grasshopper sent that name; it is not checked.
+                  </p>
+                )}
               </div>
               {view.redirect_is_loopback && (
                 <p className="rounded-md border border-amber-500/60 bg-amber-50 p-2 text-xs dark:bg-amber-950/30" role="alert">
-                  {LOOPBACK_WARNING}
+                  {isGrasshopper(view) ? GH_LOOPBACK_WARNING : LOOPBACK_WARNING}
                 </p>
               )}
               <div className="rounded-md border p-3">
@@ -72,7 +85,7 @@ export default function ConsentCard({
               </div>
               {view.can_allow ? (
                 <>
-                  <p className="text-xs text-muted-foreground">{allowText(view.redirect_host)}</p>
+                  <p className="text-xs text-muted-foreground">{allowText(view.redirect_host, view)}</p>
                   <div className="flex gap-2">
                     <WriteButton className="flex-1" disabled={busy} onClick={onAllow}>Allow</WriteButton>
                     <WriteButton className="flex-1" variant="outline" disabled={busy} onClick={onDeny}>Deny</WriteButton>

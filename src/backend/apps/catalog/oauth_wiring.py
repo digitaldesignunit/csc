@@ -42,7 +42,7 @@ from starlette.routing import Route
 
 import limiter as lim
 from apps.catalog.mcp_server import build_gate, build_mcp
-from apps.catalog.oauth_server import SCOPE, CscOAuthProvider
+from apps.catalog.oauth_server import REQUEST_COMPUTER, SCOPE, CscOAuthProvider
 from logging_setup import get_logger
 
 log = get_logger(__name__)
@@ -75,6 +75,27 @@ class AddressLimit:
                 await response(scope, receive, send)
                 return
         await self.inner(scope, receive, send)
+
+
+class ClientMeta:
+    """An ASGI wrapper for ``/authorize``: the Grasshopper client sends the
+    name of its computer as the query parameter ``computer``, which the SDK's
+    handler does not read; it is handed to ``provider.authorize`` through a
+    context variable (shown on the consent page as unchecked text)."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    async def __call__(self, scope, receive, send):
+        token = None
+        if scope['type'] == 'http':
+            token = REQUEST_COMPUTER.set(
+                Request(scope).query_params.get('computer'))
+        try:
+            await self.inner(scope, receive, send)
+        finally:
+            if token is not None:
+                REQUEST_COMPUTER.reset(token)
 
 
 class McpEndpoint:
@@ -118,8 +139,11 @@ def install(app, settings) -> bool:
                 MetadataHandler(metadata).handle, ['GET', 'OPTIONS']),
                 methods=['GET', 'OPTIONS'])
         elif route.path in LIMITS:
+            inner = route.endpoint
+            if route.path == '/authorize':
+                inner = ClientMeta(inner)
             route = Route(route.path, endpoint=AddressLimit(
-                route.endpoint, route.path, LIMITS[route.path]),
+                inner, route.path, LIMITS[route.path]),
                 methods=sorted(route.methods or []))
         routes.append(route)
     routes += create_protected_resource_routes(

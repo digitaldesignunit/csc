@@ -26,7 +26,12 @@ PAT_PREFIX = 'csc_pat_'
 DEVICE_PREFIX = 'csc_dev_'
 OAUTH_ACCESS_PREFIX = 'csc_oat_'
 OAUTH_REFRESH_PREFIX = 'csc_ort_'       # not in PREFIXES: never an access token
-PREFIXES = (PAT_PREFIX, DEVICE_PREFIX, OAUTH_ACCESS_PREFIX)
+# a device token (csc_dev_) is the refresh token of a Grasshopper sign-in: it
+# is never an access token, so it is not in this list (8.168 f)
+PREFIXES = (PAT_PREFIX, OAUTH_ACCESS_PREFIX)
+# every prefix a token of ours can have (for the short id of a list)
+ALL_PREFIXES = (PAT_PREFIX, DEVICE_PREFIX, OAUTH_ACCESS_PREFIX,
+                OAUTH_REFRESH_PREFIX)
 PREFIX_OF_KIND = {'pat': PAT_PREFIX, 'device': DEVICE_PREFIX,
                   'oauth': OAUTH_ACCESS_PREFIX}
 # kinds whose owner must still have a role of CSC_PAT_ROLES on every request
@@ -85,7 +90,7 @@ def prefix_of(token: str) -> Optional[str]:
 
 def short_id_of(token: str) -> str:
     """The first 8 characters after the prefix."""
-    prefix = prefix_of(token) or ''
+    prefix = next((p for p in ALL_PREFIXES if token.startswith(p)), '')
     return token[len(prefix):][:8]
 
 

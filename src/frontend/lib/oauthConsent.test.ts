@@ -13,8 +13,12 @@ import ConsentCard from '../components/oauth/ConsentCard'
 import { ReadOnlyContext } from '../components/common/ReadOnlyProvider'
 import {
   ACCESS_LINE,
+  GH_LOOPBACK_WARNING,
   GONE_TEXT,
   LOOPBACK_WARNING,
+  allowText,
+  consentTitle,
+  isGrasshopper,
   requestId,
   safeReturnUrl,
   type ConsentView,
@@ -89,6 +93,44 @@ test('a loopback address gets its warning, a tool without a name is just the hos
   assert.ok(html.includes(LOOPBACK_WARNING))
   assert.ok(!html.includes('The tool calls itself'))
   assert.ok(!card(VIEW).includes(LOOPBACK_WARNING))
+})
+
+const GH_VIEW: ConsentView = {
+  redirect_host: '127.0.0.1',
+  redirect_is_loopback: true,
+  client_name: null,
+  scope: 'gh:client',
+  computer: 'WORKSTATION-7',
+  access: 'Grasshopper on this computer: act as you in the Grasshopper interface',
+  can_allow: true,
+  refusal: null,
+}
+
+test('the Grasshopper variant says what it is: this computer, acting as you, the host large', () => {
+  const html = card(GH_VIEW)
+  assert.ok(isGrasshopper(GH_VIEW) && !isGrasshopper(VIEW))
+  assert.ok(html.includes(consentTitle(GH_VIEW)) && html.includes('Sign in Grasshopper on this computer'))
+  assert.match(html, /data-testid="redirect-host">127\.0\.0\.1</)
+  assert.ok(html.includes('text-2xl font-bold'))
+  assert.ok(html.includes('Grasshopper on this computer: act as you in the Grasshopper interface'))
+  assert.ok(html.includes(GH_LOOPBACK_WARNING) && !html.includes(LOOPBACK_WARNING))
+  assert.ok(html.includes('The computer calls itself') && html.includes('WORKSTATION-7') && html.includes('it is not checked'))
+  assert.ok(!html.includes('The tool calls itself'))
+  assert.match(html, />Allow</)
+  assert.match(html, />Deny</)
+  assert.ok(allowText('127.0.0.1', GH_VIEW).includes('Grasshopper here can act as you'))
+  assert.ok(allowText('claude.ai').includes('that tool can read the catalog as you'))
+})
+
+test('the computer name is text, never markup', () => {
+  const html = card({ ...GH_VIEW, computer: '<b>x</b> & "y"' })
+  assert.ok(!html.includes('<b>x</b>'))
+  assert.ok(html.includes('&lt;b&gt;x&lt;/b&gt;'))
+})
+
+test('the title of a tool that reads the catalog stays', () => {
+  assert.equal(consentTitle(VIEW), 'Connect a tool to the catalog')
+  assert.ok(card(VIEW).includes('Connect a tool to the catalog'))
 })
 
 test('a role that may not allow sees a refusal and no Allow', () => {

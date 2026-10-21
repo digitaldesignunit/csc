@@ -13,8 +13,12 @@ pending authorization request (``oauth_server.py``), signs in if needed, and:
   sends): the code and the ``state`` of the client on Allow, ``access_denied``
   on Deny. A request is answered once; it ends after 10 minutes.
 
-Only a role of ``CSC_PAT_ROLES`` may allow; nothing is remembered, so every
-connection asks again. Both are signed-in JWT routes; the POST is a write and
+Only a role of ``CSC_PAT_ROLES`` may allow a connection of a tool that reads the
+catalog (scope ``read:catalog``); the Grasshopper client (scope ``gh:client``,
+8.168 f) may be allowed by every signed-in account with a verified address, and
+its page says what that is: Grasshopper on this computer acting as you, with
+the loopback host large and the computer name the client sent as unchecked
+text. Nothing is remembered, so every connection asks again. Both are signed-in JWT routes; the POST is a write and
 gets the 503 of the read-only flag like every write.
 """
 
@@ -27,6 +31,8 @@ from pydantic import BaseModel
 
 from apps.catalog.models import UserInDB
 from apps.catalog.oauth_server import (
+    GH_ACCESS_TEXT,
+    GH_SCOPE,
     CscOAuthProvider,
     hash_secret,
     redirect_host,
@@ -43,6 +49,7 @@ GONE = ('This connection request is no longer valid. Start the connection '
         'again in Claude.')
 REFUSED_ROLE = ('Your account may not connect tools to the catalog. Ask an '
                 'administrator.')
+REFUSED_UNVERIFIED = 'Your e-mail address is not verified yet.'
 ACCESS_TEXT = 'Read access to the catalog, as you see it'
 
 
@@ -50,6 +57,11 @@ class ConsentView(BaseModel):
     redirect_host: str
     redirect_is_loopback: bool
     client_name: Optional[str] = None
+    # what is asked: read:catalog (a tool such as Claude) or gh:client
+    # (Grasshopper on this computer); `computer` is the name the Grasshopper
+    # client sent, shown as unchecked text
+    scope: str = 'read:catalog'
+    computer: Optional[str] = None
     access: str = ACCESS_TEXT
     can_allow: bool
     refusal: Optional[str] = None
@@ -61,6 +73,18 @@ class Decision(BaseModel):
 
 class DecisionResult(BaseModel):
     redirect_to: str
+
+
+def _may_allow(user: UserInDB, gh: bool):
+    """``(allowed, refusal text)``: a tool that reads the catalog needs a role
+    of ``CSC_PAT_ROLES``; the Grasshopper client only a verified account."""
+    if gh:
+        if user.email_verified:
+            return True, None
+        return False, REFUSED_UNVERIFIED
+    if may_hold_pat(user.role):
+        return True, None
+    return False, REFUSED_ROLE
 
 
 def _provider(request: Request) -> CscOAuthProvider:
@@ -105,13 +129,17 @@ async def get_consent_request(
     if client is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, GONE)
     host = redirect_host(doc['redirect_uri'])
-    allowed = may_hold_pat(user.role)
+    gh = GH_SCOPE in doc['scopes']
+    allowed, refusal = _may_allow(user, gh)
     return {
         'redirect_host': host,
         'redirect_is_loopback': host in ('localhost', '127.0.0.1'),
-        'client_name': client.client_name,
+        'client_name': None if gh else client.client_name,
+        'scope': GH_SCOPE if gh else 'read:catalog',
+        'computer': doc.get('computer') if gh else None,
+        'access': GH_ACCESS_TEXT if gh else ACCESS_TEXT,
         'can_allow': allowed,
-        'refusal': None if allowed else REFUSED_ROLE,
+        'refusal': refusal,
     }
 
 
@@ -128,8 +156,10 @@ async def decide_consent_request(
     response.headers['Cache-Control'] = 'no-store'
     provider = _provider(request)
     doc = await _own_request(request, request_id, user)
-    if decision.allow and not may_hold_pat(user.role):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, REFUSED_ROLE)
+    if decision.allow:
+        allowed, refusal = _may_allow(user, GH_SCOPE in doc['scopes'])
+        if not allowed:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, refusal)
     # answered once: the claim is the update
     claimed = await provider.requests.update_one(
         {'_id': hash_secret(request_id), 'bound_user': user.id, 'decided': False},

@@ -229,9 +229,40 @@ The CSC Grasshopper Interface consists of Python 3 components that can be used d
 - **Location**: `grasshopper_userobjects_src/` - Source files for development
 - **Installation**: Copy `.ghuser` files from `grasshopper_userobjects/` to your Grasshopper UserObjects folder
 - **Requirements**: Python 3 with packages: requests, numpy, scipy, scikit-learn
-- **Authentication**: Use `CSC_SignIn` component first to authenticate with the backend
+- **Authentication**: Use the `CSC_Session` component first to sign in (see "Signing in from Grasshopper" below)
 - **Documentation**: Component reference, copy-to-clipboard XML, and release download on the frontend at `/gh-interface`
 - **Backend routes**: Release download, sources, XML and updater assets are served under `/ghinterface/` (e.g. `version`, `download`, `src/{name}`, `xml/{name}`, `userobject/{name}`). They come from the GitHub release of the running backend (tag `v<version>`); a `channel` query param (GitHub branch or tag) overrides that for testing.
+
+### Signing in from Grasshopper
+
+The `CSC_Session` component has two button inputs, `SignIn` and `SignOut`.
+
+- **SignIn (Windows, Rhino 8)**: press it, the browser opens on the CSC
+  consent page ("Sign in Grasshopper on this computer"), press Allow, and
+  Grasshopper is signed in; no password goes into a document or an input. The
+  component listens for the answer on your own computer only (`127.0.0.1`, a
+  random port, at most 10 minutes, once) and Grasshopper stays usable while it
+  waits. The sign-in is kept for your Windows user, encrypted with DPAPI, in
+  `%APPDATA%\DDU_CSC\signin.json` (one entry per server address): after a
+  restart of Rhino the component signs in again by itself. The access token is
+  good for an hour and renews itself through that sign-in, also when a call
+  answers 401; the stored sign-in is good 30 days after its last use and at
+  most 90 days from your consent, then press SignIn again. Every account with a
+  verified address may do it (it is no role).
+- **SignOut**: deletes the stored sign-in on this computer and revokes it on the
+  server.
+- **Revoke from the website**: Settings, "Access tokens" lists every
+  sign-in as "Grasshopper on" the name of that computer; "Revoke" ends it (the
+  hour of the current access token runs out; the sign-in cannot renew).
+- **Username and Password** stay as the fallback (and the only way on macOS):
+  when both are connected they win over the stored sign-in. That path renews
+  itself too: when a call answers 401 the component signs in once more with
+  them and repeats the call.
+- **Pressing SignIn without Windows** says that the sign-in without a password is
+  Windows only.
+- **Changing or resetting your password** ends every Grasshopper sign-in of the
+  account too (and every other token and connection): the stored sign-in cannot
+  renew any more, so press SignIn again afterwards.
 
 ## Releases and deployment
 
@@ -466,6 +497,11 @@ and a JWT does not work in place of it.
   8 characters of the token and the route, no personal data.
 - **Stored.** Only the SHA-256 of a token is stored (collection
   `access_tokens`), so a leaked database holds no usable token.
+- **Password.** Changing your password (Settings) and resetting it by mail end
+  every token and connection of the account at once, of every kind: personal
+  access tokens, Claude connections and Grasshopper sign-ins, their refresh
+  tokens included. Afterwards make a new token, press Allow in Claude again and
+  press SignIn in Grasshopper again.
 
 ## Using CSC from Claude
 

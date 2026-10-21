@@ -58,7 +58,17 @@ test('the choices of the lifetime read as days and a year', () => {
 
 test('a list shows the prefix and the first 8 characters, then dots', () => {
   assert.equal(tokenPreview(row()), 'csc_pat_AbCdEfGh...')
-  assert.equal(tokenPreview(row({ kind: 'device', short_id: 'ZZZZ1111' })), 'csc_dev_ZZZZ1111...')
+  assert.equal(tokenPreview(row({ kind: 'device', short_id: 'ZZZZ1111' })), 'Connection ZZZZ1111')
+})
+
+test('a Grasshopper sign-in shows as a connection with its computer, never its refresh token', () => {
+  assert.equal(tokenPreview(row({ kind: 'device', short_id: '9f8e7d6c' })), 'Connection 9f8e7d6c')
+  const html = table([row({ kind: 'device', short_id: '9f8e7d6c', name: 'Grasshopper on WORKSTATION-7', scopes: ['gh:client'] })])
+  assert.ok(html.includes('Connection 9f8e7d6c') && html.includes('Grasshopper on WORKSTATION-7'))
+  assert.ok(html.includes('Grasshopper client'))
+  assert.ok(!html.includes('csc_dev_'))
+  assert.ok(!table([row({ kind: 'device', renew_due: true })]).includes('Renew'))
+  assert.ok(table([row({ kind: 'device' })]).includes('Revoke'))
 })
 
 test('a connection of a tool through OAuth shows a steady label, never a token prefix', () => {
