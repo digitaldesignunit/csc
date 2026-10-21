@@ -3,7 +3,7 @@
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import os
 import sys
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
@@ -35,6 +35,7 @@ from apps.catalog.api.catalog_common import (
     seed_materials,
 )
 from apps.catalog.api.access import TombstoneHit
+from apps.catalog import oauth_wiring
 from csc_version import CSC_VERSION
 from logging_setup import configure as configure_logging, get_logger
 
@@ -119,6 +120,12 @@ async def lifespan(app: FastAPI):
     app.mongodb_invitations = app.mongodb['invitations']
     app.mongodb_materials = app.mongodb['materials']
     app.mongodb_change_log = app.mongodb['change_log']
+    app.mongodb_access_tokens = app.mongodb['access_tokens']
+    # the OAuth server of the MCP layer (8.168)
+    app.mongodb_oauth_clients = app.mongodb['oauth_clients']
+    app.mongodb_oauth_requests = app.mongodb['oauth_requests']
+    app.mongodb_oauth_codes = app.mongodb['oauth_codes']
+    app.mongodb_oauth_used_refresh = app.mongodb['oauth_used_refresh']
 
     # Create helpful indexes (idempotent)
     await app.mongodb_users.create_index('email', unique=True)
@@ -127,6 +134,27 @@ async def lifespan(app: FastAPI):
     await app.mongodb_users.create_index('verification_token_sha256',
                                          sparse=True)
     await app.mongodb_datasets.create_index('members.user_id')
+    # access tokens (8.167): found by the hash of the token presented
+    await app.mongodb_access_tokens.create_index('token_sha256', unique=True)
+    await app.mongodb_access_tokens.create_index('owner_user_id')
+    await app.mongodb_access_tokens.create_index('expires')
+    await app.mongodb_access_tokens.create_index('refresh_sha256', sparse=True)
+    # a registered client that never completes a consent goes after 1 day, one
+    # that did, 30 days after its last use (one TTL index, expires_at moves);
+    # the pending requests, the codes and the used refresh tokens go by their
+    # own dates
+    try:                  # the index of an earlier build, on last_used
+        await app.mongodb_oauth_clients.drop_index('last_used_1')
+    except Exception:
+        pass
+    await app.mongodb_oauth_clients.create_index(
+        'expires_at', expireAfterSeconds=0)
+    await app.mongodb_oauth_requests.create_index(
+        'expire_at', expireAfterSeconds=0)
+    await app.mongodb_oauth_codes.create_index(
+        'expire_at', expireAfterSeconds=0)
+    await app.mongodb_oauth_used_refresh.create_index(
+        'at', expireAfterSeconds=91 * 24 * 3600)
     await app.mongodb_invitations.create_index('code_sha256', unique=True)
     await app.mongodb_invitations.create_index('email')
     await app.mongodb_change_log.create_index([('record_id', 1), ('at', 1)])
@@ -176,7 +204,11 @@ async def lifespan(app: FastAPI):
     log.info('Geometry upload limit: %d MB',
              app.geometry_upload_limit_bytes // (1024 * 1024))
 
-    yield
+    # --- MCP layer and OAuth server (8.168) ------------------------------------
+    async with AsyncExitStack() as stack:
+        await oauth_wiring.start(app, settings, stack)
+        yield
+        app.state.mcp_gate = None
 
     # shutdown
     if app.mongodb_client:
@@ -254,3 +286,5 @@ app.add_middleware(ClientHeaderLogMiddleware)
 # New, modern router structure under apps/catalog/api/*
 from apps.catalog.api import api_router  # NOQA - aggregator for sub-routers
 app.include_router(api_router, prefix='')
+# the OAuth server and the MCP endpoint at the root of the API host (8.168)
+oauth_wiring.install(app, settings)

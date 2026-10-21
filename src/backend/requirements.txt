@@ -27,6 +27,11 @@ slowapi
 # the counter store of slowapi; rate_store.py subclasses its MongoDB storage
 limits
 
+# --- MCP layer and OAuth server for Claude's connectors (apps/catalog/mcp_server.py,
+# oauth_server.py; decision 8.168): the MCP Python SDK (pure Python; its
+# pyjwt[crypto] pulls cryptography, which has a glibc 2.17 wheel) ---
+mcp
+
 # --- HTTP client (GitHub service) ---
 httpx
 

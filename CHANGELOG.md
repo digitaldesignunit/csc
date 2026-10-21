@@ -5,7 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.2.1] - unreleased
+## [0.6.3.0] - 2026-10-21
+
+### Added
+
+- **Access tokens** (decision 8.167): admins create personal access tokens in Settings (30 days,
+  90 days or one year; shown once, stored only as a hash, at most 10 active), renew and revoke
+  them; admins see and revoke every token on a new admin page. A token reads the catalog only
+  where its scope allows; `GET /auth/token-check` tests one. The ground for the MCP layer and the
+  Grasshopper device sign-in of this release.
+- **Using CSC from Claude** (decision 8.168): an MCP endpoint at `https://<api host>/mcp` with
+  nine read-only tools (search, components, versions, evidence, datasets, timeline, similar
+  components). Add it as a custom connector in Claude; a browser window opens the consent
+  page on the website, where an admin allows read access to the catalog as they see it in the
+  web app. The connection renews itself for up to 90 days and can be revoked in the token
+  list. Answers carry no e-mail addresses and mark everything that is not public.
+- **Grasshopper signs in without a password** (decision 8.168): the Session component has a
+  `SignIn` button (Windows). It opens the browser, you allow "Grasshopper on this computer" on
+  the website, and the sign-in is stored for your Windows user (encrypted with DPAPI, one per
+  server), outside every Grasshopper file. Later runs sign in by themselves and renew their
+  token; `SignOut` ends the sign-in on the computer and the server. Each sign-in appears in the
+  token list in Settings, where it can be revoked.
+
+### Changed
+
+- **Session component:** new inputs `SignIn` and `SignOut`; `Refresh` is gone, because the sign-in
+  renews itself. Connected `Username` and `Password` still win and stay the way to sign in on
+  macOS; with them the component signs in again by itself when its 6-hour token runs out.
+  Update the components with `CSC_Update`.
+- **Viewer:** a "Piece opacity" slider in the Overlay panel fades the mesh, proxy or point
+  cloud so reinforcement and other overlays show through. The Mesh and Point cloud switches are
+  labelled and have an "Off" choice instead of the "Show mesh" and "Show point cloud"
+  checkboxes; "Show edges" moved to the overlays.
+
+### Security
+
+- **A password change or reset ends every access token of the account**: personal access
+  tokens, Claude connections and Grasshopper sign-ins. Afterwards create a new token, allow
+  Claude again and press `SignIn` again.
+
+### Server notes
+
+- `CSC_PAT_ROLES` (optional, default `admin`) names the roles that may create access tokens.
+- The new collections `access_tokens`, `oauth_clients`, `oauth_requests`, `oauth_codes` and
+  `oauth_used_refresh` need the same database rights as the others; their indexes are created
+  at the start.
+- Set `CSC_PUBLIC_API_URL=https://<api host>` (no path) in the backend environment: it turns on
+  `/mcp` and the OAuth server and is the address the connector is given. It also becomes the
+  base of the links in the JSON-LD export (if it was unset so far, those links took the request's own address).
+  After the restart, check that `https://<api host>/.well-known/oauth-protected-resource/mcp`
+  answers, then add the connector once in claude.ai.
+- The deploy installs the MCP Python SDK (`mcp`) and its dependencies (`cryptography` among them).
+- In read-only mode `/mcp` and the token renewal keep working; a code issued just before the
+  switch can still be exchanged once. New consents are refused until the flag is gone.
+
+## [0.6.2.1] - 2026-10-20
 
 ### Changed
 

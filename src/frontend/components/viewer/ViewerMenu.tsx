@@ -256,11 +256,14 @@ export interface SegmentedControlProps {
   onValueChange: (value: string) => void
   options: { value: string; label: string }[]
   disabled?: boolean
+  /** Name for assistive technology when no visible label stands with the control. */
+  accessibleName?: string
 }
 
 export function SegmentedControl({
   id,
   label,
+  accessibleName,
   value,
   onValueChange,
   options,
@@ -285,6 +288,7 @@ export function SegmentedControl({
         }}
         disabled={disabled}
         aria-labelledby={label ? `${id}-label` : undefined}
+        aria-label={label ? undefined : accessibleName}
         className="h-6 w-full"
       >
         {options.map((option) => (

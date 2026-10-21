@@ -16,6 +16,7 @@ export const PROTECTED_PREFIXES = [
   '/analytics',
   '/transmit-id',
   '/add-component',
+  '/oauth',
 ] as const
 
 export function isProtectedPath(pathname: string): boolean {

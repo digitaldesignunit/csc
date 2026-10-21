@@ -9,6 +9,7 @@ test('each admin page names who may open it', () => {
   assert.equal(adminPageNeed('/admin/materials'), 'admin')
   assert.equal(adminPageNeed('/admin/geometry'), 'admin')
   assert.equal(adminPageNeed('/admin/mail-templates'), 'admin')
+  assert.equal(adminPageNeed('/admin/access-tokens'), 'admin')
   assert.equal(adminPageNeed('/admin/logs'), 'admin')
   assert.equal(adminPageNeed('/admin/datasets'), 'moderator')
   assert.equal(adminPageNeed('/admin/datasets/later_dataset'), 'moderator')

@@ -46,6 +46,7 @@ DEFAULT_MAX_DATASETS = 3
 EVIDENCE_UPLOAD_MAX_MB = 25
 LOCAL_HOSTS = ('localhost', '127.0.0.1', '::1')
 RATE_LIMIT_SCHEMES = ('memory://', 'mongodb://', 'mongodb+srv://')
+PAT_ROLE_NAMES = ('admin', 'user')
 
 # what the API cannot start without (the list that main_fastapi.py carried)
 REQUIRED_FOR_API = (
@@ -125,6 +126,9 @@ class Settings(BaseSettings):
     csc_gh_token_hours: int = Field(
         6, ge=1, le=24, description='lifetime in hours of the access token '
         'of a sign-in from the Grasshopper client (8.166)')
+    csc_pat_roles: str = Field(
+        'admin', description='global roles that may hold personal access '
+        'tokens, comma separated (8.167): admin, user')
     csc_open_registration_domains: str = Field(
         'tu-darmstadt.de', description='comma separated e-mail domains that '
                                        'may register without an invitation')
@@ -338,6 +342,17 @@ class Settings(BaseSettings):
         parse_trusted_proxies(value)
         return value
 
+    @field_validator('csc_pat_roles', mode='after')
+    @classmethod
+    def _pat_roles(cls, value: str) -> str:
+        roles = [r.strip().lower() for r in value.split(',') if r.strip()]
+        bad = [r for r in roles if r not in PAT_ROLE_NAMES]
+        if bad or not roles:
+            raise ValueError(
+                f'CSC_PAT_ROLES must list roles of {", ".join(PAT_ROLE_NAMES)}'
+                f', got {value!r}')
+        return ','.join(roles)
+
     # DERIVED VALUES AND CHECKS ----------------------------------------------
     @property
     def cors_origins(self) -> List[str]:
@@ -372,6 +387,11 @@ class Settings(BaseSettings):
         if self.csc_rate_limit_storage is not None:
             return self.csc_rate_limit_storage.get_secret_value()
         return self.need('MONGODB_URI')
+
+    @property
+    def pat_roles(self) -> Tuple[str, ...]:
+        """The global roles that may hold personal access tokens."""
+        return tuple(r for r in self.csc_pat_roles.split(',') if r)
 
     def trusted_networks(self) -> Tuple[Any, ...]:
         return parse_trusted_proxies(self.csc_trusted_proxies)

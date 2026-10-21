@@ -151,7 +151,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated, screensh
                 <li>Switch on <b>CheckForUpdates</b> and <b>InstallUpdates</b> and run it: it installs the components
                   (UserObjects) and the shared library <code>csc_gh</code> of this release.</li>
                 <li>Restart Rhino when the state says so: the library is loaded once per session.</li>
-                <li>Sign in with the <b>CSC_Session</b> component before you use the others.</li>
+                <li>Sign in with the <b>CSC_Session</b> component before you use the others: press <b>SignIn</b> (Windows; the browser asks you to allow it), or connect <b>Username</b> and <b>Password</b>.</li>
               </ol>
               <p className="text-muted-foreground">Run CSC_Update again after a new release; it says when everything is up to date.</p>
               <div className="flex flex-wrap items-center gap-3 border-t pt-3">

@@ -22,7 +22,7 @@ stored database.
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
 import re
 from datetime import datetime
-from typing import Annotated, Any, Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from pydantic import (
@@ -1063,6 +1063,31 @@ class FieldChange(_Block):
     path: str
     old: Any = None
     new: Any = None
+
+
+class AccessToken(_Document):
+    """``access_tokens``: a personal access token or a device token (8.167).
+    Only the sha256 of the token is stored; ``short_id`` is its first 8
+    characters after the prefix, the one a list shows."""
+    id: str = Field(alias='_id')
+    kind: Literal['pat', 'device', 'oauth']
+    owner_user_id: str
+    scopes: List[Literal['read:catalog', 'gh:client']] = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=80)
+    token_sha256: str
+    short_id: str
+    created: Timestamp
+    expires: Timestamp
+    last_used: Optional[Timestamp] = None
+    revoked: Optional[Timestamp] = None
+    # kind oauth (8.168): ``expires`` is the hard limit of the connection (90
+    # days from the consent); the current access token lives until
+    # ``access_expires``, the refresh token until ``refresh_expires``
+    access_expires: Optional[Timestamp] = None
+    refresh_sha256: Optional[str] = None
+    refresh_expires: Optional[Timestamp] = None
+    client_id: Optional[str] = None
+    redirect_host: Optional[str] = None
 
 
 class ChangeLogEntry(_Document):

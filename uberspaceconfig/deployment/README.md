@@ -168,6 +168,17 @@ Optional, in the service environment of the backend (`fastapi.ini`):
 token of a sign-in from the Grasshopper client (`X-CSC-Client:
 gh-userobjects/...`); every other sign-in keeps
 `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`. Leave it unset unless the 6 hours are wrong.
+`CSC_PAT_ROLES` (default `admin`) lists the global roles (`admin`, `user`) that
+may create personal access tokens (see "Access tokens" in the main README);
+leave it unset to keep them to administrators.
+`CSC_PUBLIC_API_URL` (`https://<api host>`, no path) turns on the MCP endpoint
+`/mcp` and the OAuth server of the connectors of Claude (see "Using CSC from
+Claude" in the main README): it is the issuer and the resource of the discovery
+documents, so it must be the address a connector is given. The API host already
+routes to the backend, so `/mcp`, `/authorize`, `/token`, `/register`, `/revoke`
+and `/.well-known/*` need no web backend of their own; check once after the
+deploy that `https://<api host>/.well-known/oauth-protected-resource/mcp`
+answers.
 
 ### 6. Approve the waiting deploy
 

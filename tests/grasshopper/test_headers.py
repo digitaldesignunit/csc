@@ -162,9 +162,9 @@ def test_the_updater_reads_the_components_own_version():
         assert headers.check_version_line(text, path.name) == [], path.name
 
 
-def test_the_session_names_the_0_6_client():
+def test_the_session_names_the_0_6_3_client():
     text = (headers.SRC_DIR / 'DDU_CSC_Session.py').read_text(encoding='utf-8')
-    assert re.search(r"^CSC_CLIENT = 'gh-userobjects/0\.6\.0\.0'$", text,
+    assert re.search(r"^CSC_CLIENT = 'gh-userobjects/0\.6\.3\.0'$", text,
                      re.M)
     assert re.search(r'^Version: \d+(\.\d+)?[a-z]?$', text, re.M)
 

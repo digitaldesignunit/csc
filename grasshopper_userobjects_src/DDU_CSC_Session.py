@@ -35,7 +35,8 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '1 User'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Handles user authentication with the remote API (server address '
-    'input), manages access tokens, keeps one connection alive for all '
+    'input; SignIn opens the browser, or connect Username and Password), '
+    'manages access tokens, keeps one connection alive for all '
     'requests and provides a unified catalog cache (identities and '
     'snapshots stored independently, mesh PLY geometry cached per '
     'snapshot). Stores authentication state in scriptcontext.sticky.'
@@ -44,26 +45,28 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 261005a
+Version: 261020
 """
 
 # Sent as X-CSC-Client on every request so the backend can tell which
 # UserObjects release is calling (spec 7.4).
-CSC_CLIENT = 'gh-userobjects/0.6.0.0'
+CSC_CLIENT = 'gh-userobjects/0.6.3.0'
 
 # The server of a fresh session; the Server input of this component changes it.
 DEFAULT_SERVER = 'https://api.2ndchances.build'
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005'
+CSC_GH_MINIMUM = '261020'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
     from csc_gh.rhino import (mesh_from_ply, point_cloud_from_ply)  # NOQA
+    from csc_gh import signin as csc_signin  # NOQA
 except ImportError:
+    csc_signin = None
     LIBRARY_PROBLEM = (
-        'CSC library 261005 too old or missing: run CSC_Update, '
+        'CSC library 261020 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -84,6 +87,20 @@ def empty_outputs():
     if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
+
+
+def is_windows():
+    """The sign-in without a password is Windows only (DPAPI)."""
+    return os.name == 'nt'
+
+
+def open_browser(url):
+    """Open an address in the default browser (the sign-in page)."""
+    if is_windows() and hasattr(os, 'startfile'):
+        os.startfile(url)
+        return
+    import webbrowser
+    webbrowser.open(url)
 
 
 class CSCClientOutdated(RuntimeError):
@@ -1004,6 +1021,14 @@ class _AuthCore(object):
         self._token = None
         self._exp = 0
         self._username = None
+        # the sign-in without a password (8.168 f): the refresh token lives in
+        # memory and, on Windows, encrypted with DPAPI under %APPDATA%; the
+        # credentials of a password sign-in live in memory only, to sign in
+        # again when the token runs out
+        self._refresh = None
+        self._credentials = None
+        self._computer = None
+        self.store_problem = None
         self._cache = None if disable_cache else _ComponentCache()
 
     @staticmethod
@@ -1030,6 +1055,8 @@ class _AuthCore(object):
             self._token = None
             self._exp = 0
             self._username = None
+            self._refresh = None
+            self._credentials = None
         self.sync_cache()
         return True
 
@@ -1066,6 +1093,169 @@ class _AuthCore(object):
             self._token = None
             self._exp = 0
             self._username = None
+            self._refresh = None
+            self._credentials = None
+
+    # RENEWING THE ACCESS TOKEN (8.168 f) --------------------------------
+    def post_form(self, url, data, headers, timeout):
+        """A form POST over the shared connection (the sign-in module)."""
+        return self._send('POST', url, data=data, headers=headers,
+                          timeout=timeout)
+
+    def remember_credentials(self, username, password):
+        """Keep the Username and Password of a sign-in in memory, to sign in
+        again once when a call answers 401 or the token ran out."""
+        with self._lock:
+            self._credentials = (username, password)
+
+    def _persist_refresh(self):
+        """Write the refresh token, encrypted for this Windows user. The
+        server replaced the old one, so a stored copy that cannot be replaced
+        is deleted: it would be dead."""
+        if not is_windows() or csc_signin is None or not self._refresh:
+            return
+        path = csc_signin.store_path()
+        try:
+            csc_signin.save_entry(path, self.base_url, self._refresh,
+                                  csc_signin.dpapi_protect, self._computer)
+            self.store_problem = None
+        except Exception as error:
+            self.store_problem = str(error)
+            try:
+                csc_signin.delete_entry(path, self.base_url)
+            except Exception:
+                pass
+
+    def _forget_stored(self):
+        if is_windows() and csc_signin is not None:
+            try:
+                csc_signin.delete_entry(csc_signin.store_path(),
+                                        self.base_url)
+            except Exception:
+                pass
+
+    def take_tokens(self, tokens, computer=None):
+        """Use the tokens of a sign-in or a refresh: the JWT for the calls,
+        the refresh token kept (memory and the encrypted file)."""
+        with self._lock:
+            self.set_access_token(tokens.access_token)
+            self._refresh = tokens.refresh_token
+            if computer:
+                self._computer = computer
+            self._persist_refresh()
+
+    def fetch_username(self):
+        try:
+            who = self.authorized_get('/users/me', timeout=10)
+            if who.status_code == 200:
+                with self._lock:
+                    self._username = who.json().get('username')
+        except Exception:
+            pass
+
+    def _refresh_now(self):
+        # another Rhino of this Windows user may have rotated the stored
+        # token since this one read it: use the newest, or the server would
+        # see the old one again and end the sign-in (reuse of a rotated token)
+        if is_windows():
+            latest = csc_signin.load_entry(
+                csc_signin.store_path(), self.base_url,
+                csc_signin.dpapi_unprotect)
+            if latest and latest != self._refresh:
+                self._refresh = latest
+        tokens = csc_signin.refresh_access(
+            self.post_form, self.base_url, self._refresh,
+            self.client_header())
+        self.take_tokens(tokens)
+
+    def _password_login(self):
+        username, password = self._credentials
+        try:
+            response = self._send(
+                'POST', f'{self.base_url}/auth/token',
+                data={'username': username, 'password': password},
+                headers={'Content-Type': 'application/x-www-form-urlencoded',
+                         **self.client_header()}, timeout=20)
+        except CSCClientOutdated:
+            raise
+        except Exception:
+            return False
+        if response.status_code != 200:
+            return False
+        token = response.json().get('access_token')
+        if not token:
+            return False
+        self.set_access_token(token, username)
+        return True
+
+    def renew(self, force=False):
+        """A new access token without asking the user: through the refresh
+        token of a stored sign-in, else with the Username and Password of this
+        session. True when there is a token now. One try, no loop."""
+        with self._lock:
+            if not force and self.is_valid():
+                return True
+            if self._refresh and csc_signin is not None:
+                try:
+                    self._refresh_now()
+                    return True
+                except CSCClientOutdated:
+                    raise
+                except csc_signin.SignInError as error:
+                    if error.dead:
+                        self._refresh = None
+                        self._forget_stored()
+                except Exception:
+                    pass            # the server is not reachable: try the rest
+            if self._credentials:
+                return self._password_login()
+            return False
+
+    def sign_in_stored(self):
+        """The stored sign-in of this server (Windows): True when it gave a
+        token, False when there is none, ``SignInError`` when the server will
+        not take it (it is deleted then)."""
+        with self._lock:
+            if not self._refresh:
+                self._refresh = csc_signin.load_entry(
+                    csc_signin.store_path(), self.base_url,
+                    csc_signin.dpapi_unprotect)
+            if not self._refresh:
+                return False
+            try:
+                self._refresh_now()
+                return True
+            except csc_signin.SignInError as error:
+                if error.dead:
+                    self._refresh = None
+                    self._forget_stored()
+                raise
+
+    def sign_out(self):
+        """SignOut: revoke the sign-in on the server, delete the stored one,
+        forget this session. The sentence says what happened."""
+        with self._lock:
+            refresh = self._refresh
+            if not refresh and is_windows() and csc_signin is not None:
+                refresh = csc_signin.load_entry(
+                    csc_signin.store_path(), self.base_url,
+                    csc_signin.dpapi_unprotect)
+            message = 'Signed out.'
+            if refresh and csc_signin is not None:
+                try:
+                    if not csc_signin.revoke_refresh(
+                            self.post_form, self.base_url, refresh,
+                            self.client_header()):
+                        message += (' The server did not confirm: revoke '
+                                    'this computer under Settings, Access '
+                                    'tokens.')
+                except Exception:
+                    message += (' The server could not be reached: revoke '
+                                'this computer under Settings, Access '
+                                'tokens.')
+            self._forget_stored()
+            self.clear()
+        return message
 
     def is_valid(self):
         with self._lock:
@@ -1135,10 +1325,31 @@ class _AuthCore(object):
             data=None,
             extra_headers=None,
             timeout=60):
-        if not self.is_valid():
+        if not self.is_valid() and not self.renew():
             raise RuntimeError(
                 'Access token missing or expired. Please sign in again.'
             )
+        response = self._request(
+            method, path, params, json_body, files, data, extra_headers,
+            timeout)
+        if response.status_code == 401 and self.renew(force=True):
+            # one new sign-in (refresh token, else the password) and the call
+            # again, once; an uploaded file is read from its start
+            for part in (files or {}).values():
+                handle = part[1] if isinstance(part, (tuple, list)) \
+                    and len(part) > 1 else part
+                if hasattr(handle, 'seek'):
+                    try:
+                        handle.seek(0)
+                    except Exception:
+                        pass
+            response = self._request(
+                method, path, params, json_body, files, data, extra_headers,
+                timeout)
+        return response
+
+    def _request(self, method, path, params, json_body, files, data,
+                 extra_headers, timeout):
         headers = self.auth_header()
         if extra_headers:
             headers.update(extra_headers)
@@ -1737,16 +1948,21 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
         self.InputParams[0].Description = 'Your Username or E-Mail'
         self.InputParams[1].Description = 'Your password'
         self.InputParams[2].Description = (
-            'Refresh toggle, press when your token expired'
+            'Button: sign in with the browser, without a password (Windows). '
+            'Connected Username and Password are used first'
         )
         self.InputParams[3].Description = (
-            'Disable caching (default: False - caching enabled)'
+            'Button: sign out, delete the stored sign-in and revoke it on '
+            'the server'
         )
         self.InputParams[4].Description = (
+            'Disable caching (default: False - caching enabled)'
+        )
+        self.InputParams[5].Description = (
             'Clear cache (default: False)'
         )
-        if len(self.InputParams) > 5:
-            self.InputParams[5].Description = (
+        if len(self.InputParams) > 6:
+            self.InputParams[6].Description = (
                 'Server address, e.g. https://api.2ndchances.build or '
                 'localhost:8010 (default: the CSC server; changing it signs '
                 'you out and clears the cache)'
@@ -1775,6 +1991,8 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
             auth_core._token = getattr(old, '_token', None)
             auth_core._exp = getattr(old, '_exp', 0)
             auth_core._username = getattr(old, '_username', None)
+            auth_core._refresh = getattr(old, '_refresh', None)
+            auth_core._credentials = getattr(old, '_credentials', None)
             sc.sticky['CSC_AuthCore'] = auth_core
         if auth_core is None:
             # Create new AuthCore instance with default settings
@@ -1784,10 +2002,147 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
             sc.sticky['CSC_AuthCore'] = auth_core
         return auth_core
 
+    # THE SIGN-IN WITHOUT A PASSWORD (decision 8.168 f) ----------------------
+    def _schedule_expire(self):
+        """A callback for the flow thread: ask Grasshopper to solve this
+        component again, on the UI thread, between solutions."""
+        component = self.Component
+        document = component.OnPingDocument()
+        if document is None:
+            return
+
+        def call_back(_document):
+            component.ExpireSolution(False)  # NOQA
+
+        document.ScheduleSolution(
+            1, Grasshopper.Kernel.GH_Document.GH_ScheduleDelegate(call_back))
+
+    def _ready_status(self, auth_core, status_messages):
+        """The schema, the cache and the server, as the status of a session
+        that is signed in."""
+        try:
+            schema = auth_core.get_create_identity_schema()
+            if schema:
+                status_messages.append('Create-identity schema cached')
+                self._addRemark('Create-identity schema cached successfully')
+            else:
+                status_messages.append('Failed to cache schema')
+                self._addWarning('Failed to cache create-identity schema')
+        except Exception as e:
+            status_messages.append(f'Schema caching failed: {str(e)}')
+            self._addWarning(f'Schema cache failed: {str(e)}')
+        cache_stats = auth_core.get_cache_stats()
+        cache_enabled = auth_core.is_cache_enabled()
+        comp_count = cache_stats["component_count"]
+        geometry_count = cache_stats["geometry_count"]
+        size_kb = cache_stats["total_size_bytes"] // 1024
+        geometry_size_kb = cache_stats["geometry_size_bytes"] // 1024
+        status_messages.append(
+            'Cache: '
+            f'{"Enabled" if cache_enabled else "Disabled"}\n'
+            f' | Components: {comp_count}\n'
+            f' | Geometry: {geometry_count} files\n'
+            f' | Size: {size_kb} kB\n'
+            f' | Geometry: {geometry_size_kb} kB\n'
+            f' | Server: {auth_core.base_url}\n')
+        return (status_messages,)
+
+    def _fail(self, status_messages, msg, error=True):
+        status_messages.append(msg)
+        if error:
+            self._addError(msg)
+        else:
+            self._addWarning(msg)
+        return (status_messages,)
+
+    def _sign_out(self, auth_core, status_messages):
+        """SignOut: the stored sign-in is deleted here and revoked on the
+        server; this session is signed out."""
+        flow = sc.sticky.pop('CSC_SignInFlow', None)
+        if flow is not None:
+            flow.cancel()
+        message = auth_core.sign_out()
+        status_messages.append(message)
+        return (status_messages,)
+
+    def _without_password(self, auth_core, sign_in, status_messages):
+        """No Username and Password: the sign-in of the browser. Order: the
+        session that is signed in, the sign-in in progress, the stored
+        sign-in of this server, SignIn, else what to press."""
+        windows = is_windows()
+        flow = sc.sticky.get('CSC_SignInFlow')
+        if flow is not None and flow.server != auth_core.base_url:
+            flow.cancel()
+            sc.sticky.pop('CSC_SignInFlow', None)
+            flow = None
+        if flow is not None:
+            if flow.state == 'waiting':
+                minutes = max(1, (flow.seconds_left() + 59) // 60)
+                status_messages.append(
+                    'Waiting for the browser: allow Grasshopper on the CSC '
+                    f'page ({minutes} min left)')
+                return (status_messages,)
+            sc.sticky.pop('CSC_SignInFlow', None)
+            if flow.state == 'done':
+                auth_core.take_tokens(flow.tokens, flow.computer)
+                auth_core.fetch_username()
+                sc.sticky['CSC_AuthCore'] = auth_core
+                status_messages.append(
+                    f'Signed in as {auth_core.get_username() or "you"} '
+                    '(the sign-in renews itself)')
+                return self._ready_status(auth_core, status_messages)
+            return self._fail(status_messages, flow.error or 'Sign-in failed')
+        if auth_core.is_valid():
+            return self._ready_status(auth_core, status_messages)
+        has_stored = windows and csc_signin.has_entry(
+            csc_signin.store_path(), auth_core.base_url)
+        if sign_in and not windows:
+            return self._fail(status_messages, csc_signin.none_text(False),
+                              error=False)
+        if csc_signin.choose_sign_in(None, None, has_stored, windows) \
+                == 'stored':
+            try:
+                if auth_core.sign_in_stored():
+                    auth_core.fetch_username()
+                    sc.sticky['CSC_AuthCore'] = auth_core
+                    status_messages.append(
+                        f'Signed in as {auth_core.get_username() or "you"} '
+                        '(stored sign-in, renews itself)')
+                    return self._ready_status(auth_core, status_messages)
+            except CSCClientOutdated as e:
+                return self._fail(status_messages, str(e))
+            except csc_signin.SignInError as e:
+                return self._fail(status_messages, str(e))
+            except Exception as e:
+                return self._fail(
+                    status_messages,
+                    f'Cannot reach the server ({e}): the stored sign-in is '
+                    'kept, try again', error=False)
+        if sign_in:
+            return self._start_sign_in(auth_core, status_messages)
+        status_messages.append(csc_signin.none_text(windows))
+        return (status_messages,)
+
+    def _start_sign_in(self, auth_core, status_messages):
+        flow = csc_signin.SignInFlow(
+            auth_core.base_url, auth_core.post_form, open_browser,
+            on_done=self._schedule_expire, headers=auth_core.client_header())
+        try:
+            flow.start()
+        except Exception as e:
+            return self._fail(status_messages,
+                              f'The sign-in could not be started: {e}')
+        sc.sticky['CSC_SignInFlow'] = flow
+        status_messages.append(
+            'Browser opened: allow Grasshopper on the CSC page. If it did '
+            f'not open, go to {flow.url}')
+        return (status_messages,)
+
     def RunScript(self,
             Username: str,
             Password: str,
-            Refresh: bool,
+            SignIn: bool,
+            SignOut: bool,
             DisableCache: bool,
             ClearCache: bool,
             Server):
@@ -1822,13 +2177,25 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
         # Set cache enabled/disabled
         auth_core.set_cache_enabled(not DisableCache)
 
+        if SignOut:
+            return self._sign_out(auth_core, status_messages)
+
+        # The order of the ways to sign in (8.168 f): connected Username and
+        # Password win (also the way on macOS); else the stored sign-in of
+        # this server; else SignIn, else the status says what to press.
+        have_username = bool(Username and Username.strip())
+        have_password = bool(Password and Password.strip())
+        if not have_username and not have_password:
+            return self._without_password(
+                auth_core, bool(SignIn), status_messages)
+
         # Input validation
-        if not Username or not Username.strip():
+        if not have_username:
             status_messages.append('Please provide username/email')
             Status = status_messages
             return (Status,)
 
-        if not Password or not Password.strip():
+        if not have_password:
             status_messages.append('Please provide password')
             Status = status_messages
             return (Status,)
@@ -1837,56 +2204,11 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
         password = Password.strip()
 
         try:
-            if Refresh:
-                # Refresh authentication - clear existing token and re-auth
-                auth_core.clear()
-            else:
-                # Check if we already have a valid token
-                if auth_core.is_valid():
-                    current_user = auth_core.get_username()
-
-                    # Fetch and cache create-identity schema
-                    try:
-                        schema = auth_core.get_create_identity_schema()
-                        if schema:
-                            status_messages.append(
-                                'Create-identity schema cached')
-                            self._addRemark(
-                                'Create-identity schema cached successfully'
-                            )
-                        else:
-                            status_messages.append('Failed to cache schema')
-                            self._addWarning(
-                                'Failed to cache create-identity schema'
-                            )
-                    except Exception as e:
-                        status_messages.append(
-                            f'Schema caching failed: {str(e)}')
-                        self._addWarning(f'Schema cache failed: {str(e)}')
-
-                    # Get cache status for output
-                    cache_stats = auth_core.get_cache_stats()
-                    cache_enabled = auth_core.is_cache_enabled()
-                    comp_count = cache_stats["component_count"]
-                    geometry_count = cache_stats["geometry_count"]
-                    size_kb = cache_stats["total_size_bytes"] // 1024
-                    geometry_size_kb = (
-                        cache_stats["geometry_size_bytes"] // 1024
-                    )
-
-                    # Add cache status to messages
-                    cache_status = (
-                        'Cache: '
-                        f'{"Enabled" if cache_enabled else "Disabled"}\n'
-                        f' | Components: {comp_count}\n'
-                        f' | Geometry: {geometry_count} files\n'
-                        f' | Size: {size_kb} kB\n'
-                        f' | Geometry: {geometry_size_kb} kB\n'
-                        f' | Server: {auth_core.base_url}\n')
-                    status_messages.append(cache_status)
-                    Status = status_messages
-                    return (Status,)
-
+            # Check if we already have a valid token (it renews itself, also
+            # with these credentials, when it runs out)
+            if auth_core.is_valid():
+                auth_core.remember_credentials(username, password)
+                return self._ready_status(auth_core, status_messages)
 
             # Prepare login data
             login_data = {
@@ -1914,54 +2236,12 @@ class CSC_Session(Grasshopper.Kernel.GH_ScriptInstance):
                 if access_token:
                     # Store token in AuthCore
                     auth_core.set_access_token(access_token, username)
+                    auth_core.remember_credentials(username, password)
 
                     # Update sticky storage
                     sc.sticky['CSC_AuthCore'] = auth_core
 
-                    # Fetch and cache create-identity schema
-                    try:
-                        schema = auth_core.get_create_identity_schema()
-                        if schema:
-                            status_messages.append(
-                                'Create-identity schema cached')
-                            self._addRemark(
-                                'Create-identity schema cached successfully'
-                            )
-                        else:
-                            status_messages.append('Failed to cache schema')
-                            self._addWarning(
-                                'Failed to cache create-identity schema'
-                            )
-                    except Exception as e:
-                        status_messages.append(
-                            f'Schema caching failed: {str(e)}')
-                        self._addWarning(f'Schema cache failed: {str(e)}')
-
-                    # Get cache status for output
-                    cache_stats = auth_core.get_cache_stats()
-                    cache_enabled = auth_core.is_cache_enabled()
-                    comp_count = cache_stats["component_count"]
-                    geometry_count = cache_stats["geometry_count"]
-                    size_kb = cache_stats["total_size_bytes"] // 1024
-                    geometry_size_kb = (
-                        cache_stats["geometry_size_bytes"] // 1024
-                    )
-
-                    # Add cache status to messages
-                    cache_status = (
-                        f'Cache: '
-                        f'{"Enabled" if cache_enabled else "Disabled"}\n'
-                        f' | Components: {comp_count}\n'
-                        f' | Geometry: {geometry_count} files\n'
-                        f' | Size: {size_kb} kB\n'
-                        f' | Geometry: {geometry_size_kb} kB\n'
-                        f' | Server: {auth_core.base_url}\n')
-                    status_messages.append(cache_status)
-
-
-                    # Return status messages
-                    Status = status_messages
-                    return (Status,)
+                    return self._ready_status(auth_core, status_messages)
 
                 else:
                     msg = 'Login failed: No token received'

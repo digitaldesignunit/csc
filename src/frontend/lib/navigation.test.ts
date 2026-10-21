@@ -25,8 +25,10 @@ test('moderation entries follow the roles', () => {
   assert.ok(!reviewer.includes('datasets'))
 })
 
-test('an admin has fifteen entries', () => {
-  assert.equal(ids({ ...USER, isAdmin: true }).length, 15)
+test('an admin has sixteen entries, the access tokens among them', () => {
+  assert.equal(ids({ ...USER, isAdmin: true }).length, 16)
+  assert.ok(ids({ ...USER, isAdmin: true }).includes('access-tokens'))
+  assert.ok(!ids({ ...USER, isModerator: true }).includes('access-tokens'))
 })
 
 test('the forms of a component are titled Component, not Browse', () => {

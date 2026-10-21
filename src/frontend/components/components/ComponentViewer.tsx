@@ -55,6 +55,22 @@ import type { ProxyDoc } from '@/lib/proxyOverlay'
 import type { ProxyShape } from '@/lib/proxyShape'
 import ProxySolid from '@/components/viewer/ProxySolid'
 import { useProxyShape } from '@/components/viewer/useProxyShape'
+import OpacitySlider from '@/components/viewer/OpacitySlider'
+import { useViewerCopies } from '@/components/viewer/useViewerCopies'
+import {
+  OPACITY_DEFAULT,
+  applyOpacity,
+  visibleBodyLayers,
+} from '@/lib/viewerOpacity'
+import {
+  chooseSwitch,
+  edgesControl,
+  hasMeshSwitch,
+  pointCloudStartsOff,
+  shownFlags,
+  switchValue,
+  withOff,
+} from '@/lib/viewerSwitches'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import Help from '@/components/ui/help'
 import { ViewerMenu, MenuSection, MenuSubsection, MenuDivider, InfoLine, SegmentedControl, ScrollableCheckboxList, CheckboxControl } from '@/components/viewer/ViewerMenu'
@@ -63,6 +79,21 @@ import { ViewerMenu, MenuSection, MenuSubsection, MenuDivider, InfoLine, Segment
 const scale = 0.001
 /** Slow Y-axis spin for turntable mode (~25s per revolution). */
 const TURNTABLE_RADIANS_PER_SECOND = 0.35
+
+/**
+ * A detail switch of the toolbar with its name in front of it (on a phone the
+ * name sits above). The switch carries the name for assistive technology too.
+ */
+function ToolbarSwitch({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex w-full flex-col gap-0.5 sm:w-auto sm:flex-row sm:items-center sm:gap-1.5">
+      <span className="text-[11px] leading-none text-muted-foreground sm:w-16 sm:shrink-0" aria-hidden>
+        {label}
+      </span>
+      {children}
+    </div>
+  )
+}
 
 /** Fit camera to scene bounds; registers ref for manual zoom-extents. */
 function FitCameraController({
@@ -720,12 +751,15 @@ const PointCloudVisualization = React.memo(({
   externalPointClouds,
   pointCloudGeometryMode,
   isLoadingExternal,
+  opacity,
 }: {
   pointClouds: PointCloud[]
   visiblePointClouds: boolean[]
+  /** This viewer's copies of the cached clouds (they are faded already). */
   externalPointClouds: THREE.Group[]
   pointCloudGeometryMode: PointCloudGeometryMode
   isLoadingExternal: boolean
+  opacity: number
 }) => {
   const isExternalMode = pointCloudGeometryMode === 'original'
 
@@ -738,6 +772,13 @@ const PointCloudVisualization = React.memo(({
       .filter((group): group is THREE.Group => group !== null),
     [pointClouds],
   )
+  // the inline groups are this viewer's own: fade them in place
+  useLayoutEffect(() => {
+    inlineGroups.forEach((group) => group.traverse((object) => {
+      const material = (object as THREE.Points).material as THREE.Material | undefined
+      if (material) applyOpacity(material, opacity)
+    }))
+  }, [inlineGroups, opacity])
 
   if (isExternalMode) {
     if (isLoadingExternal || externalPointClouds.length === 0) return null
@@ -771,7 +812,8 @@ const VisualizeMultipleMeshes = React.memo(({
   externalMeshes = [],
   isLoadingExternal = false,
   geometryError = null,
-  showEdges
+  showEdges,
+  opacity,
 }: {
   primitiveDraws: PrimitiveDrawBuffers[]
   meshGeometryMode: GeometryMode
@@ -780,6 +822,7 @@ const VisualizeMultipleMeshes = React.memo(({
   isLoadingExternal?: boolean
   geometryError?: string | null
   showEdges: boolean
+  opacity: number
 }) => {
   const isExternalMode = isMeshFileLevel(meshGeometryMode)
 
@@ -858,6 +901,9 @@ const VisualizeMultipleMeshes = React.memo(({
 
         const edgeGeometry = new THREE.EdgesGeometry(geom)
         const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+        // both are built here for this viewer alone: fade them in place
+        applyOpacity(material, opacity)
+        applyOpacity(edgeMaterial, opacity)
 
         return (
           <group key={index}>
@@ -887,7 +933,10 @@ type VisualizeProps = {
   showEdges: boolean
   /** The primary proxy, as the solid and the overlay draw it (8.85). */
   proxyShape: ProxyShape | null
-  showProxyMesh: boolean
+  /** The mesh switch is Off: no proxy solid, no edges. */
+  meshOff: boolean
+  /** Opacity of the piece in percent (8.165 C). */
+  opacity: number
 }
 
 function snapshotPrismRgb(snap: ComponentSnapshot): [number, number, number] {
@@ -916,8 +965,9 @@ function VisualizeComponent(props: VisualizeProps) {
         <ProxySolid
           shape={props.proxyShape}
           color={rgbToHex(r, g, b)}
-          showMesh={props.showProxyMesh}
-          showEdges={props.showEdges}
+          showMesh={!props.meshOff}
+          showEdges={props.showEdges && !props.meshOff}
+          opacity={props.opacity}
         />
         <PointCloudVisualization
           pointClouds={pointClouds}
@@ -925,6 +975,7 @@ function VisualizeComponent(props: VisualizeProps) {
           externalPointClouds={props.externalPointClouds ?? []}
           pointCloudGeometryMode={props.pointCloudGeometryMode}
           isLoadingExternal={props.isLoadingExternalPointClouds ?? false}
+          opacity={props.opacity}
         />
       </>
     )
@@ -940,6 +991,7 @@ function VisualizeComponent(props: VisualizeProps) {
           isLoadingExternal={props.isLoadingExternalMeshes}
           geometryError={props.meshGeometryError}
           showEdges={props.showEdges}
+          opacity={props.opacity}
         />
         <PointCloudVisualization
           pointClouds={pointClouds}
@@ -947,6 +999,7 @@ function VisualizeComponent(props: VisualizeProps) {
           externalPointClouds={props.externalPointClouds ?? []}
           pointCloudGeometryMode={props.pointCloudGeometryMode}
           isLoadingExternal={props.isLoadingExternalPointClouds ?? false}
+          opacity={props.opacity}
         />
       </>
     )
@@ -961,6 +1014,7 @@ function VisualizeComponent(props: VisualizeProps) {
         isLoadingExternal={props.isLoadingExternalMeshes}
         geometryError={props.meshGeometryError}
         showEdges={props.showEdges}
+        opacity={props.opacity}
       />
       <PointCloudVisualization
         pointClouds={pointClouds}
@@ -968,6 +1022,7 @@ function VisualizeComponent(props: VisualizeProps) {
         externalPointClouds={props.externalPointClouds ?? []}
         pointCloudGeometryMode={props.pointCloudGeometryMode}
         isLoadingExternal={props.isLoadingExternalPointClouds ?? false}
+        opacity={props.opacity}
       />
     </>
   )
@@ -1080,9 +1135,16 @@ export default function ComponentViewer({
   const [meshGeometryError, setMeshGeometryError] = useState<string | null>(null)
   const [showMarkerPoints, setShowMarkerPoints] = useState<boolean>(true)
   const [showEdges, setShowEdges] = useState<boolean>(true)
-  const [showProxyMesh, setShowProxyMesh] = useState<boolean>(true)
+  // Off of the detail switches: a display state, the level chosen stays (8.165 C);
+  // a piece with a mesh starts with its point cloud hidden, as it always did
+  const [meshOff, setMeshOff] = useState<boolean>(false)
+  const [pointCloudOff, setPointCloudOff] = useState<boolean>(
+    () => pointCloudStartsOff(snapshotMeshes.length),
+  )
   const [showGrid, setShowGrid] = useState<boolean>(true)
   const [turntableEnabled, setTurntableEnabled] = useState<boolean>(false)
+  // opacity of the piece in percent (8.165 C): body layers only, per viewer
+  const [opacity, setOpacity] = useState<number>(OPACITY_DEFAULT)
   const fitCameraRef = useRef<(() => void) | null>(null)
 
   const primitiveMeshCount = snapshotMeshes.length
@@ -1103,7 +1165,6 @@ export default function ComponentViewer({
   // a proxy only: no preview and no files to switch to
   const isProxyOnly = snapshotMeshes.length === 0 && snapshotPointClouds.length === 0
   const hasMultipleMeshes = primitiveMeshCount > 0
-  const pointCloudVisibleByDefault = !hasMultipleMeshes
   const isMeshExternalMode = isMeshFileLevel(meshGeometryMode)
   const isPointCloudExternalMode = pointCloudGeometryMode === 'original'
 
@@ -1277,6 +1338,7 @@ export default function ComponentViewer({
     const resetVisibilityToDefault =
       pointCloudVisibilitySeedRef.current !== visibilitySeed
     pointCloudVisibilitySeedRef.current = visibilitySeed
+    if (resetVisibilityToDefault) setPointCloudOff(pointCloudStartsOff(primitiveMeshCount))
 
     if (isPointCloudExternalMode && !isProxyOnly && identityId) {
       setIsLoadingExternalPointClouds(true)
@@ -1292,7 +1354,7 @@ export default function ComponentViewer({
               setVisiblePointClouds((prev) => nextObjectVisibility(
                 result.pointClouds.length,
                 prev,
-                pointCloudVisibleByDefault,
+                true,
                 resetVisibilityToDefault,
               ))
             } else {
@@ -1316,7 +1378,7 @@ export default function ComponentViewer({
         setVisiblePointClouds((prev) => nextObjectVisibility(
           primitivePointCloudCount,
           prev,
-          pointCloudVisibleByDefault,
+          true,
           resetVisibilityToDefault,
         ))
       } else {
@@ -1333,17 +1395,25 @@ export default function ComponentViewer({
     isPointCloudExternalMode,
     primitivePointCloudCount,
     hasPointClouds,
-    pointCloudVisibleByDefault,
+    primitiveMeshCount,
     snapshotRouting,
     snapshotMeshCacheKey,
   ])
 
-  const onMeshModeChange = (value: string) => {
-    setMeshGeometryMode(value as GeometryMode)
+  // Off hides the layer and loads nothing; the level chosen before stays
+  const onMeshSwitch = (value: string) => {
+    const next = chooseSwitch<GeometryMode>({ level: meshGeometryMode, off: meshOff }, value)
+    setMeshOff(next.off)
+    setMeshGeometryMode(next.level)
   }
 
-  const onPointCloudModeChange = (value: string) => {
-    setPointCloudGeometryMode(value as PointCloudGeometryMode)
+  const onPointCloudSwitch = (value: string) => {
+    const next = chooseSwitch<PointCloudGeometryMode>(
+      { level: pointCloudGeometryMode, off: pointCloudOff },
+      value,
+    )
+    setPointCloudOff(next.off)
+    setPointCloudGeometryMode(next.level)
   }
 
   const toggleMeshVisibility = (index: number) => {
@@ -1382,6 +1452,12 @@ export default function ComponentViewer({
     [visiblePointClouds],
   )
 
+  const shownMeshes = useMemo(() => shownFlags(visibleMeshes, meshOff), [visibleMeshes, meshOff])
+  const shownPointClouds = useMemo(
+    () => shownFlags(visiblePointClouds, pointCloudOff),
+    [visiblePointClouds, pointCloudOff],
+  )
+
   const activePointCloudCount = isPointCloudExternalMode
     ? externalPointClouds.length
     : primitivePointCloudCount
@@ -1390,16 +1466,20 @@ export default function ComponentViewer({
     ? externalMeshes.length
     : primitiveMeshCount
 
+  // the loaders cache these across viewers: draw (and fade) this viewer's copies
+  const meshCopies = useViewerCopies(externalMeshes, opacity)
+  const pointCloudCopies = useViewerCopies(externalPointClouds, opacity)
+
   useEffect(() => {
     if (!isMeshExternalMode) return
-    externalMeshes.forEach((group) => {
+    meshCopies.forEach((group) => {
       group.traverse((obj) => {
         if ((obj as THREE.LineSegments).isLineSegments && obj.name.endsWith('_edges')) {
           obj.visible = showEdges
         }
       })
     })
-  }, [showEdges, isMeshExternalMode, externalMeshes])
+  }, [showEdges, isMeshExternalMode, meshCopies])
 
   if (!canRenderViewport) {
     return <ComponentViewerSkeleton message="No Geometry Available" />
@@ -1425,6 +1505,12 @@ export default function ComponentViewer({
     label: DETAIL_LABELS[value],
   }))
 
+  const meshSwitchOptions = withOff(meshDetailOptions)
+  const meshSwitchValue = switchValue({ level: meshGeometryMode, off: meshOff })
+  const pointCloudSwitchOptions = withOff(pointCloudDetailOptions)
+  const pointCloudSwitchValue = switchValue({ level: pointCloudGeometryMode, off: pointCloudOff })
+  const hasMeshOrProxy = hasMeshSwitch(primitiveMeshCount, proxyShape !== null)
+
   const primaryProxy = (snapshotGeometry.proxies ?? []).find((proxy) => proxy.role === 'primary')
     ?? snapshotGeometry.proxies?.[0]
 
@@ -1441,21 +1527,16 @@ export default function ComponentViewer({
 
   // the proxy is the mesh shown when it is chosen, or when nothing else is stored
   const showingProxy = proxyShape !== null && (meshGeometryMode === 'proxy' || !hasMultipleMeshes)
-  const proxyCheckboxes = (
-    <>
-      <CheckboxControl
-        id="toggle-edges"
-        label="Show edges"
-        checked={showEdges}
-        onChange={(checked) => setShowEdges(checked)}
-      />
-      <CheckboxControl
-        id="toggle-proxy-mesh"
-        label="Show mesh"
-        checked={showProxyMesh}
-        onChange={(checked) => setShowProxyMesh(checked)}
-      />
-    </>
+  // the switch of the mesh: levels and Off (in the panel a title above it names it)
+  const meshSwitchControl = (label?: string) => (
+    <SegmentedControl
+      id="meshGeometryModeSelect"
+      label={label}
+      accessibleName="Mesh"
+      value={meshSwitchValue}
+      onValueChange={onMeshSwitch}
+      options={meshSwitchOptions}
+    />
   )
 
   if (showingProxy && !hasMultipleMeshes && primaryProxy) {
@@ -1464,71 +1545,41 @@ export default function ComponentViewer({
         <p className="text-xs text-muted-foreground">
           Showing: {primaryProxy.primitive} proxy ({primaryProxy.fit.method})
         </p>
-        {proxyCheckboxes}
+        {!toolbar && meshSwitchControl('Mesh')}
       </MenuSubsection>,
     )
   }
 
-  if (hasMultipleMeshes) {
+  const listsMeshes = !showingProxy && meshCount > 1
+  if (hasMultipleMeshes && (!toolbar || listsMeshes)) {
     displayBlocks.push(
-      <MenuSubsection key="meshes" title={meshCount > 1 && !showingProxy ? `Meshes (${meshCount})` : 'Mesh'}>
-        {toolbar ? null : meshDetailOptions.length > 1 ? (
-          <SegmentedControl
-            id="meshGeometryModeSelect"
-            label="Detail"
-            value={meshGeometryMode}
-            onValueChange={onMeshModeChange}
-            options={meshDetailOptions}
-          />
-        ) : (
-          <p className="text-xs text-muted-foreground">Detail: Preview</p>
-        )}
-        {showingProxy ? proxyCheckboxes : (
+      <MenuSubsection key="meshes" title={listsMeshes ? `Meshes (${meshCount})` : 'Mesh'}>
+        {!toolbar && meshSwitchControl()}
+        {listsMeshes && (
           <>
             <CheckboxControl
-              id="toggle-edges"
-              label="Show edges"
-              checked={showEdges}
-              onChange={(checked) => setShowEdges(checked)}
+              id="toggle-all-meshes"
+              label="Show all"
+              checked={allMeshesVisible}
+              onChange={toggleAllMeshes}
+              disabled={meshOff}
             />
-            {meshCount > 1 ? (
-              <>
-                <CheckboxControl
-                  id="toggle-all-meshes"
-                  label="Show all"
-                  checked={allMeshesVisible}
-                  onChange={toggleAllMeshes}
-                />
-                <ScrollableCheckboxList
-                  items={Array.from({ length: meshCount }, (_, i) => i).map((index: number) => ({
-                    id: String(index),
-                    label: meshLabel(index),
-                    checked: visibleMeshes[index] || false,
-                  }))}
-                  onToggle={(id) => toggleMeshVisibility(Number(id))}
-                />
-              </>
-            ) : (
-              <CheckboxControl
-                id="toggle-mesh-0"
-                label="Show mesh"
-                checked={visibleMeshes[0] ?? false}
-                onChange={(checked) => {
-                  setVisibleMeshes((prev) => {
-                    const next = [...prev]
-                    next[0] = checked
-                    return next
-                  })
-                }}
-              />
-            )}
+            <ScrollableCheckboxList
+              items={Array.from({ length: meshCount }, (_, i) => i).map((index: number) => ({
+                id: String(index),
+                label: meshLabel(index),
+                checked: visibleMeshes[index] || false,
+                disabled: meshOff,
+              }))}
+              onToggle={(id) => toggleMeshVisibility(Number(id))}
+            />
           </>
         )}
       </MenuSubsection>,
     )
   }
 
-  if (hasPointClouds) {
+  if (hasPointClouds && (!toolbar || pointCloudCount > 1)) {
     if (displayBlocks.length > 0) {
       displayBlocks.push(<MenuDivider key="divider-pc" />)
     }
@@ -1540,47 +1591,54 @@ export default function ComponentViewer({
         {!toolbar && (
           <SegmentedControl
             id="pointCloudGeometryModeSelect"
-            label="Detail"
-            value={pointCloudGeometryMode}
-            onValueChange={onPointCloudModeChange}
+            accessibleName="Point cloud"
+            value={pointCloudSwitchValue}
+            onValueChange={onPointCloudSwitch}
             disabled={isProxyOnly}
-            options={pointCloudDetailOptions}
+            options={pointCloudSwitchOptions}
           />
         )}
-        {pointCloudCount > 1 ? (
+        {pointCloudCount > 1 && (
           <>
             <CheckboxControl
               id="toggle-all-point-clouds"
               label="Show all"
               checked={allPointCloudsVisible}
               onChange={toggleAllPointClouds}
+              disabled={pointCloudOff}
             />
             <ScrollableCheckboxList
               items={Array.from({ length: pointCloudCount }, (_, index) => ({
                 id: String(index),
                 label: pointCloudLabel(index),
                 checked: visiblePointClouds[index] || false,
+                disabled: pointCloudOff,
               }))}
               onToggle={(id) => togglePointCloudVisibility(Number(id))}
             />
           </>
-        ) : (
-          <CheckboxControl
-            id="toggle-point-cloud-0"
-            label="Show point cloud"
-            checked={visiblePointClouds[0] ?? false}
-            onChange={(checked) => {
-              setVisiblePointClouds((prev) => {
-                const next = [...prev]
-                next[0] = checked
-                return next
-              })
-            }}
-          />
         )}
       </MenuSubsection>,
     )
   }
+
+  if (displayBlocks.length > 0) {
+    displayBlocks.push(<MenuDivider key="divider-opacity" />)
+  }
+  displayBlocks.push(
+    <OpacitySlider
+      key="opacity"
+      value={opacity}
+      onChange={setOpacity}
+      nothingShown={visibleBodyLayers({
+        showingProxy,
+        showProxyMesh: !meshOff,
+        showEdges: showEdges && !meshOff,
+        visibleMeshes: shownMeshes,
+        visiblePointClouds: shownPointClouds,
+      }).length === 0}
+    />,
+  )
 
   const orientationHelp = `${snapshot.bbx && snapshot.bbx[2] > snapshot.bbx[0]
     ? 'Canonical: a standing column, its length along z.'
@@ -1673,12 +1731,24 @@ export default function ComponentViewer({
     )
   }
 
-  if (hasOverlays) {
+  // Show edges is one entry, here; it has no effect while the mesh is Off
+  const edges = edgesControl(showEdges, meshOff)
+  const noScan = isProxyOnly && !hasOverlays
+  if (hasOverlays || hasMeshOrProxy || noScan) {
     if (displayBlocks.length > 0) {
       displayBlocks.push(<MenuDivider key="divider-overlays" />)
     }
     displayBlocks.push(
       <MenuSubsection key="overlays" title="Overlays">
+        {hasMeshOrProxy && (
+          <CheckboxControl
+            id="toggle-edges"
+            label="Show edges"
+            checked={edges.checked}
+            disabled={edges.disabled}
+            onChange={(checked) => setShowEdges(checked)}
+          />
+        )}
         {hasMarkerPoints && (
           <CheckboxControl
             id="toggle-marker-points"
@@ -1720,17 +1790,9 @@ export default function ComponentViewer({
             onChange={(checked) => setShowEvidenceMarks(checked)}
           />
         )}
-      </MenuSubsection>,
-    )
-  }
-
-  if (isProxyOnly && !hasOverlays) {
-    if (displayBlocks.length > 0) {
-      displayBlocks.push(<MenuDivider key="divider-no-scan" />)
-    }
-    displayBlocks.push(
-      <MenuSubsection key="no-scan" title="Overlays">
-        <p className="text-xs text-muted-foreground">No scan: overlays need a mesh or point cloud.</p>
+        {noScan && (
+          <p className="text-xs text-muted-foreground">No scan: overlays need a mesh or point cloud.</p>
+        )}
       </MenuSubsection>,
     )
   }
@@ -1755,25 +1817,31 @@ export default function ComponentViewer({
   // an Overlay menu in place of the settings panel
   const toolbarBar = toolbar ? (
     <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Viewer">
-      {meshDetailOptions.length > 1 && (
-        <div className="w-full max-w-[18rem] sm:w-auto sm:min-w-[16rem]">
-          <SegmentedControl
-            id="meshGeometryModeSelect"
-            value={meshGeometryMode}
-            onValueChange={onMeshModeChange}
-            options={meshDetailOptions}
-          />
-        </div>
+      {hasMeshOrProxy && (
+        <ToolbarSwitch label="Mesh">
+          <div className="w-full max-w-[22rem] sm:w-auto sm:min-w-[19rem]">
+            <SegmentedControl
+              id="meshGeometryModeSelect"
+              accessibleName="Mesh"
+              value={meshSwitchValue}
+              onValueChange={onMeshSwitch}
+              options={meshSwitchOptions}
+            />
+          </div>
+        </ToolbarSwitch>
       )}
       {hasPointClouds && !isProxyOnly && (
-        <div className="w-full max-w-[12rem] sm:w-auto sm:min-w-[10rem]" title="Point cloud detail">
-          <SegmentedControl
-            id="pointCloudGeometryModeSelect"
-            value={pointCloudGeometryMode}
-            onValueChange={onPointCloudModeChange}
-            options={pointCloudDetailOptions}
-          />
-        </div>
+        <ToolbarSwitch label="Point cloud">
+          <div className="w-full max-w-[16rem] sm:w-auto sm:min-w-[13rem]">
+            <SegmentedControl
+              id="pointCloudGeometryModeSelect"
+              accessibleName="Point cloud"
+              value={pointCloudSwitchValue}
+              onValueChange={onPointCloudSwitch}
+              options={pointCloudSwitchOptions}
+            />
+          </div>
+        </ToolbarSwitch>
       )}
       {snapshotFrame && (
         <div className="flex items-center gap-1" title={orientationHelp}>
@@ -1920,16 +1988,17 @@ export default function ComponentViewer({
                 catalog={catalog}
                 meshGeometryMode={meshGeometryMode}
                 pointCloudGeometryMode={pointCloudGeometryMode}
-                visibleMeshes={visibleMeshes}
-                visiblePointClouds={visiblePointClouds}
-                externalMeshes={isMeshExternalMode ? externalMeshes : []}
-                externalPointClouds={isPointCloudExternalMode ? externalPointClouds : []}
+                visibleMeshes={shownMeshes}
+                visiblePointClouds={shownPointClouds}
+                externalMeshes={isMeshExternalMode ? meshCopies : []}
+                externalPointClouds={isPointCloudExternalMode ? pointCloudCopies : []}
                 isLoadingExternalMeshes={isLoadingExternalMeshes}
                 isLoadingExternalPointClouds={isLoadingExternalPointClouds}
                 meshGeometryError={meshGeometryError}
                 showEdges={showEdges}
                 proxyShape={proxyShape}
-                showProxyMesh={showProxyMesh}
+                meshOff={meshOff}
+                opacity={opacity}
               />
               {/* overlays are context, not the component: never a pick target (8.43) */}
               <group userData={{ noPick: true }}>

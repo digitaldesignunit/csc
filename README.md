@@ -29,8 +29,8 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.6.2.1 --- backend, web frontend and Grasshopper interface are released together
-  under one version (tag `v0.6.2.1`); the single source is the `VERSION` file.
+- **CSC**: 0.6.3.0 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.6.3.0`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
 
@@ -229,9 +229,40 @@ The CSC Grasshopper Interface consists of Python 3 components that can be used d
 - **Location**: `grasshopper_userobjects_src/` - Source files for development
 - **Installation**: Copy `.ghuser` files from `grasshopper_userobjects/` to your Grasshopper UserObjects folder
 - **Requirements**: Python 3 with packages: requests, numpy, scipy, scikit-learn
-- **Authentication**: Use `CSC_SignIn` component first to authenticate with the backend
+- **Authentication**: Use the `CSC_Session` component first to sign in (see "Signing in from Grasshopper" below)
 - **Documentation**: Component reference, copy-to-clipboard XML, and release download on the frontend at `/gh-interface`
 - **Backend routes**: Release download, sources, XML and updater assets are served under `/ghinterface/` (e.g. `version`, `download`, `src/{name}`, `xml/{name}`, `userobject/{name}`). They come from the GitHub release of the running backend (tag `v<version>`); a `channel` query param (GitHub branch or tag) overrides that for testing.
+
+### Signing in from Grasshopper
+
+The `CSC_Session` component has two button inputs, `SignIn` and `SignOut`.
+
+- **SignIn (Windows, Rhino 8)**: press it, the browser opens on the CSC
+  consent page ("Sign in Grasshopper on this computer"), press Allow, and
+  Grasshopper is signed in; no password goes into a document or an input. The
+  component listens for the answer on your own computer only (`127.0.0.1`, a
+  random port, at most 10 minutes, once) and Grasshopper stays usable while it
+  waits. The sign-in is kept for your Windows user, encrypted with DPAPI, in
+  `%APPDATA%\DDU_CSC\signin.json` (one entry per server address): after a
+  restart of Rhino the component signs in again by itself. The access token is
+  good for an hour and renews itself through that sign-in, also when a call
+  answers 401; the stored sign-in is good 30 days after its last use and at
+  most 90 days from your consent, then press SignIn again. Every account with a
+  verified address may do it (it is no role).
+- **SignOut**: deletes the stored sign-in on this computer and revokes it on the
+  server.
+- **Revoke from the website**: Settings, "Access tokens" lists every
+  sign-in as "Grasshopper on" the name of that computer; "Revoke" ends it (the
+  hour of the current access token runs out; the sign-in cannot renew).
+- **Username and Password** stay as the fallback (and the only way on macOS):
+  when both are connected they win over the stored sign-in. That path renews
+  itself too: when a call answers 401 the component signs in once more with
+  them and repeats the call.
+- **Pressing SignIn without Windows** says that the sign-in without a password is
+  Windows only.
+- **Changing or resetting your password** ends every Grasshopper sign-in of the
+  account too (and every other token and connection): the stored sign-in cannot
+  renew any more, so press SignIn again afterwards.
 
 ## Releases and deployment
 
@@ -429,6 +460,99 @@ browser wrote itself stands on the left of that chain and is never believed.
   `CSC_TRUSTED_PROXIES`, and check after deploying that two visitors do not
   share a limit (the Uberspace manual does not state which headers its proxy
   sets or from which address it connects).
+
+## Access tokens
+
+A personal access token lets a tool other than the web app (for instance an AI
+assistant through the MCP layer) read the catalog as its owner, and nothing
+more. It is not the JWT of a sign-in: a token only works where its scope says,
+and a JWT does not work in place of it.
+
+- **Who.** Administrators at first. `CSC_PAT_ROLES` (default `admin`, a comma
+  list of the global roles `admin` and `user`) opens it to more; the role is
+  checked again on every request, so an account that loses it stops working at
+  once. Everyone sees and revokes the tokens they hold in Settings, "Access
+  tokens"; administrators see every token under Admin, "Access tokens", and can
+  revoke any.
+- **Create.** Settings, "Access tokens": a name and a lifetime of 30 days, 90
+  days (the default) or 1 year; there is no token without an expiry. The token
+  (`csc_pat_` and 43 characters) is shown once, with a copy button; copy it
+  then. The list shows only its first 8 characters, name, scope, created, last
+  used and expiry. At most 10 active tokens per account.
+- **Renew.** Within 14 days of the expiry (and after it) the list offers
+  "Renew": a new token with the same name is made and shown once, the old one
+  is revoked.
+- **Revoke.** "Revoke" in the list stops the token at once. Revoked and expired
+  tokens, a lost role, an unverified, disabled or deleted account all stop it
+  at once: the database is asked on every request, nothing is cached.
+- **Try a token.** `curl -H "Authorization: Bearer csc_pat_..."
+  https://<api host>/auth/token-check` answers the owner, the scope and the
+  expiry; every other answer is the same 401, whatever the reason. This path
+  and `/mcp` need no `X-CSC-Client` header (the connectors of Claude cannot
+  send one); every other route still does.
+- **Limits and the log.** 120 requests a minute per token (counted per worker,
+  like the read limits); the last use is written at most once a minute and not
+  at all while the maintenance flag is set; creating, renewing and revoking are
+  writes and get the 503 of that flag. The log has one line per use: the first
+  8 characters of the token and the route, no personal data.
+- **Stored.** Only the SHA-256 of a token is stored (collection
+  `access_tokens`), so a leaked database holds no usable token.
+- **Password.** Changing your password (Settings) and resetting it by mail end
+  every token and connection of the account at once, of every kind: personal
+  access tokens, Claude connections and Grasshopper sign-ins, their refresh
+  tokens included. Afterwards make a new token, press Allow in Claude again and
+  press SignIn in Grasshopper again.
+
+## Using CSC from Claude
+
+Claude can read the catalog as you: ask it to find components, show one with its
+versions and measurements, compare, or look at what happened to a piece. It
+only reads, and it sees what you see on the website; nothing it can reach is
+private to anybody else. Administrators can connect it for now (the roles are
+`CSC_PAT_ROLES`).
+
+**Connect.** In Claude, add a custom connector (claude.ai: Settings, Connectors,
+Add custom connector; Claude Code: `claude mcp add --transport http csc
+https://<api host>/mcp`) and give it the address `https://<api host>/mcp`, for
+the production server `https://api.2ndchances.build/mcp`. Claude opens the CSC
+consent page: sign in if asked, check the address it says you will be sent back
+to (for Claude on the web that is `claude.ai`), and press Allow. Deny, or closing
+the page, connects nothing. Nothing is remembered: every connection asks again.
+Allow only connections you started yourself: anyone can start an authorization
+and send you the link, so look at the large address line (the host you will be
+sent back to) before you press Allow, and press Deny when it is not the tool you
+just connected.
+
+**What it can do.** Nine read-only tools: `search_components` (the filters of
+Browse, a page at a time), `get_component`, `list_versions`, `get_version`
+(geometry as counts and a link, never the meshes), `get_evidence`,
+`list_datasets`, `get_dataset`, `get_timeline` and `similar_components` (the
+nearest neighbours on the similarity map, with their distance). Every answer
+carries the web link of the record, and a record that is not public is marked
+(`visibility` private, `status` other than published). There are no write tools
+and no tool for users, invitations or tokens; no answer holds an e-mail address
+or an account id.
+
+**How long it lasts.** The connection gives Claude an access token of one hour
+and a refresh token that Claude renews by itself: the refresh token is good for
+30 days after its last use and is replaced on every use (using an old one ends
+the connection), and a connection never lasts more than 90 days from your
+consent, then Allow again. Each connection is a line under Settings, "Access
+tokens" (and under Admin for administrators): "Revoke" ends it at once, access
+and refresh. An account that loses its role, is disabled or is deleted stops
+working at once, because every call asks the database.
+
+**For scripts and other clients.** A personal access token (Settings, "Access
+tokens") works on `/mcp` too, as `Authorization: Bearer csc_pat_...`, for a
+client that sends a header and cannot sign in through a browser.
+
+**On the server.** `CSC_PUBLIC_API_URL` must be the API address (`https://<api
+host>`); the MCP endpoint and the OAuth server (`/.well-known/...`, `/register`,
+`/authorize`, `/token`, `/revoke`, `/mcp`) are served by the backend and are off
+without it. During maintenance (the read-only flag) `/mcp` and the refreshing of
+tokens keep working; a new connection, a new registration and a revoke wait. The
+limits: 120 requests a minute per token, and per address on registering,
+authorizing and the token endpoint.
 
 ## Custom domain (`2ndchances.build`)
 
