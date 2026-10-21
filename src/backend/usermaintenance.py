@@ -23,6 +23,7 @@ from pymongo import AsyncMongoClient
 # LOCAL MODULE IMPORTS --------------------------------------------------------
 from logging_setup import configure as configure_logging, get_logger
 import read_only
+from apps.catalog.token_cleanup import backfill_purge_dates, remove_tokens_of
 from settings import get_settings
 from utility import (
     get_database_name,
@@ -83,6 +84,13 @@ async def cleanup_unverified_users(dry_run=False):
         db = client[get_database_name()]
         users = db['users']
 
+        # rows of access_tokens made before the purge dates existed get theirs
+        # here: the API start does it too, but deploys start it under the
+        # read-only flag, which skips it; this job skips under the flag as well
+        # (and the next run after the flag finishes it)
+        if not dry_run:
+            await backfill_purge_dates(db['access_tokens'])
+
         # Calculate cutoff date (7 days ago)
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=7)
         log.info('Cutoff date: %s', cutoff_date.isoformat())
@@ -103,6 +111,9 @@ async def cleanup_unverified_users(dry_run=False):
         if dry_run:
             log.info('DRY RUN: no users were actually deleted')
         else:
+            # their access tokens and OAuth rows first: if this stops here the
+            # accounts are still found by the next run, which finishes it
+            await remove_tokens_of(db, ids)
             # Delete the users
             result = await users.delete_many(query)
             log.info('Deleted %d user(s)', result.deleted_count)

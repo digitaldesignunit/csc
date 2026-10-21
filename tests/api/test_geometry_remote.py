@@ -638,3 +638,30 @@ def test_a_value_that_is_not_json_fails_loudly_and_leaves_no_entry(tmp_path):
         cache.store(key, bad)
     assert cache.entry('sid') is None
     assert [p for p in os.listdir(str(tmp_path))] == []   # no half-written folder
+
+
+def test_a_frame_only_cut_drops_the_descriptor_stage_keys(tmp_path):
+    """``descriptors`` is shared by two stages: a cut to ``frame`` carries
+    the hull scores the frame stage wrote, not the radial signature or the HKS
+    of the descriptors stage; a cut with the descriptors stage carries all."""
+    from apps.catalog.geometry_cache import cache_key
+    from apps.catalog.geometry_stages import HULL_SCORES, Outcome
+    key = cache_key({'_id': 'sid', 'geometry': {}}, {}, {'meshes': {}, 'point_clouds': {}})
+    outcome = Outcome()
+    outcome.ran = ['frame', 'descriptors']
+    scores = {name: 0.5 for name in HULL_SCORES}
+    outcome.set = {'frame': {'o': [0, 0, 0]}, 'bbx': [1, 2, 3],
+                   'descriptors': {**scores, 'hks': [1.0], 'radial_signature': [2.0],
+                                   'sas_vectors': [[0.0]]}}
+    cache = ResultCache(str(tmp_path))
+    cache.store(key, outcome)
+    frame_only = cache.lookup(key, ['frame']).outcome
+    assert frame_only.set['descriptors'] == scores
+    assert frame_only.set['frame'] == {'o': [0, 0, 0]} and frame_only.set['bbx'] == [1, 2, 3]
+    both = cache.lookup(key, ['frame', 'descriptors']).outcome
+    assert set(both.set['descriptors']) == set(scores) | {'hks', 'radial_signature', 'sas_vectors'}
+    only_descriptors = cache.lookup(key, ['descriptors']).outcome
+    assert 'hks' in only_descriptors.set['descriptors']
+    assert 'frame' not in only_descriptors.set
+    # what the cache holds is not changed by a cut
+    assert 'hks' in cache.entry('sid')['set']['descriptors']

@@ -29,8 +29,8 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.6.3.0 --- backend, web frontend and Grasshopper interface are released together
-  under one version (tag `v0.6.3.0`); the single source is the `VERSION` file.
+- **CSC**: 0.6.3.1 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.6.3.1`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
 
@@ -105,9 +105,24 @@ UserObjects talk to production by default; to use a local backend, set the `Serv
 
 For browser checks open the web app as `http://127.0.0.1:<port>`, not
 `localhost`: cookies do not separate by port, so a second dev server on another
-port (a throwaway `invoke dev-migrated` with `NEXT_DIST_DIR` and
+port (a throwaway `invoke dev-local` with `NEXT_DIST_DIR` and
 `NEXTAUTH_URL=http://127.0.0.1:<port>`) would otherwise share its NextAuth
 session with the first.
+
+**A local copy of the newest dump** (for checking the web app against real
+data) starts from `.claude/launch.json`: `backend-local` (the newest
+`mongodb_collections_local/<yymmdd>` folder, a throwaway `mongod` on 27791, the
+backend on http://127.0.0.1:8791, assets copied to `.dev/assets-261012`) and
+`frontend-local` (http://localhost:3000). Both run through
+`scripts/dev/run_csc_python.cmd`, which finds the conda environment `csc`
+without a path of your account: `CSC_PYTHON` (a `python.exe` you name), the
+active environment when it is `csc`, the conda base from `CONDA_EXE`, the usual
+install folders under `%USERPROFILE%` and `%ProgramData%`, then `conda run -n
+csc`. The sign-in `dev-admin` has a new password at every start, written to
+`.dev/dev-local-credentials-8791.txt`. The script is `scripts/dev/serve_dump.py`
+(`invoke dev-local` runs it too); it loads a dump as it is, and `--migrate`
+runs the 0.6 cutover steps on an old 0.5 dump. A collection with no export file in
+the dump is not loaded, and an export file of 0 bytes holds no documents.
 
 ### Tests
 
@@ -198,10 +213,10 @@ two places you need to set them:
 **1. `~/.bash_profile`** - for the cron jobs and the deploy script: copy the
 template `uberspaceconfig/.bash_profile.example` and fill it in (MongoDB, JWT,
 SMTP with the optional `SMTP_REPLY_TO`, the support address that replies to the
-verification and password-reset mails go to, asset folders, CORS origins; optionally `GITHUB_CSC_GH_TOKEN` for higher
-GitHub rate limits in `CSC_Update`). Optional: `CSC_MAX_DATASETS_PER_USER`
-(default 3), how many datasets a non-admin account may create; admins are
-not limited.
+verification and password-reset mails go to, asset folders, CORS origins;
+optionally `GITHUB_CSC_GH_TOKEN` for higher GitHub rate limits in
+`CSC_Update`). Optional: `CSC_MAX_DATASETS_PER_USER` (default 3), how many
+datasets a non-admin account may create; admins are not limited.
 
 Apply immediately by running: `source ~/.bash_profile`
 
@@ -273,10 +288,19 @@ push is automated.
 
 **Cutting a release**
 
-1. On your working branch: `invoke bump-version --version 0.5.1.1` (add `--gh`
-   if the Grasshopper UserObjects changed --- then re-export the changed
-   `.ghuser` / XML in Rhino). Fill in the new `CHANGELOG.md` section: it becomes
-   the release notes.
+1. On your working branch, in this order:
+   1. `invoke bump-version --version 0.5.1.1` writes the version everywhere and
+      opens a `## [0.5.1.1] - unreleased` section in `CHANGELOG.md`. Add `--gh`
+      if the Grasshopper UserObjects changed --- then re-export the changed
+      `.ghuser` / XML in Rhino. With `--gh`, a client version that already is
+      the new version leaves `DDU_CSC_Session.py` as it is (the `Version:`
+      header keeps matching the exported `.ghuser`).
+   2. Fill in that `CHANGELOG.md` section: it becomes the release notes.
+   3. `invoke release-prep` (`--date YYYY-MM-DD`, default today) dates the
+      section, writes `.zenodo.json`, runs the version check for the tag and
+      the Zenodo check, and runs `tests/ci`. It stops with an error if the
+      section is missing or empty or a check fails, and prints the next steps;
+      a second run only checks.
 2. Run the whole suite once locally, including the slow tests:
    `invoke test-release` (set `CSC_TEST_RHINO=1` for the headless Rhino tests and
    `CSC_DUMP_DIR` for the migration on a dump). CI no longer runs `tests/catalog`,

@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 import { headerRules } from "./lib/securityHeaders";
 
 const nextConfig: NextConfig = {
-  // A second dev server for browser checks (`invoke dev-migrated` plus a
+  // A second dev server for browser checks (`invoke dev-local` plus a
   // frontend on another port) needs a build folder of its own: Next allows
   // one dev server per folder. Unset, this is `.next` as always.
   distDir: process.env.NEXT_DIST_DIR || '.next',

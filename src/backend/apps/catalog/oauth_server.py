@@ -58,9 +58,11 @@ from pydantic import AnyUrl
 import read_only
 from apps.catalog import access_tokens as tk
 from apps.catalog.token_check import (
+    REQUEST_ADDRESS,
     TokenRefused,
     lookup_access_token,
     may_hold_pat,
+    note_failure,
     note_use,
 )
 from logging_setup import get_logger
@@ -365,6 +367,7 @@ class CscOAuthProvider:
             'refresh_expires': tk.stamp(
                 min(now + timedelta(days=tk.OAUTH_REFRESH_DAYS), hard)),
             'client_id': client.client_id, 'redirect_host': host}
+        row['purge_at'] = tk.purge_at(row)
         if gh:
             # the Grasshopper client: the access token is the normal JWT of an
             # hour (every route keeps working), the row keeps only the refresh
@@ -457,6 +460,10 @@ class CscOAuthProvider:
             'refresh_expires': tk.stamp(
                 min(now + timedelta(days=tk.OAUTH_REFRESH_DAYS), hard)),
             'last_used': stamp_now}
+        # the refresh limit moved: so does the date the row may go
+        changes['purge_at'] = tk.purge_at(
+            {'expires': tk.stamp(hard),
+             'refresh_expires': changes['refresh_expires']})
         if gh:
             access, seconds = self._gh_access_token(owner, now, hard)
         else:
@@ -529,7 +536,8 @@ class CscOAuthProvider:
         done = await self.tokens.update_one(
             {'_id': grant_id, 'kind': {'$in': ['oauth', 'device']},
              'revoked': None},
-            {'$set': {'revoked': tk.stamp(tk.now())}})
+            {'$set': {'revoked': tk.stamp(tk.now())},
+             '$min': {'purge_at': tk.purge_by_revoke()}})
         if done.modified_count:
             log.warning('oauth connection ended: %s (%s)', grant_id[:8], why)
 
@@ -550,6 +558,9 @@ class AccessTokenVerifier:
         except TokenRefused as refusal:
             log.info('access token refused: %s (%s)', refusal.reason,
                      refusal.short_id)
+            # counted for the client address; over the limit this raises
+            # RateLimited, which the gate around /mcp answers with a 429
+            await note_failure(REQUEST_ADDRESS.get())
             return None
         await note_use(self.app, doc, '/mcp')
         ends = doc['expires']

@@ -43,6 +43,21 @@ export function edgesControl(showEdges: boolean, meshOff: boolean): { checked: b
   return { checked: showEdges, disabled: meshOff }
 }
 
+/**
+ * Whether a stored level (the reduced or original mesh, the original point
+ * cloud) is fetched now: only while its layer is shown. A layer that is Off
+ * loads nothing, also not when the version changes; choosing a level again
+ * loads it (0.6.3.1).
+ */
+export function shouldLoadLevel(state: {
+  external: boolean
+  off: boolean
+  proxyOnly: boolean
+  hasIdentity: boolean
+}): boolean {
+  return state.external && !state.off && !state.proxyOnly && state.hasIdentity
+}
+
 /** A piece with a mesh starts with its point cloud hidden (as before the switch had Off). */
 export function pointCloudStartsOff(meshCount: number): boolean {
   return meshCount > 0

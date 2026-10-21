@@ -23,7 +23,7 @@ def help(c):
 
 
 @task()
-def gource(c, mode='overview', output_dir='viz'):
+def gource(c, mode='overview', out='viz'):
     """
     Create gource video in specified output directory.
 
@@ -37,8 +37,8 @@ def gource(c, mode='overview', output_dir='viz'):
     repodir = os.path.normpath(os.path.dirname(__file__))
     with chdir(repodir):
         # Create output directory if it doesn't exist
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        if not os.path.exists(out):
+            os.makedirs(out)
 
         # Gource visualization
         try:
@@ -49,14 +49,14 @@ def gource(c, mode='overview', output_dir='viz'):
                     "gource {0} -1920x1080 -f --multi-sampling -a 1 "
                     "-s 1 --hide bloom,mouse,progress --camera-mode "
                     "overview -r 60 -o {1}/{2}.ppm"
-                ).format(repodir, output_dir, mode)
+                ).format(repodir, out, mode)
                 c.run(gource_cmd)
             else:  # track mode
                 gource_cmd = (
                     "gource {0} -1920x1080 -f --multi-sampling -a 1 "
                     "-s 1 --hide bloom,mouse,progress --camera-mode "
                     "track -r 60 -o {1}/{2}.ppm"
-                ).format(repodir, output_dir, mode)
+                ).format(repodir, out, mode)
                 c.run(gource_cmd)
         except exceptions.UnexpectedExit:
             print("Gource is not installed or not in the current PATH! "
@@ -71,10 +71,10 @@ def gource(c, mode='overview', output_dir='viz'):
                 "{0}/{1}.ppm -vcodec libx264 -preset medium "
                 "-pix_fmt yuv420p -crf 1 -threads 0 -bf 0 "
                 "{0}/{1}.mp4"
-            ).format(output_dir, mode)
+            ).format(out, mode)
             c.run(ffmpeg_cmd)
-            os.remove(f"{output_dir}/{mode}.ppm")
-            print(f"Video saved to {output_dir}/{mode}.mp4")
+            os.remove(f"{out}/{mode}.ppm")
+            print(f"Video saved to {out}/{mode}.mp4")
         except exceptions.UnexpectedExit:
             print("FFmpeg is not installed or not in the current PATH! "
                   "See https://ffmpeg.org/ for info on installation.")
@@ -310,6 +310,30 @@ def rehearse(c, dump='261001', assets='', mapping=''):
 
 
 @task(help={
+    'dump': 'dump folder name in mongodb_collections_local, or "latest" '
+            '(default latest)',
+    'port': 'backend port (default 8000)',
+    'mongo_port': 'throwaway mongod port (default 27018)',
+    'derive': 'with --migrate: geometry-runner stages to run (default '
+              'frame,shape_class,proxies,complexity); "none" skips them',
+    'test_accounts': 'also create dev-contrib, dev-mod, dev-mod2, dev-rev '
+                     'and dev-outsider (no role); passwords in '
+                     '.dev/dev-test-accounts.json, not printed',
+    'test_dataset': 'dataset of the test accounts (default dbu_zirkus)',
+    'migrate': 'the dump is a 0.5 one: run the 0.6 cutover steps on it '
+               '(otherwise it is loaded as it is)',
+})
+def dev_local(c, dump='latest', port=8000, mongo_port=27018,
+              derive='frame,shape_class,proxies,complexity',
+              test_accounts=False, test_dataset='dbu_zirkus', migrate=False):
+    """
+    Serve a local dump (throwaway mongod) for frontend work.
+    """
+    _serve_dump(c, dump, port, mongo_port, derive, test_accounts,
+                test_dataset, migrate)
+
+
+@task(help={
     'dump': 'dump folder name in mongodb_collections_local (default 261001)',
     'port': 'backend port (default 8000)',
     'mongo_port': 'throwaway mongod port (default 27018)',
@@ -324,13 +348,25 @@ def dev_migrated(c, dump='261001', port=8000, mongo_port=27018,
                  derive='frame,shape_class,proxies,complexity',
                  test_accounts=False, test_dataset='dbu_zirkus'):
     """
-    Serve a migrated copy of a dump (throwaway mongod) for frontend work.
+    Deprecated: use "invoke dev-local --migrate" (same as before).
     """
-    flags = ' --no-derive' if derive == 'none' else f' --derive-stages {derive}'
+    print('invoke dev-migrated is deprecated: use "invoke dev-local --migrate" '
+          '(a dump that is 0.6 data already: "invoke dev-local")')
+    _serve_dump(c, dump, port, mongo_port, derive, test_accounts,
+                test_dataset, True)
+
+
+def _serve_dump(c, dump, port, mongo_port, derive, test_accounts,
+                test_dataset, migrate):
+    flags = ''
+    if migrate:
+        flags += ' --migrate'
+        flags += (' --no-derive' if derive == 'none'
+                  else f' --derive-stages {derive}')
     if test_accounts:
         flags += f' --test-accounts --test-dataset {test_dataset}'
     with chdir(REPO_DIR):
-        c.run(f'{sys.executable} scripts/dev/serve_migrated.py --dump {dump} '
+        c.run(f'{sys.executable} scripts/dev/serve_dump.py --dump {dump} '
               f'--port {port} --mongo-port {mongo_port}{flags}', pty=False)
 
 
@@ -431,19 +467,102 @@ def bump_version(c, version, gh=False):
         _rewrite(changelog, r'^## \[',
                  f'## [{version}] - unreleased{eol}{eol}## [')
     if gh:
+        release_prep = _release_prep_module()
         session = os.path.join(REPO_DIR, 'grasshopper_userobjects_src',
                                'DDU_CSC_Session.py')
-        _rewrite(session, rf"^CSC_CLIENT = 'gh-userobjects/{v}'",
-                 f"CSC_CLIENT = 'gh-userobjects/{version}'")
-        _rewrite(session, r'^Version: \d+(\.\d+)?[a-z]?(?=\r?$)',
-                 f"Version: {datetime.date.today():%y%m%d}")
-        print('GH: CSC_Session changed -> re-export DDU_CSC_Session.ghuser '
-              '(and its XML) in Rhino before releasing')
+        # latin-1 reads and writes every byte back unchanged: the file is
+        # saved by Rhino's editor and may not be UTF-8
+        with open(session, encoding='latin-1', newline='') as handle:
+            source = handle.read()
+        try:
+            new_source, changed = release_prep.gh_client_update(
+                source, version, datetime.date.today())
+        except ValueError as exc:
+            sys.exit(f'bump-version: DDU_CSC_Session.py: {exc}')
+        if changed:
+            with open(session, 'w', encoding='latin-1', newline='') as handle:
+                handle.write(new_source)
+            print('GH: CSC_Session changed -> re-export '
+                  'DDU_CSC_Session.ghuser (and its XML) in Rhino before '
+                  'releasing')
+        else:
+            print(f'GH: CSC_CLIENT is gh-userobjects/{version} already: '
+                  f'DDU_CSC_Session.py is left as it is (the Version: '
+                  f'header keeps matching the exported .ghuser)')
     print(f'VERSION -> {version}; now fill in the CHANGELOG section, then '
-          f'run invoke zenodo')
+          f'run invoke release-prep')
     with chdir(REPO_DIR):
         c.run(f'{sys.executable} scripts/ci/check_version.py', pty=False,
               warn=True)
+
+
+def _release_prep_module():
+    """scripts/ci/release_prep.py: the pure parts, shared with the tests."""
+    import importlib.util
+    path = os.path.join(REPO_DIR, 'scripts', 'ci', 'release_prep.py')
+    spec = importlib.util.spec_from_file_location('release_prep', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@task(help={'date': 'release date YYYY-MM-DD (default: today)'})
+def release_prep(c, date=''):
+    """
+    Prepare the release of the version in VERSION: date the CHANGELOG section,
+    write .zenodo.json, check version, tag and Zenodo metadata, run tests/ci.
+    Run after bump-version and after filling in the CHANGELOG section; stops
+    with an error on any failure. Running it again only checks.
+    """
+    import datetime
+    release_prep = _release_prep_module()
+    with open(os.path.join(REPO_DIR, 'VERSION'), encoding='utf-8') as handle:
+        version = handle.read().strip()
+    try:
+        day = datetime.date.fromisoformat(date) if date \
+            else datetime.date.today()
+    except ValueError:
+        sys.exit(f'release-prep: --date must be YYYY-MM-DD, not "{date}"')
+    changelog = os.path.join(REPO_DIR, 'CHANGELOG.md')
+    # newline='': the file's own line endings (CRLF) are kept
+    with open(changelog, encoding='utf-8', newline='') as handle:
+        text = handle.read()
+    body = release_prep.changelog_section(text, version)
+    if body is None:
+        sys.exit(f'release-prep: CHANGELOG.md has no "## [{version}]" '
+                 f'section; run invoke bump-version or add it')
+    if release_prep.section_is_empty(body):
+        sys.exit(f'release-prep: the "## [{version}]" section of '
+                 f'CHANGELOG.md is empty; fill it in first (it becomes the '
+                 f'release notes)')
+    new_text, state = release_prep.set_changelog_date(
+        text, version, day.isoformat())
+    if state == 'dated':
+        with open(changelog, 'w', encoding='utf-8', newline='') as handle:
+            handle.write(new_text)
+        print(f'CHANGELOG: [{version}] dated {day.isoformat()}')
+    elif state == 'already':
+        print(f'CHANGELOG: [{version}] is dated already '
+              f'({release_prep.existing_date(text, version)}): only checking')
+    else:
+        sys.exit(f'release-prep: the heading of [{version}] in CHANGELOG.md '
+                 f'is neither "unreleased" nor dated')
+    steps = [
+        ('Zenodo metadata', f'{sys.executable} scripts/ci/zenodo_metadata.py'),
+        ('version check', f'{sys.executable} scripts/ci/check_version.py '
+                          f'--tag v{version}'),
+        ('Zenodo check', f'{sys.executable} scripts/ci/zenodo_metadata.py '
+                         f'--check'),
+        ('tests/ci', f'{sys.executable} -m pytest tests/ci -q'),
+    ]
+    with chdir(REPO_DIR):
+        for name, command in steps:
+            print(f'--- {name}')
+            result = c.run(command, pty=False, warn=True)
+            if not result.ok:
+                sys.exit(f'release-prep: {name} failed (see above); fix it '
+                         f'and run invoke release-prep again')
+    print('\n' + release_prep.next_steps(version))
 
 
 @task(help={'check': 'only report whether .zenodo.json is stale'})

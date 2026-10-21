@@ -15,16 +15,26 @@ does).
 ``note_use`` is the rest of a successful check: the rate limit (120 a minute
 per token, counted per worker in memory), ``last_used`` (at most once a minute,
 never while the read-only flag is set) and the log line of the use.
+
+``note_failure`` counts a failed lookup (a token was sent and did not pass)
+for the client address, in the shared store the sign-in limit uses, so that
+every worker counts the same failures: over ``FAILED_LOOKUPS_PER_MINUTE`` the
+answer is 429 with Retry-After instead of 401. A token that passes never
+touches that counter, so a valid token is not affected by what else comes from
+its address.
 """
 
+import contextvars
 import time
 from datetime import timedelta
 from typing import Optional, Tuple
 
+import anyio
 from limits import parse
 from limits.storage import MemoryStorage
 from limits.strategies import FixedWindowRateLimiter
 
+import limiter as lim
 import read_only
 from apps.catalog import access_tokens as tk
 from apps.catalog.models import UserInDB
@@ -43,13 +53,29 @@ class TokenRefused(Exception):
         self.short_id = short_id
 
 
-class RateLimited(Exception):
-    """A valid token over its limit; ``wait`` seconds to the next window."""
+TOKEN_LIMIT_TEXT = 'Too many requests for this access token.'
+ADDRESS_LIMIT_TEXT = 'Too many failed attempts from this address; wait a minute.'
 
-    def __init__(self, wait: int, short_id: str):
+# the client address of the request being checked, for the verifier of the MCP
+# layer (the SDK hands it the token only); set by the gate around /mcp
+REQUEST_ADDRESS: contextvars.ContextVar = contextvars.ContextVar(
+    'csc_request_address', default=None)
+
+
+class RateLimited(Exception):
+    """Over a limit; ``wait`` seconds to the next window. By default a valid
+    token over its own limit; ``by_address`` when the address made too many
+    failed lookups."""
+
+    def __init__(self, wait: int, short_id: str, by_address: bool = False):
         super().__init__('rate limited')
         self.wait = wait
         self.short_id = short_id
+        self.by_address = by_address
+
+    @property
+    def message(self) -> str:
+        return ADDRESS_LIMIT_TEXT if self.by_address else TOKEN_LIMIT_TEXT
 
 
 def may_hold_pat(role: str) -> bool:
@@ -101,6 +127,31 @@ def _within_rate(short_id: str) -> Optional[int]:
         return None
     reset = _counters.get_window_stats(item, short_id).reset_time
     return max(1, int(reset - time.time()) + 1)
+
+
+_FAILED = parse(f'{tk.FAILED_LOOKUPS_PER_MINUTE}/minute')
+
+
+def _failure_wait(address: str) -> Optional[int]:
+    """One failed lookup for ``address``: None while it is within the limit,
+    else the seconds to wait. The shared store is synchronous (a thread)."""
+    counter = lim.shared_limiter._limiter
+    if counter.hit(_FAILED, 'token-failures', address):
+        return None
+    reset = counter.get_window_stats(
+        _FAILED, 'token-failures', address).reset_time
+    return max(1, int(reset - time.time()) + 1)
+
+
+async def note_failure(address: Optional[str]) -> None:
+    """Count a failed lookup for ``address``; ``RateLimited`` when over. No
+    address (a call outside a request) counts nothing."""
+    if not address:
+        return
+    wait = await anyio.to_thread.run_sync(_failure_wait, address)
+    if wait is not None:
+        log.info('failed access-token lookups over the limit for an address')
+        raise RateLimited(wait, '-', by_address=True)
 
 
 async def touch(app, doc: dict) -> None:

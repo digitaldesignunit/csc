@@ -13,6 +13,7 @@ import {
   edgesControl,
   hasMeshSwitch,
   pointCloudStartsOff,
+  shouldLoadLevel,
   shownFlags,
   switchValue,
   withOff,
@@ -100,4 +101,23 @@ test('the mesh switch is for a mesh or a proxy', () => {
   assert.equal(hasMeshSwitch(2, false), true)
   assert.equal(hasMeshSwitch(0, true), true)
   assert.equal(hasMeshSwitch(0, false), false)
+})
+
+test('a stored level is fetched only while its layer is shown', () => {
+  const shown = { external: true, off: false, proxyOnly: false, hasIdentity: true }
+  assert.equal(shouldLoadLevel(shown), true)
+  assert.equal(shouldLoadLevel({ ...shown, off: true }), false)
+  assert.equal(shouldLoadLevel({ ...shown, external: false }), false)
+  assert.equal(shouldLoadLevel({ ...shown, proxyOnly: true }), false)
+  assert.equal(shouldLoadLevel({ ...shown, hasIdentity: false }), false)
+})
+
+test('switching back on from Off loads the level that was chosen before', () => {
+  const state: SwitchState<MeshLevel> = { level: 'original', off: false }
+  const off = chooseSwitch(state, 'off')
+  const base = { external: true, proxyOnly: false, hasIdentity: true }
+  assert.equal(shouldLoadLevel({ ...base, off: off.off }), false)
+  const back = chooseSwitch(off, off.level)
+  assert.equal(back.level, 'original')
+  assert.equal(shouldLoadLevel({ ...base, off: back.off }), true)
 })

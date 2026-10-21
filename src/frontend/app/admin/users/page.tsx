@@ -280,12 +280,12 @@ export default function AdminUsersPage() {
                           {user.invited && <Badge variant="outline" className="ml-2 text-[10px]">invited</Badge>}
                         </TableCell>
                         <TableCell className="text-xs">
-                          <div>{user.full_name ?? '—'}</div>
-                          <div className="text-muted-foreground">{user.email ?? '—'}</div>
+                          <div>{user.full_name ?? '-'}</div>
+                          <div className="text-muted-foreground">{user.email ?? '-'}</div>
                         </TableCell>
                         <TableCell className="text-xs">
                           {(user.memberships ?? []).length === 0 ? (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">-</span>
                           ) : (
                             <div className="flex flex-wrap gap-1">
                               {(user.memberships ?? []).map((m) => (

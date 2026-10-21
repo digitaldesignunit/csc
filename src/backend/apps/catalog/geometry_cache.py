@@ -28,7 +28,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.geometry_source import inline_fingerprint
-from apps.catalog.geometry_stages import STAGES, VERSIONS, Outcome
+from apps.catalog.geometry_stages import HULL_SCORES, STAGES, VERSIONS, Outcome
 
 # the derived fields each stage writes (the worker's upload names them)
 FIELDS_OF_STAGE = {
@@ -183,12 +183,16 @@ class ResultCache:
         folder = self._folder(entry['key']['snapshot_id'])
         out = Outcome()
         out.ran = list(stages)
-        # a cut to ``frame`` alone would carry the whole ``descriptors`` dict
-        # of the entry (the field is shared with the descriptors stage); the
-        # day's run asks for the heavy stages, whose cut is exact, so the
-        # shared field is only a hazard for a frame-only cut
         keys = {k for s in stages for k in FIELDS_OF_STAGE.get(s, ())}
         out.set = {k: v for k, v in entry['set'].items() if k in keys}
+        # ``descriptors`` is one field of two stages: the frame stage writes
+        # the hull scores into it, the descriptors stage the rest. A cut that
+        # has the frame stage and not the descriptors stage carries the hull
+        # scores only, not the keys the descriptors stage wrote (0.6.3.1)
+        if 'descriptors' in out.set and 'descriptors' not in stages:
+            out.set['descriptors'] = {
+                k: v for k, v in (out.set['descriptors'] or {}).items()
+                if k in HULL_SCORES}
         if 'proxies' in stages:
             for n, name in enumerate(entry['files']):
                 with open(os.path.join(folder, 'files', str(n)), 'rb') as h:

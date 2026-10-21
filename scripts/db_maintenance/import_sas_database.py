@@ -9,9 +9,24 @@ COMPLEXITY_MAP = {
     'high': 3
 }
 
-SOURCE_DIR = r'C:\Users\EFESTWIN\Documents\07_tu_darmstadt_ddu\05_Promotion\07_Source\240404_SAS_Debris_Files' # NOQA
-GEOMETRY_TARGET_DIR = r'C:\Users\EFESTWIN\Documents\07_tu_darmstadt_ddu\05_Promotion\07_Source\241212_MES_Geometry_Repo' # NOQA
-JSON_TARGET_DIR = r'C:\Users\EFESTWIN\Documents\07_tu_darmstadt_ddu\05_Promotion\07_Source\241212_MES_JSON_Repo' # NOQA
+
+
+def required_dir(name):
+    """A folder outside the repository, named in an environment variable;
+    there is no default, the script stops and says which one is missing."""
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(
+            f'{name} is not set: set it to the folder before running '
+            f'(CSC_SAS_SOURCE_DIR: the SAS debris files, one sub-folder per '
+            f'object; CSC_MES_GEOMETRY_DIR and CSC_MES_JSON_DIR: where the '
+            f'geometry and the JSON go).')
+    return value
+
+
+SOURCE_DIR = required_dir('CSC_SAS_SOURCE_DIR')
+GEOMETRY_TARGET_DIR = required_dir('CSC_MES_GEOMETRY_DIR')
+JSON_TARGET_DIR = required_dir('CSC_MES_JSON_DIR')
 
 if not os.path.exists(JSON_TARGET_DIR):
     os.makedirs(JSON_TARGET_DIR)

@@ -9,6 +9,7 @@ import {
   diameterRange,
   layoutColour,
   layoutLabels,
+  layoutsOnSnapshot,
   LAYOUT_COLOURS,
   rampColour,
 } from '@/lib/reinforcementColors'
@@ -77,4 +78,59 @@ test('the legend lists the layouts or the diameter range', () => {
   assert.equal(byDiameter?.kind === 'diameter' && byDiameter.min, 8)
   assert.equal(byDiameter?.kind === 'diameter' && byDiameter.max, 16)
   assert.equal(barLegend('steel', layouts, bars), null)
+})
+
+
+// TWO LAYOUTS ON ONE PIECE (RL1, 0.6.3.1) -----------------------------------------
+const bar = (diameter: number, x: number) => ({
+  spec: `B${diameter}`, diameter_mm: diameter, points: [[x, 0, 0], [x, 0, 100]],
+})
+
+test('two layouts on one snapshot are two layouts with their own bars', () => {
+  const records = [
+    { _id: 'a', observed_at: '2026-01-05', position: { snapshot_id: 's1' },
+      payload: { bars: [bar(12, 0), bar(12, 50)], document: { title: 'Drawing A' } } },
+    { _id: 'b', observed_at: '2026-02-09', position: { snapshot_id: 's1' },
+      payload: { bars: [bar(8, 10), bar(8, 20), bar(8, 30)], document: { title: 'Drawing B' } } },
+  ]
+  const { bars, layouts } = layoutsOnSnapshot(records, 's1')
+  assert.equal(bars.length, 5)
+  assert.deepEqual(layouts, [
+    { id: 'a', label: 'Drawing A', count: 2 },
+    { id: 'b', label: 'Drawing B', count: 3 },
+  ])
+  assert.deepEqual(bars.map((b) => b.layout), [0, 0, 1, 1, 1])
+  assert.equal(defaultColourMode(layouts.length), 'layout')
+  // each layout has its own colour in the legend
+  assert.notEqual(layoutColour(0), layoutColour(1))
+  const legend = barLegend('layout', layouts, bars)
+  assert.equal(legend?.kind, 'layout')
+})
+
+test('a layout of another snapshot, or without a drawable bar, is not a layout here', () => {
+  const records = [
+    { _id: 'a', position: { snapshot_id: 's1' }, payload: { bars: [bar(12, 0)] } },
+    { _id: 'other', position: { snapshot_id: 's2' }, payload: { bars: [bar(12, 0)] } },
+    { _id: 'empty', position: { snapshot_id: 's1' }, payload: { bars: [] } },
+    { _id: 'flat', position: { snapshot_id: 's1' },
+      payload: { bars: [{ spec: 'x', diameter_mm: 0, points: [[0, 0, 0], [1, 0, 0]] }] } },
+    { _id: 'none', position: null, payload: { bars: [bar(12, 0)] } },
+  ]
+  const { bars, layouts } = layoutsOnSnapshot(records, 's1')
+  assert.deepEqual(layouts, [{ id: 'a', label: 'Layout 1', count: 1 }])
+  assert.equal(bars.length, 1)
+})
+
+test('two layouts with the same title are told apart in the legend', () => {
+  const records = ['a', 'b'].map((id) => ({
+    _id: id, position: { snapshot_id: 's1' },
+    payload: { bars: [bar(10, 0)], document: { title: 'Ground floor' } } }))
+  const { layouts } = layoutsOnSnapshot(records, 's1')
+  assert.deepEqual(layouts.map((l) => l.label), ['Ground floor (1)', 'Ground floor (2)'])
+})
+
+test('a piece without a layout has no bars and starts steel', () => {
+  const { bars, layouts } = layoutsOnSnapshot([], 's1')
+  assert.deepEqual([bars, layouts], [[], []])
+  assert.equal(defaultColourMode(layouts.length), 'steel')
 })

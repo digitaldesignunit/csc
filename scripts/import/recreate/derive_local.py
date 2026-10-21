@@ -6,7 +6,7 @@
 ``--attribute`` names the import: its components carry `attributes.<name>` (default `recreate`; the EPFL
 stones use `epfl_stacking`).
 
-Rehearsal only: the database is the throwaway mongod of scripts/dev/serve_migrated.py (any host that is not
+Rehearsal only: the database is the throwaway mongod of scripts/dev/serve_dump.py (any host that is not
 this machine is refused), and the files go to the asset copy `--assets` of that instance, which must be
 inside `.dev/` (the tool writes into it: a copy, never the original asset folders). In production the
 cron of decision 8.136 does this (`main_geometry.py --due`). No sweep: nothing is deleted. Run in the `csc`

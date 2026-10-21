@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3.1] - 2026-10-21
+
+A hardening release after 0.6.3.0.
+
+### Changed
+
+- **Viewer:** mesh edges stay crisp over the faces instead of breaking up at some angles; close
+  zooms no longer cut a piece open, and small pieces open filling the view. A version switch
+  while the mesh or the point cloud is Off loads nothing hidden.
+- **Evidence:** a core record links to its paired rebound record; a piece with several
+  reinforcement layouts shows all of them.
+- **Geometry:** replacing the meshes or clouds of a draft also removes the files and markers
+  of the dropped ones; a frame-only cache entry no longer carries descriptor data; the outline
+  vertex limit counts holes.
+- **Release tooling:** `invoke release-prep` sets the CHANGELOG date, writes `.zenodo.json` and
+  runs the version checks in one step; `bump-version --gh` leaves the Session component alone
+  when its client version already matches. The local launch entries and the old scripts work
+  without a user path; the local server script is now `scripts/dev/serve_dump.py` (`invoke
+  dev-local`; `invoke dev-migrated` still works and says so), migrating an old 0.5 dump only
+  with `--migrate`; it writes `.dev/dev-local-credentials-<port>.txt` and `.dev/local-<port>.json`.
+
+### Security
+
+- **Failed access-token lookups are limited per address** (429 with `Retry-After`); valid tokens
+  are never counted.
+- **Token clean-up:** the tokens and connections of a deleted account are removed with it;
+  revoked and expired tokens are deleted 90 days later.
+
+### Server notes
+
+- Existing token rows get their clean-up date from the daily user maintenance run (not while the
+  read-only flag is set); no step needed.
+
 ## [0.6.3.0] - 2026-10-21
 
 ### Added

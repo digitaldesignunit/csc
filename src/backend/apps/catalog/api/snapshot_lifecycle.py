@@ -30,6 +30,7 @@ from pydantic import (BaseModel, ConfigDict, Field, ValidationError,
 from pymongo import ReturnDocument
 
 # LOCAL IMPORTS ---------------------------------------------------------------
+from apps.catalog.file_markers import reconcile_markers, remove_files
 from apps.catalog.documents import (
     Capture,
     ComponentSnapshot,
@@ -204,6 +205,15 @@ def _validated(doc: dict) -> dict:
                             detail=f'{where}: {first["msg"]}') from exc
     doc['etag'] = compute_snapshot_etag(doc)
     return doc
+
+
+def _plain_geometry(geometry: Any) -> Any:
+    """A geometry as the model stores it, so that one the client sent and one
+    stored at creation compare equal (the PATCH stores the body as it came)."""
+    try:
+        return Geometry.model_validate(geometry).model_dump(mode='json')
+    except ValidationError:
+        return geometry
 
 
 def _check_client_geometry(body: SnapshotDraftBody) -> None:
@@ -742,9 +752,19 @@ async def patch_snapshot(
             derivation = dict(updated.get('derivation') or {})
             derivation.pop(key, None)
             updated['derivation'] = derivation
+    stale_files = None
     if 'geometry' in body:
         _check_client_geometry(SnapshotDraftBody.model_validate(
             {'geometry': body['geometry']}))
+        # the file markers follow the new geometry: a mesh or cloud that was
+        # replaced or removed no longer has its file (0.6.3.1)
+        stale_files = reconcile_markers(
+            _plain_geometry(snapshot.get('geometry')),
+            _plain_geometry(body['geometry']),
+            snapshot.get('mesh_ply_resolutions'),
+            snapshot.get('point_cloud_files'))
+        updated['mesh_ply_resolutions'] = stale_files.resolutions
+        updated['point_cloud_files'] = stale_files.cloud_files
     updated['lastmodified'] = now_iso()
     if set(body) & STAGE_INPUT_FIELDS:
         # the previews read the colour, the stages the geometry and the
@@ -765,6 +785,11 @@ async def patch_snapshot(
         await asyncio.to_thread(
             remove_map_files, request.app.snapshot_proxies_dir,
             fitted_map_files(snapshot))
+        if stale_files is not None and stale_files.changed:
+            await asyncio.to_thread(
+                remove_files, request.app.snapshot_meshes_dir,
+                request.app.snapshot_point_clouds_dir, snapshot['_id'],
+                stale_files)
     if 'geometry' in body or 'shape_class' in body:
         # frame and class follow at once (spec 4.3, stage 1: every draft
         # geometry write; 8.55: a cleared override is recomputed)

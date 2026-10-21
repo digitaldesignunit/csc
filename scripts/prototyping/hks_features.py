@@ -18,6 +18,7 @@ Scale invariance strategy:
 Mass-weighted pooling reduces sensitivity to non-uniform sampling density.
 """
 
+import os
 from typing import Tuple
 import numpy as np
 import scipy.sparse as sp
@@ -565,12 +566,17 @@ if __name__ == '__main__':
     # Process each shape with its own adaptive time grid
     try:
         descriptors = []
+        # the test meshes are in the repository (component_geometry/hks_test)
+        hks_test_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__)))),
+            'component_geometry', 'hks_test')
         mesh_files = [
-            r'C:\Users\EFESTWIN\source\repos\csc\component_geometry\hks_test\0aad9436-ead8-4651-81a1-8b435012d799.ply',
-            r'C:\Users\EFESTWIN\source\repos\csc\component_geometry\hks_test\0aad9436-ead8-4651-81a1-8b435012d799_b.ply',
-            r'C:\Users\EFESTWIN\source\repos\csc\component_geometry\hks_test\0b8c24c4-54d5-41b2-9eb0-43acdc34dfc1.ply',
-            r'C:\Users\EFESTWIN\source\repos\csc\component_geometry\hks_test\0dd38d21-87ea-4c1d-a0b8-7245b45cd633.ply',
-            r'C:\Users\EFESTWIN\source\repos\csc\component_geometry\hks_test\1c3a2fdc-6522-43ab-900c-8f196804cd8d.ply',
+            os.path.join(hks_test_dir, '0aad9436-ead8-4651-81a1-8b435012d799.ply'),
+            os.path.join(hks_test_dir, '0aad9436-ead8-4651-81a1-8b435012d799_b.ply'),
+            os.path.join(hks_test_dir, '0b8c24c4-54d5-41b2-9eb0-43acdc34dfc1.ply'),
+            os.path.join(hks_test_dir, '0dd38d21-87ea-4c1d-a0b8-7245b45cd633.ply'),
+            os.path.join(hks_test_dir, '1c3a2fdc-6522-43ab-900c-8f196804cd8d.ply'),
         ]
 
         # NOTE: n_times * 2 = output descriptor dimension

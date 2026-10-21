@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo } from 'react'
 import * as THREE from 'three'
 
 import { solidGeometry, type ProxyShape } from '@/lib/proxyShape'
+import { FACE_POLYGON_OFFSET, edgeLineMaterial } from '@/lib/viewerDepth'
 import { OPACITY_DEFAULT, applyOpacity, materialSettings } from '@/lib/viewerOpacity'
 
 /**
@@ -27,7 +28,7 @@ export default function ProxySolid({
   opacity?: number
 }) {
   const solid = useMemo(() => solidGeometry(shape), [shape])
-  const edgeMaterial = useMemo(() => new THREE.LineBasicMaterial({ color: 0x000000 }), [])
+  const edgeMaterial = useMemo(() => edgeLineMaterial(), [])
   useEffect(() => () => solid.dispose(), [solid])
   useEffect(() => () => edgeMaterial.dispose(), [edgeMaterial])
   useLayoutEffect(() => applyOpacity(edgeMaterial, opacity), [edgeMaterial, opacity])
@@ -46,6 +47,9 @@ export default function ProxySolid({
             transparent={fade.transparent}
             opacity={fade.opacity}
             depthWrite={fade.depthWrite}
+            polygonOffset={FACE_POLYGON_OFFSET.polygonOffset}
+            polygonOffsetFactor={FACE_POLYGON_OFFSET.polygonOffsetFactor}
+            polygonOffsetUnits={FACE_POLYGON_OFFSET.polygonOffsetUnits}
           />
         </mesh>
       )}

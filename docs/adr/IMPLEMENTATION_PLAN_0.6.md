@@ -944,6 +944,65 @@ The SH descriptor stays blocked on its licence.
 
 ---
 
+### Roadmap after 0.6.3.0 --- proposed 2026-10-21, adjusted by the user the same day; each release is grilled before it is built
+
+**0.6.3.1 --- hardening after the release (about 3 days):** a per-address limit on failed access-token lookups;
+token clean-up (tokens of deleted accounts removed, revoked rows deleted after about 90 days); viewer: a version
+switch with the mesh Off no longer loads the hidden level; viewer: mesh edges and faces clip each other at some
+angles (user 2026-10-21) --- the edges should win, most likely through `polygonOffset` on the mesh material so the
+faces sit a hair behind their edges (edges drawn with depth test off would show the hidden back edges too, so not
+that), and check the camera near / far planes against the piece's size in case the faces themselves are cut
+when zooming in; stale file markers after a geometry PATCH on a draft (`mesh_ply_resolutions`,
+`point_cloud_files`, `FUTURE.md`); the geometry cache drops the descriptor keys on a frame-only cut; the planar
+outline's vertex limit counts holes; the paired rebound linked on the core record's evidence card; RL1 checked
+(two layouts on one piece show both cards and bar sets); the snapshot-scoped fold confirmed by a test;
+housekeeping (em dashes as empty values in `app/admin/users/page.tsx` and `InvitationsTable.tsx`, the long
+README line on `SMTP_REPLY_TO`, `tests/api/test_mail_templates.py` and its `delenv`, a fresh `npm audit`). Added (user 2026-10-21): `invoke release-prep` (the CHANGELOG date, `.zenodo.json`, `check_version --tag`, `tests/ci` in one step) and `bump-version --gh` leaving `DDU_CSC_Session.py` alone when its client version already matches. And `.claude/launch.json` committable: a launcher that finds the `csc` environment without an account path, `serve_migrated.py --dump latest` (empty exports load as no documents), one `backend-local` / `frontend-local` pair.
+
+**0.6.4 --- search and the location map (about 7--9 days; user 2026-10-21):** a catalog of about 2300 pieces
+needs new kinds of questions more than indexes. (a) **Dimensions** ("what fits?"): range filters on the stored
+size (`bbx`) per axis with tolerances, an orientation-independent envelope match (the three sizes sorted), and
+sorting by closeness to the asked size; in MCP as parameters of `search_components` or a `find_fitting` tool
+(about 1--2 days). (b) **Location**: the versions' `location` and the origin building's `Place.location` also
+stored as GeoJSON points with a `2dsphere` index (Atlas M0 has it); `$geoNear` gives the nearest k or everything
+within a radius, with the distance in metres, combined with the other filters; in MCP as `near` (coordinates,
+radius, count) or a `find_near` tool (about 1--1.5 days on top of (c)). (c) The **location map** (user
+2026-10-21): a second map page next to the Similarity Map with every visible component as a marker (clustered),
+a click opening the shared preview panel, visibility as on Browse, on the field and index of (b); to grill:
+which location (current, origin, or both as layers), the map library and tile source (the CSP of 8.164 allows
+only the Google embed; OpenStreetMap tiles send each visitor's address to OSM and allow light use only, so the
+CSP and the privacy page change) (about 2--3 days). (d) **Sorting and overview**: sort by catalog number, date,
+size, distance, dimension match, rising or falling; a `catalog_overview` MCP tool with counts by material,
+function, dataset and shape class (about 1 day). (e) **True similarity**: kNN on the descriptor vectors
+(radial signature, scalars) instead of the 2D map layout, a NumPy pass at this size (no Atlas Vector Search
+needed), combinable with (a) and (b) (about 1--2 days). Later: search by measured properties from the evidence
+fold (once it is clear which quantities are searched); Atlas Search for typo-tolerant text (weakest gain).
+
+**0.6.5 --- reinforcement from Grasshopper (about 6--8 days; moved from 0.6.4 by the user 2026-10-21):** (a) units
+in GH: every component scales by the document unit (a prerequisite for placing scans); (b) RL8, a GH builder
+for the `rebar_spec` claim and its display, grilled together with (c); (c) Ferroscan to reinforcement layout,
+parts (a) report reader, detection, placement and a draft through `AddEvidence`, (b) the report image and PDF
+as attachments, (d) several scans of one face; (c) "the image in 3D" later.
+
+**0.6.6 --- interoperability (about 5--7 days):** the IFC export (`compose?format=ifc`; first the `ifcopenshell`
+wheel check for the server, then IFC4 vs IFC4x3 and single piece vs selection); the timeline as PROV-O /
+JSON-LD / GraphML (8.140 h); optionally a vocab page the JSON-LD `@vocab` resolves to.
+
+**0.6.7 --- shape descriptors (research, about 3--7 days):** HKS v2 behind a retrieval check (nothing ships if
+the neighbours do not look right); if it holds, the HKS basis on the Similarity Map, the level 1 curve and the
+level 2 heat map, and the descriptor kNN of 0.6.4 (e) gains from it; the SH descriptor only if its licence has
+arrived.
+
+**Outside a release (the maintainer):** the legal check of the privacy page by the university's data protection
+office; the Atlas traffic measurement of 0.6.1.0 (c); the backend CI job back to `ubuntu-latest` once MongoDB
+8.0 starts on the runner's kernel (SERVER-121912).
+
+**Later or ideas:** the GH sign-in on macOS (Keychain); Ferroscan "the image in 3D"; MCP opened to members
+(after 0.6.3.1); the CSC logo and brand, then the logo in mails, Open Graph and the favicon; the partners on
+the credits page (their consent); usage statistics without cookies; timber evidence methods; the analytics
+page; transactions for record plus change log; xeokit (for later, see `FUTURE.md`); a similarity-search
+endpoint and the other `FUTURE.md` ideas.
+
 ## 4. Dependencies at a glance
 
 ```

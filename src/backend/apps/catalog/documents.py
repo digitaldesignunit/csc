@@ -1088,6 +1088,9 @@ class AccessToken(_Document):
     refresh_expires: Optional[Timestamp] = None
     client_id: Optional[str] = None
     redirect_host: Optional[str] = None
+    # TTL field (0.6.3.1): a date 90 days after the row died, see
+    # ``access_tokens.purge_at``
+    purge_at: Optional[datetime] = None
 
 
 class ChangeLogEntry(_Document):

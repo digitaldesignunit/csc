@@ -82,8 +82,8 @@ export default function InvitationsTable({
         {invitations.map((invitation) => (
           <TableRow key={invitation._id}>
             <TableCell className="font-medium">{invitation.email}</TableCell>
-            {showDataset && <TableCell>{invitation.dataset ?? '—'}</TableCell>}
-            <TableCell className="text-xs">{invitation.roles.join(', ') || '—'}</TableCell>
+            {showDataset && <TableCell>{invitation.dataset ?? '-'}</TableCell>}
+            <TableCell className="text-xs">{invitation.roles.join(', ') || '-'}</TableCell>
             <TableCell>
               <Badge variant={STATE_VARIANT[invitation.state]}>{invitation.state}</Badge>
               {invitation.mail_failed && invitation.state !== 'used' && invitation.state !== 'revoked' && (
