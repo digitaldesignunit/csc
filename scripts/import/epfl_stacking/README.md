@@ -123,7 +123,7 @@ output goes outside the repository or into `.dev/`; a path anywhere else in the 
    `.dev/assets-261012`) and `frontend-local` (3000) in `.claude/launch.json`.
    Never point `--assets` at the original backup of the assets, and never run a runner with `--sweep` on it.
 2. Fetch, prepare, plan; `run.py --dry-run`; `run.py --server http://127.0.0.1:8791 --username dev-admin`
-   (the password is in `.dev/dev-migrated-credentials-8791.txt`); run it again (it creates nothing).
+   (the password is in `.dev/dev-local-credentials-8791.txt`); run it again (it creates nothing).
 3. `derive_local.py --attribute epfl_stacking`, then `spotcheck.py`.
 
 ## Production

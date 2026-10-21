@@ -1,7 +1,7 @@
 @echo off
 rem Runs the Python of the "csc" conda environment with the given arguments:
 rem
-rem     scripts\dev\run_csc_python.cmd -u scripts/dev/serve_migrated.py --dump latest ...
+rem     scripts\dev\run_csc_python.cmd -u scripts/dev/serve_dump.py --dump latest ...
 rem
 rem The launch configurations of .claude/launch.json use it, so that no path of
 rem a user account stands in a committed file. The environment is looked for in

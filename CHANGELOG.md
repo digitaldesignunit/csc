@@ -21,7 +21,10 @@ A hardening release after 0.6.3.0.
   vertex limit counts holes.
 - **Release tooling:** `invoke release-prep` sets the CHANGELOG date, writes `.zenodo.json` and
   runs the version checks in one step; `bump-version --gh` leaves the Session component alone
-  when its client version already matches. The local launch entries work without a user path.
+  when its client version already matches. The local launch entries and the old scripts work
+  without a user path; the local server script is now `scripts/dev/serve_dump.py` (`invoke
+  dev-local`; `invoke dev-migrated` still works and says so), migrating an old 0.5 dump only
+  with `--migrate`; it writes `.dev/dev-local-credentials-<port>.txt` and `.dev/local-<port>.json`.
 
 ### Security
 

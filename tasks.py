@@ -23,7 +23,7 @@ def help(c):
 
 
 @task()
-def gource(c, mode='overview', output_dir='viz'):
+def gource(c, mode='overview', out='viz'):
     """
     Create gource video in specified output directory.
 
@@ -37,8 +37,8 @@ def gource(c, mode='overview', output_dir='viz'):
     repodir = os.path.normpath(os.path.dirname(__file__))
     with chdir(repodir):
         # Create output directory if it doesn't exist
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        if not os.path.exists(out):
+            os.makedirs(out)
 
         # Gource visualization
         try:
@@ -49,14 +49,14 @@ def gource(c, mode='overview', output_dir='viz'):
                     "gource {0} -1920x1080 -f --multi-sampling -a 1 "
                     "-s 1 --hide bloom,mouse,progress --camera-mode "
                     "overview -r 60 -o {1}/{2}.ppm"
-                ).format(repodir, output_dir, mode)
+                ).format(repodir, out, mode)
                 c.run(gource_cmd)
             else:  # track mode
                 gource_cmd = (
                     "gource {0} -1920x1080 -f --multi-sampling -a 1 "
                     "-s 1 --hide bloom,mouse,progress --camera-mode "
                     "track -r 60 -o {1}/{2}.ppm"
-                ).format(repodir, output_dir, mode)
+                ).format(repodir, out, mode)
                 c.run(gource_cmd)
         except exceptions.UnexpectedExit:
             print("Gource is not installed or not in the current PATH! "
@@ -71,10 +71,10 @@ def gource(c, mode='overview', output_dir='viz'):
                 "{0}/{1}.ppm -vcodec libx264 -preset medium "
                 "-pix_fmt yuv420p -crf 1 -threads 0 -bf 0 "
                 "{0}/{1}.mp4"
-            ).format(output_dir, mode)
+            ).format(out, mode)
             c.run(ffmpeg_cmd)
-            os.remove(f"{output_dir}/{mode}.ppm")
-            print(f"Video saved to {output_dir}/{mode}.mp4")
+            os.remove(f"{out}/{mode}.ppm")
+            print(f"Video saved to {out}/{mode}.mp4")
         except exceptions.UnexpectedExit:
             print("FFmpeg is not installed or not in the current PATH! "
                   "See https://ffmpeg.org/ for info on installation.")
@@ -310,6 +310,30 @@ def rehearse(c, dump='261001', assets='', mapping=''):
 
 
 @task(help={
+    'dump': 'dump folder name in mongodb_collections_local, or "latest" '
+            '(default latest)',
+    'port': 'backend port (default 8000)',
+    'mongo_port': 'throwaway mongod port (default 27018)',
+    'derive': 'with --migrate: geometry-runner stages to run (default '
+              'frame,shape_class,proxies,complexity); "none" skips them',
+    'test_accounts': 'also create dev-contrib, dev-mod, dev-mod2, dev-rev '
+                     'and dev-outsider (no role); passwords in '
+                     '.dev/dev-test-accounts.json, not printed',
+    'test_dataset': 'dataset of the test accounts (default dbu_zirkus)',
+    'migrate': 'the dump is a 0.5 one: run the 0.6 cutover steps on it '
+               '(otherwise it is loaded as it is)',
+})
+def dev_local(c, dump='latest', port=8000, mongo_port=27018,
+              derive='frame,shape_class,proxies,complexity',
+              test_accounts=False, test_dataset='dbu_zirkus', migrate=False):
+    """
+    Serve a local dump (throwaway mongod) for frontend work.
+    """
+    _serve_dump(c, dump, port, mongo_port, derive, test_accounts,
+                test_dataset, migrate)
+
+
+@task(help={
     'dump': 'dump folder name in mongodb_collections_local (default 261001)',
     'port': 'backend port (default 8000)',
     'mongo_port': 'throwaway mongod port (default 27018)',
@@ -324,13 +348,25 @@ def dev_migrated(c, dump='261001', port=8000, mongo_port=27018,
                  derive='frame,shape_class,proxies,complexity',
                  test_accounts=False, test_dataset='dbu_zirkus'):
     """
-    Serve a migrated copy of a dump (throwaway mongod) for frontend work.
+    Deprecated: use "invoke dev-local --migrate" (same as before).
     """
-    flags = ' --no-derive' if derive == 'none' else f' --derive-stages {derive}'
+    print('invoke dev-migrated is deprecated: use "invoke dev-local --migrate" '
+          '(a dump that is 0.6 data already: "invoke dev-local")')
+    _serve_dump(c, dump, port, mongo_port, derive, test_accounts,
+                test_dataset, True)
+
+
+def _serve_dump(c, dump, port, mongo_port, derive, test_accounts,
+                test_dataset, migrate):
+    flags = ''
+    if migrate:
+        flags += ' --migrate'
+        flags += (' --no-derive' if derive == 'none'
+                  else f' --derive-stages {derive}')
     if test_accounts:
         flags += f' --test-accounts --test-dataset {test_dataset}'
     with chdir(REPO_DIR):
-        c.run(f'{sys.executable} scripts/dev/serve_migrated.py --dump {dump} '
+        c.run(f'{sys.executable} scripts/dev/serve_dump.py --dump {dump} '
               f'--port {port} --mongo-port {mongo_port}{flags}', pty=False)
 
 

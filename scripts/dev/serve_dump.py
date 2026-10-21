@@ -1,13 +1,10 @@
-"""Serve a migrated copy of a local dump for frontend work (`invoke dev-migrated`).
+"""Serve a local dump for frontend work (`invoke dev-local`).
 
-Starts a throwaway ``mongod``, loads ``mongodb_collections_local/<dump>``,
-runs the 0.6 migration, derives frame, shape class, proxies (with deviation
-maps) and complexity with the geometry runner (steps 5 and 7 of the spec;
-``--no-derive`` skips it, the web app then has no frames), builds the
-component-map cache, adds a local admin account and serves the backend on it with ``src/backend/dev.env``. The asset
-folders are only read: step 6c moves the gripper meshes out of a temporary
-copy into a temporary ``SNAPSHOT_CAPTURE_DIR``. Your usual database is not
-touched; everything is gone when the script stops (Ctrl+C).
+Starts a throwaway ``mongod``, loads ``mongodb_collections_local/<dump>`` as it
+is (a dump of the 0.6 data; the newest one by default), builds the
+component-map cache, adds a local admin account and serves the backend on it
+with ``src/backend/dev.env``. Your usual database is not touched; everything
+is gone when the script stops (Ctrl+C).
 
 The database listens on a fixed port (``--mongo-port``, default 27018), so
 the frontend only needs its NextAuth database pointed there::
@@ -16,7 +13,11 @@ the frontend only needs its NextAuth database pointed there::
     npm run dev          # in src/frontend; FASTAPI_URL from .env.development.local
 
 The admin account (``dev-admin``) and its generated password are written to
-``.dev/dev-migrated-credentials.txt`` (gitignored).
+``.dev/dev-local-credentials.txt`` (``-<port>`` after ``credentials`` for any
+other backend port; gitignored), and the address of the database and the
+backend to ``.dev/local.json`` (``local-<port>.json``). Before the rename of
+this script (it was ``serve_migrated.py``) the files were called
+``dev-migrated-credentials*.txt`` and ``migrated*.json``.
 
 ``--test-accounts`` also creates one account per dataset role in one dataset
 (``dev-contrib``, ``dev-mod`` = moderator and contributor, ``dev-rev``, and
@@ -30,12 +31,19 @@ but the user names is printed.
 whose name is six digits. A collection with no export file is not loaded, and
 an export file of 0 bytes loads as no documents.
 
-``--no-migrate`` loads a dump that already is 0.6 data (a production dump
-from after the cutover) as it is: no migration, no gripper copy, no derive
-run. ``--assets DIR`` points every asset folder (meshes, previews, photos,
-point clouds, proxies, capture, evidence) at the sub-folders of DIR, a copy of
-the server's asset folder; they are read and written in place, so never name
-the backup itself and run no runner with ``--sweep`` on it.
+``--migrate`` is for an old 0.5 dump: it runs the 0.6 cutover steps on it
+(gripper meshes out of a temporary copy of the asset folder into a temporary
+``SNAPSHOT_CAPTURE_DIR``, the owner mapping of ``.dev/reattribute_06.json``
+when present), then derives frame, shape class, proxies (with deviation maps)
+and complexity with the geometry runner (``--no-derive`` skips that, the web app
+then has no frames). Without it the dump is loaded as it is: no migration, no
+gripper copy, no derive run. ``--no-migrate`` is accepted and does nothing (it
+is the default now), so that old command lines keep working.
+
+``--assets DIR`` points every asset folder (meshes, previews, photos, point
+clouds, proxies, capture, evidence) at the sub-folders of DIR, a copy of the
+server's asset folder; they are read and written in place, so never name the
+backup itself and run no runner with ``--sweep`` on it.
 
 ``--existing`` serves a database that is already running (``--mongo-port``)
 again: no mongod, no dump, no migration, no accounts. The capture fixture
@@ -63,6 +71,11 @@ sys.path.insert(0, str(_BACKEND))
 sys.path.insert(0, str(_REPO / 'tests' / 'api'))
 
 _PATH_KEYS = ('_DIR', 'CLIENT_LOG_PATH')
+
+# the temporary folder of a run; the sweep of stale ones finds the old prefix
+# too for a while (the script was ``serve_migrated.py``)
+TEMP_PREFIX = 'csc-dev-local-'
+OLD_TEMP_PREFIX = 'csc-dev-migrated-'
 
 
 def _dev_env() -> dict:
@@ -151,7 +164,7 @@ def restore_capture_fixtures(snapshots, assets: Path, capture: Path):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('--dump', default='261001',
+    parser.add_argument('--dump', default='latest',
                         help='a folder of mongodb_collections_local, or '
                              '"latest" for the newest one (six digits)')
     parser.add_argument('--port', type=int, default=8000,
@@ -168,8 +181,13 @@ def main() -> int:
                         help='create dev-contrib, dev-mod, dev-mod2 and '
                              'dev-rev with their roles in --test-dataset, '
                              'and dev-outsider with none')
-    parser.add_argument('--no-migrate', action='store_true',
-                        help='the dump is already 0.6 data: load it as it is')
+    migration = parser.add_mutually_exclusive_group()
+    migration.add_argument('--migrate', action='store_true',
+                           help='the dump is a 0.5 one: run the 0.6 cutover '
+                                'steps on it (and derive, see --no-derive)')
+    migration.add_argument('--no-migrate', action='store_true',
+                           help='does nothing: loading the dump as it is is '
+                                'the default now')
     parser.add_argument('--assets', default=None, metavar='DIR',
                         help='use the sub-folders of this asset folder copy '
                              'for every asset directory')
@@ -184,6 +202,9 @@ def main() -> int:
     parser.add_argument('--test-dataset', default='dbu_zirkus',
                         help='dataset the test accounts are members of')
     args = parser.parse_args()
+    if args.no_migrate:
+        print('--no-migrate: the dump is loaded as it is by default now '
+              '(use --migrate for a 0.5 dump)')
     if args.dump == 'latest':
         from support import latest_dump
         args.dump = latest_dump(str(_REPO / 'mongodb_collections_local'))
@@ -208,7 +229,7 @@ def main() -> int:
         if keep_work:
             work = Path(args.work_dir)
         else:
-            work = Path(tempfile.mkdtemp(prefix='csc-dev-migrated-'))
+            work = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
             (work / 'owner.pid').write_text(str(os.getpid()), encoding='ascii')
     else:
         binary = find_mongod()
@@ -216,8 +237,9 @@ def main() -> int:
             sys.exit('no mongod binary (install MongoDB Community Server)')
         server = ThrowawayMongod(binary, port=args.mongo_port).start()
         uri = server.uri
-        sweep_stale_dirs('csc-dev-migrated-')
-        work = Path(tempfile.mkdtemp(prefix='csc-dev-migrated-'))
+        for prefix in (TEMP_PREFIX, OLD_TEMP_PREFIX):
+            sweep_stale_dirs(prefix)
+        work = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
         (work / 'owner.pid').write_text(str(os.getpid()), encoding='ascii')
     env = _dev_env()
     if args.assets:
@@ -245,7 +267,7 @@ def main() -> int:
             # those folders, never the asset folder itself
             meshes = work / 'meshes'
             copied = 0
-            if not args.no_migrate:
+            if args.migrate:
                 for snap in db['component_snapshots'].find(
                         {'geometry.meshes.1': {'$exists': True}}, {'_id': 1}):
                     source = assets / snap['_id'] / '1'
@@ -257,16 +279,17 @@ def main() -> int:
                     CUTOVER_STEPS)
                 print(f'migrated to 0.6 ({copied} gripper meshes -> {capture})')
             else:
-                print('no migration: the dump is loaded as it is')
+                print('no migration: the dump is loaded as it is '
+                      '(--migrate for a 0.5 dump)')
             # the untracked owner mapping (decisions 8.24-8.27), when present
             mapping = dev / 'reattribute_06.json'
-            if mapping.is_file() and not args.no_migrate:
+            if mapping.is_file() and args.migrate:
                 run(Context(db=db, files=False, log=lambda m: None,
                             shared_mapping=json.loads(
                                 mapping.read_text(encoding='utf-8'))), ['11b'])
                 print('step 11b applied (.dev/reattribute_06.json)')
 
-            if not args.no_derive and not args.no_migrate:
+            if not args.no_derive and args.migrate:
                 from apps.catalog.geometry_runner import derive_and_store_sync
                 from apps.catalog.geometry_stages import Env
                 stages = [s for s in args.derive_stages.split(',') if s]
@@ -301,13 +324,13 @@ def main() -> int:
                                        dev / f'dev-test-accounts{tag}.json')
                 print(f'test accounts in {args.test_dataset}: {", ".join(names)} '
                       f'(passwords in .dev/dev-test-accounts{tag}.json)')
-            (dev / f'dev-migrated-credentials{tag}.txt').write_text(
+            (dev / f'dev-local-credentials{tag}.txt').write_text(
                 f'dev-admin\n{password}\n', encoding='utf-8')
-            (dev / f'migrated{tag}.json').write_text(json.dumps(
+            (dev / f'local{tag}.json').write_text(json.dumps(
                 {'mongo_uri': mongo_uri, 'backend': f'http://127.0.0.1:{args.port}'
                  }), encoding='utf-8')
             print(f'mongo {mongo_uri}; login dev-admin '
-                  f'(password in .dev/dev-migrated-credentials{tag}.txt)')
+                  f'(password in .dev/dev-local-credentials{tag}.txt)')
         # on every start, a restart too: the temporary capture folder is
         # gone with the last stop (step 6c's files were moved into it)
         restored, present, missing = restore_capture_fixtures(
@@ -326,7 +349,7 @@ def main() -> int:
         # the backend refuses a secret under 32 bytes (0.6.1.1): a short one in
         # dev.env is replaced for this throwaway instance
         if len(env.get('JWT_SECRET', '').encode('utf-8')) < 32:
-            env['JWT_SECRET'] = 'dev-migrated-only-secret-at-least-32-bytes'
+            env['JWT_SECRET'] = 'dev-local-only-secret-at-least-32-bytes'
         env.setdefault('SMTP_PASSWORD', 'dev')
         os.environ.update(env)
         for key, value in env.items():

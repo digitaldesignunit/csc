@@ -1,4 +1,4 @@
-"""``scripts/dev/serve_migrated.py`` restores the capture fixture files on
+"""``scripts/dev/serve_dump.py`` restores the capture fixture files on
 every start (P12 preparation): copied from the asset folder, never moved, and
 only where a snapshot records a fixture and the file is missing."""
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts' / 'dev'))
 
-from serve_migrated import restore_capture_fixtures  # noqa: E402
+from serve_dump import restore_capture_fixtures  # noqa: E402
 
 WITH = {'_id': 'a1', 'capture': {'fixtures': [{'label': 'end_effector',
                                               'file': 'capture/a1/fixtures/0.ply'}]}}

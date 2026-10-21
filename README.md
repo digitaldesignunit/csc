@@ -105,7 +105,7 @@ UserObjects talk to production by default; to use a local backend, set the `Serv
 
 For browser checks open the web app as `http://127.0.0.1:<port>`, not
 `localhost`: cookies do not separate by port, so a second dev server on another
-port (a throwaway `invoke dev-migrated` with `NEXT_DIST_DIR` and
+port (a throwaway `invoke dev-local` with `NEXT_DIST_DIR` and
 `NEXTAUTH_URL=http://127.0.0.1:<port>`) would otherwise share its NextAuth
 session with the first.
 
@@ -119,7 +119,9 @@ without a path of your account: `CSC_PYTHON` (a `python.exe` you name), the
 active environment when it is `csc`, the conda base from `CONDA_EXE`, the usual
 install folders under `%USERPROFILE%` and `%ProgramData%`, then `conda run -n
 csc`. The sign-in `dev-admin` has a new password at every start, written to
-`.dev/dev-migrated-credentials-8791.txt`. A collection with no export file in
+`.dev/dev-local-credentials-8791.txt`. The script is `scripts/dev/serve_dump.py`
+(`invoke dev-local` runs it too); it loads a dump as it is, and `--migrate`
+runs the 0.6 cutover steps on an old 0.5 dump. A collection with no export file in
 the dump is not loaded, and an export file of 0 bytes holds no documents.
 
 ### Tests

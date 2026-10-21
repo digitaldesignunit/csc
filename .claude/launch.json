@@ -6,7 +6,7 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": [
         "/c",
-        "set CSC_PUBLIC_API_URL=http://127.0.0.1:8791&& scripts\\dev\\run_csc_python.cmd -u scripts/dev/serve_migrated.py --dump latest --no-migrate --assets .dev/assets-261012 --port 8791 --mongo-port 27791"
+        "set CSC_PUBLIC_API_URL=http://127.0.0.1:8791&& scripts\\dev\\run_csc_python.cmd -u scripts/dev/serve_dump.py --dump latest --assets .dev/assets-261012 --port 8791 --mongo-port 27791"
       ],
       "port": 8791
     },
@@ -35,7 +35,7 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": [
         "/c",
-        "scripts\\dev\\run_csc_python.cmd -m invoke dev-migrated"
+        "scripts\\dev\\run_csc_python.cmd -m invoke dev-local --migrate --dump 261001"
       ],
       "port": 8000
     },
