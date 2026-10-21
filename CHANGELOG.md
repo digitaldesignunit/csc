@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renews itself. Connected `Username` and `Password` still win and stay the way to sign in on
   macOS; with them the component signs in again by itself when its 6-hour token runs out.
   Update the components with `CSC_Update`.
+- **Viewer:** a "Piece opacity" slider in the Overlay panel fades the mesh, proxy or point
+  cloud so reinforcement and other overlays show through. The Mesh and Point cloud switches are
+  labelled and have an "Off" choice instead of the "Show mesh" and "Show point cloud"
+  checkboxes; "Show edges" moved to the overlays.
 
 ### Security
 
