@@ -29,8 +29,8 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.6.2.1 --- backend, web frontend and Grasshopper interface are released together
-  under one version (tag `v0.6.2.1`); the single source is the `VERSION` file.
+- **CSC**: 0.6.3.0 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.6.3.0`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
 
