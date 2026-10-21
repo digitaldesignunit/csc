@@ -54,6 +54,13 @@ RENEW_WITHIN_DAYS = 14
 OAUTH_ACCESS_SECONDS = 3600
 OAUTH_REFRESH_DAYS = 30
 OAUTH_GRANT_DAYS = 90
+# a row that is revoked, or expired past its refresh limit, is deleted this many
+# days later: a TTL index on ``purge_at`` (0.6.3.1), no job
+PURGE_AFTER_DAYS = 90
+# failed lookups (unknown, revoked, expired, wrong scope) per client address and
+# minute, counted in the shared store; /token is called from addresses many
+# people share (Anthropic's), so this is not tight
+FAILED_LOOKUPS_PER_MINUTE = 60
 
 
 def now() -> datetime:
@@ -105,6 +112,23 @@ def status_of(doc: dict, moment: Optional[datetime] = None) -> str:
     if doc['expires'] <= stamp(moment or now()):
         return 'expired'
     return 'active'
+
+
+def purge_at(doc: dict) -> datetime:
+    """When a row may be deleted: ``PURGE_AFTER_DAYS`` after it died. A row
+    dies when it is revoked, reaches its hard limit (``expires``) or, for a
+    connection, its refresh limit (``refresh_expires``): the earliest of them."""
+    ends = [doc['expires']]
+    if doc.get('refresh_expires'):
+        ends.append(doc['refresh_expires'])
+    if doc.get('revoked'):
+        ends.append(doc['revoked'])
+    return parse_stamp(min(ends)) + timedelta(days=PURGE_AFTER_DAYS)
+
+
+def purge_by_revoke(moment: Optional[datetime] = None) -> datetime:
+    """The purge date of a row revoked now (``$min`` with the one it has)."""
+    return (moment or now()) + timedelta(days=PURGE_AFTER_DAYS)
 
 
 def lifetime_days(doc: dict) -> int:

@@ -957,7 +957,7 @@ when zooming in; stale file markers after a geometry PATCH on a draft (`mesh_ply
 outline's vertex limit counts holes; the paired rebound linked on the core record's evidence card; RL1 checked
 (two layouts on one piece show both cards and bar sets); the snapshot-scoped fold confirmed by a test;
 housekeeping (em dashes as empty values in `app/admin/users/page.tsx` and `InvitationsTable.tsx`, the long
-README line on `SMTP_REPLY_TO`, `tests/api/test_mail_templates.py` and its `delenv`, a fresh `npm audit`).
+README line on `SMTP_REPLY_TO`, `tests/api/test_mail_templates.py` and its `delenv`, a fresh `npm audit`). Added (user 2026-10-21): `invoke release-prep` (the CHANGELOG date, `.zenodo.json`, `check_version --tag`, `tests/ci` in one step) and `bump-version --gh` leaving `DDU_CSC_Session.py` alone when its client version already matches. And `.claude/launch.json` committable: a launcher that finds the `csc` environment without an account path, `serve_migrated.py --dump latest` (empty exports load as no documents), one `backend-local` / `frontend-local` pair.
 
 **0.6.4 --- search and the location map (about 7--9 days; user 2026-10-21):** a catalog of about 2300 pieces
 needs new kinds of questions more than indexes. (a) **Dimensions** ("what fits?"): range filters on the stored

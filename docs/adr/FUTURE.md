@@ -45,11 +45,6 @@ gap.
   and a point cloud of the same L-panel landed a quarter turn apart). Changing the descriptor
   invalidates every stored signature.
 - **Open3D** --- mesh quality analysis, better preprocessing for the geometry runner.
-- **Stale file markers after a geometry PATCH** (review of 0.6.2.0 T1, 2026-10-16): a
-  `PATCH /snapshots/{sid}` with new `geometry` on a draft removes the fitted maps but keeps the mesh
-  and point cloud files and both markers (`mesh_ply_resolutions`, `point_cloud_files`), so an index
-  can point past the new primitives. Reads fall back to the inline copy, so nothing fails; clear the
-  markers (and the files) of indices the new geometry no longer has.
 
 ## Component map
 

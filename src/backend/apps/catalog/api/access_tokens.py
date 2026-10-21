@@ -24,7 +24,9 @@ still has a role of ``CSC_PAT_ROLES``. Any failure is the same 401 with the
 same text, so the answer does not tell which check failed (the log does). A
 JWT is refused here, and ``auth.lookup_user_from_token`` refuses ``csc_``
 tokens. 120 requests a minute per token are allowed, counted per worker in
-memory (8.152) after the token has proved itself.
+memory (8.152) after the token has proved itself. A token that fails counts
+for the client address in the shared store (60 a minute): over that the answer
+is 429 with Retry-After instead of 401; a valid token is never affected.
 """
 
 import uuid
@@ -41,8 +43,10 @@ from apps.catalog.token_check import (
     TokenRefused,
     lookup_access_token,
     may_hold_pat,
+    note_failure,
     note_use,
 )
+from limiter import client_ip
 from logging_setup import get_logger
 from .auth import get_current_active_user, require_admin
 
@@ -152,6 +156,7 @@ async def _create(request: Request, user: UserInDB, name: str, days: int,
         token_sha256=tk.token_hash(token), short_id=tk.short_id_of(token),
         created=tk.stamp(moment), expires=tk.expires_at(days, moment),
     ).model_dump(by_alias=True)
+    doc['purge_at'] = tk.purge_at(doc)
     await _tokens(request).insert_one(doc)
     if await _count_active(request, user.id, except_id) \
             > tk.MAX_ACTIVE_TOKENS:
@@ -196,7 +201,8 @@ async def _revoke(request: Request, doc: dict) -> dict:
         revoked = tk.stamp(tk.now())
         await _tokens(request).update_one(
             {'_id': doc['_id'], 'revoked': None},
-            {'$set': {'revoked': revoked}})
+            {'$set': {'revoked': revoked},
+             '$min': {'purge_at': tk.purge_by_revoke()}})
         doc = {**doc, 'revoked': revoked}
     return doc
 
@@ -347,17 +353,23 @@ def access_token_user(scope: str, www_authenticate: str = 'Bearer'):
     ``Bearer resource_metadata="..."``)."""
 
     async def dependency(request: Request) -> UserInDB:
+        token = _bearer(request)
         try:
-            doc, user = await lookup_access_token(
-                request.app, _bearer(request), scope)
-            route = getattr(request.scope.get('route'), 'path', '-')
-            await note_use(request.app, doc, route)
-        except TokenRefused as refusal:
-            raise _refuse(refusal.reason, refusal.short_id, www_authenticate)
+            try:
+                doc, user = await lookup_access_token(
+                    request.app, token, scope)
+                route = getattr(request.scope.get('route'), 'path', '-')
+                await note_use(request.app, doc, route)
+            except TokenRefused as refusal:
+                # a token was sent and failed: it counts for the address
+                # (429 once over the limit), a missing header does not
+                if token:
+                    await note_failure(client_ip(request))
+                raise _refuse(refusal.reason, refusal.short_id,
+                              www_authenticate)
         except RateLimited as limited:
             raise HTTPException(
-                status.HTTP_429_TOO_MANY_REQUESTS,
-                'Too many requests for this access token.',
+                status.HTTP_429_TOO_MANY_REQUESTS, limited.message,
                 headers={'Retry-After': str(limited.wait)})
         request.state.access_token = doc
         return user

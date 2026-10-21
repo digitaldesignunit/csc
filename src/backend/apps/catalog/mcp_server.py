@@ -16,6 +16,7 @@ users, invitations or tokens.
 ASGI app that ``/mcp`` serves (token check, 401 with the resource metadata, 429).
 """
 
+import json
 import math
 import re
 from typing import Annotated, Any, Optional
@@ -34,12 +35,14 @@ from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl, Field
 from starlette.middleware.authentication import AuthenticationMiddleware
+from starlette.requests import Request
 
+import limiter as lim
 from apps.catalog import access_tokens as tk
 from apps.catalog.internal_call import InternalError, rest_get
 from apps.catalog.models import UserInDB
 from apps.catalog.oauth_server import AccessTokenVerifier
-from apps.catalog.token_check import RateLimited
+from apps.catalog.token_check import REQUEST_ADDRESS, RateLimited
 from logging_setup import get_logger
 
 log = get_logger(__name__)
@@ -474,26 +477,34 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
 
 # THE GATE OF /mcp ------------------------------------------------------------------------
 class RateGate:
-    """Outside the SDK's authentication: a valid token over its limit gets a
-    429 with Retry-After (the SDK middleware only knows 401 and 403)."""
+    """Outside the SDK's authentication: a valid token over its limit, or an
+    address over its limit of failed lookups, gets a 429 with Retry-After (the
+    SDK middleware only knows 401 and 403). It also tells the token verifier
+    which address the request comes from."""
 
     def __init__(self, inner):
         self.inner = inner
 
     async def __call__(self, scope, receive, send):
+        marker = None
+        if scope['type'] == 'http':
+            marker = REQUEST_ADDRESS.set(lim.client_ip(Request(scope)))
         try:
             await self.inner(scope, receive, send)
         except RateLimited as limited_:
             if scope['type'] != 'http':
                 raise
-            body = b'{"error":"rate_limited","error_description":' \
-                   b'"Too many requests for this access token."}'
+            body = json.dumps({'error': 'rate_limited',
+                               'error_description': limited_.message}).encode()
             await send({'type': 'http.response.start', 'status': 429,
                         'headers': [
                             (b'content-type', b'application/json'),
                             (b'content-length', str(len(body)).encode()),
                             (b'retry-after', str(limited_.wait).encode())]})
             await send({'type': 'http.response.body', 'body': body})
+        finally:
+            if marker is not None:
+                REQUEST_ADDRESS.reset(marker)
 
 
 def build_gate(app, mcp: FastMCP, metadata_url: str):

@@ -431,19 +431,102 @@ def bump_version(c, version, gh=False):
         _rewrite(changelog, r'^## \[',
                  f'## [{version}] - unreleased{eol}{eol}## [')
     if gh:
+        release_prep = _release_prep_module()
         session = os.path.join(REPO_DIR, 'grasshopper_userobjects_src',
                                'DDU_CSC_Session.py')
-        _rewrite(session, rf"^CSC_CLIENT = 'gh-userobjects/{v}'",
-                 f"CSC_CLIENT = 'gh-userobjects/{version}'")
-        _rewrite(session, r'^Version: \d+(\.\d+)?[a-z]?(?=\r?$)',
-                 f"Version: {datetime.date.today():%y%m%d}")
-        print('GH: CSC_Session changed -> re-export DDU_CSC_Session.ghuser '
-              '(and its XML) in Rhino before releasing')
+        # latin-1 reads and writes every byte back unchanged: the file is
+        # saved by Rhino's editor and may not be UTF-8
+        with open(session, encoding='latin-1', newline='') as handle:
+            source = handle.read()
+        try:
+            new_source, changed = release_prep.gh_client_update(
+                source, version, datetime.date.today())
+        except ValueError as exc:
+            sys.exit(f'bump-version: DDU_CSC_Session.py: {exc}')
+        if changed:
+            with open(session, 'w', encoding='latin-1', newline='') as handle:
+                handle.write(new_source)
+            print('GH: CSC_Session changed -> re-export '
+                  'DDU_CSC_Session.ghuser (and its XML) in Rhino before '
+                  'releasing')
+        else:
+            print(f'GH: CSC_CLIENT is gh-userobjects/{version} already: '
+                  f'DDU_CSC_Session.py is left as it is (the Version: '
+                  f'header keeps matching the exported .ghuser)')
     print(f'VERSION -> {version}; now fill in the CHANGELOG section, then '
-          f'run invoke zenodo')
+          f'run invoke release-prep')
     with chdir(REPO_DIR):
         c.run(f'{sys.executable} scripts/ci/check_version.py', pty=False,
               warn=True)
+
+
+def _release_prep_module():
+    """scripts/ci/release_prep.py: the pure parts, shared with the tests."""
+    import importlib.util
+    path = os.path.join(REPO_DIR, 'scripts', 'ci', 'release_prep.py')
+    spec = importlib.util.spec_from_file_location('release_prep', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@task(help={'date': 'release date YYYY-MM-DD (default: today)'})
+def release_prep(c, date=''):
+    """
+    Prepare the release of the version in VERSION: date the CHANGELOG section,
+    write .zenodo.json, check version, tag and Zenodo metadata, run tests/ci.
+    Run after bump-version and after filling in the CHANGELOG section; stops
+    with an error on any failure. Running it again only checks.
+    """
+    import datetime
+    release_prep = _release_prep_module()
+    with open(os.path.join(REPO_DIR, 'VERSION'), encoding='utf-8') as handle:
+        version = handle.read().strip()
+    try:
+        day = datetime.date.fromisoformat(date) if date \
+            else datetime.date.today()
+    except ValueError:
+        sys.exit(f'release-prep: --date must be YYYY-MM-DD, not "{date}"')
+    changelog = os.path.join(REPO_DIR, 'CHANGELOG.md')
+    # newline='': the file's own line endings (CRLF) are kept
+    with open(changelog, encoding='utf-8', newline='') as handle:
+        text = handle.read()
+    body = release_prep.changelog_section(text, version)
+    if body is None:
+        sys.exit(f'release-prep: CHANGELOG.md has no "## [{version}]" '
+                 f'section; run invoke bump-version or add it')
+    if release_prep.section_is_empty(body):
+        sys.exit(f'release-prep: the "## [{version}]" section of '
+                 f'CHANGELOG.md is empty; fill it in first (it becomes the '
+                 f'release notes)')
+    new_text, state = release_prep.set_changelog_date(
+        text, version, day.isoformat())
+    if state == 'dated':
+        with open(changelog, 'w', encoding='utf-8', newline='') as handle:
+            handle.write(new_text)
+        print(f'CHANGELOG: [{version}] dated {day.isoformat()}')
+    elif state == 'already':
+        print(f'CHANGELOG: [{version}] is dated already '
+              f'({release_prep.existing_date(text, version)}): only checking')
+    else:
+        sys.exit(f'release-prep: the heading of [{version}] in CHANGELOG.md '
+                 f'is neither "unreleased" nor dated')
+    steps = [
+        ('Zenodo metadata', f'{sys.executable} scripts/ci/zenodo_metadata.py'),
+        ('version check', f'{sys.executable} scripts/ci/check_version.py '
+                          f'--tag v{version}'),
+        ('Zenodo check', f'{sys.executable} scripts/ci/zenodo_metadata.py '
+                         f'--check'),
+        ('tests/ci', f'{sys.executable} -m pytest tests/ci -q'),
+    ]
+    with chdir(REPO_DIR):
+        for name, command in steps:
+            print(f'--- {name}')
+            result = c.run(command, pty=False, warn=True)
+            if not result.ok:
+                sys.exit(f'release-prep: {name} failed (see above); fix it '
+                         f'and run invoke release-prep again')
+    print('\n' + release_prep.next_steps(version))
 
 
 @task(help={'check': 'only report whether .zenodo.json is stale'})

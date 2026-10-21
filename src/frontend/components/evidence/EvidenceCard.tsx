@@ -7,7 +7,7 @@
  * verification. Used in the component page's list, in the form's review
  * step and in the queues.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronRight, MapPin, TriangleAlert } from 'lucide-react'
 
@@ -25,6 +25,7 @@ import { roundVec, type Vec3 } from '@/lib/evidence/grid'
 import { useRegistry } from '@/lib/evidence/useRegistry'
 import { formatDateAtPrecision } from '@/components/components/componentDetailShared'
 import { documentOf } from '@/lib/evidence/document'
+import { pairedReboundLink, recordAnchor } from '@/lib/evidence/paired'
 
 function who(actor: Actor): string {
   return [actor.name, actor.organization].filter(Boolean).join(', ') || 'someone'
@@ -37,6 +38,7 @@ export default function EvidenceCard({
   defaultOpen = false,
   uploadHelp,
   menu = false,
+  shownIds,
 }: {
   record: EvidenceView
   dataset: string | null | undefined
@@ -45,8 +47,18 @@ export default function EvidenceCard({
   uploadHelp?: string
   /** The lifecycle actions in a menu of the card's own (the component page, 8.118). */
   menu?: boolean
+  /** The ids of the cards the page lists (the paired record is linked only when it is one of them). */
+  shownIds?: readonly string[]
 }) {
   const [open, setOpen] = useState(defaultOpen)
+  const anchor = recordAnchor(String(record._id))
+  // a link to this card (the paired record's) opens it
+  useEffect(() => {
+    const opens = () => { if (window.location.hash === anchor) setOpen(true) }
+    opens()
+    window.addEventListener('hashchange', opens)
+    return () => window.removeEventListener('hashchange', opens)
+  }, [anchor])
   const { registry } = useRegistry()
   const method = registry?.methods.find((m) => m.name === record.method)
   const facts = serverFacts(method, record.payload)
@@ -57,6 +69,7 @@ export default function EvidenceCard({
   const point = record.position?.point as Vec3 | null | undefined
   const attachments = (record.attachments ?? []).filter((a) => !a.removed).length
   const cited = documentOf(record.payload)
+  const paired = pairedReboundLink(record.method, record.payload, shownIds)
   // no result: the record documents the piece and never enters the fold (8.106)
   const isDocument = !record.summary
 
@@ -112,6 +125,19 @@ export default function EvidenceCard({
           <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             Record id <IdChip id={String(record._id)} kind="RecordID" />
           </p>
+          {paired && (
+            <p className="text-xs">
+              <span className="text-muted-foreground">Paired rebound record: </span>
+              {paired.onPage ? (
+                <a href={paired.href} className="font-mono underline underline-offset-2"
+                  aria-label="Paired rebound record">
+                  {paired.id.slice(0, 8)}
+                </a>
+              ) : (
+                <span className="font-mono" title={paired.title}>{paired.id.slice(0, 8)}</span>
+              )}
+            </p>
+          )}
           {(record.derived ?? []).map((d, i) => (
             <p key={i} className="text-xs">
               <span className="text-muted-foreground">{quantityLabel(d.quantity)} ({d.model.kind}): </span>

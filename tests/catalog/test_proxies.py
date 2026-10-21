@@ -458,3 +458,50 @@ def test_the_planar_prism_is_accepted_within_a_thickness_and_beating_the_box():
                    lambda: stats(0.0, rms=50.0))
     assert _accept('box', 'planar', stats(1e6), bbx)                  # the last fit always stands
     assert _accept('prism', 'linear', stats(10.0), bbx)               # the linear rule is its own
+
+
+# THE VERTEX LIMIT COUNTS THE HOLES (0.6.3.1) -----------------------------------
+def _round_hole_plate(hole_points):
+    from shapely.geometry import Point, box
+    plate = box(0, 0, 1000, 800)
+    hole = Point(500, 400).buffer(200, quad_segs=hole_points // 4)
+    return plate.difference(hole)
+
+
+def test_the_vertex_count_of_an_outline_includes_its_holes():
+    from apps.catalog.proxies.specs import outline_vertices
+    plate = _round_hole_plate(64)
+    assert len(plate.exterior.coords) == 5
+    assert outline_vertices(plate) == 5 + len(plate.interiors[0].coords)
+    assert outline_vertices(plate) > 60
+
+
+def test_a_plate_with_a_fine_hole_is_simplified_until_exterior_and_hole_fit():
+    from apps.catalog.proxies.specs import (
+        OUTLINE_MAX_VERTICES, _simplify, outline_vertices)
+    plate = _round_hole_plate(1200)                  # the exterior alone is 5
+    assert len(plate.exterior.coords) < OUTLINE_MAX_VERTICES
+    assert outline_vertices(plate) > OUTLINE_MAX_VERTICES
+    simple = _simplify(plate, 1000.0)
+    assert simple is not None
+    assert outline_vertices(simple) <= OUTLINE_MAX_VERTICES
+    assert len(simple.interiors) == 1                   # the hole is still there
+    assert abs(simple.area - plate.area) / plate.area < 0.01
+
+
+def test_a_plate_within_the_limit_keeps_its_hole_and_its_shape():
+    from apps.catalog.proxies.specs import OUTLINE_MAX_VERTICES, _simplify, outline_vertices
+    plate = _round_hole_plate(64)
+    simple = _simplify(plate, 1000.0)
+    assert simple is not None and outline_vertices(simple) <= OUTLINE_MAX_VERTICES
+    assert len(simple.interiors) == 1
+    assert abs(simple.area - plate.area) / plate.area < 0.01
+
+
+def test_a_hole_that_cannot_be_simplified_gives_up_like_a_jagged_exterior():
+    from shapely.geometry import LineString, box
+    from apps.catalog.proxies.specs import _simplify
+    zigzag = LineString([(1.6 * i + 100, 400 + 150.0 * (i % 2)) for i in range(600)])
+    hole = zigzag.buffer(0.3, cap_style='flat', join_style='mitre')
+    plate = box(0, 0, 1200, 800).difference(hole)
+    assert _simplify(plate, 1000.0) is None

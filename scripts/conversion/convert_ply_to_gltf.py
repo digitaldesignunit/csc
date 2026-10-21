@@ -21,9 +21,11 @@ COMPONENT_IDS = [
     "6dc08bb0-4ae3-42e6-8cd9-23b49f624706"
 ]
 
-# Source and destination paths
+# Source and destination paths; the destination is inside the repository
+# (from this script's own place), the source is a data folder of the machine
 SOURCE_DIR = r"D:\02_DATASETS\geometry-features-v1\meshes\original\components"
-DEST_DIR = r"C:\Users\EFESTWIN\source\repos\csc\src\frontend\public\meshes"
+DEST_DIR = str(Path(__file__).resolve().parents[2]
+               / 'src' / 'frontend' / 'public' / 'meshes')
 
 def convert_ply_to_gltf(ply_path, output_path):
     """Convert a PLY file to GLTF format"""
@@ -99,8 +101,7 @@ def main():
             }
             for component_id in COMPONENT_IDS
         ],
-        "total_count": converted_count,
-        "converted_at": str(Path().cwd())
+        "total_count": converted_count
     }
     
     manifest_path = os.path.join(DEST_DIR, "manifest.json")

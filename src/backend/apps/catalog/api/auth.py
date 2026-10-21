@@ -124,7 +124,8 @@ async def revoke_all_access_tokens(app, user_id: str) -> int:
     row holds. Returns how many were revoked."""
     done = await app.mongodb_access_tokens.update_many(
         {'owner_user_id': user_id, 'revoked': None},
-        {'$set': {'revoked': access_tokens.stamp(access_tokens.now())}})
+        {'$set': {'revoked': access_tokens.stamp(access_tokens.now())},
+         '$min': {'purge_at': access_tokens.purge_by_revoke()}})
     if done.modified_count:
         log.info('access tokens revoked after a password change: %d',
                  done.modified_count)

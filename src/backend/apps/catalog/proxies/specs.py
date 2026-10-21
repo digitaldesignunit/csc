@@ -63,8 +63,17 @@ def _length_placement(ctx: FitContext) -> Dict[str, list]:
     return frame_dict(ctx.frame['o'], axes[list(order)])
 
 
+def outline_vertices(polygon: Polygon) -> int:
+    """The vertices of the outline, the holes counted too: the limit is on
+    what is stored (``profile`` and ``holes``), not on the exterior ring
+    alone (0.6.3.1)."""
+    return len(polygon.exterior.coords) + sum(
+        len(ring.coords) for ring in polygon.interiors)
+
+
 def _simplify(polygon: Polygon, extent: float) -> Optional[Polygon]:
-    """The polygon with at most ``OUTLINE_MAX_VERTICES`` vertices, or None.
+    """The polygon with at most ``OUTLINE_MAX_VERTICES`` vertices (exterior
+    and holes together), or None.
 
     The tolerance grows by half each step from ``SIMPLIFY_START`` up to
     ``SIMPLIFY_CAP`` of the extent. A topology-preserving simplification can
@@ -78,7 +87,7 @@ def _simplify(polygon: Polygon, extent: float) -> Optional[Polygon]:
         simple = polygon.simplify(tolerance, preserve_topology=True)
         if not simple.is_valid or simple.is_empty:
             simple = polygon
-        if len(simple.exterior.coords) <= OUTLINE_MAX_VERTICES:
+        if outline_vertices(simple) <= OUTLINE_MAX_VERTICES:
             return simple
         if tolerance >= cap:
             return None

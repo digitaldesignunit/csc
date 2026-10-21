@@ -474,10 +474,20 @@ def sas_processing(
 
 
 if __name__ == '__main__':
-    source_geometry_dir = r'C:\Users\EFESTWIN\Documents\07_tu_darmstadt_ddu\05_Promotion\07_Source\240404_SAS_Debris_Files'  # NOQA
-    target_geometry_dir = r'C:\Users\EFESTWIN\source\repos\csc\component_geometry\250115'  # NOQA
-    json_source_dir = r'C:\Users\EFESTWIN\source\repos\csc\mongodb_backup\250115_0825'  # NOQA
-    json_target_dir = r'C:\Users\EFESTWIN\source\repos\csc\mongodb_backup\SAS_NEW'  # NOQA
+    # the SAS debris files are outside the repository: name the folder in the
+    # environment variable CSC_SAS_SOURCE_DIR (there is no default)
+    source_geometry_dir = os.environ.get('CSC_SAS_SOURCE_DIR')
+    if not source_geometry_dir:
+        raise SystemExit(
+            'CSC_SAS_SOURCE_DIR is not set: set it to the folder of the SAS '
+            'debris files (one sub-folder per object) before running.')
+    # the rest is inside the repository, found from this script's own place
+    repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    target_geometry_dir = os.path.join(
+        repo_dir, 'component_geometry', '250115')
+    json_source_dir = os.path.join(repo_dir, 'mongodb_backup', '250115_0825')
+    json_target_dir = os.path.join(repo_dir, 'mongodb_backup', 'SAS_NEW')
     sas_processing(
         source_geometry_dir,
         target_geometry_dir,

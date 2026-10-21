@@ -122,8 +122,9 @@ Paths below are the defaults (`--data` = `.dev/open_datasets/recreate/zenodo-168
 
 ## Local rehearsal
 
-1. Start the instance: launch configs `backend-261012` (backend on 8791, throwaway mongod on 27791, a copy
-   of the production assets in `.dev/assets-261012`) and `frontend-261012` (3100) in `.claude/launch.json`.
+1. Start the instance: launch configs `backend-local` (backend on 8791 with the newest dump of
+   `mongodb_collections_local`, throwaway mongod on 27791, a copy of the production assets in
+   `.dev/assets-261012`) and `frontend-local` (3000) in `.claude/launch.json`.
    Never point `--assets` at the original backup of the assets, and never run a runner with `--sweep` on it.
 2. Fetch, parse, compute geometry, plan, check (the order above).
 3. `run.py --dry-run`, then `run.py --server http://127.0.0.1:8791 --username dev-admin` (the password of

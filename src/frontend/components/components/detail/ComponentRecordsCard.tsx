@@ -29,9 +29,11 @@ export default function ComponentRecordsCard({ catalog }: { catalog: CatalogComp
   const published = live.filter((r) => r.status === 'published')
   const newestFirst = (a: (typeof live)[number], b: (typeof live)[number]) => b.observed_at.localeCompare(a.observed_at)
   const help = registry?.help(...UPLOAD_HELP)
+  // the cards of this page: a paired record is linked only when it is one of them
+  const shownIds = [...live, ...(showCorrected ? corrected : [])].map((record) => String(record._id))
   const card = (record: (typeof live)[number]) => (
     <EvidenceCard key={record._id} record={record} dataset={identity.dataset} onChanged={changed}
-      uploadHelp={help} menu />
+      uploadHelp={help} menu shownIds={shownIds} />
   )
 
   return (
@@ -68,7 +70,8 @@ export default function ComponentRecordsCard({ catalog }: { catalog: CatalogComp
               {showCorrected ? 'Hide' : 'Show'} corrected records ({corrected.length})
             </Button>
             {showCorrected && [...corrected].sort(newestFirst).map((record) => (
-              <EvidenceCard key={record._id} record={record} dataset={identity.dataset} onChanged={changed} menu />
+              <EvidenceCard key={record._id} record={record} dataset={identity.dataset} onChanged={changed} menu
+                shownIds={shownIds} />
             ))}
           </div>
         )}

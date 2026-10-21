@@ -44,13 +44,39 @@ def dump_files(dump_dir):
     return files
 
 
-def load_dump(database, dump_dir, replace=False):
-    """Insert every exported collection; returns {collection: count}."""
+def latest_dump(dumps_dir):
+    """The newest dump folder of ``mongodb_collections_local``: a folder whose
+    name is six digits (yymmdd); the greatest name is the newest. None when
+    there is none."""
+    import os
+    import re
+    if not os.path.isdir(dumps_dir):
+        return None
+    names = [n for n in os.listdir(dumps_dir)
+             if re.fullmatch(r'\d{6}', n)
+             and os.path.isdir(os.path.join(dumps_dir, n))]
+    return max(names) if names else None
+
+
+def read_export(path):
+    """The documents of one Compass export. An export file that is empty (0
+    bytes, or only white space), as Compass writes for a collection with no
+    documents, holds none."""
     from bson import json_util
+    with open(path, encoding='utf-8') as handle:
+        text = handle.read()
+    if not text.strip():
+        return []
+    return json_util.loads(text)
+
+
+def load_dump(database, dump_dir, replace=False):
+    """Insert every exported collection; returns {collection: count}. A
+    collection with no export file is simply not loaded (the dump predates
+    it); an empty export file loads as no documents."""
     counts = {}
     for collection, path in dump_files(dump_dir).items():
-        with open(path, encoding='utf-8') as handle:
-            docs = json_util.loads(handle.read())
+        docs = read_export(path)
         if replace:
             database[collection].delete_many({})
         if docs:

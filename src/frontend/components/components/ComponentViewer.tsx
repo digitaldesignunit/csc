@@ -38,7 +38,7 @@ import {
   barLegend,
   defaultColourMode,
   diameterRange,
-  layoutLabels,
+  layoutsOnSnapshot,
   type BarColourMode,
   type BarLayout,
 } from '@/lib/reinforcementColors'
@@ -63,10 +63,18 @@ import {
   visibleBodyLayers,
 } from '@/lib/viewerOpacity'
 import {
+  bodyFaceMaterial,
+  depthChanged,
+  depthRange,
+  edgeLineMaterial,
+  sizeChanged,
+} from '@/lib/viewerDepth'
+import {
   chooseSwitch,
   edgesControl,
   hasMeshSwitch,
   pointCloudStartsOff,
+  shouldLoadLevel,
   shownFlags,
   switchValue,
   withOff,
@@ -95,11 +103,31 @@ function ToolbarSwitch({ label, children }: { label: string; children: React.Rea
   )
 }
 
-/** Fit camera to scene bounds; registers ref for manual zoom-extents. */
+/** Frames between two measurements of the piece (it changes with a load, not with a frame). */
+const MEASURE_EVERY_FRAMES = 15
+
+/**
+ * Fit camera to scene bounds; registers ref for manual zoom-extents. Also
+ * owns two things that depend on the size of the piece (0.6.3.1), measured
+ * together with one reused box, at the first frame that has content and then
+ * every `MEASURE_EVERY_FRAMES` frames:
+ *  - the first fit can come before the piece is in the scene (it is attached a
+ *    moment later, and drei measures a made-up box of the camera's distance
+ *    for an empty scene), so a small piece was left as a dot. Until the user
+ *    moves the camera, the view is fitted again whenever the size of the piece
+ *    changes (`sizeChanged`);
+ *  - the camera planes follow the camera: drei's `clip` sets them once, for the
+ *    distance of the fit, so zooming close to a face cut it away. Each frame
+ *    they are a function of the distance to the orbit target and the radius of
+ *    the piece (`depthRange`; no measuring in the frame, only that distance).
+ */
 function FitCameraController({
   fitRef,
+  contentRef,
 }: {
   fitRef: React.MutableRefObject<(() => void) | null>
+  /** The group of the piece: its box is the size of the piece. */
+  contentRef: React.RefObject<THREE.Group | null>
 }) {
   const bounds = useBounds()
   const controls = useThree((state) => state.controls)
@@ -120,6 +148,48 @@ function FitCameraController({
     if (hasFit.current || !controls) return
     fitToScene()
     hasFit.current = true
+  })
+
+  const box = useMemo(() => new THREE.Box3(), [])
+  const extent = useMemo(() => new THREE.Vector3(), [])
+  const radius = useRef(0)
+  const fittedSize = useRef(0)
+  const touched = useRef(false)
+  const frames = useRef(0)
+  useEffect(() => {
+    const events = controls as unknown as {
+      addEventListener: (type: string, listener: () => void) => void
+      removeEventListener: (type: string, listener: () => void) => void
+    } | null
+    if (!events) return
+    const touch = () => { touched.current = true }
+    events.addEventListener('start', touch)
+    return () => events.removeEventListener('start', touch)
+  }, [controls])
+  useFrame((state) => {
+    const content = contentRef.current
+    if (hasFit.current && content
+        && (radius.current === 0 || frames.current % MEASURE_EVERY_FRAMES === 0)) {
+      box.setFromObject(content)
+      if (!box.isEmpty()) {
+        const diagonal = box.getSize(extent).length()
+        if (Number.isFinite(diagonal) && diagonal > 0) radius.current = diagonal / 2
+        if (!touched.current && sizeChanged(fittedSize.current, diagonal)) {
+          fittedSize.current = diagonal
+          fitToScene()
+        }
+      }
+    }
+    frames.current += 1
+    const target = (state.controls as { target?: THREE.Vector3 } | null)?.target
+    if (!target || radius.current === 0) return
+    const { camera } = state
+    const wanted = depthRange(camera.position.distanceTo(target), radius.current)
+    if (depthChanged({ near: camera.near, far: camera.far }, wanted)) {
+      camera.near = wanted.near
+      camera.far = wanted.far
+      camera.updateProjectionMatrix()
+    }
   })
 
   return null
@@ -387,19 +457,8 @@ function buildThreeGroupFromPLYGeometry(
 
   const hasColors = !!geometry.getAttribute('color')
 
-  const material = hasColors
-    ? new THREE.MeshBasicMaterial({
-        vertexColors: true,
-        side: THREE.DoubleSide,
-        transparent: false,
-        opacity: 1.0,
-      })
-    : new THREE.MeshBasicMaterial({
-        color: 0x888888,
-        side: THREE.DoubleSide,
-        transparent: false,
-        opacity: 1.0,
-      })
+  // the faces sit a hair behind their edges (0.6.3.1)
+  const material = bodyFaceMaterial(hasColors)
 
   const mesh = new THREE.Mesh(geometry, material)
   mesh.name = meshLabel
@@ -408,7 +467,7 @@ function buildThreeGroupFromPLYGeometry(
   object.add(mesh)
   {
     const edgeGeometry = new THREE.EdgesGeometry(geometry)
-    const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+    const edgeMaterial = edgeLineMaterial()
     const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial)
     edges.name = `${meshLabel}_edges`
     object.add(edges)
@@ -895,12 +954,10 @@ const VisualizeMultipleMeshes = React.memo(({
         geom.computeVertexNormals()
         geom.normalizeNormals()
 
-        const material = rawColors && rawColors.length > 0
-          ? new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })
-          : new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.DoubleSide })
+        const material = bodyFaceMaterial(!!rawColors && rawColors.length > 0)
 
         const edgeGeometry = new THREE.EdgesGeometry(geom)
-        const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000 })
+        const edgeMaterial = edgeLineMaterial()
         // both are built here for this viewer alone: fade them in place
         applyOpacity(material, opacity)
         applyOpacity(edgeMaterial, opacity)
@@ -1156,6 +1213,9 @@ export default function ComponentViewer({
   const pointCloudVisibilitySeedRef = useRef(
     `${identityId?.toString() ?? ''}:${primitivePointCloudCount}`,
   )
+  const pointCloudOffSeedRef = useRef(
+    `${identityId?.toString() ?? ''}:${primitivePointCloudCount}`,
+  )
 
   const snapshotMeshCacheKey = useMemo(() => {
     if (!snapshotRouting?.snapshot_id) return ''
@@ -1235,20 +1295,11 @@ export default function ComponentViewer({
       }[]) => {
         if (cancelled) return
         // one layout per record (RL3); a record without drawable bars is no layout
-        const drawable = (bar: ReinforcementBar) => Array.isArray(bar.points) && bar.points.length >= 2 && bar.diameter_mm > 0
-        const here = records
-          .filter((record) => record.position?.snapshot_id === snapshotIdForOverlays)
-          .filter((record) => (record.payload?.bars ?? []).some(drawable))
-        const labels = layoutLabels(here)
-        const bars: ViewerBar[] = here.flatMap((record, layout) =>
-          (record.payload?.bars ?? []).filter(drawable).map((bar) => ({ ...bar, layout })))
+        // one layout per record (RL1), every bar of every layout drawn
+        const { bars, layouts } = layoutsOnSnapshot<ReinforcementBar>(records, snapshotIdForOverlays)
         setReinforcementBars(bars)
-        setBarLayouts(here.map((record, layout) => ({
-          id: String(record._id ?? layout),
-          label: labels[layout],
-          count: bars.filter((bar) => bar.layout === layout).length,
-        })))
-        setBarColourMode(defaultColourMode(here.length))
+        setBarLayouts(layouts)
+        setBarColourMode(defaultColourMode(layouts.length))
       })
       .catch(() => { if (!cancelled) { setReinforcementBars([]); setBarLayouts([]) } })
     return () => { cancelled = true }
@@ -1264,9 +1315,20 @@ export default function ComponentViewer({
     const visibilitySeed = `${identityId?.toString() ?? ''}:${primitiveMeshCount}`
     const resetVisibilityToDefault =
       meshVisibilitySeedRef.current !== visibilitySeed
-    meshVisibilitySeedRef.current = visibilitySeed
+    // an Off layer loads nothing and leaves its visibility alone: it must not
+    // use up the reset either, so that after a version switch while Off the
+    // new version's default visibility applies when the mesh is switched back
+    // on (0.6.3.1)
+    const meshHeldByOff = isMeshExternalMode && meshOff && !isProxyOnly && !!identityId
+    if (!meshHeldByOff) meshVisibilitySeedRef.current = visibilitySeed
 
-    if (isMeshExternalMode && !isProxyOnly && identityId) {
+    if (meshHeldByOff) {
+      // Off hides and loads nothing, also not after a version switch; the
+      // level is fetched when the mesh is switched back on (0.6.3.1)
+      setIsLoadingExternalMeshes(false)
+    } else if (isMeshExternalMode && shouldLoadLevel({
+      external: isMeshExternalMode, off: meshOff, proxyOnly: isProxyOnly, hasIdentity: !!identityId,
+    })) {
       setIsLoadingExternalMeshes(true)
       setMeshGeometryError(null)
       setShowEdges(false)
@@ -1323,6 +1385,7 @@ export default function ComponentViewer({
     }
   }, [
     meshGeometryMode,
+    meshOff,
     isProxyOnly,
     identityId,
     isMeshExternalMode,
@@ -1337,10 +1400,22 @@ export default function ComponentViewer({
     const visibilitySeed = `${identityId?.toString() ?? ''}:${primitivePointCloudCount}`
     const resetVisibilityToDefault =
       pointCloudVisibilitySeedRef.current !== visibilitySeed
-    pointCloudVisibilitySeedRef.current = visibilitySeed
-    if (resetVisibilityToDefault) setPointCloudOff(pointCloudStartsOff(primitiveMeshCount))
+    // as for the mesh, an Off cloud holding a stored level does not use up the
+    // reset of its visibility (0.6.3.1); the Off switch itself starts again
+    // for another piece at once (a seed of its own)
+    const cloudHeldByOff = isPointCloudExternalMode && pointCloudOff && !isProxyOnly && !!identityId
+    if (!cloudHeldByOff) pointCloudVisibilitySeedRef.current = visibilitySeed
+    if (pointCloudOffSeedRef.current !== visibilitySeed) {
+      pointCloudOffSeedRef.current = visibilitySeed
+      setPointCloudOff(pointCloudStartsOff(primitiveMeshCount))
+    }
 
-    if (isPointCloudExternalMode && !isProxyOnly && identityId) {
+    if (cloudHeldByOff) {
+      // as for the mesh: Off loads nothing (0.6.3.1)
+      setIsLoadingExternalPointClouds(false)
+    } else if (shouldLoadLevel({
+      external: isPointCloudExternalMode, off: pointCloudOff, proxyOnly: isProxyOnly, hasIdentity: !!identityId,
+    })) {
       setIsLoadingExternalPointClouds(true)
       loadExternalPointClouds(
         identityId.toString(),
@@ -1390,6 +1465,7 @@ export default function ComponentViewer({
     }
   }, [
     pointCloudGeometryMode,
+    pointCloudOff,
     isProxyOnly,
     identityId,
     isPointCloudExternalMode,
@@ -1981,7 +2057,7 @@ export default function ComponentViewer({
             margin={1.2}
             maxDuration={1}
           >
-            <FitCameraController fitRef={fitCameraRef} />
+            <FitCameraController fitRef={fitCameraRef} contentRef={pickRootRef} />
             <Turntable enabled={turntableEnabled}>
               <group ref={pickRootRef} matrixAutoUpdate={false} matrix={orientationMatrix}>
               <VisualizeComponent

@@ -94,6 +94,42 @@ export function layoutLabels(records: RecordLike[]): string[] {
 
 export type ColouredBar = { diameter_mm: number; layout: number }
 
+/** A bar the viewer can draw: a centreline of two points or more and a diameter. */
+export type DrawableBar = { diameter_mm: number; points: number[][] }
+
+export function isDrawableBar(bar: DrawableBar): boolean {
+  return Array.isArray(bar.points) && bar.points.length >= 2 && bar.diameter_mm > 0
+}
+
+export type LayoutRecord<B extends DrawableBar = DrawableBar> = RecordLike & {
+  position?: { snapshot_id?: string | null } | null
+  payload?: { bars?: B[]; document?: { title?: string | null } | null } | null
+}
+
+/**
+ * The layouts of one snapshot and their bars (RL1, 0.6.3.1): every record that
+ * is positioned on the snapshot and has a drawable bar is one layout, in the
+ * order given, and every bar of every layout is drawn, each with the index of
+ * its layout. Two layouts on one piece are two cards and two sets of bars.
+ */
+export function layoutsOnSnapshot<B extends DrawableBar>(
+  records: LayoutRecord<B>[],
+  snapshotId: string,
+): { bars: (B & { layout: number })[]; layouts: BarLayout[] } {
+  const here = records
+    .filter((record) => record.position?.snapshot_id === snapshotId)
+    .filter((record) => (record.payload?.bars ?? []).some(isDrawableBar))
+  const labels = layoutLabels(here)
+  const bars = here.flatMap((record, layout) =>
+    (record.payload?.bars ?? []).filter(isDrawableBar).map((bar) => ({ ...bar, layout })))
+  const layouts = here.map((record, layout) => ({
+    id: String(record._id ?? layout),
+    label: labels[layout],
+    count: bars.filter((bar) => bar.layout === layout).length,
+  }))
+  return { bars, layouts }
+}
+
 /** The colour of a bar, or null for the steel material. */
 export function barColour(
   mode: BarColourMode,

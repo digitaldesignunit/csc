@@ -401,3 +401,31 @@ def test_the_timeline_merges_everything_and_hides_what_it_must(world):
     row = [e for e in outside if e.get('record_id') == mid['_id']][0]
     assert row['status'] == 'withdrawn' and 'secret' not in str(row)
     assert row['quantity'] is None
+
+
+def test_two_versions_each_see_only_their_own_records(world):
+    """The snapshot-scoped fold (0.6.3.1 check): a record belongs to the
+    version that was current when it was observed; a claim about the piece
+    as a whole belongs to neither. Each version's properties hold its own
+    records and nothing of the other's."""
+    w = world
+    v0, v1 = sid('beam', 0), sid('beam', 1)
+    a = put(w, visual_body('spalling', 1, observed_at=IN_V0))
+    b = put(w, visual_body('crack_width', 0.2, observed_at=IN_V0))
+    c = put(w, visual_body('spalling', 3, observed_at=IN_V1))
+    d = put(w, visual_body('crack_width', 0.9, observed_at=IN_V1))
+    put(w, claim_body('compressive_strength', (18, 28)))
+    first, second = snap_props(w, v0), snap_props(w, v1)
+    assert first['spalling']['evidence_ids'] == [a['_id']]
+    assert first['crack_width']['evidence_ids'] == [b['_id']]
+    assert second['spalling']['evidence_ids'] == [c['_id']]
+    assert second['crack_width']['evidence_ids'] == [d['_id']]
+    assert first['spalling']['range'] == [1, 1] and second['spalling']['range'] == [3, 3]
+    assert first['crack_width']['range'] == [0.2, 0.2] and second['crack_width']['range'] == [0.9, 0.9]
+    for props in (first, second):
+        assert 'compressive_strength' not in props
+        assert props['spalling']['n'] == 1
+    # a record added to v1 later leaves v0 alone
+    e = put(w, visual_body('spalling', 2, observed_at=IN_V1))
+    assert snap_props(w, v0)['spalling']['evidence_ids'] == [a['_id']]
+    assert sorted(snap_props(w, v1)['spalling']['evidence_ids']) == sorted([c['_id'], e['_id']])

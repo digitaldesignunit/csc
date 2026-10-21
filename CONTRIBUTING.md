@@ -29,7 +29,7 @@ Thank you for helping with the Catalog of Second Chances (CSC). Everyone taking 
 Releases are made by the maintainers only; tags `v*` are protected.
 
 - `VERSION` and the changelog section are set with `invoke bump-version <version>`; `.zenodo.json` follows with
-  `invoke zenodo`.
+  `invoke release-prep`, which also dates the section and runs the release checks.
 - Pushing the tag `v<version>` on `main` runs CI, builds the three bundles (backend, frontend, Grasshopper
   interface), publishes the GitHub release and asks for approval before the deploy.
 - The Grasshopper bundle takes its files from `grasshopper_release/`:

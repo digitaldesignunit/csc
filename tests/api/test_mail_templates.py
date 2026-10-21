@@ -289,14 +289,21 @@ def test_a_test_mail_needs_an_admin_and_an_address(api, db, auth_headers, sent):
     assert sent['mails'] == []
 
 
-def test_mail_that_is_not_set_up_says_so(api, auth_headers, sent, monkeypatch):
-    monkeypatch.delenv('SMTP_HOST', raising=False)
-    got = api.post('/admin/mail-templates/reset/test',
-                   headers=auth_headers('admin'))
+def test_mail_that_is_not_set_up_says_so(api, auth_headers, sent, env):
+    admin = auth_headers('admin')
+    # set up (the test environment has SMTP_HOST): the test mail goes out
+    assert api.post('/admin/mail-templates/reset/test',
+                    headers=admin).status_code == 200
+    assert len(sent['mails']) == 1
+    sent['mails'].clear()
+    # the settings are cached, so the variable is removed through ``env``,
+    # which reads them again (a bare delenv would change nothing)
+    env(SMTP_HOST=None)
+    got = api.post('/admin/mail-templates/reset/test', headers=admin)
     assert got.status_code == 502 and 'SMTP_HOST' in got.json()['detail']
+    assert sent['mails'] == []
     # the preview does not need the SMTP settings
-    assert api.get('/admin/mail-templates',
-                   headers=auth_headers('admin')).status_code == 200
+    assert api.get('/admin/mail-templates', headers=admin).status_code == 200
 
 
 def test_the_test_send_is_rate_limited(api, auth_headers, sent):

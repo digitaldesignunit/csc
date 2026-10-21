@@ -26,6 +26,10 @@ sees) with fresh
 passwords, written to ``.dev/dev-test-accounts.json`` (gitignored); nothing
 but the user names is printed.
 
+``--dump latest`` takes the newest folder of ``mongodb_collections_local``
+whose name is six digits. A collection with no export file is not loaded, and
+an export file of 0 bytes loads as no documents.
+
 ``--no-migrate`` loads a dump that already is 0.6 data (a production dump
 from after the cutover) as it is: no migration, no gripper copy, no derive
 run. ``--assets DIR`` points every asset folder (meshes, previews, photos,
@@ -147,7 +151,9 @@ def restore_capture_fixtures(snapshots, assets: Path, capture: Path):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('--dump', default='261001')
+    parser.add_argument('--dump', default='261001',
+                        help='a folder of mongodb_collections_local, or '
+                             '"latest" for the newest one (six digits)')
     parser.add_argument('--port', type=int, default=8000,
                         help='backend port (default 8000)')
     parser.add_argument('--mongo-port', type=int, default=27018,
@@ -178,6 +184,13 @@ def main() -> int:
     parser.add_argument('--test-dataset', default='dbu_zirkus',
                         help='dataset the test accounts are members of')
     args = parser.parse_args()
+    if args.dump == 'latest':
+        from support import latest_dump
+        args.dump = latest_dump(str(_REPO / 'mongodb_collections_local'))
+        if args.dump is None:
+            sys.exit('--dump latest: no yymmdd folder in '
+                     'mongodb_collections_local')
+        print(f'latest dump: {args.dump}')
 
     from mongod import ThrowawayMongod, find_mongod, sweep_stale_dirs
     from pymongo import MongoClient

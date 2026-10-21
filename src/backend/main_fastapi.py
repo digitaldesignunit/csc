@@ -36,6 +36,7 @@ from apps.catalog.api.catalog_common import (
 )
 from apps.catalog.api.access import TombstoneHit
 from apps.catalog import oauth_wiring
+from apps.catalog.token_cleanup import backfill_purge_dates
 from csc_version import CSC_VERSION
 from logging_setup import configure as configure_logging, get_logger
 
@@ -139,6 +140,12 @@ async def lifespan(app: FastAPI):
     await app.mongodb_access_tokens.create_index('owner_user_id')
     await app.mongodb_access_tokens.create_index('expires')
     await app.mongodb_access_tokens.create_index('refresh_sha256', sparse=True)
+    # a revoked row, or one expired past its refresh limit, goes 90 days later
+    # (0.6.3.1): a TTL on the date written when the row dies; rows of an earlier
+    # build get theirs here, once
+    await app.mongodb_access_tokens.create_index(
+        'purge_at', expireAfterSeconds=0)
+    await backfill_purge_dates(app.mongodb_access_tokens)
     # a registered client that never completes a consent goes after 1 day, one
     # that did, 30 days after its last use (one TTL index, expires_at moves);
     # the pending requests, the codes and the used refresh tokens go by their
