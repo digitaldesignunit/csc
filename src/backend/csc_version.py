@@ -6,7 +6,7 @@ together as tag ``v<version>``). Written by ``invoke bump-version``; checked
 against VERSION, package.json and the release tag by scripts/ci/check_version.py.
 """
 
-CSC_VERSION = '0.6.3.0'
+CSC_VERSION = '0.6.3.1'
 
 
 def release_tag(version: str = CSC_VERSION) -> str:
