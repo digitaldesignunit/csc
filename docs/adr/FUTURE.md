@@ -28,8 +28,12 @@ gap.
 - **IFC export via IfcOpenShell** --- proxies map to `IfcExtrudedAreaSolid` / `IfcTriangulatedFaceSet`,
   properties to a PSet (spec section 10.4). Unlocks professional AEC workflows. *(On the 0.6.0.x backlog since
   2026-10-08, plan P12 "Backlog after P12"; to grill.)*
-- **xeokit** --- open-source WebGL BIM viewer; could replace or augment the component viewer,
-  with IFC support. High effort, high visual impact.
+- **xeokit** (for later) --- open-source WebGL BIM viewer for whole IFC building models. In CSC it could show a
+  piece in its donor building (floor, axis, facade highlighted) and check our own IFC export; replacing the
+  three.js component viewer brings nothing for a single piece. Only once donor-building IFC models exist (no
+  dataset has one so far), and only after clearing the licence: the xeokit SDK is AGPL-3.0, CSC is MIT, and
+  AGPL code in the served web app would bind it to the AGPL (a commercial licence costs money). The IFC
+  export does not need it. High effort.
 
 ## Geometry search and processing
 
