@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse
 from apps.catalog.read_models import (
     CatalogRow,
     LocationMap,
+    SimilarPieces,
     CatalogSharedTypesEnvelope,
     ComponentPassport,
     MySnapshotItem,
@@ -82,6 +83,16 @@ async def get_catalog_row_json_schema():
 async def get_location_map_json_schema():
     """Used by frontend `generate:models` (see `CatalogModels.ts`)."""
     schema = LocationMap.model_json_schema(by_alias=True)
+    return JSONResponse(status_code=200, content=schema)
+
+
+@router.get(
+    '/schema/similar-pieces',
+    summary='JSON Schema for GET /identities/{id}/similar (SimilarPieces)',
+)
+async def get_similar_pieces_json_schema():
+    """Used by frontend `generate:models` (see `CatalogModels.ts`)."""
+    schema = SimilarPieces.model_json_schema(by_alias=True)
     return JSONResponse(status_code=200, content=schema)
 
 

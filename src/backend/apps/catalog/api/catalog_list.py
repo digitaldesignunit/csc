@@ -29,8 +29,10 @@ from apps.catalog.component_map import (
     MapMethod,
     MapSource,
     annotate_live_payload,
+    basis_label,
     build_component_map,
     cache_doc_id,
+    extract_feature,
     map_rows_project_stage,
     payload_from_cache_doc,
 )
@@ -45,6 +47,9 @@ from apps.catalog.people import for_viewer
 from limiter import local_limiter, signed_in_or_ip
 from apps.catalog.api.access import (
     and_match,
+    find_identity,
+    identity_projection,
+    not_found,
     viewer_of,
     visible_identity_ids,
     visible_identity_match,
@@ -58,7 +63,8 @@ from .identity_filters import (
     catalog_filters,
     public_filters,
 )
-from .near_search import LAYER_FIELDS, NearLayer
+from .near_search import LAYER_FIELDS, NearLayer, first_stages
+from apps.catalog import similarity as sim
 from .identity_query import (
     aggregate_identities,
     annotate_has_preview,
@@ -182,6 +188,140 @@ async def count_identities_route(
         )
     return JSONResponse(
         status_code=200, content={'count': total},
+        headers=viewer_headers(anonymous_public=current_user is None))
+
+
+def _needs_snapshot(args: Dict[str, Any]) -> bool:
+    """Whether the filters read the current snapshot (a name, a shape class,
+    sizes, a fit, a state other than published). The current snapshot of a
+    piece is always published (I3b), so ``status=published`` alone does not."""
+    if args['fit_stages']:
+        return True
+    match = dict(args['snapshot_match'])
+    if match.pop('current_snapshot.status', 'published') != 'published':
+        return True
+    return bool(match)
+
+
+async def _candidate_ids(request: Request, args: Dict[str, Any],
+                         filters: CatalogFilters) -> List[str]:
+    """The ids of the pieces this caller may see that pass the filters (the
+    visibility, circulation, dataset ..., a fit and a near search too). The
+    join of the current snapshot only runs when a filter reads it."""
+    if _needs_snapshot(args):
+        pipeline = build_list_pipeline(
+            **args, fit_mode=filters.fit_mode, sortkey='_id', sort_order=1,
+            page=0, size=0, include_username=False, current_user_id=None,
+            reserved_filter=None, snapshot_view='row')
+        pipeline.append({'$project': {'_id': 1}})
+    else:
+        pipeline = [*first_stages(args['identity_match'], args['near']),
+                    {'$project': {'_id': 1}}]
+    return [doc['_id'] for doc in await aggregate_identities(request, pipeline)]
+
+
+@router.get(
+    '/identities/{identity_id}/similar',
+    summary='The pieces nearest to one in descriptor space (kNN)',
+)
+@local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
+async def get_similar_identities(
+    request: Request,
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
+    filters: Annotated[CatalogFilters, Depends(catalog_filters)],
+    identity_id: str,
+    basis: MapBasis = Query(
+        sim.DEFAULT_BASIS,
+        description='descriptor space: radial_signature (default), scalars '
+                    'or hks'),
+    count: int = Query(10, ge=1, le=sim.MAX_NEIGHBOURS,
+                       description='how many neighbours, 1 to 50'),
+):
+    """The ``count`` pieces nearest to this one in the full descriptor space
+    of ``basis`` (decision 8.174): Euclidean distance after each dimension is
+    standardised over the catalog (smaller is more similar). The pieces ranked
+    are those this caller may see that pass the filters of the list (also a
+    dimension and a near search): the filters come first, then the ranking, so
+    "similar and can hold X and within 50 km" returns the k nearest that pass.
+    The piece itself is never one of them. A piece the caller cannot see is
+    404; one without the descriptor of the basis is 422; before the matrix of
+    the basis has been computed (``main_component_map.py``) the answer is
+    409."""
+    if current_user is None:
+        filters = public_filters(filters)
+    viewer = viewer_of(current_user)
+    identity = await find_identity(request, identity_id, what='Component')
+    # a piece that is not visible, or only a tombstone for this caller, is
+    # not there: the same answer as for a piece that does not exist
+    if await identity_projection(request, viewer, identity) != 'full':
+        raise not_found('Component')
+    try:
+        matrix = await sim.STORE.get(
+            request.app.mongodb_component_map_cache, basis)
+        if matrix is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f'The similarity matrix for {basis} has not been '
+                       f'computed yet (main_component_map.py).')
+        query = matrix.vector_of(identity_id)
+        if query is None:
+            # added after the matrix was built: its own descriptor in the
+            # same standardised space (its neighbours are the built ones)
+            snapshot_id = identity.get('current_snapshot_id')
+            snapshot = await request.app.mongodb_component_snapshots.find_one(
+                {'_id': snapshot_id}, {'descriptors': 1}
+            ) if snapshot_id else None
+            feature = extract_feature(
+                (snapshot or {}).get('descriptors') or {}, basis)
+            if feature is not None and len(feature) == matrix.dim:
+                query = sim.standardise_vector(
+                    feature, matrix.mean, matrix.std, matrix.flat)
+        if query is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f'This component has no {basis_label(basis)} '
+                       f'descriptor, so it cannot be compared.')
+        args = await _pipelines_args(request, filters, current_user)
+        candidates = await _candidate_ids(request, args, filters)
+        ranked, considered = sim.nearest(
+            matrix, query, candidates, count, exclude=identity_id)
+        ids = [i for i, _ in ranked]
+        rows: Dict[str, Dict[str, Any]] = {}
+        if ids:
+            # the rows of the neighbours, with their fit and distance_m when
+            # those searches are set
+            pipeline = build_list_pipeline(
+                **{**args, 'identity_match': and_match(
+                    args['identity_match'], {'_id': {'$in': ids}})},
+                fit_mode=filters.fit_mode, sortkey='_id', sort_order=1,
+                page=0, size=0, include_username=False,
+                current_user_id=None, reserved_filter=None,
+                snapshot_view='row')
+            docs = await aggregate_identities(request, pipeline)
+            annotate_has_preview(request, docs)
+            rows = {doc['_id']: doc for doc in docs}
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
+    except PyMongoError:
+        log.exception('similar identities DB error')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+    try:
+        # the rows are CatalogRow dumps (fit and distance_m only when set);
+        # ``SimilarPieces`` is their schema, not a second validation
+        content = {
+            'query_id': identity_id, 'basis': basis,
+            'basis_label': basis_label(basis),
+            'computed_at': matrix.computed_at, 'considered': considered,
+            'results': [{'distance': round(distance, 6),
+                         'piece': catalog_row(rows[i])}
+                        for i, distance in ranked if i in rows]}
+    except Exception as exc:
+        raise internal_error(exc, 'similar rows')
+    return JSONResponse(
+        status_code=200, content=content,
         headers=viewer_headers(anonymous_public=current_user is None))
 
 
@@ -429,6 +569,24 @@ def _normalize_stats_facet_lists(items):
     return out
 
 
+def _side_ranges(facet) -> Dict[str, Any]:
+    """The ``sides`` facet as the range of each sorted side, in mm; null
+    ranges while no counted piece has a size."""
+    row = (facet or [{}])[0]
+    out: Dict[str, Any] = {'count': int(row.get('count', 0))}
+    for name in ('largest', 'middle', 'smallest'):
+        low, high = row.get(f'{name}_min'), row.get(f'{name}_max')
+        out[name] = ({'min': low, 'max': high}
+                     if low is not None and high is not None else None)
+    return out
+
+
+def _with_location(facet) -> Dict[str, int]:
+    row = (facet or [{}])[0]
+    return {'current': int(row.get('current', 0)),
+            'origin': int(row.get('origin', 0))}
+
+
 @router.get(
     '/identities/stats',
     summary=(
@@ -487,7 +645,14 @@ async def get_identities_stats(
             'createdMonthly': _normalize_stats_facet_lists(
                 raw.get('createdMonthly')
             ),
-            'bbxX': _normalize_stats_facet_lists(raw.get('bbx'))
+            'bbxX': _normalize_stats_facet_lists(raw.get('bbx')),
+            # the overview of the MCP tool (8.173): the range of each sorted
+            # side in mm, the pieces with a point on each location layer, and
+            # the counted pieces that are not public
+            'sideRanges': _side_ranges(raw.get('sides')),
+            'withLocation': _with_location(raw.get('visibility')),
+            'notPublic': int(((raw.get('visibility') or [{}])[0]
+                              ).get('not_public', 0)),
         }
         return JSONResponse(
             status_code=200, content=content,

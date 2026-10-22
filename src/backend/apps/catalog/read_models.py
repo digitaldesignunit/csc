@@ -183,6 +183,29 @@ class LocationMap(BaseModel):
     points: List[LocationPoint]
 
 
+class SimilarPiece(BaseModel):
+    """One neighbour: how far it is in descriptor space, and its list row."""
+    distance: float = Field(
+        description='Euclidean distance in the standardised descriptor space '
+                    '(each dimension in standard deviations over the '
+                    'catalog); smaller is more similar. Not metres or mm; '
+                    'compare within one answer.')
+    piece: 'CatalogRow'
+
+
+class SimilarPieces(BaseModel):
+    """``GET /identities/{id}/similar``: the nearest pieces by descriptor."""
+    query_id: str
+    basis: Literal['radial_signature', 'scalars', 'hks']
+    basis_label: str
+    computed_at: Optional[str] = Field(
+        default=None, description='when the matrix of the catalog was built')
+    considered: int = Field(
+        description='how many visible pieces that pass the filters were '
+                    'ranked (the query piece not among them)')
+    results: List[SimilarPiece]
+
+
 def catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
     """An aggregation row (identity + ``current_snapshot``) -> CatalogRow."""
     snap = doc.get('current_snapshot') or {}

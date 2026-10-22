@@ -1,5 +1,5 @@
 """
-The read-only MCP layer (decision 8.165, 8.168): nine tools that let Claude read
+The read-only MCP layer (decision 8.165, 8.168): ten tools that let Claude read
 the catalog as the owner of the access token sees it in the web app.
 
 The tools reuse the REST API instead of copying it: each one calls a route
@@ -17,9 +17,8 @@ ASGI app that ``/mcp`` serves (token check, 401 with the resource metadata, 429)
 """
 
 import json
-import math
 import re
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, Tuple
 
 from mcp.server.auth.middleware.auth_context import (
     AuthContextMiddleware,
@@ -40,6 +39,7 @@ from starlette.requests import Request
 import limiter as lim
 from apps.catalog import access_tokens as tk
 from apps.catalog.api.near_search import NearError, parse_near
+from apps.catalog.vocab import ORIGINAL_FUNCTION_LABELS, SHAPE_CLASS_LABELS
 from apps.catalog.internal_call import InternalError, rest_get
 from apps.catalog.models import UserInDB
 from apps.catalog.oauth_server import AccessTokenVerifier
@@ -89,6 +89,9 @@ SEARCH_SORTS = {'catalog_number': 'catalog_number', 'date': 'effective_from',
                 'created': 'created', 'volume': 'volume', 'match': 'match',
                 'distance': 'distance'}
 FIT_MODES = ('about', 'can_hold')
+SIMILARITY_BASES = ('radial_signature', 'scalars', 'hks')
+CIRCULATION_LABELS = {'in_place': 'In place', 'deinstalled': 'Not in place',
+                      'exited': 'Out of circulation'}
 
 
 def size_text(values) -> str:
@@ -187,6 +190,98 @@ def limited(answer: dict) -> dict:
 
 
 # THE SERVER ----------------------------------------------------------------------
+# THE FILTERS OF THE SEARCH TOOLS ---------------------------------------------------
+# search_components, catalog_overview and similar_components take the same
+# filters (decisions 8.169, 8.170, 8.173, 8.174), so they share their
+# descriptions and their checks.
+QueryArg = Annotated[str, Field(description=(
+    'Free text: matches the name (any part), an id prefix or the '
+    'catalog number (12 or #12). It does not match materials, '
+    'functions or places: use the filters below. Leave empty to '
+    'list.'))]
+FunctionArg = Annotated[str, Field(description=(
+    'Building function, for example IfcBeam, IfcPlate, IfcWall '
+    '(exact).'))]
+MaterialArg = Annotated[str, Field(description='Material key.')]
+DatasetArg = Annotated[str, Field(description=(
+    'Dataset id, from list_datasets.'))]
+ShapeClassArg = Annotated[str, Field(description=(
+    'Shape class, for example planar, linear, compact.'))]
+CirculationArg = Annotated[str, Field(description=(
+    'active (default: in circulation), in_place, deinstalled, '
+    'exited, all.'))]
+StatusArg = Annotated[str, Field(description=(
+    'Version status: published (default), or any to include '
+    'pending and other states you may see.'))]
+WithdrawnArg = Annotated[bool, Field(description=(
+    'Also withdrawn components, if you may see them.'))]
+FitModeArg = Annotated[str, Field(description=(
+    'Search by size, with size_mm: about = every side within the '
+    'tolerance of the asked side (which pieces are about this '
+    'size); can_hold = every side of the piece at least the asked '
+    'side (which pieces can this part be cut from). The sides are '
+    'compared largest to smallest, so the orientation does not '
+    'matter. A piece without a known size never matches.'))]
+SizeArg = Annotated[Optional[list[float]], Field(description=(
+    'The asked size: three numbers in mm in any order, for example '
+    '[1200, 600, 200]. Needs fit_mode.'))]
+ToleranceArg = Annotated[str, Field(description=(
+    'Only for fit_mode about: a share of each asked side or '
+    'millimetres, for example "10%" (the default) or "50mm".'))]
+NearLatArg = Annotated[Optional[float], Field(description=(
+    'Search by place: the latitude of the point, -90 to 90, with '
+    'near_lon. Only pieces with a known place on the chosen layer '
+    'are listed, nearest first, each with its distance_km.'))]
+NearLonArg = Annotated[Optional[float], Field(description=(
+    'The longitude of the point, -180 to 180. Needs near_lat.'
+    ))]
+NearLayerArg = Annotated[str, Field(description=(
+    'Which place of a piece is measured: current (where the piece '
+    'is now; the default) or origin (the building it comes from, '
+    'known for fewer pieces).'))]
+RadiusArg = Annotated[Optional[float], Field(description=(
+    'Only pieces within this many km of the point. Without it every '
+    'piece with a place on the layer is listed, nearest first.'
+    ))]
+
+
+def search_params(*, query: str, original_function: str, material: str,
+                  dataset: str, shape_class: str, circulation: str,
+                  status: str, include_withdrawn: bool, fit_mode: str,
+                  size_mm: Optional[list], tolerance: str,
+                  near_lat: Optional[float], near_lon: Optional[float],
+                  near_layer: str, radius_km: Optional[float]
+                  ) -> Tuple[dict, dict, dict]:
+    """The REST filters of one search (the list, count, stats and similar
+    routes read the same names), the fit part and the near part of it. A
+    combination the routes would refuse is a ToolError in words."""
+    fit = {}
+    if fit_mode or size_mm or tolerance:
+        if fit_mode not in FIT_MODES:
+            raise ToolError('fit_mode is about or can_hold, with size_mm.')
+        if not size_mm or len(size_mm) != 3:
+            raise ToolError('size_mm needs three numbers in mm, for '
+                            'example [1200, 600, 200].')
+        fit = {'fit_mode': fit_mode, 'fit_size': size_text(size_mm),
+               'fit_tol': tolerance}
+    near = {}
+    if (near_lat is not None or near_lon is not None or near_layer
+            or radius_km is not None):
+        try:
+            near = parse_near(near_lat, near_lon, near_layer or None,
+                              radius_km)
+        except NearError as exc:
+            raise ToolError(f'{exc}.')
+        near = {k: v for k, v in near.items() if v is not None}
+    filters = {
+        'q': query, 'original_function': original_function,
+        'material': material, 'dataset': dataset,
+        'shape_class': shape_class, 'circulation': circulation,
+        'status': status, 'include_withdrawn': include_withdrawn or None,
+        **fit, **near}
+    return filters, fit, near
+
+
 def build_mcp(app, frontend_url: str) -> FastMCP:
     """The MCP server (stateless HTTP) whose tools call ``app``."""
     web = frontend_url.rstrip('/')
@@ -223,6 +318,8 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
                 raise ToolError('Not found, or not visible to you.')
             if exc.status == 429:
                 raise ToolError('Too many reads just now; wait a minute.')
+            if exc.status == 409:
+                raise ToolError(str(exc.detail))
             if exc.status in (400, 422):
                 raise ToolError(f'The request was not valid: {exc.detail}')
             log.warning('mcp tool: %s answered %s', path, exc.status)
@@ -234,55 +331,21 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
     # 1 -------------------------------------------------------------------------
     @mcp.tool()
     async def search_components(
-        query: Annotated[str, Field(description=(
-            'Free text: matches the name (any part), an id prefix or the '
-            'catalog number (12 or #12). It does not match materials, '
-            'functions or places: use the filters below. Leave empty to '
-            'list.'))] = '',
-        original_function: Annotated[str, Field(description=(
-            'Building function, for example IfcBeam, IfcPlate, IfcWall '
-            '(exact).'))] = '',
-        material: Annotated[str, Field(description='Material key.')] = '',
-        dataset: Annotated[str, Field(description=(
-            'Dataset id, from list_datasets.'))] = '',
-        shape_class: Annotated[str, Field(description=(
-            'Shape class, for example planar, linear, compact.'))] = '',
-        circulation: Annotated[str, Field(description=(
-            'active (default: in circulation), in_place, deinstalled, '
-            'exited, all.'))] = 'active',
-        status: Annotated[str, Field(description=(
-            'Version status: published (default), or any to include '
-            'pending and other states you may see.'))] = 'published',
-        include_withdrawn: Annotated[bool, Field(description=(
-            'Also withdrawn components, if you may see them.'))] = False,
-        fit_mode: Annotated[str, Field(description=(
-            'Search by size, with size_mm: about = every side within the '
-            'tolerance of the asked side (which pieces are about this '
-            'size); can_hold = every side of the piece at least the asked '
-            'side (which pieces can this part be cut from). The sides are '
-            'compared largest to smallest, so the orientation does not '
-            'matter. A piece without a known size never matches.'))] = '',
-        size_mm: Annotated[Optional[list[float]], Field(description=(
-            'The asked size: three numbers in mm in any order, for example '
-            '[1200, 600, 200]. Needs fit_mode.'))] = None,
-        tolerance: Annotated[str, Field(description=(
-            'Only for fit_mode about: a share of each asked side or '
-            'millimetres, for example "10%" (the default) or "50mm".'))] = '',
-        near_lat: Annotated[Optional[float], Field(description=(
-            'Search by place: the latitude of the point, -90 to 90, with '
-            'near_lon. Only pieces with a known place on the chosen layer '
-            'are listed, nearest first, each with its distance_km.'))] = None,
-        near_lon: Annotated[Optional[float], Field(description=(
-            'The longitude of the point, -180 to 180. Needs near_lat.'
-            ))] = None,
-        near_layer: Annotated[str, Field(description=(
-            'Which place of a piece is measured: current (where the piece '
-            'is now; the default) or origin (the building it comes from, '
-            'known for fewer pieces).'))] = '',
-        radius_km: Annotated[Optional[float], Field(description=(
-            'Only pieces within this many km of the point. Without it every '
-            'piece with a place on the layer is listed, nearest first.'
-            ))] = None,
+        query: QueryArg = '',
+        original_function: FunctionArg = '',
+        material: MaterialArg = '',
+        dataset: DatasetArg = '',
+        shape_class: ShapeClassArg = '',
+        circulation: CirculationArg = 'active',
+        status: StatusArg = 'published',
+        include_withdrawn: WithdrawnArg = False,
+        fit_mode: FitModeArg = '',
+        size_mm: SizeArg = None,
+        tolerance: ToleranceArg = '',
+        near_lat: NearLatArg = None,
+        near_lon: NearLonArg = None,
+        near_layer: NearLayerArg = '',
+        radius_km: RadiusArg = None,
         sort: Annotated[str, Field(description=(
             'catalog_number (default without a size or place search), date '
             '(the version applies from), created, volume (length x width x '
@@ -304,25 +367,13 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         and near_lon each row carries its distance_km. Use get_component for
         the details of one."""
         page, size = page_args(page, size)
-        fit = {}
-        if fit_mode or size_mm or tolerance:
-            if fit_mode not in FIT_MODES:
-                raise ToolError('fit_mode is about or can_hold, with size_mm.')
-            if not size_mm or len(size_mm) != 3:
-                raise ToolError('size_mm needs three numbers in mm, for '
-                                'example [1200, 600, 200].')
-            fit = {'fit_mode': fit_mode,
-                   'fit_size': size_text(size_mm),
-                   'fit_tol': tolerance}
-        near = {}
-        if (near_lat is not None or near_lon is not None or near_layer
-                or radius_km is not None):
-            try:
-                near = parse_near(near_lat, near_lon, near_layer or None,
-                                  radius_km)
-            except NearError as exc:
-                raise ToolError(f'{exc}.')
-            near = {k: v for k, v in near.items() if v is not None}
+        filters, fit, near = search_params(
+            query=query, original_function=original_function,
+            material=material, dataset=dataset, shape_class=shape_class,
+            circulation=circulation, status=status,
+            include_withdrawn=include_withdrawn, fit_mode=fit_mode,
+            size_mm=size_mm, tolerance=tolerance, near_lat=near_lat,
+            near_lon=near_lon, near_layer=near_layer, radius_km=radius_km)
         sort = sort or ('distance' if near
                         else 'match' if fit else 'catalog_number')
         if sort not in SEARCH_SORTS:
@@ -333,12 +384,6 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
             raise ToolError('sort distance needs near_lat and near_lon.')
         if order not in ('asc', 'desc'):
             raise ToolError('order is asc or desc.')
-        filters = {
-            'q': query, 'original_function': original_function,
-            'material': material, 'dataset': dataset,
-            'shape_class': shape_class, 'circulation': circulation,
-            'status': status, 'include_withdrawn': include_withdrawn or None,
-            **fit, **near}
         rows = await get('/identities', {
             **filters, 'page': page, 'size': size,
             'sortkey': SEARCH_SORTS[sort], 'sortorder': order})
@@ -571,40 +616,143 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
     @mcp.tool()
     async def similar_components(
         component_id: Annotated[str, Field(description='The component id.')],
+        basis: Annotated[str, Field(description=(
+            'What is compared: radial_signature (the shape seen from the '
+            'centre, the default), scalars (how box-, sphere-, line- and '
+            'plane-like it is) or hks (the heat kernel signature).'))
+            ] = 'radial_signature',
         count: Annotated[int, Field(description='How many, 1 to 25.')] = 10,
-        method: Annotated[str, Field(description=(
-            'Layout of the similarity map: umap (default) or pca.'))] = 'umap',
+        query: QueryArg = '',
+        original_function: FunctionArg = '',
+        material: MaterialArg = '',
+        dataset: DatasetArg = '',
+        shape_class: ShapeClassArg = '',
+        circulation: CirculationArg = 'active',
+        status: StatusArg = 'published',
+        include_withdrawn: WithdrawnArg = False,
+        fit_mode: FitModeArg = '',
+        size_mm: SizeArg = None,
+        tolerance: ToleranceArg = '',
+        near_lat: NearLatArg = None,
+        near_lon: NearLonArg = None,
+        near_layer: NearLayerArg = '',
+        radius_km: RadiusArg = None,
     ) -> dict:
         """Components that look alike: the nearest neighbours of one component
-        on the similarity map (a layout of shape descriptors computed ahead of
-        time). The distance is in map units of that layout: compare distances
-        within one answer only; smaller is more alike. A component that is
-        not on the map yet cannot be compared."""
-        if method not in ('umap', 'pca'):
-            raise ToolError('method must be umap or pca.')
+        in the full space of its shape descriptors (every dimension
+        standardised over the catalog), not on the similarity map.
+        descriptor_distance is a Euclidean distance in standardised descriptor
+        units, not metres or millimetres: smaller is more similar, comparable
+        within one answer or between answers of the same basis. The filters
+        of search_components apply first and the nearest of what passes are
+        ranked, so "similar in shape, can hold 1200 x 600 x 200 mm, within
+        50 km" works. The component itself is left out. A component without
+        the descriptor of the basis cannot be compared."""
+        if basis not in SIMILARITY_BASES:
+            raise ToolError('basis is ' + ', '.join(SIMILARITY_BASES) + '.')
         count = min(max(1, count), PAGE_MAX)
-        body = await get('/identities/map', {'method': method})
-        points = body.get('points') or []
-        me = next((p for p in points if p.get('id') == component_id), None)
-        if me is None:
-            raise ToolError('This component is not on the similarity map '
-                            '(not published, no descriptors, or the map has '
-                            'not been computed since it was added).')
-        near = sorted(
-            ((math.hypot(p['x'] - me['x'], p['y'] - me['y']), p)
-             for p in points if p.get('id') != component_id),
-            key=lambda item: item[0])[:count]
+        filters, fit, near = search_params(
+            query=query, original_function=original_function,
+            material=material, dataset=dataset, shape_class=shape_class,
+            circulation=circulation, status=status,
+            include_withdrawn=include_withdrawn, fit_mode=fit_mode,
+            size_mm=size_mm, tolerance=tolerance, near_lat=near_lat,
+            near_lon=near_lon, near_layer=near_layer, radius_km=radius_km)
+        body = await get(f'/identities/{component_id}/similar',
+                         {**filters, 'basis': basis, 'count': count})
         return limited(clean({
-            'component_id': component_id, 'layout': body.get('method'),
-            'basis': body.get('basis_label'), 'computed_at': body.get('computed_at'),
+            'component_id': component_id, 'basis': body.get('basis'),
+            'basis_label': body.get('basis_label'),
+            'matrix_built': body.get('computed_at'),
+            'compared_with': body.get('considered'),
+            'distance_unit': 'standardised descriptor units (smaller is '
+                             'more similar; not metres or millimetres)',
             'web_link': link_component(component_id),
             'similar': [{
-                'id': p['id'], 'distance': round(d, 4), 'name': p.get('name'),
-                'catalog_number': p.get('catalog_number'),
-                'original_function': p.get('original_function'),
-                'material': p.get('material'), 'dataset': p.get('dataset'),
-                'shape_class': p.get('shape_class'),
-                'web_link': link_component(p['id'])} for d, p in near]}))
+                'descriptor_distance': round(r['distance'], 3),
+                **short_row(r['piece'], link_component(r['piece']['_id']))}
+                for r in body.get('results') or []]}))
+
+    # 10 ------------------------------------------------------------------------
+    @mcp.tool()
+    async def catalog_overview(
+        query: QueryArg = '',
+        original_function: FunctionArg = '',
+        material: MaterialArg = '',
+        dataset: DatasetArg = '',
+        shape_class: ShapeClassArg = '',
+        circulation: CirculationArg = 'active',
+        status: StatusArg = 'published',
+        include_withdrawn: WithdrawnArg = False,
+        fit_mode: FitModeArg = '',
+        size_mm: SizeArg = None,
+        tolerance: ToleranceArg = '',
+        near_lat: NearLatArg = None,
+        near_lon: NearLonArg = None,
+        near_layer: NearLayerArg = '',
+        radius_km: RadiusArg = None,
+    ) -> dict:
+        """What the catalog holds, in numbers, for the components that match
+        the filters of search_components (none: the whole catalog you may
+        see). It counts components (one per piece or batch, with its current
+        version), not rows of a list: the total, how many physical pieces they
+        stand for, and the counts by material (with its label), original
+        function, dataset, shape class and circulation. The ranges give the
+        smallest and the largest value of each side of the pieces that have a
+        size, sides sorted largest, middle, smallest; lengths are in
+        millimetres. It also says how many components have a current and how
+        many an origin location, and how many of the counted components are
+        not public (visible to you as a member of their dataset or as an
+        administrator). Use it to see the catalog before a search."""
+        filters, fit, near = search_params(
+            query=query, original_function=original_function,
+            material=material, dataset=dataset, shape_class=shape_class,
+            circulation=circulation, status=status,
+            include_withdrawn=include_withdrawn, fit_mode=fit_mode,
+            size_mm=size_mm, tolerance=tolerance, near_lat=near_lat,
+            near_lon=near_lon, near_layer=near_layer, radius_km=radius_km)
+        # limit_dim 0: every value, not the ten most frequent and "others"
+        stats = await get('/identities/stats', {**filters, 'limit_dim': 0})
+        labels = {m.get('_id'): m.get('label') for m in await get(
+            '/materials', {'include_retired': 'true',
+                           'include_merged': 'true'}) or []}
+
+        def counted(rows, label_of=None):
+            return [{'key': r['label'], 'label': (label_of(r['label'])
+                                                  if label_of else None),
+                     'count': r['count']}
+                    for r in rows or []]
+
+        sides = stats.get('sideRanges') or {}
+        not_public = int(stats.get('notPublic') or 0)
+        total = int(stats.get('total') or 0)
+        return limited(clean({
+            'counted': 'components with a current version that match the '
+                       'filters and that you may see',
+            'total': total, 'pieces': stats.get('pieces'),
+            'by_material': counted(stats.get('byMaterial'), labels.get),
+            'by_original_function': counted(
+                stats.get('byOriginalFunction'), ORIGINAL_FUNCTION_LABELS.get),
+            'by_dataset': counted(stats.get('byDataset')),
+            'by_shape_class': counted(
+                stats.get('byShapeClass'), SHAPE_CLASS_LABELS.get),
+            'by_circulation': counted(
+                stats.get('byCirculation'), CIRCULATION_LABELS.get),
+            'side_ranges_mm': {
+                'components_with_a_size': sides.get('count', 0),
+                'largest_side': sides.get('largest'),
+                'middle_side': sides.get('middle'),
+                'smallest_side': sides.get('smallest')},
+            'with_location': {
+                'current': (stats.get('withLocation') or {}).get('current', 0),
+                'origin': (stats.get('withLocation') or {}).get('origin', 0)},
+            'not_public': not_public,
+            'note': (f'{not_public} of the {total} counted components are '
+                     f'not public: you see them as a member of their dataset '
+                     f'or as an administrator.' if not_public else
+                     f'All {total} counted components are public.'),
+            'filters': {k: v for k, v in filters.items()
+                        if v not in ('', None)}}))
 
     return mcp
 

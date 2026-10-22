@@ -98,20 +98,20 @@ def fit_stages(mode: FitMode, sides: Tuple[float, float, float],
                     'current_snapshot.bbx.0': {'$type': 'number'},
                     'current_snapshot.bbx.1': {'$type': 'number'},
                     'current_snapshot.bbx.2': {'$type': 'number'}}},
-        {'$addFields': {'_fit_sides': _sorted_sides()}},
+        {'$addFields': {'_fit_sides': sorted_sides()}},
         {'$match': {'$expr': {'$and': conditions}}},
         {'$addFields': {'fit': fit}},
         {'$unset': '_fit_sides'},
     ]
 
 
-def _sorted_sides() -> List[Dict[str, Any]]:
+def sorted_sides(path: str = _BBX) -> List[Dict[str, Any]]:
     """The three sides of ``bbx``, largest first, without ``$sortArray`` (so no
     MongoDB version is needed): the largest, the middle and the smallest as
     ``$max`` / ``$min`` of the elements. The middle is the larger of the
     smaller of the first two and the smaller of their larger and the third, so
     no arithmetic touches the values and equal sides stay equal."""
-    a, b, c = (_side(i) for i in range(3))
+    a, b, c = (_side(i, path) for i in range(3))
     return [
         {'$max': [a, b, c]},
         {'$max': [{'$min': [a, b]}, {'$min': [{'$max': [a, b]}, c]}]},
@@ -119,8 +119,8 @@ def _sorted_sides() -> List[Dict[str, Any]]:
     ]
 
 
-def _side(index: int) -> Dict[str, Any]:
-    return {'$arrayElemAt': [_BBX, index]}
+def _side(index: int, path: str = _BBX) -> Dict[str, Any]:
+    return {'$arrayElemAt': [path, index]}
 
 
 def match_sort_field(mode: Optional[str]) -> str:

@@ -29,10 +29,18 @@ Search and the location map.
   (with a "Show as list" link back), colours the pieces like the Similarity Map, opens a piece's
   preview on a click, and offers "Search near here" on a click into the map. The map images come
   from the tile server of FOSSGIS e.V. (tile.openstreetmap.de); only this page loads them.
+- **Similar pieces:** a card on the component page shows the six pieces nearest in shape, over
+  the whole shape descriptor rather than on the two-dimensional Similarity Map; size counts as
+  well as the outline. "Show more" brings up to 24. The nearest pieces are also available at
+  `GET /identities/{id}/similar`, with every Browse filter applied before the ranking.
 - **MCP:** `search_components` takes `fit_mode`, `size_mm` and `tolerance`, `near_lat`,
   `near_lon`, `near_layer` and `radius_km` (each result with its distance), and `sort` and
   `order`; its description now says what the text query matches (name, id prefix, catalog
-  number).
+  number). The new tool `catalog_overview` counts the pieces of a search by material, original
+  function, dataset, shape class and circulation, with the range of each side in mm, how many
+  have a location and how many are not public. `similar_components` now ranks by the shape
+  descriptor (with `basis`, `count` and the filters of `search_components`) instead of the
+  distance on the Similarity Map.
 
 ### Changed
 
@@ -49,6 +57,8 @@ Search and the location map.
 - **Browse table:** at middle widths its columns no longer run into each other; the table keeps
   a minimum width for the columns shown and scrolls sideways inside its frame. The same for the
   admin Materials table.
+- **Statistics:** one piece with a malformed size in the database can no longer make the
+  statistics (and with them Analytics) fail for everyone.
 
 ### Security
 
@@ -64,6 +74,10 @@ Search and the location map.
   the location points the near search uses for the existing pieces (new and edited pieces get
   them on their own). Without `--apply` it only reports, and it exits with 4 while points are
   missing or out of date.
+- After the deploy, run the map job once (`main_component_map.py`, or `--knn-only` for the
+  similarity data alone): until it has run, similar pieces answer 409 and the card stays hidden.
+  The similarity data is then rebuilt with the map on every scheduled run; a new or reshaped
+  piece joins at the next run.
 
 ## [0.6.3.1] - 2026-10-21
 

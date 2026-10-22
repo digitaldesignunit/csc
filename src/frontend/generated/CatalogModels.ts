@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-22T17:34:49.836Z
+// Generated on: 2026-10-22T19:04:21.667Z
 // Source: http://127.0.0.1:8791/schema/catalog-compose
 
 import type {
@@ -310,5 +310,20 @@ export interface LocationMap {
   displayed: number; // of those, the ones with a point on the layer
   left_out: number; // the pieces without a point on the layer
   points: LocationPoint[];
+}
+
+
+export interface SimilarPiece {
+  distance: number; // Euclidean distance in the standardised descriptor space (each dimension in standard deviations over the catalog); smaller is more similar. Not metres or mm; compare within one answer.
+  piece: CatalogRow;
+}
+
+export interface SimilarPieces {
+  query_id: string;
+  basis: 'radial_signature' | 'scalars' | 'hks';
+  basis_label: string;
+  computed_at?: string | null; // when the matrix of the catalog was built
+  considered: number; // how many visible pieces that pass the filters were ranked (the query piece not among them)
+  results: SimilarPiece[];
 }
 

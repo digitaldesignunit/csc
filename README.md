@@ -547,11 +547,16 @@ and send you the link, so look at the large address line (the host you will be
 sent back to) before you press Allow, and press Deny when it is not the tool you
 just connected.
 
-**What it can do.** Nine read-only tools: `search_components` (the filters of
-Browse, a page at a time), `get_component`, `list_versions`, `get_version`
-(geometry as counts and a link, never the meshes), `get_evidence`,
-`list_datasets`, `get_dataset`, `get_timeline` and `similar_components` (the
-nearest neighbours on the similarity map, with their distance). Every answer
+**What it can do.** Ten read-only tools: `search_components` (the filters of
+Browse, a page at a time), `catalog_overview` (how many pieces, counted by
+material, original function, dataset, shape class and circulation, the range of
+each sorted side in millimetres, and how many have a location; it takes the same
+filters), `get_component`, `list_versions`, `get_version` (geometry as counts
+and a link, never the meshes), `get_evidence`, `list_datasets`, `get_dataset`,
+`get_timeline` and `similar_components` (the pieces nearest in shape over the
+whole descriptor, not on the two-dimensional similarity map, with their distance
+in standardised units; it takes the same filters, which apply before the
+ranking). Every answer
 carries the web link of the record, and a record that is not public is marked
 (`visibility` private, `status` other than published). There are no write tools
 and no tool for users, invitations or tokens; no answer holds an e-mail address
