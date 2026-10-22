@@ -50,6 +50,14 @@ Search and the location map.
   a minimum width for the columns shown and scrolls sideways inside its frame. The same for the
   admin Materials table.
 
+### Security
+
+- **Next.js 16.4.1:** the web app moves from Next.js 16.4.0 to 16.4.1, which fixes two critical
+  advisories (GHSA-2464-fhr4-w9xw, code execution through the image optimizer with SVG files;
+  GHSA-p3m5-59mp-jv5r, denial of service through Server Actions). The catalog was not reachable
+  through either: it does not use the image optimizer and has no Server Actions. Upgraded as a
+  precaution; `npm audit` is clean again.
+
 ### Server notes
 
 - After the deploy, run `scripts/db_maintenance/backfill_geo_points.py --apply` once: it stores
