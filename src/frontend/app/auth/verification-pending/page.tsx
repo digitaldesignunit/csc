@@ -109,7 +109,7 @@ export default function VerificationPendingPage() {
                   type='email'
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder='your.email@tu-darmstadt.de'
+                  placeholder='name@example.org'
                   required
                   className='backdrop-blur'
                 />

@@ -52,7 +52,10 @@ environment=
     # (a mongodb:// URI) or to keep them in the process (memory://).
     # CSC_JSON_BODY_LIMIT_MB: largest request body of the routes that take no file
     CSC_JSON_BODY_LIMIT_MB="16",
-    CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de",
+    # CSC_OPEN_REGISTRATION_DOMAINS: e-mail domains that register without an
+    # invitation, comma-separated, subdomains included. Empty = invite only
+    # (decision 8.172); "example.org,example.com" opens those two domains.
+    CSC_OPEN_REGISTRATION_DOMAINS="",
     CSC_MAX_DATASETS_PER_USER="3",
     GH_XML_CACHE_DIR="/home/ddu/csc/current/backend/static/ghxml",
     FASTAPI_CORS_ORIGINS="https://yourdomain.com,http://localhost:3000",

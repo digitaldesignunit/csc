@@ -1121,8 +1121,8 @@ shown anywhere on its own: it appears through the records it fills (section 3.3.
 well (the account and its `default_role` stay).
 
 **Registration (decision 8.14).** Self-registration is open to addresses of
-`CSC_OPEN_REGISTRATION_DOMAINS` (env, comma-separated, default `tu-darmstadt.de`, subdomains
-included), with the verification email as in 0.5. Every other address needs an **invitation**:
+`CSC_OPEN_REGISTRATION_DOMAINS` (env, comma-separated, subdomains included; empty by default, which
+means invite only, 8.172), with the verification email as in 0.5. Every other address needs an **invitation**:
 
 ```jsonc
 // invitations

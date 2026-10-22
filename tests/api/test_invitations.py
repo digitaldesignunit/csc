@@ -191,3 +191,60 @@ def test_admin_user_list_and_search(world):
     assert [u['username'] for u in search] == ['alice']
     assert api.get('/users/search', params={'q': 'ali'},
                    headers=world['moderator']).status_code == 403
+
+
+# INVITE ONLY (decision 8.172) --------------------------------------------------
+def _registration(api):
+    response = api.get('/auth/registration')
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_the_default_is_invite_only(world, env):
+    api, mails = world['api'], world['mails']
+    env(CSC_OPEN_REGISTRATION_DOMAINS=None)
+    assert _registration(api) == {'open_domains': [], 'invite_only': True}
+    refused = _register(api, 'dora@tu-darmstadt.de', username='dora')
+    assert refused.status_code == 400
+    assert 'needs an invitation' in refused.text
+
+    _invite(api, world['moderator'], ['dora@tu-darmstadt.de'])
+    code = mails['invitations'][-1]['code']
+    done = _register(api, 'dora@tu-darmstadt.de', code, username='dora')
+    assert done.status_code == 201, done.text
+    # the code proved the address: verified at once (8.14)
+    assert world['db']['users'].find_one({'username': 'dora'})['email_verified']
+
+
+@pytest.mark.parametrize('value', ['', ',', ' , ,', '.'])
+def test_no_domain_in_the_variable_is_invite_only(world, env, value):
+    env(CSC_OPEN_REGISTRATION_DOMAINS=value)
+    assert _registration(world['api']) == {'open_domains': [], 'invite_only': True}
+    assert _register(world['api'], 'eve@tu-darmstadt.de',
+                     username='eve').status_code == 400
+
+
+def test_a_set_domain_registers_directly_and_is_named(world, env):
+    api = world['api']
+    env(CSC_OPEN_REGISTRATION_DOMAINS=' Partner.Example, .other.example ')
+    assert _registration(api) == {
+        'open_domains': ['partner.example', 'other.example'],
+        'invite_only': False}
+    assert _register(api, 'a@partner.example',
+                     username='anna').status_code == 201
+    assert _register(api, 'b@lab.other.example',
+                     username='bert').status_code == 201
+    # an address outside the domains still needs an invitation
+    assert _register(api, 'c@elsewhere.example',
+                     username='clara').status_code == 400
+
+
+def test_the_registration_answer_is_public_and_works_read_only(world, env,
+                                                               read_only_flag):
+    api = world['api']
+    env(CSC_OPEN_REGISTRATION_DOMAINS='partner.example')
+    read_only_flag.on()
+    response = api.get('/auth/registration')       # no sign-in
+    assert response.status_code == 200
+    assert response.json() == {'open_domains': ['partner.example'],
+                               'invite_only': False}

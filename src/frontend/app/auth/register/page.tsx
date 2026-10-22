@@ -9,6 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import BackgroundMesh from "@/components/components/BackgroundMesh";
 import { USERNAME_HINT, usernameProblem } from "@/lib/username";
+import Help from "@/components/ui/help";
+import { useRegistration } from "@/hooks/useRegistration";
+import { codeFieldLabel, OPEN_DOMAINS_HINT, openDomainsHelp } from "@/lib/registration";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
@@ -19,8 +22,23 @@ export default function RegisterPage() {
   // an invitation link carries ?code=... (decision 8.14)
   const searchParams = useSearchParams();
   const [code, setCode] = useState(searchParams.get("code") ?? "");
+  // invite only (decision 8.172): the form shows once there is a code, from
+  // the link or typed into the code field of the invitation page
+  const [codeGiven, setCodeGiven] = useState(Boolean(searchParams.get("code")?.trim()));
+  const { info, ready } = useRegistration();
+  const inviteOnly = info?.inviteOnly === true;
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const router = useRouter();
+
+  function handleCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!code.trim()) {
+      setError("Enter the invitation code from your invitation.");
+      return;
+    }
+    setError("");
+    setCodeGiven(true);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,7 +108,30 @@ export default function RegisterPage() {
           </CardHeader>
           <CardContent>
             {error && <p className="text-sm text-destructive mb-4">{error}</p>}
-            
+
+            {!ready ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : inviteOnly && !codeGiven ? (
+              <form onSubmit={handleCode} className="space-y-4">
+                <p className="text-sm">
+                  Registration is by invitation only. To get an invitation, ask a moderator of the
+                  dataset you want to join.
+                </p>
+                <div className="gap-1 flex flex-col">
+                  <Label htmlFor="code">I have an invitation code</Label>
+                  <Input
+                    id="code"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className="backdrop-blur font-mono"
+                  />
+                </div>
+                <WriteButton type="submit" className="w-full">Continue</WriteButton>
+              </form>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="gap-1 flex flex-col">
                 <Label htmlFor="email">E-mail</Label>
@@ -101,18 +142,27 @@ export default function RegisterPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   onFocus={() => setFocusedField('email')}
                   onBlur={() => setFocusedField(null)}
-                  placeholder={focusedField === 'email' ? '' : 'franklin.re-usevelt@stud.tu-darmstadt.de'}
+                  placeholder={focusedField === 'email' ? '' : 'name@example.org'}
                   className="backdrop-blur placeholder:opacity-40"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {code
-                    ? "Use the address the invitation was sent to."
-                    : "The address decides the way: a TU Darmstadt address registers directly."}
+                  {code || inviteOnly ? (
+                    "Use the address the invitation was sent to."
+                  ) : info ? (
+                    <>
+                      {OPEN_DOMAINS_HINT}{" "}
+                      <span className="inline-block align-middle">
+                        <Help label="Open registration domains" text={openDomainsHelp(info.openDomains)} />
+                      </span>
+                    </>
+                  ) : (
+                    "An address outside the open domains needs an invitation code."
+                  )}
                 </p>
               </div>
 
               <div className="gap-1 flex flex-col">
-                <Label htmlFor="code">Invitation code {code ? "" : "(for addresses outside TU Darmstadt)"}</Label>
+                <Label htmlFor="code">{codeFieldLabel(info, Boolean(code))}</Label>
                 <Input
                   id="code"
                   value={code}
@@ -184,6 +234,7 @@ export default function RegisterPage() {
 
               <WriteButton type="submit" className="w-full">Register</WriteButton>
             </form>
+            )}
             
             <div className="mt-4 text-center text-sm text-muted-foreground">
               Already have an account?{' '}

@@ -44,7 +44,9 @@ export FRONTEND_URL="https://2ndchances.build"
 # address; without it they use the request's own, which is http:// behind the
 # proxy. Optional.
 export CSC_PUBLIC_API_URL="https://api.2ndchances.build"
-export CSC_OPEN_REGISTRATION_DOMAINS="tu-darmstadt.de"
+# e-mail domains that register without an invitation, comma-separated, subdomains
+# included. Empty or unset = invite only (decision 8.172).
+export CSC_OPEN_REGISTRATION_DOMAINS=""
 # datasets a non-admin account may create (default 3; admins: unlimited)
 export CSC_MAX_DATASETS_PER_USER="3"
 

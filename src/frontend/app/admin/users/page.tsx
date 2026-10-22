@@ -25,6 +25,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { registrationSummary } from '@/lib/registration'
+import { useRegistration } from '@/hooks/useRegistration'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -53,6 +55,7 @@ const ANY = '__any__'
 const FILTER_KEYS = ['q', 'dataset', 'dataset_role', 'no_dataset', 'role', 'state', 'invited'] as const
 
 export default function AdminUsersPage() {
+  const { info: registration } = useRegistration()
   const { data: session, status } = useSession()
   const router = useRouter()
   const pathname = usePathname()
@@ -325,7 +328,7 @@ export default function AdminUsersPage() {
               <div>
                 <CardTitle>Invitations</CardTitle>
                 <CardDescription>
-                  Registration outside the open domains works only with an invitation.
+                  {registrationSummary(registration)}
                 </CardDescription>
               </div>
               <InviteDialog datasets={datasets} allowNoDataset onInvited={() => void fetchInvitations()} />

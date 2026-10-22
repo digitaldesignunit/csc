@@ -62,6 +62,8 @@ import {
 import { isEntryActive, visibleNav, type NavViewer } from '@/lib/navigation'
 import { forgetRecentComponents, useRecentComponents, useRecentUserId } from '@/lib/recentComponents'
 import { useMe } from '@/lib/me'
+import { registerLinkText, signInAlternativeText } from '@/lib/registration'
+import { useRegistration } from '@/hooks/useRegistration'
 import { backendJson } from '@/lib/backend'
 import { cn, resolveStatic } from '@/lib/utils'
 
@@ -259,6 +261,7 @@ function AccountMenu() {
   const close = useCloseSheet()
   const isRail = useIsRail()
   const user = (session?.user ?? null) as SessionUser | null
+  const { info: registration } = useRegistration(!user)
   const expired = Boolean(
     (session as { error?: string } | null)?.error === 'ApiTokenExpired'
     || (session as { api?: { hasAccessToken?: boolean } } | null)?.api?.hasAccessToken === false,
@@ -281,7 +284,7 @@ function AccountMenu() {
   const primary = user ? (user.name || user.username || user.email || '') : 'Sign in'
   const secondary = user
     ? (expired ? 'Session expired' : (user.username || user.email || ''))
-    : 'or register'
+    : (signInAlternativeText(registration) ?? '')
 
   return (
     <SidebarMenu>
@@ -334,9 +337,11 @@ function AccountMenu() {
                 <DropdownMenuItem onSelect={() => signIn()}>
                   <LogIn /> Sign in
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/auth/register" onClick={close}><UserPlus /> Register</Link>
-                </DropdownMenuItem>
+                {registration && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/auth/register" onClick={close}><UserPlus /> {registerLinkText(registration)}</Link>
+                  </DropdownMenuItem>
+                )}
               </>
             )}
             <DropdownMenuSub>

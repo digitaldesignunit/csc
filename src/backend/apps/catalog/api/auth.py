@@ -11,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from fastapi.concurrency import run_in_threadpool
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import bcrypt
+from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 
 # LOCAL MODULE IMPORTS --------------------------------------------------------
@@ -50,11 +51,12 @@ oauth2_scheme_optional = OAuth2PasswordBearer(
 
 
 def open_registration_domains() -> list:
-    """CSC_OPEN_REGISTRATION_DOMAINS (comma-separated, default
-    tu-darmstadt.de): self-registration without invitation (8.14)."""
+    """CSC_OPEN_REGISTRATION_DOMAINS (comma-separated): self-registration
+    without invitation (8.14). No domain (the default) = invite only
+    (8.172)."""
     raw = get_settings().csc_open_registration_domains
-    return [d.strip().lower().lstrip('.') for d in raw.split(',')
-            if d.strip()]
+    domains = (d.strip().lower().lstrip('.') for d in raw.split(','))
+    return [d for d in domains if d]
 
 
 def is_open_domain(email: str) -> bool:
@@ -338,7 +340,22 @@ async def login_for_access_token(
     return Token(access_token=token)
 
 
-# Optional: registration endpoint (enforce TU domain)
+class RegistrationInfo(BaseModel):
+    """Who may register without an invitation (8.172): the domains are not
+    secret; none = invite only."""
+    open_domains: list[str]
+    invite_only: bool
+
+
+@router.get('/registration',
+            response_model=RegistrationInfo,
+            summary='The open registration domains (none = invite only)')
+async def registration_info():
+    domains = open_registration_domains()
+    return RegistrationInfo(open_domains=domains, invite_only=not domains)
+
+
+# Registration: an open domain, or an invitation code (8.14, 8.172)
 @router.post('/register',
              response_model=UserPublic,
              status_code=201,

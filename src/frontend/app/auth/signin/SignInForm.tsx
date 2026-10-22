@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PASSWORD_CHANGED_PARAM, PASSWORD_CHANGED_VALUE } from '@/lib/password'
 import { RATE_LIMITED, RATE_LIMITED_TEXT } from '@/lib/signInErrors'
+import { registerLinkText, signInRegisterPrompt } from '@/lib/registration'
+import { useRegistration } from '@/hooks/useRegistration'
 
 function toSafePathClient(raw: string): string {
   const fallback = '/components'
@@ -28,6 +30,7 @@ function toSafePathClient(raw: string): string {
 }
 
 export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
+  const { info: registration } = useRegistration()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -202,15 +205,17 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
             </div>
           </form>
           
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{' '}
-            <a 
-              href="/auth/register" 
-              className="text-primary hover:underline font-medium"
-            >
-              Register here
-            </a>
-          </div>
+          {registration && (
+            <div className="mt-4 text-center text-sm text-muted-foreground">
+              {signInRegisterPrompt(registration)}{' '}
+              <a
+                href="/auth/register"
+                className="text-primary hover:underline font-medium"
+              >
+                {registerLinkText(registration)}
+              </a>
+            </div>
+          )}
           <div className="mt-2 text-center text-sm">
             <Link href="/components" className="text-muted-foreground underline underline-offset-4 hover:text-foreground">
               Browse without signing in
