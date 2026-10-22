@@ -27,6 +27,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { backendJson } from '@/lib/backend'
+import { originLocationProblem } from '@/lib/near'
 import {
   cleanOrigin,
   emptyOrigin,
@@ -148,6 +149,11 @@ export function ReenterDialog({ identityId, exit, open, onOpenChange }: {
   const [error, setError] = useState<string | null>(null)
 
   const submit = async () => {
+    const locationProblem = originLocationProblem(origin)
+    if (locationProblem) {
+      setError(`Place: ${locationProblem}`)
+      return
+    }
     setBusy(true)
     setError(null)
     try {

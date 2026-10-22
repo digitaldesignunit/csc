@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-22T14:04:46.249Z
+// Generated on: 2026-10-22T15:06:49.443Z
 // Source: http://127.0.0.1:8791/schema/catalog-compose
 
 import type {
@@ -270,6 +270,7 @@ export interface CatalogRow {
   has_preview?: boolean | null; // whether the current state has a rendered preview (list rows only; absent elsewhere)
   current_snapshot_id?: string | null;
   fit?: FitAbout | FitCanHold | null; // how close the piece is to the asked size, while the list has a dimension search (fit_mode); absent otherwise
+  distance_m?: number | null; // distance in metres from the near point of the list (near_lat, near_lon) to the piece, on the layer asked (near_layer); absent without a near search
   identity_id: string;
   version: number;
   status: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';

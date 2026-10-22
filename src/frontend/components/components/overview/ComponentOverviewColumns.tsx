@@ -11,6 +11,7 @@ import ChipView from '@/components/common/ChipView'
 import { useMaterials } from '@/lib/lineage'
 import { piecesNote, rowStatus, sizeLabel } from '@/lib/browse'
 import { fitRowLines, fitRowText, rowFit } from '@/lib/fit'
+import { distanceText, rowDistance } from '@/lib/near'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -167,6 +168,20 @@ const BASE: Record<string, Column> = {
         : <div className='text-xs text-muted-foreground'>N/A</div>
     },
   },
+  // only while a near search is active (decision 8.170): how far the piece is
+  distance: {
+    id: 'distance',
+    accessorFn: (row) => rowDistance(row),
+    header: () => <ComponentOverviewDataTableHeader header='Distance' sortKey='distance' />,
+    // the header with its reset cross needs about 135 px (Browse sets a minimum width)
+    meta: { colClassName: 'w-[15%]' },
+    cell: ({ row }) => {
+      const metres = rowDistance(row.original)
+      return metres === null
+        ? <div className='text-xs text-muted-foreground'>N/A</div>
+        : <div className='whitespace-nowrap text-xs tabular-nums'>{distanceText(metres)}</div>
+    },
+  },
   // only while a fit is active (decision 8.169): how close the piece is
   fit: {
     id: 'fit',
@@ -318,12 +333,22 @@ const OPTIONAL: Record<string, Column> = {
 }
 
 /** The base columns, then the picked optional ones in the picker's order. */
-export function buildColumns(picked: string[], withFit = false): Column[] {
-  // the match column takes its width from the name and material columns
-  const narrower: Record<string, string> = { name: 'w-[14%]', material: 'w-[14%]' }
+export function buildColumns(picked: string[], withFit = false, withNear = false): Column[] {
+  // the match and the distance columns take their width from the name,
+  // function, material and dataset columns
+  const narrower: Record<string, string> = withFit && withNear
+    ? {
+        name: 'w-[15%]', original_function: 'w-[10%]', material: 'w-[11%]', dataset: 'w-[10%]',
+        size: 'w-[11%]', distance: 'w-[14%]', shape_class: 'w-[10.5%]',
+      }
+    : withFit
+      ? { name: 'w-[14%]', material: 'w-[14%]', shape_class: 'w-[10.5%]' }
+      : withNear
+        ? { name: 'w-[18%]', material: 'w-[12%]', dataset: 'w-[12%]', shape_class: 'w-[10.5%]' }
+        : {}
   const base = Object.entries(BASE)
-    .filter(([key]) => withFit || key !== 'fit')
-    .map(([key, column]) => (withFit && narrower[key] ? { ...column, meta: { colClassName: narrower[key] } } : column))
+    .filter(([key]) => (withFit || key !== 'fit') && (withNear || key !== 'distance'))
+    .map(([key, column]) => (narrower[key] ? { ...column, meta: { colClassName: narrower[key] } } : column))
   return [
     ...base,
     ...Object.keys(OPTIONAL).filter((key) => picked.includes(key)).map((key) => OPTIONAL[key]),

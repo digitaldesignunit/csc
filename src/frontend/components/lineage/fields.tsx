@@ -35,6 +35,7 @@ import { firstDay, truncateTo } from '@/lib/dateField'
 import { dateOnlyToIso, isoToDateOnly, WORKS_ORIGIN_KINDS } from '@/lib/lineage'
 import { cn } from '@/lib/utils'
 import PerformedByField from './PerformedByField'
+import PlaceLocationFields from './PlaceLocationFields'
 
 const NONE = '__none__'
 
@@ -224,6 +225,12 @@ export function OriginFields({ idPrefix, value, onChange, disabled }: {
           />
         </Field>
       </div>
+      <PlaceLocationFields
+        idPrefix={`${idPrefix}-place`}
+        location={value.place?.location}
+        onChange={(location) => set({ place: { ...(value.place ?? {}), location } })}
+        disabled={disabled}
+      />
 
       {works && (
         <div className="space-y-3 rounded-md border border-border/70 p-3">

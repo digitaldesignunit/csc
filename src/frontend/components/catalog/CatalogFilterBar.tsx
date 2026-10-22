@@ -28,7 +28,9 @@ import {
 } from '@/lib/browse'
 import { useMaterials } from '@/lib/lineage'
 import { fitChanges, fitChipLabel, parseFit } from '@/lib/fit'
+import { nearChanges, nearChipLabel, parseNear } from '@/lib/near'
 import FitFilter from './FitFilter'
+import NearFilter from './NearFilter'
 
 const SELECT_CLASS =
   'h-9 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -40,11 +42,13 @@ type Props = {
   withSize?: boolean
   /** The "Fits" section of the dimension search (Browse only, decision 8.169). */
   withFit?: boolean
+  /** The "Near" section of the near search (Browse only, decision 8.170). */
+  withNear?: boolean
   /** Extra fields of the "More filters" popover, e.g. the rows per page. */
   extra?: React.ReactNode
 }
 
-export default function CatalogFilterBar({ circulation = 'active', withSize = true, withFit = false, extra }: Props) {
+export default function CatalogFilterBar({ circulation = 'active', withSize = true, withFit = false, withNear = false, extra }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const search = useSearchParams()
@@ -85,8 +89,9 @@ export default function CatalogFilterBar({ circulation = 'active', withSize = tr
 
   const active = activeFilters(search)
   const fit = withFit ? parseFit(search) : null
+  const near = withNear ? parseNear(search) : null
   const moreCount = active.filter((f) => !['original_function', 'material', 'dataset'].includes(f.key)).length
-    + (fit ? 1 : 0)
+    + (fit ? 1 : 0) + (near ? 1 : 0)
 
   return (
     <div className="space-y-2">
@@ -130,10 +135,11 @@ export default function CatalogFilterBar({ circulation = 'active', withSize = tr
           go={go}
           withSize={withSize}
           withFit={withFit}
+          withNear={withNear}
           extra={extra}
         />
       </div>
-      {(active.length > 0 || fit) && (
+      {(active.length > 0 || fit || near) && (
         <div className="flex flex-wrap items-center gap-1.5">
           {fit && (
             <button
@@ -143,6 +149,17 @@ export default function CatalogFilterBar({ circulation = 'active', withSize = tr
               aria-label={`Remove filter Fits: ${fitChipLabel(fit)}`}
             >
               Fits: {fitChipLabel(fit)}
+              <X className="h-3 w-3" aria-hidden />
+            </button>
+          )}
+          {near && (
+            <button
+              type="button"
+              onClick={() => go(nearChanges(null, true))}
+              className="inline-flex items-center gap-1 rounded-full border bg-muted px-2.5 py-0.5 text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={`Remove filter ${nearChipLabel(near)}`}
+            >
+              {nearChipLabel(near)}
               <X className="h-3 w-3" aria-hidden />
             </button>
           )}
@@ -158,7 +175,7 @@ export default function CatalogFilterBar({ circulation = 'active', withSize = tr
               <X className="h-3 w-3" aria-hidden />
             </button>
           ))}
-          {active.length + (fit ? 1 : 0) > 1 && (
+          {active.length + (fit ? 1 : 0) + (near ? 1 : 0) > 1 && (
             <button type="button" onClick={clearAll} className="px-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground">
               Clear all
             </button>
@@ -181,6 +198,7 @@ function MoreFilters({
   go,
   withSize,
   withFit,
+  withNear,
   extra,
 }: {
   count: number
@@ -188,6 +206,7 @@ function MoreFilters({
   go: (changes: Record<string, string | null>) => void
   withSize: boolean
   withFit: boolean
+  withNear: boolean
   extra?: React.ReactNode
 }) {
   return (
@@ -263,6 +282,7 @@ function MoreFilters({
           </div>
         )}
         {withFit && <FitFilter search={search} go={go} />}
+        {withNear && <NearFilter search={search} go={go} />}
         {extra}
       </PopoverContent>
     </Popover>

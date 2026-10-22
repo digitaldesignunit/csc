@@ -70,6 +70,7 @@ const PROBLEM_STEP: Record<string, StepId> = {
   original_function: 'details',
   material: 'details',
   location: 'details',
+  origin_location: 'details',
   quantity: 'details',
   effective_on: 'details',
   size: 'size',

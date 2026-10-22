@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { backendJson } from '@/lib/backend'
+import { originLocationProblem } from '@/lib/near'
 import {
   assessedClass,
   cleanOrigin,
@@ -237,6 +238,11 @@ export default function ProvenanceEditDialog({ identity, open, onOpenChange }: P
   const locked = (unit: InheritUnit) => hasParents && inherit[unit]
 
   const save = async () => {
+    const locationProblem = originLocationProblem(draft.origin)
+    if (locationProblem) {
+      setError(`Origin place: ${locationProblem}`)
+      return
+    }
     const patch = buildPatch(identity, draft, inherit, me?._id)
     if (Object.keys(patch).length === 0) {
       onOpenChange(false)

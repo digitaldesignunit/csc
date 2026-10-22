@@ -11,6 +11,7 @@ from apps.catalog.read_models import catalog_row
 
 from .dimension_fit import match_sort_field, volume_stages
 from .identity_filters import resolve_sort_field
+from .near_search import DISTANCE_FIELD, Near, distance_sort, first_stages
 
 
 def annotate_has_preview(request: Request, docs: List[Dict[str, Any]]) -> None:
@@ -106,6 +107,7 @@ def build_list_pipeline(
     snapshot_view: str = 'row',
     fit_stages: Optional[List[Dict[str, Any]]] = None,
     fit_mode: Optional[str] = None,
+    near: Optional[Near] = None,
 ) -> List[Dict[str, Any]]:
     """The identities with their current snapshot. ``snapshot_view`` (see
     ``SNAPSHOT_VIEWS``) says how much of the snapshot comes back: the join is
@@ -117,7 +119,11 @@ def build_list_pipeline(
     ``fit_stages`` (the dimension search, 8.169) come right after the filters
     of the snapshot and add ``fit`` to the row; the sort key ``match`` sorts
     on it (``fit_mode`` says which value), ``volume`` on the product of the
-    sides of ``bbx`` (8.173). Both are computed, so they sort after the join."""
+    sides of ``bbx`` (8.173). Both are computed, so they sort after the join.
+
+    ``near`` (the near search, 8.170) opens the pipeline with ``$geoNear``
+    instead of the plain ``$match``, which adds ``distance_m`` to the row; the
+    sort key ``distance`` sorts on it, with the catalog number as the tie."""
     sort_prep: List[Dict[str, Any]] = []
     sort_drop: List[str] = []
     if sortkey == 'volume':
@@ -127,6 +133,9 @@ def build_list_pipeline(
         sort_field = match_sort_field(fit_mode)
         # ties by id, so a page boundary never repeats or skips a piece
         sort_spec = {sort_field: sort_order, '_id': 1}
+    elif sortkey == 'distance':
+        sort_field = DISTANCE_FIELD
+        sort_spec = distance_sort(sort_order)
     else:
         sort_field = resolve_sort_field(sortkey)
         sort_spec = {sort_field: sort_order}
@@ -137,7 +146,7 @@ def build_list_pipeline(
     identity_sort = not sort_field.startswith(
         ('current_snapshot.', 'fit.', 'volume'))
 
-    pipeline: List[Dict[str, Any]] = [{'$match': identity_match}]
+    pipeline: List[Dict[str, Any]] = first_stages(identity_match, near)
     if identity_sort:
         pipeline.append(sort_stage)
     pipeline.extend([
@@ -194,9 +203,10 @@ def build_count_pipeline(
     current_user_id: Optional[str],
     include_username: bool,
     fit_stages: Optional[List[Dict[str, Any]]] = None,
+    near: Optional[Near] = None,
 ) -> List[Dict[str, Any]]:
     pipeline: List[Dict[str, Any]] = [
-        {'$match': identity_match},
+        *first_stages(identity_match, near),
         _current_snapshot_lookup(snapshots_collection,
                                  fields=SORT_SNAPSHOT_FIELDS),
         {'$unwind': '$current_snapshot'},
@@ -329,13 +339,14 @@ def build_identity_stats_pipeline(
     snapshot_match: Dict[str, Any],
     limit_dim: int,
     fit_stages: Optional[List[Dict[str, Any]]] = None,
+    near: Optional[Near] = None,
 ) -> List[Dict[str, Any]]:
     """
     Join identities to current snapshots, reshape to flat fields, facet.
     """
     _ = limit_dim  # retained for parity with legacy handler (Top-N applied in Python)
     pipeline: List[Dict[str, Any]] = [
-        {'$match': identity_match},
+        *first_stages(identity_match, near),
         {
             '$lookup': {
                 'from': snapshots_collection,

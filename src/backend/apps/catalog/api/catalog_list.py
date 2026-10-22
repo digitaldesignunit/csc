@@ -91,7 +91,7 @@ def _format_list_rows(
             identity_doc = {
                 k: v for k, v in doc.items()
                 if k not in ('current_snapshot', 'reserved_by_username',
-                             'fit')
+                             'fit', 'distance_m', 'geo_current', 'geo_origin')
             }
             if expand == 'current_snapshot':
                 row = passport_body(identity_doc,
@@ -102,6 +102,8 @@ def _format_list_rows(
                 row['reserved_by_username'] = doc['reserved_by_username']
             if doc.get('fit') is not None:
                 row['fit'] = doc['fit']
+            if doc.get('distance_m') is not None:
+                row['distance_m'] = doc['distance_m']
             rows.append(row)
     except HTTPException:
         raise
@@ -120,6 +122,7 @@ async def _pipelines_args(request: Request, filters: CatalogFilters,
             await visible_identity_match(request, viewer_of(user))),
         'snapshot_match': filters.snapshot_match(),
         'fit_stages': filters.fit_pipeline_stages(),
+        'near': filters.near,
     }
 
 
@@ -433,8 +436,10 @@ async def list_identities_route(
         None, description='Sort key; volume = the product of the three bbx '
                           'sides (a piece without bbx last); match = the '
                           'closeness to the dimension search (needs '
-                          'fit_mode). Default: match while fit_mode is set, '
-                          'else _id'),
+                          'fit_mode); distance = the distance to the near '
+                          'point (needs near_lat and near_lon). Default: '
+                          'distance while a near search is set, else match '
+                          'while fit_mode is set, else _id'),
     sortorder: Literal['asc', 'desc'] = Query('asc'),
     expand: ExpandMode = Query(
         'shallow',
@@ -451,7 +456,14 @@ async def list_identities_route(
         raise HTTPException(
             status_code=422,
             detail='sortkey match needs fit_mode (about or can_hold)')
-    sortkey = sortkey or ('match' if filters.fit_mode else '_id')
+    if sortkey == 'distance' and not filters.near:
+        raise HTTPException(
+            status_code=422,
+            detail='sortkey distance needs near_lat and near_lon')
+    # a near search sorts by distance, also with a dimension search: that
+    # one filters (8.173)
+    sortkey = sortkey or ('distance' if filters.near
+                          else 'match' if filters.fit_mode else '_id')
     try:
         pipeline = build_list_pipeline(
             **(await _pipelines_args(request, filters, current_user)),

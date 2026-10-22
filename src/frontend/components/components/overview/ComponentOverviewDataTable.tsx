@@ -20,6 +20,9 @@ import type { CatalogShallowRow } from '@/generated/catalogExtras'
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  /** The table never gets narrower than this (px): the card scrolls instead of
+   *  squeezing a header out of sight. */
+  minWidth?: number
 }
 
 type ColMeta = { colClassName?: string }
@@ -27,6 +30,7 @@ type ColMeta = { colClassName?: string }
 export function ComponentOverviewDataTable<TData, TValue>({
   columns,
   data,
+  minWidth,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
@@ -37,7 +41,7 @@ export function ComponentOverviewDataTable<TData, TValue>({
   return (
     <div className="w-full overflow-x-auto rounded-lg border bg-card">
       {/* table-fixed: the widths of <col> hold, the base columns add up to 100% */}
-      <Table className="table-fixed w-full text-foreground">
+      <Table className="table-fixed w-full text-foreground" style={minWidth ? { minWidth } : undefined}>
         {/* Apply responsive widths via <colgroup> */}
         <colgroup>
           {table.getFlatHeaders().map((header) => (

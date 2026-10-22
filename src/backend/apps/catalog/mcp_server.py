@@ -39,6 +39,7 @@ from starlette.requests import Request
 
 import limiter as lim
 from apps.catalog import access_tokens as tk
+from apps.catalog.api.near_search import NearError, parse_near
 from apps.catalog.internal_call import InternalError, rest_get
 from apps.catalog.models import UserInDB
 from apps.catalog.oauth_server import AccessTokenVerifier
@@ -85,7 +86,8 @@ def visibility_of(record: dict) -> str:
 
 # the sorts of search_components -> the sort key of the REST list
 SEARCH_SORTS = {'catalog_number': 'catalog_number', 'date': 'effective_from',
-                'created': 'created', 'volume': 'volume', 'match': 'match'}
+                'created': 'created', 'volume': 'volume', 'match': 'match',
+                'distance': 'distance'}
 FIT_MODES = ('about', 'can_hold')
 
 
@@ -111,11 +113,23 @@ def fit_of(row: dict) -> Optional[dict]:
         out = {'mode': 'can_hold',
                'waste_m3': float(f"{fit['waste_mm3'] / 1e9:.2g}")}
         if percent is not None:
-            out['waste_percent'] = round(percent, 1) if percent < 1                 else round(percent)
+            # never 100 unless the waste is all of it: 99.97 reads as 99 (8.169)
+            out['waste_percent'] = (round(percent, 1) if percent < 1
+                                    else min(99, round(percent)) if percent < 100
+                                    else 100)
         if (row.get('quantity') or 1) > 1:
             out['per_piece'] = True     # the size is one piece's of the batch
         return out
     return None
+
+
+def distance_km(metres: Optional[float]) -> Optional[float]:
+    """A distance from the near point in km: two decimals (10 m) up to 100 km,
+    one decimal beyond; the unit is in the name of the field."""
+    if metres is None:
+        return None
+    km = metres / 1000
+    return round(km, 2) if km < 100 else round(km, 1)
 
 
 def short_row(row: dict, link: str) -> dict:
@@ -134,6 +148,8 @@ def short_row(row: dict, link: str) -> dict:
     fit = fit_of(row)
     if fit:
         short['fit'] = fit
+    if row.get('distance_m') is not None:
+        short['distance_km'] = distance_km(row['distance_m'])
     return short
 
 
@@ -252,12 +268,29 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         tolerance: Annotated[str, Field(description=(
             'Only for fit_mode about: a share of each asked side or '
             'millimetres, for example "10%" (the default) or "50mm".'))] = '',
+        near_lat: Annotated[Optional[float], Field(description=(
+            'Search by place: the latitude of the point, -90 to 90, with '
+            'near_lon. Only pieces with a known place on the chosen layer '
+            'are listed, nearest first, each with its distance_km.'))] = None,
+        near_lon: Annotated[Optional[float], Field(description=(
+            'The longitude of the point, -180 to 180. Needs near_lat.'
+            ))] = None,
+        near_layer: Annotated[str, Field(description=(
+            'Which place of a piece is measured: current (where the piece '
+            'is now; the default) or origin (the building it comes from, '
+            'known for fewer pieces).'))] = '',
+        radius_km: Annotated[Optional[float], Field(description=(
+            'Only pieces within this many km of the point. Without it every '
+            'piece with a place on the layer is listed, nearest first.'
+            ))] = None,
         sort: Annotated[str, Field(description=(
-            'catalog_number (default without a size search), date (the '
-            'version applies from), created, volume (length x width x '
+            'catalog_number (default without a size or place search), date '
+            '(the version applies from), created, volume (length x width x '
             'height; pieces without a size last), match (closeness to the '
             'size search: smallest deviation, or least waste, first; the '
-            'default with fit_mode).'))] = '',
+            'default with fit_mode and no place search), distance (from the '
+            'near point, nearest first; the default with near_lat and '
+            'near_lon).'))] = '',
         order: Annotated[str, Field(description=(
             'asc (default) or desc.'))] = 'asc',
         page: Annotated[int, Field(description='Page, from 1.')] = 1,
@@ -267,7 +300,9 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         component (name, function, material, dataset, size, status,
         visibility) with its web link, and the total. With fit_mode and
         size_mm each row also carries its deviation (about, in per cent) or
-        waste (can_hold, in m3 and in per cent of the piece). Use get_component for the details of one."""
+        waste (can_hold, in m3 and in per cent of the piece); with near_lat
+        and near_lon each row carries its distance_km. Use get_component for
+        the details of one."""
         page, size = page_args(page, size)
         fit = {}
         if fit_mode or size_mm or tolerance:
@@ -279,11 +314,23 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
             fit = {'fit_mode': fit_mode,
                    'fit_size': size_text(size_mm),
                    'fit_tol': tolerance}
-        sort = sort or ('match' if fit else 'catalog_number')
+        near = {}
+        if (near_lat is not None or near_lon is not None or near_layer
+                or radius_km is not None):
+            try:
+                near = parse_near(near_lat, near_lon, near_layer or None,
+                                  radius_km)
+            except NearError as exc:
+                raise ToolError(f'{exc}.')
+            near = {k: v for k, v in near.items() if v is not None}
+        sort = sort or ('distance' if near
+                        else 'match' if fit else 'catalog_number')
         if sort not in SEARCH_SORTS:
             raise ToolError('sort is one of ' + ', '.join(SEARCH_SORTS) + '.')
         if sort == 'match' and not fit:
             raise ToolError('sort match needs fit_mode and size_mm.')
+        if sort == 'distance' and not near:
+            raise ToolError('sort distance needs near_lat and near_lon.')
         if order not in ('asc', 'desc'):
             raise ToolError('order is asc or desc.')
         filters = {
@@ -291,7 +338,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
             'material': material, 'dataset': dataset,
             'shape_class': shape_class, 'circulation': circulation,
             'status': status, 'include_withdrawn': include_withdrawn or None,
-            **fit}
+            **fit, **near}
         rows = await get('/identities', {
             **filters, 'page': page, 'size': size,
             'sortkey': SEARCH_SORTS[sort], 'sortorder': order})
@@ -299,6 +346,10 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         return limited({
             'total': total.get('count'), 'page': page, 'size': size,
             'sort': sort, 'order': order,
+            **({'near': {'lat': near['near_lat'], 'lon': near['near_lon'],
+                         'layer': near['near_layer'],
+                         'radius_km': near.get('radius_km')}}
+               if near else {}),
             'results': [short_row(r, link_component(r['_id']))
                         for r in rows]})
 

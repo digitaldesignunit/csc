@@ -8,6 +8,7 @@
  */
 import type { ParamsLike } from '@/lib/browse'
 import type { CatalogRow } from '@/generated/CatalogModels'
+import { parseNear } from '@/lib/near'
 
 export const FIT_MODES = ['about', 'can_hold'] as const
 export type FitMode = (typeof FIT_MODES)[number]
@@ -112,8 +113,11 @@ export function fitChipLabel(fit: FitQuery): string {
   return `About ${fitSizeText(fit.size)} (${(fit.tolerance ?? DEFAULT_TOLERANCE).replace('%', ' %').replace('mm', ' mm')})`
 }
 
-/** The sort a list has while no other is asked: the match under a fit. */
+/** The sort a list has while no other is asked: the distance under a near
+ *  search (also with a fit: the fit filters, the distance sorts, 8.173), else
+ *  the match under a fit. */
 export function defaultSortKey(params: ParamsLike): string {
+  if (parseNear(params)) return 'distance'
   return parseFit(params) ? 'match' : '_id'
 }
 
@@ -148,9 +152,12 @@ export function volumeText(mm3: number): string {
   return `${decimals > 0 ? text.replace(/0+$/, '').replace(/\.$/, '') : text} m3`
 }
 
-/** The waste as a share of the piece's box volume, whole per cent: "41 %", "<1 %". */
+/** The waste as a share of the piece's box volume, whole per cent: "41 %", "<1 %".
+ *  Never "100 %" unless the waste is exactly 100 %: 99.97 % shows as "99 %" (a
+ *  "100 %" reads as nothing usable, decision 8.169). */
 export function percentText(percent: number): string {
-  return percent < 1 ? '<1 %' : `${Math.round(percent)} %`
+  if (percent < 1) return '<1 %'
+  return `${percent < 100 ? Math.min(99, Math.round(percent)) : 100} %`
 }
 
 /** "no waste", or "41 % waste (0.12 m3)"; "... per piece" for a batch (the size is one piece's). */

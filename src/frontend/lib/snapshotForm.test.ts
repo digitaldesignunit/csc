@@ -168,3 +168,15 @@ test('the edit page patches only what changed', () => {
   const placed = { ...before, lat: '1', lon: '2' }
   assert.deepEqual(metadataPatch(placed, { ...placed, lat: '', lon: '' }), { location: null })
 })
+
+test('an origin place whose coordinates are no point blocks the form of a new piece, not a new state', () => {
+  const place = (location: { lat: number; lon: number } | null) =>
+    identity({ origin: { kind: 'unknown', place: { location } } as never })
+  const bad = { lat: Number.NaN, lon: Number.NaN }
+  assert.ok(check({ identity: place(bad), mode: 'new' }).includes('origin_location'))
+  assert.ok(check({ identity: place(bad), mode: 'cut' }).includes('origin_location'))
+  assert.ok(!check({ identity: place({ lat: 49.8, lon: 8.6 }) }).includes('origin_location'))
+  assert.ok(!check({ identity: place(null) }).includes('origin_location'))
+  assert.ok(!check({ identity: identity() }).includes('origin_location'))
+  assert.ok(!check({ identity: place(bad), mode: 'state' }).includes('origin_location'))
+})

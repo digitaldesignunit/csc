@@ -277,7 +277,12 @@ def test_the_waste_reads_in_m3_with_two_digits_and_in_per_cent():
                                           'waste_percent': percent}})
     assert waste(1_700_000, 0.4) == {'mode': 'can_hold', 'waste_m3': 0.0017, 'waste_percent': 0.4}
     assert waste(120_000_000, 41.4) == {'mode': 'can_hold', 'waste_m3': 0.12, 'waste_percent': 41}
-    assert waste(1_500_000_000, 99.6) == {'mode': 'can_hold', 'waste_m3': 1.5, 'waste_percent': 100}
+    # 100 only when the waste is all of it (8.169)
+    assert waste(1_500_000_000, 99.6) == {'mode': 'can_hold', 'waste_m3': 1.5, 'waste_percent': 99}
+    assert waste(1_500_000_000, 99.97)['waste_percent'] == 99
+    assert waste(1_500_000_000, 99.4)['waste_percent'] == 99
+    assert waste(1_500_000_000, 100)['waste_percent'] == 100
+    assert waste(1_700_000, 0.4)['waste_percent'] == 0.4
     assert waste(0, 0) == {'mode': 'can_hold', 'waste_m3': 0.0, 'waste_percent': 0.0}
     assert 'waste_dm3' not in waste(120_000_000, 41.4)
 
@@ -312,6 +317,97 @@ def test_search_refuses_what_it_cannot_answer_in_words(api, world):
             ({'fit_mode': 'about', 'size_mm': [1, 2, 0]}, 'above 0')):
         is_error, text = tool_result(api, admin, 'search_components', **args)
         assert is_error and words in text, (args, text)
+
+
+# SEARCH BY PLACE (8.170, 8.173) -------------------------------------------------------
+DARMSTADT = {'lat': 49.8728, 'lon': 8.6512}
+FRANKFURT = {'lat': 50.1109, 'lon': 8.6821}        # about 26.5 km from Darmstadt
+BERLIN = {'lat': 52.52, 'lon': 13.405}
+
+
+def _placed(db, current, origin=None):
+    """Set the stored points of pieces by name: ``current`` and ``origin`` map a
+    name to a {lat, lon}."""
+    from apps.catalog.geo import point_of
+    for field, places in (('geo_current', current), ('geo_origin', origin or {})):
+        for name, place in places.items():
+            snapshot = db['component_snapshots'].find_one({'name': name})
+            db['component_identities'].update_one(
+                {'_id': snapshot['identity_id']}, {'$set': {field: point_of(place)}})
+
+
+def test_search_by_place_gives_the_distance_in_km_nearest_first(api, db, world):
+    _placed(db, {'beam': DARMSTADT, 'feld': FRANKFURT, 'cut2': BERLIN})
+    admin = world['admin']
+    near = {'near_lat': 49.87, 'near_lon': 8.65}
+    answer = tool(api, admin, 'search_components', **near)
+    assert _names(answer) == ['beam', 'feld', 'cut2'] and answer['total'] == 3
+    assert answer['sort'] == 'distance'
+    assert answer['near'] == {'lat': 49.87, 'lon': 8.65, 'layer': 'current', 'radius_km': None}
+    km = [r['distance_km'] for r in answer['results']]
+    assert km[0] < 0.5 and 26 < km[1] < 27.5 and 440 < km[2] < 450
+    assert all('distance_m' not in r for r in answer['results'])
+    within = tool(api, admin, 'search_components', **near, radius_km=30)
+    assert _names(within) == ['beam', 'feld'] and within['total'] == 2
+    assert 'near' not in tool(api, admin, 'search_components')
+    assert all('distance_km' not in r for r in tool(api, admin, 'search_components')['results'])
+
+
+def test_search_by_place_on_the_origin_layer_and_with_a_size_search(api, db, world):
+    _sized(db)
+    _placed(db, {'beam': DARMSTADT, 'feld': FRANKFURT, 'cut2': BERLIN}, {'cut2': DARMSTADT})
+    admin = world['admin']
+    origin = tool(api, admin, 'search_components', near_lat=49.87, near_lon=8.65,
+                  near_layer='origin')
+    assert _names(origin) == ['cut2'] and origin['near']['layer'] == 'origin'
+    held = tool(api, admin, 'search_components', fit_mode='can_hold', size_mm=[400, 300, 200],
+                near_lat=49.87, near_lon=8.65)
+    # the size search filters (beam is too thin), the place sorts: Frankfurt, Berlin
+    assert _names(held) == ['feld', 'cut2'] and held['sort'] == 'distance'
+    assert 'fit' in held['results'][0] and 'distance_km' in held['results'][0]
+    by_match = tool(api, admin, 'search_components', fit_mode='can_hold', size_mm=[400, 300, 200],
+                    near_lat=49.87, near_lon=8.65, sort='match')
+    assert by_match['sort'] == 'match' and _names(by_match) == ['feld', 'cut2']
+    far_first = tool(api, admin, 'search_components', near_lat=49.87, near_lon=8.65,
+                     sort='distance', order='desc')
+    assert _names(far_first) == ['cut2', 'feld', 'beam']
+
+
+def test_search_by_place_refuses_what_it_cannot_answer_in_words(api, world):
+    admin = world['admin']
+    for args, words in (
+            ({'near_lat': 49.8}, 'both or neither'),
+            ({'near_lon': 8.6}, 'both or neither'),
+            ({'near_lat': 91, 'near_lon': 8}, 'latitude'),
+            ({'near_lat': 49, 'near_lon': 181}, 'longitude'),
+            ({'near_lat': 49, 'near_lon': 8, 'radius_km': 0}, 'above 0'),
+            ({'near_lat': 49, 'near_lon': 8, 'near_layer': 'sky'}, 'current or origin'),
+            ({'radius_km': 5}, 'need near_lat'),
+            ({'near_layer': 'origin'}, 'need near_lat'),
+            ({'sort': 'distance'}, 'needs near_lat')):
+        is_error, text = tool_result(api, admin, 'search_components', **args)
+        assert is_error and words in text, (args, text)
+
+
+def test_the_place_search_is_described_to_the_model(api, world):
+    tools = mcp_post(api, world['admin'], 'tools/list').json()['result']['tools']
+    search = next(t for t in tools if t['name'] == 'search_components')
+    properties = search['inputSchema']['properties']
+    for name in ('near_lat', 'near_lon', 'near_layer', 'radius_km'):
+        assert name in properties, name
+    assert 'distance_km' in properties['near_lat']['description']
+    assert 'origin' in properties['near_layer']['description']
+    assert 'distance' in properties['sort']['description']
+    assert 'distance_km' in search['description']
+    assert not any(t['name'] == 'find_near' for t in tools)
+
+
+def test_the_distance_reads_in_km_with_a_fitting_precision():
+    assert mcp_server.distance_km(None) is None
+    assert mcp_server.distance_km(0) == 0
+    assert mcp_server.distance_km(1234.5) == 1.23
+    assert mcp_server.distance_km(26_500) == 26.5
+    assert mcp_server.distance_km(123_456) == 123.5
 
 
 def test_the_query_description_says_what_q_matches(api, world):

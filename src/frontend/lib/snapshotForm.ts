@@ -5,6 +5,7 @@
  * the network, so the unit test covers it.
  */
 import type { Origin } from '@/generated/CatalogModels'
+import { originLocationProblem } from '@/lib/near'
 
 export type FormMode = 'new' | 'cut' | 'state' | 'correct'
 
@@ -274,6 +275,8 @@ export function problemsOf(input: CheckInput): Problem[] {
   if (parseLocation(fields.lat, fields.lon) === undefined) {
     out.push({ field: 'location', message: 'Latitude and longitude: two numbers within range, or both empty.' })
   }
+  const originPlace = (mode === 'new' || mode === 'cut') ? originLocationProblem(identity.origin) : null
+  if (originPlace) out.push({ field: 'origin_location', message: `Origin place: ${originPlace}` })
   if (fields.effectiveOn.trim() && !dayToTimestamp(fields.effectiveOn)) {
     out.push({ field: 'effective_on', message: 'The date must be a day.' })
   }

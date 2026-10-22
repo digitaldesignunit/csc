@@ -311,6 +311,19 @@ def main() -> int:
                     if n % 100 == 0:
                         print(f'  {n} / {len(todo)}')
 
+            # the stored points of the near search (8.170): a dump of an
+            # earlier build has none; the release runs the same script
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                'backfill_geo_points', _REPO / 'scripts' / 'db_maintenance'
+                / 'backfill_geo_points.py')
+            backfill = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(backfill)
+            found = backfill.scan(db)
+            backfill.apply(db, found['updates'])
+            print(f'geo points: {found["with_current"]} current, '
+                  f'{found["with_origin"]} origin')
+
             password = secrets.token_urlsafe(12)
             db['users'].insert_one({
                 '_id': str(uuid.uuid4()), 'username': 'dev-admin',

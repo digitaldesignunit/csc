@@ -16,7 +16,15 @@ Search and the location map.
   *can hold this size* (every side at least the asked one, least waste first). Each row shows how
   far off it is or how much it wastes, as a share of the piece and in m3 (per piece on batches). The
   list can also sort by volume, and the card view has a sort menu.
-- **MCP:** `search_components` takes `fit_mode`, `size_mm` and `tolerance`, and `sort` and
+- **Near:** a Near section in Browse's More filters finds pieces around a point (a pasted "lat,
+  lon"), by their current location or by their origin, within a radius in km or simply nearest
+  first. Each row shows its distance, and the list sorts by it. A component page links to "Near
+  this piece".
+- **Origin coordinates:** the origin form of a piece takes the latitude and longitude of its
+  origin place, typed or pasted as "lat, lon"; until now they could be set only when the piece
+  was created.
+- **MCP:** `search_components` takes `fit_mode`, `size_mm` and `tolerance`, `near_lat`,
+  `near_lon`, `near_layer` and `radius_km` (each result with its distance), and `sort` and
   `order`; its description now says what the text query matches (name, id prefix, catalog
   number).
 
@@ -27,6 +35,13 @@ Search and the location map.
   registration is open to certain domains and lists them behind a "?"; no page names a fixed
   university any more. `CSC_OPEN_REGISTRATION_DOMAINS` is now empty by default: a server that
   keeps open registration must set it explicitly.
+
+### Server notes
+
+- After the deploy, run `scripts/db_maintenance/backfill_geo_points.py --apply` once: it stores
+  the location points the near search uses for the existing pieces (new and edited pieces get
+  them on their own). Without `--apply` it only reports, and it exits with 4 while points are
+  missing or out of date.
 
 ## [0.6.3.1] - 2026-10-21
 

@@ -128,6 +128,11 @@ class CatalogRow(BaseModel):
         default=None,
         description='how close the piece is to the asked size, while the '
                     'list has a dimension search (fit_mode); absent otherwise')
+    distance_m: Optional[float] = Field(
+        default=None,
+        description='distance in metres from the near point of the list '
+                    '(near_lat, near_lon) to the piece, on the layer asked '
+                    '(near_layer); absent without a near search')
     # current snapshot
     identity_id: str
     version: int
@@ -168,6 +173,7 @@ def catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
         'has_preview': doc.get('has_preview'),
         'current_snapshot_id': doc.get('current_snapshot_id'),
         'fit': doc.get('fit'),
+        'distance_m': doc.get('distance_m'),
         **{key: snap.get(key) for key in (
             'identity_id', 'version', 'status', 'name', 'effective_from',
             'effective_from_precision', 'shape_class', 'complexity',
@@ -180,6 +186,8 @@ def catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
                                                     mode='json')
     if out.get('fit') is None:
         del out['fit']          # only a list with a dimension search has one
+    if out.get('distance_m') is None:
+        del out['distance_m']   # nor has a list without a near search
     return out
 
 
