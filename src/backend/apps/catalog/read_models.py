@@ -9,7 +9,7 @@ until their phase rebuilds them (P3 / P4 / P7).
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from pydantic import BaseModel, ConfigDict, Field
@@ -81,6 +81,21 @@ def passport_body(identity_doc: Dict[str, Any],
 
 
 # CATALOG ROW (GET /identities?expand=shallow) --------------------------------
+class FitAbout(BaseModel):
+    """The match of a dimension search *about this size* (8.169)."""
+    mode: Literal['about']
+    deviation: float = Field(
+        description='largest relative deviation of the three sorted sides, '
+                    'as a ratio (0.08 = 8 %)')
+
+
+class FitCanHold(BaseModel):
+    """The match of a dimension search *can hold this size* (8.169)."""
+    mode: Literal['can_hold']
+    waste_mm3: float = Field(
+        description='box volume of the piece minus the asked volume, in mm3')
+
+
 class CatalogRow(BaseModel):
     """
     One catalog list row: identity core + current-snapshot metadata. Not a
@@ -106,6 +121,10 @@ class CatalogRow(BaseModel):
         description='whether the current state has a rendered preview '
                     '(list rows only; absent elsewhere)')
     current_snapshot_id: Optional[str] = None
+    fit: Optional[Union[FitAbout, FitCanHold]] = Field(
+        default=None,
+        description='how close the piece is to the asked size, while the '
+                    'list has a dimension search (fit_mode); absent otherwise')
     # current snapshot
     identity_id: str
     version: int
@@ -145,6 +164,7 @@ def catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
         'is_public': bool(doc.get('is_public')),
         'has_preview': doc.get('has_preview'),
         'current_snapshot_id': doc.get('current_snapshot_id'),
+        'fit': doc.get('fit'),
         **{key: snap.get(key) for key in (
             'identity_id', 'version', 'status', 'name', 'effective_from',
             'effective_from_precision', 'shape_class', 'complexity',
@@ -153,8 +173,11 @@ def catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
         'fragment': bool(snap.get('fragment')),
         'quantity': snap.get('quantity') or 1,
     }
-    return CatalogRow.model_validate(row).model_dump(by_alias=True,
-                                                     mode='json')
+    out = CatalogRow.model_validate(row).model_dump(by_alias=True,
+                                                    mode='json')
+    if out.get('fit') is None:
+        del out['fit']          # only a list with a dimension search has one
+    return out
 
 
 # SNAPSHOT ROWS ---------------------------------------------------------------

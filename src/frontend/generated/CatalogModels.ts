@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-16T18:45:17.626Z
-// Source: http://127.0.0.1:8899/schema/catalog-compose
+// Generated on: 2026-10-22T12:35:35.450Z
+// Source: http://127.0.0.1:8791/schema/catalog-compose
 
 import type {
   Frame,
@@ -242,6 +242,16 @@ export interface ComponentPassport {
 export type CatalogComponent = ComponentPassport
 
 
+export interface FitAbout {
+  mode: string;
+  deviation: number; // largest relative deviation of the three sorted sides, as a ratio (0.08 = 8 %)
+}
+
+export interface FitCanHold {
+  mode: string;
+  waste_mm3: number; // box volume of the piece minus the asked volume, in mm3
+}
+
 export interface CatalogRow {
   _id: string;
   catalog_number: number;
@@ -258,6 +268,7 @@ export interface CatalogRow {
   is_public?: boolean;
   has_preview?: boolean | null; // whether the current state has a rendered preview (list rows only; absent elsewhere)
   current_snapshot_id?: string | null;
+  fit?: FitAbout | FitCanHold | null; // how close the piece is to the asked size, while the list has a dimension search (fit_mode); absent otherwise
   identity_id: string;
   version: number;
   status: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';

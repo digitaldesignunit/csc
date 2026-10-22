@@ -10,6 +10,7 @@ import { SHAPE_CLASS_LABELS, ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/gene
 import ChipView from '@/components/common/ChipView'
 import { useMaterials } from '@/lib/lineage'
 import { piecesNote, rowStatus, sizeLabel } from '@/lib/browse'
+import { fitRowText, rowFit } from '@/lib/fit'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -157,13 +158,24 @@ const BASE: Record<string, Column> = {
   size: {
     id: 'size',
     accessorFn: (row) => sizeLabel(row.bbx),
-    header: () => <ComponentOverviewDataTableHeader header='Size (mm)' sortKey='bbx.0' />,
+    header: () => <ComponentOverviewDataTableHeader header='Size (mm)' sortKey='volume' />,
     meta: { colClassName: 'w-[12%]' },
     cell: ({ row }) => {
       const text = sizeLabel(row.original.bbx)
       return text
         ? <div className='text-xs tabular-nums truncate'>{text}</div>
         : <div className='text-xs text-muted-foreground'>N/A</div>
+    },
+  },
+  // only while a fit is active (decision 8.169): how close the piece is
+  fit: {
+    id: 'fit',
+    accessorFn: (row) => fitRowText(rowFit(row), row.quantity ?? 1),
+    header: () => <ComponentOverviewDataTableHeader header='Match' sortKey='match' />,
+    meta: { colClassName: 'w-[11%]' },
+    cell: ({ row }) => {
+      const text = fitRowText(rowFit(row.original), row.original.quantity ?? 1)
+      return <div className='text-xs tabular-nums' title={text}>{text}</div>
     },
   },
   shape_class: {
@@ -214,6 +226,24 @@ const OPTIONAL: Record<string, Column> = {
     header: () => <ComponentOverviewDataTableHeader header='Identity id' sortKey='_id' />,
     meta: { colClassName: 'w-[300px]' },
     cell: ({ row }) => <ComponentOverviewDataTableCopyIdCell componentId={row.getValue('_id') as string} />,
+  },
+  catalog_number: {
+    id: 'catalog_number',
+    accessorKey: 'catalog_number',
+    header: () => <ComponentOverviewDataTableHeader header='Catalog number' sortKey='catalog_number' />,
+    meta: { colClassName: 'w-[140px]' },
+    cell: ({ row }) => <div className='text-xs tabular-nums truncate'>#{row.original.catalog_number}</div>,
+  },
+  effective_from: {
+    id: 'effective_from',
+    accessorKey: 'effective_from',
+    header: () => <ComponentOverviewDataTableHeader header='Date' sortKey='effective_from' />,
+    meta: { colClassName: 'w-[130px]' },
+    cell: ({ row }) => (
+      <div className='text-xs truncate'>
+        {row.original.effective_from ? formatDay(row.original.effective_from, row.original.effective_from_precision) : 'N/A'}
+      </div>
+    ),
   },
   color: {
     id: 'color',
@@ -281,9 +311,13 @@ const OPTIONAL: Record<string, Column> = {
 }
 
 /** The base columns, then the picked optional ones in the picker's order. */
-export function buildColumns(picked: string[]): Column[] {
+export function buildColumns(picked: string[], withFit = false): Column[] {
+  // the match column takes its width from the name column
+  const base = Object.entries(BASE)
+    .filter(([key]) => withFit || key !== 'fit')
+    .map(([key, column]) => (withFit && key === 'name' ? { ...column, meta: { colClassName: 'w-[17%]' } } : column))
   return [
-    ...Object.values(BASE),
+    ...base,
     ...Object.keys(OPTIONAL).filter((key) => picked.includes(key)).map((key) => OPTIONAL[key]),
   ]
 }

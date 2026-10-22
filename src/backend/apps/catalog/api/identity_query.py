@@ -9,6 +9,7 @@ from fastapi import HTTPException, Request
 
 from apps.catalog.read_models import catalog_row
 
+from .dimension_fit import match_sort_field, volume_stages
 from .identity_filters import resolve_sort_field
 
 
@@ -103,19 +104,38 @@ def build_list_pipeline(
     current_user_id: Optional[str],
     reserved_filter: Optional[str],
     snapshot_view: str = 'row',
+    fit_stages: Optional[List[Dict[str, Any]]] = None,
+    fit_mode: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """The identities with their current snapshot. ``snapshot_view`` (see
     ``SNAPSHOT_VIEWS``) says how much of the snapshot comes back: the join is
     always projected to the fields the filters, the sort and the row read, so
     the sort never holds an inline mesh (Atlas' free tier caps a blocking sort
     at 32 MB and ignores allowDiskUse) and a row carries no geometry; the
-    whole state of a ``full`` view is joined after ``$skip`` / ``$limit``."""
-    sort_field = resolve_sort_field(sortkey)
-    sort_stage = {'$sort': {sort_field: sort_order}}
+    whole state of a ``full`` view is joined after ``$skip`` / ``$limit``.
+
+    ``fit_stages`` (the dimension search, 8.169) come right after the filters
+    of the snapshot and add ``fit`` to the row; the sort key ``match`` sorts
+    on it (``fit_mode`` says which value), ``volume`` on the product of the
+    sides of ``bbx`` (8.173). Both are computed, so they sort after the join."""
+    sort_prep: List[Dict[str, Any]] = []
+    sort_drop: List[str] = []
+    if sortkey == 'volume':
+        sort_prep, sort_spec, sort_drop = volume_stages(sort_order)
+        sort_field = 'volume'
+    elif sortkey == 'match':
+        sort_field = match_sort_field(fit_mode)
+        # ties by id, so a page boundary never repeats or skips a piece
+        sort_spec = {sort_field: sort_order, '_id': 1}
+    else:
+        sort_field = resolve_sort_field(sortkey)
+        sort_spec = {sort_field: sort_order}
+    sort_stage = {'$sort': sort_spec}
     # a sort on an identity field runs on the small identity documents, right
     # after the first match (an index serves ``_id``); every later stage keeps
     # the order
-    identity_sort = not sort_field.startswith('current_snapshot.')
+    identity_sort = not sort_field.startswith(
+        ('current_snapshot.', 'fit.', 'volume'))
 
     pipeline: List[Dict[str, Any]] = [{'$match': identity_match}]
     if identity_sort:
@@ -128,6 +148,8 @@ def build_list_pipeline(
 
     if snapshot_match:
         pipeline.append({'$match': snapshot_match})
+    if fit_stages:
+        pipeline.extend(fit_stages)
 
     if (
         include_username
@@ -140,7 +162,10 @@ def build_list_pipeline(
         pipeline.extend(_username_enrichment_stages())
 
     if not identity_sort:
+        pipeline.extend(sort_prep)
         pipeline.append(sort_stage)
+        if sort_drop:
+            pipeline.append({'$unset': sort_drop})
 
     if page > 0 and size > 0:
         pipeline.extend([
@@ -168,6 +193,7 @@ def build_count_pipeline(
     reserved_filter: Optional[str],
     current_user_id: Optional[str],
     include_username: bool,
+    fit_stages: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     pipeline: List[Dict[str, Any]] = [
         {'$match': identity_match},
@@ -177,6 +203,8 @@ def build_count_pipeline(
     ]
     if snapshot_match:
         pipeline.append({'$match': snapshot_match})
+    if fit_stages:
+        pipeline.extend(fit_stages)
     if (
         include_username
         and reserved_filter == 'true'
@@ -300,6 +328,7 @@ def build_identity_stats_pipeline(
     identity_match: Dict[str, Any],
     snapshot_match: Dict[str, Any],
     limit_dim: int,
+    fit_stages: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Join identities to current snapshots, reshape to flat fields, facet.
@@ -319,6 +348,8 @@ def build_identity_stats_pipeline(
     ]
     if snapshot_match:
         pipeline.append({'$match': snapshot_match})
+    if fit_stages:
+        pipeline.extend(fit_stages)
     pipeline.append(
         {
             '$replaceRoot': {

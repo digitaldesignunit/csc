@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Search and the location map.
 
+### Added
+
+- **"What fits?":** a Fits section in Browse's More filters finds pieces by size, whatever their
+  orientation: *about this size* (within a tolerance in mm or %, default 10 %, closest first) or
+  *can hold this size* (every side at least the asked one, least waste first). Each row shows how
+  far off it is or how much it wastes (per piece on batches). The list can also sort by volume, and
+  the card view has a sort menu.
+- **MCP:** `search_components` takes `fit_mode`, `size_mm` and `tolerance`, and `sort` and
+  `order`; its description now says what the text query matches (name, id prefix, catalog
+  number).
+
 ### Changed
 
 - **Registration:** without open domains the catalog is invite only, and the register page then

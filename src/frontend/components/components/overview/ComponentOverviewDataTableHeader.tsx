@@ -3,6 +3,8 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowDown, ArrowUp, ArrowUpDown, X } from "lucide-react"
 
+import { defaultSortKey } from '@/lib/fit'
+
 export default function ComponentOverviewDataTableHeader({
   header,
   sortKey,
@@ -12,7 +14,7 @@ export default function ComponentOverviewDataTableHeader({
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const activeSortKey = searchParams.get('sortkey') ?? '_id'
+  const activeSortKey = searchParams.get('sortkey') ?? defaultSortKey(searchParams)
   const activeSortOrder = searchParams.get('sortorder') === 'desc' ? 'desc' : 'asc'
   const isActiveSort = Boolean(sortKey) && activeSortKey === sortKey
 

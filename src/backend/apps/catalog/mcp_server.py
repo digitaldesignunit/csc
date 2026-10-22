@@ -83,9 +83,40 @@ def visibility_of(record: dict) -> str:
     return 'public' if record.get('is_public') else 'private'
 
 
+# the sorts of search_components -> the sort key of the REST list
+SEARCH_SORTS = {'catalog_number': 'catalog_number', 'date': 'effective_from',
+                'created': 'created', 'volume': 'volume', 'match': 'match'}
+FIT_MODES = ('about', 'can_hold')
+
+
+def size_text(values) -> str:
+    """``[1200, 600.5, 0.0001]`` -> ``'1200,600.5,0.0001'``: plain decimals,
+    never an exponent (the list route reads digits and a point only)."""
+    return ','.join(f'{float(v):.10f}'.rstrip('0').rstrip('.') or '0'
+                    for v in values)
+
+
+def fit_of(row: dict) -> Optional[dict]:
+    """The match of a dimension search in words a reader needs: the largest
+    deviation in per cent (about), or the waste in dm3 (can_hold)."""
+    fit = row.get('fit')
+    if not isinstance(fit, dict):
+        return None
+    if fit.get('mode') == 'about' and fit.get('deviation') is not None:
+        return {'mode': 'about',
+                'deviation_percent': round(fit['deviation'] * 100, 2)}
+    if fit.get('mode') == 'can_hold' and fit.get('waste_mm3') is not None:
+        out = {'mode': 'can_hold',
+               'waste_dm3': round(fit['waste_mm3'] / 1e6, 3)}
+        if (row.get('quantity') or 1) > 1:
+            out['per_piece'] = True     # the size is one piece's of the batch
+        return out
+    return None
+
+
 def short_row(row: dict, link: str) -> dict:
     origin = row.get('origin') or {}
-    return clean({
+    short = clean({
         'id': row.get('_id'), 'name': row.get('name'),
         'catalog_number': row.get('catalog_number'),
         'original_function': row.get('original_function'),
@@ -96,6 +127,10 @@ def short_row(row: dict, link: str) -> dict:
         'origin_kind': origin.get('kind'),
         'in_circulation': row.get('exit') is None,
         'web_link': link})
+    fit = fit_of(row)
+    if fit:
+        short['fit'] = fit
+    return short
 
 
 def geometry_summary(geometry: Optional[dict]) -> dict:
@@ -180,8 +215,10 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
     @mcp.tool()
     async def search_components(
         query: Annotated[str, Field(description=(
-            'Free text: matches names, materials, functions, places. '
-            'Leave empty to list.'))] = '',
+            'Free text: matches the name (any part), an id prefix or the '
+            'catalog number (12 or #12). It does not match materials, '
+            'functions or places: use the filters below. Leave empty to '
+            'list.'))] = '',
         original_function: Annotated[str, Field(description=(
             'Building function, for example IfcBeam, IfcPlate, IfcWall '
             '(exact).'))] = '',
@@ -198,24 +235,66 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
             'pending and other states you may see.'))] = 'published',
         include_withdrawn: Annotated[bool, Field(description=(
             'Also withdrawn components, if you may see them.'))] = False,
+        fit_mode: Annotated[str, Field(description=(
+            'Search by size, with size_mm: about = every side within the '
+            'tolerance of the asked side (which pieces are about this '
+            'size); can_hold = every side of the piece at least the asked '
+            'side (which pieces can this part be cut from). The sides are '
+            'compared largest to smallest, so the orientation does not '
+            'matter. A piece without a known size never matches.'))] = '',
+        size_mm: Annotated[Optional[list[float]], Field(description=(
+            'The asked size: three numbers in mm in any order, for example '
+            '[1200, 600, 200]. Needs fit_mode.'))] = None,
+        tolerance: Annotated[str, Field(description=(
+            'Only for fit_mode about: a share of each asked side or '
+            'millimetres, for example "10%" (the default) or "50mm".'))] = '',
+        sort: Annotated[str, Field(description=(
+            'catalog_number (default without a size search), date (the '
+            'version applies from), created, volume (length x width x '
+            'height; pieces without a size last), match (closeness to the '
+            'size search: smallest deviation, or least waste, first; the '
+            'default with fit_mode).'))] = '',
+        order: Annotated[str, Field(description=(
+            'asc (default) or desc.'))] = 'asc',
         page: Annotated[int, Field(description='Page, from 1.')] = 1,
         size: Annotated[int, Field(description='Rows per page, 1 to 25.')] = 10,
     ) -> dict:
         """Search the catalog of reused components. Returns one short row per
         component (name, function, material, dataset, size, status,
-        visibility) with its web link, and the total. Use get_component for
-        the details of one."""
+        visibility) with its web link, and the total. With fit_mode and
+        size_mm each row also carries its deviation (about, in per cent) or
+        waste (can_hold, in dm3). Use get_component for the details of one."""
         page, size = page_args(page, size)
+        fit = {}
+        if fit_mode or size_mm or tolerance:
+            if fit_mode not in FIT_MODES:
+                raise ToolError('fit_mode is about or can_hold, with size_mm.')
+            if not size_mm or len(size_mm) != 3:
+                raise ToolError('size_mm needs three numbers in mm, for '
+                                'example [1200, 600, 200].')
+            fit = {'fit_mode': fit_mode,
+                   'fit_size': size_text(size_mm),
+                   'fit_tol': tolerance}
+        sort = sort or ('match' if fit else 'catalog_number')
+        if sort not in SEARCH_SORTS:
+            raise ToolError('sort is one of ' + ', '.join(SEARCH_SORTS) + '.')
+        if sort == 'match' and not fit:
+            raise ToolError('sort match needs fit_mode and size_mm.')
+        if order not in ('asc', 'desc'):
+            raise ToolError('order is asc or desc.')
         filters = {
             'q': query, 'original_function': original_function,
             'material': material, 'dataset': dataset,
             'shape_class': shape_class, 'circulation': circulation,
-            'status': status, 'include_withdrawn': include_withdrawn or None}
-        rows = await get('/identities', {**filters, 'page': page,
-                                         'size': size, 'sortkey': 'catalog_number'})
+            'status': status, 'include_withdrawn': include_withdrawn or None,
+            **fit}
+        rows = await get('/identities', {
+            **filters, 'page': page, 'size': size,
+            'sortkey': SEARCH_SORTS[sort], 'sortorder': order})
         total = await get('/identities/count', filters)
         return limited({
             'total': total.get('count'), 'page': page, 'size': size,
+            'sort': sort, 'order': order,
             'results': [short_row(r, link_component(r['_id']))
                         for r in rows]})
 

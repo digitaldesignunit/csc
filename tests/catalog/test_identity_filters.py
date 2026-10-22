@@ -78,3 +78,19 @@ def test_text_filters_have_a_length_cap():
         lengths = [m.max_length for m in default.metadata
                    if hasattr(m, 'max_length')]
         assert lengths == [FILTER_MAX_LENGTH], name
+
+
+def test_a_dimension_search_is_not_part_of_the_default_scope():
+    from apps.catalog.api.identity_filters import _parse_fit
+    assert CatalogFilters().fit_pipeline_stages() == []
+    fit = _parse_fit('about', '200,1200,600', None)
+    assert fit == {'fit_mode': 'about', 'fit_sides': (1200.0, 600.0, 200.0),
+                   'fit_tolerance': ('percent', 10.0)}
+    filters = CatalogFilters(**fit)
+    assert not filters.is_default_scope()
+    assert filters.snapshot_match() == {'current_snapshot.status': 'published'}
+    stages = filters.fit_pipeline_stages()
+    assert [next(iter(stage)) for stage in stages] == [
+        '$match', '$addFields', '$match', '$addFields', '$unset']
+    assert _parse_fit('can_hold', '1,2,3', None)['fit_tolerance'] is None
+    assert _parse_fit(None, None, None) == {}

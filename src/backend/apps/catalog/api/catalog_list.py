@@ -90,7 +90,8 @@ def _format_list_rows(
                 continue
             identity_doc = {
                 k: v for k, v in doc.items()
-                if k not in ('current_snapshot', 'reserved_by_username')
+                if k not in ('current_snapshot', 'reserved_by_username',
+                             'fit')
             }
             if expand == 'current_snapshot':
                 row = passport_body(identity_doc,
@@ -99,6 +100,8 @@ def _format_list_rows(
                 row = identity_body(identity_doc)
             if 'reserved_by_username' in doc:
                 row['reserved_by_username'] = doc['reserved_by_username']
+            if doc.get('fit') is not None:
+                row['fit'] = doc['fit']
             rows.append(row)
     except HTTPException:
         raise
@@ -116,6 +119,7 @@ async def _pipelines_args(request: Request, filters: CatalogFilters,
             filters.identity_match(),
             await visible_identity_match(request, viewer_of(user))),
         'snapshot_match': filters.snapshot_match(),
+        'fit_stages': filters.fit_pipeline_stages(),
     }
 
 
@@ -425,7 +429,12 @@ async def list_identities_route(
     filters: Annotated[CatalogFilters, Depends(catalog_filters)],
     page: int = Query(0, description='Page number (0=get all, 1+=paginated)'),
     size: int = Query(0, description='Page size (0=get all)'),
-    sortkey: str = Query('_id', description='Sort key'),
+    sortkey: Optional[str] = Query(
+        None, description='Sort key; volume = the product of the three bbx '
+                          'sides (a piece without bbx last); match = the '
+                          'closeness to the dimension search (needs '
+                          'fit_mode). Default: match while fit_mode is set, '
+                          'else _id'),
     sortorder: Literal['asc', 'desc'] = Query('asc'),
     expand: ExpandMode = Query(
         'shallow',
@@ -438,9 +447,15 @@ async def list_identities_route(
 ):
     if current_user is None:
         filters = public_filters(filters)
+    if sortkey == 'match' and not filters.fit_mode:
+        raise HTTPException(
+            status_code=422,
+            detail='sortkey match needs fit_mode (about or can_hold)')
+    sortkey = sortkey or ('match' if filters.fit_mode else '_id')
     try:
         pipeline = build_list_pipeline(
             **(await _pipelines_args(request, filters, current_user)),
+            fit_mode=filters.fit_mode,
             sortkey=sortkey,
             sort_order=-1 if sortorder == 'desc' else 1,
             page=page,

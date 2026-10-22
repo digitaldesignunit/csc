@@ -105,10 +105,18 @@ async function appendModelFromSchema(
     schemaPath,
     { catalogPassport: false, defsOnly: false, dedupe: false, fileName: outputFileName },
   )
-  // only the root interface: its defs already live in the file appended to
+  // the root interface, and the definitions only this schema has (the shared
+  // ones already live in the file appended to, or in the shared types file)
   const rootStart = typescriptBlock.indexOf(`export interface ${interfaceName} {`)
   const interfaceOnly = typescriptBlock.slice(rootStart)
-  fs.appendFileSync(outFile, `\n${interfaceOnly}`)
+  const existing = fs.readFileSync(outFile, 'utf8')
+  const newDefs: string[] = []
+  for (const match of typescriptBlock.slice(0, rootStart).matchAll(/export interface (\w+) \{[^]*?\n\}\n/g)) {
+    const name = match[1]
+    const declared = new RegExp(`export interface ${name} \\{`).test(existing)
+    if (!declared && !SHARED_DEFS_FROM_CATALOG_SHARED.has(name)) newDefs.push(match[0].trimEnd())
+  }
+  fs.appendFileSync(outFile, `\n${newDefs.length ? `${newDefs.join('\n\n')}\n\n` : ''}${interfaceOnly}`)
   console.log(`📝 Appended ${interfaceName} to ${outFile}`)
 }
 

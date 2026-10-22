@@ -211,6 +211,102 @@ def test_search_filters_pages_and_caps_the_page_size(api, world):
     assert tool(api, admin, 'search_components', page=0, size=0)['page'] == 1
 
 
+# SEARCH BY SIZE AND SORTING (8.169, 8.173) -----------------------------------------------
+SIZES = {'beam': [3000, 200, 100], 'cut2': [500, 1000, 300], 'feld': [500, 500, 500]}
+
+
+def _sized(db):
+    for name, bbx in SIZES.items():
+        db['component_snapshots'].update_many({'name': name}, {'$set': {'bbx': bbx}})
+
+
+def _names(answer):
+    return [r['name'] for r in answer['results']]
+
+
+def test_search_by_size_gives_the_deviation_or_the_waste(api, db, world):
+    _sized(db)
+    admin = world['admin']
+    about = tool(api, admin, 'search_components', fit_mode='about',
+                 size_mm=[300, 1000, 540], tolerance='10%')
+    # cut2 is 500 x 1000 x 300 turned: 8 % off on the 500 side only, feld is out
+    assert _names(about) == ['cut2'] and about['total'] == 1
+    assert about['results'][0]['fit'] == {'mode': 'about', 'deviation_percent': 7.41}
+    assert (about['sort'], about['order']) == ('match', 'asc')
+    held = tool(api, admin, 'search_components', fit_mode='can_hold',
+                size_mm=[400, 300, 200])
+    # feld 500^3 (waste 125 - 24 dm3), cut2 (150 - 24 dm3), beam is too thin
+    assert _names(held) == ['feld', 'cut2']
+    assert held['results'][0]['fit'] == {'mode': 'can_hold', 'waste_dm3': 101.0}
+    assert held['total'] == 2
+    plain = tool(api, admin, 'search_components')
+    assert all('fit' not in r for r in plain['results'])
+
+
+def test_search_sorts_by_the_keys_in_both_directions(api, db, world):
+    _sized(db)
+    admin = world['admin']
+
+    def order(**args):
+        return _names(tool(api, admin, 'search_components', **args))
+
+    assert order(sort='volume') == ['beam', 'feld', 'cut2']
+    assert order(sort='volume', order='desc') == ['cut2', 'feld', 'beam']
+    assert order(sort='catalog_number', order='desc') == order(sort='catalog_number')[::-1]
+    assert sorted(order(sort='date')) == sorted(order(sort='created'))
+    assert tool(api, admin, 'search_components', fit_mode='can_hold',
+                size_mm=[1, 1, 1], sort='volume', order='desc')['sort'] == 'volume'
+
+
+def test_the_waste_of_a_batch_is_per_piece():
+    row = {'fit': {'mode': 'can_hold', 'waste_mm3': 12_400_000}, 'quantity': 4}
+    assert mcp_server.fit_of(row) == {'mode': 'can_hold', 'waste_dm3': 12.4, 'per_piece': True}
+    assert 'per_piece' not in mcp_server.fit_of({**row, 'quantity': 1})
+    assert 'per_piece' not in mcp_server.fit_of(
+        {'fit': {'mode': 'about', 'deviation': 0.1}, 'quantity': 4})
+
+
+def test_the_asked_size_is_sent_as_plain_decimals():
+    assert mcp_server.size_text([1200, 600.5, 0.0001]) == '1200,600.5,0.0001'
+    assert mcp_server.size_text([100000, 1234.56789, 0.5]) == '100000,1234.56789,0.5'
+    assert mcp_server.size_text([1e5, 3.0, 2]) == '100000,3,2'
+    assert 'e' not in mcp_server.size_text([1e-5, 99999.99999, 1e5])
+
+
+def test_a_size_with_many_digits_reaches_the_search_whole(api, db, world):
+    _sized(db)
+    db['component_snapshots'].update_many({'name': 'feld'}, {'$set': {'bbx': [500.123456, 500, 500]}})
+    answer = tool(api, world['admin'], 'search_components', fit_mode='about',
+                  size_mm=[500, 500.123456, 500], tolerance='0mm')
+    assert _names(answer) == ['feld']
+
+
+def test_search_refuses_what_it_cannot_answer_in_words(api, world):
+    admin = world['admin']
+    for args, words in (
+            ({'fit_mode': 'about'}, 'size_mm'),
+            ({'size_mm': [1, 2, 3]}, 'fit_mode'),
+            ({'fit_mode': 'about', 'size_mm': [1, 2]}, 'three numbers'),
+            ({'fit_mode': 'near', 'size_mm': [1, 2, 3]}, 'fit_mode'),
+            ({'sort': 'match'}, 'needs fit_mode'),
+            ({'sort': 'size'}, 'sort is one of'),
+            ({'order': 'up'}, 'asc or desc'),
+            ({'fit_mode': 'can_hold', 'size_mm': [1, 2, 3], 'tolerance': '5%'}, 'no fit_tol'),
+            ({'fit_mode': 'about', 'size_mm': [1, 2, 3], 'tolerance': 'x'}, 'fit_tol'),
+            ({'fit_mode': 'about', 'size_mm': [1, 2, 0]}, 'above 0')):
+        is_error, text = tool_result(api, admin, 'search_components', **args)
+        assert is_error and words in text, (args, text)
+
+
+def test_the_query_description_says_what_q_matches(api, world):
+    tools = mcp_post(api, world['admin'], 'tools/list').json()['result']['tools']
+    search = next(t for t in tools if t['name'] == 'search_components')
+    query = search['inputSchema']['properties']['query']['description']
+    assert 'name' in query and 'catalog number' in query
+    assert 'does not match materials, functions or places' in query
+    assert 'matches names, materials' not in query
+
+
 def test_a_version_that_is_not_published_is_marked_and_found_by_status_any(api, db, world):
     db['component_snapshots'].update_one({'_id': sid('feld', 1)}, {'$set': {'status': 'pending'}})
     default = tool(api, world['admin'], 'search_components')

@@ -10,9 +10,18 @@ and stats routes, so every route filters the same way.
 
 import re
 from dataclasses import dataclass, fields
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
-from fastapi import Query
+from fastapi import HTTPException, Query
+
+from .dimension_fit import (
+    DEFAULT_TOLERANCE,
+    FitError,
+    FitMode,
+    fit_stages,
+    parse_size,
+    parse_tolerance,
+)
 
 # active = no exit (in place or deinstalled); in_place / deinstalled are its
 # two parts (decision 8.104); exited = has an exit; all
@@ -29,7 +38,11 @@ _SNAPSHOT_SORT_FIELDS = frozenset({
     'name', 'color', 'complexity', 'fragment', 'shape_class',
     'effective_from', 'bbx.0', 'bbx.1', 'bbx.2', 'created', 'lastmodified',
 })
-SORT_KEYS = tuple(sorted(_IDENTITY_SORT_FIELDS | _SNAPSHOT_SORT_FIELDS))
+# computed in the pipeline: ``volume`` from the current ``bbx`` (8.173),
+# ``match`` from the dimension search (8.169), only while one is set
+_COMPUTED_SORT_KEYS = frozenset({'volume', 'match'})
+SORT_KEYS = tuple(sorted(_IDENTITY_SORT_FIELDS | _SNAPSHOT_SORT_FIELDS
+                         | _COMPUTED_SORT_KEYS))
 _BBX_AXES = (('x', 0), ('y', 1), ('z', 2))
 # the longest value a text filter accepts (a name, an id, a slug)
 FILTER_MAX_LENGTH = 100
@@ -64,6 +77,18 @@ class CatalogFilters:
     bbx_max_y: Optional[float] = None
     bbx_max_z: Optional[float] = None
     q: str = ''
+    # dimension search (8.169): the mode, the asked sides (largest first) and
+    # the tolerance of ``about`` as (``percent`` | ``mm``, value)
+    fit_mode: Optional[str] = None
+    fit_sides: Optional[Tuple[float, float, float]] = None
+    fit_tolerance: Optional[Tuple[str, float]] = None
+
+    def fit_pipeline_stages(self) -> List[Dict[str, Any]]:
+        """The stages of the dimension search, after the join of the current
+        snapshot; none while no search is set."""
+        if not self.fit_mode or not self.fit_sides:
+            return []
+        return fit_stages(self.fit_mode, self.fit_sides, self.fit_tolerance)
 
     def identity_match(self) -> Dict[str, Any]:
         """``$match`` on ``component_identities`` (before the lookup)."""
@@ -164,9 +189,48 @@ def catalog_filters(
     bbx_max_z: Optional[float] = Query(None),
     q: str = Query('', max_length=FILTER_MAX_LENGTH,
                    description='name, catalogue number or id'),
+    fit_mode: Optional[FitMode] = Query(
+        None, description='dimension search (8.169): about = every side '
+                          'within fit_tol of fit_size; can_hold = every side '
+                          'of the piece at least fit_size'),
+    fit_size: Optional[str] = Query(
+        None, max_length=FILTER_MAX_LENGTH,
+        description='three sizes in mm in any order, for example '
+                    '1200,600,200; needs fit_mode'),
+    fit_tol: Optional[str] = Query(
+        None, max_length=20,
+        description='tolerance of about: 10% (default) or 50mm; not for '
+                    'can_hold'),
 ) -> CatalogFilters:
     """FastAPI dependency: the catalog filters from the query string."""
-    return CatalogFilters(**{k: v for k, v in locals().items()})
+    values = {k: v for k, v in locals().items()
+              if k not in ('fit_mode', 'fit_size', 'fit_tol')}
+    try:
+        values.update(_parse_fit(fit_mode, fit_size, fit_tol))
+    except FitError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return CatalogFilters(**values)
+
+
+def _parse_fit(mode: Optional[str], size: Optional[str],
+               tolerance: Optional[str]) -> Dict[str, Any]:
+    """The fit query parameters -> the ``CatalogFilters`` fields."""
+    if mode is None:
+        if size is not None or tolerance is not None:
+            raise FitError('fit_size and fit_tol need fit_mode (about or '
+                           'can_hold)')
+        return {}
+    if size is None:
+        raise FitError('fit_mode needs fit_size, three sizes in mm, for '
+                       'example 1200,600,200')
+    if mode == 'can_hold' and tolerance is not None:
+        raise FitError('fit_mode can_hold takes no fit_tol')
+    return {
+        'fit_mode': mode,
+        'fit_sides': parse_size(size),
+        'fit_tolerance': (parse_tolerance(tolerance or DEFAULT_TOLERANCE)
+                          if mode == 'about' else None),
+    }
 
 
 def public_filters(filters: CatalogFilters) -> CatalogFilters:

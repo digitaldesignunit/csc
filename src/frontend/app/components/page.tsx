@@ -1,6 +1,7 @@
 import BrowseView from '@/components/components/overview/BrowseView'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { parseCirculation } from '@/lib/browse'
+import { fitBackendParams } from '@/lib/fit'
 import { serverBackend } from '@/lib/serverBackend'
 import { redirect } from 'next/navigation'
 
@@ -41,7 +42,13 @@ export default async function ComponentsPage({
 
   const page = Math.max(1, Number(sp?.page ?? 1) || 1)
   const size = Math.min(200, Math.max(1, Number(sp?.size ?? 20) || 20))
-  const sortkey = sp?.sortkey ?? '_id'
+  // a usable fit goes on to the backend (an unusable one is left out, the
+  // backend would refuse it) and sorts by the match unless another sort is set
+  const fit = fitBackendParams(new URLSearchParams(
+    Object.entries(sp ?? {}).filter((e): e is [string, string] => typeof e[1] === 'string')))
+  const asked = sp?.sortkey
+  // `match` without a fit (an old link) is no sort: the backend would refuse it
+  const sortkey = asked && !(asked === 'match' && !fit.fit_mode) ? asked : fit.fit_mode ? 'match' : '_id'
   const sortorder: 'asc' | 'desc' = sp?.sortorder === 'desc' ? 'desc' : 'asc'
 
   const countParams = new URLSearchParams({ circulation })
@@ -49,6 +56,7 @@ export default async function ComponentsPage({
     const value = sp?.[key]
     if (value) countParams.set(key, value)
   }
+  for (const [key, value] of Object.entries(fit)) countParams.set(key, value)
   const listParams = new URLSearchParams(countParams)
   listParams.set('page', String(page))
   listParams.set('size', String(size))
