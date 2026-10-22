@@ -16,12 +16,14 @@ import {
   fitBackendParams,
   fitChanges,
   fitChipLabel,
+  fitRowLines,
   fitRowText,
   fitSizeText,
   parseFit,
   parseFitSize,
   parseFitTolerance,
   rowFit,
+  percentText,
   volumeText,
   wasteText,
 } from './fit'
@@ -120,25 +122,53 @@ test('the match of a row reads as a deviation or a waste', () => {
   assert.equal(deviationText(0.083), '8.3 % off')
   assert.equal(deviationText(0.1), '10 % off')
   assert.equal(deviationText(0.256), '26 % off')
-  assert.equal(volumeText(340_000), '340 cm3')
-  assert.equal(volumeText(12_400_000), '12.4 dm3')
-  assert.equal(volumeText(250_000_000), '250 dm3')
-  assert.equal(volumeText(1_250_000_000), '1.25 m3')
-  assert.equal(wasteText(0), 'no waste')
-  assert.equal(wasteText(47_660_000), 'waste 47.7 dm3')
+  // volumes: m3 with two significant digits, never an exponent
+  assert.equal(volumeText(1_700_000), '0.0017 m3')
+  assert.equal(volumeText(120_000_000), '0.12 m3')
+  assert.equal(volumeText(1_500_000_000), '1.5 m3')
+  assert.equal(volumeText(12_400_000_000), '12 m3')
+  assert.equal(volumeText(1_000_000_000), '1 m3')
+  assert.equal(volumeText(996_000_000), '1 m3')
+  assert.equal(volumeText(123_000_000_000), '120 m3')
+  assert.equal(volumeText(5_000), '0.000005 m3')
+  assert.equal(percentText(0.4), '<1 %')
+  assert.equal(percentText(1), '1 %')
+  assert.equal(percentText(41.4), '41 %')
+  assert.equal(percentText(99.6), '100 %')
+  assert.equal(wasteText(0, 0), 'no waste')
+  // tiny, small, large
+  assert.equal(wasteText(1_700_000, 0.4), '<1 % waste (0.0017 m3)')
+  assert.equal(wasteText(120_000_000, 41.2), '41 % waste (0.12 m3)')
+  assert.equal(wasteText(1_500_000_000, 63.5), '64 % waste (1.5 m3)')
+  // a batch: the size is one piece's, so is the waste
+  assert.equal(wasteText(120_000_000, 41.2, 5), '41 % waste (0.12 m3) per piece')
   assert.equal(fitRowText({ mode: 'about', deviation: 0.05 }), '5.0 % off')
-  assert.equal(fitRowText({ mode: 'can_hold', waste_mm3: 1e9 }), 'waste 1.00 m3')
+  assert.equal(fitRowText({ mode: 'can_hold', waste_mm3: 1e9, waste_percent: 50 }), '50 % waste (1 m3)')
   assert.equal(fitRowText(null), '')
   // a batch: the size is one piece's, so is the waste
-  assert.equal(fitRowText({ mode: 'can_hold', waste_mm3: 12_400_000 }, 4), 'waste 12.4 dm3 per piece')
-  assert.equal(fitRowText({ mode: 'can_hold', waste_mm3: 12_400_000 }, 1), 'waste 12.4 dm3')
-  assert.equal(fitRowText({ mode: 'can_hold', waste_mm3: 0 }, 4), 'no waste')
+  const held = { mode: 'can_hold' as const, waste_mm3: 12_400_000, waste_percent: 41 }
+  assert.equal(fitRowText(held, 4), '41 % waste (0.012 m3) per piece')
+  assert.equal(fitRowText(held, 1), '41 % waste (0.012 m3)')
+  assert.equal(fitRowText({ ...held, waste_mm3: 0, waste_percent: 0 }, 4), 'no waste')
   assert.equal(fitRowText({ mode: 'about', deviation: 0.083 }, 4), '8.3 % off')
+})
+
+test('the match on two lines for a narrow cell', () => {
+  const held = { mode: 'can_hold' as const, waste_mm3: 120_000_000, waste_percent: 41.2 }
+  assert.deepEqual(fitRowLines(held), ['41 % waste', '0.12 m3'])
+  assert.deepEqual(fitRowLines(held, 3), ['41 % waste', '0.12 m3 per piece'])
+  assert.deepEqual(fitRowLines({ ...held, waste_mm3: 1_700_000, waste_percent: 0.4 }), ['<1 % waste', '0.0017 m3'])
+  assert.deepEqual(fitRowLines({ ...held, waste_mm3: 0, waste_percent: 0 }, 3), ['no waste'])
+  assert.deepEqual(fitRowLines({ mode: 'about', deviation: 0.083 }, 3), ['8.3 % off'])
+  assert.deepEqual(fitRowLines(null), [])
+  // the one-line text of a card is the same words
+  assert.equal(fitRowText(held, 3), '41 % waste (0.12 m3) per piece')
 })
 
 test('a row carries a match only when the backend sent a usable one', () => {
   assert.deepEqual(rowFit({ fit: { mode: 'about', deviation: 0.1 } }), { mode: 'about', deviation: 0.1 })
-  assert.deepEqual(rowFit({ fit: { mode: 'can_hold', waste_mm3: 5 } }), { mode: 'can_hold', waste_mm3: 5 })
+  assert.deepEqual(rowFit({ fit: { mode: 'can_hold', waste_mm3: 5, waste_percent: 2 } }),
+    { mode: 'can_hold', waste_mm3: 5, waste_percent: 2 })
   for (const bad of [null, undefined, {}, { fit: null }]) {
     assert.equal(rowFit(bad), null, JSON.stringify(bad))
   }

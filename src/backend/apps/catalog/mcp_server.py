@@ -98,7 +98,8 @@ def size_text(values) -> str:
 
 def fit_of(row: dict) -> Optional[dict]:
     """The match of a dimension search in words a reader needs: the largest
-    deviation in per cent (about), or the waste in dm3 (can_hold)."""
+    deviation in per cent (about), or the waste in m3 (two significant
+    digits) and as a share of the piece's box volume (can_hold)."""
     fit = row.get('fit')
     if not isinstance(fit, dict):
         return None
@@ -106,8 +107,11 @@ def fit_of(row: dict) -> Optional[dict]:
         return {'mode': 'about',
                 'deviation_percent': round(fit['deviation'] * 100, 2)}
     if fit.get('mode') == 'can_hold' and fit.get('waste_mm3') is not None:
+        percent = fit.get('waste_percent')
         out = {'mode': 'can_hold',
-               'waste_dm3': round(fit['waste_mm3'] / 1e6, 3)}
+               'waste_m3': float(f"{fit['waste_mm3'] / 1e9:.2g}")}
+        if percent is not None:
+            out['waste_percent'] = round(percent, 1) if percent < 1                 else round(percent)
         if (row.get('quantity') or 1) > 1:
             out['per_piece'] = True     # the size is one piece's of the batch
         return out
@@ -263,7 +267,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         component (name, function, material, dataset, size, status,
         visibility) with its web link, and the total. With fit_mode and
         size_mm each row also carries its deviation (about, in per cent) or
-        waste (can_hold, in dm3). Use get_component for the details of one."""
+        waste (can_hold, in m3 and in per cent of the piece). Use get_component for the details of one."""
         page, size = page_args(page, size)
         fit = {}
         if fit_mode or size_mm or tolerance:

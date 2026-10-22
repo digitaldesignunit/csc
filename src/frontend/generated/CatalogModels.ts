@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-22T12:35:35.450Z
+// Generated on: 2026-10-22T14:04:46.249Z
 // Source: http://127.0.0.1:8791/schema/catalog-compose
 
 import type {
@@ -250,6 +250,7 @@ export interface FitAbout {
 export interface FitCanHold {
   mode: string;
   waste_mm3: number; // box volume of the piece minus the asked volume, in mm3
+  waste_percent: number; // that waste as a share of the box volume of the piece, in per cent
 }
 
 export interface CatalogRow {

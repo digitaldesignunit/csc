@@ -38,7 +38,7 @@ export type FitQuery = {
 /** A fit as the backend sends it with a row. */
 export type FitMatch =
   | { mode: 'about'; deviation: number }
-  | { mode: 'can_hold'; waste_mm3: number }
+  | { mode: 'can_hold'; waste_mm3: number; waste_percent: number }
 
 const NUMBER = /^\d+(?:\.\d+)?$/
 const TOLERANCE = /^(\d+(?:\.\d+)?)\s*(%|mm)$/i
@@ -125,7 +125,9 @@ export function rowFit(row: Pick<CatalogRow, 'fit'> | null | undefined): FitMatc
   const fit = row?.fit
   if (!fit) return null
   if ('deviation' in fit && typeof fit.deviation === 'number') return { mode: 'about', deviation: fit.deviation }
-  if ('waste_mm3' in fit && typeof fit.waste_mm3 === 'number') return { mode: 'can_hold', waste_mm3: fit.waste_mm3 }
+  if ('waste_mm3' in fit && typeof fit.waste_mm3 === 'number' && typeof fit.waste_percent === 'number') {
+    return { mode: 'can_hold', waste_mm3: fit.waste_mm3, waste_percent: fit.waste_percent }
+  }
   return null
 }
 
@@ -136,24 +138,39 @@ export function deviationText(ratio: number): string {
   return `${percent < 10 ? percent.toFixed(1) : Math.round(percent)} % off`
 }
 
-/** A volume in mm3 as cm3, dm3 or m3, whichever reads best. */
+/** A volume in mm3 as m3 with two significant digits, never in an exponent:
+ *  "0.0017 m3", "0.12 m3", "1.5 m3", "12 m3". */
 export function volumeText(mm3: number): string {
-  if (mm3 < 1e6) return `${Math.round(mm3 / 1e3)} cm3`
-  if (mm3 < 1e9) {
-    const dm3 = mm3 / 1e6
-    return `${dm3 < 100 ? dm3.toFixed(1) : Math.round(dm3)} dm3`
-  }
-  return `${(mm3 / 1e9).toFixed(2)} m3`
+  const rounded = Number((mm3 / 1e9).toPrecision(2))
+  if (rounded === 0) return '0 m3'
+  const decimals = Math.min(12, Math.max(0, 1 - Math.floor(Math.log10(rounded))))
+  const text = rounded.toFixed(decimals)
+  return `${decimals > 0 ? text.replace(/0+$/, '').replace(/\.$/, '') : text} m3`
 }
 
-/** "no waste", or "waste 12.4 dm3"; "... per piece" for a batch (the size is one piece's). */
-export function wasteText(mm3: number, quantity = 1): string {
+/** The waste as a share of the piece's box volume, whole per cent: "41 %", "<1 %". */
+export function percentText(percent: number): string {
+  return percent < 1 ? '<1 %' : `${Math.round(percent)} %`
+}
+
+/** "no waste", or "41 % waste (0.12 m3)"; "... per piece" for a batch (the size is one piece's). */
+export function wasteText(mm3: number, percent: number, quantity = 1): string {
   if (mm3 < 500) return 'no waste'
-  return `waste ${volumeText(mm3)}${quantity > 1 ? ' per piece' : ''}`
+  return `${percentText(percent)} waste (${volumeText(mm3)})${quantity > 1 ? ' per piece' : ''}`
 }
 
-/** What a row says about its match: "8.3 % off", "waste 12.4 dm3", or nothing. */
+/** The match of a row on two lines for a narrow table cell: the share
+ *  ("41 % waste") over the volume ("0.12 m3", "0.12 m3 per piece" for a batch).
+ *  The about text and "no waste" are one line. */
+export function fitRowLines(fit: FitMatch | null, quantity = 1): string[] {
+  if (!fit) return []
+  if (fit.mode === 'about') return [deviationText(fit.deviation)]
+  if (fit.waste_mm3 < 500) return ['no waste']
+  return [`${percentText(fit.waste_percent)} waste`, `${volumeText(fit.waste_mm3)}${quantity > 1 ? ' per piece' : ''}`]
+}
+
+/** What a row says about its match: "8.3 % off", "41 % waste (0.12 m3)", or nothing. */
 export function fitRowText(fit: FitMatch | null, quantity = 1): string {
   if (!fit) return ''
-  return fit.mode === 'about' ? deviationText(fit.deviation) : wasteText(fit.waste_mm3, quantity)
+  return fit.mode === 'about' ? deviationText(fit.deviation) : wasteText(fit.waste_mm3, fit.waste_percent, quantity)
 }

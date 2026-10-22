@@ -94,6 +94,9 @@ class FitCanHold(BaseModel):
     mode: Literal['can_hold']
     waste_mm3: float = Field(
         description='box volume of the piece minus the asked volume, in mm3')
+    waste_percent: float = Field(
+        description='that waste as a share of the box volume of the piece, '
+                    'in per cent')
 
 
 class CatalogRow(BaseModel):

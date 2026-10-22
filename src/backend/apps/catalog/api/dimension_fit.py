@@ -13,7 +13,8 @@ as z).
 * ``can_hold``: every sorted side of the piece is at least the asked side,
   which is exactly when the asked box fits inside the piece turned in
   90-degree steps. The match value is the waste, the piece's box volume minus
-  the asked volume, in mm^3. It takes no tolerance.
+  the asked volume, in mm^3, and its share of the piece's box volume in
+  per cent. It takes no tolerance.
 
 A piece without a ``bbx`` (geometry not derived) never matches. The stages
 read the joined ``current_snapshot`` and add ``fit`` to the row.
@@ -86,8 +87,11 @@ def fit_stages(mode: FitMode, sides: Tuple[float, float, float],
             {'$divide': [diffs[i], sides[i]]} for i in range(3)]}}
     else:
         conditions = [{'$gte': [s[i], sides[i] - _SLACK]} for i in range(3)]
-        fit = {'mode': 'can_hold', 'waste_mm3': {'$subtract': [
-            {'$multiply': s}, sides[0] * sides[1] * sides[2]]}}
+        volume = {'$multiply': s}
+        waste = {'$subtract': [volume, sides[0] * sides[1] * sides[2]]}
+        fit = {'mode': 'can_hold', 'waste_mm3': waste,
+               'waste_percent': {'$multiply': [
+                   100, {'$divide': [waste, volume]}]}}
     return [
         # three numbers, else the piece has no size to compare
         {'$match': {'current_snapshot.bbx': {'$size': 3},

@@ -237,7 +237,10 @@ def test_search_by_size_gives_the_deviation_or_the_waste(api, db, world):
                 size_mm=[400, 300, 200])
     # feld 500^3 (waste 125 - 24 dm3), cut2 (150 - 24 dm3), beam is too thin
     assert _names(held) == ['feld', 'cut2']
-    assert held['results'][0]['fit'] == {'mode': 'can_hold', 'waste_dm3': 101.0}
+    assert held['results'][0]['fit'] == {
+        'mode': 'can_hold', 'waste_m3': 0.1, 'waste_percent': 81}
+    assert held['results'][1]['fit'] == {
+        'mode': 'can_hold', 'waste_m3': 0.13, 'waste_percent': 84}
     assert held['total'] == 2
     plain = tool(api, admin, 'search_components')
     assert all('fit' not in r for r in plain['results'])
@@ -259,11 +262,24 @@ def test_search_sorts_by_the_keys_in_both_directions(api, db, world):
 
 
 def test_the_waste_of_a_batch_is_per_piece():
-    row = {'fit': {'mode': 'can_hold', 'waste_mm3': 12_400_000}, 'quantity': 4}
-    assert mcp_server.fit_of(row) == {'mode': 'can_hold', 'waste_dm3': 12.4, 'per_piece': True}
+    row = {'fit': {'mode': 'can_hold', 'waste_mm3': 12_400_000, 'waste_percent': 41.2},
+           'quantity': 4}
+    assert mcp_server.fit_of(row) == {
+        'mode': 'can_hold', 'waste_m3': 0.012, 'waste_percent': 41, 'per_piece': True}
     assert 'per_piece' not in mcp_server.fit_of({**row, 'quantity': 1})
     assert 'per_piece' not in mcp_server.fit_of(
         {'fit': {'mode': 'about', 'deviation': 0.1}, 'quantity': 4})
+
+
+def test_the_waste_reads_in_m3_with_two_digits_and_in_per_cent():
+    def waste(mm3, percent):
+        return mcp_server.fit_of({'fit': {'mode': 'can_hold', 'waste_mm3': mm3,
+                                          'waste_percent': percent}})
+    assert waste(1_700_000, 0.4) == {'mode': 'can_hold', 'waste_m3': 0.0017, 'waste_percent': 0.4}
+    assert waste(120_000_000, 41.4) == {'mode': 'can_hold', 'waste_m3': 0.12, 'waste_percent': 41}
+    assert waste(1_500_000_000, 99.6) == {'mode': 'can_hold', 'waste_m3': 1.5, 'waste_percent': 100}
+    assert waste(0, 0) == {'mode': 'can_hold', 'waste_m3': 0.0, 'waste_percent': 0.0}
+    assert 'waste_dm3' not in waste(120_000_000, 41.4)
 
 
 def test_the_asked_size_is_sent_as_plain_decimals():

@@ -10,7 +10,7 @@ import { SHAPE_CLASS_LABELS, ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/gene
 import ChipView from '@/components/common/ChipView'
 import { useMaterials } from '@/lib/lineage'
 import { piecesNote, rowStatus, sizeLabel } from '@/lib/browse'
-import { fitRowText, rowFit } from '@/lib/fit'
+import { fitRowLines, fitRowText, rowFit } from '@/lib/fit'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -172,10 +172,17 @@ const BASE: Record<string, Column> = {
     id: 'fit',
     accessorFn: (row) => fitRowText(rowFit(row), row.quantity ?? 1),
     header: () => <ComponentOverviewDataTableHeader header='Match' sortKey='match' />,
-    meta: { colClassName: 'w-[11%]' },
+    meta: { colClassName: 'w-[14%]' },
     cell: ({ row }) => {
-      const text = fitRowText(rowFit(row.original), row.original.quantity ?? 1)
-      return <div className='text-xs tabular-nums' title={text}>{text}</div>
+      const lines = fitRowLines(rowFit(row.original), row.original.quantity ?? 1)
+      // two lines under the table's truncating wrapper: the volume must not be cut off
+      return (
+        <div className='whitespace-normal text-xs tabular-nums' title={lines.join(' ')}>
+          {lines.map((line, index) => (
+            <div key={index} className={index === 0 ? 'whitespace-nowrap' : 'text-muted-foreground'}>{line}</div>
+          ))}
+        </div>
+      )
     },
   },
   shape_class: {
@@ -312,10 +319,11 @@ const OPTIONAL: Record<string, Column> = {
 
 /** The base columns, then the picked optional ones in the picker's order. */
 export function buildColumns(picked: string[], withFit = false): Column[] {
-  // the match column takes its width from the name column
+  // the match column takes its width from the name and material columns
+  const narrower: Record<string, string> = { name: 'w-[14%]', material: 'w-[14%]' }
   const base = Object.entries(BASE)
     .filter(([key]) => withFit || key !== 'fit')
-    .map(([key, column]) => (withFit && key === 'name' ? { ...column, meta: { colClassName: 'w-[17%]' } } : column))
+    .map(([key, column]) => (withFit && narrower[key] ? { ...column, meta: { colClassName: narrower[key] } } : column))
   return [
     ...base,
     ...Object.keys(OPTIONAL).filter((key) => picked.includes(key)).map((key) => OPTIONAL[key]),

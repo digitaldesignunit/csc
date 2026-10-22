@@ -148,6 +148,11 @@ def test_can_hold_means_every_sorted_side_is_at_least_the_asked_side(world):
     assert wastes[2] == pytest.approx(1321 * 600 * 200 - 1200 * 600 * 200)
     assert wastes[3] == pytest.approx(1320 * 660 * 220 - 1200 * 600 * 200)
     assert wastes[4] == pytest.approx(2000 * 1000 * 500 - 1200 * 600 * 200)
+    # the share of the piece's own box volume, in per cent
+    shares = [row['fit']['waste_percent'] for row in rows]
+    assert shares[:2] == [0, 0]
+    assert shares[3] == pytest.approx(100 * (1 - 1200 * 600 * 200 / (1320 * 660 * 220)))
+    assert shares[4] == pytest.approx(100 * (1 - 1200 * 600 * 200 / (2000 * 1000 * 500)))
     assert all(row['fit']['mode'] == 'can_hold' for row in rows)
 
 
@@ -334,4 +339,5 @@ def test_the_row_schema_describes_fit(world):
         '#/$defs/FitAbout', '#/$defs/FitCanHold'}
     assert 'fit' not in schema.get('required', [])
     assert set(schema['$defs']['FitAbout']['properties']) == {'mode', 'deviation'}
-    assert set(schema['$defs']['FitCanHold']['properties']) == {'mode', 'waste_mm3'}
+    assert set(schema['$defs']['FitCanHold']['properties']) == {
+        'mode', 'waste_mm3', 'waste_percent'}
