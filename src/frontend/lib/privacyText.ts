@@ -5,7 +5,7 @@
  */
 
 /** The day this text was last changed: the one place to edit with the text. */
-export const LAST_UPDATED = '13 October 2026'
+export const LAST_UPDATED = '22 October 2026'
 
 /** The controller's address for requests: the one on the Imprint. */
 export const CONTACT_EMAIL = 'max.eschenbach@tu-darmstadt.de'
@@ -41,6 +41,12 @@ export const ROWS: { what: string; why: string; basis: string; kept: string }[] 
     why: 'Operation and security.',
     basis: 'Art. 6(1)(f) GDPR',
     kept: "The hosting provider keeps its logs for a short period; the site's own log is deleted after 14 days.",
+  },
+  {
+    what: 'Map tiles: the Location Map page loads its map images from the tile server of FOSSGIS e.V. (Germany, tile.openstreetmap.de), which therefore receives your IP address and your browser data when you open that page. No other page loads them.',
+    why: 'To show the map.',
+    basis: 'Art. 6(1)(f) GDPR',
+    kept: 'The site stores nothing of it; FOSSGIS e.V. keeps its server logs under its own rules.',
   },
   {
     what: 'Cookies and your device: the sign-in cookie, and on your device the theme, your Browse columns, the pieces you opened last and this notice being closed.',

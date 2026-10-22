@@ -24,6 +24,11 @@ Search and the location map.
   origin place; until now they could be set only when the piece was created. In every location
   form a pasted "lat, lon" fills both boxes, and a comma after the latitude moves on to the
   longitude.
+- **Location Map:** a new page next to the Similarity Map shows the pieces on a map, by their
+  current location or by their origin, in clusters with counts. It takes the filters of Browse
+  (with a "Show as list" link back), colours the pieces like the Similarity Map, opens a piece's
+  preview on a click, and offers "Search near here" on a click into the map. The map images come
+  from the tile server of FOSSGIS e.V. (tile.openstreetmap.de); only this page loads them.
 - **MCP:** `search_components` takes `fit_mode`, `size_mm` and `tolerance`, `near_lat`,
   `near_lon`, `near_layer` and `radius_km` (each result with its distance), and `sort` and
   `order`; its description now says what the text query matches (name, id prefix, catalog
@@ -36,6 +41,8 @@ Search and the location map.
   registration is open to certain domains and lists them behind a "?"; no page names a fixed
   university any more. `CSC_OPEN_REGISTRATION_DOMAINS` is now empty by default: a server that
   keeps open registration must set it explicitly.
+- **Privacy page:** names the tile server of the Location Map and what it receives. The
+  Content-Security-Policy allows images from that one host in addition.
 
 ### Fixed
 

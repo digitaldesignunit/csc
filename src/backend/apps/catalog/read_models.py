@@ -153,6 +153,36 @@ class CatalogRow(BaseModel):
     lastmodified: str
 
 
+class LocationPoint(BaseModel):
+    """One piece on the location map (``GET /identities/locations``): where
+    it is and what the map colours and labels it by."""
+    id: str
+    catalog_number: Optional[int] = None
+    name: Optional[str] = None
+    lat: float
+    lon: float
+    original_function: Optional[str] = None
+    dataset: Optional[str] = None
+    material: Optional[str] = None
+    shape_class: Optional[str] = None
+    in_place: bool = Field(
+        default=False,
+        description='still in place: identified in its works, not yet '
+                    'deinstalled')
+
+
+class LocationMap(BaseModel):
+    """The points of the location map (decisions 8.170, 8.171)."""
+    layer: Literal['current', 'origin']
+    total: int = Field(
+        description='the pieces this caller may see that match the filters')
+    displayed: int = Field(
+        description='of those, the ones with a point on the layer')
+    left_out: int = Field(
+        description='the pieces without a point on the layer')
+    points: List[LocationPoint]
+
+
 def catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
     """An aggregation row (identity + ``current_snapshot``) -> CatalogRow."""
     snap = doc.get('current_snapshot') or {}

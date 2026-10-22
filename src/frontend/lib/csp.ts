@@ -4,6 +4,9 @@
  * nonce, and sends it as the only CSP header; Next puts the nonce on its own
  * scripts and `app/layout.tsx` hands it to next-themes.
  *
+ * The Location Map (decision 8.171) loads its map tiles from one host, which
+ * is the only addition: `img-src` also allows `MAP_TILE_ORIGIN`.
+ *
  * Scripts: the nonce, `'strict-dynamic'` (the scripts Next loads from a
  * nonced script run), and `'wasm-unsafe-eval'` for the meshopt decoder that
  * drei's `useGLTF` always sets up. Styles stay `'unsafe-inline'` (sonner,
@@ -18,6 +21,9 @@
 
 export const CSP_HEADER = 'Content-Security-Policy'
 export const CSP_REPORT_ONLY_HEADER = 'Content-Security-Policy-Report-Only'
+
+/** The tile server of the Location Map (FOSSGIS e.V., decision 8.171): images only. */
+export const MAP_TILE_ORIGIN = 'https://tile.openstreetmap.de'
 
 export type CspOptions = {
   nonce: string
@@ -55,7 +61,7 @@ export function buildCsp({ nonce, dev = false, staticBaseUrl }: CspOptions): str
     ['script-src', ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", "'wasm-unsafe-eval'",
       ...(dev ? ["'unsafe-eval'"] : [])]],
     ['style-src', ["'self'", "'unsafe-inline'"]],
-    ['img-src', ["'self'", 'blob:', 'data:', ...(staticHost ? [staticHost] : [])]],
+    ['img-src', ["'self'", 'blob:', 'data:', MAP_TILE_ORIGIN, ...(staticHost ? [staticHost] : [])]],
     ['connect-src', ["'self'", ...(dev ? ['ws:'] : [])]],
     ['font-src', ["'self'"]],
     ['worker-src', ["'self'", 'blob:']],

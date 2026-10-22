@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
+import { MAP_TILE_ORIGIN } from './csp'
 import { LAST_UPDATED, ROWS } from './privacyText'
 
 const text = ROWS.map((row) => `${row.what} ${row.kept}`).join('\n')
@@ -31,7 +32,17 @@ test('location data is removed from photos', () => {
 
 test('the date is not older than this change', () => {
   const day = new Date(`${LAST_UPDATED} UTC`)
-  assert.ok(day >= new Date('2026-10-13T00:00:00Z'), LAST_UPDATED)
+  assert.ok(day >= new Date('2026-10-22T00:00:00Z'), LAST_UPDATED)
+})
+
+test('the map tiles are named: the host of the policy, the receiver, and only the Location Map', () => {
+  const row = ROWS.find((r) => r.what.startsWith('Map tiles'))!
+  assert.ok(row)
+  assert.ok(row.what.includes(new URL(MAP_TILE_ORIGIN).host))
+  assert.match(row.what, /FOSSGIS e\.V\./)
+  assert.match(row.what, /IP address/)
+  assert.match(row.what, /Location Map page/)
+  assert.match(row.what, /No other page loads them/)
 })
 
 test('the text is ASCII, as the files are', () => {

@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-22T15:06:49.443Z
+// Generated on: 2026-10-22T17:34:49.836Z
 // Source: http://127.0.0.1:8791/schema/catalog-compose
 
 import type {
@@ -288,5 +288,27 @@ export interface CatalogRow {
   etag?: string | null;
   created: string;
   lastmodified: string;
+}
+
+
+export interface LocationPoint {
+  id: string;
+  catalog_number?: number | null;
+  name?: string | null;
+  lat: number;
+  lon: number;
+  original_function?: string | null;
+  dataset?: string | null;
+  material?: string | null;
+  shape_class?: string | null;
+  in_place?: boolean; // still in place: identified in its works, not yet deinstalled
+}
+
+export interface LocationMap {
+  layer: 'current' | 'origin';
+  total: number; // the pieces this caller may see that match the filters
+  displayed: number; // of those, the ones with a point on the layer
+  left_out: number; // the pieces without a point on the layer
+  points: LocationPoint[];
 }
 

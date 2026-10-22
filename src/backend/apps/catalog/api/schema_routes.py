@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse
 
 from apps.catalog.read_models import (
     CatalogRow,
+    LocationMap,
     CatalogSharedTypesEnvelope,
     ComponentPassport,
     MySnapshotItem,
@@ -71,6 +72,16 @@ async def get_catalog_shared_json_schema():
 async def get_catalog_row_json_schema():
     """Used by frontend `generate:models` (see `CatalogModels.ts`)."""
     schema = CatalogRow.model_json_schema(by_alias=True)
+    return JSONResponse(status_code=200, content=schema)
+
+
+@router.get(
+    '/schema/location-map',
+    summary='JSON Schema for GET /identities/locations (LocationMap)',
+)
+async def get_location_map_json_schema():
+    """Used by frontend `generate:models` (see `CatalogModels.ts`)."""
+    schema = LocationMap.model_json_schema(by_alias=True)
     return JSONResponse(status_code=200, content=schema)
 
 

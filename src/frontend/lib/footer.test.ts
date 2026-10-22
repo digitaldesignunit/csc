@@ -20,7 +20,7 @@ test('Browse and a component page are public for a visitor and app pages for a m
 })
 
 test('the other pages of the app have the thin line', () => {
-  for (const path of ['/components/similarity-map', '/analytics', '/my-work', '/scan', '/settings', '/admin/validation', '/gh-interface']) {
+  for (const path of ['/components/similarity-map', '/components/location-map', '/analytics', '/my-work', '/scan', '/settings', '/admin/validation', '/gh-interface']) {
     assert.equal(footerMode(path, true), 'thin', path)
     assert.equal(footerMode(path, false), 'thin', path)
   }

@@ -10,6 +10,9 @@ The catalogue reads: list, count, stats and the 2D component map.
 
 * `GET /identities/map`
     -> 2D descriptor embedding (cached UMAP/PCA; optional live compute)
+
+* `GET /identities/locations`
+    -> the points of the location map (current or origin layer)
 """
 
 import asyncio
@@ -32,7 +35,12 @@ from apps.catalog.component_map import (
     payload_from_cache_doc,
 )
 from apps.catalog.models import ComponentCount, User
-from apps.catalog.read_models import catalog_row, identity_body, passport_body
+from apps.catalog.read_models import (
+    LocationMap,
+    catalog_row,
+    identity_body,
+    passport_body,
+)
 from apps.catalog.people import for_viewer
 from limiter import local_limiter, signed_in_or_ip
 from apps.catalog.api.access import (
@@ -50,6 +58,7 @@ from .identity_filters import (
     catalog_filters,
     public_filters,
 )
+from .near_search import LAYER_FIELDS, NearLayer
 from .identity_query import (
     aggregate_identities,
     annotate_has_preview,
@@ -173,6 +182,81 @@ async def count_identities_route(
         )
     return JSONResponse(
         status_code=200, content={'count': total},
+        headers=viewer_headers(anonymous_public=current_user is None))
+
+
+# what the location map needs of a piece: where it is, and what it colours by
+_LOCATION_PROJECT = {
+    '$project': {
+        '_id': 0,
+        'id': '$_id',
+        'catalog_number': 1,
+        'original_function': 1,
+        'dataset': 1,
+        'material': 1,
+        'in_place': {'$eq': ['$origin.planned', True]},
+        'name': '$current_snapshot.name',
+        'shape_class': '$current_snapshot.shape_class',
+        'lon': {'$arrayElemAt': ['$_point.coordinates', 0]},
+        'lat': {'$arrayElemAt': ['$_point.coordinates', 1]},
+    }
+}
+
+
+@router.get(
+    '/identities/locations',
+    summary='The points of the location map (current or origin layer)',
+    response_model=LocationMap,
+)
+@local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
+async def get_identities_locations(
+    request: Request,
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
+    filters: Annotated[CatalogFilters, Depends(catalog_filters)],
+    layer: NearLayer = Query(
+        'current', description='which place of a piece is a point: '
+                               'current (the location of the current '
+                               'version) or origin (the origin building)'),
+):
+    """Every piece this caller may see that matches the filters and has a
+    point on the layer (decisions 8.170, 8.171), with what the map colours
+    and labels it by; the pieces without a point are only counted
+    (``left_out``). The filters, the visibility and a near or fit search are
+    those of the list. A piece never appears for someone who may not see it,
+    and neither does it count."""
+    if current_user is None:
+        filters = public_filters(filters)
+    field = LAYER_FIELDS[layer]
+    try:
+        args = await _pipelines_args(request, filters, current_user)
+        total = await count_identities(request, build_count_pipeline(
+            **args, reserved_filter=filters.reserved,
+            current_user_id=current_user.id if current_user else None,
+            include_username=False))
+        with_point = {**args, 'identity_match': and_match(
+            args['identity_match'], {field: {'$type': 'object'}})}
+        pipeline = build_list_pipeline(
+            **with_point, fit_mode=filters.fit_mode, sortkey='catalog_number',
+            sort_order=1, page=0, size=0, include_username=False,
+            current_user_id=None, reserved_filter=filters.reserved,
+            snapshot_view='row')
+        pipeline.append({'$addFields': {'_point': f'${field}'}})
+        pipeline.append(_LOCATION_PROJECT)
+        points = await aggregate_identities(request, pipeline)
+    except ConnectionFailure:
+        raise            # the 503 handler of main_fastapi.py
+    except PyMongoError:
+        log.exception('identities locations DB error')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Internal server error',
+        )
+    content = LocationMap(
+        layer=layer, total=total, displayed=len(points),
+        left_out=max(0, total - len(points)), points=points,
+    ).model_dump(mode='json')
+    return JSONResponse(
+        status_code=200, content=content,
         headers=viewer_headers(anonymous_public=current_user is None))
 
 

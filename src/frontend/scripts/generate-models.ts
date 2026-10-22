@@ -9,6 +9,7 @@
  * - `/schema/catalog-shared` --> `CatalogSharedTypes.ts` (frames, location, mesh types)
  * - `/schema/catalog-compose` --> `CatalogModels` (passport body with snapshots[])
  * - `/schema/catalog-row` --> `CatalogRow` in `CatalogModels.ts` (list rows)
+ * - `/schema/location-map` --> `LocationMap` in `CatalogModels.ts` (location map points)
  * - `/schema/snapshot-summary` --> `SnapshotSummaryItem` in `SnapshotModels.ts`
  * - `/schema/pending-snapshot` --> `PendingSnapshotItem` in `SnapshotModels.ts`
  * - `/schema/my-snapshot` --> `MySnapshotItem` in `SnapshotModels.ts`
@@ -134,6 +135,8 @@ async function run() {
     })
 
     await appendModelFromSchema('/schema/catalog-row', 'CatalogRow', 'CatalogModels.ts')
+
+    await appendModelFromSchema('/schema/location-map', 'LocationMap', 'CatalogModels.ts')
 
     await generateModel(
       '/schema/snapshot-summary',

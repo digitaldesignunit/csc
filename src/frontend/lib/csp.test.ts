@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { config } from '../proxy'
-import { buildCsp, cspHeaderName, isReportOnly, newNonce, staticOrigin } from './csp'
+import { MAP_TILE_ORIGIN, buildCsp, cspHeaderName, isReportOnly, newNonce, staticOrigin } from './csp'
 import { PROTECTED_PREFIXES, isApiPath, isProtectedPath } from './proxyAuth'
 
 const directives = (policy: string) =>
@@ -23,7 +23,8 @@ test('every directive of 8.164 is present, with its sources', () => {
   assert.deepEqual(d['default-src'], ["'self'"])
   assert.deepEqual(d['script-src'], ["'self'", "'nonce-abc'", "'strict-dynamic'", "'wasm-unsafe-eval'"])
   assert.deepEqual(d['style-src'], ["'self'", "'unsafe-inline'"])
-  assert.deepEqual(d['img-src'], ["'self'", 'blob:', 'data:'])
+  // the Location Map's tiles (8.171) are the one addition
+  assert.deepEqual(d['img-src'], ["'self'", 'blob:', 'data:', 'https://tile.openstreetmap.de'])
   assert.deepEqual(d['connect-src'], ["'self'"])
   assert.deepEqual(d['font-src'], ["'self'"])
   assert.deepEqual(d['worker-src'], ["'self'", 'blob:'])
@@ -56,9 +57,25 @@ test('development adds unsafe-eval and ws: for hot reload, and nothing else', ()
   assert.deepEqual({ ...dev, 'script-src': 0, 'connect-src': 0 }, { ...prod, 'script-src': 0, 'connect-src': 0 })
 })
 
+test('the tile host is allowed for images only, and for nothing else', () => {
+  assert.equal(MAP_TILE_ORIGIN, 'https://tile.openstreetmap.de')
+  const policy = buildCsp({ nonce: 'abc' })
+  const d = directives(policy)
+  for (const [name, sources] of Object.entries(d)) {
+    assert.equal(sources.includes(MAP_TILE_ORIGIN), name === 'img-src', name)
+  }
+  // no other host appears than the map tiles and the Google embed of 8.164
+  const hosts = new Set(policy.match(/https?:\/\/[^\s;]+/g))
+  assert.deepEqual([...hosts].sort(), ['https://maps.google.com', 'https://tile.openstreetmap.de', 'https://www.google.com'])
+  // a tile server is not a script, connect or frame source
+  assert.ok(!d['script-src'].some((s) => s.includes('openstreetmap')))
+  assert.ok(!d['connect-src'].some((s) => s.includes('openstreetmap')))
+  assert.ok(!d['frame-src'].some((s) => s.includes('openstreetmap')))
+})
+
 test('the static host is allowed for images only', () => {
   const d = directives(buildCsp({ nonce: 'abc', staticBaseUrl: 'https://static.example.org/assets/' }))
-  assert.deepEqual(d['img-src'], ["'self'", 'blob:', 'data:', 'https://static.example.org'])
+  assert.deepEqual(d['img-src'], ["'self'", 'blob:', 'data:', 'https://tile.openstreetmap.de', 'https://static.example.org'])
   assert.deepEqual(d['connect-src'], ["'self'"])
   assert.equal(staticOrigin('  '), null)
   assert.equal(staticOrigin('javascript:alert(1)'), null)
@@ -110,7 +127,7 @@ test('the matcher runs for every path under a protected prefix, whatever it ends
 })
 
 test('the sign-in gate covers the prefixes it always did, and public pages stay public', () => {
-  for (const protectedPath of ['/components', '/components/similarity-map', '/dashboard', '/dashboard/x',
+  for (const protectedPath of ['/components', '/components/similarity-map', '/components/location-map', '/dashboard', '/dashboard/x',
     '/admin', '/admin/users', '/api/backend/identities', '/gh-interface', '/locate-by-id',
     '/locate-by-id/x', '/scan', '/my-work', '/identify', '/analytics', '/transmit-id',
     '/add-component', '/add-component/x', '/oauth/consent']) {
