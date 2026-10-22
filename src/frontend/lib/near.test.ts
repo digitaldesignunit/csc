@@ -12,7 +12,10 @@ import { sortOptions, withParams, withoutFilters } from './browse'
 import { defaultSortKey, fitChanges } from './fit'
 import {
   coordinateText,
-  boxesFromPaste,
+  latLonEdit,
+  pairFromText,
+  type LatLonBoxes,
+  boxesOfLocation,
   distanceText,
   INVALID_LOCATION,
   latLonText,
@@ -227,25 +230,54 @@ test('the two coordinate boxes of the origin form make a point, none, or a probl
   }
 })
 
-test('typing a pair into the paste field character by character ends on the whole pair', () => {
-  for (const text of ['49.8728, 8.6512', '  -33.5 ,  151.25 ', '49.8728 8.6512', '(49.8728; 8.6512)']) {
-    let boxes = { lat: '', lon: '' }
-    const seen: { lat: string; lon: string }[] = []
-    for (let i = 1; i <= text.length; i++) {
-      boxes = boxesFromPaste(text.slice(0, i), boxes)
-      seen.push(boxes)
-    }
-    const whole = parseLatLon(text)!
-    assert.deepEqual(boxes, { lat: coordinateText(whole.lat), lon: coordinateText(whole.lon) }, text)
+/** Types `text` one character at a time into the boxes, the way the form does: the
+ *  character goes to the focused box, and a `focus` answer moves the focus. */
+function typeInto(text: string, start: 'lat' | 'lon' = 'lat', from: LatLonBoxes = { lat: '', lon: '' }) {
+  let boxes = from
+  let focused: 'lat' | 'lon' = start
+  for (const char of text) {
+    const result = latLonEdit(focused, boxes, boxes[focused] + char)
+    boxes = result.boxes
+    if (result.focus) focused = result.focus
   }
-  // on the way the boxes hold a shorter longitude: the field must keep its text, not clear it
-  const steps = ['49.8728, 8', '49.8728, 8.', '49.8728, 8.6', '49.8728, 8.6512'].map((t) => boxesFromPaste(t, { lat: '', lon: '' }))
-  assert.deepEqual(steps.map((b) => b.lon), ['8', '', '8.6', '8.6512'])
-  // text that is no pair leaves the boxes as they were
-  const before = { lat: '1', lon: '2' }
-  assert.deepEqual(boxesFromPaste('abc', before), before)
-  assert.deepEqual(boxesFromPaste('', before), before)
-  assert.deepEqual(boxesFromPaste('91, 8', before), before)
+  return { boxes, focused }
+}
+
+test('a pair typed character by character goes latitude, comma, longitude', () => {
+  assert.deepEqual(typeInto('49.8728, 8.6512'), { boxes: { lat: '49.8728', lon: '8.6512' }, focused: 'lon' })
+  assert.deepEqual(typeInto('49.8728,8.6512').boxes, { lat: '49.8728', lon: '8.6512' })
+  assert.deepEqual(typeInto('-33.5 ;  151.25').boxes, { lat: '-33.5', lon: '151.25' })
+  // the comma is not inserted into the latitude
+  const comma = latLonEdit('lat', { lat: '', lon: '' }, '49.8728,')
+  assert.deepEqual(comma, { boxes: { lat: '49.8728', lon: '' }, focus: 'lon' })
+  assert.deepEqual(latLonEdit('lat', { lat: '', lon: '' }, '49.8728 ,  '), { boxes: { lat: '49.8728', lon: '' }, focus: 'lon' })
+  // a comma that follows no number is typed as it is, and the focus stays
+  assert.deepEqual(latLonEdit('lat', { lat: '', lon: '' }, ','), { boxes: { lat: ',', lon: '' }, focus: null })
+  // the longitude has no such rule
+  assert.deepEqual(latLonEdit('lon', { lat: '49', lon: '' }, '8,'), { boxes: { lat: '49', lon: '8,' }, focus: null })
+  // spaces alone do not split the box while typing; a pair left in a box is read when it is left
+  const spaced = typeInto('49.8728 8.6512')
+  assert.deepEqual(spaced.boxes, { lat: '49.8728 8.6512', lon: '' })
+  assert.deepEqual(pairFromText(spaced.boxes.lat), { lat: '49.8728', lon: '8.6512' })
+  // typing into the longitude box keeps the latitude; leading spaces go
+  assert.deepEqual(typeInto(' 8.65', 'lon', { lat: '49.8', lon: '' }).boxes, { lat: '49.8', lon: '8.65' })
+})
+
+test('a pair in either box fills both boxes, a single number is a normal paste', () => {
+  const filled = { lat: '49.8728', lon: '8.6512' }
+  assert.deepEqual(latLonEdit('lat', { lat: '', lon: '' }, '49.8728, 8.6512'), { boxes: filled, focus: null })
+  assert.deepEqual(latLonEdit('lon', { lat: '', lon: '' }, '49.8728, 8.6512'), { boxes: filled, focus: null })
+  // over what the boxes held before
+  assert.deepEqual(latLonEdit('lat', { lat: '1', lon: '2' }, '  (49.8728 ; 8.6512) '), { boxes: filled, focus: null })
+  assert.deepEqual(latLonEdit('lon', { lat: '1', lon: '2' }, '49.8728\u00b0 8.6512\u00b0'), { boxes: filled, focus: null })
+  assert.deepEqual(latLonEdit('lat', { lat: '', lon: '8' }, '49.8728'), { boxes: { lat: '49.8728', lon: '8' }, focus: null })
+  assert.deepEqual(latLonEdit('lon', { lat: '49', lon: '' }, '8.6512'), { boxes: { lat: '49', lon: '8.6512' }, focus: null })
+  // a pair off the globe is no pair: it stays as typed in its box
+  assert.deepEqual(latLonEdit('lat', { lat: '', lon: '' }, '95, 8.6'), { boxes: { lat: '95, 8.6', lon: '' }, focus: null })
+  assert.equal(pairFromText('49.8728, 8.6512')?.lon, '8.6512')
+  assert.equal(pairFromText('49.8728'), null)
+  assert.equal(pairFromText(''), null)
+  assert.equal(pairFromText(null), null)
 })
 
 test('a form that holds no point on the globe cannot be saved', () => {
@@ -260,4 +292,19 @@ test('a form that holds no point on the globe cannot be saved', () => {
   assert.equal(originLocationProblem({ place: { location: null } }), null)
   assert.equal(originLocationProblem({ place: { location: { lat: 49.8, lon: 8.6 } } }), null)
   assert.ok(originLocationProblem({ place: { location: INVALID_LOCATION } }))
+})
+
+test('a stored location fills the coordinate boxes as plain decimals that read back', () => {
+  assert.deepEqual(boxesOfLocation(null), { lat: '', lon: '' })
+  assert.deepEqual(boxesOfLocation(undefined), { lat: '', lon: '' })
+  assert.deepEqual(boxesOfLocation({ lat: 49.8728, lon: 8.6512 }), { lat: '49.8728', lon: '8.6512' })
+  assert.deepEqual(boxesOfLocation({ lat: -33.5, lon: 151 }), { lat: '-33.5', lon: '151' })
+  // below the six decimals the boxes keep (about 10 cm) a coordinate shows as 0, never as an exponent
+  for (const [lat, lon] of [[1e-7, -0], [-1e-7, 1e-9], [0, 0], [5e-7, -5e-7]]) {
+    const boxes = boxesOfLocation({ lat, lon })
+    assert.equal(boxes.lat + boxes.lon, '00', `${lat} ${lon}`)
+    assert.deepEqual(locationFromBoxes(boxes.lat, boxes.lon).location, { lat: 0, lon: 0 })
+  }
+  assert.equal(String(1e-7), '1e-7')
+  assert.equal(locationFromBoxes(String(1e-7), '0').problem !== null, true)
 })

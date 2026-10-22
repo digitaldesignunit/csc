@@ -42,6 +42,7 @@ import {
   versionToEdit,
   type EditValues,
 } from '@/lib/snapshotEdit'
+import { LOCATION_PROBLEM } from '@/lib/near'
 import { ColourField, LocationFields } from './MetadataFields'
 
 export default function EditSnapshotForm({
@@ -207,7 +208,7 @@ export default function EditSnapshotForm({
     }
     const patch = editPatch(snapshot, before, values)
     if (patch === undefined) {
-      setError('Latitude and longitude: two numbers within range, or both empty.')
+      setError(LOCATION_PROBLEM)
       return
     }
     if (Object.keys(patch).length === 0) {

@@ -333,9 +333,11 @@ export default function MaterialsPage() {
       ) : shown.length === 0 ? (
         <Card className="p-4 text-sm text-muted-foreground">No material matches.</Card>
       ) : wide ? (
-        <Card className="overflow-hidden py-0">
-          {/* fixed layout: long cells truncate (the full text is the tooltip), the table never scrolls */}
-          <table className="w-full table-fixed caption-bottom text-sm">
+        <Card className="relative overflow-x-auto py-0">
+          {/* fixed layout: long cells truncate (the full text is the tooltip). The fixed columns add
+              up to 384 px (688 px from xl, with Uniclass and Id), so the table is never narrower than
+              that plus 200 px for the material: the card scrolls sideways instead of squeezing it. */}
+          <table className="w-full min-w-[584px] table-fixed caption-bottom text-sm xl:min-w-[888px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Material</TableHead>
@@ -343,7 +345,7 @@ export default function MaterialsPage() {
                 <TableHead className="w-28">Waste class</TableHead>
                 <TableHead className="hidden w-28 xl:table-cell">Uniclass</TableHead>
                 <TableHead className="hidden w-48 xl:table-cell">Id</TableHead>
-                <TableHead className="w-24"><span className="sr-only">Components</span></TableHead>
+                <TableHead className="w-28"><span className="sr-only">Components</span></TableHead>
                 <TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
               </TableRow>
             </TableHeader>

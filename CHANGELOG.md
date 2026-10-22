@@ -21,8 +21,9 @@ Search and the location map.
   first. Each row shows its distance, and the list sorts by it. A component page links to "Near
   this piece".
 - **Origin coordinates:** the origin form of a piece takes the latitude and longitude of its
-  origin place, typed or pasted as "lat, lon"; until now they could be set only when the piece
-  was created.
+  origin place; until now they could be set only when the piece was created. In every location
+  form a pasted "lat, lon" fills both boxes, and a comma after the latitude moves on to the
+  longitude.
 - **MCP:** `search_components` takes `fit_mode`, `size_mm` and `tolerance`, `near_lat`,
   `near_lon`, `near_layer` and `radius_km` (each result with its distance), and `sort` and
   `order`; its description now says what the text query matches (name, id prefix, catalog
@@ -35,6 +36,12 @@ Search and the location map.
   registration is open to certain domains and lists them behind a "?"; no page names a fixed
   university any more. `CSC_OPEN_REGISTRATION_DOMAINS` is now empty by default: a server that
   keeps open registration must set it explicitly.
+
+### Fixed
+
+- **Browse table:** at middle widths its columns no longer run into each other; the table keeps
+  a minimum width for the columns shown and scrolls sideways inside its frame. The same for the
+  admin Materials table.
 
 ### Server notes
 

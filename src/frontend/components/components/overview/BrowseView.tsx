@@ -390,9 +390,7 @@ function DesktopTable({ rows, fitActive, nearActive }: { rows: CatalogShallowRow
         </Popover>
       </div>
       <Card className="w-full overflow-x-auto p-0">
-        {/* a distance column needs its header whole: wider than the squeezed table */}
-        <ComponentOverviewDataTable columns={columns} data={rows}
-          minWidth={nearActive ? (fitActive ? 1200 : 1000) : undefined} />
+        <ComponentOverviewDataTable columns={columns} data={rows} />
       </Card>
     </div>
     </PreviewProvider>

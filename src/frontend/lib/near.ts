@@ -65,6 +65,16 @@ export function coordinateText(value: number): string {
   return String(Number(value.toFixed(6)))
 }
 
+/** The texts of the two coordinate boxes for a stored location (empty without
+ *  one): plain decimals through `coordinateText`, never an exponent, so what
+ *  the form shows is what `locationFromBoxes` reads back ("1e-7" would be
+ *  refused: a coordinate that small shows as "0"). */
+export function boxesOfLocation(
+  location: { lat: number; lon: number } | null | undefined,
+): { lat: string; lon: string } {
+  return location ? { lat: coordinateText(location.lat), lon: coordinateText(location.lon) } : { lat: '', lon: '' }
+}
+
 /** "49.8728, 8.6512": the pair as the point field shows it. */
 export function latLonText(lat: number, lon: number): string {
   return `${coordinateText(lat)}, ${coordinateText(lon)}`
@@ -168,7 +178,7 @@ export type PlaceLocation = { lat: number; lon: number }
  *  it is not the old point, which would be saved without a word. */
 export const INVALID_LOCATION: PlaceLocation = { lat: Number.NaN, lon: Number.NaN }
 
-const LOCATION_PROBLEM =
+export const LOCATION_PROBLEM =
   'Latitude (-90 to 90) and longitude (-180 to 180) need a number each, or both empty.'
 
 /** The two boxes as typed -> the point they make (null = both empty, no
@@ -190,16 +200,43 @@ export function locationProblem(location: PlaceLocation | null | undefined): str
   return onGlobe(location) ? null : LOCATION_PROBLEM
 }
 
-/** The two boxes after the paste field changed to `text`: the pair it holds
- *  when it reads as one, else the boxes as they were. The field keeps what is
- *  typed and this runs on every change, so the last state wins: typing
- *  "49.8728, 8.6512" passes through lon 8 and ends on 8.6512. */
-export function boxesFromPaste(
-  text: string,
-  boxes: { lat: string; lon: string },
-): { lat: string; lon: string } {
+export type LatLonBoxes = { lat: string; lon: string }
+
+/** A pair of coordinates in a text ("49.8728, 8.6512" and the other forms
+ *  `parseLatLon` reads) as the two boxes' texts, or null. */
+export function pairFromText(text: string | null | undefined): LatLonBoxes | null {
   const point = parseLatLon(text)
-  return point ? { lat: coordinateText(point.lat), lon: coordinateText(point.lon) } : boxes
+  return point ? { lat: coordinateText(point.lat), lon: coordinateText(point.lon) } : null
+}
+
+// a number and then the separator, as when a pair is typed into the latitude box
+const NUMBER_THEN_COMMA = /^\s*([+-]?\d+(?:\.\d*)?)\s*[,;]\s*$/
+
+/** The two coordinate boxes of a location form after the text of one of them
+ *  changed to `value` (a typed character, a paste, an autofill):
+ *  - a text that reads as a pair ("49.8728, 8.6512", pasted or filled in whole)
+ *    fills both boxes, whichever box it went into; one typed character never
+ *    does (a space typed between two numbers would split the box on the way);
+ *  - a number followed by a comma typed in the latitude box stays the latitude
+ *    and asks for the focus to move to the longitude box (`focus: 'lon'`), the
+ *    comma is not inserted: typing "49.8728, 8.6512" goes lat, comma, lon;
+ *  - anything else (a single number, a half-typed text) is the box's text as
+ *    typed, leading spaces dropped from the longitude. A decimal comma is not
+ *    supported: the comma is the separator. */
+export function latLonEdit(
+  box: 'lat' | 'lon',
+  current: LatLonBoxes,
+  value: string,
+): { boxes: LatLonBoxes; focus: 'lon' | null } {
+  const typedOne = value.length === current[box].length + 1
+  const pair = typedOne ? null : pairFromText(value)
+  if (pair) return { boxes: pair, focus: null }
+  if (box === 'lat') {
+    const found = NUMBER_THEN_COMMA.exec(value)
+    if (found) return { boxes: { ...current, lat: found[1] }, focus: 'lon' }
+    return { boxes: { ...current, lat: value }, focus: null }
+  }
+  return { boxes: { ...current, lon: value.replace(/^\s+/, '') }, focus: null }
 }
 
 /** The origin's place location of a form, as its problem. */

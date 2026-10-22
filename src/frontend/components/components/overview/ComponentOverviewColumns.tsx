@@ -113,14 +113,12 @@ const BASE: Record<string, Column> = {
     id: 'name',
     accessorKey: 'name',
     header: () => <ComponentOverviewDataTableHeader header='Name' sortKey='name' />,
-    meta: { colClassName: 'w-[23%]' },
     cell: ({ row }) => <ComponentOverviewDataTablePreviewCell component_data={row.original} />,
   },
   original_function: {
     id: 'original_function',
     accessorKey: 'original_function',
     header: () => <ComponentOverviewDataTableHeader header='Function' sortKey='original_function' />,
-    meta: { colClassName: 'w-[11%]' },
     cell: ({ row }) => {
       const value: string = row.getValue('original_function')
       return (
@@ -137,14 +135,12 @@ const BASE: Record<string, Column> = {
     id: 'material',
     accessorKey: 'material',
     header: () => <ComponentOverviewDataTableHeader header='Material' sortKey='material' />,
-    meta: { colClassName: 'w-[15%]' },
     cell: ({ row }) => <MaterialCell id={(row.getValue('material') as string | null) ?? ''} />,
   },
   dataset: {
     id: 'dataset',
     accessorKey: 'dataset',
     header: () => <ComponentOverviewDataTableHeader header='Dataset' sortKey='dataset' />,
-    meta: { colClassName: 'w-[15%]' },
     cell: ({ row }) => {
       const value: string = row.getValue('dataset') ?? ''
       return (
@@ -160,7 +156,6 @@ const BASE: Record<string, Column> = {
     id: 'size',
     accessorFn: (row) => sizeLabel(row.bbx),
     header: () => <ComponentOverviewDataTableHeader header='Size (mm)' sortKey='volume' />,
-    meta: { colClassName: 'w-[12%]' },
     cell: ({ row }) => {
       const text = sizeLabel(row.original.bbx)
       return text
@@ -173,8 +168,6 @@ const BASE: Record<string, Column> = {
     id: 'distance',
     accessorFn: (row) => rowDistance(row),
     header: () => <ComponentOverviewDataTableHeader header='Distance' sortKey='distance' />,
-    // the header with its reset cross needs about 135 px (Browse sets a minimum width)
-    meta: { colClassName: 'w-[15%]' },
     cell: ({ row }) => {
       const metres = rowDistance(row.original)
       return metres === null
@@ -187,7 +180,6 @@ const BASE: Record<string, Column> = {
     id: 'fit',
     accessorFn: (row) => fitRowText(rowFit(row), row.quantity ?? 1),
     header: () => <ComponentOverviewDataTableHeader header='Match' sortKey='match' />,
-    meta: { colClassName: 'w-[14%]' },
     cell: ({ row }) => {
       const lines = fitRowLines(rowFit(row.original), row.original.quantity ?? 1)
       // two lines under the table's truncating wrapper: the volume must not be cut off
@@ -204,7 +196,6 @@ const BASE: Record<string, Column> = {
     id: 'shape_class',
     accessorKey: 'shape_class',
     header: () => <ComponentOverviewDataTableHeader header='Shape class' sortKey='shape_class' />,
-    meta: { colClassName: 'w-[9.5%]' },
     cell: ({ row }) => {
       const value = row.original.shape_class
       return value
@@ -221,7 +212,6 @@ const BASE: Record<string, Column> = {
     id: 'status',
     accessorFn: (row) => rowStatus(row).label,
     header: () => <ComponentOverviewDataTableHeader header='Status' />,
-    meta: { colClassName: 'w-[10%]' },
     cell: ({ row }) => {
       const pieces = piecesNote(row.original)
       return (
@@ -235,7 +225,6 @@ const BASE: Record<string, Column> = {
   actions: {
     id: 'actions',
     header: () => <span className='sr-only'>Actions</span>,
-    meta: { colClassName: 'w-[44px]' },
     cell: ({ row }) => <RowMenu row={row.original} />,
   },
 }
@@ -246,21 +235,18 @@ const OPTIONAL: Record<string, Column> = {
     id: '_id',
     accessorKey: '_id',
     header: () => <ComponentOverviewDataTableHeader header='Identity id' sortKey='_id' />,
-    meta: { colClassName: 'w-[300px]' },
     cell: ({ row }) => <ComponentOverviewDataTableCopyIdCell componentId={row.getValue('_id') as string} />,
   },
   catalog_number: {
     id: 'catalog_number',
     accessorKey: 'catalog_number',
     header: () => <ComponentOverviewDataTableHeader header='Catalog number' sortKey='catalog_number' />,
-    meta: { colClassName: 'w-[140px]' },
     cell: ({ row }) => <div className='text-xs tabular-nums truncate'>#{row.original.catalog_number}</div>,
   },
   effective_from: {
     id: 'effective_from',
     accessorKey: 'effective_from',
     header: () => <ComponentOverviewDataTableHeader header='Date' sortKey='effective_from' />,
-    meta: { colClassName: 'w-[130px]' },
     cell: ({ row }) => (
       <div className='text-xs truncate'>
         {row.original.effective_from ? formatDay(row.original.effective_from, row.original.effective_from_precision) : 'N/A'}
@@ -271,7 +257,6 @@ const OPTIONAL: Record<string, Column> = {
     id: 'color',
     accessorKey: 'color',
     header: () => <ComponentOverviewDataTableHeader header='Colour' sortKey='color' />,
-    meta: { colClassName: 'w-[140px]' },
     cell: ({ row }) => {
       const color = row.getValue('color') as number[] | null | undefined
       // a state recorded without a colour (an imported piece, say) has none
@@ -291,21 +276,18 @@ const OPTIONAL: Record<string, Column> = {
     id: 'fragment',
     accessorKey: 'fragment',
     header: () => <ComponentOverviewDataTableHeader header='Fragment' />,
-    meta: { colClassName: 'w-[100px]' },
     cell: ({ row }) => <div className='text-xs truncate'>{row.original.fragment ? 'yes' : 'no'}</div>,
   },
   complexity: {
     id: 'complexity',
     accessorKey: 'complexity',
     header: () => <ComponentOverviewDataTableHeader header='Complexity' sortKey='complexity' />,
-    meta: { colClassName: 'w-[110px]' },
     cell: ({ row }) => <div className='text-xs tabular-nums truncate'>{row.original.complexity ?? ''}</div>,
   },
   location: {
     id: 'location',
     accessorKey: 'location',
     header: () => <ComponentOverviewDataTableHeader header='Location' />,
-    meta: { colClassName: 'w-[220px]' },
     cell: ({ row }) => {
       const coords = row.getValue('location') as Parameters<typeof ComponentOverviewDataTableLocationCell>[0]['coords'] | null
       // a state recorded without a location has none
@@ -320,35 +302,22 @@ const OPTIONAL: Record<string, Column> = {
     id: 'created',
     accessorKey: 'created',
     header: () => <ComponentOverviewDataTableHeader header='Created' sortKey='created' />,
-    meta: { colClassName: 'w-[170px]' },
     cell: ({ row }) => <div className='text-xs truncate' title={formatTimestamp(row.getValue('created'))}>{formatDay(row.getValue('created'))}</div>,
   },
   lastmodified: {
     id: 'lastmodified',
     accessorKey: 'lastmodified',
     header: () => <ComponentOverviewDataTableHeader header='Last modified' sortKey='lastmodified' />,
-    meta: { colClassName: 'w-[170px]' },
     cell: ({ row }) => <div className='text-xs truncate' title={formatTimestamp(row.getValue('lastmodified'))}>{formatDay(row.getValue('lastmodified'))}</div>,
   },
 }
 
-/** The base columns, then the picked optional ones in the picker's order. */
+/** The base columns, then the picked optional ones in the picker's order. The
+ *  widths of all of them come from `lib/tableWidths` by id. */
 export function buildColumns(picked: string[], withFit = false, withNear = false): Column[] {
-  // the match and the distance columns take their width from the name,
-  // function, material and dataset columns
-  const narrower: Record<string, string> = withFit && withNear
-    ? {
-        name: 'w-[15%]', original_function: 'w-[10%]', material: 'w-[11%]', dataset: 'w-[10%]',
-        size: 'w-[11%]', distance: 'w-[14%]', shape_class: 'w-[10.5%]',
-      }
-    : withFit
-      ? { name: 'w-[14%]', material: 'w-[14%]', shape_class: 'w-[10.5%]' }
-      : withNear
-        ? { name: 'w-[18%]', material: 'w-[12%]', dataset: 'w-[12%]', shape_class: 'w-[10.5%]' }
-        : {}
   const base = Object.entries(BASE)
     .filter(([key]) => (withFit || key !== 'fit') && (withNear || key !== 'distance'))
-    .map(([key, column]) => (narrower[key] ? { ...column, meta: { colClassName: narrower[key] } } : column))
+    .map(([, column]) => column)
   return [
     ...base,
     ...Object.keys(OPTIONAL).filter((key) => picked.includes(key)).map((key) => OPTIONAL[key]),
