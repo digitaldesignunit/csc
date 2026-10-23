@@ -163,7 +163,7 @@ After generation, save to `svg/{NickName}.svg`, validate in a browser or vector 
 
 Rescanned from `grasshopper_userobjects_src/` (Python + C# script components). Descriptions are shortened from each component's `Description` field for icon generation.
 
-**Icon coverage:** every component below has `svg/{NickName}.svg` and a matching `24x24/{NickName}.png` (the P8 components got theirs on 2026-10-08, `FetchReinforcementLayout` on 2026-10-12; `ApplyFrame`, `FetchOriginalGeometry`, `ReinforcementLayout` and `GetComponentPassport` reuse the artwork of the names they replace).
+**Icon coverage:** every component below has `svg/{NickName}.svg` and a matching `24x24/{NickName}.png` (the P8 components got theirs on 2026-10-08, `FetchReinforcementLayout` on 2026-10-12, `FetchSimilarComponents` on 2026-10-23: a filled piece and a similar outline beside it, with the fetch arrow; `ApplyFrame`, `FetchOriginalGeometry`, `ReinforcementLayout` and `GetComponentPassport` reuse the artwork of the names they replace).
 
 | Icon | Meaning |
 | --- | --- |
@@ -203,7 +203,7 @@ To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_i
 | `FetchOriginalGeometry` | yes | Fetches the original (as uploaded) snapshot geometry as binary PLY (ETag cache); falls back to reduced, then the inline preview; builds authored shapes. |
 | `FetchReinforcementLayout` | yes | Fetches the reinforcement layouts of a component as polylines (one tree branch per record, newest first) with diameter, grade, cover, record id, basis, snapshot and status; optional solid bars; a passport placement moves the layouts of its snapshot (RL11). |
 | `FetchReducedGeometry` | yes | Fetches the reduced snapshot geometry as binary PLY (ETag cache); falls back to the inline preview; builds authored shapes from their parameters. |
-| `FetchSimilarComponents` | no | Fetches the components nearest in shape to one component by the radial signature (outline and size; not on the 2D Similarity Map), nearest first as passport JSON, with the distance per result; takes the filters of `FetchFilteredComponents` (they apply before the ranking). |
+| `FetchSimilarComponents` | yes | Fetches the components nearest in shape to one component by the radial signature (outline and size; not on the 2D Similarity Map), nearest first as passport JSON, with the distance per result; takes the filters of `FetchFilteredComponents` (they apply before the ranking). |
 | `FetchSnapshot` | yes | Fetches passport JSON for one identity and a specific snapshot (`{identity, snapshots:[one]}`); input can be a UUID or passport JSON. |
 | `FetchTransmittedID` | yes | Returns the pending transmitted component ID for the signed-in user from the backend. |
 | `FilterComponents` | yes | Locally filters a list of passport JSON by original function, material, dataset, complexity, fragment, bounding-box size, shape class, and material class. |
