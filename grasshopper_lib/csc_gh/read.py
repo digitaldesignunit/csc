@@ -290,10 +290,34 @@ _TOLERANCE = re.compile(r'^(\d+(?:\.\d+)?)\s*(%|mm)$', re.IGNORECASE)
 _NUMBER = re.compile(r'^\d+(?:\.\d+)?$')
 
 
+def _plain(value):
+    """The value inside a Grasshopper wrapper (GH_Number, GH_String,
+    GH_Point ...: anything with ``Value`` that is no text, no number and no
+    point itself), else the value."""
+    if (value is not None and not isinstance(value, (str, int, float))
+            and not hasattr(value, 'X') and hasattr(value, 'Value')):
+        return value.Value
+    return value
+
+
+def _items(value):
+    """The items of a list, a tuple or a .NET list (what a list access gives
+    in Rhino 8), unwrapped; None for anything that is not a list."""
+    if isinstance(value, (str, bytes)) or hasattr(value, 'X'):
+        return None
+    if isinstance(value, (list, tuple)) or (
+            hasattr(value, '__iter__') and hasattr(value, 'Count')):
+        return [_plain(v) for v in value]
+    return None
+
+
 def _blank(value):
-    """Nothing wired: None, an empty text, or an empty list."""
-    if isinstance(value, (list, tuple)):
-        return len(value) == 0
+    """Nothing wired: None, an empty text, an empty list, or a list whose
+    items are all empty (Grasshopper passes None for an empty item)."""
+    value = _plain(value)
+    items = _items(value)
+    if items is not None:
+        return all(_blank(v) for v in items)
     return value is None or (isinstance(value, str) and not value.strip())
 
 
@@ -338,9 +362,13 @@ def _unwrap(value):
     """The one value of a list access that holds a single item that is no
     number (a Point3d, a vector, a text): a point wired to a list input
     arrives as a list of one."""
-    if (isinstance(value, (list, tuple)) and len(value) == 1
-            and _number(value[0]) is None):
-        return value[0]
+    value = _plain(value)
+    items = _items(value)
+    if items is not None:
+        items = [v for v in items if not _blank(v)]
+        if len(items) == 1 and _number(items[0]) is None:
+            return items[0]
+        return items
     return value
 
 
@@ -349,7 +377,12 @@ def _numbers_of(value):
     text separated by commas, semicolons or spaces ('49.87, 8.65'; a
     decimal point, not a comma); None when
     it is none of them or a part is no number."""
-    if isinstance(value, str):
+    value = _plain(value)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        values = [_number(value)]
+    elif isinstance(value, str):
         parts = [p for p in re.split(r'[;,\s]+', value.strip()) if p]
         values = [_number(p) for p in parts]
     elif hasattr(value, 'X') and hasattr(value, 'Y'):
@@ -358,7 +391,7 @@ def _numbers_of(value):
             values.append(_number(value.Z))
     else:
         try:
-            values = [_number(v) for v in value]
+            values = [_number(_plain(v)) for v in value]
         except TypeError:
             return None
     return None if any(v is None for v in values) else values

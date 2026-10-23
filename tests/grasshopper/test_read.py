@@ -498,3 +498,30 @@ def test_the_similar_params_hand_the_remarks_on_in_the_note():
     assert note == 'Count lowered to the most the server gives, 50; ' + r.FIT_SIZE_EMPTY
     assert r.similar_params(r.fetch_filter_params(), None, None)[1] is None
     assert r.similar_params({}, None, None)[1] is None
+
+class _Goo:
+    """A Grasshopper wrapper (GH_Number ...): the value sits in ``Value``."""
+
+    def __init__(self, value):
+        self.Value = value
+
+
+class _NetList(list):
+    """A .NET list as a list access gives it in Rhino 8 (has ``Count``)."""
+
+    @property
+    def Count(self):
+        return len(self)
+
+
+@pytest.mark.parametrize('size', [0, 0.0, '0', [0], [None, None], _NetList(), _NetList([0.0, 0.0, 0.0]),
+                                  [_Goo(0.0), _Goo(0.0), _Goo(0.0)], _Goo(0)])
+def test_a_zero_or_empty_size_in_any_grasshopper_form_is_not_set(size):
+    assert r.fetch_filter_params(fit_size=size) == {}
+    notes = r.fetch_filter_params(fit_mode='can_hold', fit_size=size).notes
+    assert notes and 'FitSize is empty or zero' in notes[0]
+
+
+def test_a_wrapped_or_net_list_size_is_read():
+    assert r.fetch_filter_params(fit_mode='can_hold', fit_size=[_Goo(1200), _Goo(600), _Goo(200)])['fit_size'] == '1200,600,200'
+    assert r.fetch_filter_params(fit_mode='can_hold', fit_size=_NetList([1200.0, 600.0, 200.0]))['fit_size'] == '1200,600,200'
