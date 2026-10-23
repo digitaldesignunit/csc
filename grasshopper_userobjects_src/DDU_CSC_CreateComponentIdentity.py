@@ -26,21 +26,22 @@ ghenv.Component.Description = (  # NOQA
     '(IdentityMetadata, SnapshotMetadata, Capture), geometry and, for a '
     'cut piece, its parents. Reduces and stages the mesh files for '
     'AddComponentIdentity. No orientation or box is computed here: the '
-    'server derives the frame.'
+    'server derives the frame. Meshes referenced from Rhino objects with '
+    'a base-colour texture get vertex colours from it.'
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005'
+CSC_GH_MINIMUM = '261022'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
     from csc_gh.build import (BuildError, identity_body, loads_fragment, problems_of_identity, snapshot_body, staging_key, text)  # NOQA
-    from csc_gh.rhino import (stage_geometry)  # NOQA
+    from csc_gh.rhino import (input_references, stage_geometry)  # NOQA
     from csc_gh.upload import (clear_staging, commit_staging, staging_root)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261005 too old or missing: run CSC_Update, '
+        'CSC library 261022 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 
@@ -70,7 +71,7 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261022
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -145,7 +146,11 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
         self.InputParams[6].Description = (
             'Meshes, point clouds, extrusions (-> prism) and box-shaped breps '
             '(-> box). Meshes are reduced for the Preview and the Reduced '
-            'level; the original is kept.'
+            'level; the original is kept. A mesh that references a Rhino '
+            'object with a base-colour texture in its material is coloured '
+            'from that texture (the texture wins over vertex colours the '
+            'mesh has; an internalised or Grasshopper-made mesh keeps its '
+            'own colours).'
         )
         self.InputParams[7].Description = (
             'Ids of the pieces this one is cut from (one parent: a split, '
@@ -188,9 +193,20 @@ class CSC_CreateComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
             os.makedirs(root, exist_ok=True)
             tmp_dir = os.path.join(root, '_tmp_' + uuid.uuid4().hex)
             meta = loads_fragment(Snapshot, 'Snapshot') or {}
+            # vertex colours from the texture of the Rhino object each mesh
+            # references (8.175): no input, the references come from the
+            # volatile data of Geometry; the remarks say what was done
+            items = list(Geometry)
+            try:
+                references = input_references(self.Component, 'Geometry', items)
+            except Exception:
+                references = None
+            texture_notes = []
             geometry, mani, move = stage_geometry(
-                list(Geometry), tmp_dir, meta.get('color') or DEFAULT_RGB,
-                bool(Centre))
+                items, tmp_dir, meta.get('color') or DEFAULT_RGB,
+                bool(Centre), references=references, notes=texture_notes)
+            for note in texture_notes:
+                self._addRemark(note)
             snapshot_dict = snapshot_body(meta, geometry, Capture)
             body = identity_body(IdentityID, Dataset, Identity, snapshot_dict,
                                  list(ParentIdentity or []))

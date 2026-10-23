@@ -199,10 +199,11 @@ To verify PNG exports after SVG changes: `conda run -n csc python resources/gh_i
 | `FetchAllComponents` | yes | GET `/identities` --- fetches all identities joined with current snapshots as passport JSON `{identity, snapshots[]}`; cached. |
 | `FetchAllSnapshots` | yes | Fetches passport JSON with every snapshot for one identity (`{identity, snapshots[]}`); input can be a UUID or passport JSON. |
 | `FetchComponents` | yes | Fetches specific catalog components by identity ID; handles missing IDs; supports cache. |
-| `FetchFilteredComponents` | yes | Server-side filtered catalog query (original function, material, dataset, complexity, dimensions, reservation status, shape class, material class, circulation). |
+| `FetchFilteredComponents` | yes | Server-side filtered catalog query (original function, material, dataset, complexity, dimensions, reservation status, shape class, material class, circulation, the dimension search and the near search) with the match and the distance per result. |
 | `FetchOriginalGeometry` | yes | Fetches the original (as uploaded) snapshot geometry as binary PLY (ETag cache); falls back to reduced, then the inline preview; builds authored shapes. |
 | `FetchReinforcementLayout` | yes | Fetches the reinforcement layouts of a component as polylines (one tree branch per record, newest first) with diameter, grade, cover, record id, basis, snapshot and status; optional solid bars; a passport placement moves the layouts of its snapshot (RL11). |
 | `FetchReducedGeometry` | yes | Fetches the reduced snapshot geometry as binary PLY (ETag cache); falls back to the inline preview; builds authored shapes from their parameters. |
+| `FetchSimilarComponents` | no | Fetches the components nearest in shape to one component by the radial signature (outline and size; not on the 2D Similarity Map), nearest first as passport JSON, with the distance per result; takes the filters of `FetchFilteredComponents` (they apply before the ranking). |
 | `FetchSnapshot` | yes | Fetches passport JSON for one identity and a specific snapshot (`{identity, snapshots:[one]}`); input can be a UUID or passport JSON. |
 | `FetchTransmittedID` | yes | Returns the pending transmitted component ID for the signed-in user from the backend. |
 | `FilterComponents` | yes | Locally filters a list of passport JSON by original function, material, dataset, complexity, fragment, bounding-box size, shape class, and material class. |

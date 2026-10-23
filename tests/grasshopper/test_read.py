@@ -249,3 +249,179 @@ def test_passes_filters():
     assert not r.passes_filters(pending, complexity=1)
     assert r.passes_filters(pending)
     assert not r.passes_filters('nope')
+
+
+# DIMENSION AND NEAR SEARCH (8.169, 8.170) ------------------------------------
+class _Xyz:
+    """What a Rhino Point3d / Vector3d is to the helpers: X, Y, Z."""
+
+    def __init__(self, x, y, z=0.0):
+        self.X, self.Y, self.Z = x, y, z
+
+
+class _Xy:
+    def __init__(self, x, y):
+        self.X, self.Y = x, y
+
+
+def test_the_fit_size_takes_three_numbers_in_any_form():
+    want = '1200,600,200'
+    assert r.fit_size_of([1200, 600, 200]) == want
+    assert r.fit_size_of((1200.0, 600.0, 200.0)) == want
+    assert r.fit_size_of(_Xyz(1200, 600, 200)) == want            # Point3d / Vector3d
+    assert r.fit_size_of('1200, 600, 200') == want
+    assert r.fit_size_of('1200;600;200') == want
+    assert r.fit_size_of(' 1200 600 200 ') == want
+    assert r.fit_size_of([1200.5, 600, 200]) == '1200.5,600,200'
+    for bad in ([1200, 600], [1, 2, 3, 4], 'a,b,c', '1200,600', [0, 1, 2], [-5, 10, 10],
+                [1e9, 1, 1], None, '', [True, 1, 1], [float('nan'), 1, 1], 5):
+        with pytest.raises(ValueError):
+            r.fit_size_of(bad)
+
+
+def test_the_fit_tolerance_is_a_percent_or_millimetres_as_the_server_reads_it():
+    assert r.fit_tolerance_of('10%') == '10%'
+    assert r.fit_tolerance_of(' 7.5 % ') == '7.5%'
+    assert r.fit_tolerance_of('50mm') == '50mm'
+    assert r.fit_tolerance_of('50 MM') == '50mm'
+    assert r.fit_tolerance_of(10) == '10%'                        # a bare number is per cent
+    assert r.fit_tolerance_of('12,5') == '12.5%'
+    assert r.fit_tolerance_of(None) is None and r.fit_tolerance_of(' ') is None
+    for bad in ('ten', '10 m', '101%', '1e9mm', -5, '%', True):
+        with pytest.raises(ValueError):
+            r.fit_tolerance_of(bad)
+
+
+def test_the_fit_params_follow_the_mode():
+    assert r.fit_params(None, None, None) == {}
+    assert r.fit_params('about', [1200, 600, 200], None) == {
+        'fit_mode': 'about', 'fit_size': '1200,600,200', 'fit_tol': '10%'}
+    assert r.fit_params('About', [1200, 600, 200], '50mm')['fit_tol'] == '50mm'
+    # can hold takes no tolerance: it is left out, not sent (the server answers 422)
+    assert r.fit_params('Can hold', [1200, 600, 200], '5%') == {
+        'fit_mode': 'can_hold', 'fit_size': '1200,600,200'}
+    assert r.fit_params('can-hold', [1, 2, 3], None)['fit_mode'] == 'can_hold'
+    for args in (('about', None, None), ('hold', [1, 2, 3], None), (None, [1, 2, 3], None),
+                 ('about', [1, 2], None)):
+        with pytest.raises(ValueError):
+            r.fit_params(*args)
+
+
+def test_the_near_point_is_latitude_then_longitude_as_in_origin():
+    assert r.near_point_of(_Xyz(49.8728, 8.6512)) == (49.8728, 8.6512)   # X = lat, Y = lon
+    assert r.near_point_of(_Xy(49.8728, 8.6512)) == (49.8728, 8.6512)
+    assert r.near_point_of([49.8728, 8.6512]) == (49.8728, 8.6512)
+    assert r.near_point_of('49.8728, 8.6512') == (49.8728, 8.6512)
+    assert r.near_point_of('52.5 13.4') == (52.5, 13.4)
+    for bad in ('49.87', [1, 2, 3], '91, 0', [0, 181], 'a, b', 7, [None, 1]):
+        with pytest.raises(ValueError):
+            r.near_point_of(bad)
+
+
+def test_the_near_params_name_the_layer_and_the_radius():
+    assert r.near_params(None, None, None) == {}
+    assert r.near_params('', '', '') == {}
+    assert r.near_params(_Xyz(49.8728, 8.6512), None, None) == {
+        'near_lat': '49.8728', 'near_lon': '8.6512'}
+    assert r.near_params([49.8728, 8.6512], 'Origin', 25) == {
+        'near_lat': '49.8728', 'near_lon': '8.6512', 'near_layer': 'origin',
+        'radius_km': '25'}
+    assert 'radius_km' not in r.near_params([1, 2], 'current', 0)       # empty or 0 = nearest
+    assert r.near_params([1, 2], None, 2.5)['radius_km'] == '2.5'
+    for args in (([1, 2], 'garden', None), ([1, 2], None, -1), ([1, 2], None, 'far'),
+                 (None, 'origin', None), (None, None, 30), ([200, 2], None, None)):
+        with pytest.raises(ValueError):
+            r.near_params(*args)
+
+
+def test_the_filter_params_carry_the_fit_and_the_near_search():
+    params = r.fetch_filter_params(
+        material='concrete', fit_mode='about', fit_size=_Xyz(1200, 600, 200),
+        fit_tolerance='5%', near_point=_Xyz(49.8728, 8.6512), near_layer='origin',
+        radius_km=30)
+    assert params == {
+        'material': 'concrete', 'fit_mode': 'about', 'fit_size': '1200,600,200',
+        'fit_tol': '5%', 'near_lat': '49.8728', 'near_lon': '8.6512',
+        'near_layer': 'origin', 'radius_km': '30'}
+    with pytest.raises(ValueError):
+        r.fetch_filter_params(fit_size=[1, 2, 3])
+    # the keys are query parameters of the server, and the server reads the values
+    sys.path.insert(0, str(BACKEND))
+    try:
+        from apps.catalog.api.identity_filters import catalog_filters, _parse_fit
+        from apps.catalog.api.near_search import parse_near
+    except Exception:
+        return
+    import inspect
+    assert set(params) <= set(inspect.signature(catalog_filters).parameters)
+    for mode, tolerance in (('about', '5%'), ('about', '50mm'), ('can_hold', None)):
+        got = r.fit_params(mode, [1200, 600, 200.5], tolerance)
+        fit = _parse_fit(got['fit_mode'], got['fit_size'], got.get('fit_tol'))
+        assert fit['fit_mode'] == mode and sorted(fit['fit_sides']) == [200.5, 600.0, 1200.0]
+    near = r.near_params(_Xyz(49.8728, 8.6512), 'origin', 30)
+    assert parse_near(float(near['near_lat']), float(near['near_lon']), near['near_layer'],
+                      float(near['radius_km']))
+
+
+def test_a_row_gives_its_fit_in_percent_and_its_distance_in_km():
+    assert r.fit_percent({'fit': {'mode': 'about', 'deviation': 0.08}}) == pytest.approx(8.0)
+    assert r.fit_percent({'fit': {'mode': 'can_hold', 'waste_mm3': 5e7, 'waste_percent': 41.5}}) == 41.5
+    assert r.fit_percent({}) is None and r.fit_percent({'fit': None}) is None
+    assert r.fit_percent({'fit': {'mode': 'about'}}) is None
+    assert r.distance_km({'distance_m': 12500.0}) == 12.5
+    assert r.distance_km({}) is None and r.distance_km(None) is None
+
+
+# SIMILAR SEARCH (8.174) ------------------------------------------------------
+def test_the_similar_basis_and_count():
+    assert r.similar_basis(None) == 'radial_signature' and r.similar_basis(' ') == 'radial_signature'
+    assert r.similar_basis('Scalars') == 'scalars' and r.similar_basis('hks') == 'hks'
+    with pytest.raises(ValueError):
+        r.similar_basis('tsne')
+    assert r.similar_count(None) == (10, None)
+    assert r.similar_count(6) == (6, None) and r.similar_count('25') == (25, None)
+    assert r.similar_count(0)[0] == 1 and r.similar_count(0)[1]
+    assert r.similar_count(500) == (50, 'Count lowered to the most the server gives, 50')
+    with pytest.raises(ValueError):
+        r.similar_count('many')
+
+
+def test_the_similar_params_are_the_filters_plus_basis_and_count():
+    filters = r.fetch_filter_params(material='concrete', reserved=1, fit_mode='can_hold',
+                                    fit_size=[1200, 600, 200])
+    params, note = r.similar_params(filters, 'scalars', 5)
+    assert params == {'material': 'concrete', 'fit_mode': 'can_hold', 'fit_size': '1200,600,200',
+                      'basis': 'scalars', 'count': 5} and note is None   # reserved is not a similar filter
+    assert r.similar_params({}, None, None)[0] == {'basis': 'radial_signature', 'count': 10}
+    assert r.similar_params(None, None, 99)[1]
+    sys.path.insert(0, str(BACKEND))
+    try:
+        import inspect
+        from apps.catalog.api.identity_filters import catalog_filters
+        from apps.catalog.api import catalog_list
+    except Exception:
+        return
+    route = inspect.signature(catalog_list.get_similar_identities).parameters
+    assert {'basis', 'count'} <= set(route)
+    assert set(params) - {'basis', 'count'} <= set(inspect.signature(catalog_filters).parameters)
+
+
+def test_the_similar_results_keep_the_order_and_the_extra_numbers():
+    body = {'query_id': 'q', 'results': [
+        {'distance': 0.5, 'piece': {'_id': 'a', 'fit': {'mode': 'about', 'deviation': 0.1},
+                                    'distance_m': 2000}},
+        {'distance': 1.25, 'piece': {'_id': 'b'}},
+        {'distance': 2.0, 'piece': {}},
+    ]}
+    assert r.similar_results(body) == [
+        {'id': 'a', 'distance': 0.5, 'fit': pytest.approx(10.0), 'distance_km': 2.0},
+        {'id': 'b', 'distance': 1.25, 'fit': None, 'distance_km': None}]
+    assert r.similar_results({}) == [] and r.similar_results(None) == []
+
+
+def test_the_similar_errors_are_said_in_words():
+    assert 'not visible' in r.similar_error_text(404)
+    assert 'not built' in r.similar_error_text(409)
+    assert 'no descriptor' in r.similar_error_text(422)
+    assert 'size' in r.similar_error_text(422, 'fit_mode needs size')
+    assert r.similar_error_text(500) == ''

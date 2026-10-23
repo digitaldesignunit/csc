@@ -27,6 +27,7 @@ import Rhino  # NOQA
 from .ply import (parse_ply, write_ply_cloud, write_ply_mesh)  # NOQA
 from .build import (POINT_CLOUD_STAGING_THRESHOLD, box_proxy, geometry_body, inline_mesh, inline_point_cloud, manifest, mesh_levels, prism_proxy)  # NOQA
 from .read import (drawable_proxy)  # NOQA
+from .texture import (sample_bilinear, texture_problem, too_large, uv_transform_is_identity, wrap_of)  # NOQA
 
 # 'loop' = one call per vertex / face (the 0.5 way), 'bulk' = AddVertices /
 # AddFaces with .NET collections, 'blit' = the arrays copied into pinned .NET
@@ -410,33 +411,71 @@ def reduce_mesh(mesh, target_faces):
     return reduced
 
 
-def export_mesh(mesh, directory, index, default_rgb):
+def export_mesh(mesh, directory, index, default_rgb, texture=None,
+                info=None):
     """Reduce, stage and describe one mesh (8.95 1).
 
     Writes ``<directory>/meshes/<index>/detailed.ply`` (the Original) and,
     for a big mesh, ``reduced.ply``; returns the inline Preview entry and the
     list of staged levels. Files always carry colours (the piece's colour
     when the mesh has none); the inline entry only the mesh's own.
+
+    ``texture`` (a ``TextureImage``, 8.175): the vertex colours of every level
+    are sampled from it at that level's own texture coordinates and win over
+    the colours the mesh has; the inline Preview then carries them too.
+    ``info`` (a dict) is filled with ``textured`` (True when the texture
+    coloured the levels), ``replaced`` (the mesh had vertex colours of its
+    own) and ``lost`` (a level whose reduction left no texture coordinates; it
+    keeps the colours it had).
     """
+    info = info if info is not None else {}
     vertices, triangles, own_colors = mesh_arrays(mesh)
+    info['replaced'] = False
+    info['textured'] = False
+    info['lost'] = []
+    textured = None
+    if texture is not None:
+        textured = texture_colors(texture, mesh)
+        if textured is not None:
+            info['textured'] = True
+            info['replaced'] = own_colors is not None
+            own_colors = textured
     file_colors = own_colors if own_colors is not None         else np.asarray(default_rgb[:3], dtype=np.uint8)
     plan = mesh_levels(len(triangles))
     levels = []
     folder = os.path.join(directory, 'meshes', str(index))
     if plan['save_original'] or plan['reduced_target']:
         os.makedirs(folder, exist_ok=True)
+
+    def level(target, name):
+        """Vertices, triangles and colours of a reduced level: coloured from
+        the texture at the coordinates the reduction kept."""
+        reduced = reduce_mesh(mesh, target)
+        rv, rt, rc = mesh_arrays(reduced)
+        if textured is not None:
+            again = texture_colors(texture, reduced)
+            if again is not None:
+                rc = again
+            else:
+                # no coordinates left: this level has no texture colours
+                info['lost'].append(name)
+                if rc is None:
+                    rc = np.tile(np.asarray(default_rgb[:3], dtype=np.uint8),
+                                 (len(rv), 1))
+        return rv, rt, rc
+
     if plan['save_original']:
         with open(os.path.join(folder, 'detailed.ply'), 'wb') as handle:
             handle.write(write_ply_mesh(vertices, triangles, file_colors))
         levels.append('detailed')
     if plan['reduced_target']:
-        rv, rt, rc = mesh_arrays(reduce_mesh(mesh, plan['reduced_target']))
+        rv, rt, rc = level(plan['reduced_target'], 'reduced')
         with open(os.path.join(folder, 'reduced.ply'), 'wb') as handle:
             handle.write(write_ply_mesh(
                 rv, rt, rc if rc is not None else file_colors))
         levels.append('reduced')
     if plan['preview_target']:
-        pv, pt, pc = mesh_arrays(reduce_mesh(mesh, plan['preview_target']))
+        pv, pt, pc = level(plan['preview_target'], 'preview')
     else:
         pv, pt, pc = vertices, triangles, own_colors
     return inline_mesh(pv, pt, pc), levels
@@ -700,9 +739,198 @@ def proxy_to_rhino(proxy):
     return usable(geometry)
 
 
+# VERTEX COLOURS FROM THE TEXTURE (8.175) -------------------------------------
+class TextureImage(object):
+    """The base-colour image of a material: ``pixels`` (height, width, 4)
+    uint8 in the memory order of a .NET bitmap (blue, green, red, alpha),
+    the wrapping of the texture and where it came from."""
+
+    rgb = (2, 1, 0)
+
+    def __init__(self, pixels, wrap_u, wrap_v, path, keepalive=None):
+        self.pixels = pixels
+        self.wrap_u = wrap_u
+        self.wrap_v = wrap_v
+        self.path = path
+        self._keepalive = keepalive      # the .NET array the pixels view
+
+    @property
+    def name(self):
+        return os.path.basename(self.path or '') or 'texture'
+
+
+def texture_colors(texture, mesh):
+    """``(n, 3) uint8`` vertex colours of a Rhino mesh sampled from the
+    texture at the mesh's own texture coordinates, or None when it has none
+    that match its vertices."""
+    count = mesh.Vertices.Count
+    if not count or mesh.TextureCoordinates.Count != count:
+        return None
+    flat = to_numpy(mesh.TextureCoordinates.ToFloatArray(), np.float32)
+    uv = flat.reshape(-1, 2).astype(np.float64)
+    return sample_bilinear(texture.pixels, uv, texture.wrap_u,
+                           texture.wrap_v, TextureImage.rgb)
+
+
+def read_image(path):
+    """The pixels of an image file as ``(height, width, 4)`` uint8 in BGRA
+    order: ``System.Drawing.Bitmap`` locked into one buffer, no call per
+    pixel. Returns ``(pixels, keepalive)``; raises ``ValueError`` for a file
+    that cannot be read or is too big."""
+    import System.Drawing as drawing  # NOQA
+    import System.Drawing.Imaging as imaging  # NOQA
+    import System.Runtime.InteropServices as interop  # NOQA
+    try:
+        bitmap = drawing.Bitmap(path)
+    except Exception as error:
+        raise ValueError('the image cannot be read: %s' % error)
+    try:
+        width, height = int(bitmap.Width), int(bitmap.Height)
+        if too_large(width, height):
+            raise ValueError('the image is too big (%d x %d pixels)'
+                             % (width, height))
+        data = bitmap.LockBits(
+            drawing.Rectangle(0, 0, width, height),
+            imaging.ImageLockMode.ReadOnly, imaging.PixelFormat.Format32bppArgb)
+        try:
+            stride = abs(int(data.Stride))
+            buffer = System.Array.CreateInstance(System.Byte, stride * height)
+            interop.Marshal.Copy(data.Scan0, buffer, 0, buffer.Length)
+        finally:
+            bitmap.UnlockBits(data)
+    finally:
+        bitmap.Dispose()
+    try:
+        flat = np.frombuffer(buffer, dtype=np.uint8)
+    except (TypeError, ValueError, BufferError):
+        flat = to_numpy(buffer, np.uint8)
+    raw = flat.reshape(height, stride)
+    return raw[:, :width * 4].reshape(height, width, 4), buffer
+
+
+def _texture_of_material(material):
+    """The base-colour bitmap texture of a Rhino material (PBR base colour
+    first, then the bitmap, then the diffuse slot) or None."""
+    types = Rhino.DocObjects.TextureType
+    for kind in ('PBR_BaseColor', 'Bitmap', 'Diffuse'):
+        slot = getattr(types, kind, None)
+        if slot is None:
+            continue
+        found = material.GetTexture(slot)
+        if found is not None and found.FileName:
+            return found
+    return None
+
+
+def material_texture(rhino_object):
+    """The ``Rhino.DocObjects.Texture`` of the object's material: the
+    material it shows (its own, or its layer's) and, when that has no bitmap,
+    the simulated material of its render material. None when there is none."""
+    material = rhino_object.GetMaterial(True)
+    found = _texture_of_material(material) if material is not None else None
+    if found is None:
+        render = getattr(rhino_object, 'RenderMaterial', None)
+        if render is not None:
+            try:
+                found = _texture_of_material(render.SimulateMaterial(True))
+            except Exception:
+                found = None
+    return found
+
+
+# why a mesh gets no texture colours, when that is the usual case and the
+# component stays silent about it (decision 8.175: the old behaviour)
+REASON_NO_REFERENCE = ('no Rhino object to take a material from (an '
+                       'internalised or Grasshopper-made mesh)')
+REASON_NOT_IN_DOCUMENT = ('the referenced Rhino object is not in the open '
+                          'document')
+REASON_NO_BITMAP = 'the material has no base-colour bitmap texture'
+QUIET_REASONS = (REASON_NO_REFERENCE, REASON_NOT_IN_DOCUMENT,
+                 REASON_NO_BITMAP)
+
+
+def _uv_unchanged(transform):
+    """Whether a Rhino ``Transform`` leaves u and v alone (the w part of the
+    transform of a render material's texture is 0, not 1)."""
+    return uv_transform_is_identity(
+        [[transform[i, j] for j in range(4)] for i in range(4)])
+
+
+def texture_image_for(reference_id, mesh, doc=None):
+    """``(TextureImage or None, reason)``: the texture of the Rhino object
+    ``reference_id`` points to, when the mesh's own texture coordinates can
+    express it; else None and why not (a text for the remark)."""
+    if reference_id is None:
+        return None, REASON_NO_REFERENCE
+    doc = doc if doc is not None else Rhino.RhinoDoc.ActiveDoc
+    obj = doc.Objects.FindId(reference_id) if doc is not None else None
+    if obj is None:
+        return None, REASON_NOT_IN_DOCUMENT
+    try:
+        found = material_texture(obj)
+    except Exception as error:
+        return None, 'the material could not be read: %s' % error
+    if found is None:
+        return None, REASON_NO_BITMAP
+    problem = texture_problem(
+        enabled=bool(found.Enabled), channel=int(found.MappingChannelId),
+        transform_identity=(not bool(getattr(found, 'ApplyUvwTransform', True))
+                            or _uv_unchanged(found.UvwTransform)),
+        texture_coordinates=int(mesh.TextureCoordinates.Count),
+        vertices=int(mesh.Vertices.Count))
+    if problem:
+        return None, problem
+    path = None
+    reference = found.FileReference
+    if reference is not None and reference.FullPath:
+        path = str(reference.FullPath)
+    if not path or not os.path.isfile(path):
+        path = str(found.FileName or '')
+    if not path or not os.path.isfile(path):
+        return None, 'the texture file is missing (%s)' % (
+            os.path.basename(str(found.FileName or '')) or 'no file name')
+    try:
+        pixels, keep = read_image(path)
+    except ValueError as error:
+        return None, str(error)
+    return TextureImage(pixels, wrap_of(found.WrapU), wrap_of(found.WrapV),
+                        path, keep), None
+
+
+def input_references(component, name, geometries):
+    """The Rhino object each item of the ``Geometry`` list input references:
+    a list aligned with ``geometries`` (a Guid or None), read from the
+    volatile data of the input parameter named ``name`` (``GH_Mesh.ReferenceID``
+    of a referenced item). None when it cannot be told: no such input, the
+    items do not line up with the list, or a mesh differs from its item."""
+    try:
+        param = next(p for p in component.Params.Input
+                     if p.Name == name or p.NickName == name)
+        goos = list(param.VolatileData.AllData(True))
+    except Exception:
+        return None
+    if len(goos) != len(geometries):
+        return None
+    references = []
+    for goo, geometry in zip(goos, geometries):
+        reference = None
+        if getattr(goo, 'IsReferencedGeometry', False):
+            reference = getattr(goo, 'ReferenceID', None)
+            value = getattr(goo, 'Value', None)
+            # the item and the list entry must be the same mesh
+            if (value is not None and geometry is not None
+                    and hasattr(value, 'Vertices') and hasattr(geometry, 'Vertices')
+                    and value.Vertices.Count != geometry.Vertices.Count):
+                return None
+            if str(reference) == '00000000-0000-0000-0000-000000000000':
+                reference = None
+        references.append(reference)
+    return references
+
+
 # STAGING THE GEOMETRY OF A CREATE (8.95 1, 2, 8) -----------------------------
 def stage_geometry(geometries, directory, default_rgb=(110, 110, 110),
-                   centre=False):
+                   centre=False, references=None, doc=None, notes=None):
     """Everything CreateComponent* needs of the input geometry.
 
     Works on copies. ``centre`` moves the centroid to the origin first
@@ -711,10 +939,23 @@ def stage_geometry(geometries, directory, default_rgb=(110, 110, 110),
     ``directory``), clouds thinned and staged, an extrusion becomes a prism
     and a box-shaped brep a box.
 
+    ``references`` (8.175): one Rhino object id (or None) per item of
+    ``geometries``, from ``input_references``. A mesh whose object has a
+    material with a base-colour bitmap texture is coloured from it (the
+    texture wins over the vertex colours the mesh has); a mesh that cannot be
+    is staged as before. ``doc`` is the Rhino document the objects are looked
+    up in (the active one). ``notes`` (a list) receives the remarks for the
+    component to show: only when the texture replaced vertex colours the mesh
+    had, or the texture of a referenced object could not be used (switched
+    off, missing or unreadable file, too big, no or mismatched texture
+    coordinates, another mapping channel, a texture transform). A mesh with
+    no reference or a material without a bitmap stays silent: that is the
+    usual case and the old behaviour.
+
     Returns ``(geometry block, manifest dict, translation (x, y, z))``.
     """
-    copies = []
-    for geometry in geometries:
+    copies, copy_references = [], []
+    for position, geometry in enumerate(geometries):
         if geometry is None:
             continue
         if not isinstance(geometry, Rhino.Geometry.GeometryBase):
@@ -722,6 +963,9 @@ def stage_geometry(geometries, directory, default_rgb=(110, 110, 110),
                              'point cloud, extrusion or box-shaped brep)'
                              % type(geometry).__name__)
         copies.append(geometry.Duplicate())
+        copy_references.append(
+            references[position] if references is not None
+            and position < len(references) else None)
     move = (0.0, 0.0, 0.0)
     if centre and copies:
         move = centre_vector(copies)
@@ -729,12 +973,45 @@ def stage_geometry(geometries, directory, default_rgb=(110, 110, 110),
         for geometry in copies:
             geometry.Transform(xform)
     meshes, clouds, proxies = split_geometry(copies)
+    # the texture of each mesh (looked up on the copies: same coordinates)
+    mesh_references = [reference for geometry, reference
+                       in zip(copies, copy_references)
+                       if isinstance(geometry, Rhino.Geometry.Mesh)]
     mesh_entries, staged_levels = [], {}
+    skipped = {}
     for index, mesh in enumerate(meshes):
-        entry, levels = export_mesh(mesh, directory, index, default_rgb)
+        texture = None
+        if mesh_references[index] is not None:
+            texture, reason = texture_image_for(
+                mesh_references[index], mesh, doc)
+            if texture is None and reason not in QUIET_REASONS:
+                skipped.setdefault(reason, []).append(index)
+        info = {}
+        entry, levels = export_mesh(
+            mesh, directory, index, default_rgb, texture, info)
         mesh_entries.append(entry)
         if levels:
             staged_levels[index] = levels
+        if notes is not None and info.get('replaced'):
+            # said only when the texture replaced colours the mesh had
+            notes.append(
+                'Mesh %d: its vertex colours were replaced by colours from '
+                'the texture %s (bilinear, %s), each level from its own '
+                'texture coordinates'
+                % (index, texture.name,
+                   'wrap %s' % texture.wrap_u if texture.wrap_u
+                   == texture.wrap_v else 'wrap %s / %s'
+                   % (texture.wrap_u, texture.wrap_v)))
+        if notes is not None and info.get('lost'):
+            notes.append(
+                'Mesh %d: the reduction left no texture coordinates for '
+                '%s; that level has no texture colours'
+                % (index, ', '.join(info['lost'])))
+    if notes is not None:
+        for reason, indices in skipped.items():
+            notes.append('No vertex colours from the texture of mesh %s: %s '
+                         '(the mesh keeps its own colours)'
+                         % (', '.join(str(i) for i in indices), reason))
     cloud_entries, staged_clouds = [], []
     for index, cloud in enumerate(clouds):
         entry, staged = export_point_cloud(cloud, directory, index)

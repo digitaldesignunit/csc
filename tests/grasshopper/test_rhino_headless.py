@@ -428,3 +428,328 @@ def test_bars_become_polylines_and_pipes():
     assert pipe is not None and pipe.IsSolid
     length = 300.0
     assert pipe.GetVolume() == pytest.approx(np.pi * 16 * length, rel=0.02)
+
+
+# VERTEX COLOURS FROM THE TEXTURE (8.175) -------------------------------------
+import System.Drawing as _sd  # noqa: E402
+import System.Drawing.Imaging as _sdi  # noqa: E402
+
+DO = Rhino.DocObjects
+CENTRE = G.Point3d(10, 20, 30)
+
+
+def _gradient_png(path, size=64):
+    """An image whose red is the column (x * 4), green the row counted from
+    the BOTTOM ((size - 1 - y) * 4) and blue 128: a colour tells where it was
+    sampled, and the V axis is checked."""
+    bitmap = _sd.Bitmap(size, size)
+    for y in range(size):
+        for x in range(size):
+            bitmap.SetPixel(x, y, _sd.Color.FromArgb(255, x * 4, (size - 1 - y) * 4, 128))
+    bitmap.Save(str(path), _sdi.ImageFormat.Png)
+    bitmap.Dispose()
+    return str(path)
+
+
+def _with_uv(mesh, centre=CENTRE, radius=50.0):
+    """Spherical texture coordinates: u around the z axis, v from the south
+    to the north pole."""
+    mesh.TextureCoordinates.Clear()
+    for i in range(mesh.Vertices.Count):
+        v = mesh.Vertices[i]
+        u = 0.5 + np.arctan2(v.Y - centre.Y, v.X - centre.X) / (2 * np.pi)
+        w = 0.5 + np.arcsin(np.clip((v.Z - centre.Z) / radius, -1, 1)) / np.pi
+        mesh.TextureCoordinates.Add(float(u), float(w))
+    return mesh
+
+
+def _expected_gradient(vertices, size=64):
+    """What the gradient image gives a vertex of the spherical mapping (away
+    from the seam and the poles, where the mapping itself is not smooth)."""
+    rel = vertices - np.array([10.0, 20.0, 30.0])
+    u = 0.5 + np.arctan2(rel[:, 1], rel[:, 0]) / (2 * np.pi)
+    v = 0.5 + np.arcsin(np.clip(rel[:, 2] / 50.0, -1, 1)) / np.pi
+    red = np.clip(u * size - 0.5, 0, size - 1) * 4
+    green = np.clip(v * size - 0.5, 0, size - 1) * 4        # v up = green up
+    return np.column_stack([red, green]), u, v
+
+
+def _doc_with_texture(path, **texture):
+    doc = Rhino.RhinoDoc.CreateHeadless(None)
+    material = DO.Material()
+    material.ToPhysicallyBased()
+    tex = DO.Texture()
+    tex.FileName = path
+    for key, value in texture.items():
+        setattr(tex, key, value)
+    assert material.SetTexture(tex, DO.TextureType.PBR_BaseColor)
+    attributes = DO.ObjectAttributes()
+    attributes.MaterialIndex = doc.Materials.Add(material)
+    attributes.MaterialSource = DO.ObjectMaterialSource.MaterialFromObject
+    return doc, attributes
+
+
+def _add_mesh(doc, attributes, mesh):
+    return doc.Objects.AddMesh(mesh, attributes)
+
+
+def test_reduce_keeps_the_texture_coordinates_with_their_vertices():
+    """The stop point of 8.175: Mesh.Reduce (as reduce_mesh calls it) keeps
+    one texture coordinate per vertex, and each stays with its vertex."""
+    mesh = _with_uv(_sphere(5))
+    for target in (500, 2000, 6000):
+        reduced = NS['reduce_mesh'](mesh, target)
+        assert reduced.TextureCoordinates.Count == reduced.Vertices.Count > 0
+        vertices, _, _ = NS['mesh_arrays'](reduced)
+        _, u, v = _expected_gradient(vertices.astype(float))
+        tc = np.array([[reduced.TextureCoordinates[i].X, reduced.TextureCoordinates[i].Y]
+                       for i in range(reduced.Vertices.Count)])
+        off_seam = (np.abs(u - 0.5) < 0.45) & (np.abs(v - 0.5) < 0.45)
+        # the coordinate still belongs to the vertex it is stored with
+        assert np.abs(tc[off_seam, 0] - u[off_seam]).max() < 0.06
+        assert np.abs(tc[off_seam, 1] - v[off_seam]).max() < 0.06
+
+
+def test_an_image_file_is_read_as_bgra_without_a_call_per_pixel(tmp_path):
+    path = _gradient_png(tmp_path / 'g.png', 16)
+    pixels, keep = NS['read_image'](path)
+    assert pixels.shape == (16, 16, 4) and pixels.dtype == np.uint8
+    top_left = pixels[0, 0]                                  # B, G, R, A of (x 0, y 0)
+    assert top_left.tolist() == [128, 15 * 4, 0, 255]
+    assert pixels[15, 15].tolist() == [128, 0, 15 * 4, 255]
+    with pytest.raises(ValueError):
+        NS['read_image'](str(tmp_path / 'missing.png'))
+
+
+def test_a_mesh_is_coloured_from_its_texture_with_the_v_axis_up(tmp_path):
+    path = _gradient_png(tmp_path / 'g.png')
+    mesh = G.Mesh.CreateFromPlane(G.Plane.WorldXY, G.Interval(0, 1), G.Interval(0, 1), 8, 8)
+    mesh.TextureCoordinates.Clear()
+    for i in range(mesh.Vertices.Count):                      # u = x, v = y of the plane
+        mesh.TextureCoordinates.Add(float(mesh.Vertices[i].X), float(mesh.Vertices[i].Y))
+    doc, attributes = _doc_with_texture(path)
+    guid = _add_mesh(doc, attributes, mesh)
+    texture, reason = NS['texture_image_for'](guid, mesh, doc)
+    assert reason is None and texture.wrap_u == 'repeat' and texture.name == 'g.png'
+    colors = NS['texture_colors'](texture, mesh)
+    vertices, _, _ = NS['mesh_arrays'](mesh)
+    for position, colour in zip(vertices, colors):
+        x, y = position[0], position[1]
+        if not (0.05 < x < 0.95 and 0.05 < y < 0.95):
+            continue                       # at the edge a repeating texture blends with its far side
+        assert abs(int(colour[0]) - np.clip(x * 64 - 0.5, 0, 63) * 4) <= 4      # red follows u
+        assert abs(int(colour[1]) - np.clip(y * 64 - 0.5, 0, 63) * 4) <= 4      # green follows v (up)
+        assert colour[2] == 128
+    doc.Dispose()
+
+
+@pytest.mark.parametrize('own_colours', [False, True])
+def test_every_level_takes_its_colours_from_its_own_texture_coordinates(tmp_path, own_colours):
+    path = _gradient_png(tmp_path / 'g.png')
+    mesh = _with_uv(_sphere(5))                               # 20480 faces: Original, Reduced, Preview
+    if own_colours:
+        for i in range(mesh.Vertices.Count):
+            mesh.VertexColors.Add(200, 10, 10)
+    doc, attributes = _doc_with_texture(path)
+    guid = _add_mesh(doc, attributes, mesh)
+    texture, _ = NS['texture_image_for'](guid, mesh, doc)
+    info = {}
+    entry, levels = NS['export_mesh'](mesh, str(tmp_path / 'out'), 0, [1, 2, 3], texture, info)
+    assert levels == ['detailed', 'reduced']
+    assert info['textured'] and info['replaced'] is own_colours and not info['lost']
+    folder = tmp_path / 'out' / 'meshes' / '0'
+    for name in ('detailed.ply', 'reduced.ply'):
+        ply = NS['parse_ply']((folder / name).read_bytes())
+        expected, u, v = _expected_gradient(np.asarray(ply['vertices'], dtype=float))
+        colours = np.asarray(ply['colors'], dtype=float)
+        away = (np.abs(u - 0.5) < 0.4) & (np.abs(v - 0.5) < 0.4)
+        assert np.abs(colours[away, 0] - expected[away, 0]).max() < 14, name
+        assert np.abs(colours[away, 1] - expected[away, 1]).max() < 14, name
+        assert set(colours[:, 2]) == {128.0}                  # the texture, not the 200 10 10 of the mesh
+    # the inline Preview carries the texture colours, from its own reduction
+    pv = np.asarray(entry['vertices'], dtype=float)
+    pc = np.asarray(entry['colors'], dtype=float)
+    expected, u, v = _expected_gradient(pv)
+    away = (np.abs(u - 0.5) < 0.4) & (np.abs(v - 0.5) < 0.4)
+    assert len(pv) < 4000 and np.abs(pc[away, 0] - expected[away, 0]).max() < 14
+    doc.Dispose()
+
+
+def test_stage_geometry_colours_a_referenced_mesh_and_says_so(tmp_path):
+    path = _gradient_png(tmp_path / 'g.png')
+    mesh = _with_uv(_sphere(5))
+    for i in range(mesh.Vertices.Count):
+        mesh.VertexColors.Add(200, 10, 10)
+    doc, attributes = _doc_with_texture(path)
+    guid = _add_mesh(doc, attributes, mesh)
+    notes = []
+    geometry, mani, move = NS['stage_geometry'](
+        [mesh], str(tmp_path / 'stage'), references=[guid], doc=doc, notes=notes)
+    assert mani['meshes'] == {0: ['detailed', 'reduced']} or mani['meshes'] == {'0': ['detailed', 'reduced']}
+    # said because the texture replaced colours the mesh had
+    assert len(notes) == 1 and 'its vertex colours were replaced by colours from the texture g.png' in notes[0]
+    assert 'bilinear' in notes[0] and 'wrap repeat' in notes[0]
+    assert 'colors' in geometry['meshes'][0]
+    # the input mesh is not touched
+    assert mesh.VertexColors.Count == mesh.Vertices.Count and mesh.VertexColors[0].R == 200
+    doc.Dispose()
+
+
+def test_a_texture_on_a_mesh_without_colours_colours_it_and_stays_silent(tmp_path):
+    path = _gradient_png(tmp_path / 'g.png')
+    mesh = _with_uv(_sphere(5))                               # no vertex colours of its own
+    doc, attributes = _doc_with_texture(path)
+    guid = _add_mesh(doc, attributes, mesh)
+    geometry, notes = _staged(mesh, guid, doc, tmp_path)
+    assert 'colors' in geometry['meshes'][0] and notes == []
+    doc.Dispose()
+
+
+def _staged(mesh, reference, doc, tmp_path):
+    notes = []
+    geometry, _, _ = NS['stage_geometry']([mesh], str(tmp_path / 'stage'), references=[reference],
+                                          doc=doc, notes=notes)
+    return geometry, notes
+
+
+def test_the_usual_cases_are_staged_as_before_and_say_nothing(tmp_path):
+    """No reference (internalised or Grasshopper-made), an object that is not
+    in the document, a material without a bitmap: the old behaviour, silent
+    (8.175), also when the mesh has colours of its own."""
+    path = _gradient_png(tmp_path / 'g.png')
+    coloured = _with_uv(_sphere(3))
+    for i in range(coloured.Vertices.Count):
+        coloured.VertexColors.Add(200, 10, 10)
+    doc, attributes = _doc_with_texture(path)
+    # 1 no reference at all
+    geometry, notes = _staged(coloured, None, doc, tmp_path)
+    assert notes == []                                        # the preview is reduced: its colours are the mesh's own
+    assert set(map(tuple, geometry['meshes'][0]['colors'])) == {(200, 10, 10)}
+    plain = _sphere(3)
+    geometry, notes = _staged(plain, None, doc, tmp_path)
+    assert notes == [] and 'colors' not in geometry['meshes'][0]
+    # 2 a reference to an object that is not in the document
+    _, notes = _staged(plain, System.Guid.NewGuid(), doc, tmp_path)
+    assert notes == []
+    doc.Dispose()
+    # 3 a material without a bitmap
+    doc2 = Rhino.RhinoDoc.CreateHeadless(None)
+    bare = _with_uv(_sphere(3))
+    bare_guid = doc2.Objects.AddMesh(bare)
+    geometry, notes = _staged(bare, bare_guid, doc2, tmp_path)
+    assert notes == [] and 'colors' not in geometry['meshes'][0]
+    doc2.Dispose()
+
+
+def test_a_texture_that_cannot_be_used_is_staged_as_before_with_a_remark(tmp_path):
+    path = _gradient_png(tmp_path / 'g.png')
+    # the mesh has no texture coordinates
+    plain = _sphere(3)
+    doc, attributes = _doc_with_texture(path)
+    guid = _add_mesh(doc, attributes, plain)
+    geometry, notes = _staged(plain, guid, doc, tmp_path)
+    assert len(notes) == 1 and 'no texture coordinates' in notes[0] and 'keeps its own colours' in notes[0]
+    assert 'colors' not in geometry['meshes'][0]
+    doc.Dispose()
+    # the file is gone
+    doc3, attributes3 = _doc_with_texture(str(tmp_path / 'gone.png'))
+    textured = _with_uv(_sphere(3))
+    gone = _add_mesh(doc3, attributes3, textured)
+    _, notes = _staged(textured, gone, doc3, tmp_path)
+    assert 'texture file is missing (gone.png)' in notes[0]
+    doc3.Dispose()
+    # a file that is no image
+    junk = tmp_path / 'junk.png'
+    junk.write_bytes(b'not an image')
+    doc5, attributes5 = _doc_with_texture(str(junk))
+    shown = _with_uv(_sphere(3))
+    guid5 = _add_mesh(doc5, attributes5, shown)
+    _, notes = _staged(shown, guid5, doc5, tmp_path)
+    assert 'cannot be read' in notes[0]
+    doc5.Dispose()
+    # a texture transform in the material; the texture switched off
+    # (the mapping channel of a texture is read-only in RhinoCommon: tested in test_texture.py)
+    for settings, words in (({'UvwTransform': G.Transform.Scale(G.Plane.WorldXY, 2.0, 2.0, 1.0)}, 'transform'),
+                            ({'Enabled': False}, 'switched off')):
+        doc4, attributes4 = _doc_with_texture(path, **settings)
+        shown = _with_uv(_sphere(3))
+        guid4 = _add_mesh(doc4, attributes4, shown)
+        geometry, notes = _staged(shown, guid4, doc4, tmp_path)
+        assert words in notes[0] and 'colors' not in geometry['meshes'][0], settings
+        doc4.Dispose()
+
+
+def test_a_texture_that_clamps_clamps(tmp_path):
+    path = _gradient_png(tmp_path / 'g.png')
+    mesh = G.Mesh.CreateFromPlane(G.Plane.WorldXY, G.Interval(0, 1), G.Interval(0, 1), 1, 1)
+    mesh.TextureCoordinates.Clear()
+    for i in range(mesh.Vertices.Count):                      # coordinates far outside 0..1
+        mesh.TextureCoordinates.Add(3.0 + float(mesh.Vertices[i].X), 5.0 + float(mesh.Vertices[i].Y))
+    doc, attributes = _doc_with_texture(path, WrapU=DO.TextureUvwWrapping.Clamp,
+                                        WrapV=DO.TextureUvwWrapping.Clamp)
+    guid = _add_mesh(doc, attributes, mesh)
+    texture, _ = NS['texture_image_for'](guid, mesh, doc)
+    assert texture.wrap_u == 'clamp' and texture.wrap_v == 'clamp'
+    colours = NS['texture_colors'](texture, mesh)
+    assert (colours[:, 0] == 252).all() and (colours[:, 1] == 252).all()    # the top right corner pixel
+    doc.Dispose()
+
+
+class _Goo:
+    """A GH_Mesh as the helpers read it: IsReferencedGeometry, ReferenceID, Value."""
+
+    def __init__(self, value, reference=None):
+        self.Value = value
+        self.IsReferencedGeometry = reference is not None
+        self.ReferenceID = reference
+
+
+class _Param:
+    def __init__(self, name, goos):
+        self.Name = self.NickName = name
+
+        class _Data:
+            def AllData(_, skip_null):
+                return iter(goos)
+        self.VolatileData = _Data()
+
+
+class _Component:
+    def __init__(self, *params):
+        class _Params:
+            Input = list(params)
+        self.Params = _Params()
+
+
+def test_the_references_of_a_geometry_input_line_up_with_its_items():
+    a, b, c = _sphere(1), _sphere(2), G.PointCloud()
+    guid = System.Guid.NewGuid()
+    component = _Component(_Param('Capture', []),
+                           _Param('Geometry', [_Goo(a, guid), _Goo(b), _Goo(c)]))
+    got = NS['input_references'](component, 'Geometry', [a, b, c])
+    assert got == [guid, None, None]
+    assert NS['input_references'](component, 'Geometry', [a, b]) is None          # counts differ
+    assert NS['input_references'](component, 'Geometry', [b, a, c]) is None       # another mesh in the slot
+    assert NS['input_references'](component, 'Nothing', [a]) is None
+    assert NS['input_references'](_Component(_Param('Geometry', [_Goo(a, System.Guid.Empty)])),
+                                  'Geometry', [a]) == [None]
+
+
+def test_a_texture_on_a_render_material_is_found_too(tmp_path):
+    """A textured scan imported into Rhino 8 carries a render material."""
+    path = _gradient_png(tmp_path / 'g.png', 16)
+    doc = Rhino.RhinoDoc.CreateHeadless(None)
+    material = DO.Material()
+    material.ToPhysicallyBased()
+    tex = DO.Texture()
+    tex.FileName = path
+    assert material.SetTexture(tex, DO.TextureType.PBR_BaseColor)
+    render = Rhino.Render.RenderMaterial.CreateBasicMaterial(material, doc)
+    doc.RenderMaterials.Add(render)
+    attributes = DO.ObjectAttributes()
+    attributes.RenderMaterial = render
+    mesh = _with_uv(_sphere(2))
+    guid = doc.Objects.AddMesh(mesh, attributes)
+    texture, reason = NS['texture_image_for'](guid, mesh, doc)
+    assert reason is None and texture.name == 'g.png'
+    doc.Dispose()

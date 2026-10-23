@@ -26,21 +26,23 @@ ghenv.Component.Description = (  # NOQA
     'correction of a published state with its new scan (POST '
     '/snapshots/{id}/supersede): the builder objects (SnapshotMetadata, '
     'Capture) and the geometry. Reduces and stages the mesh files for '
-    'AddComponentSnapshot. The frame is derived by the server.'
+    'AddComponentSnapshot, with vertex colours from the texture of the '
+    'referenced Rhino object when it has one. The frame is derived by the '
+    'server.'
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005'
+CSC_GH_MINIMUM = '261022'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
     from csc_gh.build import (BuildError, loads_fragment, problems_of_envelope, snapshot_body, snapshot_envelope, staging_key)  # NOQA
-    from csc_gh.rhino import (stage_geometry)  # NOQA
+    from csc_gh.rhino import (input_references, stage_geometry)  # NOQA
     from csc_gh.upload import (clear_staging, commit_staging, staging_root)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261005 too old or missing: run CSC_Update, '
+        'CSC library 261022 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 
@@ -70,7 +72,7 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261022
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -137,7 +139,11 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
         self.InputParams[4].Description = (
             'Meshes, point clouds, extrusions (-> prism) and box-shaped breps '
             '(-> box). Meshes are reduced for the Preview and the Reduced '
-            'level; the original is kept.'
+            'level; the original is kept. A mesh that references a Rhino '
+            'object with a base-colour texture in its material is coloured '
+            'from that texture (the texture wins over vertex colours the '
+            'mesh has; an internalised or Grasshopper-made mesh keeps its '
+            'own colours).'
         )
         self.InputParams[5].Description = (
             'Id of the published state this one corrects (empty: a new state)'
@@ -177,9 +183,20 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
             os.makedirs(root, exist_ok=True)
             tmp_dir = os.path.join(root, '_tmp_' + uuid.uuid4().hex)
             meta = loads_fragment(Snapshot, 'Snapshot') or {}
+            # vertex colours from the texture of the Rhino object each mesh
+            # references (8.175): no input, the references come from the
+            # volatile data of Geometry; the remarks say what was done
+            items = list(Geometry)
+            try:
+                references = input_references(self.Component, 'Geometry', items)
+            except Exception:
+                references = None
+            texture_notes = []
             geometry, mani, move = stage_geometry(
-                list(Geometry), tmp_dir, meta.get('color') or DEFAULT_RGB,
-                bool(Centre))
+                items, tmp_dir, meta.get('color') or DEFAULT_RGB,
+                bool(Centre), references=references, notes=texture_notes)
+            for note in texture_notes:
+                self._addRemark(note)
             snapshot_dict = snapshot_body(meta, geometry, Capture)
             body = snapshot_envelope(IdentityID, snapshot_dict, Supersedes)
 
