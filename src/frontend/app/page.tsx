@@ -7,6 +7,8 @@ import { Globe, Workflow } from 'lucide-react'
 import BackgroundMesh from '@/components/components/BackgroundMesh'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useRegistration } from '@/hooks/useRegistration'
+import { signInButtonText } from '@/lib/registration'
 
 /**
  * The home page (plan P11 stage 3, decision 8.118 C-1): the one page a
@@ -16,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 export default function Home() {
   const { data: session, status } = useSession()
   const known = status !== 'loading'
+  const { info: registration } = useRegistration(status === 'unauthenticated')
   const signedIn = known && Boolean(session?.user) && !(session as { error?: string } | null)?.error
 
   return (
@@ -46,7 +49,7 @@ export default function Home() {
               <>
                 <Button asChild size="lg"><Link href="/components">Browse the catalog</Link></Button>
                 {known && (
-                  <Button asChild size="lg" variant="outline"><Link href="/auth/signin">Sign in / Register</Link></Button>
+                  <Button asChild size="lg" variant="outline"><Link href="/auth/signin">{signInButtonText(registration)}</Link></Button>
                 )}
               </>
             )}

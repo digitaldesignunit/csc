@@ -8,6 +8,7 @@ import type { Capture, ComponentSnapshot } from '@/generated/CatalogModels'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { dateOnlyToIso, isoToDateOnly } from '@/lib/lineage'
 import { creditFromInputs } from '@/lib/photoCredit'
+import { boxesOfLocation } from '@/lib/near'
 import { emptyFields, metadataPatch, type Metadata } from '@/lib/snapshotForm'
 
 type Precision = NonNullable<ComponentSnapshot['effective_from_precision']>
@@ -47,8 +48,7 @@ export function editValuesOf(snapshot: ComponentSnapshot): EditValues {
     name: snapshot.name ?? '',
     notes: snapshot.notes ?? '',
     color,
-    lat: snapshot.location ? String(snapshot.location.lat) : '',
-    lon: snapshot.location ? String(snapshot.location.lon) : '',
+    ...boxesOfLocation(snapshot.location),
     effectiveFrom: isoToDateOnly(snapshot.effective_from),
     precision: snapshot.effective_from_precision ?? 'day',
     captureNotes: capture.notes ?? '',

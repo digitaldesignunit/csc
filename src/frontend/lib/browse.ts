@@ -8,6 +8,8 @@
  */
 import { ORIGINAL_FUNCTION_LABELS, SHAPE_CLASS_LABELS, vocabLabel } from '@/generated/Vocab'
 import { circulationChip, type Chip } from '@/lib/componentDetail'
+import { FIT_KEYS } from '@/lib/fit'
+import { NEAR_KEYS } from '@/lib/near'
 import { uuidFromScan } from '@/lib/scanIds'
 
 // CIRCULATION ------------------------------------------------------------------
@@ -133,9 +135,34 @@ export function withParams(
 /** The params without any filter (the circulation, the search and the sort stay). */
 export function withoutFilters(params: ParamsLike): URLSearchParams {
   const next = new URLSearchParams(params.toString())
-  for (const key of FILTER_KEYS) next.delete(key)
+  for (const key of [...FILTER_KEYS, ...FIT_KEYS, ...NEAR_KEYS]) next.delete(key)
   next.delete('page')
   return next
+}
+
+// SORT -------------------------------------------------------------------------
+/** The sorts of the card view's menu: the keys the table headers have, plus
+ *  the volume and, while a fit or a near search is active, the match and the
+ *  distance (decision 8.173). */
+const SORT_OPTIONS = [
+  { value: '_id', label: 'Identity id' },
+  { value: 'catalog_number', label: 'Catalog number' },
+  { value: 'name', label: 'Name' },
+  { value: 'original_function', label: 'Function' },
+  { value: 'material', label: 'Material' },
+  { value: 'dataset', label: 'Dataset' },
+  { value: 'volume', label: 'Volume' },
+  { value: 'effective_from', label: 'Date' },
+  { value: 'created', label: 'Created' },
+  { value: 'lastmodified', label: 'Last modified' },
+]
+
+export function sortOptions(fitActive: boolean, nearActive = false): { value: string; label: string }[] {
+  return [
+    ...(nearActive ? [{ value: 'distance', label: 'Distance' }] : []),
+    ...(fitActive ? [{ value: 'match', label: 'Best match' }] : []),
+    ...SORT_OPTIONS,
+  ]
 }
 
 // SEARCH -----------------------------------------------------------------------
@@ -219,6 +246,8 @@ export function rowNumber(row: RowLike): string {
 export const BASE_COLUMNS = ['name', 'original_function', 'material', 'dataset', 'size', 'shape_class', 'status'] as const
 export const OPTIONAL_COLUMNS: { key: string; label: string }[] = [
   { key: '_id', label: 'Identity id' },
+  { key: 'catalog_number', label: 'Catalog number' },
+  { key: 'effective_from', label: 'Date' },
   { key: 'color', label: 'Colour' },
   { key: 'fragment', label: 'Fragment' },
   { key: 'complexity', label: 'Complexity' },

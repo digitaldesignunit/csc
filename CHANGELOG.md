@@ -5,6 +5,97 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4.0] - 2026-10-23
+
+Search and the location map.
+
+### Added
+
+- **"What fits?":** a Fits section in Browse's More filters finds pieces by size, whatever their
+  orientation: *about this size* (within a tolerance in mm or %, default 10 %, closest first) or
+  *can hold this size* (every side at least the asked one, least waste first). Each row shows how
+  far off it is or how much it wastes, as a share of the piece and in m3 (per piece on batches). The
+  list can also sort by volume, and the card view has a sort menu.
+- **Near:** a Near section in Browse's More filters finds pieces around a point (a pasted "lat,
+  lon"), by their current location or by their origin, within a radius in km or simply nearest
+  first. Each row shows its distance, and the list sorts by it. A component page links to "Near
+  this piece".
+- **Origin coordinates:** the origin form of a piece takes the latitude and longitude of its
+  origin place; until now they could be set only when the piece was created. In every location
+  form a pasted "lat, lon" fills both boxes, and a comma after the latitude moves on to the
+  longitude.
+- **Location Map:** a new page next to the Similarity Map shows the pieces on a map, by their
+  current location or by their origin, in clusters with counts. It takes the filters of Browse
+  (with a "Show as list" link back), colours the pieces like the Similarity Map, opens a piece's
+  preview on a click, and offers "Search near here" on a click into the map. The map images come
+  from the tile server of FOSSGIS e.V. (tile.openstreetmap.de); only this page loads them.
+- **Similar pieces:** a card on the component page shows the six pieces nearest in shape, over
+  the whole shape descriptor rather than on the two-dimensional Similarity Map; size counts as
+  well as the outline. "Show more" brings up to 24. The nearest pieces are also available at
+  `GET /identities/{id}/similar`, with every Browse filter applied before the ranking.
+- **MCP:** `search_components` takes `fit_mode`, `size_mm` and `tolerance`, `near_lat`,
+  `near_lon`, `near_layer` and `radius_km` (each result with its distance), and `sort` and
+  `order`; its description now says what the text query matches (name, id prefix, catalog
+  number). The new tool `catalog_overview` counts the pieces of a search by material, original
+  function, dataset, shape class and circulation, with the range of each side in mm, how many
+  have a location and how many are not public. `similar_components` now ranks by the shape
+  descriptor (with `basis`, `count` and the filters of `search_components`) instead of the
+  distance on the Similarity Map.
+- **Grasshopper:** the new `FetchSimilarComponents` returns the pieces nearest in shape to a
+  piece, with their distance, and takes the filters, the dimension search and the near search of
+  `FetchFilteredComponents`. `FetchFilteredComponents` gains the dimension search (`FitMode`,
+  `FitSize`, `FitTolerance`) and the near search (`NearPoint`, `NearLayer`, `RadiusKm`), with the
+  deviation or waste (`Fit`) and the distance (`DistanceKm`) per result.
+- **Grasshopper, texture colours:** `CreateComponentIdentity` and `CreateComponentSnapshot` give
+  a mesh the colours of its texture when it is staged: when the mesh comes from a Rhino object
+  whose material has a base-colour image, each vertex takes the colour at its texture
+  coordinate, on every level of detail. The texture replaces vertex colours the mesh already
+  has, with a remark. Meshes without such a texture are staged as before. Grasshopper library
+  261022: run `CSC_Update`.
+
+### Changed
+
+- **Registration:** without open domains the catalog is invite only, and the register page then
+  asks for an invitation code and suggests no open sign-up. With open domains the page says that
+  registration is open to certain domains and lists them behind a "?"; no page names a fixed
+  university any more. `CSC_OPEN_REGISTRATION_DOMAINS` is now empty by default: a server that
+  keeps open registration must set it explicitly.
+- **Privacy page and imprint:** they state that the maintainer runs the catalog in person and is
+  its sole controller, and that TU Darmstadt does not operate it and is not responsible for it.
+  The privacy page names the tile server of the Location Map and what it receives, and no longer
+  claims that nothing is loaded from other sites; the imprint cites the DDG instead of the
+  repealed TMG. The Content-Security-Policy allows images from that one tile host in addition.
+- **No Google map preview:** pointing at a location in the Browse table no longer loads an
+  embedded Google map; the location is a link that opens Google Maps in a new tab on a click.
+  With no embed left, the Content-Security-Policy allows no frames (`frame-src 'none'`).
+
+### Fixed
+
+- **Browse table:** at middle widths its columns no longer run into each other; the table keeps
+  a minimum width for the columns shown and scrolls sideways inside its frame. The same for the
+  admin Materials table.
+- **Statistics:** one piece with a malformed size in the database can no longer make the
+  statistics (and with them Analytics) fail for everyone.
+
+### Security
+
+- **Next.js 16.4.1:** the web app moves from Next.js 16.4.0 to 16.4.1, which fixes two critical
+  advisories (GHSA-2464-fhr4-w9xw, code execution through the image optimizer with SVG files;
+  GHSA-p3m5-59mp-jv5r, denial of service through Server Actions). The catalog was not reachable
+  through either: it does not use the image optimizer and has no Server Actions. Upgraded as a
+  precaution; `npm audit` is clean again.
+
+### Server notes
+
+- After the deploy, run `scripts/db_maintenance/backfill_geo_points.py --apply` once: it stores
+  the location points the near search uses for the existing pieces (new and edited pieces get
+  them on their own). Without `--apply` it only reports, and it exits with 4 while points are
+  missing or out of date.
+- After the deploy, run the map job once (`main_component_map.py`, or `--knn-only` for the
+  similarity data alone): until it has run, similar pieces answer 409 and the card stays hidden.
+  The similarity data is then rebuilt with the map on every scheduled run; a new or reshaped
+  piece joins at the next run.
+
 ## [0.6.3.1] - 2026-10-21
 
 A hardening release after 0.6.3.0.

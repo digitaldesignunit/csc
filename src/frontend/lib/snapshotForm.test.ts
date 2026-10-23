@@ -26,6 +26,7 @@ import {
   type CheckInput,
   type IdentityFields,
 } from '@/lib/snapshotForm'
+import { LOCATION_PROBLEM, locationFromBoxes } from '@/lib/near'
 
 const identity = (patch: Partial<IdentityFields> = {}): IdentityFields => ({
   tag: '', dataset: 'ds', parents: [], originalFunction: null, material: '', tradeName: '', origin: null, ...patch,
@@ -76,7 +77,22 @@ test('dimension input: decimals while typing, commas read as points, positive nu
 
 test('locations: both empty is none, a pair is checked, a half or a wild value is wrong', () => {
   assert.equal(parseLocation('', ''), null)
-  assert.deepEqual(parseLocation('49,8', '8.67'), { lat: 49.8, lon: 8.67 })
+  assert.deepEqual(parseLocation('49.8', '8.67'), { lat: 49.8, lon: 8.67 })
+  assert.deepEqual(parseLocation(' -33.5 ', ' 151 '), { lat: -33.5, lon: 151 })
+  // a decimal comma is not read (the comma separates the two), nor text after a number
+  assert.equal(parseLocation('49,8', '8.67'), undefined)
+  assert.equal(parseLocation('49.8', '8,67'), undefined)
+  assert.equal(parseLocation('49.8abc', '8.67'), undefined)
+  assert.equal(parseLocation('4e1', '8'), undefined)
+  // the same answer as the origin form's boxes, and the same words
+  for (const [lat, lon] of [['49,8', '8'], ['49.8', ''], ['95', '8'], ['49.8', '8.6'], ['', '']]) {
+    const boxes = locationFromBoxes(lat, lon)
+    assert.equal(parseLocation(lat, lon) === undefined, boxes.problem !== null, `${lat} / ${lon}`)
+  }
+  assert.ok(problemsOf({
+    mode: 'new', fields: { ...emptyFields(), lat: '49,8', lon: '8' }, identity: identity(),
+    dimensions: ['100', '50', '20'], sizeEntered: true,
+  }).some((p) => p.field === 'location' && p.message === LOCATION_PROBLEM))
   assert.equal(parseLocation('49.8', ''), undefined)
   assert.equal(parseLocation('95', '8'), undefined)
   assert.equal(dayToTimestamp('2026-10-03'), '2026-10-03T00:00:00Z')
@@ -167,4 +183,16 @@ test('the edit page patches only what changed', () => {
   assert.equal(metadataPatch(before, { ...before, lat: '1' }), undefined)
   const placed = { ...before, lat: '1', lon: '2' }
   assert.deepEqual(metadataPatch(placed, { ...placed, lat: '', lon: '' }), { location: null })
+})
+
+test('an origin place whose coordinates are no point blocks the form of a new piece, not a new state', () => {
+  const place = (location: { lat: number; lon: number } | null) =>
+    identity({ origin: { kind: 'unknown', place: { location } } as never })
+  const bad = { lat: Number.NaN, lon: Number.NaN }
+  assert.ok(check({ identity: place(bad), mode: 'new' }).includes('origin_location'))
+  assert.ok(check({ identity: place(bad), mode: 'cut' }).includes('origin_location'))
+  assert.ok(!check({ identity: place({ lat: 49.8, lon: 8.6 }) }).includes('origin_location'))
+  assert.ok(!check({ identity: place(null) }).includes('origin_location'))
+  assert.ok(!check({ identity: identity() }).includes('origin_location'))
+  assert.ok(!check({ identity: place(bad), mode: 'state' }).includes('origin_location'))
 })

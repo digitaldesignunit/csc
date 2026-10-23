@@ -10,9 +10,25 @@ and stats routes, so every route filters the same way.
 
 import re
 from dataclasses import dataclass, fields
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
-from fastapi import Query
+from fastapi import HTTPException, Query
+
+from .dimension_fit import (
+    DEFAULT_TOLERANCE,
+    FitError,
+    FitMode,
+    fit_stages,
+    parse_size,
+    parse_tolerance,
+)
+from .near_search import (
+    Near,
+    NearError,
+    NearLayer,
+    first_stages,
+    parse_near,
+)
 
 # active = no exit (in place or deinstalled); in_place / deinstalled are its
 # two parts (decision 8.104); exited = has an exit; all
@@ -29,7 +45,12 @@ _SNAPSHOT_SORT_FIELDS = frozenset({
     'name', 'color', 'complexity', 'fragment', 'shape_class',
     'effective_from', 'bbx.0', 'bbx.1', 'bbx.2', 'created', 'lastmodified',
 })
-SORT_KEYS = tuple(sorted(_IDENTITY_SORT_FIELDS | _SNAPSHOT_SORT_FIELDS))
+# computed in the pipeline: ``volume`` from the current ``bbx`` (8.173),
+# ``match`` from the dimension search (8.169) and ``distance`` from the near
+# search (8.170), each only while its search is set
+_COMPUTED_SORT_KEYS = frozenset({'volume', 'match', 'distance'})
+SORT_KEYS = tuple(sorted(_IDENTITY_SORT_FIELDS | _SNAPSHOT_SORT_FIELDS
+                         | _COMPUTED_SORT_KEYS))
 _BBX_AXES = (('x', 0), ('y', 1), ('z', 2))
 # the longest value a text filter accepts (a name, an id, a slug)
 FILTER_MAX_LENGTH = 100
@@ -64,6 +85,38 @@ class CatalogFilters:
     bbx_max_y: Optional[float] = None
     bbx_max_z: Optional[float] = None
     q: str = ''
+    # dimension search (8.169): the mode, the asked sides (largest first) and
+    # the tolerance of ``about`` as (``percent`` | ``mm``, value)
+    fit_mode: Optional[str] = None
+    fit_sides: Optional[Tuple[float, float, float]] = None
+    fit_tolerance: Optional[Tuple[str, float]] = None
+    # near search (8.170): the point, the layer (current | origin; set once
+    # there is a point) and the radius in km (none = nearest first)
+    near_lat: Optional[float] = None
+    near_lon: Optional[float] = None
+    near_layer: Optional[str] = None
+    radius_km: Optional[float] = None
+
+    def fit_pipeline_stages(self) -> List[Dict[str, Any]]:
+        """The stages of the dimension search, after the join of the current
+        snapshot; none while no search is set."""
+        if not self.fit_mode or not self.fit_sides:
+            return []
+        return fit_stages(self.fit_mode, self.fit_sides, self.fit_tolerance)
+
+    @property
+    def near(self) -> Optional[Near]:
+        """The near search as (lat, lon, layer, radius in km), or None."""
+        if self.near_lat is None or self.near_lon is None:
+            return None
+        return (self.near_lat, self.near_lon, self.near_layer or 'current',
+                self.radius_km)
+
+    def opening_stages(self, identity_match: Dict[str, Any]
+                       ) -> List[Dict[str, Any]]:
+        """The first stage of a pipeline: the ``$match`` on the identities,
+        or, while a near search is set, the ``$geoNear`` that carries it."""
+        return first_stages(identity_match, self.near)
 
     def identity_match(self) -> Dict[str, Any]:
         """``$match`` on ``component_identities`` (before the lookup)."""
@@ -138,6 +191,11 @@ class CatalogFilters:
         return all(getattr(self, f.name) == f.default for f in fields(self))
 
 
+# the query parameters of the searches: parsed apart, not passed on as they are
+_SEARCH_PARAMS = ('fit_mode', 'fit_size', 'fit_tol', 'near_lat', 'near_lon',
+                  'near_layer', 'radius_km')
+
+
 def catalog_filters(
     original_function: str = Query('', max_length=FILTER_MAX_LENGTH,
                                    description='IFC class name'),
@@ -164,9 +222,62 @@ def catalog_filters(
     bbx_max_z: Optional[float] = Query(None),
     q: str = Query('', max_length=FILTER_MAX_LENGTH,
                    description='name, catalogue number or id'),
+    fit_mode: Optional[FitMode] = Query(
+        None, description='dimension search (8.169): about = every side '
+                          'within fit_tol of fit_size; can_hold = every side '
+                          'of the piece at least fit_size'),
+    fit_size: Optional[str] = Query(
+        None, max_length=FILTER_MAX_LENGTH,
+        description='three sizes in mm in any order, for example '
+                    '1200,600,200; needs fit_mode'),
+    fit_tol: Optional[str] = Query(
+        None, max_length=20,
+        description='tolerance of about: 10% (default) or 50mm; not for '
+                    'can_hold'),
+    near_lat: Optional[float] = Query(
+        None, description='near search (8.170): latitude, -90 to 90; needs '
+                          'near_lon'),
+    near_lon: Optional[float] = Query(
+        None, description='near search: longitude, -180 to 180; needs '
+                          'near_lat'),
+    near_layer: Optional[NearLayer] = Query(
+        None, description='which point of a piece is measured: current (the '
+                          'location of the current version, default) or '
+                          'origin (the origin building)'),
+    radius_km: Optional[float] = Query(
+        None, description='near search: only pieces within this many km; '
+                          'without it every piece with a point on the layer, '
+                          'nearest first'),
 ) -> CatalogFilters:
     """FastAPI dependency: the catalog filters from the query string."""
-    return CatalogFilters(**{k: v for k, v in locals().items()})
+    values = {k: v for k, v in locals().items() if k not in _SEARCH_PARAMS}
+    try:
+        values.update(_parse_fit(fit_mode, fit_size, fit_tol))
+        values.update(parse_near(near_lat, near_lon, near_layer, radius_km))
+    except (FitError, NearError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return CatalogFilters(**values)
+
+
+def _parse_fit(mode: Optional[str], size: Optional[str],
+               tolerance: Optional[str]) -> Dict[str, Any]:
+    """The fit query parameters -> the ``CatalogFilters`` fields."""
+    if mode is None:
+        if size is not None or tolerance is not None:
+            raise FitError('fit_size and fit_tol need fit_mode (about or '
+                           'can_hold)')
+        return {}
+    if size is None:
+        raise FitError('fit_mode needs fit_size, three sizes in mm, for '
+                       'example 1200,600,200')
+    if mode == 'can_hold' and tolerance is not None:
+        raise FitError('fit_mode can_hold takes no fit_tol')
+    return {
+        'fit_mode': mode,
+        'fit_sides': parse_size(size),
+        'fit_tolerance': (parse_tolerance(tolerance or DEFAULT_TOLERANCE)
+                          if mode == 'about' else None),
+    }
 
 
 def public_filters(filters: CatalogFilters) -> CatalogFilters:

@@ -76,6 +76,9 @@ def backend_env(mongod, db_name, tmp_path_factory):
         'FRONTEND_URL': 'http://localhost:3000',
         # the issuer and the resource of the OAuth server and the MCP layer
         'CSC_PUBLIC_API_URL': 'http://localhost',
+        # the default is invite only (8.172); most route tests register with an
+        # address of this domain, the ones for the modes set or clear it
+        'CSC_OPEN_REGISTRATION_DOMAINS': 'tu-darmstadt.de',
         'SNAPSHOT_PREVIEW_DIR': str(root / 'previews'),
         'SNAPSHOT_PHOTOS_DIR': str(root / 'photos'),
         'SNAPSHOT_MESHES_DIR': str(root / 'meshes'),

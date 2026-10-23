@@ -21,6 +21,8 @@ NOT_LOGGED: Dict[str, frozenset] = {
     'identity': frozenset({
         'properties', 'properties_version', 'lastmodified', 'created',
         'etag', '_id', 'reserved',
+        # the stored points of the near search (8.170), derived
+        'geo_current', 'geo_origin',
     }),
     'snapshot': frozenset({
         'descriptors', 'properties', 'properties_version', 'frame', 'bbx',

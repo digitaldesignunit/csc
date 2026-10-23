@@ -31,6 +31,7 @@ from pymongo import ReturnDocument
 
 # LOCAL IMPORTS ---------------------------------------------------------------
 from apps.catalog.file_markers import reconcile_markers, remove_files
+from apps.catalog.geo import set_geo_current
 from apps.catalog.documents import (
     Capture,
     ComponentSnapshot,
@@ -300,6 +301,10 @@ async def _set_current(request: Request, identity_id: str,
                       'lastmodified': now}},
             return_document=ReturnDocument.BEFORE)
     if before is not None:
+        # the near search reads the point of the new current state (8.170)
+        await set_geo_current(request.app.mongodb_component_identities,
+                              request.app.mongodb_component_snapshots,
+                              identity_id, snapshot_id)
         await log_change(request, 'identity', before,
                          {**before, 'current_snapshot_id': snapshot_id},
                          by_user_id=user_id, cause='patch', at=now)
@@ -777,6 +782,12 @@ async def patch_snapshot(
                           await _snapshots_of(request, identity['_id']))
     await request.app.mongodb_component_snapshots.replace_one(
         {'_id': snapshot['_id']}, updated)
+    if ('location' in body
+            and identity.get('current_snapshot_id') == snapshot['_id']):
+        # the point of the current state moves with its location (8.170)
+        await set_geo_current(request.app.mongodb_component_identities,
+                              request.app.mongodb_component_snapshots,
+                              identity['_id'], snapshot['_id'])
     await log_change(request, 'snapshot', snapshot, updated,
                      by_user_id=current_user.id, cause='patch',
                      at=updated['lastmodified'])

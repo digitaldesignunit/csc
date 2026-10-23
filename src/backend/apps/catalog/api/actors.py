@@ -203,7 +203,9 @@ async def redact_actor(
             updated['lastmodified'] = now
             if (await identities.replace_one(
                     {'_id': doc['_id'],
-                     'lastmodified': doc.get('lastmodified')},
+                     'lastmodified': doc.get('lastmodified'),
+                     # a current point set meanwhile: retry on the new one
+                     'geo_current': doc.get('geo_current')},
                     updated)).matched_count:
                 counts['actors'] += n
                 break

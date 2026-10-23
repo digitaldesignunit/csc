@@ -2,12 +2,16 @@
 # Pure: no Rhino import; numpy for matrices.
 #
 # Passport readers (identity / snapshot parts, the 0.6 fields), the filters
-# of FetchFilteredComponents / FilterComponents, the placement key of
-# passport JSON, frame matrices, proxy validity and placement.
+# of FetchFilteredComponents / FilterComponents (with the dimension and near
+# search, 8.169 / 8.170) and the similar search of FetchSimilarComponents
+# (8.174), the placement key of passport JSON, frame matrices, proxy
+# validity and placement.
 #
 # Python 3.9 compatible; part of the package csc_gh (decision 8.111).
 
 import json  # NOQA
+import math  # NOQA
+import re  # NOQA
 
 import numpy as np  # NOQA
 
@@ -234,12 +238,18 @@ def authored_only(snapshot):
 def fetch_filter_params(original_function=None, material=None, dataset=None,
                         complexity=None, fragment=None, reserved=None,
                         shape_class=None, material_class=None,
-                        circulation=None, bbx=None):
+                        circulation=None, bbx=None, fit_mode=None,
+                        fit_size=None, fit_tolerance=None, near_point=None,
+                        near_layer=None, radius_km=None):
     """Query parameters of ``GET /identities`` for FetchFilteredComponents.
 
     ``bbx``: dict with min_x / max_x / min_y / max_y / min_z / max_z
     (0 or None = not set). ``reserved``: -1 ignore, 0 not reserved, 1
-    reserved by the caller.
+    reserved by the caller. ``fit_*``: the dimension search (``fit_params``),
+    ``near_point`` / ``near_layer`` / ``radius_km`` the near search
+    (``near_params``); a value that cannot be used raises ``ValueError`` with
+    a text for the user. The result is a dict that also carries ``notes``:
+    remarks for inputs left out (``FitMode`` set, ``FitSize`` empty or zero).
     """
     params = {}
 
@@ -263,7 +273,379 @@ def fetch_filter_params(original_function=None, material=None, dataset=None,
     for key, value in (bbx or {}).items():
         if value is not None and value != 0:
             params['bbx_' + key] = value
+    notes = []
+    params.update(fit_params(fit_mode, fit_size, fit_tolerance, notes))
+    params.update(near_params(near_point, near_layer, radius_km))
+    result = FilterParams(params)
+    result.notes = notes
+    return result
+
+
+# DIMENSION AND NEAR SEARCH (8.169, 8.170) -----------------------------------
+FIT_MODES = ('about', 'can_hold')
+NEAR_LAYERS = ('current', 'origin')
+MAX_FIT_MM = 100000
+DEFAULT_TOLERANCE = '10%'
+_TOLERANCE = re.compile(r'^(\d+(?:\.\d+)?)\s*(%|mm)$', re.IGNORECASE)
+_NUMBER = re.compile(r'^\d+(?:\.\d+)?$')
+
+
+def _plain(value):
+    """The value inside a Grasshopper wrapper (GH_Number, GH_String,
+    GH_Point ...: anything with ``Value`` that is no text, no number and no
+    point itself), else the value."""
+    if (value is not None and not isinstance(value, (str, int, float))
+            and not hasattr(value, 'X') and hasattr(value, 'Value')):
+        return value.Value
+    return value
+
+
+def _items(value):
+    """The items of a list, a tuple or a .NET list (what a list access gives
+    in Rhino 8), unwrapped; None for anything that is not a list."""
+    if isinstance(value, (str, bytes)) or hasattr(value, 'X'):
+        return None
+    if isinstance(value, (list, tuple)) or (
+            hasattr(value, '__iter__') and hasattr(value, 'Count')):
+        return [_plain(v) for v in value]
+    return None
+
+
+def _blank(value):
+    """Nothing wired: None, an empty text, an empty list, or a list whose
+    items are all empty (Grasshopper passes None for an empty item)."""
+    value = _plain(value)
+    items = _items(value)
+    if items is not None:
+        return all(_blank(v) for v in items)
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _all_zero(value):
+    """True for a value that is only zeros: the text '0,0,0', a list of zeros
+    (any length), a zero Point3d or Vector3d (what Grasshopper gives an
+    unconnected or reset vector input). Zero is the default of a vector
+    input, so it means "not set" for the size and the point."""
+    numbers = _numbers_of(_unwrap(value))
+    return bool(numbers) and all(n == 0 for n in numbers)
+
+
+def _unset(value):
+    """Blank or all zeros: the input carries nothing."""
+    return _blank(value) or _all_zero(value)
+
+
+class FilterParams(dict):
+    """The query parameters of ``fetch_filter_params``: a plain dict, and
+    ``notes``, the remarks for the user about inputs that were left out (a
+    ``FitMode`` without a usable ``FitSize``). A component shows them when it
+    reads ``notes``; one that does not simply sends the dict."""
+
+    notes = ()
+
+
+def _number(value):
+    """A finite float from a number or a number text ('1200', '12,5'), else
+    None; a bool is not a number."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        value = value.strip().replace(',', '.')
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _unwrap(value):
+    """The one value of a list access that holds a single item that is no
+    number (a Point3d, a vector, a text): a point wired to a list input
+    arrives as a list of one."""
+    value = _plain(value)
+    items = _items(value)
+    if items is not None:
+        items = [v for v in items if not _blank(v)]
+        if len(items) == 1 and _number(items[0]) is None:
+            return items[0]
+        return items
+    return value
+
+
+def _numbers_of(value):
+    """The numbers of a Point3d / Vector3d (X, Y, Z), a list or tuple, or a
+    text separated by commas, semicolons or spaces ('49.87, 8.65'; a
+    decimal point, not a comma); None when
+    it is none of them or a part is no number."""
+    value = _plain(value)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        values = [_number(value)]
+    elif isinstance(value, str):
+        parts = [p for p in re.split(r'[;,\s]+', value.strip()) if p]
+        values = [_number(p) for p in parts]
+    elif hasattr(value, 'X') and hasattr(value, 'Y'):
+        values = [_number(value.X), _number(value.Y)]
+        if hasattr(value, 'Z'):
+            values.append(_number(value.Z))
+    else:
+        try:
+            values = [_number(_plain(v)) for v in value]
+        except TypeError:
+            return None
+    return None if any(v is None for v in values) else values
+
+
+def fit_mode_of(value):
+    """'about' or 'can_hold' from a text ('Can hold', 'can-hold' too); None
+    when blank; ``ValueError`` for anything else."""
+    if _blank(value):
+        return None
+    mode = str(value).strip().lower().replace('-', '_').replace(' ', '_')
+    if mode not in FIT_MODES:
+        raise ValueError('FitMode is "about" (every side within the '
+                         'tolerance of FitSize) or "can_hold" (every side of '
+                         'the piece at least FitSize), not %r' % (value,))
+    return mode
+
+
+def fit_size_of(value):
+    """The three asked sides (mm, any order) from a list of three numbers, a
+    Point3d / Vector3d (X, Y, Z) or a text '1200, 600, 200', as the REST text
+    ``'1200,600,200'``; ``ValueError`` when they are not three numbers above
+    0 and at most 100 m."""
+    value = _unwrap(value)
+    numbers = None if _blank(value) else _numbers_of(value)
+    if numbers is None or len(numbers) != 3:
+        raise ValueError('FitSize needs three sizes in mm, in any order '
+                         '(a list of three numbers, a point or vector, or '
+                         'the text 1200,600,200)')
+    if not all(0 < n <= MAX_FIT_MM for n in numbers):
+        raise ValueError('FitSize: every side is above 0 and at most %d mm'
+                         % MAX_FIT_MM)
+    return ','.join(('%g' % n) for n in numbers)
+
+
+def fit_tolerance_of(value):
+    """The tolerance as the REST takes it: '10%' or '50mm'. A bare number is
+    read as per cent (the web default is 10 %). None when blank;
+    ``ValueError`` for anything else."""
+    if _blank(value):
+        return None
+    bad = ('FitTolerance is a number (per cent) or a text such as 10%% or '
+           '50mm, not %r' % (value,))
+    if isinstance(value, str):
+        text = value.strip().replace(',', '.')
+        if _NUMBER.match(text):
+            text += '%'
+    else:
+        number = _number(value)
+        if number is None or number < 0:
+            raise ValueError(bad)
+        text = '%g%%' % number
+    found = _TOLERANCE.match(text)
+    if not found:
+        raise ValueError(bad)
+    amount, unit = float(found.group(1)), found.group(2).lower()
+    if unit == '%' and amount > 100:
+        raise ValueError('FitTolerance in per cent is at most 100')
+    if unit == 'mm' and amount > MAX_FIT_MM:
+        raise ValueError('FitTolerance in mm is at most %d' % MAX_FIT_MM)
+    return '%s%s' % (found.group(1), unit)
+
+
+FIT_SIZE_EMPTY = ('FitMode is set but FitSize is empty or zero: no '
+                  'dimension search')
+
+
+def fit_params(mode, size, tolerance, notes=None):
+    """``fit_mode`` / ``fit_size`` / ``fit_tol`` of the REST list (the web's
+    "Fits" search). Empty without a mode and a size. A size that is empty or
+    all zeros (``0,0,0``, a list of zeros of any length, a zero Point3d or
+    Vector3d: the Grasshopper default) is "not set": no search, and with a
+    ``FitMode`` a remark ``FIT_SIZE_EMPTY`` is appended to ``notes`` (a list)
+    when one is given. A size that is set but wrong (two numbers, a side of
+    zero or less among others, above 100 m) is an error, as is a size without
+    a mode (the server would answer 422). *Can hold* takes no tolerance, it is
+    left out."""
+    mode = fit_mode_of(mode)
+    if _unset(size):
+        if mode is not None and notes is not None:
+            notes.append(FIT_SIZE_EMPTY)
+        return {}
+    if mode is None:
+        raise ValueError('FitSize needs FitMode: "about" or "can_hold"')
+    params = {'fit_mode': mode, 'fit_size': fit_size_of(size)}
+    if mode == 'about':
+        params['fit_tol'] = fit_tolerance_of(tolerance) or DEFAULT_TOLERANCE
     return params
+
+
+def near_point_of(value):
+    """``(lat, lon)`` from a Point3d / Vector3d with X = latitude and Y =
+    longitude (as the PlaceLocation of Origin), a list of two numbers or a
+    text 'lat, lon'; ``ValueError`` out of range."""
+    value = _unwrap(value)
+    numbers = _numbers_of(value)
+    if numbers is None or len(numbers) < 2 or (
+            isinstance(value, (list, tuple, str)) and len(numbers) != 2):
+        raise ValueError('NearPoint is a point or vector with X = latitude '
+                         'and Y = longitude, or the text "lat, lon"')
+    lat, lon = numbers[0], numbers[1]
+    if not -90 <= lat <= 90 or not -180 <= lon <= 180:
+        raise ValueError('NearPoint: latitude is between -90 and 90 (X), '
+                         'longitude between -180 and 180 (Y)')
+    return lat, lon
+
+
+def near_layer_of(value):
+    if _blank(value):
+        return None
+    layer = str(value).strip().lower()
+    if layer not in NEAR_LAYERS:
+        raise ValueError('NearLayer is "current" (where the piece is now) or '
+                         '"origin" (the building it came from), not %r'
+                         % (value,))
+    return layer
+
+
+def near_params(point, layer, radius_km):
+    """``near_lat`` / ``near_lon`` / ``near_layer`` / ``radius_km`` of the REST
+    list. Empty without a point; a layer or radius without a point is an
+    error. No radius (or 0) = every piece with a point on the layer, nearest
+    first. A point that is only zeros (0, 0: a zero Point3d or Vector3d, a
+    list of zeros, the text "0, 0") counts as not set: 0, 0 is a real
+    coordinate, but no catalogue piece is there and it is the Grasshopper
+    default of an unconnected vector input."""
+    layer = near_layer_of(layer)
+    radius = None if _blank(radius_km) else _number(radius_km)
+    if not _blank(radius_km) and radius is None:
+        raise ValueError('RadiusKm is a number of kilometres')
+    if _unset(point):
+        if layer is not None or radius not in (None, 0):
+            raise ValueError('NearLayer and RadiusKm need NearPoint')
+        return {}
+    lat, lon = near_point_of(point)
+    params = {'near_lat': '%.7g' % lat, 'near_lon': '%.7g' % lon}
+    if layer is not None:
+        params['near_layer'] = layer
+    if radius is not None and radius != 0:
+        if radius < 0:
+            raise ValueError('RadiusKm is above 0 (or empty for the nearest)')
+        params['radius_km'] = '%g' % radius
+    return params
+
+
+def fit_percent(row):
+    """The match of a list row as one number: the deviation in per cent
+    (*about*) or the waste as a share of the piece's box in per cent (*can
+    hold*); None without a dimension search."""
+    fit = (row or {}).get('fit')
+    if not isinstance(fit, dict):
+        return None
+    if fit.get('mode') == 'about' and fit.get('deviation') is not None:
+        return float(fit['deviation']) * 100.0
+    if fit.get('mode') == 'can_hold' and fit.get('waste_percent') is not None:
+        return float(fit['waste_percent'])
+    return None
+
+
+def distance_km(row):
+    """The distance of a list row from the near point in km; None without a
+    near search."""
+    metres = (row or {}).get('distance_m')
+    return None if metres is None else float(metres) / 1000.0
+
+
+# SIMILAR SEARCH (8.174) -------------------------------------------------------
+SIMILAR_BASES = ('radial_signature', 'scalars', 'hks')
+DEFAULT_SIMILAR_BASIS = 'radial_signature'
+DEFAULT_SIMILAR_COUNT = 10
+MAX_SIMILAR_COUNT = 50
+
+
+def similar_basis(value):
+    """The basis of the descriptor space: ``radial_signature`` (default),
+    ``scalars`` or ``hks``; ``ValueError`` for anything else."""
+    if _blank(value):
+        return DEFAULT_SIMILAR_BASIS
+    basis = str(value).strip().lower().replace(' ', '_')
+    if basis not in SIMILAR_BASES:
+        raise ValueError('Basis is one of %s, not %r'
+                         % (', '.join(SIMILAR_BASES), value))
+    return basis
+
+
+def similar_count(value):
+    """``(count, note)``: how many neighbours to ask for (default 10, 1 to 50
+    as the server limits it); ``note`` says when the number was changed. 0
+    counts as not set (the Grasshopper default of an integer input), like
+    empty: the default."""
+    if _blank(value):
+        return DEFAULT_SIMILAR_COUNT, None
+    number = _number(value)
+    if number is None:
+        raise ValueError('Count is a whole number, 1 to %d'
+                         % MAX_SIMILAR_COUNT)
+    count = int(number)
+    if count == 0:
+        return DEFAULT_SIMILAR_COUNT, None
+    if count < 1:
+        return 1, 'Count raised to 1'
+    if count > MAX_SIMILAR_COUNT:
+        return MAX_SIMILAR_COUNT, ('Count lowered to the most the server '
+                                   'gives, %d' % MAX_SIMILAR_COUNT)
+    return count, None
+
+
+def similar_params(filters, basis=None, count=None):
+    """The query of ``GET /identities/{id}/similar``: the filters (the output
+    of ``fetch_filter_params``; the server ignores ``reserved`` here), the
+    basis and the count. Returns ``(params, note)``; ``note`` is the text for
+    one remark (a count that was changed, the ``notes`` of the filters), or
+    None."""
+    params = {k: v for k, v in (filters or {}).items() if k != 'reserved'}
+    number, note = similar_count(count)
+    params['basis'] = similar_basis(basis)
+    params['count'] = number
+    notes = ([note] if note else []) + list(getattr(filters, 'notes', ()) or ())
+    return params, ('; '.join(notes) if notes else None)
+
+
+def similar_results(body):
+    """The neighbours of a ``/similar`` answer, nearest first: dicts with the
+    identity ``id``, the descriptor ``distance`` (standardised units) and the
+    ``fit`` (per cent) and ``distance_km`` of the row when those searches were
+    set."""
+    out = []
+    for item in (body or {}).get('results') or []:
+        piece = item.get('piece') or {}
+        identity_id = piece.get('_id') or piece.get('id')
+        if not identity_id:
+            continue
+        out.append({'id': identity_id, 'distance': item.get('distance'),
+                    'fit': fit_percent(piece),
+                    'distance_km': distance_km(piece)})
+    return out
+
+
+def similar_error_text(status, detail=None):
+    """What a refused ``/similar`` call means, in words for the user; an empty
+    text for a status that is not one of them."""
+    detail = detail if isinstance(detail, str) else ''
+    if status == 404:
+        return ('Component not found, or not visible to you (the server '
+                'gives the same answer for both)')
+    if status == 409:
+        return ('The similarity data is not built on the server yet (it is '
+                'built by the component map job); try again later')
+    if status == 422:
+        if detail:
+            return 'Similar search refused: ' + detail
+        return ('Similar search refused: no descriptor for this basis, or a '
+                'filter the server cannot use')
+    return ''
 
 
 def passes_filters(passport, original_function=None, material=None,

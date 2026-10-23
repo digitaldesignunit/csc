@@ -1,6 +1,6 @@
 """
 The read-only MCP layer (decisions 8.165, 8.168): the endpoint behind the access
-tokens, the nine tools on a migrated catalog (what the owner of the token sees on
+tokens, the ten tools on a migrated catalog (what the owner of the token sees on
 the website, nothing private for anyone else, every non-public record marked, no
 e-mail address or account id), the maintenance flag and the limits.
 """
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 
 import pytest
 
@@ -28,7 +29,7 @@ from support import iid, seed_05_catalog, sid
 
 TOOLS = {'search_components', 'get_component', 'list_versions', 'get_version',
          'get_evidence', 'list_datasets', 'get_dataset', 'get_timeline',
-         'similar_components'}
+         'similar_components', 'catalog_overview'}
 WEB = 'http://localhost:3000'
 EMAIL = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
 
@@ -95,7 +96,7 @@ def test_initialize_names_the_server_and_tells_the_model_what_it_is_for(api, wor
     assert 'These tools only read' in result['instructions']
 
 
-def test_exactly_these_nine_tools_exist_and_each_explains_itself(api, world):
+def test_exactly_these_ten_tools_exist_and_each_explains_itself(api, world):
     listed = mcp_post(api, world['admin'], 'tools/list').json()['result']['tools']
     assert {t['name'] for t in listed} == TOOLS
     for entry in listed:
@@ -209,6 +210,214 @@ def test_search_filters_pages_and_caps_the_page_size(api, world):
     assert not set(ids_of(first['results'])) & set(ids_of(second['results']))
     assert tool(api, admin, 'search_components', size=1000)['size'] == 25
     assert tool(api, admin, 'search_components', page=0, size=0)['page'] == 1
+
+
+# SEARCH BY SIZE AND SORTING (8.169, 8.173) -----------------------------------------------
+SIZES = {'beam': [3000, 200, 100], 'cut2': [500, 1000, 300], 'feld': [500, 500, 500]}
+
+
+def _sized(db):
+    for name, bbx in SIZES.items():
+        db['component_snapshots'].update_many({'name': name}, {'$set': {'bbx': bbx}})
+
+
+def _names(answer):
+    return [r['name'] for r in answer['results']]
+
+
+def test_search_by_size_gives_the_deviation_or_the_waste(api, db, world):
+    _sized(db)
+    admin = world['admin']
+    about = tool(api, admin, 'search_components', fit_mode='about',
+                 size_mm=[300, 1000, 540], tolerance='10%')
+    # cut2 is 500 x 1000 x 300 turned: 8 % off on the 500 side only, feld is out
+    assert _names(about) == ['cut2'] and about['total'] == 1
+    assert about['results'][0]['fit'] == {'mode': 'about', 'deviation_percent': 7.41}
+    assert (about['sort'], about['order']) == ('match', 'asc')
+    held = tool(api, admin, 'search_components', fit_mode='can_hold',
+                size_mm=[400, 300, 200])
+    # feld 500^3 (waste 125 - 24 dm3), cut2 (150 - 24 dm3), beam is too thin
+    assert _names(held) == ['feld', 'cut2']
+    assert held['results'][0]['fit'] == {
+        'mode': 'can_hold', 'waste_m3': 0.1, 'waste_percent': 81}
+    assert held['results'][1]['fit'] == {
+        'mode': 'can_hold', 'waste_m3': 0.13, 'waste_percent': 84}
+    assert held['total'] == 2
+    plain = tool(api, admin, 'search_components')
+    assert all('fit' not in r for r in plain['results'])
+
+
+def test_search_sorts_by_the_keys_in_both_directions(api, db, world):
+    _sized(db)
+    admin = world['admin']
+
+    def order(**args):
+        return _names(tool(api, admin, 'search_components', **args))
+
+    assert order(sort='volume') == ['beam', 'feld', 'cut2']
+    assert order(sort='volume', order='desc') == ['cut2', 'feld', 'beam']
+    assert order(sort='catalog_number', order='desc') == order(sort='catalog_number')[::-1]
+    assert sorted(order(sort='date')) == sorted(order(sort='created'))
+    assert tool(api, admin, 'search_components', fit_mode='can_hold',
+                size_mm=[1, 1, 1], sort='volume', order='desc')['sort'] == 'volume'
+
+
+def test_the_waste_of_a_batch_is_per_piece():
+    row = {'fit': {'mode': 'can_hold', 'waste_mm3': 12_400_000, 'waste_percent': 41.2},
+           'quantity': 4}
+    assert mcp_server.fit_of(row) == {
+        'mode': 'can_hold', 'waste_m3': 0.012, 'waste_percent': 41, 'per_piece': True}
+    assert 'per_piece' not in mcp_server.fit_of({**row, 'quantity': 1})
+    assert 'per_piece' not in mcp_server.fit_of(
+        {'fit': {'mode': 'about', 'deviation': 0.1}, 'quantity': 4})
+
+
+def test_the_waste_reads_in_m3_with_two_digits_and_in_per_cent():
+    def waste(mm3, percent):
+        return mcp_server.fit_of({'fit': {'mode': 'can_hold', 'waste_mm3': mm3,
+                                          'waste_percent': percent}})
+    assert waste(1_700_000, 0.4) == {'mode': 'can_hold', 'waste_m3': 0.0017, 'waste_percent': 0.4}
+    assert waste(120_000_000, 41.4) == {'mode': 'can_hold', 'waste_m3': 0.12, 'waste_percent': 41}
+    # 100 only when the waste is all of it (8.169)
+    assert waste(1_500_000_000, 99.6) == {'mode': 'can_hold', 'waste_m3': 1.5, 'waste_percent': 99}
+    assert waste(1_500_000_000, 99.97)['waste_percent'] == 99
+    assert waste(1_500_000_000, 99.4)['waste_percent'] == 99
+    assert waste(1_500_000_000, 100)['waste_percent'] == 100
+    assert waste(1_700_000, 0.4)['waste_percent'] == 0.4
+    assert waste(0, 0) == {'mode': 'can_hold', 'waste_m3': 0.0, 'waste_percent': 0.0}
+    assert 'waste_dm3' not in waste(120_000_000, 41.4)
+
+
+def test_the_asked_size_is_sent_as_plain_decimals():
+    assert mcp_server.size_text([1200, 600.5, 0.0001]) == '1200,600.5,0.0001'
+    assert mcp_server.size_text([100000, 1234.56789, 0.5]) == '100000,1234.56789,0.5'
+    assert mcp_server.size_text([1e5, 3.0, 2]) == '100000,3,2'
+    assert 'e' not in mcp_server.size_text([1e-5, 99999.99999, 1e5])
+
+
+def test_a_size_with_many_digits_reaches_the_search_whole(api, db, world):
+    _sized(db)
+    db['component_snapshots'].update_many({'name': 'feld'}, {'$set': {'bbx': [500.123456, 500, 500]}})
+    answer = tool(api, world['admin'], 'search_components', fit_mode='about',
+                  size_mm=[500, 500.123456, 500], tolerance='0mm')
+    assert _names(answer) == ['feld']
+
+
+def test_search_refuses_what_it_cannot_answer_in_words(api, world):
+    admin = world['admin']
+    for args, words in (
+            ({'fit_mode': 'about'}, 'size_mm'),
+            ({'size_mm': [1, 2, 3]}, 'fit_mode'),
+            ({'fit_mode': 'about', 'size_mm': [1, 2]}, 'three numbers'),
+            ({'fit_mode': 'near', 'size_mm': [1, 2, 3]}, 'fit_mode'),
+            ({'sort': 'match'}, 'needs fit_mode'),
+            ({'sort': 'size'}, 'sort is one of'),
+            ({'order': 'up'}, 'asc or desc'),
+            ({'fit_mode': 'can_hold', 'size_mm': [1, 2, 3], 'tolerance': '5%'}, 'no fit_tol'),
+            ({'fit_mode': 'about', 'size_mm': [1, 2, 3], 'tolerance': 'x'}, 'fit_tol'),
+            ({'fit_mode': 'about', 'size_mm': [1, 2, 0]}, 'above 0')):
+        is_error, text = tool_result(api, admin, 'search_components', **args)
+        assert is_error and words in text, (args, text)
+
+
+# SEARCH BY PLACE (8.170, 8.173) -------------------------------------------------------
+DARMSTADT = {'lat': 49.8728, 'lon': 8.6512}
+FRANKFURT = {'lat': 50.1109, 'lon': 8.6821}        # about 26.5 km from Darmstadt
+BERLIN = {'lat': 52.52, 'lon': 13.405}
+
+
+def _placed(db, current, origin=None):
+    """Set the stored points of pieces by name: ``current`` and ``origin`` map a
+    name to a {lat, lon}."""
+    from apps.catalog.geo import point_of
+    for field, places in (('geo_current', current), ('geo_origin', origin or {})):
+        for name, place in places.items():
+            snapshot = db['component_snapshots'].find_one({'name': name})
+            db['component_identities'].update_one(
+                {'_id': snapshot['identity_id']}, {'$set': {field: point_of(place)}})
+
+
+def test_search_by_place_gives_the_distance_in_km_nearest_first(api, db, world):
+    _placed(db, {'beam': DARMSTADT, 'feld': FRANKFURT, 'cut2': BERLIN})
+    admin = world['admin']
+    near = {'near_lat': 49.87, 'near_lon': 8.65}
+    answer = tool(api, admin, 'search_components', **near)
+    assert _names(answer) == ['beam', 'feld', 'cut2'] and answer['total'] == 3
+    assert answer['sort'] == 'distance'
+    assert answer['near'] == {'lat': 49.87, 'lon': 8.65, 'layer': 'current', 'radius_km': None}
+    km = [r['distance_km'] for r in answer['results']]
+    assert km[0] < 0.5 and 26 < km[1] < 27.5 and 440 < km[2] < 450
+    assert all('distance_m' not in r for r in answer['results'])
+    within = tool(api, admin, 'search_components', **near, radius_km=30)
+    assert _names(within) == ['beam', 'feld'] and within['total'] == 2
+    assert 'near' not in tool(api, admin, 'search_components')
+    assert all('distance_km' not in r for r in tool(api, admin, 'search_components')['results'])
+
+
+def test_search_by_place_on_the_origin_layer_and_with_a_size_search(api, db, world):
+    _sized(db)
+    _placed(db, {'beam': DARMSTADT, 'feld': FRANKFURT, 'cut2': BERLIN}, {'cut2': DARMSTADT})
+    admin = world['admin']
+    origin = tool(api, admin, 'search_components', near_lat=49.87, near_lon=8.65,
+                  near_layer='origin')
+    assert _names(origin) == ['cut2'] and origin['near']['layer'] == 'origin'
+    held = tool(api, admin, 'search_components', fit_mode='can_hold', size_mm=[400, 300, 200],
+                near_lat=49.87, near_lon=8.65)
+    # the size search filters (beam is too thin), the place sorts: Frankfurt, Berlin
+    assert _names(held) == ['feld', 'cut2'] and held['sort'] == 'distance'
+    assert 'fit' in held['results'][0] and 'distance_km' in held['results'][0]
+    by_match = tool(api, admin, 'search_components', fit_mode='can_hold', size_mm=[400, 300, 200],
+                    near_lat=49.87, near_lon=8.65, sort='match')
+    assert by_match['sort'] == 'match' and _names(by_match) == ['feld', 'cut2']
+    far_first = tool(api, admin, 'search_components', near_lat=49.87, near_lon=8.65,
+                     sort='distance', order='desc')
+    assert _names(far_first) == ['cut2', 'feld', 'beam']
+
+
+def test_search_by_place_refuses_what_it_cannot_answer_in_words(api, world):
+    admin = world['admin']
+    for args, words in (
+            ({'near_lat': 49.8}, 'both or neither'),
+            ({'near_lon': 8.6}, 'both or neither'),
+            ({'near_lat': 91, 'near_lon': 8}, 'latitude'),
+            ({'near_lat': 49, 'near_lon': 181}, 'longitude'),
+            ({'near_lat': 49, 'near_lon': 8, 'radius_km': 0}, 'above 0'),
+            ({'near_lat': 49, 'near_lon': 8, 'near_layer': 'sky'}, 'current or origin'),
+            ({'radius_km': 5}, 'need near_lat'),
+            ({'near_layer': 'origin'}, 'need near_lat'),
+            ({'sort': 'distance'}, 'needs near_lat')):
+        is_error, text = tool_result(api, admin, 'search_components', **args)
+        assert is_error and words in text, (args, text)
+
+
+def test_the_place_search_is_described_to_the_model(api, world):
+    tools = mcp_post(api, world['admin'], 'tools/list').json()['result']['tools']
+    search = next(t for t in tools if t['name'] == 'search_components')
+    properties = search['inputSchema']['properties']
+    for name in ('near_lat', 'near_lon', 'near_layer', 'radius_km'):
+        assert name in properties, name
+    assert 'distance_km' in properties['near_lat']['description']
+    assert 'origin' in properties['near_layer']['description']
+    assert 'distance' in properties['sort']['description']
+    assert 'distance_km' in search['description']
+    assert not any(t['name'] == 'find_near' for t in tools)
+
+
+def test_the_distance_reads_in_km_with_a_fitting_precision():
+    assert mcp_server.distance_km(None) is None
+    assert mcp_server.distance_km(0) == 0
+    assert mcp_server.distance_km(1234.5) == 1.23
+    assert mcp_server.distance_km(26_500) == 26.5
+    assert mcp_server.distance_km(123_456) == 123.5
+
+
+def test_the_query_description_says_what_q_matches(api, world):
+    tools = mcp_post(api, world['admin'], 'tools/list').json()['result']['tools']
+    search = next(t for t in tools if t['name'] == 'search_components')
+    query = search['inputSchema']['properties']['query']['description']
+    assert 'name' in query and 'catalog number' in query
+    assert 'does not match materials, functions or places' in query
+    assert 'matches names, materials' not in query
 
 
 def test_a_version_that_is_not_published_is_marked_and_found_by_status_any(api, db, world):
@@ -369,43 +578,184 @@ def test_the_timeline_lists_events_in_order(api, world):
     assert set(answer['events'][0]) == {'kind', 'at', 'precision', 'section', 'cycle', 'planned', 'detail'}
 
 
-# SIMILAR COMPONENTS ----------------------------------------------------------------------------
-def put_map(db, method='umap', points=None):
-    db['component_map_cache'].insert_one({
-        '_id': cache_doc_id('radial_signature', method), 'basis': 'radial_signature', 'method': method,
-        'basis_label': 'Radial signature', 'total': len(points), 'displayed': len(points),
-        'computed_at': '2026-10-20T00:00:00Z', 'points': points})
+# SIMILAR COMPONENTS (8.174) --------------------------------------------------------------------
+def put_matrix(db, vectors, basis='radial_signature'):
+    """A stored similarity matrix of the test catalog: one row per name, the
+    vectors taken as the standardised ones (mean 0, standard deviation 1)."""
+    import numpy as np
+    from apps.catalog import similarity as sim
+    names = list(vectors)
+    z = np.asarray([vectors[n] for n in names], dtype=np.float32)
+    dim = z.shape[1]
+    matrix = sim.FeatureMatrix(basis, [iid(n) for n in names], z, np.zeros(dim), np.ones(dim),
+                               '2026-10-20T00:00:00Z', build_id=uuid.uuid4().hex)
+    db['component_map_cache'].replace_one(
+        {'_id': sim.knn_doc_id(basis)}, sim.matrix_to_doc(matrix, '2026-10-20T00:00:00Z'), upsert=True)
 
 
-def point(name, x, y):
-    return {'id': iid(name), 'x': x, 'y': y, 'name': name, 'original_function': 'IfcBeam',
-            'catalog_number': 1, 'in_place': False, 'color': None, 'dataset': 'ddu', 'material': 'concrete',
-            'shape_class': 'planar'}
+NEAR_BEAM = {'beam': [0.0, 0.0], 'feld': [1.0, 0.0], 'stone': [-2.0, 0.0], 'cut2': [3.0, 4.0], 'panel': [10.0, 0.0]}
 
 
-def test_similar_components_are_the_nearest_on_the_map_with_their_distance(api, db, world):
-    put_map(db, points=[point('beam', 0.0, 0.0), point('cut2', 3.0, 4.0), point('feld', 1.0, 0.0),
-                        point('panel', 10.0, 0.0), point('stone', -2.0, 0.0)])
-    answer = tool(api, world['admin'], 'similar_components', component_id=iid('beam'), count=3)
+def test_similar_components_are_the_nearest_in_descriptor_space_with_their_distance(api, db, world):
+    put_matrix(db, NEAR_BEAM)
+    answer = tool(api, world['admin'], 'similar_components', component_id=iid('beam'), count=3, circulation='all')
     assert [s['name'] for s in answer['similar']] == ['feld', 'stone', 'cut2']
-    assert [s['distance'] for s in answer['similar']] == [1.0, 2.0, 5.0]
-    assert answer['layout'] == 'umap' and answer['basis'] == 'Radial signature'
+    assert [s['descriptor_distance'] for s in answer['similar']] == [1.0, 2.0, 5.0]
+    assert answer['basis'] == 'radial_signature' and answer['matrix_built'] == '2026-10-20T00:00:00Z'
+    assert 'standardised' in answer['distance_unit'] and 'not metres' in answer['distance_unit']
     assert answer['similar'][0]['web_link'] == f'{WEB}/components/{iid("feld")}'
-    assert tool(api, world['admin'], 'similar_components', component_id=iid('beam'), count=1000)['similar'].__len__() == 4
+    assert all('distance_km' not in s and 'fit' not in s for s in answer['similar'])
+    # the piece itself is never one of its neighbours; the rows are the short rows of the search
+    everyone = tool(api, world['admin'], 'similar_components', component_id=iid('beam'), count=1000, circulation='all')['similar']
+    assert iid('beam') not in str(everyone)
+    assert {'id', 'catalog_number', 'original_function', 'material', 'dataset', 'visibility'} <= set(everyone[0])
 
 
-def test_similar_components_say_when_there_is_nothing_to_compare(api, db, world):
-    put_map(db, points=[point('beam', 0.0, 0.0)])
-    is_error, text = tool_result(api, world['admin'], 'similar_components', component_id=iid('feld'))
-    assert is_error and 'not on the similarity map' in text
-    assert tool_result(api, world['admin'], 'similar_components', component_id=iid('beam'), method='tsne')[0]
-    is_error, text = tool_result(api, world['admin'], 'similar_components', component_id=iid('beam'), method='pca')
-    assert is_error                                       # no pca layout cached
+def test_the_filters_apply_before_the_ranking(api, db, world):
+    _sized(db)
+    put_matrix(db, NEAR_BEAM)
+    admin = world['admin']
+    # feld and stone are nearer, but only cut2 is in this dataset: it is the nearest that passes
+    ddu = tool(api, admin, 'similar_components', component_id=iid('beam'), count=1, dataset='ddu_aggregations')
+    assert [s['name'] for s in ddu['similar']] == ['cut2'] and ddu['compared_with'] == 1
+    # similar in shape and able to hold 400 x 300 x 200: beam (3000 x 200 x 100) is too thin, feld and cut2 pass
+    held = tool(api, admin, 'similar_components', component_id=iid('beam'), count=5,
+                fit_mode='can_hold', size_mm=[400, 300, 200])
+    assert [s['name'] for s in held['similar']] == ['feld', 'cut2'] and held['compared_with'] == 2
+    # a place search filters too: only the two pieces near Darmstadt
+    _placed(db, {'feld': DARMSTADT, 'cut2': BERLIN, 'stone': DARMSTADT})
+    near = tool(api, admin, 'similar_components', component_id=iid('beam'), count=5, circulation='all',
+                near_lat=49.87, near_lon=8.65, radius_km=30)
+    assert [s['name'] for s in near['similar']] == ['feld', 'stone']
 
 
-def test_the_map_only_holds_what_the_account_may_see(api, db, world, plain):
-    put_map(db, points=[point('beam', 0.0, 0.0), point('cut2', 1.0, 0.0), point('feld', 2.0, 0.0)])
-    admin = tool(api, world['admin'], 'similar_components', component_id=iid('cut2'))
+def test_similar_components_refuse_in_words(api, db, world, plain):
+    admin = world['admin']
+    is_error, text = tool_result(api, admin, 'similar_components', component_id=iid('beam'))
+    assert is_error and 'not been computed' in text                       # no matrix yet
+    put_matrix(db, NEAR_BEAM)
+    for args, words in (({'basis': 'tsne'}, 'basis is'),
+                        ({'fit_mode': 'about'}, 'size_mm'),
+                        ({'near_lat': 49.0}, 'both or neither')):
+        is_error, text = tool_result(api, admin, 'similar_components', component_id=iid('beam'), **args)
+        assert is_error and words in text, (args, text)
+    # a piece the matrix does not have and whose version has no descriptor
+    is_error, text = tool_result(api, admin, 'similar_components', component_id=iid('cut'))
+    assert is_error and 'descriptor' in text
+    is_error, text = tool_result(api, admin, 'similar_components', component_id='3f2c0c86-6b5b-4a6a-8b7e-0d9d3a2d6e11')
+    assert is_error and 'Not found' in text
+
+
+def _visible(api, pat, **args):
+    """The pieces an account sees, as the search tool lists them (visibility is the list's)."""
+    found = tool(api, pat, 'search_components', size=25, **args)
+    return {r['id']: r for r in found['results']}, found['total']
+
+
+def test_similar_components_never_show_what_the_account_may_not_see(api, db, world, plain, dataset_member):
+    put_matrix(db, NEAR_BEAM)
+    admin = tool(api, world['admin'], 'similar_components', component_id=iid('cut2'), circulation='all')
     assert iid('beam') in str(admin)
-    for_plain = tool_result(api, plain['pat'], 'similar_components', component_id=iid('cut2'))
-    assert iid('beam') not in str(for_plain)
+    for who in (plain, dataset_member):
+        seen, _ = _visible(api, who['pat'], circulation='all', status='any')
+        hidden = [iid(n) for n in NEAR_BEAM if iid(n) not in seen]
+        assert hidden, 'the test needs a piece this account may not see'
+        for name in NEAR_BEAM:
+            piece = iid(name)
+            if piece in hidden:
+                is_error, text = tool_result(api, who['pat'], 'similar_components', component_id=piece)
+                assert is_error and 'Not found' in text, name
+            else:
+                answer = tool(api, who['pat'], 'similar_components', component_id=piece, circulation='all',
+                              status='any')
+                assert {r['id'] for r in answer['similar']} <= set(seen) - {piece}
+                assert not set(hidden) & {r['id'] for r in answer['similar']}
+                assert answer['compared_with'] <= len(seen) - 1
+
+
+def test_similar_components_are_described_in_standardised_units(api, world):
+    tools = mcp_post(api, world['admin'], 'tools/list').json()['result']['tools']
+    similar = next(t for t in tools if t['name'] == 'similar_components')
+    assert 'standardised' in similar['description'] and 'not metres or millimetres' in similar['description']
+    assert 'not on the similarity map' in similar['description']       # said as the contrast
+    properties = similar['inputSchema']['properties']
+    for name in ('basis', 'count', 'query', 'dataset', 'fit_mode', 'size_mm', 'near_lat', 'radius_km'):
+        assert name in properties, name
+    assert 'method' not in properties                      # the 2D map is nowhere in this tool
+
+
+# THE OVERVIEW (8.173) --------------------------------------------------------------------------
+def test_the_overview_counts_the_catalog_with_labels_ranges_and_coverage(api, db, world):
+    _sized(db)
+    _placed(db, {'beam': DARMSTADT, 'feld': FRANKFURT}, {'beam': BERLIN})
+    answer = tool(api, world['admin'], 'catalog_overview')
+    assert answer['total'] == 3 and answer['pieces'] >= 3
+    assert sum(r['count'] for r in answer['by_dataset']) == 3
+    assert {r['key'] for r in answer['by_dataset']} == {'dbu_zirkus', 'ddu_aggregations', 'schoenes_neues_feld'}
+    for facet in ('by_material', 'by_original_function', 'by_shape_class', 'by_circulation'):
+        assert sum(r['count'] for r in answer[facet]) == 3, facet
+    assert all(r['label'] for r in answer['by_material'])         # materials come with their label
+    assert 'Beam' in {r['label'] for r in answer['by_original_function']} or answer['by_original_function']
+    # sides sorted largest, middle, smallest, in mm: beam 3000 x 200 x 100, cut2 1000 x 500 x 300, feld 500^3
+    ranges = answer['side_ranges_mm']
+    assert ranges['components_with_a_size'] == 3
+    assert ranges['largest_side'] == {'min': 500, 'max': 3000}
+    assert ranges['middle_side'] == {'min': 200, 'max': 500}
+    assert ranges['smallest_side'] == {'min': 100, 'max': 500}
+    assert answer['with_location'] == {'current': 2, 'origin': 1}
+    # the administrator sees every piece; the private ones are counted as not public
+    seen, total = _visible(api, world['admin'])
+    private = sum(1 for r in seen.values() if r['visibility'] == 'private')
+    assert total == 3 and answer['not_public'] == private
+    assert f'{private} of the 3' in answer['note'] or private == 0
+
+
+def test_the_overview_follows_the_filters_of_the_search(api, db, world):
+    _sized(db)
+    admin = world['admin']
+    one = tool(api, admin, 'catalog_overview', dataset='ddu_aggregations')
+    assert one['total'] == 1 and one['filters'] == {'dataset': 'ddu_aggregations', 'circulation': 'active',
+                                                    'status': 'published'}
+    assert one['side_ranges_mm']['largest_side'] == {'min': 1000, 'max': 1000}
+    held = tool(api, admin, 'catalog_overview', fit_mode='can_hold', size_mm=[400, 300, 200])
+    assert held['total'] == 2                                     # beam is too thin
+    assert held['side_ranges_mm']['smallest_side'] == {'min': 300, 'max': 500}
+    nothing = tool(api, admin, 'catalog_overview', query='no such piece zzz')
+    assert nothing['total'] == 0 and nothing['side_ranges_mm']['largest_side'] is None
+    assert nothing['with_location'] == {'current': 0, 'origin': 0}
+    is_error, text = tool_result(api, admin, 'catalog_overview', fit_mode='about')
+    assert is_error and 'size_mm' in text
+
+
+def test_the_overview_counts_only_what_the_account_may_see(api, db, world, plain, dataset_member):
+    _sized(db)
+    for who in (plain, dataset_member):
+        seen, total = _visible(api, who['pat'])
+        overview = tool(api, who['pat'], 'catalog_overview')
+        # the same pieces as the list, and the non-public ones named
+        assert overview['total'] == total
+        assert overview['not_public'] == sum(1 for r in seen.values() if r['visibility'] == 'private')
+        assert sum(r['count'] for r in overview['by_dataset']) == total
+        assert ('dbu_zirkus' in {r['key'] for r in overview['by_dataset']}) == (iid('beam') in seen)
+    # a member of dbu_zirkus sees its beam, which is not public; the account without a role does not
+    assert tool(api, dataset_member['pat'], 'catalog_overview', dataset='dbu_zirkus')['total'] == 1
+    assert tool(api, plain['pat'], 'catalog_overview', dataset='dbu_zirkus')['total'] == 0
+    only = tool(api, dataset_member['pat'], 'catalog_overview', dataset='dbu_zirkus')
+    assert only['not_public'] == 1
+    assert only['side_ranges_mm']['largest_side'] == {'min': 3000, 'max': 3000}
+    # once it is public it counts as public
+    db['component_identities'].update_one({'_id': iid('beam')}, {'$set': {'is_public': True}})
+    assert tool(api, dataset_member['pat'], 'catalog_overview', dataset='dbu_zirkus')['not_public'] == 0
+
+
+def test_the_overview_is_described_and_takes_the_search_filters(api, world):
+    tools = mcp_post(api, world['admin'], 'tools/list').json()['result']['tools']
+    overview = next(t for t in tools if t['name'] == 'catalog_overview')
+    for word in ('millimetres', 'not public', 'origin location', 'material'):
+        assert word in overview['description'], word
+    search = next(t for t in tools if t['name'] == 'search_components')
+    shared = ('query', 'original_function', 'material', 'dataset', 'shape_class', 'circulation', 'status',
+              'include_withdrawn', 'fit_mode', 'size_mm', 'tolerance', 'near_lat', 'near_lon', 'near_layer',
+              'radius_km')
+    for name in shared:
+        assert overview['inputSchema']['properties'][name] == search['inputSchema']['properties'][name], name

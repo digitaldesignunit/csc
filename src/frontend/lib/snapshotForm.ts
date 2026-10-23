@@ -5,6 +5,7 @@
  * the network, so the unit test covers it.
  */
 import type { Origin } from '@/generated/CatalogModels'
+import { LOCATION_PROBLEM, locationFromBoxes, originLocationProblem } from '@/lib/near'
 
 export type FormMode = 'new' | 'cut' | 'state' | 'correct'
 
@@ -142,13 +143,12 @@ export function hexToRgb(hex: string): [number, number, number] | null {
   return [parseInt(m.slice(0, 2), 16), parseInt(m.slice(2, 4), 16), parseInt(m.slice(4, 6), 16)]
 }
 
-/** A location from two text fields; null when empty, undefined when wrong. */
+/** A location from two text fields; null when empty, undefined when wrong. The
+ *  same rule as the origin form's boxes (`locationFromBoxes`): plain numbers
+ *  with a point; a decimal comma is not read, the comma separates the two. */
 export function parseLocation(lat: string, lon: string): { lat: number; lon: number } | null | undefined {
-  if (!lat.trim() && !lon.trim()) return null
-  const la = parseFloat(lat.trim().replace(',', '.'))
-  const lo = parseFloat(lon.trim().replace(',', '.'))
-  if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) return undefined
-  return { lat: la, lon: lo }
+  const { location, problem } = locationFromBoxes(lat, lon)
+  return problem ? undefined : location
 }
 
 /** `YYYY-MM-DD` as a day-precise timestamp; empty stays null. */
@@ -272,8 +272,10 @@ export function problemsOf(input: CheckInput): Problem[] {
     })
   }
   if (parseLocation(fields.lat, fields.lon) === undefined) {
-    out.push({ field: 'location', message: 'Latitude and longitude: two numbers within range, or both empty.' })
+    out.push({ field: 'location', message: LOCATION_PROBLEM })
   }
+  const originPlace = (mode === 'new' || mode === 'cut') ? originLocationProblem(identity.origin) : null
+  if (originPlace) out.push({ field: 'origin_location', message: `Origin place: ${originPlace}` })
   if (fields.effectiveOn.trim() && !dayToTimestamp(fields.effectiveOn)) {
     out.push({ field: 'effective_on', message: 'The date must be a day.' })
   }

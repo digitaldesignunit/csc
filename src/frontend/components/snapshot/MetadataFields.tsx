@@ -7,11 +7,13 @@
 import { useState } from 'react'
 import { Loader2, MapPin } from 'lucide-react'
 
+import LatLonFields from '@/components/common/LatLonFields'
 import { Field } from '@/components/lineage/fields'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { hexToRgb, type SnapshotFields } from '@/lib/snapshotForm'
+import { LOCATION_PROBLEM } from '@/lib/near'
+import { hexToRgb, parseLocation, type SnapshotFields } from '@/lib/snapshotForm'
 import { hexComponentColor } from '@/lib/utils'
 
 type Props = {
@@ -72,16 +74,13 @@ export function LocationFields({ fields, setFields, idPrefix = 'sf' }: Props) {
         </Button>
       </div>
       {locationError && <p className="text-sm text-destructive" role="alert">{locationError}</p>}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Latitude" htmlFor={`${idPrefix}-lat`}>
-          <Input id={`${idPrefix}-lat`} inputMode="decimal" value={fields.lat}
-            onChange={(event) => setFields({ lat: event.target.value })} />
-        </Field>
-        <Field label="Longitude" htmlFor={`${idPrefix}-lon`}>
-          <Input id={`${idPrefix}-lon`} inputMode="decimal" value={fields.lon}
-            onChange={(event) => setFields({ lon: event.target.value })} />
-        </Field>
-      </div>
+      <LatLonFields
+        idPrefix={idPrefix}
+        lat={fields.lat}
+        lon={fields.lon}
+        onChange={(boxes) => setFields(boxes)}
+        problem={parseLocation(fields.lat, fields.lon) === undefined ? LOCATION_PROBLEM : null}
+      />
     </div>
   )
 }

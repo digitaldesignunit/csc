@@ -9,7 +9,9 @@ from fastapi import HTTPException, Request
 
 from apps.catalog.read_models import catalog_row
 
+from .dimension_fit import match_sort_field, sorted_sides, volume_stages
 from .identity_filters import resolve_sort_field
+from .near_search import DISTANCE_FIELD, Near, distance_sort, first_stages
 
 
 def annotate_has_preview(request: Request, docs: List[Dict[str, Any]]) -> None:
@@ -103,21 +105,48 @@ def build_list_pipeline(
     current_user_id: Optional[str],
     reserved_filter: Optional[str],
     snapshot_view: str = 'row',
+    fit_stages: Optional[List[Dict[str, Any]]] = None,
+    fit_mode: Optional[str] = None,
+    near: Optional[Near] = None,
 ) -> List[Dict[str, Any]]:
     """The identities with their current snapshot. ``snapshot_view`` (see
     ``SNAPSHOT_VIEWS``) says how much of the snapshot comes back: the join is
     always projected to the fields the filters, the sort and the row read, so
     the sort never holds an inline mesh (Atlas' free tier caps a blocking sort
     at 32 MB and ignores allowDiskUse) and a row carries no geometry; the
-    whole state of a ``full`` view is joined after ``$skip`` / ``$limit``."""
-    sort_field = resolve_sort_field(sortkey)
-    sort_stage = {'$sort': {sort_field: sort_order}}
+    whole state of a ``full`` view is joined after ``$skip`` / ``$limit``.
+
+    ``fit_stages`` (the dimension search, 8.169) come right after the filters
+    of the snapshot and add ``fit`` to the row; the sort key ``match`` sorts
+    on it (``fit_mode`` says which value), ``volume`` on the product of the
+    sides of ``bbx`` (8.173). Both are computed, so they sort after the join.
+
+    ``near`` (the near search, 8.170) opens the pipeline with ``$geoNear``
+    instead of the plain ``$match``, which adds ``distance_m`` to the row; the
+    sort key ``distance`` sorts on it, with the catalog number as the tie."""
+    sort_prep: List[Dict[str, Any]] = []
+    sort_drop: List[str] = []
+    if sortkey == 'volume':
+        sort_prep, sort_spec, sort_drop = volume_stages(sort_order)
+        sort_field = 'volume'
+    elif sortkey == 'match':
+        sort_field = match_sort_field(fit_mode)
+        # ties by id, so a page boundary never repeats or skips a piece
+        sort_spec = {sort_field: sort_order, '_id': 1}
+    elif sortkey == 'distance':
+        sort_field = DISTANCE_FIELD
+        sort_spec = distance_sort(sort_order)
+    else:
+        sort_field = resolve_sort_field(sortkey)
+        sort_spec = {sort_field: sort_order}
+    sort_stage = {'$sort': sort_spec}
     # a sort on an identity field runs on the small identity documents, right
     # after the first match (an index serves ``_id``); every later stage keeps
     # the order
-    identity_sort = not sort_field.startswith('current_snapshot.')
+    identity_sort = not sort_field.startswith(
+        ('current_snapshot.', 'fit.', 'volume'))
 
-    pipeline: List[Dict[str, Any]] = [{'$match': identity_match}]
+    pipeline: List[Dict[str, Any]] = first_stages(identity_match, near)
     if identity_sort:
         pipeline.append(sort_stage)
     pipeline.extend([
@@ -128,6 +157,8 @@ def build_list_pipeline(
 
     if snapshot_match:
         pipeline.append({'$match': snapshot_match})
+    if fit_stages:
+        pipeline.extend(fit_stages)
 
     if (
         include_username
@@ -140,7 +171,10 @@ def build_list_pipeline(
         pipeline.extend(_username_enrichment_stages())
 
     if not identity_sort:
+        pipeline.extend(sort_prep)
         pipeline.append(sort_stage)
+        if sort_drop:
+            pipeline.append({'$unset': sort_drop})
 
     if page > 0 and size > 0:
         pipeline.extend([
@@ -168,15 +202,19 @@ def build_count_pipeline(
     reserved_filter: Optional[str],
     current_user_id: Optional[str],
     include_username: bool,
+    fit_stages: Optional[List[Dict[str, Any]]] = None,
+    near: Optional[Near] = None,
 ) -> List[Dict[str, Any]]:
     pipeline: List[Dict[str, Any]] = [
-        {'$match': identity_match},
+        *first_stages(identity_match, near),
         _current_snapshot_lookup(snapshots_collection,
                                  fields=SORT_SNAPSHOT_FIELDS),
         {'$unwind': '$current_snapshot'},
     ]
     if snapshot_match:
         pipeline.append({'$match': snapshot_match})
+    if fit_stages:
+        pipeline.extend(fit_stages)
     if (
         include_username
         and reserved_filter == 'true'
@@ -186,6 +224,8 @@ def build_count_pipeline(
     pipeline.append({'$count': 'count'})
     return pipeline
 
+
+_BBX_ARRAY = {'$cond': [{'$isArray': '$bbx'}, '$bbx', []]}
 
 _STATS_FACET_TEMPLATE: Dict[str, Any] = {
     'total': [{'$count': 'count'}],
@@ -272,12 +312,40 @@ _STATS_FACET_TEMPLATE: Dict[str, Any] = {
         },
         {'$sort': {'_id': 1}},
     ],
+    # the sorted sides (largest, middle, smallest) of the pieces that have a
+    # size: how many, and the smallest and largest value of each (8.173)
+    'sides': [
+        {'$match': {'_sides': {'$type': 'array'}}},
+        {'$group': {
+            '_id': None,
+            'count': {'$sum': 1},
+            'largest_min': {'$min': {'$arrayElemAt': ['$_sides', 0]}},
+            'largest_max': {'$max': {'$arrayElemAt': ['$_sides', 0]}},
+            'middle_min': {'$min': {'$arrayElemAt': ['$_sides', 1]}},
+            'middle_max': {'$max': {'$arrayElemAt': ['$_sides', 1]}},
+            'smallest_min': {'$min': {'$arrayElemAt': ['$_sides', 2]}},
+            'smallest_max': {'$max': {'$arrayElemAt': ['$_sides', 2]}},
+        }},
+    ],
+    # how many have a point on each location layer (8.170), and how many of
+    # the counted pieces are not public
+    'visibility': [
+        {'$group': {
+            '_id': None,
+            'current': {'$sum': {'$cond': ['$_has_current', 1, 0]}},
+            'origin': {'$sum': {'$cond': ['$_has_origin', 1, 0]}},
+            'not_public': {'$sum': {'$cond': [
+                {'$eq': ['$is_public', True]}, 0, 1]}},
+        }},
+    ],
     'bbx': [
         {
             '$project': {
-                'x': {'$arrayElemAt': ['$bbx', 0]},
-                'y': {'$arrayElemAt': ['$bbx', 1]},
-                'z': {'$arrayElemAt': ['$bbx', 2]},
+                # a bbx that is no array reads as an empty one: $arrayElemAt
+                # fails on it, and one bad document must not 500 the stats
+                'x': {'$arrayElemAt': [_BBX_ARRAY, 0]},
+                'y': {'$arrayElemAt': [_BBX_ARRAY, 1]},
+                'z': {'$arrayElemAt': [_BBX_ARRAY, 2]},
             }
         },
         {
@@ -300,13 +368,15 @@ def build_identity_stats_pipeline(
     identity_match: Dict[str, Any],
     snapshot_match: Dict[str, Any],
     limit_dim: int,
+    fit_stages: Optional[List[Dict[str, Any]]] = None,
+    near: Optional[Near] = None,
 ) -> List[Dict[str, Any]]:
     """
     Join identities to current snapshots, reshape to flat fields, facet.
     """
     _ = limit_dim  # retained for parity with legacy handler (Top-N applied in Python)
     pipeline: List[Dict[str, Any]] = [
-        {'$match': identity_match},
+        *first_stages(identity_match, near),
         {
             '$lookup': {
                 'from': snapshots_collection,
@@ -319,6 +389,18 @@ def build_identity_stats_pipeline(
     ]
     if snapshot_match:
         pipeline.append({'$match': snapshot_match})
+    if fit_stages:
+        pipeline.extend(fit_stages)
+    # the three sides of a piece with a size, largest first (else null)
+    # (a bbx that is no array reads as an empty one: $arrayElemAt fails on it)
+    box = {'$cond': [{'$isArray': '$current_snapshot.bbx'},
+                     '$current_snapshot.bbx', []]}
+    has_size = {'$and': [
+        {'$eq': [{'$size': box}, 3]},
+        *({'$isNumber': {'$arrayElemAt': [box, i]}} for i in range(3)),
+    ]}
+    pipeline.append({'$addFields': {'_stat_sides': {'$cond': [
+        has_size, sorted_sides(box), None]}}})
     pipeline.append(
         {
             '$replaceRoot': {
@@ -327,6 +409,12 @@ def build_identity_stats_pipeline(
                         '$current_snapshot',
                         {
                             '_id': '$_id',
+                            'is_public': '$is_public',
+                            '_sides': '$_stat_sides',
+                            '_has_current': {
+                                '$eq': [{'$type': '$geo_current'}, 'object']},
+                            '_has_origin': {
+                                '$eq': [{'$type': '$geo_origin'}, 'object']},
                             'original_function': '$original_function',
                             'material': '$material',
                             'dataset': '$dataset',

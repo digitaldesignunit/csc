@@ -25,6 +25,7 @@ import { WriteButton } from '@/components/ui/write-button'
 import { Field } from '@/components/lineage/fields'
 import { backendJson, isTombstone } from '@/lib/backend'
 import { cleanOrigin, useMaterials } from '@/lib/lineage'
+import { boxesOfLocation } from '@/lib/near'
 import { useMe } from '@/lib/me'
 import { uuidFromScan } from '@/lib/scanIds'
 import { uploadSnapshotPhoto } from '@/lib/snapshotPhotos'
@@ -70,6 +71,7 @@ const PROBLEM_STEP: Record<string, StepId> = {
   original_function: 'details',
   material: 'details',
   location: 'details',
+  origin_location: 'details',
   quantity: 'details',
   effective_on: 'details',
   size: 'size',
@@ -133,8 +135,7 @@ function valuesOf(mode: FormMode, catalog: CatalogComponent): FormValues {
       name: snapshot.name ?? '',
       notes: snapshot.notes ?? '',
       color,
-      lat: snapshot.location ? String(snapshot.location.lat) : '',
-      lon: snapshot.location ? String(snapshot.location.lon) : '',
+      ...boxesOfLocation(snapshot.location),
       quantity: snapshot.quantity ?? 1,
       fragment: snapshot.fragment ?? false,
     },

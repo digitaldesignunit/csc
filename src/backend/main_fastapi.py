@@ -164,6 +164,13 @@ async def lifespan(app: FastAPI):
         'at', expireAfterSeconds=91 * 24 * 3600)
     await app.mongodb_invitations.create_index('code_sha256', unique=True)
     await app.mongodb_invitations.create_index('email')
+    # the near search (8.170): the points of the current and of the origin
+    # location, each in its own index ($geoNear names the one it uses); a
+    # record without the field is not in the index
+    await app.mongodb_component_identities.create_index(
+        [('geo_current', '2dsphere')])
+    await app.mongodb_component_identities.create_index(
+        [('geo_origin', '2dsphere')])
     await app.mongodb_change_log.create_index([('record_id', 1), ('at', 1)])
     await app.mongodb_change_log.create_index([('identity_id', 1), ('at', -1)])
     await app.mongodb_component_snapshots.create_index(

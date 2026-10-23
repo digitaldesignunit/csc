@@ -13,6 +13,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import BulkWriteError, ConnectionFailure, DuplicateKeyError
 
 from apps.catalog.etag import compute_snapshot_etag  # noqa: F401 (re-export)
+from apps.catalog.geo import set_geo_current
 
 from logging_setup import get_logger
 
@@ -252,6 +253,7 @@ async def validate_snapshot_and_promote(
                 detail='Internal server error',
             )
         identity_doc = {**identity_doc, **identity_update}
+        await set_geo_current(identities, snapshots, identity_id, snapshot_id)
 
     return identity_doc, snapshot_doc
 

@@ -86,3 +86,17 @@ test('the photo credit is sent when it changed, and cleared by an empty text (8.
   const cleared = editPatch(withCredit, had, { ...had, creditText: '', creditUrl: '' })!
   assert.equal(cleared.photo_credit, null)
 })
+
+test('a stored location fills the boxes as plain decimals, so an untouched form is never blocked by it', () => {
+  for (const location of [{ lat: 1e-7, lon: -0 }, { lat: -1e-7, lon: 1e-9 }, { lat: 49.861444, lon: 8.676556 }, { lat: -33.86, lon: 151.21 }]) {
+    const s = snapshot({ location } as Partial<ComponentSnapshot>)
+    const before = editValuesOf(s)
+    assert.ok(!/e/i.test(before.lat + before.lon), `${before.lat} ${before.lon}`)
+    assert.deepEqual(editPatch(s, before, before), {})
+  }
+  const tiny = editValuesOf(snapshot({ location: { lat: 1e-7, lon: -0 } } as Partial<ComponentSnapshot>))
+  assert.deepEqual([tiny.lat, tiny.lon], ['0', '0'])
+  assert.deepEqual(
+    editPatch(snapshot({ location: { lat: 1e-7, lon: -0 } } as Partial<ComponentSnapshot>), tiny, { ...tiny, lat: '49.5', lon: '8.5' }),
+    { location: { lat: 49.5, lon: 8.5 } })
+})

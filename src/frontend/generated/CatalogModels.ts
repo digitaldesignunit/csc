@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-16T18:45:17.626Z
-// Source: http://127.0.0.1:8899/schema/catalog-compose
+// Generated on: 2026-10-22T19:04:21.667Z
+// Source: http://127.0.0.1:8791/schema/catalog-compose
 
 import type {
   Frame,
@@ -242,6 +242,17 @@ export interface ComponentPassport {
 export type CatalogComponent = ComponentPassport
 
 
+export interface FitAbout {
+  mode: string;
+  deviation: number; // largest relative deviation of the three sorted sides, as a ratio (0.08 = 8 %)
+}
+
+export interface FitCanHold {
+  mode: string;
+  waste_mm3: number; // box volume of the piece minus the asked volume, in mm3
+  waste_percent: number; // that waste as a share of the box volume of the piece, in per cent
+}
+
 export interface CatalogRow {
   _id: string;
   catalog_number: number;
@@ -258,6 +269,8 @@ export interface CatalogRow {
   is_public?: boolean;
   has_preview?: boolean | null; // whether the current state has a rendered preview (list rows only; absent elsewhere)
   current_snapshot_id?: string | null;
+  fit?: FitAbout | FitCanHold | null; // how close the piece is to the asked size, while the list has a dimension search (fit_mode); absent otherwise
+  distance_m?: number | null; // distance in metres from the near point of the list (near_lat, near_lon) to the piece, on the layer asked (near_layer); absent without a near search
   identity_id: string;
   version: number;
   status: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
@@ -275,5 +288,42 @@ export interface CatalogRow {
   etag?: string | null;
   created: string;
   lastmodified: string;
+}
+
+
+export interface LocationPoint {
+  id: string;
+  catalog_number?: number | null;
+  name?: string | null;
+  lat: number;
+  lon: number;
+  original_function?: string | null;
+  dataset?: string | null;
+  material?: string | null;
+  shape_class?: string | null;
+  in_place?: boolean; // still in place: identified in its works, not yet deinstalled
+}
+
+export interface LocationMap {
+  layer: 'current' | 'origin';
+  total: number; // the pieces this caller may see that match the filters
+  displayed: number; // of those, the ones with a point on the layer
+  left_out: number; // the pieces without a point on the layer
+  points: LocationPoint[];
+}
+
+
+export interface SimilarPiece {
+  distance: number; // Euclidean distance in the standardised descriptor space (each dimension in standard deviations over the catalog); smaller is more similar. Not metres or mm; compare within one answer.
+  piece: CatalogRow;
+}
+
+export interface SimilarPieces {
+  query_id: string;
+  basis: 'radial_signature' | 'scalars' | 'hks';
+  basis_label: string;
+  computed_at?: string | null; // when the matrix of the catalog was built
+  considered: number; // how many visible pieces that pass the filters were ranked (the query piece not among them)
+  results: SimilarPiece[];
 }
 

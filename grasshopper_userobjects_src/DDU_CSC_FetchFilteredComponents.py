@@ -27,20 +27,25 @@ ghenv.Component.Description = (  # NOQA
     'Fetches identities (with their current snapshot) from the remote '
     'Catalog based on filter criteria (original function, material, '
     'dataset, complexity, fragment, bounding box dimensions, shape class, '
-    'material class, circulation). Mirrors the web catalog filter menu and '
-    'returns component passport JSON ({identity, snapshots[]}) results.'
+    'material class, circulation) and, like the web filter menu, the '
+    'dimension search (FitMode about or can_hold, FitSize, FitTolerance) '
+    'and the near search (NearPoint, NearLayer, RadiusKm). Returns '
+    'component passport JSON ({identity, snapshots[]}) results, with the '
+    'match (Fit, per cent) and the distance (DistanceKm) of each when '
+    'those searches are set.'
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005'
+CSC_GH_MINIMUM = '261022'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
-    from csc_gh.read import (fetch_filter_params)  # NOQA
+    from csc_gh.read import (fetch_filter_params, fit_percent,  # NOQA
+                             distance_km, fit_mode_of)
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261005 too old or missing: run CSC_Update, '
+        'CSC library 261022 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -55,6 +60,15 @@ OUTPUTS = [
      'Human-readable description of the applied filters and query'),
     ('ComponentPassport', 'ComponentPassport',
      "Component passport JSON per entry ({identity, snapshots[]}) fetched from the server. Use 'DisassembleComponent' to access the individual fields ready for Grasshopper"),
+    ('Fit', 'Fit',
+     'Dimension search: per result, the deviation in per cent (FitMode '
+     'about: the largest relative deviation of the three sorted sides) or '
+     'the waste in per cent of the piece (FitMode can_hold). Empty without '
+     'FitMode and FitSize. Same paths as ComponentPassport'),
+    ('DistanceKm', 'DistanceKm',
+     'Near search: per result, the distance in km from NearPoint to the '
+     'piece (on NearLayer). Empty without NearPoint. Same paths as '
+     'ComponentPassport'),
 ]
 
 
@@ -69,7 +83,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005a
+    Version: 261022
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -148,6 +162,24 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Circulation: active (default: in circulation, in place or '
             'deinstalled), in_place (still in the works), deinstalled, '
             'exited or all',
+            'Dimension search: about (every side of the piece within '
+            'FitTolerance of FitSize) or can_hold (every side of the piece '
+            'at least FitSize: a piece to cut your part from). Empty = no '
+            'dimension search',
+            'The asked size in mm, three numbers in any order (a list of '
+            'three numbers, or one Point3d / Vector3d with X, Y, Z). The way '
+            'a piece lies does not matter: the sides are compared largest to '
+            'smallest. Needs FitMode',
+            'Only for about: a percentage or millimetres as text, 10% or '
+            '50mm (a bare number is per cent). Default 10%. can_hold takes '
+            'none',
+            'Near search: a point with X = latitude and Y = longitude (a '
+            'Point3d or Vector3d, as the PlaceLocation of Origin). Empty = no '
+            'near search. The results are sorted by distance',
+            'Near search: current (where the piece is now, default) or '
+            'origin (the building it came from)',
+            'Near search: only pieces within this many km. Empty = every '
+            'piece with a point on the layer, nearest first',
         ]
         for index, text_ in enumerate(descriptions):
             if index < len(self.InputParams):
@@ -183,7 +215,13 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             ReservedStatus,
             ShapeClass,
             MaterialClass,
-            Circulation):
+            Circulation,
+            FitMode=None,
+            FitSize=None,
+            FitTolerance=None,
+            NearPoint=None,
+            NearLayer=None,
+            RadiusKm=None):
         """
         Build query parameters for GET /identities (csc_read).
 
@@ -191,7 +229,10 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         dataset, complexity, fragment, bounding box, shape class, material
         class and circulation. ``status`` is left to the server default
         (published only), matching the web. Adds a reservation-status filter
-        on top: 1=reserved by current user, 0=not reserved.
+        on top: 1=reserved by current user, 0=not reserved. The dimension
+        search (FitMode, FitSize, FitTolerance) and the near search
+        (NearPoint, NearLayer, RadiusKm) are the web's "Fits" and "Near"
+        filters; a value that cannot be used raises ``ValueError``.
         """
         function = OriginalFunction
         if isinstance(function, (list, tuple)):
@@ -204,7 +245,9 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             circulation=Circulation,
             bbx={'min_x': MinDimensionX, 'max_x': MaxDimensionX,
                  'min_y': MinDimensionY, 'max_y': MaxDimensionY,
-                 'min_z': MinDimensionZ, 'max_z': MaxDimensionZ})
+                 'min_z': MinDimensionZ, 'max_z': MaxDimensionZ},
+            fit_mode=FitMode, fit_size=FitSize, fit_tolerance=FitTolerance,
+            near_point=NearPoint, near_layer=NearLayer, radius_km=RadiusKm)
 
     def generate_filter_description(self, filter_params: dict) -> str:
         """Generates a human-readable description of the applied filters."""
@@ -234,6 +277,21 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                         f'\n{axis.upper()} {sign} {float(value):.2f}')
         if bbx_filters:
             description.append(f'\nBounding Box: {", ".join(bbx_filters)}')
+        if filter_params.get('fit_mode') == 'about':
+            description.append(
+                f'\nFit: about {filter_params["fit_size"]} mm, within '
+                f'{filter_params["fit_tol"]}')
+        elif filter_params.get('fit_mode') == 'can_hold':
+            description.append(
+                f'\nFit: can hold {filter_params["fit_size"]} mm')
+        if 'near_lat' in filter_params:
+            reach = (f', within {filter_params["radius_km"]} km'
+                     if 'radius_km' in filter_params else ', nearest first')
+            description.append(
+                f'\nNear: {filter_params["near_lat"]}, '
+                f'{filter_params["near_lon"]} '
+                f'({filter_params.get("near_layer", "current")} location)'
+                f'{reach}')
         return f'Applied filters: {", ".join(description)}'
 
     def RunScript(self,
@@ -251,7 +309,13 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             ReservedStatus,
             ShapeClass: str,
             MaterialClass: str,
-            Circulation: str):
+            Circulation: str,
+            FitMode: str,
+            FitSize: list[object],
+            FitTolerance: str,
+            NearPoint: Rhino.Geometry.Vector3d,
+            NearLayer: str,
+            RadiusKm: float):
 
         if self._stop():
             return empty_outputs()
@@ -277,12 +341,26 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         try:
 
             # Build filter query parameters (parity with web filter menu)
-            filter_params = self.build_filter_query_params(
-                OriginalFunction, Material, Dataset, Complexity, Fragment,
-                MinDimensionX, MaxDimensionX, MinDimensionY,
-                MaxDimensionY, MinDimensionZ, MaxDimensionZ,
-                ReservedStatus, ShapeClass, MaterialClass, Circulation
-            )
+            try:
+                filter_params = self.build_filter_query_params(
+                    OriginalFunction, Material, Dataset, Complexity,
+                    Fragment, MinDimensionX, MaxDimensionX, MinDimensionY,
+                    MaxDimensionY, MinDimensionZ, MaxDimensionZ,
+                    ReservedStatus, ShapeClass, MaterialClass, Circulation,
+                    FitMode, FitSize, FitTolerance, NearPoint, NearLayer,
+                    RadiusKm
+                )
+            except ValueError as e:
+                # a size, tolerance, point or layer that cannot be used
+                self._addWarning(str(e))
+                return empty_outputs()
+            for note in getattr(filter_params, 'notes', ()):
+                self._addRemark(note)
+            searched = ('fit_mode' in filter_params
+                        or 'near_lat' in filter_params)
+            if FitTolerance and fit_mode_of(FitMode) == 'can_hold':
+                self._addRemark('FitTolerance is ignored: can_hold takes '
+                                'none')
 
             # Request params: filters + passport expansion (identity+snapshot)
             request_params = dict(filter_params)
@@ -296,7 +374,13 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
 
             # Unified catalog cache (same identity/snapshot store as
             # FetchAllComponents and FetchComponents).
-            response = auth_core.cached_list_identities(request_params)
+            # a list with a fit or a distance is read from the server each
+            # time: the cache keeps the pieces, not the match of this query
+            if searched:
+                response = auth_core.authorized_get(
+                    '/identities', request_params, timeout=60)
+            else:
+                response = auth_core.cached_list_identities(request_params)
 
             if response.status_code == 200:
                 # Successfully fetched passport entries
@@ -313,7 +397,10 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 # Set up output trees and results tuple
                 FilterDescription = Grasshopper.DataTree[System.Object]()
                 ComponentPassport = Grasshopper.DataTree[System.Object]()
-                __Results = (FilterDescription, ComponentPassport)
+                Fit = Grasshopper.DataTree[System.Object]()
+                DistanceKm = Grasshopper.DataTree[System.Object]()
+                __Results = (FilterDescription, ComponentPassport, Fit,
+                             DistanceKm)
 
                 # Loop over all passport entries and add them to the data tree
                 for i, json_comp in enumerate(json_comps):
@@ -322,6 +409,14 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                     # Add passport JSON to the datatree
                     ComponentPassport.Add(
                         auth_core.passport_json_string(json_comp), ghp)
+                    # the match and the distance sit beside the passport on
+                    # the same path (empty trees without those searches)
+                    match = fit_percent(json_comp)
+                    if match is not None:
+                        Fit.Add(match, ghp)
+                    far = distance_km(json_comp)
+                    if far is not None:
+                        DistanceKm.Add(far, ghp)
 
                 # Add filter description to the filter query output
                 FilterDescription.Add(
@@ -367,5 +462,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
         # Return empty results if there was an error
         ComponentPassport = Grasshopper.DataTree[System.Object]()
         FilterDescription = Grasshopper.DataTree[System.Object]()
-        __Results = (FilterDescription, ComponentPassport)
+        Fit = Grasshopper.DataTree[System.Object]()
+        DistanceKm = Grasshopper.DataTree[System.Object]()
+        __Results = (FilterDescription, ComponentPassport, Fit, DistanceKm)
         return __Results

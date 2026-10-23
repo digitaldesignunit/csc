@@ -78,3 +78,47 @@ def test_text_filters_have_a_length_cap():
         lengths = [m.max_length for m in default.metadata
                    if hasattr(m, 'max_length')]
         assert lengths == [FILTER_MAX_LENGTH], name
+
+
+def test_a_dimension_search_is_not_part_of_the_default_scope():
+    from apps.catalog.api.identity_filters import _parse_fit
+    assert CatalogFilters().fit_pipeline_stages() == []
+    fit = _parse_fit('about', '200,1200,600', None)
+    assert fit == {'fit_mode': 'about', 'fit_sides': (1200.0, 600.0, 200.0),
+                   'fit_tolerance': ('percent', 10.0)}
+    filters = CatalogFilters(**fit)
+    assert not filters.is_default_scope()
+    assert filters.snapshot_match() == {'current_snapshot.status': 'published'}
+    stages = filters.fit_pipeline_stages()
+    assert [next(iter(stage)) for stage in stages] == [
+        '$match', '$addFields', '$match', '$addFields', '$unset']
+    assert _parse_fit('can_hold', '1,2,3', None)['fit_tolerance'] is None
+    assert _parse_fit(None, None, None) == {}
+
+
+def test_a_near_search_opens_the_pipeline_with_geonear_that_carries_the_match():
+    from apps.catalog.api.identity_query import build_list_pipeline
+    from apps.catalog.api.identity_filters import SORT_KEYS
+    assert 'distance' in SORT_KEYS
+    plain = CatalogFilters()
+    assert plain.near is None
+    assert plain.opening_stages({'exit': None}) == [{'$match': {'exit': None}}]
+    filters = CatalogFilters(near_lat=49.9, near_lon=8.6, near_layer='origin', radius_km=2)
+    assert filters.near == (49.9, 8.6, 'origin', 2)
+    assert not filters.is_default_scope()
+    stage = filters.opening_stages({'exit': None})[0]['$geoNear']
+    assert stage['near'] == {'type': 'Point', 'coordinates': [8.6, 49.9]}   # lon first
+    assert stage['key'] == 'geo_origin' and stage['maxDistance'] == 2000
+    assert stage['query'] == {'exit': None} and stage['spherical'] is True
+    assert stage['distanceField'] == 'distance_m'
+    # without a layer it is the current one, without a radius there is no limit
+    nearest = CatalogFilters(near_lat=0, near_lon=0).opening_stages({})[0]['$geoNear']
+    assert nearest['key'] == 'geo_current' and 'maxDistance' not in nearest
+    pipeline = build_list_pipeline(
+        snapshots_collection='s', identity_match={'exit': None}, snapshot_match={},
+        sortkey='distance', sort_order=1, page=1, size=10, include_username=False,
+        current_user_id=None, reserved_filter=None, near=filters.near)
+    assert '$geoNear' in pipeline[0]
+    # the sort runs on the small identity documents, right after the first stage
+    assert pipeline[1] == {'$sort': {'distance_m': 1, 'catalog_number': 1, '_id': 1}}
+    assert '$lookup' in pipeline[2]

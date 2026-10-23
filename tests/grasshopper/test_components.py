@@ -655,11 +655,12 @@ def test_fetch_filtered_sends_the_0_6_query():
     module = compstub.load_component('FetchFilteredComponents',
                                      sticky={'CSC_AuthCore': core})
     obj = compstub.instance(module, 'FetchFilteredComponents')
-    description, data = obj.RunScript(
+    description, data, fit, far = obj.RunScript(
         'IfcBeam', 'concrete', 'ds', 2, False, 100.0, 0.0, None, None, None,
-        None, 1, 'linear', '17 01 01', 'all')
-    assert list(inspect.signature(obj.RunScript).parameters)[-3:] == [
-        'ShapeClass', 'MaterialClass', 'Circulation']
+        None, 1, 'linear', '17 01 01', 'all', None, None, None, None, None, None)
+    assert list(inspect.signature(obj.RunScript).parameters)[-9:] == [
+        'ShapeClass', 'MaterialClass', 'Circulation', 'FitMode', 'FitSize',
+        'FitTolerance', 'NearPoint', 'NearLayer', 'RadiusKm']
     assert core.asked == [{
         'original_function': 'IfcBeam', 'material': 'concrete',
         'dataset': 'ds', 'shape_class': 'linear',
@@ -674,13 +675,104 @@ def test_fetch_filtered_sends_the_0_6_query():
     # an empty list of filters is a plain list request
     core.asked.clear()
     obj.RunScript(None, None, None, None, None, None, None, None, None, None,
-                  None, None, None, None, None)
+                  None, None, None, None, None, None, None, None, None, None, None)
     assert core.asked == [{'expand': 'current_snapshot'}]
     # a list for the original function takes its first item
     core.asked.clear()
     obj.RunScript(['IfcSlab', 'IfcBeam'], None, None, None, None, None, None,
-                  None, None, None, None, None, None, None, None)
+                  None, None, None, None, None, None, None, None, None, None,
+                  None, None, None, None)
     assert core.asked[0]['original_function'] == 'IfcSlab'
+    assert data.DataCount == 1 and fit.DataCount == 0 and far.DataCount == 0
+
+class SearchCore(ListCore):
+    """The Session core for a list with a fit or a distance: the rows come
+    from ``authorized_get`` (the cache keeps no match)."""
+
+    def authorized_get(self, path, params=None, extra_headers=None, timeout=20):
+        self.asked.append((path, dict(params)))
+        return Response(200, self.rows)
+
+    def cached_list_identities(self, params):
+        raise AssertionError('a fit or near search is not read from the cache')
+
+
+def _search_rows():
+    first, second = _row('IfcBeam', 'concrete'), _row('IfcBeam', 'concrete')
+    first['fit'] = {'mode': 'about', 'deviation': 0.05}
+    first['distance_m'] = 1500.0
+    second['fit'] = {'mode': 'about', 'deviation': 0.12}
+    return [first, second]
+
+
+def _run_search(rows, **kwargs):
+    core = SearchCore(rows)
+    module = compstub.load_component('FetchFilteredComponents',
+                                     sticky={'CSC_AuthCore': core})
+    obj = compstub.instance(module, 'FetchFilteredComponents')
+    args = dict(OriginalFunction=None, Material=None, Dataset=None, Complexity=None,
+                Fragment=None, MinDimensionX=None, MaxDimensionX=None, MinDimensionY=None,
+                MaxDimensionY=None, MinDimensionZ=None, MaxDimensionZ=None, ReservedStatus=None,
+                ShapeClass=None, MaterialClass=None, Circulation=None, FitMode=None,
+                FitSize=None, FitTolerance=None, NearPoint=None, NearLayer=None, RadiusKm=None)
+    args.update(kwargs)
+    return core, obj, obj.RunScript(**args)
+
+
+def test_fetch_filtered_sends_the_fit_and_the_near_search_and_returns_the_match():
+    class Point:
+        X, Y, Z = 49.8728, 8.6512, 0.0
+
+    core, obj, (description, data, fit, far) = _run_search(
+        _search_rows(), FitMode='about', FitSize=[1200, 600, 200], FitTolerance='5%',
+        NearPoint=Point(), NearLayer='origin', RadiusKm=30.0)
+    path, params = core.asked[0]
+    assert path == '/identities' and params == {
+        'fit_mode': 'about', 'fit_size': '1200,600,200', 'fit_tol': '5%',
+        'near_lat': '49.8728', 'near_lon': '8.6512', 'near_layer': 'origin', 'radius_km': '30',
+        'expand': 'current_snapshot'}
+    assert data.DataCount == 2
+    assert fit.values == pytest.approx([5.0, 12.0])                      # per cent
+    assert far.values == [1.5]                                           # km; the 2nd has no distance
+    assert [p for p, _ in fit.items] == [p for p, _ in data.items]       # same paths as the passports
+    text = description.values[0]
+    assert 'Fit: about 1200,600,200 mm, within 5%' in text
+    assert 'Near: 49.8728, 8.6512 (origin location), within 30 km' in text
+
+
+def test_fetch_filtered_can_hold_gives_the_waste_and_says_the_tolerance_is_ignored():
+    rows = _search_rows()
+    rows[0]['fit'] = {'mode': 'can_hold', 'waste_mm3': 4.0e7, 'waste_percent': 41.5}
+    rows[1]['fit'] = None
+    core, obj, (description, data, fit, far) = _run_search(
+        rows, FitMode='Can hold', FitSize='1200, 600, 200', FitTolerance='10%')
+    assert core.asked[0][1]['fit_mode'] == 'can_hold' and 'fit_tol' not in core.asked[0][1]
+    assert fit.values == [41.5]
+    assert any('ignored' in m for m in compstub.messages(obj)['remark'])
+    assert 'Fit: can hold 1200,600,200 mm' in description.values[0]
+
+
+def test_fetch_filtered_says_what_is_wrong_with_a_fit_or_near_input():
+    for kwargs, words in (({'FitMode': 'about', 'FitSize': [1, 2]}, 'FitSize'),
+                          ({'FitMode': 'roughly', 'FitSize': [1, 2, 3]}, 'FitMode'),
+                          ({'FitSize': [1, 2, 3]}, 'FitMode'),
+                          ({'NearLayer': 'origin'}, 'NearPoint'),
+                          ({'NearPoint': 'here'}, 'NearPoint'),
+                          ({'FitMode': 'about', 'FitSize': [1, 2, 3], 'FitTolerance': 'ten'},
+                           'FitTolerance')):
+        core, obj, result = _run_search(_search_rows(), **kwargs)
+        assert core.asked == [], kwargs                  # nothing is sent
+        assert any(words in m for m in compstub.messages(obj)['warning']), kwargs
+        assert result is None or all(v is None for v in result)
+
+
+def test_fetch_filtered_declares_the_match_and_distance_outputs():
+    module = compstub.load_component('FetchFilteredComponents')
+    names = [name for name, _, _ in module.OUTPUTS]
+    assert names == ['FilterDescription', 'ComponentPassport', 'Fit', 'DistanceKm']
+    params = list(inspect.signature(
+        compstub.instance(module, 'FetchFilteredComponents').RunScript).parameters)
+    assert params[-6:] == ['FitMode', 'FitSize', 'FitTolerance', 'NearPoint', 'NearLayer', 'RadiusKm']
 
 
 def test_the_filter_components_name_the_new_inputs():
@@ -729,3 +821,191 @@ def test_apply_frame_computes_a_missing_frame_from_the_passports_preview():
     stood = csc_read.placement_matrix(csc_read.placement_of(
         json.loads(column)))
     assert abs(abs((stood[:3, :3] @ [1, 0, 0])[2]) - 1) < 1e-9
+
+
+# FETCH SIMILAR COMPONENTS (8.174) -------------------------------------------
+UUID_C = '33333333-3333-4333-8333-333333333333'
+UUID_D = '44444444-4444-4444-8444-444444444444'
+
+
+class SimilarCore:
+    """What FetchSimilarComponents asks of the Session core."""
+
+    def __init__(self, answer, passports=None):
+        self.answer = answer
+        self.passports = passports if passports is not None else {}
+        self.asked = []
+        self.fetched = []
+
+    def is_valid(self):
+        return True
+
+    def resolve_identity_id_from_input(self, value):
+        text = str(value).strip()
+        if text.startswith('{'):
+            return json.loads(text)['identity']['_id']
+        return text if len(text) == 36 else None
+
+    def authorized_get(self, path, params=None, extra_headers=None, timeout=20):
+        self.asked.append((path, dict(params or {})))
+        return self.answer
+
+    def cached_get_passport(self, identity_id, snapshots=None):
+        self.fetched.append(identity_id)
+        body = self.passports.get(identity_id)
+        return Response(200, body) if body is not None else Response(404, {'detail': 'gone'})
+
+    def passport_json_string(self, passport):
+        return json.dumps(passport)
+
+
+def _similar_answer(*neighbours):
+    return Response(200, {
+        'query_id': UUID_A, 'basis': 'radial_signature', 'basis_label': 'Radial signature',
+        'computed_at': 't', 'considered': 40,
+        'results': [{'distance': d, 'piece': dict(piece, _id=i)} for i, d, piece in neighbours]})
+
+
+def _similar_run(core, **kwargs):
+    module = compstub.load_component('FetchSimilarComponents', sticky={'CSC_AuthCore': core})
+    obj = compstub.instance(module, 'FetchSimilarComponents')
+    args = dict(IdentityID=UUID_A, Basis=None, Count=None, OriginalFunction=None, Material=None,
+                Dataset=None, Complexity=None, Fragment=None, MinDimensionX=None,
+                MaxDimensionX=None, MinDimensionY=None, MaxDimensionY=None, MinDimensionZ=None,
+                MaxDimensionZ=None, ShapeClass=None, MaterialClass=None, Circulation=None,
+                FitMode=None, FitSize=None, FitTolerance=None, NearPoint=None, NearLayer=None,
+                RadiusKm=None)
+    args.update(kwargs)
+    return obj, obj.RunScript(**args)
+
+
+def test_fetch_similar_asks_for_the_neighbours_and_returns_passports_with_distances():
+    passports = {UUID_C: _row('IfcBeam', 'concrete'), UUID_D: _row('IfcColumn', 'concrete')}
+    core = SimilarCore(_similar_answer(
+        (UUID_C, 0.5, {'fit': {'mode': 'about', 'deviation': 0.1}, 'distance_m': 2500.0}),
+        (UUID_D, 1.75, {})), passports)
+    obj, (description, data, distance, fit, far) = _similar_run(core)
+    assert core.asked == [('/identities/%s/similar' % UUID_A, {'basis': 'radial_signature', 'count': 10})]
+    assert core.fetched == [UUID_C, UUID_D]
+    assert [json.loads(v)['identity']['original_function'] for v in data.values] == [
+        'IfcBeam', 'IfcColumn']                                          # nearest first
+    assert distance.values == [0.5, 1.75]
+    assert fit.values == pytest.approx([10.0]) and far.values == [2.5]   # only where the search is set
+    assert [p for p, _ in distance.items] == [p for p, _ in data.items]  # same paths
+    assert 'Basis: radial_signature, up to 10' in description.values[0]
+    assert any('Found 2 similar components among 40' in m for m in compstub.messages(obj)['remark'])
+
+
+def test_fetch_similar_sends_basis_count_filters_fit_and_near():
+    core = SimilarCore(_similar_answer())
+    obj, _ = _similar_run(
+        core, IdentityID=json.dumps({'identity': {'_id': UUID_A}}), Basis='Scalars', Count=6,
+        Material='concrete', Dataset='ds', ShapeClass='planar', MinDimensionX=100.0,
+        FitMode='can_hold', FitSize=[1200, 600, 200], NearPoint=[49.8728, 8.6512], NearLayer='origin',
+        RadiusKm=50.0)
+    assert core.asked == [('/identities/%s/similar' % UUID_A, {
+        'material': 'concrete', 'dataset': 'ds', 'shape_class': 'planar', 'bbx_min_x': 100.0,
+        'fit_mode': 'can_hold', 'fit_size': '1200,600,200', 'near_lat': '49.8728',
+        'near_lon': '8.6512', 'near_layer': 'origin', 'radius_km': '50',
+        'basis': 'scalars', 'count': 6})]
+
+
+def test_fetch_similar_lowers_a_count_the_server_would_refuse():
+    core = SimilarCore(_similar_answer())
+    obj, _ = _similar_run(core, Count=500)
+    assert core.asked[0][1]['count'] == 50
+    assert any('lowered' in m for m in compstub.messages(obj)['remark'])
+
+
+def test_fetch_similar_says_in_words_why_the_server_refused():
+    for status, body, words in ((404, {'detail': 'Component not found'}, 'not visible'),
+                                (409, {'detail': 'matrix'}, 'not built'),
+                                (422, {'detail': 'This component has no Radial signature descriptor'},
+                                 'no Radial signature descriptor')):
+        core = SimilarCore(Response(status, body))
+        obj, result = _similar_run(core)
+        assert any(words in m for m in compstub.messages(obj)['warning']), (status, compstub.messages(obj))
+        assert all(v is None for v in result)
+
+
+def test_fetch_similar_needs_an_identity_and_a_usable_search():
+    core = SimilarCore(_similar_answer())
+    for kwargs, level, words in (({'IdentityID': None}, 'warning', 'identity UUID'),
+                                 ({'IdentityID': 'nope'}, 'error', 'not a valid identity'),
+                                 ({'Basis': 'tsne'}, 'warning', 'Basis'),
+                                 ({'Count': 'many'}, 'warning', 'Count'),
+                                 ({'FitMode': 'about', 'FitSize': [1, 2]}, 'warning', 'FitSize'),
+                                 ({'NearLayer': 'origin'}, 'warning', 'NearPoint')):
+        obj, result = _similar_run(core, **kwargs)
+        assert any(words in m for m in compstub.messages(obj)[level]), kwargs
+        assert all(v is None for v in result)
+    assert core.asked == []                                                # nothing is sent
+
+
+def test_fetch_similar_skips_a_neighbour_whose_passport_is_gone_and_says_so():
+    core = SimilarCore(_similar_answer((UUID_C, 0.5, {}), (UUID_D, 1.0, {'fit': {'mode': 'about', 'deviation': 0.2}})),
+                       {UUID_D: _row('IfcColumn', 'concrete')})
+    obj, (description, data, distance, fit, far) = _similar_run(core)
+    assert data.DataCount == 1 and distance.values == [1.0] and fit.values == pytest.approx([20.0])
+    assert any('could not be fetched' in m for m in compstub.messages(obj)['warning'])
+    # the paths count the passports found: no gap for the lost one, and the numbers share them
+    assert [p.indices for p, _ in data.items] == [p.indices for p, _ in distance.items] == [
+        p.indices for p, _ in fit.items]
+    assert [p.indices for p, _ in data.items] == [(0, 0)]
+
+
+def test_fetch_similar_numbers_its_paths_by_the_passports_found():
+    ids = [UUID_C, UUID_D, '55555555-5555-4555-8555-555555555555', '66666666-6666-4666-8666-666666666666']
+    core = SimilarCore(_similar_answer(*[(i, 0.1 * (n + 1), {}) for n, i in enumerate(ids)]),
+                       {ids[0]: _row('IfcBeam', 'concrete'), ids[2]: _row('IfcSlab', 'concrete'),
+                        ids[3]: _row('IfcPlate', 'concrete')})       # the second one is gone
+    obj, (description, data, distance, fit, far) = _similar_run(core)
+    assert [p.indices for p, _ in data.items] == [(0, 0), (0, 1), (0, 2)]
+    assert [p.indices for p, _ in distance.items] == [(0, 0), (0, 1), (0, 2)]
+    assert distance.values == pytest.approx([0.1, 0.3, 0.4])
+
+
+def test_fetch_similar_declares_its_outputs_and_inputs_in_the_documented_order():
+    module = compstub.load_component('FetchSimilarComponents')
+    assert [n for n, _, _ in module.OUTPUTS] == [
+        'FilterDescription', 'ComponentPassport', 'Distance', 'Fit', 'DistanceKm']
+    obj = compstub.instance(module, 'FetchSimilarComponents')
+    params = list(inspect.signature(obj.RunScript).parameters)
+    assert params[:3] == ['IdentityID', 'Basis', 'Count']
+    # the filters of FetchFilteredComponents, with the same names, in the same order
+    filtered = compstub.instance(compstub.load_component('FetchFilteredComponents'),
+                                 'FetchFilteredComponents')
+    shared = [p for p in inspect.signature(filtered.RunScript).parameters if p != 'ReservedStatus']
+    assert params[3:] == shared                    # reserved is not a filter of the similar search
+
+
+class _Vector0:
+    """A zero Vector3d: what an unconnected vector input of Grasshopper gives."""
+    X = Y = Z = 0.0
+
+
+def test_fetch_filtered_treats_a_zero_size_and_a_zero_point_as_not_set():
+    for kwargs in ({'FitMode': 'about', 'FitSize': [0, 0, 0], 'NearPoint': _Vector0()},
+                   {'FitSize': _Vector0(), 'NearPoint': _Vector0()}, {'FitSize': [], 'NearPoint': None}):
+        core = ListCore([_row('IfcBeam', 'concrete')])
+        module = compstub.load_component('FetchFilteredComponents', sticky={'CSC_AuthCore': core})
+        obj = compstub.instance(module, 'FetchFilteredComponents')
+        args = dict(OriginalFunction=None, Material=None, Dataset=None, Complexity=None, Fragment=None,
+                    MinDimensionX=None, MaxDimensionX=None, MinDimensionY=None, MaxDimensionY=None,
+                    MinDimensionZ=None, MaxDimensionZ=None, ReservedStatus=None, ShapeClass=None,
+                    MaterialClass=None, Circulation=None, FitMode=None, FitSize=None, FitTolerance=None,
+                    NearPoint=None, NearLayer=None, RadiusKm=None)
+        args.update(kwargs)
+        description, data, fit, far = obj.RunScript(**args)
+        # a plain list from the cache, no fit or near search, and no error
+        assert core.asked == [{'expand': 'current_snapshot'}], kwargs
+        assert data.DataCount == 1 and compstub.messages(obj)['warning'] == []
+
+
+def test_fetch_similar_says_a_fit_mode_without_a_size_does_nothing():
+    for size in ([0, 0, 0], [], None, _Vector0()):
+        core = SimilarCore(_similar_answer())
+        obj, result = _similar_run(core, FitMode='can_hold', FitSize=size, NearPoint=_Vector0())
+        assert core.asked == [('/identities/%s/similar' % UUID_A, {'basis': 'radial_signature', 'count': 10})]
+        assert any('no dimension search' in m for m in compstub.messages(obj)['remark']), size
+        assert compstub.messages(obj)['warning'] == []

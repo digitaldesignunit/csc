@@ -38,10 +38,23 @@ export default function PrivacyPage() {
               <CardTitle className="text-base">Controller</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6 text-sm leading-relaxed">
+              <div className="space-y-2">
+                <address className="not-italic">
+                  Max Eschenbach<br />
+                  Lahnstr. 67<br />
+                  60326 Frankfurt am Main<br />
+                  Germany
+                </address>
+                <p>
+                  E-mail: <a href={`mailto:${CONTACT_EMAIL}`} className={LINK}>{CONTACT_EMAIL}</a> (as in the{' '}
+                  <Link href="/imprint" className={LINK}>Imprint</Link>)
+                </p>
+              </div>
+
               <p>
-                Max Eschenbach, Lahnstr. 67, 60326 Frankfurt am Main, Germany. E-mail:{' '}
-                <a href={`mailto:${CONTACT_EMAIL}`} className={LINK}>{CONTACT_EMAIL}</a> (as in the{' '}
-                <Link href="/imprint" className={LINK}>Imprint</Link>).
+                The catalog is part of a doctoral project at the Digital Design Unit (DDU) of TU Darmstadt, but it is
+                run by Max Eschenbach in person. Max Eschenbach alone is the controller for the processing described
+                on this page; TU Darmstadt does not operate the site and is not responsible for it.
               </p>
 
               <ul className="space-y-4">

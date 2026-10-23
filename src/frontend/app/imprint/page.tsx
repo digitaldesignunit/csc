@@ -47,7 +47,9 @@ export default function ImprintPage() {
               <p><strong>E-Mail:</strong> <a href="mailto:max.eschenbach@tu-darmstadt.de" className="text-blue-500 underline">max.eschenbach@tu-darmstadt.de</a></p>
               <p className="text-sm text-muted-foreground">
                 Der Katalog ist Teil eines Promotionsprojekts am Fachgebiet Digitales Gestalten (Digital Design Unit,
-                DDU), TU Darmstadt, El-Lissitzky-Stra&szlig;e 1, 64287 Darmstadt, Deutschland.
+                DDU), TU Darmstadt, El-Lissitzky-Stra&szlig;e 1, 64287 Darmstadt, Deutschland. Anbieter dieses Angebots und
+                Verantwortlicher im Sinne der DSGVO ist Max Eschenbach pers&ouml;nlich. Die TU Darmstadt betreibt den
+                Katalog nicht und ist f&uuml;r ihn nicht verantwortlich.
               </p>
             </div>
           </CardContent>
@@ -64,7 +66,7 @@ export default function ImprintPage() {
             <div>
               <h3 className="text-lg font-semibold mb-2">Haftung für Inhalte</h3>
               <p className="mb-4">
-                Alle Inhalte unseres Internetauftritts wurden mit größter Sorgfalt und nach bestem Gewissen erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte können wir jedoch keine Gewähr übernehmen. Als Diensteanbieter sind wir gemäß § 7 Abs.1 TMG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 TMG sind wir als Diensteanbieter jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu überwachen oder nach Umständen zu forschen, die auf eine rechtswidrige Tätigkeit hinweisen. Verpflichtungen zur Entfernung oder Sperrung der Nutzung von Informationen nach den allgemeinen Gesetzen bleiben hiervon unberührt.
+                Alle Inhalte unseres Internetauftritts wurden mit größter Sorgfalt und nach bestem Gewissen erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte können wir jedoch keine Gewähr übernehmen. Als Diensteanbieter sind wir gemäß § 7 Abs. 1 DDG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 DDG sind wir als Diensteanbieter jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu überwachen oder nach Umständen zu forschen, die auf eine rechtswidrige Tätigkeit hinweisen. Verpflichtungen zur Entfernung oder Sperrung der Nutzung von Informationen nach den allgemeinen Gesetzen bleiben hiervon unberührt.
               </p>
               <p className="mb-4">
                 Eine diesbezügliche Haftung ist jedoch erst ab dem Zeitpunkt der Kenntniserlangung einer konkreten Rechtsverletzung möglich. Bei Bekanntwerden von den o.g. Rechtsverletzungen werden wir diese Inhalte unverzüglich entfernen.

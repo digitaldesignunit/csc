@@ -1,45 +1,23 @@
 'use client'
 
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import React from 'react'
-import ComponentDetailMap from '../ComponentDetailMap';
 import { formatLocation, formatLocationMapsLink } from '@/lib/utils'
 import { GeoLocation } from '@/generated/CatalogSharedTypes'
 
-export default function ComponentOverviewDataTableLocationCell({ coords, showTooltip = true }: { coords: GeoLocation, showTooltip?: boolean }) {
-  const location: string = formatLocation(coords)
-  const locationlink: string = formatLocationMapsLink(coords)
-  const { lat, lon } = coords;
+/**
+ * A location in the table: a plain link that opens Google Maps in a new tab
+ * on a click. There is no map preview on hover (decision 8.176): an embedded
+ * map sent every visitor who pointed at a location to Google.
+ */
+export default function ComponentOverviewDataTableLocationCell({ coords }: { coords: GeoLocation }) {
   return (
-    <>
-      {showTooltip ? (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a
-                href={locationlink}
-                target='_blank'
-                rel='noopener noreferrer'
-                className='hover:text-gray-500'
-              >
-                {location}
-              </a>
-            </TooltipTrigger>
-            <TooltipContent>
-                <ComponentDetailMap lat={lat} lon={lon} />
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      ) : (
-        <a
-          href={locationlink}
-          target='_blank'
-          rel='noopener noreferrer'
-          className='hover:text-gray-500'
-        >
-          {location}
-        </a>
-      )}
-    </>
+    <a
+      href={formatLocationMapsLink(coords)}
+      target='_blank'
+      rel='noopener noreferrer'
+      title='Open in Google Maps'
+      className='hover:text-gray-500'
+    >
+      {formatLocation(coords)}
+    </a>
   )
 }

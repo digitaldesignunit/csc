@@ -87,6 +87,7 @@ from .batches import (
 )
 from .catalog_common import allocate_catalog_number, now_iso, validate_uuid
 from .change_log import log_change
+from apps.catalog.geo import with_geo_origin
 from apps.catalog.history import diff
 from .evidence_fold import recompute_properties
 from .geometry_hooks import derive_sync_identity
@@ -222,9 +223,13 @@ async def _write(request: Request, before: Dict[str, Any],
     # the write first, the log entry only once it stands: a piece another
     # edit changed meanwhile (409) leaves no entry behind
     at = now_iso()
-    after = {**after, 'lastmodified': at}
+    # the stored points follow the origin (8.170); the model dump above
+    # dropped them, ``geo_current`` is carried over from the stored record
+    after = with_geo_origin({**after, 'lastmodified': at}, before)
     result = await request.app.mongodb_component_identities.replace_one(
-        {'_id': before['_id'], 'lastmodified': before.get('lastmodified')},
+        {'_id': before['_id'], 'lastmodified': before.get('lastmodified'),
+         # a current point set meanwhile (the replace would undo it): 409
+         'geo_current': before.get('geo_current')},
         after)
     if result.matched_count == 0:
         raise HTTPException(status_code=409,
@@ -472,7 +477,7 @@ async def create_identity(
 
     if doc.get('origin') is not None:
         doc['origin'] = await fill_origin(request, doc['origin'])   # 8.133 e
-    await identities.insert_one(dict(doc))
+    await identities.insert_one(with_geo_origin(doc))
     try:
         await request.app.mongodb_component_snapshots.insert_one(
             dict(snapshot))

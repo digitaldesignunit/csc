@@ -1,6 +1,8 @@
 import BrowseView from '@/components/components/overview/BrowseView'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import { parseCirculation } from '@/lib/browse'
+import { fitBackendParams } from '@/lib/fit'
+import { nearBackendParams } from '@/lib/near'
 import { serverBackend } from '@/lib/serverBackend'
 import { redirect } from 'next/navigation'
 
@@ -41,7 +43,18 @@ export default async function ComponentsPage({
 
   const page = Math.max(1, Number(sp?.page ?? 1) || 1)
   const size = Math.min(200, Math.max(1, Number(sp?.size ?? 20) || 20))
-  const sortkey = sp?.sortkey ?? '_id'
+  // a usable fit or near search goes on to the backend (an unusable one is
+  // left out, the backend would refuse it); the list sorts by the distance of
+  // a near search, else the match of a fit, unless another sort is set
+  const urlParams = new URLSearchParams(
+    Object.entries(sp ?? {}).filter((e): e is [string, string] => typeof e[1] === 'string'))
+  const fit = fitBackendParams(urlParams)
+  const near = nearBackendParams(urlParams)
+  const asked = sp?.sortkey
+  // `match` or `distance` without its search (an old link) is no sort: the
+  // backend would refuse it
+  const usable = !(asked === 'match' && !fit.fit_mode) && !(asked === 'distance' && !near.near_lat)
+  const sortkey = asked && usable ? asked : near.near_lat ? 'distance' : fit.fit_mode ? 'match' : '_id'
   const sortorder: 'asc' | 'desc' = sp?.sortorder === 'desc' ? 'desc' : 'asc'
 
   const countParams = new URLSearchParams({ circulation })
@@ -49,6 +62,7 @@ export default async function ComponentsPage({
     const value = sp?.[key]
     if (value) countParams.set(key, value)
   }
+  for (const [key, value] of Object.entries({ ...fit, ...near })) countParams.set(key, value)
   const listParams = new URLSearchParams(countParams)
   listParams.set('page', String(page))
   listParams.set('size', String(size))

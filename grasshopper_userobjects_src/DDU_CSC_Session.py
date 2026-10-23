@@ -45,12 +45,12 @@ ghenv.Component.Description = (  # NOQA
 """
 Author: Max Benjamin Eschenbach
 License: MIT License
-Version: 261020
+Version: 261023
 """
 
 # Sent as X-CSC-Client on every request so the backend can tell which
 # UserObjects release is calling (spec 7.4).
-CSC_CLIENT = 'gh-userobjects/0.6.3.0'
+CSC_CLIENT = 'gh-userobjects/0.6.4.0'
 
 # The server of a fresh session; the Server input of this component changes it.
 DEFAULT_SERVER = 'https://api.2ndchances.build'

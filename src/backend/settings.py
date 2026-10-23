@@ -130,8 +130,9 @@ class Settings(BaseSettings):
         'admin', description='global roles that may hold personal access '
         'tokens, comma separated (8.167): admin, user')
     csc_open_registration_domains: str = Field(
-        'tu-darmstadt.de', description='comma separated e-mail domains that '
-                                       'may register without an invitation')
+        '', description='comma separated e-mail domains that may register '
+                        'without an invitation; none (the default) = '
+                        'invite only (8.172)')
     csc_max_datasets_per_user: int = Field(
         DEFAULT_MAX_DATASETS, ge=0, description='datasets one account may '
         'create (admins: no limit); 3 when not a number')

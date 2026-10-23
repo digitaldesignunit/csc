@@ -1,0 +1,129 @@
+/*
+ * The Location Map (decisions 8.170, 8.171): Leaflet's controls, popups and the
+ * pins and clusters of the page follow the theme through the app's own colour
+ * variables. The tiles stay as they come (light) in both themes.
+ */
+
+/* Leaflet's panes and controls reach z-index 1000: keep them inside the map so
+   they never cover the top bar, a dialog or the preview panel. */
+.csc-map {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  background: var(--muted);
+  font: inherit;
+}
+
+/* zoom buttons */
+.csc-map .leaflet-bar,
+.csc-map .leaflet-bar a {
+  background-color: var(--card);
+  color: var(--card-foreground);
+  border-color: var(--border);
+}
+.csc-map .leaflet-bar a:hover,
+.csc-map .leaflet-bar a:focus-visible {
+  background-color: var(--muted);
+}
+.csc-map .leaflet-bar a.leaflet-disabled {
+  color: var(--muted-foreground);
+  background-color: var(--card);
+}
+.csc-map .leaflet-touch .leaflet-bar {
+  border: 1px solid var(--border);
+}
+
+/* the attribution over the light tiles */
+.csc-map .leaflet-control-attribution {
+  background: color-mix(in srgb, var(--card) 86%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.csc-map .leaflet-control-attribution a {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+/* the popup of "Search near here" and the hover label of a pin */
+.csc-map .leaflet-popup-content-wrapper,
+.csc-map .leaflet-popup-tip,
+.csc-map .leaflet-tooltip {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+.csc-map .leaflet-tooltip-top::before {
+  border-top-color: var(--card);
+}
+.csc-map .leaflet-popup-close-button {
+  color: var(--muted-foreground);
+}
+.csc-map .leaflet-popup-content {
+  margin: 10px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.csc-popup-coords {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+.csc-popup-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.csc-popup-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* a piece: a dot in the colour of the colouring, with a ring that shows on tiles and on other dots */
+.csc-pin {
+  background: transparent;
+  border: 0;
+}
+.csc-pin span {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.55), 0 1px 3px rgb(0 0 0 / 0.4);
+}
+.csc-pin:focus-visible span,
+.leaflet-marker-icon.csc-pin:focus span {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* a cluster: neutral, with the count; the size follows the count */
+.csc-cluster {
+  background: transparent;
+  border: 0;
+}
+.csc-cluster span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 3px solid var(--primary);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.csc-cluster.csc-cluster-m span {
+  font-size: 14px;
+}
+.csc-cluster.csc-cluster-l span {
+  font-size: 15px;
+}

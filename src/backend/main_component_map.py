@@ -1,9 +1,15 @@
 #!/usr/bin/env python3.13
 """
-Precompute Component Map layouts (PCA + UMAP) into ``component_map_cache``.
+Precompute Component Map layouts (PCA + UMAP) and the similarity matrices
+into ``component_map_cache``.
 
 Runs as a cron job so the FastAPI ``GET /identities/map`` route can serve
-UMAP layouts without computing them on request.
+UMAP layouts without computing them on request, and the ``similar`` route and
+the MCP ``similar_components`` tool can rank by descriptor distance (decision
+8.174): for each basis one matrix of the standardised feature vectors of every
+piece that has the descriptor (``knn:<basis>``, see ``apps/catalog/similarity.py``).
+The matrix is fixed until the next run: a piece added or reshaped since is ranked
+by its old vector, or not at all, until then.
 
 Default catalog scope matches the Component Map page: published current
 snapshots of pieces in circulation (``CatalogFilters()`` defaults).
@@ -12,6 +18,8 @@ Usage:
     python main_component_map.py
     python main_component_map.py --basis scalars --method umap
     python main_component_map.py --dry-run
+    python main_component_map.py --knn-only     # only the similarity matrices
+    python main_component_map.py --no-knn       # only the layouts
 """
 
 from __future__ import annotations
@@ -33,6 +41,7 @@ from utility import (
 )
 from apps.catalog.api.identity_filters import CatalogFilters
 from apps.catalog.api.identity_query import build_list_pipeline
+from apps.catalog.similarity import build_feature_matrix, store_matrix
 from apps.catalog.component_map import (
     MAP_BASES,
     MAP_METHODS,
@@ -56,9 +65,11 @@ def log(message: str, prefix: str = 'COMPONENT_MAP') -> None:
 async def load_map_rows(
     identities_col,
     snapshots_collection: str,
+    scope: Optional[CatalogFilters] = None,
 ) -> List[Dict[str, Any]]:
-    """Default-scope rows with current-snapshot descriptors."""
-    scope = CatalogFilters()
+    """Rows with current-snapshot descriptors: the default scope (published,
+    in circulation) unless a scope is given."""
+    scope = scope or CatalogFilters()
     pipeline = build_list_pipeline(
         snapshots_collection=snapshots_collection,
         identity_match=scope.identity_match(),
@@ -153,11 +164,49 @@ async def compute_and_store(
     return stored
 
 
+# every piece with a current version: the matrices serve any filter, the
+# visibility and the filters are applied when a query ranks (8.174)
+KNN_SCOPE = dict(status='any', circulation='all', include_withdrawn=True)
+
+
+async def compute_and_store_knn(
+    *,
+    identities_col,
+    snapshots_collection: str,
+    cache_col,
+    bases: Sequence[MapBasis],
+    dry_run: bool,
+) -> int:
+    """The similarity matrix of each basis, standardised over the catalog."""
+    rows = await load_map_rows(identities_col, snapshots_collection,
+                               CatalogFilters(**KNN_SCOPE))
+    log(f'Loaded {len(rows)} components for the similarity matrices')
+    now = get_current_timestamp_z()
+    stored = 0
+    for basis in bases:
+        matrix = await asyncio.to_thread(
+            build_feature_matrix, rows, basis, now)
+        if matrix is None:
+            log(f'No component has the {basis} descriptor: no matrix',
+                'WARNING')
+            continue
+        if dry_run:
+            log(f'[dry-run] would upsert knn:{basis} '
+                f'({len(matrix.ids)} rows x {matrix.dim})')
+        else:
+            await store_matrix(cache_col, matrix, now)
+            log(f'Upserted knn:{basis} ({len(matrix.ids)} rows x {matrix.dim})')
+        stored += 1
+    return stored
+
+
 async def run(
     *,
     bases: Sequence[MapBasis],
     methods: Sequence[MapMethod],
     dry_run: bool,
+    layouts: bool = True,
+    knn: bool = True,
 ) -> int:
     log(
         f'Starting component map cache '
@@ -177,15 +226,26 @@ async def run(
         identities = db['component_identities']
         snapshots = db['component_snapshots']
         cache = db['component_map_cache']
-        stored = await compute_and_store(
-            identities_col=identities,
-            snapshots_collection=snapshots.name,
-            cache_col=cache,
-            bases=bases,
-            methods=methods,
-            dry_run=dry_run,
-        )
-        log(f'Summary: layouts_written={stored}')
+        stored = 0
+        if layouts:
+            stored = await compute_and_store(
+                identities_col=identities,
+                snapshots_collection=snapshots.name,
+                cache_col=cache,
+                bases=bases,
+                methods=methods,
+                dry_run=dry_run,
+            )
+        matrices = 0
+        if knn:
+            matrices = await compute_and_store_knn(
+                identities_col=identities,
+                snapshots_collection=snapshots.name,
+                cache_col=cache,
+                bases=bases,
+                dry_run=dry_run,
+            )
+        log(f'Summary: layouts_written={stored} matrices_written={matrices}')
     except Exception:
         _log.exception('Error during component map cache')
         raise
@@ -215,6 +275,15 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         choices=list(MAP_METHODS),
         help='Limit to one method (repeatable). Default: pca and umap.',
     )
+    only = parser.add_mutually_exclusive_group()
+    only.add_argument(
+        '--knn-only', action='store_true',
+        help='Only the similarity matrices, no layouts.',
+    )
+    only.add_argument(
+        '--no-knn', action='store_true',
+        help='Only the layouts, no similarity matrices.',
+    )
     return parser.parse_args(argv)
 
 
@@ -229,7 +298,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         tuple(args.method) if args.method else MAP_METHODS
     )
     try:
-        asyncio.run(run(bases=bases, methods=methods, dry_run=args.dry_run))
+        asyncio.run(run(bases=bases, methods=methods, dry_run=args.dry_run,
+                        layouts=not args.knn_only, knn=not args.no_knn))
     except Exception:
         return 1
     return 0

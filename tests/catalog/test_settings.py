@@ -50,7 +50,7 @@ def test_the_defaults_are_the_ones_the_backend_always_had(clean):
     assert (s.smtp_port, s.smtp_from_name, s.smtp_reply_to, s.smtp_dev_mode) == (
         587, 'Catalog of Second Chances', '', False)
     assert (s.csc_workers, s.csc_log_level, s.csc_max_datasets_per_user) == (2, 'info', 3)
-    assert s.csc_open_registration_domains == 'tu-darmstadt.de'
+    assert s.csc_open_registration_domains == ''  # invite only (8.172)
     assert s.csc_trusted_proxies == '127.0.0.0/8,::1'
     assert s.csc_geometry_heavy_stages == 'server'
     assert (s.geometry_upload_limit_mb, s.evidence_upload_limit_mb) == (250, 25)

@@ -6,11 +6,13 @@
  * the coordinates with a link to the map instead of a map for a point that
  * hundreds of pieces share. A piece without a location says so (P9).
  */
+import Link from 'next/link'
 import { Camera, MapPin } from 'lucide-react'
 
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
 import type { GeoLocation } from '@/generated/CatalogSharedTypes'
+import { nearThisPieceLink } from '@/lib/near'
 import { formatLocation, formatLocationMapsLink } from '@/lib/utils'
 import ComponentSnapshotPhotoGallery from '../ComponentSnapshotPhotoGallery'
 
@@ -20,6 +22,8 @@ export default function ComponentPhotosLocationCard({ catalog }: { catalog: Cata
   const snapshotId = String(snapshot._id ?? identity.current_snapshot_id ?? '')
   const location = (snapshot.location as GeoLocation | null | undefined) ?? null
   const located = !!location && location.lat != null && location.lon != null
+  // pieces near this one: from its place now, else from its origin (8.170)
+  const nearLink = nearThisPieceLink(location, identity.origin?.place?.location)
 
   return (
     <section aria-label="Photos and location" className="rounded-lg border border-border bg-card p-3 shadow-sm">
@@ -47,6 +51,11 @@ export default function ComponentPhotosLocationCard({ catalog }: { catalog: Cata
           </>
         ) : (
           <span className="text-muted-foreground">No location recorded.</span>
+        )}
+        {nearLink && (
+          <Link href={nearLink} className="text-primary underline underline-offset-2">
+            Near this piece
+          </Link>
         )}
       </p>
     </section>

@@ -9,7 +9,7 @@ until their phase rebuilds them (P3 / P4 / P7).
 """
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from pydantic import BaseModel, ConfigDict, Field
@@ -81,6 +81,24 @@ def passport_body(identity_doc: Dict[str, Any],
 
 
 # CATALOG ROW (GET /identities?expand=shallow) --------------------------------
+class FitAbout(BaseModel):
+    """The match of a dimension search *about this size* (8.169)."""
+    mode: Literal['about']
+    deviation: float = Field(
+        description='largest relative deviation of the three sorted sides, '
+                    'as a ratio (0.08 = 8 %)')
+
+
+class FitCanHold(BaseModel):
+    """The match of a dimension search *can hold this size* (8.169)."""
+    mode: Literal['can_hold']
+    waste_mm3: float = Field(
+        description='box volume of the piece minus the asked volume, in mm3')
+    waste_percent: float = Field(
+        description='that waste as a share of the box volume of the piece, '
+                    'in per cent')
+
+
 class CatalogRow(BaseModel):
     """
     One catalog list row: identity core + current-snapshot metadata. Not a
@@ -106,6 +124,15 @@ class CatalogRow(BaseModel):
         description='whether the current state has a rendered preview '
                     '(list rows only; absent elsewhere)')
     current_snapshot_id: Optional[str] = None
+    fit: Optional[Union[FitAbout, FitCanHold]] = Field(
+        default=None,
+        description='how close the piece is to the asked size, while the '
+                    'list has a dimension search (fit_mode); absent otherwise')
+    distance_m: Optional[float] = Field(
+        default=None,
+        description='distance in metres from the near point of the list '
+                    '(near_lat, near_lon) to the piece, on the layer asked '
+                    '(near_layer); absent without a near search')
     # current snapshot
     identity_id: str
     version: int
@@ -124,6 +151,59 @@ class CatalogRow(BaseModel):
     etag: Optional[str] = None
     created: str
     lastmodified: str
+
+
+class LocationPoint(BaseModel):
+    """One piece on the location map (``GET /identities/locations``): where
+    it is and what the map colours and labels it by."""
+    id: str
+    catalog_number: Optional[int] = None
+    name: Optional[str] = None
+    lat: float
+    lon: float
+    original_function: Optional[str] = None
+    dataset: Optional[str] = None
+    material: Optional[str] = None
+    shape_class: Optional[str] = None
+    in_place: bool = Field(
+        default=False,
+        description='still in place: identified in its works, not yet '
+                    'deinstalled')
+
+
+class LocationMap(BaseModel):
+    """The points of the location map (decisions 8.170, 8.171)."""
+    layer: Literal['current', 'origin']
+    total: int = Field(
+        description='the pieces this caller may see that match the filters')
+    displayed: int = Field(
+        description='of those, the ones with a point on the layer')
+    left_out: int = Field(
+        description='the pieces without a point on the layer')
+    points: List[LocationPoint]
+
+
+class SimilarPiece(BaseModel):
+    """One neighbour: how far it is in descriptor space, and its list row."""
+    distance: float = Field(
+        description='Euclidean distance in the standardised descriptor space '
+                    '(each dimension in standard deviations over the '
+                    'catalog); smaller is more similar. Not metres or mm; '
+                    'compare within one answer.')
+    piece: 'CatalogRow'
+
+
+class SimilarPieces(BaseModel):
+    """``GET /identities/{id}/similar``: the nearest pieces by descriptor."""
+    query_id: str
+    basis: Literal['radial_signature', 'scalars', 'hks']
+    basis_label: str
+    computed_at: Optional[str] = Field(
+        default=None, description='when the matrix of the catalog was built')
+    considered: int = Field(
+        description='how many visible pieces that pass the filters were '
+                    'ranked (the query piece not among them)')
+    results: List[SimilarPiece]
 
 
 def catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -145,6 +225,8 @@ def catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
         'is_public': bool(doc.get('is_public')),
         'has_preview': doc.get('has_preview'),
         'current_snapshot_id': doc.get('current_snapshot_id'),
+        'fit': doc.get('fit'),
+        'distance_m': doc.get('distance_m'),
         **{key: snap.get(key) for key in (
             'identity_id', 'version', 'status', 'name', 'effective_from',
             'effective_from_precision', 'shape_class', 'complexity',
@@ -153,8 +235,13 @@ def catalog_row(doc: Dict[str, Any]) -> Dict[str, Any]:
         'fragment': bool(snap.get('fragment')),
         'quantity': snap.get('quantity') or 1,
     }
-    return CatalogRow.model_validate(row).model_dump(by_alias=True,
-                                                     mode='json')
+    out = CatalogRow.model_validate(row).model_dump(by_alias=True,
+                                                    mode='json')
+    if out.get('fit') is None:
+        del out['fit']          # only a list with a dimension search has one
+    if out.get('distance_m') is None:
+        del out['distance_m']   # nor has a list without a near search
+    return out
 
 
 # SNAPSHOT ROWS ---------------------------------------------------------------

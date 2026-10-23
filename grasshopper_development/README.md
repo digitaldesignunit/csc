@@ -34,7 +34,7 @@ code). `tests/grasshopper/test_frame_parity.py` keeps the frame of
 ### The shared library `csc_gh` (part C, decision 8.111)
 
 The code the components share lives in the package `grasshopper_lib/csc_gh/`
-(modules `ply`, `build`, `read`, `convention`, `frame`, `upload`, `rhino`,
+(modules `ply`, `build`, `read`, `convention`, `frame`, `upload`, `texture`, `rhino`,
 `doc`, `ports`, `messages`; `csc_gh.__version__`). It is installed to Rhino's
 scripts folder, which Rhino 8 puts on `sys.path` of every Python 3 script, so
 a component does `import csc_gh` (and `from csc_gh.build import ...`) instead

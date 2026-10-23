@@ -35,9 +35,12 @@ import {
   rowNumber,
   rowStatus,
   searchTarget,
+  sortOptions,
   withParams,
   type Circulation,
 } from '@/lib/browse'
+import { defaultSortKey, fitRowText, parseFit, rowFit } from '@/lib/fit'
+import { distanceText, parseNear, rowDistance } from '@/lib/near'
 import { useMaterials } from '@/lib/lineage'
 import ComponentPreviewImage from '../ComponentPreviewImage'
 import { PreviewProvider } from '../preview/ComponentPreview'
@@ -46,15 +49,6 @@ import { ComponentOverviewDataTable } from './ComponentOverviewDataTable'
 import ComponentOverviewPagination from './ComponentOverviewPagination'
 
 const PICKED_KEY = 'csc.browse.columns'
-
-const SORT_OPTIONS = [
-  { value: '_id', label: 'Identity id' },
-  { value: 'name', label: 'Name' },
-  { value: 'original_function', label: 'Function' },
-  { value: 'material', label: 'Material' },
-  { value: 'dataset', label: 'Dataset' },
-  { value: 'lastmodified', label: 'Last modified' },
-]
 
 type Props = {
   rows: CatalogShallowRow[]
@@ -97,6 +91,8 @@ export default function BrowseView({
   }
 
   const group = circulationGroup(circulation)
+  const fitActive = parseFit(search) !== null
+  const nearActive = parseNear(search) !== null
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-3 p-3 sm:p-5">
@@ -149,21 +145,23 @@ export default function BrowseView({
         </div>
       </div>
 
-      <CatalogFilterBar circulation={circulation} />
+      <CatalogFilterBar circulation={circulation} withFit withNear />
 
       {rows.length === 0 ? (
         <Card className="p-6 text-center text-sm text-muted-foreground">
           No components match. Change or remove a filter.
         </Card>
       ) : wide ? (
-        <DesktopTable rows={rows} />
+        <DesktopTable rows={rows} fitActive={fitActive} nearActive={nearActive} />
       ) : (
         <PhoneCards
           rows={rows}
+          fitActive={fitActive}
+          nearActive={nearActive}
           materialLabel={materialLabel}
           sortkey={sortkey}
           sortorder={sortorder}
-          onSort={(key, order) => replace({ sortkey: key === '_id' ? null : key, sortorder: order === 'asc' ? null : order }, true)}
+          onSort={(key, order) => replace({ sortkey: key === defaultSortKey(search) ? null : key, sortorder: order === 'asc' ? null : order }, true)}
         />
       )}
 
@@ -253,12 +251,16 @@ function SearchField({
 // PHONE ------------------------------------------------------------------------
 function PhoneCards({
   rows,
+  fitActive,
+  nearActive,
   materialLabel,
   sortkey,
   sortorder,
   onSort,
 }: {
   rows: CatalogShallowRow[]
+  fitActive: boolean
+  nearActive: boolean
   materialLabel: (id: string | null | undefined) => string
   sortkey: string
   sortorder: 'asc' | 'desc'
@@ -274,7 +276,7 @@ function PhoneCards({
           value={sortkey}
           onChange={(e) => onSort(e.target.value, sortorder)}
         >
-          {SORT_OPTIONS.map((o) => (
+          {sortOptions(fitActive, nearActive).map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
@@ -303,6 +305,8 @@ function PhoneCards({
 function BrowseCard({ row, line }: { row: CatalogShallowRow; line: string }) {
   const pieces = piecesNote(row)
   const number = rowNumber(row)
+  const match = fitRowText(rowFit(row), row.quantity ?? 1)
+  const metres = rowDistance(row)
   return (
     <Link
       href={`/components/${row._id}`}
@@ -328,6 +332,8 @@ function BrowseCard({ row, line }: { row: CatalogShallowRow; line: string }) {
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <ChipView chip={rowStatus(row)} />
           {pieces && <span className="text-xs text-muted-foreground">{pieces}</span>}
+          {match && <span className="text-xs font-medium tabular-nums">{match}</span>}
+          {metres !== null && <span className="text-xs font-medium tabular-nums">{distanceText(metres)}</span>}
         </div>
       </div>
     </Link>
@@ -335,7 +341,7 @@ function BrowseCard({ row, line }: { row: CatalogShallowRow; line: string }) {
 }
 
 // DESKTOP ----------------------------------------------------------------------
-function DesktopTable({ rows }: { rows: CatalogShallowRow[] }) {
+function DesktopTable({ rows, fitActive, nearActive }: { rows: CatalogShallowRow[]; fitActive: boolean; nearActive: boolean }) {
   const [picked, setPicked] = useState<string[]>([])
   useEffect(() => {
     try {
@@ -353,7 +359,7 @@ function DesktopTable({ rows }: { rows: CatalogShallowRow[] }) {
       // not saved
     }
   }
-  const columns = useMemo(() => buildColumns(picked), [picked])
+  const columns = useMemo(() => buildColumns(picked, fitActive, nearActive), [picked, fitActive, nearActive])
   const items = useMemo(
     () => rows.map((row) => ({ id: row._id, name: row.name, number: row.catalog_number, dataset: row.dataset })),
     [rows],

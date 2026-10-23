@@ -16,4 +16,5 @@ test('the other pages stay behind the sign-in', () => {
   assert.equal(allowsAnonymousCatalogRead('/my-work', 'GET'), false)
   assert.equal(allowsAnonymousCatalogRead('/admin/validation', 'GET'), false)
   assert.equal(allowsAnonymousCatalogRead('/components/similarity-map', 'GET'), true)
+  assert.equal(allowsAnonymousCatalogRead('/components/location-map', 'GET'), true)
 })

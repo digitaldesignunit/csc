@@ -1,5 +1,6 @@
 'use client'
 
+import { useLayoutEffect, useRef, useState } from 'react'
 import {
   ColumnDef,
   flexRender,
@@ -16,13 +17,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
+import { columnWidths, firstPaintWidths, minTableWidth } from '@/lib/tableWidths'
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
 }
-
-type ColMeta = { colClassName?: string }
 
 export function ComponentOverviewDataTable<TData, TValue>({
   columns,
@@ -34,17 +34,34 @@ export function ComponentOverviewDataTable<TData, TValue>({
     getCoreRowModel: getCoreRowModel(),
   })
 
+  // Every column has a minimum width (lib/tableWidths): the table is never
+  // narrower than the sum of those of the columns it shows, and its frame
+  // scrolls sideways below that (the page never does). Above it the room is
+  // shared by weight, so the table fills the frame.
+  const ids = table.getFlatHeaders().map((header) => header.column.id)
+  const frame = useRef<HTMLDivElement>(null)
+  const [frameWidth, setFrameWidth] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const element = frame.current
+    if (!element) return
+    const measure = () => setFrameWidth(element.clientWidth)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  const sized = columnWidths(frameWidth, ids)
+  const firstPaint = firstPaintWidths(ids)
+
   return (
-    <div className="w-full overflow-x-auto rounded-lg border bg-card">
-      {/* table-fixed: the widths of <col> hold, the base columns add up to 100% */}
-      <Table className="table-fixed w-full text-foreground">
-        {/* Apply responsive widths via <colgroup> */}
+    <div ref={frame} className="w-full overflow-x-auto rounded-lg border bg-card">
+      <Table
+        className="table-fixed text-foreground"
+        style={{ width: sized ? sized.total : '100%', minWidth: minTableWidth(ids) }}
+      >
         <colgroup>
-          {table.getFlatHeaders().map((header) => (
-            <col
-              key={header.id}
-              className={(header.column.columnDef.meta as ColMeta | undefined)?.colClassName ?? ''}
-            />
+          {ids.map((id, index) => (
+            <col key={id} style={{ width: sized ? sized.widths[index] : firstPaint[index] }} />
           ))}
         </colgroup>
 
@@ -52,12 +69,10 @@ export function ComponentOverviewDataTable<TData, TValue>({
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="h-10">
               {headerGroup.headers.map((header) => {
-                const headMeta = header.column.columnDef.meta as ColMeta | undefined
                 return (
-                  
                   <TableHead
                     key={header.id}
-                    className={`px-3 py-2 text-xs font-semibold text-muted-foreground whitespace-nowrap ${headMeta?.colClassName ?? ''}`}
+                    className="px-3 py-2 text-xs font-semibold text-muted-foreground whitespace-nowrap"
                   >
                     {header.isPlaceholder
                       ? null
@@ -83,11 +98,10 @@ export function ComponentOverviewDataTable<TData, TValue>({
                   className={`h-12 ${isReserved ? 'bg-amber-100/60 hover:bg-amber-200/70 dark:bg-amber-900/40 dark:hover:bg-amber-800/50' : ''}`}
                 >
                   {row.getVisibleCells().map((cell) => {
-                    const cellMeta = cell.column.columnDef.meta as ColMeta | undefined
                     return (
                       <TableCell
                         key={cell.id}
-                        className={`px-3 py-2 text-sm whitespace-nowrap overflow-hidden ${cellMeta?.colClassName ?? ''}`}
+                        className="px-3 py-2 text-sm whitespace-nowrap overflow-hidden"
                       >
                         <div className="min-w-0 truncate">
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}

@@ -33,6 +33,7 @@
     "DisassembleComponent": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
     "FilterComponents": {"env": "DDU_CSC", "needs": ["charset_normalizer", "numpy"]},
     "FetchFilteredComponents": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
+    "FetchSimilarComponents": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
     "FetchReducedGeometry": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
     "FetchOriginalGeometry": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
     "FetchReinforcementLayout": {"env": "DDU_CSC", "needs": ["charset_normalizer", "requests", "numpy"]},
