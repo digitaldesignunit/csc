@@ -287,7 +287,7 @@ class CSC_FetchSimilarComponents(Grasshopper.Kernel.GH_ScriptInstance):
             MaterialClass: str,
             Circulation: str,
             FitMode: str,
-            FitSize: list[object],
+            FitSize: System.Collections.Generic.List[object],
             FitTolerance: str,
             NearPoint: Rhino.Geometry.Vector3d,
             NearLayer: str,
