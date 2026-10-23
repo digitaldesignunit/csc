@@ -41,6 +41,17 @@ Search and the location map.
   have a location and how many are not public. `similar_components` now ranks by the shape
   descriptor (with `basis`, `count` and the filters of `search_components`) instead of the
   distance on the Similarity Map.
+- **Grasshopper:** the new `FetchSimilarComponents` returns the pieces nearest in shape to a
+  piece, with their distance, and takes the filters, the dimension search and the near search of
+  `FetchFilteredComponents`. `FetchFilteredComponents` gains the dimension search (`FitMode`,
+  `FitSize`, `FitTolerance`) and the near search (`NearPoint`, `NearLayer`, `RadiusKm`), with the
+  deviation or waste (`Fit`) and the distance (`DistanceKm`) per result.
+- **Grasshopper, texture colours:** `CreateComponentIdentity` and `CreateComponentSnapshot` give
+  a mesh the colours of its texture when it is staged: when the mesh comes from a Rhino object
+  whose material has a base-colour image, each vertex takes the colour at its texture
+  coordinate, on every level of detail. The texture replaces vertex colours the mesh already
+  has, with a remark. Meshes without such a texture are staged as before. Grasshopper library
+  261022: run `CSC_Update`.
 
 ### Changed
 
@@ -49,8 +60,14 @@ Search and the location map.
   registration is open to certain domains and lists them behind a "?"; no page names a fixed
   university any more. `CSC_OPEN_REGISTRATION_DOMAINS` is now empty by default: a server that
   keeps open registration must set it explicitly.
-- **Privacy page:** names the tile server of the Location Map and what it receives. The
-  Content-Security-Policy allows images from that one host in addition.
+- **Privacy page and imprint:** they state that the maintainer runs the catalog in person and is
+  its sole controller, and that TU Darmstadt does not operate it and is not responsible for it.
+  The privacy page names the tile server of the Location Map and what it receives, and no longer
+  claims that nothing is loaded from other sites; the imprint cites the DDG instead of the
+  repealed TMG. The Content-Security-Policy allows images from that one tile host in addition.
+- **No Google map preview:** pointing at a location in the Browse table no longer loads an
+  embedded Google map; the location is a link that opens Google Maps in a new tab on a click.
+  With no embed left, the Content-Security-Policy allows no frames (`frame-src 'none'`).
 
 ### Fixed
 

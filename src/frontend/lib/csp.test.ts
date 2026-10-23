@@ -29,7 +29,8 @@ test('every directive of 8.164 is present, with its sources', () => {
   assert.deepEqual(d['font-src'], ["'self'"])
   assert.deepEqual(d['worker-src'], ["'self'", 'blob:'])
   assert.deepEqual(d['media-src'], ["'self'", 'blob:'])
-  assert.deepEqual(d['frame-src'], ['https://maps.google.com', 'https://www.google.com'])
+  // no frame of another site (8.176: the Google map preview is gone); the mail preview is a srcdoc frame
+  assert.deepEqual(d['frame-src'], ["'none'"])
   assert.deepEqual(d['object-src'], ["'none'"])
   assert.deepEqual(d['base-uri'], ["'none'"])
   assert.deepEqual(d['form-action'], ["'self'"])
@@ -64,9 +65,9 @@ test('the tile host is allowed for images only, and for nothing else', () => {
   for (const [name, sources] of Object.entries(d)) {
     assert.equal(sources.includes(MAP_TILE_ORIGIN), name === 'img-src', name)
   }
-  // no other host appears than the map tiles and the Google embed of 8.164
+  // no other host appears than the map tiles (8.171; the Google embed of 8.164 is gone, 8.176)
   const hosts = new Set(policy.match(/https?:\/\/[^\s;]+/g))
-  assert.deepEqual([...hosts].sort(), ['https://maps.google.com', 'https://tile.openstreetmap.de', 'https://www.google.com'])
+  assert.deepEqual([...hosts], ['https://tile.openstreetmap.de'])
   // a tile server is not a script, connect or frame source
   assert.ok(!d['script-src'].some((s) => s.includes('openstreetmap')))
   assert.ok(!d['connect-src'].some((s) => s.includes('openstreetmap')))

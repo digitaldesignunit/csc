@@ -32,7 +32,29 @@ test('location data is removed from photos', () => {
 
 test('the date is not older than this change', () => {
   const day = new Date(`${LAST_UPDATED} UTC`)
-  assert.ok(day >= new Date('2026-10-22T00:00:00Z'), LAST_UPDATED)
+  assert.ok(day >= new Date('2026-10-23T00:00:00Z'), LAST_UPDATED)
+})
+
+test('the cookies row claims no tracking, no statistics, no advertising, and not that nothing loads from other sites', () => {
+  const row = ROWS.find((r) => r.what.startsWith('Cookies'))!
+  assert.ok(row)
+  assert.match(row.why, /No tracking, no statistics, no advertising\./)
+  assert.ok(!/other sites/.test(row.why))
+})
+
+test('the maintainer alone is the controller, and the page says TU Darmstadt is not (8.176)', () => {
+  const page = readFileSync(join(__dirname, '..', 'app', 'privacy', 'page.tsx'), 'utf8').replace(/\s+/g, ' ')
+  assert.match(page, /run by Max Eschenbach in person\. Max Eschenbach alone is the controller/)
+  assert.match(page, /TU Darmstadt does not operate the site and is not responsible for it\./)
+})
+
+test('the imprint names the maintainer as provider and controller and cites the DDG, not the repealed TMG', () => {
+  const page = readFileSync(join(__dirname, '..', 'app', 'imprint', 'page.tsx'), 'utf8').replace(/\s+/g, ' ')
+  assert.match(page, /Verantwortlicher im Sinne der DSGVO ist Max Eschenbach pers&ouml;nlich/)
+  assert.match(page, /betreibt den Katalog nicht und ist f&uuml;r ihn nicht verantwortlich/)
+  assert.match(page, /\u00a7 7 Abs\. 1 DDG/)
+  assert.match(page, /\u00a7\u00a7 8 bis 10 DDG/)
+  assert.ok(!/TMG/.test(page))
 })
 
 test('the map tiles are named: the host of the policy, the receiver, and only the Location Map', () => {

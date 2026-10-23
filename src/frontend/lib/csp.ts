@@ -66,7 +66,7 @@ export function buildCsp({ nonce, dev = false, staticBaseUrl }: CspOptions): str
     ['font-src', ["'self'"]],
     ['worker-src', ["'self'", 'blob:']],
     ['media-src', ["'self'", 'blob:']],
-    ['frame-src', ['https://maps.google.com', 'https://www.google.com']],
+    ['frame-src', ["'none'"]],
     ['object-src', ["'none'"]],
     ['base-uri', ["'none'"]],
     ['form-action', ["'self'"]],

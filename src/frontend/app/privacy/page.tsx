@@ -44,6 +44,12 @@ export default function PrivacyPage() {
                 <Link href="/imprint" className={LINK}>Imprint</Link>).
               </p>
 
+              <p>
+                The catalog is part of a doctoral project at the Digital Design Unit (DDU) of TU Darmstadt, but it is
+                run by Max Eschenbach in person. Max Eschenbach alone is the controller for the processing described
+                on this page; TU Darmstadt does not operate the site and is not responsible for it.
+              </p>
+
               <ul className="space-y-4">
                 {ROWS.map((row) => (
                   <li key={row.what} className="space-y-1 border-l-2 border-primary/40 pl-4">

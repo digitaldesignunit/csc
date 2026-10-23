@@ -5,7 +5,7 @@
  */
 
 /** The day this text was last changed: the one place to edit with the text. */
-export const LAST_UPDATED = '22 October 2026'
+export const LAST_UPDATED = '23 October 2026'
 
 /** The controller's address for requests: the one on the Imprint. */
 export const CONTACT_EMAIL = 'max.eschenbach@tu-darmstadt.de'
@@ -50,7 +50,7 @@ export const ROWS: { what: string; why: string; basis: string; kept: string }[] 
   },
   {
     what: 'Cookies and your device: the sign-in cookie, and on your device the theme, your Browse columns, the pieces you opened last and this notice being closed.',
-    why: 'Sign-in and your settings. No tracking, no statistics, nothing loaded from other sites.',
+    why: 'Sign-in and your settings. No tracking, no statistics, no advertising.',
     basis: 'Section 25(2) TDDDG, needed for the service',
     kept: 'The sign-in cookie lasts at most 24 hours; the rest stays on your device until you clear it.',
   },
