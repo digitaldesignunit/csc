@@ -995,8 +995,14 @@ the neighbours do not look right); if it holds, the HKS basis on the Similarity 
 level 2 heat map, and the descriptor kNN of 0.6.4 (e) gains from it; the SH descriptor only if its licence has
 arrived.
 
-**Outside a release (the maintainer):** the legal check of the privacy page by the university's data protection
-office; the Atlas traffic measurement of 0.6.1.0 (c); the backend CI job back to `ubuntu-latest` once MongoDB
+**Later, not yet scheduled --- modular Grasshopper components (user 2026-10-23):** the large Grasshopper
+components, `FetchFilteredComponents` first (about twenty inputs since 0.6.4), become small components that are
+combined: for example one component per filter group (material and function, dimensions, fit, near, circulation)
+that each output a filter object, and one fetch component that takes any number of them, in the way the builder
+objects of the Create components already work. To be grilled before it is planned: the split, how filters
+combine, and how existing definitions keep working (old components kept, marked as superseded).
+
+**Outside a release (the maintainer):** the Atlas traffic measurement of 0.6.1.0 (c); the backend CI job back to `ubuntu-latest` once MongoDB
 8.0 starts on the runner's kernel (SERVER-121912).
 
 **Later or ideas:** the GH sign-in on macOS (Keychain); Ferroscan "the image in 3D"; MCP opened to members

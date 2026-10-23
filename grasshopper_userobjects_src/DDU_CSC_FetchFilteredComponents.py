@@ -354,6 +354,8 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
                 # a size, tolerance, point or layer that cannot be used
                 self._addWarning(str(e))
                 return empty_outputs()
+            for note in getattr(filter_params, 'notes', ()):
+                self._addRemark(note)
             searched = ('fit_mode' in filter_params
                         or 'near_lat' in filter_params)
             if FitTolerance and fit_mode_of(FitMode) == 'can_hold':

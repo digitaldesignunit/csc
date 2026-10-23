@@ -301,8 +301,9 @@ def test_the_fit_params_follow_the_mode():
     assert r.fit_params('Can hold', [1200, 600, 200], '5%') == {
         'fit_mode': 'can_hold', 'fit_size': '1200,600,200'}
     assert r.fit_params('can-hold', [1, 2, 3], None)['fit_mode'] == 'can_hold'
-    for args in (('about', None, None), ('hold', [1, 2, 3], None), (None, [1, 2, 3], None),
-                 ('about', [1, 2], None)):
+    for args in (('hold', [1, 2, 3], None), (None, [1, 2, 3], None), ('about', [1, 2], None),
+                 ('about', [0, 600, 200], None), ('about', [-5, 600, 200], None),
+                 ('about', [1e9, 1, 1], None), ('about', [0, 0, 5], None), ('about', [1, 2], '10%')):
         with pytest.raises(ValueError):
             r.fit_params(*args)
 
@@ -380,7 +381,8 @@ def test_the_similar_basis_and_count():
         r.similar_basis('tsne')
     assert r.similar_count(None) == (10, None)
     assert r.similar_count(6) == (6, None) and r.similar_count('25') == (25, None)
-    assert r.similar_count(0)[0] == 1 and r.similar_count(0)[1]
+    assert r.similar_count(0) == (10, None) and r.similar_count(0.0) == (10, None)
+    assert r.similar_count(-3) == (1, 'Count raised to 1')
     assert r.similar_count(500) == (50, 'Count lowered to the most the server gives, 50')
     with pytest.raises(ValueError):
         r.similar_count('many')
@@ -425,3 +427,74 @@ def test_the_similar_errors_are_said_in_words():
     assert 'no descriptor' in r.similar_error_text(422)
     assert 'size' in r.similar_error_text(422, 'fit_mode needs size')
     assert r.similar_error_text(500) == ''
+
+
+# AN EMPTY OR ZERO SIZE AND POINT ARE "NOT SET" ---------------------------------
+ZERO_SIZES = ['0,0,0', '0, 0, 0', '0 0 0', [0, 0, 0], (0.0, 0.0, 0.0), [0, 0], [0], [0, 0, 0, 0],
+              _Xyz(0, 0, 0), [_Xyz(0, 0, 0)], ' 0,0,0 ', [], '', None]
+ZERO_POINTS = ['0,0', '0, 0', '0 0', [0, 0], (0.0, 0.0), [0, 0, 0], _Xyz(0, 0, 0), _Xy(0, 0),
+               [_Xyz(0, 0, 0)], [], '', None]
+
+
+@pytest.mark.parametrize('size', ZERO_SIZES)
+def test_a_zero_or_empty_size_is_no_fit_search(size):
+    # without a mode: silent
+    notes = []
+    assert r.fit_params(None, size, None, notes) == {} and notes == []
+    assert r.fit_params('', size, '10%', notes) == {} and notes == []
+    # with a mode: no search, no error, and a remark for the component
+    for mode in ('about', 'can_hold', 'Can hold'):
+        notes = []
+        assert r.fit_params(mode, size, '10%', notes) == {}
+        assert notes == ['FitMode is set but FitSize is empty or zero: no dimension search']
+    # no notes list given: the same, without the remark
+    assert r.fit_params('about', size, None) == {}
+
+
+def test_a_size_that_is_set_but_wrong_is_still_an_error():
+    for bad in ([1200, 600], [1200], [0, 600, 200], [1200, 0, 200], [-1200, 600, 200], [1e9, 600, 200],
+                [0, 0, 200], 'a,b,c', '1200,600', _Xyz(1200, 600, 0), _Xyz(0, 600, 200)):
+        for mode in ('about', 'can_hold'):
+            with pytest.raises(ValueError):
+                r.fit_params(mode, bad, None)
+        with pytest.raises(ValueError):
+            r.fit_params(None, bad, None)                      # and a size without a mode
+
+
+@pytest.mark.parametrize('point', ZERO_POINTS)
+def test_a_zero_or_empty_point_is_no_near_search(point):
+    assert r.near_params(point, None, None) == {}
+    assert r.near_params(point, '', '') == {}
+    assert r.near_params(point, None, 0) == {}                  # radius 0 is empty too
+    # a layer or a radius alone still follows the existing rule: an error
+    for layer, radius in (('origin', None), ('current', None), (None, 30), ('origin', 30)):
+        with pytest.raises(ValueError):
+            r.near_params(point, layer, radius)
+
+
+def test_a_point_with_one_zero_coordinate_is_a_real_point():
+    assert r.near_params(_Xyz(0, 8.65), None, None) == {'near_lat': '0', 'near_lon': '8.65'}
+    assert r.near_params([49.87, 0], 'origin', None) == {
+        'near_lat': '49.87', 'near_lon': '0', 'near_layer': 'origin'}
+
+
+def test_the_filter_params_carry_the_remarks_of_the_inputs_left_out():
+    params = r.fetch_filter_params(material='concrete', fit_mode='about', fit_size=_Xyz(0, 0, 0),
+                                   near_point=_Xyz(0, 0, 0))
+    assert params == {'material': 'concrete'}                    # still a plain dict for the query
+    assert isinstance(params, dict) and params.notes == [r.FIT_SIZE_EMPTY]
+    assert r.fetch_filter_params(fit_size=[0, 0, 0], near_point=[0, 0]).notes == []
+    assert r.fetch_filter_params().notes == []
+    ok = r.fetch_filter_params(fit_mode='about', fit_size=[1200, 600, 200])
+    assert ok.notes == [] and ok['fit_mode'] == 'about'
+
+
+def test_the_similar_params_hand_the_remarks_on_in_the_note():
+    filters = r.fetch_filter_params(fit_mode='can_hold', fit_size=_Xyz(0, 0, 0))
+    params, note = r.similar_params(filters, None, None)
+    assert params == {'basis': 'radial_signature', 'count': 10}
+    assert note == r.FIT_SIZE_EMPTY
+    params, note = r.similar_params(filters, None, 500)
+    assert note == 'Count lowered to the most the server gives, 50; ' + r.FIT_SIZE_EMPTY
+    assert r.similar_params(r.fetch_filter_params(), None, None)[1] is None
+    assert r.similar_params({}, None, None)[1] is None

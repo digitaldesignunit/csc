@@ -248,7 +248,8 @@ def fetch_filter_params(original_function=None, material=None, dataset=None,
     reserved by the caller. ``fit_*``: the dimension search (``fit_params``),
     ``near_point`` / ``near_layer`` / ``radius_km`` the near search
     (``near_params``); a value that cannot be used raises ``ValueError`` with
-    a text for the user.
+    a text for the user. The result is a dict that also carries ``notes``:
+    remarks for inputs left out (``FitMode`` set, ``FitSize`` empty or zero).
     """
     params = {}
 
@@ -272,9 +273,12 @@ def fetch_filter_params(original_function=None, material=None, dataset=None,
     for key, value in (bbx or {}).items():
         if value is not None and value != 0:
             params['bbx_' + key] = value
-    params.update(fit_params(fit_mode, fit_size, fit_tolerance))
+    notes = []
+    params.update(fit_params(fit_mode, fit_size, fit_tolerance, notes))
     params.update(near_params(near_point, near_layer, radius_km))
-    return params
+    result = FilterParams(params)
+    result.notes = notes
+    return result
 
 
 # DIMENSION AND NEAR SEARCH (8.169, 8.170) -----------------------------------
@@ -287,7 +291,33 @@ _NUMBER = re.compile(r'^\d+(?:\.\d+)?$')
 
 
 def _blank(value):
+    """Nothing wired: None, an empty text, or an empty list."""
+    if isinstance(value, (list, tuple)):
+        return len(value) == 0
     return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _all_zero(value):
+    """True for a value that is only zeros: the text '0,0,0', a list of zeros
+    (any length), a zero Point3d or Vector3d (what Grasshopper gives an
+    unconnected or reset vector input). Zero is the default of a vector
+    input, so it means "not set" for the size and the point."""
+    numbers = _numbers_of(_unwrap(value))
+    return bool(numbers) and all(n == 0 for n in numbers)
+
+
+def _unset(value):
+    """Blank or all zeros: the input carries nothing."""
+    return _blank(value) or _all_zero(value)
+
+
+class FilterParams(dict):
+    """The query parameters of ``fetch_filter_params``: a plain dict, and
+    ``notes``, the remarks for the user about inputs that were left out (a
+    ``FitMode`` without a usable ``FitSize``). A component shows them when it
+    reads ``notes``; one that does not simply sends the dict."""
+
+    notes = ()
 
 
 def _number(value):
@@ -392,16 +422,27 @@ def fit_tolerance_of(value):
     return '%s%s' % (found.group(1), unit)
 
 
-def fit_params(mode, size, tolerance):
+FIT_SIZE_EMPTY = ('FitMode is set but FitSize is empty or zero: no '
+                  'dimension search')
+
+
+def fit_params(mode, size, tolerance, notes=None):
     """``fit_mode`` / ``fit_size`` / ``fit_tol`` of the REST list (the web's
-    "Fits" search). Empty without a mode and a size; a size without a mode is
-    an error (the server would answer 422). *Can hold* takes no tolerance, it
-    is left out."""
+    "Fits" search). Empty without a mode and a size. A size that is empty or
+    all zeros (``0,0,0``, a list of zeros of any length, a zero Point3d or
+    Vector3d: the Grasshopper default) is "not set": no search, and with a
+    ``FitMode`` a remark ``FIT_SIZE_EMPTY`` is appended to ``notes`` (a list)
+    when one is given. A size that is set but wrong (two numbers, a side of
+    zero or less among others, above 100 m) is an error, as is a size without
+    a mode (the server would answer 422). *Can hold* takes no tolerance, it is
+    left out."""
     mode = fit_mode_of(mode)
-    if mode is None:
-        if not _blank(size):
-            raise ValueError('FitSize needs FitMode: "about" or "can_hold"')
+    if _unset(size):
+        if mode is not None and notes is not None:
+            notes.append(FIT_SIZE_EMPTY)
         return {}
+    if mode is None:
+        raise ValueError('FitSize needs FitMode: "about" or "can_hold"')
     params = {'fit_mode': mode, 'fit_size': fit_size_of(size)}
     if mode == 'about':
         params['fit_tol'] = fit_tolerance_of(tolerance) or DEFAULT_TOLERANCE
@@ -440,12 +481,15 @@ def near_params(point, layer, radius_km):
     """``near_lat`` / ``near_lon`` / ``near_layer`` / ``radius_km`` of the REST
     list. Empty without a point; a layer or radius without a point is an
     error. No radius (or 0) = every piece with a point on the layer, nearest
-    first."""
+    first. A point that is only zeros (0, 0: a zero Point3d or Vector3d, a
+    list of zeros, the text "0, 0") counts as not set: 0, 0 is a real
+    coordinate, but no catalogue piece is there and it is the Grasshopper
+    default of an unconnected vector input."""
     layer = near_layer_of(layer)
     radius = None if _blank(radius_km) else _number(radius_km)
     if not _blank(radius_km) and radius is None:
         raise ValueError('RadiusKm is a number of kilometres')
-    if _blank(point):
+    if _unset(point):
         if layer is not None or radius not in (None, 0):
             raise ValueError('NearLayer and RadiusKm need NearPoint')
         return {}
@@ -502,7 +546,9 @@ def similar_basis(value):
 
 def similar_count(value):
     """``(count, note)``: how many neighbours to ask for (default 10, 1 to 50
-    as the server limits it); ``note`` says when the number was changed."""
+    as the server limits it); ``note`` says when the number was changed. 0
+    counts as not set (the Grasshopper default of an integer input), like
+    empty: the default."""
     if _blank(value):
         return DEFAULT_SIMILAR_COUNT, None
     number = _number(value)
@@ -510,6 +556,8 @@ def similar_count(value):
         raise ValueError('Count is a whole number, 1 to %d'
                          % MAX_SIMILAR_COUNT)
     count = int(number)
+    if count == 0:
+        return DEFAULT_SIMILAR_COUNT, None
     if count < 1:
         return 1, 'Count raised to 1'
     if count > MAX_SIMILAR_COUNT:
@@ -521,12 +569,15 @@ def similar_count(value):
 def similar_params(filters, basis=None, count=None):
     """The query of ``GET /identities/{id}/similar``: the filters (the output
     of ``fetch_filter_params``; the server ignores ``reserved`` here), the
-    basis and the count. Returns ``(params, note)``."""
+    basis and the count. Returns ``(params, note)``; ``note`` is the text for
+    one remark (a count that was changed, the ``notes`` of the filters), or
+    None."""
     params = {k: v for k, v in (filters or {}).items() if k != 'reserved'}
     number, note = similar_count(count)
     params['basis'] = similar_basis(basis)
     params['count'] = number
-    return params, note
+    notes = ([note] if note else []) + list(getattr(filters, 'notes', ()) or ())
+    return params, ('; '.join(notes) if notes else None)
 
 
 def similar_results(body):

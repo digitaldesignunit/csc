@@ -753,8 +753,7 @@ def test_fetch_filtered_can_hold_gives_the_waste_and_says_the_tolerance_is_ignor
 
 
 def test_fetch_filtered_says_what_is_wrong_with_a_fit_or_near_input():
-    for kwargs, words in (({'FitMode': 'about'}, 'FitSize'),
-                          ({'FitMode': 'about', 'FitSize': [1, 2]}, 'FitSize'),
+    for kwargs, words in (({'FitMode': 'about', 'FitSize': [1, 2]}, 'FitSize'),
                           ({'FitMode': 'roughly', 'FitSize': [1, 2, 3]}, 'FitMode'),
                           ({'FitSize': [1, 2, 3]}, 'FitMode'),
                           ({'NearLayer': 'origin'}, 'NearPoint'),
@@ -935,7 +934,7 @@ def test_fetch_similar_needs_an_identity_and_a_usable_search():
                                  ({'IdentityID': 'nope'}, 'error', 'not a valid identity'),
                                  ({'Basis': 'tsne'}, 'warning', 'Basis'),
                                  ({'Count': 'many'}, 'warning', 'Count'),
-                                 ({'FitMode': 'about'}, 'warning', 'FitSize'),
+                                 ({'FitMode': 'about', 'FitSize': [1, 2]}, 'warning', 'FitSize'),
                                  ({'NearLayer': 'origin'}, 'warning', 'NearPoint')):
         obj, result = _similar_run(core, **kwargs)
         assert any(words in m for m in compstub.messages(obj)[level]), kwargs
@@ -978,3 +977,35 @@ def test_fetch_similar_declares_its_outputs_and_inputs_in_the_documented_order()
                                  'FetchFilteredComponents')
     shared = [p for p in inspect.signature(filtered.RunScript).parameters if p != 'ReservedStatus']
     assert params[3:] == shared                    # reserved is not a filter of the similar search
+
+
+class _Vector0:
+    """A zero Vector3d: what an unconnected vector input of Grasshopper gives."""
+    X = Y = Z = 0.0
+
+
+def test_fetch_filtered_treats_a_zero_size_and_a_zero_point_as_not_set():
+    for kwargs in ({'FitMode': 'about', 'FitSize': [0, 0, 0], 'NearPoint': _Vector0()},
+                   {'FitSize': _Vector0(), 'NearPoint': _Vector0()}, {'FitSize': [], 'NearPoint': None}):
+        core = ListCore([_row('IfcBeam', 'concrete')])
+        module = compstub.load_component('FetchFilteredComponents', sticky={'CSC_AuthCore': core})
+        obj = compstub.instance(module, 'FetchFilteredComponents')
+        args = dict(OriginalFunction=None, Material=None, Dataset=None, Complexity=None, Fragment=None,
+                    MinDimensionX=None, MaxDimensionX=None, MinDimensionY=None, MaxDimensionY=None,
+                    MinDimensionZ=None, MaxDimensionZ=None, ReservedStatus=None, ShapeClass=None,
+                    MaterialClass=None, Circulation=None, FitMode=None, FitSize=None, FitTolerance=None,
+                    NearPoint=None, NearLayer=None, RadiusKm=None)
+        args.update(kwargs)
+        description, data, fit, far = obj.RunScript(**args)
+        # a plain list from the cache, no fit or near search, and no error
+        assert core.asked == [{'expand': 'current_snapshot'}], kwargs
+        assert data.DataCount == 1 and compstub.messages(obj)['warning'] == []
+
+
+def test_fetch_similar_says_a_fit_mode_without_a_size_does_nothing():
+    for size in ([0, 0, 0], [], None, _Vector0()):
+        core = SimilarCore(_similar_answer())
+        obj, result = _similar_run(core, FitMode='can_hold', FitSize=size, NearPoint=_Vector0())
+        assert core.asked == [('/identities/%s/similar' % UUID_A, {'basis': 'radial_signature', 'count': 10})]
+        assert any('no dimension search' in m for m in compstub.messages(obj)['remark']), size
+        assert compstub.messages(obj)['warning'] == []
