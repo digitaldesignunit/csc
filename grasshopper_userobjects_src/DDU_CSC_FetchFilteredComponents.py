@@ -311,7 +311,7 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             MaterialClass: str,
             Circulation: str,
             FitMode: str,
-            FitSize,
+            FitSize: list[object],
             FitTolerance: str,
             NearPoint: Rhino.Geometry.Vector3d,
             NearLayer: str,

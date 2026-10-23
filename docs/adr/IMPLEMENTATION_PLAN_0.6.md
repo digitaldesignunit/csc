@@ -1000,7 +1000,10 @@ components, `FetchFilteredComponents` first (about twenty inputs since 0.6.4), b
 combined: for example one component per filter group (material and function, dimensions, fit, near, circulation)
 that each output a filter object, and one fetch component that takes any number of them, in the way the builder
 objects of the Create components already work. To be grilled before it is planned: the split, how filters
-combine, and how existing definitions keep working (old components kept, marked as superseded).
+combine, and how existing definitions keep working (old components kept, marked as superseded). With it (user 2026-10-23): a check that a component on
+a canvas has the inputs its source declares. The access and the type hint of an input already follow the
+annotation in the source's `RunScript` signature (`FitSize: list[object]` is list access without a type hint), but
+`CSC_Update` leaves the inputs of a component already on a canvas as they were, so new inputs are missing there.
 
 **Outside a release (the maintainer):** the Atlas traffic measurement of 0.6.1.0 (c); the backend CI job back to `ubuntu-latest` once MongoDB
 8.0 starts on the runner's kernel (SERVER-121912).
