@@ -32,6 +32,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import Icon, ToolAnnotations
 from pydantic import AnyHttpUrl, Field
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import Request
@@ -39,7 +40,12 @@ from starlette.requests import Request
 import limiter as lim
 from apps.catalog import access_tokens as tk
 from apps.catalog.api.near_search import NearError, parse_near
-from apps.catalog.vocab import ORIGINAL_FUNCTION_LABELS, SHAPE_CLASS_LABELS
+from apps.catalog.vocab import (
+    EVIDENCE_METHOD_LABELS,
+    EVIDENCE_METHODS,
+    ORIGINAL_FUNCTION_LABELS,
+    SHAPE_CLASS_LABELS,
+)
 from apps.catalog.internal_call import InternalError, rest_get
 from apps.catalog.models import UserInDB
 from apps.catalog.oauth_server import AccessTokenVerifier
@@ -53,15 +59,39 @@ TEXT_MAX = 30000
 _EMAIL = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
 _DROP_KEYS = {'email', 'etag', 'hashed_password', 'password'}
 
+# the evidence methods as "name (Label)", one source for the tool texts
+EVIDENCE_METHOD_TEXT = ', '.join(
+    f'{m} ({EVIDENCE_METHOD_LABELS[m]})' for m in EVIDENCE_METHODS)
+
 INSTRUCTIONS = (
-    'The Catalog of Second Chances (CSC) describes reused building components '
-    '(panels, beams, stones ...) with their shape, origin, versions and '
-    'measurements ("evidence"). These tools only read. You see what the '
-    'signed-in owner of this connection sees on the website. Start with '
-    'search_components, then get_component. Every answer carries a web link '
-    'to give to the user. A record marked visibility "private" or a status '
-    'other than "published" is not public: say so when you quote it. '
-    'Lengths are in millimetres unless a unit is given.')
+    'The Catalog of Second Chances (CSC) is a catalog of reused and '
+    'salvaged building components (German: wiederverwendete Bauteile, '
+    'Wiederverwendung, Bauteilboerse): concrete walls and beams '
+    '(Betonwaende, Traeger), stone, timber and other pieces, each '
+    'with its shape, origin, versions and measurements ("evidence"). Use '
+    'these tools before a web search when the user looks for such pieces, '
+    'for example "Betontraeger mit Bewehrung" or reused beams with '
+    'reinforcement (Bewehrung): search_components with the filters below, '
+    'and has_evidence=reinforcement_layout for "with reinforcement". '
+    'These tools only read. You see what the signed-in owner of this '
+    'connection sees on the website. Start with search_components, then '
+    'get_component. Every answer carries a web link to give to the user. A '
+    'record marked visibility "private" or a status other than "published" '
+    'is not public: say so when you quote it. Lengths are in millimetres '
+    'unless a unit is given.')
+
+GET_EVIDENCE_TEXT = (
+    'Measurements and other evidence about a component. The methods are: '
+    + EVIDENCE_METHOD_TEXT + '. A list gives short rows: method, source '
+    'tier, when observed, who performed it, summary, status, verification; '
+    'a reinforcement_layout row also gives a summary of its bars (count, '
+    'basis, specs, diameters, cover, the version it refers to). Filter with '
+    'method. Pass evidence_id for one record in full, with its payload (the '
+    'bars of a layout).')
+
+# every tool reads, never writes, and never reaches outside the catalog
+READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True,
+                            openWorldHint=False)
 
 
 # ANSWERS -----------------------------------------------------------------------
@@ -165,8 +195,63 @@ def geometry_summary(geometry: Optional[dict]) -> dict:
         'mesh_faces': sum(len(m.get('faces') or []) for m in meshes),
         'point_clouds': len(geometry.get('point_clouds') or []),
         'proxies': len(geometry.get('proxies') or []),
-        'reinforcements': len(geometry.get('reinforcements') or []),
         'note': 'Geometry is not sent; open the web link to see it.'}
+
+
+def layout_bars(record: dict) -> list:
+    """The bars of a ``reinforcement_layout`` record, as dicts."""
+    bars = (record.get('payload') or {}).get('bars') or []
+    return [b for b in bars if isinstance(b, dict)]
+
+
+def layouts_of_version(rows: list, snapshot_id: Optional[str]) -> dict:
+    """The reinforcement of one version, from the published
+    ``reinforcement_layout`` evidence that names it in ``position.snapshot_id``
+    (decision 7.8: the bars are evidence, not geometry): how many records and
+    how many bars, and where to read them."""
+    records = [r for r in rows or []
+               if isinstance(r, dict)
+               and r.get('method') == 'reinforcement_layout'
+               and r.get('status') == 'published'
+               and (r.get('position') or {}).get('snapshot_id') == snapshot_id]
+    return {
+        'records': len(records),
+        'bars': sum(len(layout_bars(r)) for r in records),
+        'note': 'get_evidence with method=reinforcement_layout lists the '
+                'layouts of the component; pass an evidence_id for the '
+                'bars of one.'}
+
+
+def layout_summary(record: dict) -> dict:
+    """A reinforcement layout in one row: the number of bars, the basis, the
+    steel specs, the distinct diameters in mm, the cover range when known and
+    the version the bars refer to."""
+    bars = layout_bars(record)
+    covers = [b['cover_mm'] for b in bars
+              if isinstance(b.get('cover_mm'), (int, float))]
+    summary = {
+        'bars': len(bars),
+        'basis': (record.get('payload') or {}).get('basis'),
+        'specs': sorted({b['spec'] for b in bars if b.get('spec')}),
+        'diameters_mm': sorted({b['diameter_mm'] for b in bars
+                                if isinstance(b.get('diameter_mm'),
+                                              (int, float))}),
+        'version_id': (record.get('position') or {}).get('snapshot_id')}
+    if covers:
+        summary['cover_mm'] = {'min': min(covers), 'max': max(covers)}
+    return summary
+
+
+def performers(record: dict) -> list:
+    """Who did the work: a person's name, else the organization; an actor
+    with neither is left out (never ``null``)."""
+    names = []
+    for actor in record.get('performed_by') or []:
+        if isinstance(actor, dict):
+            name = actor.get('name') or actor.get('organization')
+            if name:
+                names.append(name)
+    return names
 
 
 def limited(answer: dict) -> dict:
@@ -215,6 +300,11 @@ StatusArg = Annotated[str, Field(description=(
     'pending and other states you may see.'))]
 WithdrawnArg = Annotated[bool, Field(description=(
     'Also withdrawn components, if you may see them.'))]
+HasEvidenceArg = Annotated[str, Field(description=(
+    'Only components with at least one published evidence record of this '
+    'method: ' + EVIDENCE_METHOD_TEXT + '. Use reinforcement_layout for '
+    '"with reinforcement" (Bewehrung); it combines with every other '
+    'filter. Leave empty for all.'))]
 FitModeArg = Annotated[str, Field(description=(
     'Search by size, with size_mm: about = every side within the '
     'tolerance of the asked side (which pieces are about this '
@@ -247,14 +337,17 @@ RadiusArg = Annotated[Optional[float], Field(description=(
 
 def search_params(*, query: str, original_function: str, material: str,
                   dataset: str, shape_class: str, circulation: str,
-                  status: str, include_withdrawn: bool, fit_mode: str,
-                  size_mm: Optional[list], tolerance: str,
+                  status: str, include_withdrawn: bool, has_evidence: str,
+                  fit_mode: str, size_mm: Optional[list], tolerance: str,
                   near_lat: Optional[float], near_lon: Optional[float],
                   near_layer: str, radius_km: Optional[float]
                   ) -> Tuple[dict, dict, dict]:
     """The REST filters of one search (the list, count, stats and similar
     routes read the same names), the fit part and the near part of it. A
     combination the routes would refuse is a ToolError in words."""
+    if has_evidence and has_evidence not in EVIDENCE_METHODS:
+        raise ToolError('has_evidence is one of '
+                        + ', '.join(EVIDENCE_METHODS) + '.')
     fit = {}
     if fit_mode or size_mm or tolerance:
         if fit_mode not in FIT_MODES:
@@ -278,7 +371,7 @@ def search_params(*, query: str, original_function: str, material: str,
         'material': material, 'dataset': dataset,
         'shape_class': shape_class, 'circulation': circulation,
         'status': status, 'include_withdrawn': include_withdrawn or None,
-        **fit, **near}
+        'evidence_method': has_evidence, **fit, **near}
     return filters, fit, near
 
 
@@ -287,6 +380,9 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
     web = frontend_url.rstrip('/')
     mcp = FastMCP(
         'Catalog of Second Chances', instructions=INSTRUCTIONS,
+        website_url=web,
+        icons=[Icon(src=f'{web}/favicon.ico', mimeType='image/x-icon',
+                    sizes=['any'])],
         stateless_http=True, json_response=True,
         streamable_http_path='/mcp',
         transport_security=TransportSecuritySettings(
@@ -329,7 +425,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         return max(1, page), min(max(1, size), PAGE_MAX)
 
     # 1 -------------------------------------------------------------------------
-    @mcp.tool()
+    @mcp.tool(title='Search reused building components', annotations=READ_ONLY)
     async def search_components(
         query: QueryArg = '',
         original_function: FunctionArg = '',
@@ -339,6 +435,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         circulation: CirculationArg = 'active',
         status: StatusArg = 'published',
         include_withdrawn: WithdrawnArg = False,
+        has_evidence: HasEvidenceArg = '',
         fit_mode: FitModeArg = '',
         size_mm: SizeArg = None,
         tolerance: ToleranceArg = '',
@@ -364,14 +461,17 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         visibility) with its web link, and the total. With fit_mode and
         size_mm each row also carries its deviation (about, in per cent) or
         waste (can_hold, in m3 and in per cent of the piece); with near_lat
-        and near_lon each row carries its distance_km. Use get_component for
-        the details of one."""
+        and near_lon each row carries its distance_km. has_evidence keeps
+        only components with a published evidence record of one method, for
+        example reinforcement_layout for "with reinforcement". Use
+        get_component for the details of one."""
         page, size = page_args(page, size)
         filters, fit, near = search_params(
             query=query, original_function=original_function,
             material=material, dataset=dataset, shape_class=shape_class,
             circulation=circulation, status=status,
-            include_withdrawn=include_withdrawn, fit_mode=fit_mode,
+            include_withdrawn=include_withdrawn, has_evidence=has_evidence,
+            fit_mode=fit_mode,
             size_mm=size_mm, tolerance=tolerance, near_lat=near_lat,
             near_lon=near_lon, near_layer=near_layer, radius_km=radius_km)
         sort = sort or ('distance' if near
@@ -399,16 +499,19 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
                         for r in rows]})
 
     # 2 -------------------------------------------------------------------------
-    @mcp.tool()
+    @mcp.tool(title='Get one component', annotations=READ_ONLY)
     async def get_component(
         component_id: Annotated[str, Field(description=(
             'The component id (a UUID) from search_components.'))],
     ) -> dict:
         """One component: what it is, where it comes from, how it left
         circulation, its derived properties with confidence, its current
-        version in short, and links. Geometry is a summary only."""
+        version in short (with the count of its reinforcement layouts and
+        bars), and links. Geometry is a summary only."""
         passport = await get(f'/identities/{component_id}/compose')
         versions = await get(f'/identities/{component_id}/snapshots')
+        layouts = await get(f'/identities/{component_id}/evidence',
+                            {'method': 'reinforcement_layout'})
         identity = passport.get('identity') or {}
         snapshots = passport.get('snapshots') or []
         current = next((s for s in snapshots
@@ -450,14 +553,16 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
                 'quantity': current.get('quantity'),
                 'effective_from': current.get('effective_from'),
                 'location': current.get('location'),
-                'geometry': geometry_summary(current.get('geometry'))},
+                'geometry': geometry_summary(current.get('geometry')),
+                'reinforcement_layouts': layouts_of_version(
+                    layouts, current.get('_id'))},
             'version_count': len(versions),
             'web_link': link_component(identity.get('_id') or component_id),
             'next': ('list_versions, get_evidence and get_timeline take '
                      'this id.')}))
 
     # 3 -------------------------------------------------------------------------
-    @mcp.tool()
+    @mcp.tool(title='List the versions of a component', annotations=READ_ONLY)
     async def list_versions(
         component_id: Annotated[str, Field(description='The component id.')],
     ) -> dict:
@@ -480,16 +585,20 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
                 for r in rows]}))
 
     # 4 -------------------------------------------------------------------------
-    @mcp.tool()
+    @mcp.tool(title='Get one version of a component', annotations=READ_ONLY)
     async def get_version(
         version_id: Annotated[str, Field(description=(
             'The version id (a UUID) from list_versions.'))],
     ) -> dict:
         """One version of a component: size, shape class, descriptors,
         derived properties, status and notes. The geometry is only a summary
-        (counts); the web link opens the viewer."""
+        (counts); the web link opens the viewer. The reinforcement layouts
+        of the version are counted from the evidence."""
         s = await get(f'/snapshots/{version_id}')
         identity_id = s.get('identity_id')
+        layouts = await get(f'/identities/{identity_id}/evidence',
+                            {'method': 'reinforcement_layout'}
+                            ) if identity_id else []
         return limited(clean({
             'id': s.get('_id'), 'component_id': identity_id,
             'version': s.get('version'), 'status': s.get('status'),
@@ -507,11 +616,15 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
             'supersedes': s.get('supersedes'),
             'superseded_by': s.get('superseded_by'),
             'geometry': geometry_summary(s.get('geometry')),
+            'reinforcement_layouts': layouts_of_version(
+                layouts, s.get('_id')),
             'web_link': link_component(identity_id, s.get('_id'))
             if identity_id else None}))
 
     # 5 -------------------------------------------------------------------------
-    @mcp.tool()
+    @mcp.tool(title='Get the evidence of a component',
+              annotations=READ_ONLY,
+              description=GET_EVIDENCE_TEXT)
     async def get_evidence(
         component_id: Annotated[str, Field(description=(
             'The component id. Leave empty when you pass evidence_id.'))] = '',
@@ -524,10 +637,6 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         page: Annotated[int, Field(description='Page, from 1.')] = 1,
         size: Annotated[int, Field(description='Records per page, 1 to 25.')] = 10,
     ) -> dict:
-        """Measurements and other evidence about a component (rebound hammer,
-        cores, visual inspection, archive documents ...): method, source tier,
-        when observed, summary, status, verification. A list gives short rows;
-        pass evidence_id for one record in full."""
         if evidence_id:
             record = await get(f'/evidence/{evidence_id}')
             identity_id = record.get('identity_id')
@@ -555,15 +664,16 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
                 'verification': (r.get('verification') or {}).get('state')
                 if isinstance(r.get('verification'), dict) else None,
                 'recorded_by': r.get('recorded_by_username'),
-                'performed_by': [p.get('name') for p in r.get('performed_by') or []
-                                 if isinstance(p, dict)],
+                'performed_by': performers(r),
+                **({'reinforcement': layout_summary(r)}
+                   if r.get('method') == 'reinforcement_layout' else {}),
                 'notes': r.get('notes'), 'warnings': r.get('warnings'),
                 'withdrawn': r.get('withdrawn_at') is not None
                 if 'withdrawn_at' in r else None}
                 for r in window]}))
 
     # 6 -------------------------------------------------------------------------
-    @mcp.tool()
+    @mcp.tool(title='List datasets', annotations=READ_ONLY)
     async def list_datasets() -> dict:
         """The datasets (collections of components, each with its own access)
         you can see: name, id, visibility (public or members only), whether an
@@ -578,7 +688,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
             for d in rows]}))
 
     # 7 -------------------------------------------------------------------------
-    @mcp.tool()
+    @mcp.tool(title='Get one dataset', annotations=READ_ONLY)
     async def get_dataset(
         dataset_id: Annotated[str, Field(description=(
             'The dataset id from list_datasets.'))],
@@ -596,7 +706,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
             'web_link': f'{web}/components?dataset={d.get("_id")}'}))
 
     # 8 -------------------------------------------------------------------------
-    @mcp.tool()
+    @mcp.tool(title='Get the timeline of a component', annotations=READ_ONLY)
     async def get_timeline(
         component_id: Annotated[str, Field(description='The component id.')],
     ) -> dict:
@@ -613,7 +723,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
                        for e in body.get('events') or []]}))
 
     # 9 -------------------------------------------------------------------------
-    @mcp.tool()
+    @mcp.tool(title='Find similar components', annotations=READ_ONLY)
     async def similar_components(
         component_id: Annotated[str, Field(description='The component id.')],
         basis: Annotated[str, Field(description=(
@@ -630,6 +740,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         circulation: CirculationArg = 'active',
         status: StatusArg = 'published',
         include_withdrawn: WithdrawnArg = False,
+        has_evidence: HasEvidenceArg = '',
         fit_mode: FitModeArg = '',
         size_mm: SizeArg = None,
         tolerance: ToleranceArg = '',
@@ -655,7 +766,8 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
             query=query, original_function=original_function,
             material=material, dataset=dataset, shape_class=shape_class,
             circulation=circulation, status=status,
-            include_withdrawn=include_withdrawn, fit_mode=fit_mode,
+            include_withdrawn=include_withdrawn, has_evidence=has_evidence,
+            fit_mode=fit_mode,
             size_mm=size_mm, tolerance=tolerance, near_lat=near_lat,
             near_lon=near_lon, near_layer=near_layer, radius_km=radius_km)
         body = await get(f'/identities/{component_id}/similar',
@@ -674,7 +786,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
                 for r in body.get('results') or []]}))
 
     # 10 ------------------------------------------------------------------------
-    @mcp.tool()
+    @mcp.tool(title='Overview of the catalog in numbers', annotations=READ_ONLY)
     async def catalog_overview(
         query: QueryArg = '',
         original_function: FunctionArg = '',
@@ -684,6 +796,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         circulation: CirculationArg = 'active',
         status: StatusArg = 'published',
         include_withdrawn: WithdrawnArg = False,
+        has_evidence: HasEvidenceArg = '',
         fit_mode: FitModeArg = '',
         size_mm: SizeArg = None,
         tolerance: ToleranceArg = '',
@@ -708,7 +821,8 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
             query=query, original_function=original_function,
             material=material, dataset=dataset, shape_class=shape_class,
             circulation=circulation, status=status,
-            include_withdrawn=include_withdrawn, fit_mode=fit_mode,
+            include_withdrawn=include_withdrawn, has_evidence=has_evidence,
+            fit_mode=fit_mode,
             size_mm=size_mm, tolerance=tolerance, near_lat=near_lat,
             near_lon=near_lon, near_layer=near_layer, radius_km=radius_km)
         # limit_dim 0: every value, not the ten most frequent and "others"

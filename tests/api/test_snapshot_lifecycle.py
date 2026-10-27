@@ -423,3 +423,20 @@ def test_photo_credit_is_mutable_metadata_never_frozen(story):
     assert patch_problems('snapshot', {'photo_credit': []},
                           status='published', is_author=True) == {
         'forbidden': ['photo_credit']}
+
+
+def test_a_new_state_with_geometry_reinforcements_is_refused_in_words(story):
+    """7.8: the bars are a reinforcement_layout evidence record, not geometry."""
+    geometry = {**story['geometry'], 'reinforcements': [
+        {'spec': 'BSt III', 'diameter': 8, 'points': [[0, 0, 0], [100, 0, 0]]}]}
+    refused = story['api'].post(f'/identities/{BEAM}/snapshots', json={'geometry': geometry},
+                                headers=story['contributor'])
+    assert refused.status_code == 422, refused.text
+    text = str(refused.json()['detail'])
+    assert 'geometry.reinforcements is not accepted' in text and 'reinforcement_layout' in text
+    assert '7.8' in text
+    # nothing was stored
+    assert story['db']['component_snapshots'].count_documents({'identity_id': BEAM, 'version': 2}) == 0
+    # without the key the same body is accepted
+    assert story['api'].post(f'/identities/{BEAM}/snapshots', json={'geometry': story['geometry']},
+                             headers=story['contributor']).status_code == 201

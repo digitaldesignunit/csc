@@ -299,6 +299,35 @@ def test_the_filters_apply_before_the_ranking(world):
     assert _numbers(_similar(world, 1, count=50, material='nothing')) == []
 
 
+def test_the_evidence_method_filter_applies_before_the_ranking(world):
+    """8.177: only pieces with a published record of the method are ranked; a
+    pending record does not count; it combines with the other filters."""
+    _built(world)
+    evidence = world['db']['component_evidence']
+    for number, status in ((3, 'published'), (4, 'published'), (5, 'pending'), (6, 'published'),
+                           (1, 'published')):
+        evidence.insert_one({'_id': str(uuid.uuid4()), 'identity_id': pid(number),
+                             'method': 'reinforcement_layout', 'status': status})
+    evidence.insert_one({'_id': str(uuid.uuid4()), 'identity_id': pid(2), 'method': 'rebound_hammer',
+                         'status': 'published'})
+    # 2 is nearer than 3 and 4 but has no layout; 5 has only a pending one; the piece itself (1) never counts
+    body = _similar(world, 1, count=50, evidence_method='reinforcement_layout')
+    assert _numbers(body) == [6, 3, 4] and body['considered'] == 3
+    assert _numbers(_similar(world, 1, count=1, evidence_method='reinforcement_layout')) == [6]
+    assert _numbers(_similar(world, 1, count=50, evidence_method='rebound_hammer')) == [2]
+    assert _similar(world, 1, count=50, evidence_method='core_compression')['results'] == []
+    # with another filter: the dataset, a dimension search and a near search
+    assert _numbers(_similar(world, 1, count=50, evidence_method='reinforcement_layout', dataset='other')) == [6]
+    held = _similar(world, 1, count=50, evidence_method='reinforcement_layout', fit_mode='can_hold',
+                    fit_size='1200,600,200')
+    assert _numbers(held) == [6, 4]
+    around = _similar(world, 1, count=50, evidence_method='reinforcement_layout', near_lat=49.8728,
+                      near_lon=8.6512, radius_km=30)
+    assert _numbers(around) == [6, 4]
+    # an unknown method is a 422, not an empty answer
+    _similar(world, 1, expect=422, evidence_method='x_ray')
+
+
 def test_a_piece_the_caller_cannot_see_is_not_there_and_is_never_a_neighbour(world):
     _built(world)
     admin = _similar(world, 1, count=50)

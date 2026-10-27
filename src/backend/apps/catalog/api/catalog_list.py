@@ -130,11 +130,20 @@ def _format_list_rows(
 async def _pipelines_args(request: Request, filters: CatalogFilters,
                           user: Optional[User]) -> Dict[str, Any]:
     """The filters plus the visibility rule (3.6) for this caller."""
+    identity_match = and_match(
+        filters.identity_match(),
+        await visible_identity_match(request, viewer_of(user)))
+    if filters.evidence_method:
+        # 8.177: the pieces with a published record of this method, matched
+        # on the identity (the evidence collection has an index on status
+        # and method); the rest of the match keeps the access rules
+        ids = await request.app.mongodb_component_evidence.distinct(
+            'identity_id', {'status': 'published',
+                            'method': filters.evidence_method})
+        identity_match = and_match(identity_match, {'_id': {'$in': ids}})
     return {
         'snapshots_collection': request.app.mongodb_component_snapshots.name,
-        'identity_match': and_match(
-            filters.identity_match(),
-            await visible_identity_match(request, viewer_of(user))),
+        'identity_match': identity_match,
         'snapshot_match': filters.snapshot_match(),
         'fit_stages': filters.fit_pipeline_stages(),
         'near': filters.near,

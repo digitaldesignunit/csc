@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from fastapi import HTTPException, Query
 
+from ..vocab import EvidenceMethod
 from .dimension_fit import (
     DEFAULT_TOLERANCE,
     FitError,
@@ -85,6 +86,10 @@ class CatalogFilters:
     bbx_max_y: Optional[float] = None
     bbx_max_z: Optional[float] = None
     q: str = ''
+    # evidence method (8.177): only pieces with a published evidence record
+    # of this method; the ids come from the evidence collection, see
+    # ``catalog_list._pipelines_args``
+    evidence_method: Optional[str] = None
     # dimension search (8.169): the mode, the asked sides (largest first) and
     # the tolerance of ``about`` as (``percent`` | ``mm``, value)
     fit_mode: Optional[str] = None
@@ -222,6 +227,11 @@ def catalog_filters(
     bbx_max_z: Optional[float] = Query(None),
     q: str = Query('', max_length=FILTER_MAX_LENGTH,
                    description='name, catalogue number or id'),
+    evidence_method: Optional[EvidenceMethod] = Query(
+        None, description='only pieces with at least one published evidence '
+                          'record of this method (8.177), for example '
+                          'reinforcement_layout; combines with every other '
+                          'filter'),
     fit_mode: Optional[FitMode] = Query(
         None, description='dimension search (8.169): about = every side '
                           'within fit_tol of fit_size; can_hold = every side '

@@ -548,11 +548,14 @@ sent back to) before you press Allow, and press Deny when it is not the tool you
 just connected.
 
 **What it can do.** Ten read-only tools: `search_components` (the filters of
-Browse, a page at a time), `catalog_overview` (how many pieces, counted by
+Browse and `has_evidence`, which keeps only pieces with a published record of one
+evidence method, for example `reinforcement_layout` for "with reinforcement", a
+page at a time), `catalog_overview` (how many pieces, counted by
 material, original function, dataset, shape class and circulation, the range of
 each sorted side in millimetres, and how many have a location; it takes the same
-filters), `get_component`, `list_versions`, `get_version` (geometry as counts
-and a link, never the meshes), `get_evidence`, `list_datasets`, `get_dataset`,
+filters), `get_component` (with the reinforcement layouts of the current version as
+counts), `list_versions`, `get_version` (geometry as counts and a link, never
+the meshes; the reinforcement layouts of the version as counts), `get_evidence`, `list_datasets`, `get_dataset`,
 `get_timeline` and `similar_components` (the pieces nearest in shape over the
 whole descriptor, not on the two-dimensional similarity map, with their distance
 in standardised units; it takes the same filters, which apply before the

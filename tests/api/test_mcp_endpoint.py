@@ -499,7 +499,7 @@ def test_list_versions_and_get_version(api, world):
     one = tool(api, world['admin'], 'get_version', version_id=sid('beam', 1))
     assert one['id'] == sid('beam', 1) and one['component_id'] == iid('beam') and one['status'] == 'published'
     assert one['geometry'] == {'meshes': 1, 'mesh_vertices': 4, 'mesh_faces': 4, 'point_clouds': 0, 'proxies': 0,
-                               'reinforcements': 0, 'note': 'Geometry is not sent; open the web link to see it.'}
+                               'note': 'Geometry is not sent; open the web link to see it.'}
     assert 'planescore' in one['descriptors'] and one['web_link'].endswith(f'?snapshot={sid("beam", 1)}')
     assert '"vertices"' not in json.dumps(one)
 
@@ -755,7 +755,207 @@ def test_the_overview_is_described_and_takes_the_search_filters(api, world):
         assert word in overview['description'], word
     search = next(t for t in tools if t['name'] == 'search_components')
     shared = ('query', 'original_function', 'material', 'dataset', 'shape_class', 'circulation', 'status',
-              'include_withdrawn', 'fit_mode', 'size_mm', 'tolerance', 'near_lat', 'near_lon', 'near_layer',
-              'radius_km')
+              'include_withdrawn', 'has_evidence', 'fit_mode', 'size_mm', 'tolerance', 'near_lat', 'near_lon',
+              'near_layer', 'radius_km')
     for name in shared:
         assert overview['inputSchema']['properties'][name] == search['inputSchema']['properties'][name], name
+
+
+# 0.6.4.1: A SERVER A MODEL RECOGNIZES, SEARCH BY EVIDENCE METHOD (8.177) -----------------------------
+def test_the_server_names_the_domain_in_english_and_german_and_has_a_home_and_an_icon(api, world):
+    response = mcp_post(api, world['admin'], 'initialize', {
+        'protocolVersion': '2025-06-18', 'capabilities': {},
+        'clientInfo': {'name': 'test', 'version': '1'}})
+    info = response.json()['result']['serverInfo']
+    assert info['websiteUrl'] == WEB
+    assert [i['src'] for i in info['icons']] == [f'{WEB}/favicon.ico']
+    text = response.json()['result']['instructions']
+    for word in ('reused and salvaged building components', 'Bauteile', 'Wiederverwendung', 'Bauteilboerse',
+                 'Betonwaende', 'Traeger', 'Bewehrung', 'reinforcement', 'stone', 'timber', 'before a web search',
+                 'has_evidence=reinforcement_layout'):
+        assert word in text, word
+    assert text.isascii()
+
+
+def test_every_tool_has_a_title_and_says_it_only_reads_the_catalog(api, world):
+    listed = mcp_post(api, world['admin'], 'tools/list').json()['result']['tools']
+    assert {t['name'] for t in listed} == TOOLS
+    for entry in listed:
+        assert entry['title'] and entry['title'] != entry['name'], entry['name']
+        hints = entry['annotations']
+        assert hints['readOnlyHint'] is True and hints['openWorldHint'] is False, entry['name']
+        assert hints['idempotentHint'] is True, entry['name']
+    assert len({t['title'] for t in listed}) == len(listed)
+
+
+def test_the_evidence_methods_are_named_for_the_model_from_the_vocabulary(api, world):
+    from apps.catalog.vocab import EVIDENCE_METHODS
+    listed = mcp_post(api, world['admin'], 'tools/list').json()['result']['tools']
+    by_name = {t['name']: t for t in listed}
+    for method in EVIDENCE_METHODS:
+        assert method in by_name['get_evidence']['description'], method
+        for name in ('search_components', 'catalog_overview', 'similar_components'):
+            assert method in by_name[name]['inputSchema']['properties']['has_evidence']['description'], (name, method)
+    assert 'reinforcement' in by_name['search_components']['inputSchema']['properties']['has_evidence']['description']
+
+
+def _layout_for(db, name, status='pending', **changes):
+    """A copy of the migrated reinforcement layout of the beam, for another piece."""
+    doc = db['component_evidence'].find_one({'method': 'reinforcement_layout'})
+    doc.update({'_id': str(uuid.uuid4()), 'identity_id': iid(name), 'status': status, **changes})
+    doc['position'] = {**doc['position'], 'snapshot_id': sid(name)}
+    db['component_evidence'].insert_one(doc)
+    return doc['_id']
+
+
+def test_has_evidence_lists_the_pieces_with_a_published_record_of_that_method(api, db, world):
+    admin = world['admin']
+    answer = tool(api, admin, 'search_components', has_evidence='reinforcement_layout')
+    assert _names(answer) == ['beam'] and answer['total'] == 1
+    assert _names(tool(api, admin, 'search_components', has_evidence='visual_inspection')) == ['feld']
+    assert tool(api, admin, 'search_components', has_evidence='core_compression')['total'] == 0
+    assert tool(api, admin, 'search_components')['total'] == 3             # no filter: as before
+
+
+def test_a_piece_with_only_a_pending_layout_is_not_found_by_has_evidence(api, db, world):
+    pending = _layout_for(db, 'feld', status='pending')
+    admin = world['admin']
+    assert _names(tool(api, admin, 'search_components', has_evidence='reinforcement_layout')) == ['beam']
+    db['component_evidence'].update_one({'_id': pending}, {'$set': {'status': 'published'}})
+    assert _names(tool(api, admin, 'search_components', has_evidence='reinforcement_layout',
+                       sort='catalog_number')) == ['beam', 'feld']
+
+
+def test_has_evidence_combines_with_the_other_filters(api, db, world):
+    _sized(db)
+    admin = world['admin']
+    _layout_for(db, 'feld', status='published')
+    assert tool(api, admin, 'search_components', has_evidence='reinforcement_layout', dataset='dbu_zirkus')['total'] == 1
+    assert tool(api, admin, 'search_components', has_evidence='reinforcement_layout', dataset='ddu_aggregations')['total'] == 0
+    both = tool(api, admin, 'search_components', has_evidence='reinforcement_layout', fit_mode='can_hold',
+                size_mm=[400, 300, 200])
+    assert _names(both) == ['feld']                                        # beam is too thin
+    _placed(db, {'beam': DARMSTADT, 'feld': BERLIN})
+    near = tool(api, admin, 'search_components', has_evidence='reinforcement_layout', near_lat=49.87, near_lon=8.65,
+                radius_km=30)
+    assert _names(near) == ['beam'] and near['total'] == 1
+
+
+def test_has_evidence_follows_what_the_account_may_see(api, db, world, plain, dataset_member):
+    assert tool(api, plain['pat'], 'search_components', has_evidence='reinforcement_layout')['total'] == 0
+    assert _names(tool(api, dataset_member['pat'], 'search_components', has_evidence='reinforcement_layout')) == ['beam']
+
+
+def test_has_evidence_refuses_an_unknown_method_in_words(api, world):
+    is_error, text = tool_result(api, world['admin'], 'search_components', has_evidence='x_ray')
+    assert is_error and 'has_evidence is one of' in text and 'reinforcement_layout' in text
+    for name, args in (('catalog_overview', {}), ('similar_components', {'component_id': iid('beam')})):
+        assert tool_result(api, world['admin'], name, has_evidence='x_ray', **args)[0] is True
+
+
+def test_the_overview_and_the_similar_pieces_take_has_evidence(api, db, world):
+    admin = world['admin']
+    overview = tool(api, admin, 'catalog_overview', has_evidence='reinforcement_layout')
+    assert overview['total'] == 1 and overview['filters']['evidence_method'] == 'reinforcement_layout'
+    assert [r['key'] for r in overview['by_dataset']] == ['dbu_zirkus']
+    assert tool(api, admin, 'catalog_overview')['total'] == 3
+    put_matrix(db, NEAR_BEAM)
+    # feld, stone and cut2 are nearer than panel, but only the pieces with a layout are ranked
+    _layout_for(db, 'cut2', status='published')
+    similar = tool(api, admin, 'similar_components', component_id=iid('feld'), count=5, circulation='all',
+                   has_evidence='reinforcement_layout')
+    assert [s['name'] for s in similar['similar']] == ['beam', 'cut2'] and similar['compared_with'] == 2
+    unfiltered = tool(api, admin, 'similar_components', component_id=iid('feld'), count=5, circulation='all')
+    assert len(unfiltered['similar']) > 2
+
+
+# 0.6.4.1: REINFORCEMENT IS EVIDENCE, NOT GEOMETRY (7.8) ---------------------------------------------
+def test_the_geometry_summary_has_no_reinforcement_count_any_more():
+    summary = mcp_server.geometry_summary({'meshes': [{'vertices': [[0, 0, 0]], 'faces': []}],
+                                           'reinforcements': [{'spec': 'x'}]})
+    assert 'reinforcements' not in summary and summary['meshes'] == 1
+
+
+def test_a_version_reports_its_reinforcement_layouts_from_the_evidence(api, db, world):
+    admin = world['admin']
+    component = tool(api, admin, 'get_component', component_id=iid('beam'))
+    layouts = component['current_version']['reinforcement_layouts']
+    assert layouts['records'] == 1 and layouts['bars'] == 1
+    assert 'get_evidence' in layouts['note'] and 'reinforcement_layout' in layouts['note']
+    assert 'reinforcements' not in component['current_version']['geometry']
+    assert 'Geometry is not sent' in component['current_version']['geometry']['note']
+    now = tool(api, admin, 'get_version', version_id=sid('beam', 1))
+    assert now['reinforcement_layouts']['records'] == 1 and now['reinforcement_layouts']['bars'] == 1
+    assert 'reinforcements' not in now['geometry']
+    # the layout names version 1: the version before it has none
+    before = tool(api, admin, 'get_version', version_id=sid('beam', 0))
+    assert before['reinforcement_layouts']['records'] == 0 and before['reinforcement_layouts']['bars'] == 0
+    plain_piece = tool(api, admin, 'get_component', component_id=iid('feld'))
+    assert plain_piece['current_version']['reinforcement_layouts']['records'] == 0
+
+
+def test_a_pending_layout_is_not_counted_and_two_records_add_their_bars(api, db, world):
+    admin = world['admin']
+    pending = _layout_for(db, 'beam', status='pending')
+    db['component_evidence'].update_one({'_id': pending}, {'$set': {'position.snapshot_id': sid('beam', 1)}})
+    assert tool(api, admin, 'get_version', version_id=sid('beam', 1))['reinforcement_layouts']['records'] == 1
+    db['component_evidence'].update_one({'_id': pending}, {'$set': {'status': 'published'}})
+    counted = tool(api, admin, 'get_version', version_id=sid('beam', 1))['reinforcement_layouts']
+    assert counted['records'] == 2 and counted['bars'] == 2
+
+
+def test_the_layout_helper_counts_published_records_of_the_version_only():
+    def record(snapshot, bars, status='published', method='reinforcement_layout'):
+        return {'method': method, 'status': status, 'position': {'snapshot_id': snapshot},
+                'payload': {'bars': [{}] * bars}}
+    rows = [record('a', 3), record('a', 2), record('b', 7), record('a', 9, status='pending'),
+            record('a', 5, method='visual_inspection'), {'method': 'reinforcement_layout', 'status': 'withdrawn'}]
+    assert mcp_server.layouts_of_version(rows, 'a')['records'] == 2
+    assert mcp_server.layouts_of_version(rows, 'a')['bars'] == 5
+    assert mcp_server.layouts_of_version(rows, 'c')['records'] == 0
+    assert mcp_server.layouts_of_version(None, 'a')['bars'] == 0
+
+
+def test_a_layout_row_carries_a_summary_of_its_bars(api, db, world):
+    admin = world['admin']
+    layout = db['component_evidence'].find_one({'method': 'reinforcement_layout'})
+    bars = [{'spec': 'BSt III', 'diameter_mm': 8, 'points': [[0, 0, 0], [1, 0, 0]]},
+            {'spec': 'BSt III', 'diameter_mm': 12, 'cover_mm': 25, 'points': [[0, 0, 0], [1, 0, 0]]},
+            {'spec': 'BSt I', 'diameter_mm': 8, 'cover_mm': 40, 'points': [[0, 0, 0], [1, 0, 0]]}]
+    db['component_evidence'].update_one({'_id': layout['_id']}, {'$set': {'payload.bars': bars}})
+    row = tool(api, admin, 'get_evidence', component_id=iid('beam'), method='reinforcement_layout')['evidence'][0]
+    assert row['reinforcement'] == {'bars': 3, 'basis': 'drawing', 'specs': ['BSt I', 'BSt III'],
+                                    'diameters_mm': [8.0, 12.0], 'cover_mm': {'min': 25, 'max': 40},
+                                    'version_id': sid('beam', 1)}
+    assert 'payload' not in row and 'points' not in json.dumps(row)
+    full = tool(api, admin, 'get_evidence', evidence_id=row['id'])
+    assert len(full['record']['payload']['bars']) == 3
+    # the other methods have no such summary
+    other = tool(api, admin, 'get_evidence', component_id=iid('feld'))['evidence']
+    assert other and all('reinforcement' not in r for r in other)
+
+
+def test_performed_by_shows_a_name_else_the_organization_never_null(api, db, world):
+    layout = db['component_evidence'].find_one({'method': 'reinforcement_layout'})
+    db['component_evidence'].update_one({'_id': layout['_id']}, {'$set': {'performed_by': [
+        {'kind': 'person', 'name': 'Ada Example', 'organization': 'Example Institute'},
+        {'kind': 'organization', 'organization': 'Example Laboratory'}]}})
+    row = tool(api, world['admin'], 'get_evidence', component_id=iid('beam'))['evidence'][0]
+    assert row['performed_by'] == ['Ada Example', 'Example Laboratory']
+    assert None not in row['performed_by']
+
+
+def test_performers_leaves_out_an_actor_with_neither_name_nor_organization():
+    record = {'performed_by': [{'kind': 'user', 'user_id': 'abc'}, {'kind': 'person', 'name': 'Ada'}, 'x', None,
+                               {'kind': 'organization', 'organization': 'Lab'}]}
+    assert mcp_server.performers(record) == ['Ada', 'Lab']
+    assert mcp_server.performers({}) == []
+
+
+def test_no_address_or_account_id_leaks_through_the_layout_and_performer_fields(api, db, world):
+    layout = db['component_evidence'].find_one({'method': 'reinforcement_layout'})
+    db['component_evidence'].update_one({'_id': layout['_id']}, {'$set': {'performed_by': [
+        {'kind': 'person', 'name': 'Ada ada@example.org', 'email': 'ada@example.org'}]}})
+    text = json.dumps([tool(api, world['admin'], 'get_evidence', component_id=iid('beam')),
+                       tool(api, world['admin'], 'get_component', component_id=iid('beam'))])
+    assert not EMAIL.search(text)
