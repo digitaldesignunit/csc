@@ -395,7 +395,7 @@ async def register_user(
             '_id': new_id, 'username': username, 'full_name': full_name,
             'email': email, 'hashed_password': get_password_hash(password),
             'disabled': False, 'role': 'user', 'email_verified': True,
-            'verification_token': None, 'verification_token_expires': None,
+            'verification_token_expires': None,
             'invitation_id': invitation['_id'],
         }
         await _insert_account(users, doc)
@@ -451,14 +451,10 @@ async def verify_email(
     if not token:
         raise HTTPException(400, 'Verification token is required')
 
-    # Find the user by the hash of the token (stored since 0.6.1.1); a token
-    # mailed before that is stored as it is and works until it expires, at
-    # most 24 hours. TODO 0.6.2: drop the plain-token fallback.
+    # Find the user by the hash of the token; the plain token is never stored
     user = await users.find_one({
         'verification_token_sha256': token_sha256(token),
     })
-    if not user:
-        user = await users.find_one({'verification_token': token})
 
     if not user:
         raise HTTPException(400, 'Invalid or expired verification token')

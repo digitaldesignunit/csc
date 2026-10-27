@@ -13,6 +13,7 @@ import re
 
 import pytest
 
+import compstub
 import headers
 
 PACKAGE = headers.LIB_DIR / 'csc_gh'
@@ -162,10 +163,10 @@ def test_the_updater_reads_the_components_own_version():
         assert headers.check_version_line(text, path.name) == [], path.name
 
 
-def test_the_session_names_the_0_6_3_client():
+def test_the_session_names_the_client_of_the_release():
     text = (headers.SRC_DIR / 'DDU_CSC_Session.py').read_text(encoding='utf-8')
-    assert re.search(r"^CSC_CLIENT = 'gh-userobjects/0\.6\.3\.0'$", text,
-                     re.M)
+    assert re.search(r"^CSC_CLIENT = '%s'$" % re.escape(compstub.GH_CLIENT),
+                     text, re.M)
     assert re.search(r'^Version: \d+(\.\d+)?[a-z]?$', text, re.M)
 
 

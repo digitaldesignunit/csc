@@ -19,6 +19,12 @@ import headers
 
 SRC = headers.SRC_DIR
 
+# the client the Session names: the release in the VERSION file at the root, so a
+# version bump does not break the tests that expect it
+GH_CLIENT = 'gh-userobjects/' + (
+    Path(__file__).resolve().parents[2] / 'VERSION').read_text(
+        encoding='utf-8').strip()
+
 
 class Stub:
     """An object that is any attribute, any call and any subscript."""
