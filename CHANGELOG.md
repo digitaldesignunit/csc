@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4.1] - 2026-10-27
+
+Hardening: the MCP connector, the component page and dependencies.
+
+### Added
+
+- **Search by evidence method:** the catalog list takes `evidence_method=<method>` (one name of the
+  evidence vocabulary, an unknown name is a 422) and keeps only pieces with at least one
+  published, current record of that method, for example `reinforcement_layout` for the pieces
+  with a reinforcement layout. It combines with every other filter, also with fit and near. The
+  MCP tools `search_components`, `catalog_overview` and `similar_components` take it as
+  `has_evidence`. A filter in Browse follows later.
+- **A reinforcement layout in the viewer:** the card of a reinforcement layout in the evidence
+  list has "Show in viewer", for every status, so a submitted draft can be seen before it is
+  published. The viewer opens the version the bars belong to and draws that layout on top of the
+  published ones, which turn faint; the legend names it with its status, and an x takes it out
+  again. The link can be sent on: whoever may not see the record gets a short note and no bars.
+
+### Changed
+
+- **MCP connector:** the server introduces itself as the Catalog of Second Chances, with a link to
+  the website and an icon, and its instructions tell a chat to use these tools for reused building
+  components before a web search (in English and German). Every tool has a title and is marked
+  read-only, and the descriptions name the evidence methods.
+- **MCP, reinforcement:** `get_component` and `get_version` count the reinforcement layouts of the
+  version from its evidence records (records, bars, diameters) instead of the old inline field,
+  which always gave 0. In `get_evidence` a layout record carries a summary of its bars, and
+  `performed_by` shows the organization.
+- **Similar pieces:** on a wide screen the card sits in the left rail below Provenance, with
+  smaller tiles, three to a row, so it no longer pushes the evidence records down. On a narrow
+  screen it keeps its place after Photos and location. "Show more" appears only when there are
+  more than six similar pieces.
+- **Statistics:** the size facet of `/identities/stats` (`bbxX`) buckets the largest side of each
+  piece in millimetres (0, 100, 250, 500, 1000, 2000, 5000, 10000 and more); the old edges came
+  from the metre era and put nearly every piece in the last bucket. Pieces without a size are
+  left out instead of counting as the largest.
+- **Write model:** creating or changing a version rejects the old inline field
+  `geometry.reinforcements`; a reinforcement layout is an evidence record.
+
+### Security
+
+- **E-mail verification** accepts only the hashed token. The fallback to a token stored in plain
+  text is gone (such tokens expired a day after 0.6.1.1); an account that is still unverified can
+  ask for a new mail.
+- **Dependencies:** the frontend lockfile takes `undici` 7.30.1 and `fast-uri` 3.1.9 (one high, two
+  medium and two low advisories; both come only through the development tool `shadcn`, the
+  production install was not affected). The local import scripts move to Pillow 13.0.0.
+
+### Server notes
+
+- No step needed: no new setting, collection or index.
+- In claude.ai the connector can be renamed to "Catalog of Second Chances" (Settings, Connectors);
+  the name the server gives itself is shown when it is added again.
+
 ## [0.6.4.0] - 2026-10-23
 
 Search and the location map.

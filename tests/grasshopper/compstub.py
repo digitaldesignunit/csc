@@ -11,6 +11,7 @@ that only pass geometry around).
 
 from __future__ import annotations
 
+import re
 import sys
 import types
 from pathlib import Path
@@ -19,11 +20,13 @@ import headers
 
 SRC = headers.SRC_DIR
 
-# the client the Session names: the release in the VERSION file at the root, so a
-# version bump does not break the tests that expect it
-GH_CLIENT = 'gh-userobjects/' + (
-    Path(__file__).resolve().parents[2] / 'VERSION').read_text(
-        encoding='utf-8').strip()
+# the client the Session really sends: the CSC_CLIENT line of its source. It lags
+# behind VERSION until the UserObjects are re-exported (bump-version --gh), so the
+# tests that expect it must not read VERSION
+GH_CLIENT = re.search(
+    r"^CSC_CLIENT = '(gh-userobjects/[^']+)'\r?$",
+    (SRC / 'DDU_CSC_Session.py').read_bytes().decode('utf-8', 'replace'),
+    re.M).group(1)
 
 
 class Stub:

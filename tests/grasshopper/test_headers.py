@@ -163,11 +163,23 @@ def test_the_updater_reads_the_components_own_version():
         assert headers.check_version_line(text, path.name) == [], path.name
 
 
-def test_the_session_names_the_client_of_the_release():
-    text = (headers.SRC_DIR / 'DDU_CSC_Session.py').read_text(encoding='utf-8')
-    assert re.search(r"^CSC_CLIENT = '%s'$" % re.escape(compstub.GH_CLIENT),
-                     text, re.M)
-    assert re.search(r'^Version: \d+(\.\d+)?[a-z]?$', text, re.M)
+def _version_key(version):
+    """The order of scripts/ci/check_version.py: a pre-release sorts before its final."""
+    core, _, pre = version.partition('-')
+    return tuple(int(x) for x in core.split('.')), (0, pre) if pre else (1, '')
+
+
+def test_the_session_names_a_valid_client_not_newer_than_the_release():
+    # the client moves only with a re-export of the UserObjects (bump-version --gh),
+    # so it may lag behind VERSION but never lead it (the rule of check_version.py)
+    text = (headers.SRC_DIR / 'DDU_CSC_Session.py').read_bytes().decode('utf-8', 'replace')
+    found = re.search(
+        r"^CSC_CLIENT = 'gh-userobjects/(\d+\.\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)'\r?$", text, re.M)
+    assert found, 'CSC_CLIENT is not gh-userobjects/<MAJOR.MINOR.PATCH.HOTFIX>'
+    assert compstub.GH_CLIENT == 'gh-userobjects/' + found.group(1)
+    release = (headers.SRC_DIR.parent / 'VERSION').read_text(encoding='utf-8').strip()
+    assert _version_key(found.group(1)) <= _version_key(release), (found.group(1), release)
+    assert re.search(r'^Version: \d+(\.\d+)?[a-z]?\r?$', text, re.M)
 
 
 def test_no_component_is_left_from_0_5():
