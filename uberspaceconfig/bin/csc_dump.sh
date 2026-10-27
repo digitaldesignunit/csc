@@ -43,11 +43,19 @@ options = JSONOptions(json_mode=JSONMode.RELAXED)
 for name in sorted(db.list_collection_names()):
     if name.startswith('system.'):
         continue
-    docs = list(db[name].find())
+    # one document at a time: the server kills a process that holds a large
+    # collection in memory
     path = os.path.join(os.environ['CSC_DUMP_DIR'], f'csc.{name}.json')
+    count = 0
     with open(path, 'w', encoding='utf-8') as handle:
-        handle.write(json_util.dumps(docs, json_options=options))
-    print(f'{name}: {len(docs)}', file=sys.stderr)
+        handle.write('[')
+        for doc in db[name].find(batch_size=50):
+            if count:
+                handle.write(',')
+            handle.write(json_util.dumps(doc, json_options=options))
+            count += 1
+        handle.write(']')
+    print(f'{name}: {count}', file=sys.stderr)
 EOF
         tar czf - -C "$TMP" .
         ;;
