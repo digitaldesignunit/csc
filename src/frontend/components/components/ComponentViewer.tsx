@@ -17,7 +17,7 @@ import {
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Scan, Grid3x3, Rotate3d, SlidersHorizontal } from 'lucide-react'
+import { Scan, Grid3x3, Rotate3d, SlidersHorizontal, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Bounds, OrbitControls, Html, useBounds } from '@react-three/drei'
 import { cn, rgbToHex } from '@/lib/utils'
@@ -38,7 +38,9 @@ import {
   barLegend,
   defaultColourMode,
   diameterRange,
-  layoutsOnSnapshot,
+  layoutsWithPicked,
+  type LayoutRecord,
+  type PickedProblem,
   type BarColourMode,
   type BarLayout,
 } from '@/lib/reinforcementColors'
@@ -750,8 +752,12 @@ CaptureFixtures.displayName = 'CaptureFixtures'
 /** A bar with the index of the layout record it comes from (RL3). */
 type ViewerBar = ReinforcementBar & { layout: number }
 
-const ReinforcementBarMesh = React.memo(({ bar, colour }: { bar: ReinforcementBar; colour: string | null }) => {
-  const material = reinforcementMaterial(colour)
+const ReinforcementBarMesh = React.memo(({ bar, colour, dimmed }: {
+  bar: ReinforcementBar
+  colour: string | null
+  dimmed: boolean
+}) => {
+  const material = reinforcementMaterial(colour, dimmed)
   const { segments, cornerJoints } = useMemo(
     () => buildReinforcementBarMeshes(bar.points),
     [bar.points],
@@ -787,17 +793,21 @@ const ReinforcementBars = React.memo(({
   bars,
   visible,
   mode,
+  picked,
 }: {
   bars: ViewerBar[]
   visible: boolean
   mode: BarColourMode
+  /** The layout opened by the link: the others are drawn faint (8.178). */
+  picked: number | null
 }) => {
   const range = useMemo(() => diameterRange(bars), [bars])
   if (!visible || bars.length === 0) return null
   return (
     <group scale={[scale, scale, scale]} rotation={[-Math.PI / 2, 0, 0]}>
       {bars.map((bar, index) => (
-        <ReinforcementBarMesh key={`${bar.spec}-${index}`} bar={bar} colour={barColour(mode, bar, range)} />
+        <ReinforcementBarMesh key={`${bar.spec}-${index}`} bar={bar} colour={barColour(mode, bar, range)}
+          dimmed={picked !== null && bar.layout !== picked} />
       ))}
     </group>
   )
@@ -1114,6 +1124,51 @@ export type ComponentViewerProps = {
    * zoom, without a toolbar or the settings panel.
    */
   bare?: boolean
+  /**
+   * `?layout=<evidence id>` (decision 8.178): one reinforcement layout record,
+   * whatever its status, is drawn in addition to the published ones when it is
+   * positioned on the version shown.
+   */
+  layoutId?: string
+  /** Removes `layout=` from the page's address (the legend's close button). */
+  onClearLayout?: () => void
+}
+
+/** The small close button of the opened layout (legend entry and note): removes `layout=`. */
+function ClearLayoutButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="pointer-events-auto -my-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+      aria-label="Stop showing this layout" title="Stop showing this layout">
+      <X className="h-3 w-3" />
+    </button>
+  )
+}
+
+/** The opened layout as a line of its own while the legend does not list layouts. */
+function LayoutEntry({ label, status, onClear }: { label: string; status?: string | null; onClear?: () => void }) {
+  return (
+    <p className="flex items-center gap-1.5 rounded-md border border-border bg-background/90 px-2 py-1 text-[11px] font-medium shadow-sm backdrop-blur-sm">
+      <span className="truncate">{label}</span>
+      {status && (
+        <span className="shrink-0 rounded border border-amber-400 px-1 text-[10px] font-normal text-amber-800 dark:text-amber-200">{status}</span>
+      )}
+      {onClear && <ClearLayoutButton onClick={onClear} />}
+    </p>
+  )
+}
+
+const LAYOUT_NOTES: Record<PickedProblem | 'hidden' | 'failed', string> = {
+  hidden: 'This layout is not visible to you.',
+  failed: 'This layout could not be loaded.',
+  other_version: 'This layout belongs to another version of the piece and is not drawn here.',
+  no_bars: 'This layout has no bars to draw.',
+}
+
+type LoadedLayouts = {
+  published: LayoutRecord<ReinforcementBar>[]
+  picked: LayoutRecord<ReinforcementBar> | null
+  pickedFailure: 'hidden' | 'failed' | null
 }
 
 export default function ComponentViewer({
@@ -1124,6 +1179,8 @@ export default function ComponentViewer({
   fill = false,
   toolbar = false,
   bare = false,
+  layoutId,
+  onClearLayout,
 }: ComponentViewerProps) {
   const snapshot = primarySnapshot(catalog)
   const identityId = catalog.identity._id
@@ -1276,38 +1333,61 @@ export default function ComponentViewer({
       .catch(() => { if (!cancelled) setEvidenceMarks([]) })
     return () => { cancelled = true }
   }, [identityId, snapshotIdForOverlays])
+  // the layout the link names, drawn in addition to the published ones (8.178)
+  const [pickedLayout, setPickedLayout] = useState<number | null>(null)
+  const [layoutNote, setLayoutNote] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
     setReinforcementBars([])
     setBarLayouts([])
+    setPickedLayout(null)
+    setLayoutNote(null)
     if (!identityId || !snapshotIdForOverlays) return
     const params = new URLSearchParams({ method: 'reinforcement_layout' })
-    fetch(`/api/backend/identities/${encodeURIComponent(String(identityId))}/evidence?${params}`, {
-      credentials: 'include',
-    })
-      .then((response) => (response.ok ? response.json() : []))
-      .then((records: {
-        _id?: string
-        observed_at?: string | null
-        observed_at_precision?: string | null
-        position?: { snapshot_id?: string | null }
-        payload?: { bars?: ReinforcementBar[]; document?: { title?: string | null } | null }
-      }[]) => {
+    const published: Promise<LoadedLayouts['published']> = fetch(
+      `/api/backend/identities/${encodeURIComponent(String(identityId))}/evidence?${params}`,
+      { credentials: 'include' },
+    ).then((response) => (response.ok ? response.json() : []))
+    // the server decides who may load the record (7.0): no access draws nothing more
+    const picked: Promise<Pick<LoadedLayouts, 'picked' | 'pickedFailure'>> = layoutId
+      ? fetch(`/api/backend/evidence/${encodeURIComponent(layoutId)}`, { credentials: 'include' })
+        .then(async (response) => {
+          if (response.ok) {
+            const record = (await response.json()) as LayoutRecord<ReinforcementBar> & {
+              method?: string
+              identity_id?: string
+            }
+            // only a layout of this piece: the link is not a way to draw another piece's bars
+            return record.method === 'reinforcement_layout' && String(record.identity_id) === String(identityId)
+              ? { picked: record, pickedFailure: null }
+              : { picked: null, pickedFailure: 'hidden' as const }
+          }
+          const failure = [401, 403, 404].includes(response.status) ? 'hidden' as const : 'failed' as const
+          return { picked: null, pickedFailure: failure }
+        })
+        .catch(() => ({ picked: null, pickedFailure: 'failed' as const }))
+      : Promise.resolve({ picked: null, pickedFailure: null })
+    Promise.all([published.catch(() => []), picked])
+      .then(([records, extra]) => {
         if (cancelled) return
-        // one layout per record (RL3); a record without drawable bars is no layout
-        // one layout per record (RL1), every bar of every layout drawn
-        const { bars, layouts } = layoutsOnSnapshot<ReinforcementBar>(records, snapshotIdForOverlays)
-        setReinforcementBars(bars)
-        setBarLayouts(layouts)
-        setBarColourMode(defaultColourMode(layouts.length))
+        // one layout per record (RL1, RL3), every bar of every layout drawn; a
+        // record without drawable bars is no layout
+        const result = layoutsWithPicked<ReinforcementBar>(records, extra.picked, snapshotIdForOverlays)
+        setReinforcementBars(result.bars)
+        setBarLayouts(result.layouts)
+        setPickedLayout(result.picked)
+        // the opened layout is told apart by its colour: layout colours from the start
+        setBarColourMode(result.picked !== null ? 'layout' : defaultColourMode(result.layouts.length))
+        const problem = extra.pickedFailure ?? result.problem
+        setLayoutNote(layoutId && problem ? LAYOUT_NOTES[problem] : null)
       })
-      .catch(() => { if (!cancelled) { setReinforcementBars([]); setBarLayouts([]) } })
     return () => { cancelled = true }
-  }, [identityId, snapshotIdForOverlays])
+  }, [identityId, snapshotIdForOverlays, layoutId])
   const hasReinforcement = reinforcementBars.length > 0
   const legend = hasReinforcement && showReinforcement
     ? barLegend(barColourMode, barLayouts, reinforcementBars)
     : null
+  const pickedItem = pickedLayout !== null && showReinforcement ? barLayouts[pickedLayout] : null
 
 
   useEffect(() => {
@@ -2021,27 +2101,46 @@ export default function ComponentViewer({
               </TooltipContent>
             </Tooltip>
           </div>
-          {legend && (
-            <div className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[70%] rounded-md border border-border bg-background/90 px-2 py-1.5 text-[11px] shadow-sm backdrop-blur-sm"
-              role="group" aria-label="Bar colours">
-              {legend.kind === 'layout' ? (
-                <ul className="space-y-0.5">
-                  {legend.items.map((item) => (
-                    <li key={item.label} className="flex items-center gap-1.5">
-                      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.colour }} aria-hidden />
-                      <span className="truncate">{item.label}</span>
-                      <span className="text-muted-foreground">{item.count}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="w-36">
-                  <div className="h-2.5 rounded-sm" aria-hidden
-                    style={{ background: `linear-gradient(to right, ${legend.stops.join(', ')})` }} />
-                  <div className="mt-0.5 flex justify-between tabular-nums text-muted-foreground">
-                    <span>{legend.min} mm</span>
-                    <span>{legend.max} mm</span>
-                  </div>
+          {(legend || pickedItem || layoutNote) && (
+            <div className="pointer-events-none absolute bottom-2 left-2 z-10 flex max-w-[70%] flex-col items-start gap-1">
+              {layoutNote && (
+                <p className="pointer-events-auto flex items-start gap-1 rounded-md border border-amber-300 bg-amber-50/95 px-2 py-1 text-[11px] text-amber-950 shadow-sm dark:border-amber-700 dark:bg-amber-950/90 dark:text-amber-100"
+                  role="status">
+                  <span>{layoutNote}</span>
+                  {onClearLayout && <ClearLayoutButton onClick={onClearLayout} />}
+                </p>
+              )}
+              {legend?.kind !== 'layout' && pickedItem && (
+                <LayoutEntry label={pickedItem.label} status={pickedItem.status} onClear={onClearLayout} />
+              )}
+              {legend && (
+                <div className="rounded-md border border-border bg-background/90 px-2 py-1.5 text-[11px] shadow-sm backdrop-blur-sm"
+                  role="group" aria-label="Bar colours">
+                  {legend.kind === 'layout' ? (
+                    <ul className="space-y-0.5">
+                      {legend.items.map((item) => (
+                        <li key={`${item.label}-${item.colour}`}
+                          className={`flex items-center gap-1.5${item.picked ? ' font-medium' : ''}`}>
+                          <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.colour }} aria-hidden />
+                          <span className="truncate">{item.label}</span>
+                          {item.status && (
+                            <span className="shrink-0 rounded border border-amber-400 px-1 text-[10px] text-amber-800 dark:text-amber-200">{item.status}</span>
+                          )}
+                          <span className="text-muted-foreground">{item.count}</span>
+                          {item.picked && onClearLayout && <ClearLayoutButton onClick={onClearLayout} />}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="w-36">
+                      <div className="h-2.5 rounded-sm" aria-hidden
+                        style={{ background: `linear-gradient(to right, ${legend.stops.join(', ')})` }} />
+                      <div className="mt-0.5 flex justify-between tabular-nums text-muted-foreground">
+                        <span>{legend.min} mm</span>
+                        <span>{legend.max} mm</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2080,7 +2179,8 @@ export default function ComponentViewer({
               <group userData={{ noPick: true }}>
                 <MarkerPoints markerPoints={markerPoints} visible={showMarkerPoints} />
                 <CaptureFixtures fixtures={fixtureGroups} visible={showFixtures} />
-                <ReinforcementBars bars={reinforcementBars} visible={showReinforcement} mode={barColourMode} />
+                <ReinforcementBars bars={reinforcementBars} visible={showReinforcement} mode={barColourMode}
+                  picked={pickedLayout} />
               </group>
               {showEvidenceMarks && (
                 <EvidenceMarks marks={evidenceMarks} snapshotId={snapshotIdForOverlays} />

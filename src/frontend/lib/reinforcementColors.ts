@@ -63,7 +63,14 @@ export function diameterColour(diameter: number, range: { min: number; max: numb
 }
 
 // LAYOUTS ---------------------------------------------------------------------
-export type BarLayout = { id: string; label: string; count: number }
+export type BarLayout = {
+  id: string
+  label: string
+  count: number
+  /** The layout opened by `?layout=` (8.178): its status text, null for a current published one. */
+  status?: string | null
+  picked?: boolean
+}
 
 type RecordLike = {
   _id?: string
@@ -102,6 +109,9 @@ export function isDrawableBar(bar: DrawableBar): boolean {
 }
 
 export type LayoutRecord<B extends DrawableBar = DrawableBar> = RecordLike & {
+  identity_id?: string
+  status?: string | null
+  superseded_by?: string | null
   position?: { snapshot_id?: string | null } | null
   payload?: { bars?: B[]; document?: { title?: string | null } | null } | null
 }
@@ -130,6 +140,61 @@ export function layoutsOnSnapshot<B extends DrawableBar>(
   return { bars, layouts }
 }
 
+/** The status a legend names: draft, pending, rejected, withdrawn or superseded; null for a current published record. */
+export function layoutStatusText(record: { status?: string | null; superseded_by?: string | null }): string | null {
+  if (record.superseded_by) return 'superseded'
+  if (record.status && record.status !== 'published') return record.status
+  return null
+}
+
+export type PickedProblem = 'other_version' | 'no_bars'
+
+/**
+ * The published layouts and, in addition, one record the link names (8.178,
+ * `?layout=`), whatever its status: appended after the published ones, not
+ * twice when it is one of them, and only when it is positioned on the version
+ * shown (its bars are in the stored coordinates of that version). `picked` is
+ * the index of its layout, `problem` says why it is not drawn.
+ */
+export function layoutsWithPicked<B extends DrawableBar>(
+  published: LayoutRecord<B>[],
+  pickedRecord: LayoutRecord<B> | null,
+  snapshotId: string,
+): {
+  bars: (B & { layout: number })[]
+  layouts: BarLayout[]
+  picked: number | null
+  problem: PickedProblem | null
+} {
+  if (!pickedRecord) return { ...layoutsOnSnapshot(published, snapshotId), picked: null, problem: null }
+  const id = String(pickedRecord._id ?? '')
+  const problem: PickedProblem | null =
+    pickedRecord.position?.snapshot_id !== snapshotId ? 'other_version'
+      : !(pickedRecord.payload?.bars ?? []).some(isDrawableBar) ? 'no_bars'
+        : null
+  const listed = published.some((record) => String(record._id ?? '') === id)
+  const records = problem || listed ? published : [...published, pickedRecord]
+  const { bars, layouts } = layoutsOnSnapshot(records, snapshotId)
+  const picked = problem ? null : layouts.findIndex((layout) => layout.id === id)
+  if (picked === null || picked < 0) return { bars, layouts, picked: null, problem }
+  return {
+    bars,
+    layouts: layouts.map((layout, i) =>
+      i === picked ? { ...layout, status: layoutStatusText(pickedRecord), picked: true } : layout),
+    picked,
+    problem,
+  }
+}
+
+/** "Show in viewer": the page of the piece on the version of the layout, with the layout opened; null when there is nothing to draw. */
+export function layoutViewerHref(record: LayoutRecord): string | null {
+  const snapshotId = record.position?.snapshot_id
+  if (!record._id || !record.identity_id || !snapshotId) return null
+  if (!(record.payload?.bars ?? []).some(isDrawableBar)) return null
+  const query = new URLSearchParams({ snapshot: snapshotId, layout: String(record._id) })
+  return `/components/${encodeURIComponent(record.identity_id)}?${query}#component-viewer`
+}
+
 /** The colour of a bar, or null for the steel material. */
 export function barColour(
   mode: BarColourMode,
@@ -142,7 +207,7 @@ export function barColour(
 }
 
 export type BarLegend =
-  | { kind: 'layout'; items: { colour: string; label: string; count: number }[] }
+  | { kind: 'layout'; items: { colour: string; label: string; count: number; status?: string | null; picked?: boolean }[] }
   | { kind: 'diameter'; min: number; max: number; stops: string[] }
 
 export function barLegend(
@@ -151,7 +216,8 @@ export function barLegend(
   bars: { diameter_mm: number }[],
 ): BarLegend | null {
   if (mode === 'layout') {
-    return { kind: 'layout', items: layouts.map((l, i) => ({ colour: layoutColour(i), label: l.label, count: l.count })) }
+    return { kind: 'layout', items: layouts.map((l, i) => ({
+        colour: layoutColour(i), label: l.label, count: l.count, status: l.status, picked: l.picked })) }
   }
   if (mode === 'diameter') {
     const { min, max } = diameterRange(bars)

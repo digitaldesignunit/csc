@@ -10,6 +10,9 @@ import {
   layoutColour,
   layoutLabels,
   layoutsOnSnapshot,
+  layoutsWithPicked,
+  layoutStatusText,
+  layoutViewerHref,
   LAYOUT_COLOURS,
   rampColour,
 } from '@/lib/reinforcementColors'
@@ -133,4 +136,88 @@ test('a piece without a layout has no bars and starts steel', () => {
   const { bars, layouts } = layoutsOnSnapshot([], 's1')
   assert.deepEqual([bars, layouts], [[], []])
   assert.equal(defaultColourMode(layouts.length), 'steel')
+})
+
+
+// A RECORD NAMED BY THE LINK, WHATEVER ITS STATUS (8.178) -------------------------
+const published = [
+  { _id: 'p1', status: 'published', position: { snapshot_id: 's1' },
+    payload: { bars: [bar(12, 0), bar(12, 50)], document: { title: 'Drawing A' } } },
+]
+const draft = {
+  _id: 'd1', status: 'draft', position: { snapshot_id: 's1' },
+  payload: { bars: [bar(8, 10), bar(8, 20), bar(8, 30)], document: { title: 'T4 test layout' } },
+}
+
+test('the named record is drawn in addition to the published layouts, with its status', () => {
+  const { bars, layouts, picked, problem } = layoutsWithPicked(published, draft, 's1')
+  assert.equal(problem, null)
+  assert.equal(picked, 1)
+  assert.equal(bars.length, 5)
+  assert.deepEqual(bars.map((b) => b.layout), [0, 0, 1, 1, 1])
+  assert.deepEqual(layouts, [
+    { id: 'p1', label: 'Drawing A', count: 2 },
+    { id: 'd1', label: 'T4 test layout', count: 3, status: 'draft', picked: true },
+  ])
+})
+
+test('the named record that is one of the published layouts is not drawn twice', () => {
+  const { bars, layouts, picked } = layoutsWithPicked(published, published[0], 's1')
+  assert.equal(bars.length, 2)
+  assert.equal(layouts.length, 1)
+  assert.equal(picked, 0)
+  assert.equal(layouts[0].status, null)
+  assert.equal(layouts[0].picked, true)
+})
+
+test('the named record of another version is rejected and nothing extra is drawn', () => {
+  const other = { ...draft, position: { snapshot_id: 's2' } }
+  const result = layoutsWithPicked(published, other, 's1')
+  assert.equal(result.problem, 'other_version')
+  assert.equal(result.picked, null)
+  assert.equal(result.bars.length, 2)
+  assert.deepEqual(result.layouts, [{ id: 'p1', label: 'Drawing A', count: 2 }])
+  assert.equal(layoutsWithPicked(published, { ...draft, position: null }, 's1').problem, 'other_version')
+})
+
+test('the named record without a drawable bar is a problem, not a layout', () => {
+  const result = layoutsWithPicked(published, { ...draft, payload: { bars: [] } }, 's1')
+  assert.equal(result.problem, 'no_bars')
+  assert.equal(result.bars.length, 2)
+})
+
+test('without a named record the published layouts are what layoutsOnSnapshot returns', () => {
+  const result = layoutsWithPicked(published, null, 's1')
+  assert.deepEqual({ bars: result.bars, layouts: result.layouts }, layoutsOnSnapshot(published, 's1'))
+  assert.equal(result.picked, null)
+  assert.equal(result.problem, null)
+})
+
+test('a named layout alone on a piece without published layouts is drawn', () => {
+  const result = layoutsWithPicked([], draft, 's1')
+  assert.equal(result.picked, 0)
+  assert.equal(result.bars.length, 3)
+})
+
+test('the status text names draft, pending, rejected, withdrawn and superseded, not published', () => {
+  assert.equal(layoutStatusText({ status: 'draft' }), 'draft')
+  assert.equal(layoutStatusText({ status: 'pending' }), 'pending')
+  assert.equal(layoutStatusText({ status: 'rejected' }), 'rejected')
+  assert.equal(layoutStatusText({ status: 'withdrawn' }), 'withdrawn')
+  assert.equal(layoutStatusText({ status: 'published', superseded_by: 'x' }), 'superseded')
+  assert.equal(layoutStatusText({ status: 'published', superseded_by: null }), null)
+  assert.equal(layoutStatusText({}), null)
+})
+
+test('"Show in viewer" links the version and the record, only for a drawable positioned layout', () => {
+  const record = { ...draft, identity_id: 'i 1' }
+  assert.equal(layoutViewerHref(record), '/components/i%201?snapshot=s1&layout=d1#component-viewer')
+  assert.equal(layoutViewerHref({ ...record, position: null }), null)
+  assert.equal(layoutViewerHref({ ...record, position: { snapshot_id: null } }), null)
+  assert.equal(layoutViewerHref({ ...record, payload: { bars: [] } }), null)
+  assert.equal(layoutViewerHref({ ...record, payload: {} }), null)
+  assert.equal(layoutViewerHref({ ...record, identity_id: undefined }), null)
+  for (const status of ['draft', 'pending', 'rejected', 'published', 'withdrawn']) {
+    assert.ok(layoutViewerHref({ ...record, status }))
+  }
 })
