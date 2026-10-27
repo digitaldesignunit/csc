@@ -301,8 +301,8 @@ StatusArg = Annotated[str, Field(description=(
 WithdrawnArg = Annotated[bool, Field(description=(
     'Also withdrawn components, if you may see them.'))]
 HasEvidenceArg = Annotated[str, Field(description=(
-    'Only components with at least one published evidence record of this '
-    'method: ' + EVIDENCE_METHOD_TEXT + '. Use reinforcement_layout for '
+    'Only components with at least one published, current evidence record '
+    'of this method: ' + EVIDENCE_METHOD_TEXT + '. Use reinforcement_layout for '
     '"with reinforcement" (Bewehrung); it combines with every other '
     'filter. Leave empty for all.'))]
 FitModeArg = Annotated[str, Field(description=(
@@ -462,8 +462,8 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         size_mm each row also carries its deviation (about, in per cent) or
         waste (can_hold, in m3 and in per cent of the piece); with near_lat
         and near_lon each row carries its distance_km. has_evidence keeps
-        only components with a published evidence record of one method, for
-        example reinforcement_layout for "with reinforcement". Use
+        only components with a published, current evidence record of one
+        method, for example reinforcement_layout for "with reinforcement". Use
         get_component for the details of one."""
         page, size = page_args(page, size)
         filters, fit, near = search_params(

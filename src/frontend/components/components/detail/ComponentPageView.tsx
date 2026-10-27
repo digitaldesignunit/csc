@@ -8,7 +8,7 @@
  *
  * Phone order: header, banners, viewer, facts, properties, provenance, photos
  * and location, similar pieces, records, history, descriptors. Desktop: two columns --- the facts, the
- * properties and the provenance (about 24 rem) beside the viewer, the photos
+ * properties, the provenance and the similar pieces (about 24 rem) beside the viewer, the photos
  * and location, the records and the history.
  */
 import { useSession } from 'next-auth/react'
@@ -100,24 +100,25 @@ export default function ComponentPageView({
           <div className="order-1 min-w-0 lg:col-start-2 lg:row-start-1">
             <ComponentViewer catalog={catalog} compactDesktop toolbar />
           </div>
-          <div className="contents lg:col-start-1 lg:row-span-5 lg:row-start-1 lg:flex lg:min-w-0 lg:flex-col lg:gap-3">
+          <div className="contents lg:col-start-1 lg:row-span-4 lg:row-start-1 lg:flex lg:min-w-0 lg:flex-col lg:gap-3">
             <div className="order-2 min-w-0"><ComponentFactsCard catalog={catalog} /></div>
             <div className="order-3 min-w-0"><ComponentPropertiesCard catalog={catalog} /></div>
             <div className="order-4 min-w-0">
               <ComponentProvenanceCard catalog={catalog} childIdentities={childIdentities} />
+            </div>
+            {/* in the rail below Provenance on lg; below lg after Photos and location (order-6) */}
+            <div className="order-6 min-w-0 empty:hidden lg:order-5">
+              <ComponentSimilarCard identityId={identityId} />
             </div>
             {HKS_VISIBLE && <div className="order-9 min-w-0"><ComponentDescriptorsCard catalog={catalog} /></div>}
           </div>
           <div className="order-5 min-w-0 lg:col-start-2 lg:row-start-2">
             <ComponentPhotosLocationCard catalog={catalog} />
           </div>
-          <div className="order-6 min-w-0 empty:hidden lg:col-start-2 lg:row-start-3">
-            <ComponentSimilarCard identityId={identityId} />
-          </div>
-          <div className="order-7 min-w-0 lg:col-start-2 lg:row-start-4">
+          <div className="order-7 min-w-0 lg:col-start-2 lg:row-start-3">
             <ComponentRecordsCard catalog={catalog} />
           </div>
-          <div className="order-8 min-w-0 lg:col-start-2 lg:row-start-5">
+          <div className="order-8 min-w-0 lg:col-start-2 lg:row-start-4">
             <ComponentHistoryCard
               catalog={catalog}
               snapshots={snapshots}

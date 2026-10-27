@@ -225,8 +225,6 @@ def build_count_pipeline(
     return pipeline
 
 
-_BBX_ARRAY = {'$cond': [{'$isArray': '$bbx'}, '$bbx', []]}
-
 _STATS_FACET_TEMPLATE: Dict[str, Any] = {
     'total': [{'$count': 'count'}],
     'byOriginalFunction': [
@@ -339,22 +337,19 @@ _STATS_FACET_TEMPLATE: Dict[str, Any] = {
         }},
     ],
     'bbx': [
-        {
-            '$project': {
-                # a bbx that is no array reads as an empty one: $arrayElemAt
-                # fails on it, and one bad document must not 500 the stats
-                'x': {'$arrayElemAt': [_BBX_ARRAY, 0]},
-                'y': {'$arrayElemAt': [_BBX_ARRAY, 1]},
-                'z': {'$arrayElemAt': [_BBX_ARRAY, 2]},
-            }
-        },
+        # the largest side (``_sides``, sorted largest first, as in the
+        # ``sides`` facet); a piece without three numbers has no size and is
+        # in no bucket, not in the default one
+        {'$match': {'_sides': {'$type': 'array'}}},
         {
             '$bucket': {
-                'groupBy': '$x',
+                'groupBy': {'$arrayElemAt': ['$_sides', 0]},
+                # millimetres, as bbx is stored: a bucket is labelled with
+                # its lower edge, the rest is '>=10000'
                 'boundaries': [
-                    0, 0.5, 1, 2, 5, 10, 20, 50, 100, 1000,
+                    0, 100, 250, 500, 1000, 2000, 5000, 10000,
                 ],
-                'default': '>=1000',
+                'default': '>=10000',
                 'output': {'count': {'$sum': 1}},
             }
         },

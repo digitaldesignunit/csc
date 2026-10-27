@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import { BackendError } from './backend'
 import {
   SIMILAR_CARD_COUNT,
+  SIMILAR_FIRST_COUNT,
   SIMILAR_MORE_COUNT,
   canShowMore,
   cardOfAnswer,
@@ -31,9 +32,10 @@ function answer(results: SimilarPiece[]): SimilarPieces {
   return { query_id: ID, basis: 'radial_signature', basis_label: 'Radial signature', considered: 9, results }
 }
 
-test('the request asks for the radial signature and the six nearest', () => {
+test('the request asks for the radial signature and one more than the six shown', () => {
   assert.equal(SIMILAR_CARD_COUNT, 6)
-  assert.equal(similarPath(ID), `/identities/${ID}/similar?basis=radial_signature&count=6`)
+  assert.equal(SIMILAR_FIRST_COUNT, 7)
+  assert.equal(similarPath(ID), `/identities/${ID}/similar?basis=radial_signature&count=7`)
   assert.equal(similarPath(ID, SIMILAR_MORE_COUNT), `/identities/${ID}/similar?basis=radial_signature&count=24`)
   assert.match(similarPath('a b'), /^\/identities\/a%20b\/similar/)
 })
@@ -55,11 +57,12 @@ test('a refusal or a failure hides the card and says why', () => {
   assert.deepEqual(cardOfError(new TypeError('network')), { kind: 'hidden', reason: 'error' })
 })
 
-test('"Show more" is offered only after a full first answer', () => {
-  assert.equal(canShowMore(6), true)
+test('"Show more" is offered only when the answer has a seventh neighbour', () => {
   assert.equal(canShowMore(5), false)
+  assert.equal(canShowMore(6), false)                  // exactly six: nothing is behind them
+  assert.equal(canShowMore(7), true)
+  assert.equal(canShowMore(24), true)
   assert.equal(canShowMore(0), false)
-  assert.equal(canShowMore(24, 24), true)
 })
 
 test('a neighbour is named by number and shape, and its distance is rounded', () => {
@@ -77,8 +80,9 @@ test('the toggle shows six, all loaded when expanded, and the right word', () =>
   assert.deepEqual(shownPieces(loaded, false), [0, 1, 2, 3, 4, 5])
   assert.equal(shownPieces(loaded, true).length, 24)
   assert.deepEqual(shownPieces([1, 2], false), [1, 2])
-  assert.equal(toggleLabel(6, false), 'Show more')
+  assert.equal(toggleLabel(7, false), 'Show more')
   assert.equal(toggleLabel(24, true), 'Show fewer')
+  assert.equal(toggleLabel(6, false), null)            // exactly six: nothing more to show
   assert.equal(toggleLabel(3, false), null)            // fewer than six found: nothing more to show
   assert.equal(toggleLabel(7, true), 'Show fewer')
 })

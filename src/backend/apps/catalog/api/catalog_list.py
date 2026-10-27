@@ -134,11 +134,12 @@ async def _pipelines_args(request: Request, filters: CatalogFilters,
         filters.identity_match(),
         await visible_identity_match(request, viewer_of(user)))
     if filters.evidence_method:
-        # 8.177: the pieces with a published record of this method, matched
-        # on the identity (the evidence collection has an index on status
-        # and method); the rest of the match keeps the access rules
+        # 8.177: the pieces with a published, current record of this method
+        # (not superseded; None matches a missing field too), matched on the
+        # identity (the evidence collection has an index on status and
+        # method); the rest of the match keeps the access rules
         ids = await request.app.mongodb_component_evidence.distinct(
-            'identity_id', {'status': 'published',
+            'identity_id', {'status': 'published', 'superseded_by': None,
                             'method': filters.evidence_method})
         identity_match = and_match(identity_match, {'_id': {'$in': ids}})
     return {

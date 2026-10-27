@@ -86,8 +86,8 @@ class CatalogFilters:
     bbx_max_y: Optional[float] = None
     bbx_max_z: Optional[float] = None
     q: str = ''
-    # evidence method (8.177): only pieces with a published evidence record
-    # of this method; the ids come from the evidence collection, see
+    # evidence method (8.177): only pieces with a published, current evidence
+    # record (not superseded) of this method; the ids come from the evidence collection, see
     # ``catalog_list._pipelines_args``
     evidence_method: Optional[str] = None
     # dimension search (8.169): the mode, the asked sides (largest first) and
@@ -228,8 +228,8 @@ def catalog_filters(
     q: str = Query('', max_length=FILTER_MAX_LENGTH,
                    description='name, catalogue number or id'),
     evidence_method: Optional[EvidenceMethod] = Query(
-        None, description='only pieces with at least one published evidence '
-                          'record of this method (8.177), for example '
+        None, description='only pieces with at least one published, current '
+                          'evidence record of this method (8.177), for example '
                           'reinforcement_layout; combines with every other '
                           'filter'),
     fit_mode: Optional[FitMode] = Query(

@@ -869,6 +869,22 @@ def test_the_overview_and_the_similar_pieces_take_has_evidence(api, db, world):
     assert len(unfiltered['similar']) > 2
 
 
+def test_a_superseded_layout_does_not_count_for_has_evidence(api, db, world):
+    admin = world['admin']
+    layout = db['component_evidence'].find_one({'identity_id': iid('beam'), 'method': 'reinforcement_layout'})
+    # a correction replaces the layout: the old record stays published but is superseded
+    db['component_evidence'].update_one({'_id': layout['_id']}, {'$set': {'superseded_by': str(uuid.uuid4())}})
+    assert tool(api, admin, 'search_components', has_evidence='reinforcement_layout')['total'] == 0
+    assert tool(api, admin, 'catalog_overview', has_evidence='reinforcement_layout')['total'] == 0
+    put_matrix(db, NEAR_BEAM)
+    assert tool(api, admin, 'similar_components', component_id=iid('feld'), count=5, circulation='all',
+                has_evidence='reinforcement_layout')['similar'] == []
+    # a current record next to the superseded one brings the piece back
+    _layout_for(db, 'beam', status='published', superseded_by=None)
+    assert _names(tool(api, admin, 'search_components', has_evidence='reinforcement_layout')) == ['beam']
+    assert tool(api, admin, 'catalog_overview', has_evidence='reinforcement_layout')['total'] == 1
+
+
 # 0.6.4.1: REINFORCEMENT IS EVIDENCE, NOT GEOMETRY (7.8) ---------------------------------------------
 def test_the_geometry_summary_has_no_reinforcement_count_any_more():
     summary = mcp_server.geometry_summary({'meshes': [{'vertices': [[0, 0, 0]], 'faces': []}],

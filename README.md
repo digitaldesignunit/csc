@@ -548,7 +548,7 @@ sent back to) before you press Allow, and press Deny when it is not the tool you
 just connected.
 
 **What it can do.** Ten read-only tools: `search_components` (the filters of
-Browse and `has_evidence`, which keeps only pieces with a published record of one
+Browse and `has_evidence`, which keeps only pieces with a published, current record of one
 evidence method, for example `reinforcement_layout` for "with reinforcement", a
 page at a time), `catalog_overview` (how many pieces, counted by
 material, original function, dataset, shape class and circulation, the range of

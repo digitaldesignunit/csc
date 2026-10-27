@@ -162,3 +162,25 @@ def test_a_piece_gains_the_match_when_its_pending_record_is_published(world):
     world['db']['component_evidence'].update_many(
         {'identity_id': _id(3)}, {'$set': {'status': 'published'}})
     assert 3 in _list(world, evidence_method=LAYOUT)
+
+
+def test_a_superseded_record_does_not_count_only_a_current_one_does(world):
+    evidence = world['db']['component_evidence']
+    # piece 4: its only layout is superseded by a later record (which is not
+    # of the method, as after a correction to another method) -> not listed
+    evidence.update_many({'identity_id': _id(4)}, {'$set': {'superseded_by': str(uuid.uuid4())}})
+    assert _list(world, evidence_method=LAYOUT) == [1, 2, 5]
+    # piece 1 has two layouts: one superseded, one current -> still listed
+    first = evidence.find_one({'identity_id': _id(1), 'method': LAYOUT})
+    evidence.update_one({'_id': first['_id']}, {'$set': {'superseded_by': str(uuid.uuid4())}})
+    assert _list(world, evidence_method=LAYOUT) == [1, 2, 5]
+    # both superseded -> piece 1 drops out; its rebound hammer is untouched
+    evidence.update_many({'identity_id': _id(1), 'method': LAYOUT}, {'$set': {'superseded_by': str(uuid.uuid4())}})
+    assert _list(world, evidence_method=LAYOUT) == [2, 5]
+    assert _list(world, evidence_method='rebound_hammer') == [1, 7]
+    # count and stats follow the same rule
+    assert _get(world, '/identities/count', evidence_method=LAYOUT)['count'] == 2
+    assert _get(world, '/identities/stats', evidence_method=LAYOUT)['total'] == 2
+    # an explicit null counts as current, like a missing field (the fixture)
+    evidence.update_many({'identity_id': _id(1), 'method': LAYOUT}, {'$set': {'superseded_by': None}})
+    assert _list(world, evidence_method=LAYOUT) == [1, 2, 5]
