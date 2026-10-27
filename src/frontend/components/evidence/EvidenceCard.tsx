@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronRight, MapPin, TriangleAlert } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, MapPin, TriangleAlert } from 'lucide-react'
 
 import EvidenceAttachments from '@/components/evidence/EvidenceAttachments'
 import LayoutDetails from '@/components/evidence/LayoutDetails'
@@ -26,6 +26,7 @@ import { useRegistry } from '@/lib/evidence/useRegistry'
 import { formatDateAtPrecision } from '@/components/components/componentDetailShared'
 import { documentOf } from '@/lib/evidence/document'
 import { pairedReboundLink, recordAnchor } from '@/lib/evidence/paired'
+import { layoutViewerHref, type LayoutRecord } from '@/lib/reinforcementColors'
 
 function who(actor: Actor): string {
   return [actor.name, actor.organization].filter(Boolean).join(', ') || 'someone'
@@ -70,6 +71,10 @@ export default function EvidenceCard({
   const attachments = (record.attachments ?? []).filter((a) => !a.removed).length
   const cited = documentOf(record.payload)
   const paired = pairedReboundLink(record.method, record.payload, shownIds)
+  // a layout with bars and a position opens in the viewer, whatever its status (8.178)
+  const viewerHref = record.method === 'reinforcement_layout'
+    ? layoutViewerHref(record as unknown as LayoutRecord)
+    : null
   // no result: the record documents the piece and never enters the fold (8.106)
   const isDocument = !record.summary
 
@@ -162,6 +167,12 @@ export default function EvidenceCard({
 
           {record.method === 'reinforcement_layout' && (
             <LayoutDetails record={record} dataset={dataset} onChanged={onChanged} />
+          )}
+          {viewerHref && (
+            <Link href={viewerHref}
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs font-medium hover:bg-muted">
+              <Eye className="h-3.5 w-3.5" />Show in viewer
+            </Link>
           )}
 
           {facts.length > 0 && (

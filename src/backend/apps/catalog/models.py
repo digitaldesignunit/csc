@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.13
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
-from typing import Optional, List, Dict, Literal
+from typing import Any, Optional, List, Dict, Literal
 import uuid
 from datetime import datetime
 
@@ -14,6 +14,9 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+# PROJECT IMPORTS -------------------------------------------------------------
+from apps.catalog.documents import REINFORCEMENT_IS_EVIDENCE
 
 # AUTH ------------------------------------------------------------------------
 Role = Literal["user", "admin"]
@@ -35,7 +38,6 @@ class User(BaseModel):
     disabled: Optional[bool] = None
     role: Role = "user"
     email_verified: bool = False
-    verification_token: Optional[str] = None       # tokens before 0.6.1.1
     verification_token_sha256: Optional[str] = None
     verification_token_expires: Optional[datetime] = None
     # a token issued before this moment is refused (8.124 a)
@@ -312,52 +314,14 @@ class SnapshotExtrusion(BaseModel):
     height: float = Field(description="Extrusion length along Z")
 
 
-class SnapshotReinforcement(BaseModel):
-    """Inline reinforcement bar centerline on a snapshot.
-
-    Fully encoded on the snapshot document (no file companion). A snapshot
-    may hold multiple bars in ``geometry.reinforcements``. Does not satisfy
-    the primary geometry representation requirement on its own.
-    """
-    spec: str = Field(
-        description="Reinforcement steel specification (e.g. B500B)"
-    )
-    diameter: float = Field(
-        gt=0,
-        description="Bar diameter in mm",
-    )
-    points: List[List[float]] = Field(
-        min_length=2,
-        description=(
-            "Open centerline polyline as [x, y, z] coordinate triplets; "
-            "same coordinate frame as meshes/extrusions/marker_points"
-        ),
-    )
-
-    @field_validator('spec')
-    @classmethod
-    def _strip_spec(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError('spec must be non-empty')
-        return v
-
-    @field_validator('points')
-    @classmethod
-    def _validate_points(cls, v: List[List[float]]) -> List[List[float]]:
-        for pt in v:
-            if len(pt) != 3:
-                raise ValueError('each point must be [x, y, z]')
-        return v
-
-
 class SnapshotGeometry(BaseModel):
     """Multi-representation geometry block for one snapshot.
 
     A single snapshot may hold simultaneous representations (multiple
     meshes + multiple point clouds + multiple extrusions) of the same
     physical state. Marker points are shared across all representations
-    within the snapshot (same coordinate frame).
+    within the snapshot (same coordinate frame). Reinforcement bars are not
+    geometry: they are ``reinforcement_layout`` evidence (decision 7.8).
     """
     meshes: Optional[List[SnapshotMesh]] = Field(
         None,
@@ -385,14 +349,13 @@ class SnapshotGeometry(BaseModel):
             "same coordinate frame as the meshes/point_clouds/extrusions"
         )
     )
-    reinforcements: Optional[List[SnapshotReinforcement]] = Field(
-        None,
-        description=(
-            "Inline reinforcement bar centerlines (spec + diameter + open "
-            "polyline); ancillary to primary mesh/point_cloud/extrusion "
-            "representations"
-        )
-    )
+
+    @model_validator(mode='before')
+    @classmethod
+    def _reinforcement_is_evidence(cls, data: Any) -> Any:
+        if isinstance(data, dict) and 'reinforcements' in data:
+            raise ValueError(REINFORCEMENT_IS_EVIDENCE)
+        return data
 
     @model_validator(mode='after')
     def _require_at_least_one_representation(self) -> 'SnapshotGeometry':
@@ -596,9 +559,9 @@ class ComponentSnapshot(BaseModel):
     geometry: SnapshotGeometry = Field(
         description=(
             "Multi-representation geometry block for this snapshot "
-            "(meshes, point clouds, extrusions, marker_points, "
-            "reinforcements). At least one of meshes / point_clouds / "
-            "extrusions must be non-empty."
+            "(meshes, point clouds, extrusions, marker_points; reinforcement "
+            "is evidence, not geometry). At least one of meshes / "
+            "point_clouds / extrusions must be non-empty."
         )
     )
     descriptors: Optional[Dict] = Field(

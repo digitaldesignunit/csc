@@ -15,7 +15,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 type PageParams = { component_id: string }
-type PageSearchParams = { snapshot?: string; snapshots?: string }
+type PageSearchParams = { snapshot?: string; snapshots?: string; layout?: string }
 
 export default async function ComponentDetailPage({
   params,
@@ -44,7 +44,10 @@ export default async function ComponentDetailPage({
   // a piece the viewer cannot see is explained, not hidden (8.11, 8.17)
   if (res.status === 401) {
     const callback = requestedSnapshotId
-      ? `/components/${component_id}?snapshot=${encodeURIComponent(requestedSnapshotId)}`
+      ? `/components/${component_id}?${new URLSearchParams({
+        snapshot: requestedSnapshotId,
+        ...(query.layout ? { layout: query.layout } : {}),
+      })}`
       : `/components/${component_id}`
     return <ComponentAccessNotice kind="not-public" callbackUrl={callback} />
   }
@@ -144,6 +147,7 @@ export default async function ComponentDetailPage({
       liveVersion={liveVersion}
       isViewingLive={isViewingLive}
       snapshotStatus={isPublished(snapshot) ? 'published' : snapshot.status}
+      layoutId={typeof query.layout === 'string' && query.layout ? query.layout : undefined}
     />
   )
 }

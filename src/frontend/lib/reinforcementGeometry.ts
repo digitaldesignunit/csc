@@ -23,7 +23,27 @@ export const reinforcementSteelMaterial = new THREE.MeshStandardMaterial({
 const COLOURED = new Map<string, THREE.MeshStandardMaterial>()
 
 /** The material of a bar: the steel one, or the colour of the layout or the diameter (RL3). */
-export function reinforcementMaterial(colour: string | null | undefined): THREE.MeshStandardMaterial {
+export function reinforcementMaterial(
+  colour: string | null | undefined,
+  dimmed = false,
+): THREE.MeshStandardMaterial {
+  if (dimmed) {
+    // the other layouts while one is opened by the link (8.178): faint, never hidden
+    const key = `dim:${colour ?? 'steel'}`
+    let faint = COLOURED.get(key)
+    if (!faint) {
+      faint = new THREE.MeshStandardMaterial({
+        color: colour || REINFORCEMENT_STEEL_COLOR,
+        metalness: 0.2,
+        roughness: 0.55,
+        transparent: true,
+        opacity: 0.3,
+        depthWrite: false,
+      })
+      COLOURED.set(key, faint)
+    }
+    return faint
+  }
   if (!colour) return reinforcementSteelMaterial
   let material = COLOURED.get(colour)
   if (!material) {

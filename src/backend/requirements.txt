@@ -29,8 +29,9 @@ limits
 
 # --- MCP layer and OAuth server for Claude's connectors (apps/catalog/mcp_server.py,
 # oauth_server.py; decision 8.168): the MCP Python SDK (pure Python; its
-# pyjwt[crypto] pulls cryptography, which has a glibc 2.17 wheel) ---
-mcp
+# pyjwt[crypto] pulls cryptography, which has a glibc 2.17 wheel); website_url and
+# icons of the server need 1.30 ---
+mcp>=1.30
 
 # --- HTTP client (GitHub service) ---
 httpx

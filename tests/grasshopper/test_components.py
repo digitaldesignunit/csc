@@ -433,7 +433,7 @@ def test_server_addresses(session):
 def test_the_session_core_sends_over_one_connection(session):
     core = session.ns['_AuthCore']('localhost:8010', disable_cache=True)
     assert core.base_url == 'http://localhost:8010'
-    assert core.CLIENT == 'gh-userobjects/0.6.3.0'
+    assert core.CLIENT == compstub.GH_CLIENT
     core.set_access_token(_token(), 'ada')
     seen = []
 
@@ -451,7 +451,7 @@ def test_the_session_core_sends_over_one_connection(session):
         ('POST', 'http://localhost:8010/identities'),
         ('PUT', 'http://localhost:8010/snapshots/s/meshes/0/reduced')]
     for _, _, kwargs in seen:
-        assert kwargs['headers']['X-CSC-Client'] == 'gh-userobjects/0.6.3.0'
+        assert kwargs['headers']['X-CSC-Client'] == compstub.GH_CLIENT
         assert kwargs['headers']['Authorization'].startswith('Bearer ')
     assert seen[0][2]['params'] == {'expand': 'none'}
     assert seen[1][2]['json'] == {'a': 1} and 'files' not in seen[1][2]
@@ -490,7 +490,7 @@ def test_the_cache_is_purged_once_when_the_client_changes(session, tmp_path):
     assert not hasattr(cache, 'designs_dir')
     assert not (cache_dir / 'designs').exists()
     stamp = cache_dir / 'client_release.txt'
-    assert stamp.read_text() == 'gh-userobjects/0.6.3.0'
+    assert stamp.read_text() == compstub.GH_CLIENT
     cache.set_identity('i1', {'_id': 'i1', 'type': 'beam'})
     assert cache.get_identity('i1')[2] is True
     # same release: kept
@@ -500,7 +500,7 @@ def test_the_cache_is_purged_once_when_the_client_changes(session, tmp_path):
     stamp.write_text('gh-userobjects/0.5.1.0')
     cache_class(cache_dir=str(cache_dir))
     assert cache.get_identity('i1')[2] is False
-    assert stamp.read_text() == 'gh-userobjects/0.6.3.0'
+    assert stamp.read_text() == compstub.GH_CLIENT
     # an old cache without any stamp is not trusted either
     cache.set_identity('i2', {'_id': 'i2'})
     stamp.unlink()
@@ -541,7 +541,7 @@ def test_the_session_logs_in_to_the_server_it_is_given(session):
     login = [entry for entry in log if entry[1].endswith('/auth/token')][0]
     assert login[1] == 'http://localhost:8011/auth/token'
     assert login[2]['data'] == {'username': 'ada', 'password': 'secret'}
-    assert login[2]['headers']['X-CSC-Client'] == 'gh-userobjects/0.6.3.0'
+    assert login[2]['headers']['X-CSC-Client'] == compstub.GH_CLIENT
     assert core.is_valid() and core.get_username() == 'ada'
     text = '\n'.join(status)
     assert 'Server changed to http://localhost:8011' in text
@@ -581,7 +581,7 @@ def test_a_core_left_by_the_0_5_session_is_replaced(session):
     session.sticky['CSC_AuthCore'] = Old()
     obj = compstub.instance(session, 'Session')
     core = obj.get_auth_core_from_sticky()
-    assert core.CLIENT == 'gh-userobjects/0.6.3.0' and core.is_valid()
+    assert core.CLIENT == compstub.GH_CLIENT and core.is_valid()
     assert core.base_url == 'http://localhost:8010'
     assert session.sticky['CSC_AuthCore'] is core
     assert hasattr(core, '_http') and hasattr(core, 'authorized_put')

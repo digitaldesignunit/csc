@@ -152,7 +152,7 @@ def test_a_stored_sign_in_signs_in_and_the_new_refresh_token_replaces_the_old(ct
     (call,) = core._http.calls('POST', '/token')
     assert call[2]['data'] == {'grant_type': 'refresh_token', 'refresh_token': 'csc_dev_OLD',
                                'client_id': 'csc-grasshopper'}
-    assert call[2]['headers']['X-CSC-Client'] == 'gh-userobjects/0.6.3.0'
+    assert call[2]['headers']['X-CSC-Client'] == compstub.GH_CLIENT
     assert core.is_valid() and core.get_username() == 'ada'
     assert signin.load_entry(ctx.store, SERVER, fake_unprotect) == 'csc_dev_NEW'
     assert any('Signed in as ada (stored sign-in' in line for line in status)
@@ -519,7 +519,7 @@ def test_a_core_left_by_an_older_release_keeps_its_sign_in(ctx):
         _credentials = ('ada', 'secret')
     ctx.sticky['CSC_AuthCore'] = Old()
     core = compstub.instance(ctx, 'Session').get_auth_core_from_sticky()
-    assert core.CLIENT == 'gh-userobjects/0.6.3.0' and core._refresh == 'csc_dev_KEPT'
+    assert core.CLIENT == compstub.GH_CLIENT and core._refresh == 'csc_dev_KEPT'
     assert core._credentials == ('ada', 'secret') and core.is_valid()
 
 

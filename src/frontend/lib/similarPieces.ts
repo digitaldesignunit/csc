@@ -11,14 +11,17 @@ import { BackendError } from '@/lib/backend'
 import { SHAPE_CLASS_LABELS, vocabLabel } from '@/generated/Vocab'
 import type { SimilarPiece, SimilarPieces } from '@/generated/CatalogModels'
 
-/** The card shows the six nearest; "Show more" asks for this many. */
+/** The card shows the six nearest. It asks for one more than that, so a seventh
+ *  neighbour in the answer is what tells it that "Show more" has something to show;
+ *  "Show more" then asks for the larger number. */
 export const SIMILAR_CARD_COUNT = 6
+export const SIMILAR_FIRST_COUNT = SIMILAR_CARD_COUNT + 1
 export const SIMILAR_MORE_COUNT = 24
 
 /** The basis of the card: the full radial signature, the shape as a whole. */
 export const SIMILAR_BASIS = 'radial_signature'
 
-export function similarPath(identityId: string, count: number = SIMILAR_CARD_COUNT): string {
+export function similarPath(identityId: string, count: number = SIMILAR_FIRST_COUNT): string {
   const query = new URLSearchParams({ basis: SIMILAR_BASIS, count: String(count) })
   return `/identities/${encodeURIComponent(identityId)}/similar?${query.toString()}`
 }
@@ -43,9 +46,10 @@ export function cardOfError(error: unknown): SimilarCard {
   return { kind: 'hidden', reason: 'error' }
 }
 
-/** Whether "Show more" is offered: the first answer was full, so there may be more. */
-export function canShowMore(shown: number, asked: number = SIMILAR_CARD_COUNT): boolean {
-  return shown >= asked
+/** Whether "Show more" is offered: the answer holds more neighbours than the card shows,
+ *  so exactly six (the card full, nothing behind it) offers nothing. */
+export function canShowMore(found: number, shown: number = SIMILAR_CARD_COUNT): boolean {
+  return found > shown
 }
 
 /** The neighbours the card lists: all that were loaded when expanded, else the nearest six.
@@ -54,7 +58,7 @@ export function shownPieces<T>(loaded: T[], expanded: boolean): T[] {
   return expanded ? loaded : loaded.slice(0, SIMILAR_CARD_COUNT)
 }
 
-/** "Show more" while collapsed and more were found; "Show fewer" while expanded; else nothing. */
+/** "Show more" while collapsed and more than six were found; "Show fewer" while expanded; else nothing. */
 export function toggleLabel(loaded: number, expanded: boolean): 'Show more' | 'Show fewer' | null {
   if (expanded) return 'Show fewer'
   return canShowMore(loaded) ? 'Show more' : null

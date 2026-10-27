@@ -599,10 +599,24 @@ class Proxy(_Block):
         return self
 
 
+# what a write that still sends ``geometry.reinforcements`` is told (7.8)
+REINFORCEMENT_IS_EVIDENCE = (
+    'geometry.reinforcements is not accepted: reinforcement is evidence, '
+    'post it as a reinforcement_layout evidence record that names this '
+    'snapshot in position.snapshot_id (decision 7.8)')
+
+
 class Geometry(_Block):
     meshes: List[Mesh] = Field(default_factory=list)
     point_clouds: List[PointCloud] = Field(default_factory=list)
     proxies: List[Proxy] = Field(default_factory=list)
+
+    @model_validator(mode='before')
+    @classmethod
+    def _reinforcement_is_evidence(cls, data: Any) -> Any:
+        if isinstance(data, dict) and 'reinforcements' in data:
+            raise ValueError(REINFORCEMENT_IS_EVIDENCE)
+        return data
 
     @model_validator(mode='after')
     def _representation(self) -> 'Geometry':

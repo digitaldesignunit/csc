@@ -101,8 +101,7 @@ def test_the_verification_token_is_stored_as_a_hash(api, db, outbox):
                    params={'token': token}).status_code == 400
 
 
-def test_a_plain_token_from_before_the_patch_still_works_until_it_expires(
-        api, db):
+def test_a_plain_token_stored_the_old_way_no_longer_verifies(api, db):
     soon = datetime.now(timezone.utc) + timedelta(hours=3)
     db['users'].insert_many([
         {'_id': 'old-ok', 'username': 'oldok', 'email': 'oldok@x.org',
@@ -114,13 +113,23 @@ def test_a_plain_token_from_before_the_patch_still_works_until_it_expires(
          'verification_token': 'plain-token-late-0123456789abcd',
          'verification_token_expires': soon - timedelta(hours=9)},
     ])
-    ok = api.get('/auth/verify-email',
-                 params={'token': 'plain-token-ok-0123456789abcdef'})
+    # neither a live nor an expired plain token finds its account any more
+    for token in ('plain-token-ok-0123456789abcdef',
+                  'plain-token-late-0123456789abcd'):
+        refused = api.get('/auth/verify-email', params={'token': token})
+        assert refused.status_code == 400
+    assert db['users'].find_one({'_id': 'old-ok'})['email_verified'] is False
+    # the hashed path still verifies, and an account in the old shape is
+    # still read (the stored plain field is ignored)
+    hashed = 'hashed-token-0123456789abcdef'
+    db['users'].update_one(
+        {'_id': 'old-ok'},
+        {'$set': {'verification_token_sha256': token_sha256(hashed)}})
+    ok = api.get('/auth/verify-email', params={'token': hashed})
     assert ok.status_code == 200
-    late = api.get('/auth/verify-email',
-                   params={'token': 'plain-token-late-0123456789abcd'})
-    assert late.status_code == 400
-    assert db['users'].find_one({'_id': 'old-ok'})['email_verified'] is True
+    after = db['users'].find_one({'_id': 'old-ok'})
+    assert after['email_verified'] is True
+    assert 'verification_token' not in after       # the leftover plain field is cleared
 
 
 def test_the_hash_has_a_sparse_index(db):
