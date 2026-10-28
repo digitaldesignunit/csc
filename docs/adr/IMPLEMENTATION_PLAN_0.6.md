@@ -1013,6 +1013,16 @@ annotation in the source's `RunScript` signature (`FitSize: list[object]` is lis
 
 **Later, not yet scheduled --- the robot rubble scan pipeline (user 2026-10-27):** `src/py_modules/csc_robot_rubble_scan_processing` still builds the 0.5 shape (`type`, `assembly`, `processes`, `iframe`) and puts the scan markers into `geometry.marker_points`, which `upload_robot_scan.py` posts unchanged to `POST /identities`. Before it runs again: the 0.6 create request, the markers as `capture.markers` with role `rig` (7.7), a trial upload against the local stack; then the write model rejects `geometry.marker_points`, as it rejects `geometry.reinforcements` since 0.6.4.1.
 
+**Later, not yet scheduled --- German as a second language of the web app (user 2026-10-28):** a language
+switch in the header, the choice in a cookie (default from `Accept-Language`), no `/de/...` URLs; `next-intl`
+with `messages/en.json` and `messages/de.json` and a test that fails on a key missing in either. About 6--10
+days for the whole UI (about 1200--1800 strings in some 184 files), or about 3--4 days with the public pages
+first. The vocabulary labels gain a German label in the vocabulary source and `generated/Vocab`; dates and
+numbers follow the language. To be grilled before it is planned: the German terms (evidence, snapshot, piece,
+passport) in `CONTEXT.md` first; whether the backend errors become codes, the mails get a language per user,
+and the privacy page a German text (the maintainer's own); a rule for the implementer that every new string is
+written in both languages. Grasshopper and MCP texts stay English.
+
 **Outside a release (the maintainer):** the Atlas traffic measurement of 0.6.1.0 (c); the backend CI job back to `ubuntu-latest` once MongoDB
 8.0 starts on the runner's kernel (SERVER-121912); `shadcn` (dev only) lifted to >=4.22.1 once that
 version is about two weeks old, which clears the six remaining dev findings of `npm audit` (found in the
