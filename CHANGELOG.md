@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4.3] - 2026-10-29
+
+Photo controls that follow the permission rule. The Grasshopper fixes announced for 0.6.4.3 move to
+0.6.4.4.
+
+### Fixed
+
+- **Photos of a version:** the "Take photo", "Add from gallery" and delete controls on the component
+  page now follow the same rule as the server. Before publish, the author of a draft and the
+  moderators of its dataset add and remove photos, and only moderators on a pending version. After
+  publish, contributors and moderators of the dataset add photos and only moderators remove them. Until
+  now only site admins saw these controls, and only before publish (#45).
+
+### Server notes
+
+- No server step needed.
+
 ## [0.6.4.2] - 2026-10-29
 
 Second hardening: the web app and the backend. The Grasshopper fixes follow in 0.6.4.3.
