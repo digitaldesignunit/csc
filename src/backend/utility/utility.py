@@ -131,7 +131,8 @@ def get_current_timestamp_z() -> str:
 
     Example: '2024-06-21T09:31:39Z'
     """
-    return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+    now = datetime.datetime.now(datetime.timezone.utc)
+    return now.replace(microsecond=0, tzinfo=None).isoformat() + 'Z'
 
 
 def get_geometry_upload_limit_bytes() -> int:

@@ -7,6 +7,7 @@ import {
   defaultColourMode,
   diameterColour,
   diameterRange,
+  scaleBars,
   layoutColour,
   layoutLabels,
   layoutsOnSnapshot,
@@ -220,4 +221,57 @@ test('"Show in viewer" links the version and the record, only for a drawable pos
   for (const status of ['draft', 'pending', 'rejected', 'published', 'withdrawn']) {
     assert.ok(layoutViewerHref({ ...record, status }))
   }
+})
+
+// THE DIAMETER SCALE WITH A PICKED LAYOUT (8.178 follow-up) ------------------------
+const two = [
+  { _id: 'a', position: { snapshot_id: 's1' }, payload: { bars: [bar(6, 0), bar(25, 50)], document: { title: 'A' } } },
+  { _id: 'b', position: { snapshot_id: 's1' }, payload: { bars: [bar(10, 10), bar(14, 20)], document: { title: 'B' } } },
+]
+
+test('the diameter scale spans all bars while no layout is picked', () => {
+  const { bars, layouts } = layoutsWithPicked(two, null, 's1')
+  assert.deepEqual(diameterRange(scaleBars(bars, null)), { min: 6, max: 25 })
+  const legend = barLegend('diameter', layouts, bars, null)
+  assert.equal(legend?.kind === 'diameter' && legend.min, 6)
+  assert.equal(legend?.kind === 'diameter' && legend.max, 25)
+})
+
+test('the scale and the legend follow the picked layout, the others stay on that scale', () => {
+  const { bars, layouts, picked } = layoutsWithPicked(two, null, 's1')
+  assert.equal(picked, null)
+  // layout "b" (index 1) is picked: only its bars (10 and 14 mm) span the scale
+  assert.deepEqual(scaleBars(bars, 1).map((b) => b.diameter_mm), [10, 14])
+  assert.deepEqual(diameterRange(scaleBars(bars, 1)), { min: 10, max: 14 })
+  const legend = barLegend('diameter', layouts, bars, 1)
+  assert.equal(legend?.kind === 'diameter' && legend.min, 10)
+  assert.equal(legend?.kind === 'diameter' && legend.max, 14)
+  // a faint bar outside the range takes the end colour of the scale, it does not widen it
+  const range = diameterRange(scaleBars(bars, 1))
+  assert.equal(diameterColour(6, range), diameterColour(10, range))
+  assert.equal(diameterColour(25, range), diameterColour(14, range))
+  // picked 0 spans its own bars
+  assert.deepEqual(diameterRange(scaleBars(bars, 0)), { min: 6, max: 25 })
+})
+
+test('a picked layout with one diameter has a one-value scale in the middle of the ramp', () => {
+  const same = [{ _id: 'a', position: { snapshot_id: 's1' }, payload: { bars: [bar(12, 0), bar(12, 5)] } },
+    { _id: 'b', position: { snapshot_id: 's1' }, payload: { bars: [bar(8, 0), bar(20, 5)] } }]
+  const { bars } = layoutsWithPicked(same, null, 's1')
+  const range = diameterRange(scaleBars(bars, 0))
+  assert.deepEqual(range, { min: 12, max: 12 })
+  assert.equal(diameterColour(12, range), diameterColour(12, { min: 0, max: 24 }))
+})
+
+test('the legend of the layouts carries the layout id as its key', () => {
+  const { bars, layouts } = layoutsWithPicked(two, null, 's1')
+  const legend = barLegend('layout', layouts, bars)
+  assert.deepEqual(legend?.kind === 'layout' && legend.items.map((item) => item.id), ['a', 'b'])
+  // two layouts with the same label and colour index modulo the palette stay told apart by id
+  const twin = layoutsOnSnapshot([
+    { _id: 'x', position: { snapshot_id: 's1' }, payload: { bars: [bar(8, 0)], document: { title: 'Same' } } },
+    { _id: 'y', position: { snapshot_id: 's1' }, payload: { bars: [bar(8, 1)], document: { title: 'Same' } } },
+  ], 's1')
+  const items = barLegend('layout', twin.layouts, twin.bars)
+  assert.equal(items?.kind === 'layout' && new Set(items.items.map((item) => item.id)).size, 2)
 })

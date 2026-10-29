@@ -600,7 +600,7 @@ async def exit_identity(
     body: ExitBody,
 ):
     """Installed, recycled, disposed, returned, lost --- or a hand-set
-    ``split`` without catalogued pieces. ``merged`` is only ever set by the
+    ``split`` without catalogued elements. ``merged`` is only ever set by the
     server (8.8). ``construction_work`` only for ``installed`` (I18)."""
     identity = (await load_identity(request, current_user, identity_id,
                                     'exit')).record
@@ -618,12 +618,12 @@ async def exit_identity(
     if body.kind == 'merged':
         raise HTTPException(status_code=422,
                             detail='merged is set by the server when a '
-                                   'merged piece is published (8.8).')
+                                   'merged element is published (8.8).')
     if (identity.get('origin') or {}).get('planned') \
             and body.kind not in IN_PLACE_EXIT_KINDS:
         raise HTTPException(
             status_code=409,
-            detail=f'A piece still in place leaves as '
+            detail=f'An element still in place leaves as '
                    f'{", ".join(IN_PLACE_EXIT_KINDS)} only; it never left '
                    f'its works, so it was not {body.kind}. Record its '
                    f'deinstallation first (8.104).')
@@ -653,7 +653,7 @@ async def undo_exit(
     if exit_.get('recorded_by_user_id') is None:
         raise HTTPException(
             status_code=409,
-            detail='This split / merge follows from published pieces cut '
+            detail='This split / merge follows from published elements cut '
                    'from it; withdraw those to undo it (8.8).')
     after = _validated({**identity, 'exit': None})
     written = await _write(request, identity, after,
@@ -671,7 +671,7 @@ async def reenter_identity(
     body: ReenterBody,
 ):
     """
-    An installed, returned or lost piece comes back with a new origin; the
+    An installed, returned or lost element comes back with a new origin; the
     old ``{origin, exit}`` goes to ``past_cycles`` (3.1.3). Terminal exits
     cannot re-enter (I18). The next snapshot defaults to the new
     ``origin.at`` (8.19). A re-entered child owns its new origin.
@@ -684,7 +684,7 @@ async def reenter_identity(
                                                     'circulation.')
     if exit_.get('kind') in TERMINAL_EXIT_KINDS:
         raise HTTPException(status_code=409,
-                            detail=f'A {exit_["kind"]} piece no longer exists '
+                            detail=f'A {exit_["kind"]} element no longer exists '
                                    f'as this component; it cannot re-enter '
                                    f'(I18).')
     cycles = [*(identity.get('past_cycles') or []),
@@ -761,12 +761,12 @@ async def undo_deinstall_refusal(request: Request, identity: Dict[str, Any]
     origin = identity.get('origin') or {}
     if origin.get('planned') or origin.get('kind') not in (
             'deinstallation', 'demolition'):
-        return 'The piece is not a deinstalled one.'
+        return 'The element is not a deinstalled one.'
     exit_ = identity.get('exit')
     if (exit_ and exit_.get('recorded_by_user_id') is not None
             and exit_.get('kind') not in IN_PLACE_EXIT_KINDS):
-        return (f'The piece left as {exit_["kind"]}, which only a '
-                f'deinstalled piece can do (8.104).')
+        return (f'The element left as {exit_["kind"]}, which only a '
+                f'deinstalled element can do (8.104).')
     if not origin.get('at'):
         return ('The deinstallation has no date; set the date by PATCH '
                 'of the origin first (8.115).')
@@ -783,7 +783,7 @@ async def undo_deinstall_refusal(request: Request, identity: Dict[str, Any]
 
 
 @router.post('/identities/{identity_id}/deinstall',
-             summary='Record the deinstallation of an in-place piece '
+             summary='Record the deinstallation of an in-place element '
                      '(moderator(D))')
 async def deinstall_identity(
     request: Request,
@@ -794,7 +794,7 @@ async def deinstall_identity(
     """
     ``planned`` becomes false and the given fields go into the existing
     origin; ``kind`` may switch to ``demolition``. A reservation survives;
-    no snapshot is created. The origin is now the piece's own, and every
+    no snapshot is created. The origin is now the element's own, and every
     descendant that still inherits it follows, like a parent's PATCH of
     ``origin`` (3.1.2, 8.110).
     """
@@ -803,7 +803,7 @@ async def deinstall_identity(
     origin = identity.get('origin') or {}
     if not origin.get('planned'):
         raise HTTPException(status_code=409,
-                            detail='The piece is not in place; there is '
+                            detail='The element is not in place; there is '
                                    'nothing to deinstall.')
     if identity.get('withdrawn'):
         raise HTTPException(status_code=409,
@@ -811,7 +811,7 @@ async def deinstall_identity(
     if (identity.get('exit') or {}).get('recorded_by_user_id') is not None:
         # a split the server keeps from cut pieces does not stop it
         raise HTTPException(status_code=409,
-                            detail='The piece left circulation while in '
+                            detail='The element left circulation while in '
                                    'place; undo that exit first.')
     given = body.model_dump(mode='json', exclude_none=True)
     new_origin = {**origin, 'planned': False, **given}

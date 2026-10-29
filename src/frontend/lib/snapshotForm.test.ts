@@ -163,8 +163,8 @@ test('a draw from a batch: no size needed, never more pieces than remain', () =>
     mode: 'cut', identity: identity({ parents: ['batch'] }), fields: { ...emptyFields(), quantity: 5 },
     dimensions: ['', '', ''], sizeEntered: false, draw: { remaining },
   }).map((p) => p.message)
-  assert.deepEqual(said(1), ['Only 1 piece remains in the batch.'])
-  assert.deepEqual(said(2), ['Only 2 pieces remain in the batch.'])
+  assert.deepEqual(said(1), ['Only 1 element remains in the batch.'])
+  assert.deepEqual(said(2), ['Only 2 elements remain in the batch.'])
   // a size of its own must be complete
   assert.deepEqual(draw(1, 7, true), ['size'])
   // without geometry the body leaves the key out, so the server copies the batch's proxy

@@ -10,24 +10,9 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PASSWORD_CHANGED_PARAM, PASSWORD_CHANGED_VALUE } from '@/lib/password'
 import { RATE_LIMITED, RATE_LIMITED_TEXT } from '@/lib/signInErrors'
+import { safeCallbackPath } from '@/lib/safeCallback'
 import { registerLinkText, signInRegisterPrompt } from '@/lib/registration'
 import { useRegistration } from '@/hooks/useRegistration'
-
-function toSafePathClient(raw: string): string {
-  const fallback = '/components'
-  try {
-    // Build absolute URL to validate origin, but only return path
-    const u = new URL(raw, window.location.origin)
-    if (u.origin === window.location.origin && u.pathname.startsWith('/')) {
-      return u.pathname + u.search + u.hash
-    }
-  } catch {
-    // ignore
-  }
-  // If it was already a plain path like "/components", keep it
-  if (raw.startsWith('/')) return raw
-  return fallback
-}
 
 export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
   const { info: registration } = useRegistration()
@@ -97,7 +82,7 @@ export default function SignInForm({ callbackUrl }: { callbackUrl: string }) {
     
     const safeCallback = typeof window === 'undefined'
       ? callbackUrl // SSR fallback (already sanitized on server)
-      : toSafePathClient(callbackUrl)
+      : safeCallbackPath(callbackUrl, '/my-work', window.location.origin)
 
     startTransition(async () => {
       const result = await signIn('credentials', {

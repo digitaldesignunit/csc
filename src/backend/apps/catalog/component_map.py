@@ -199,6 +199,7 @@ def _embed_umap(matrix: np.ndarray) -> np.ndarray:
         min_dist=0.1,
         metric='euclidean',
         random_state=42,
+        n_jobs=1,   # a seed makes UMAP single-threaded: say so instead of the warning
     )
     return reducer.fit_transform(scaled).astype(np.float64)
 

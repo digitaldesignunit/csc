@@ -222,7 +222,7 @@ async def create_evidence_bulk(
 ):
     """contributor(D) of every target. Fan-out (three rebound areas, one
     inspection noting several findings) and apply-to-several (a claim for
-    a batch of pieces) end here (7.6). Every record is validated before
+    a batch of elements) end here (7.6). Every record is validated before
     the first is inserted; one problem rejects the whole request and names
     the record by its position."""
     identities: Dict[str, Dict[str, Any]] = {}
@@ -347,7 +347,7 @@ async def list_identity_evidence(
                           'whole day)'),
     status: str = Query('published', description='a status, or all'),
     include: Optional[str] = Query(
-        None, description='comma list: context (the state of the piece each '
+        None, description='comma list: context (the state of the element each '
                           'record belongs to), superseded (corrected ones)'),
 ):
     """Published, non-superseded records by default; what the caller may
@@ -650,7 +650,7 @@ async def get_timeline(
 ):
     """Archived cycles, the origin, every state and correction, every
     evidence record (where it falls: before cataloguing, in the history,
-    after the piece left circulation), changes of the metadata and the exit.
+    after the element left circulation), changes of the metadata and the exit.
     What the caller may not see is left out; a withdrawn record outside the
     dataset is a bare row; outside the dataset a metadata change shows only
     its date (8.36)."""

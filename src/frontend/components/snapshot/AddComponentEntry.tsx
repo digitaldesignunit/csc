@@ -34,7 +34,7 @@ export default function AddComponentEntry({
             <span>
               <span className="block font-medium">New component</span>
               <span className="block text-xs font-normal text-muted-foreground">
-                A piece with a tag that is not in the catalog yet.
+                An element with a tag that is not in the catalog yet.
               </span>
             </span>
           </Button>
@@ -42,9 +42,9 @@ export default function AddComponentEntry({
             onClick={() => setMode('cut')}>
             <Scissors className="h-5 w-5 shrink-0" />
             <span>
-              <span className="block font-medium">Cut from pieces</span>
+              <span className="block font-medium">Cut from elements</span>
               <span className="block text-xs font-normal text-muted-foreground">
-                A piece cut from one component, or merged from several.
+                An element cut from one component, or merged from several.
               </span>
             </span>
           </Button>

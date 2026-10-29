@@ -116,7 +116,7 @@ async def identity_ever_published(request: Request,
 
 
 UNREVIEWED = ('This dataset has not been reviewed by an admin yet: it stays '
-              'visible to its members only, and its pieces cannot be made '
+              'visible to its members only, and its elements cannot be made '
               'public until it is reviewed.')
 
 

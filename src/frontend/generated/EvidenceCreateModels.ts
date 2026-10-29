@@ -61,7 +61,7 @@ export interface PositionInput {
   kind?: 'point' | 'region' | 'face' | 'none' | null; // point, region, face or none; a rebound grid is always a region
   snapshot_id?: string | null; // The snapshot whose stored coordinates `point` is in (authored, never derived)
   point?: number[] | null; // Picked point in stored coordinates; for a rebound grid the server sets the grid centre
-  description?: string | null; // Where on the piece, in words, e.g. "north face, mid-span"
+  description?: string | null; // Where on the element, in words, e.g. "north face, mid-span"
 }
 
 export interface ReasonBody {
@@ -118,7 +118,7 @@ export interface ArchivalDocument {
 
 export interface ArchivalDocumentPayload {
   document: ArchivalDocument; // The source document.
-  claim?: ArchivalClaim | null; // What the document says. Without a claim and a summary the record is a document: it documents the piece and never enters the fold.
+  claim?: ArchivalClaim | null; // What the document says. Without a claim and a summary the record is a document: it documents the element and never enters the fold.
 }
 
 export interface CoreBar {
@@ -152,7 +152,7 @@ export interface CoreResult {
 }
 
 export interface CoreSampling {
-  cored_at: string; // When the core was drilled; becomes the record's sampled_at and decides which state of the piece the result belongs to.
+  cored_at: string; // When the core was drilled; becomes the record's sampled_at and decides which state of the element the result belongs to.
   paired_rebound_id?: string | null; // The rebound hammer record taken at this drill spot (EN 13791 pairs). Same component, not discarded, taken no later than the coring, one core per rebound record.
   drill_diameter_mm: number; // Nominal drill diameter (typically 50, 100 or 150 mm).
   drilling_method?: 'wet' | 'dry' | null; // Wet or dry drilling.
@@ -262,7 +262,7 @@ export interface ReboundInstrument {
 }
 
 export interface ReboundTestArea {
-  label?: string | null; // Name of the test area on the piece, e.g. TA-1.
+  label?: string | null; // Name of the test area on the element, e.g. TA-1.
   surface_preparation: 'ground' | 'as_found'; // Whether the surface was ground before testing.
   surface_condition: 'dry' | 'damp' | 'wet'; // Moisture state of the surface.
   carbonation_depth_mm?: number | null; // Carbonation depth at the test area. The German annex (NA.6 / NA.7) is only used up to 5 mm unless the surface was ground.

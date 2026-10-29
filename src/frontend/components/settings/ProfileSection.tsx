@@ -15,6 +15,7 @@ import {
   ACTOR_ROLE_LABELS,
   checkOrcid,
   checkRor,
+  checkUrl,
   problemField,
   profileFields,
   profilePatch,
@@ -24,8 +25,8 @@ import {
 } from '@/lib/profile'
 
 /**
- * Settings, "Profile" (decision 8.133 b): the name, organisation, ROR, ORCID
- * and default role that "Add me" in the evidence form, Grasshopper and the
+ * Settings, "Profile" (decision 8.133 b): the name, organisation, ROR, website of the
+ * organisation, ORCID and default role that "Add me" in the evidence form, Grasshopper and the
  * server copy into the records you make. There is no profile page: the
  * values appear only through the records they fill.
  */
@@ -79,7 +80,7 @@ export default function ProfileSection() {
   const save = async () => {
     const found = profileProblems(fields)
     setProblems(found)
-    setTouched({ full_name: true, organization: true, organization_ror: true, orcid: true, default_role: true })
+    setTouched({ full_name: true, organization: true, organization_ror: true, organization_url: true, orcid: true, default_role: true })
     if (Object.keys(found).length > 0) return
     const body: Record<string, string> = { ...patch }
     // send the normal form: the API stores `https://ror.org/<id>` and `0000-...` itself, the field shows it after
@@ -112,7 +113,7 @@ export default function ProfileSection() {
         <p className="text-muted-foreground">
           &quot;Add me&quot; in the evidence form, Grasshopper and the server copy these values into the records you
           make. A record states where you worked then: a later change never rewrites an older record. Your
-          organisation is public, your name and ORCID are shown to signed-in users only.
+          organisation, its ROR and its website are public, your name and ORCID are shown to signed-in users only.
         </p>
         <form
           className="space-y-3"
@@ -139,6 +140,17 @@ export default function ProfileSection() {
                 onChange={(e) => set({ organization_ror: e.target.value }, 'organization_ror')} onBlur={() => leave('organization_ror')} />
               <Normalised value={fields.organization_ror} check={checkRor} />
             </Field>
+            <Field id="profile-url" label="Website of the organisation"
+              help="The web page of your organisation, e.g. https://lab.example.org. Optional. Shown publicly with your records."
+              errors={problems.organization_url ? [problems.organization_url] : []}>
+              <Input id="profile-url" type="url" inputMode="url" value={fields.organization_url} placeholder="https://..." spellCheck={false}
+                autoComplete="url" maxLength={500}
+                aria-invalid={problems.organization_url ? true : undefined}
+                onChange={(e) => set({ organization_url: e.target.value }, 'organization_url')} onBlur={() => leave('organization_url')} />
+              <Normalised value={fields.organization_url} check={checkUrl} />
+            </Field>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field id="profile-orcid" label="ORCID"
               help="Your ORCID iD, e.g. 0000-0002-1825-0097; the check digit is verified. Optional. Shown to signed-in users only."
               errors={problems.orcid ? [problems.orcid] : []}>
@@ -147,14 +159,14 @@ export default function ProfileSection() {
                 onChange={(e) => set({ orcid: e.target.value }, 'orcid')} onBlur={() => leave('orcid')} />
               <Normalised value={fields.orcid} check={checkOrcid} />
             </Field>
+            <Field id="profile-role" label="Default role"
+              help="The role you have in a record when you add yourself: you can change it in each record.">
+              <NativeSelect id="profile-role" value={fields.default_role}
+                onChange={(value) => set({ default_role: value as ProfileFields['default_role'] }, 'default_role')}
+                options={ACTOR_ROLES.map((role) => ({ value: role, label: ACTOR_ROLE_LABELS[role] }))}
+                placeholder={null} className="max-w-56" />
+            </Field>
           </div>
-          <Field id="profile-role" label="Default role"
-            help="The role you have in a record when you add yourself: you can change it in each record.">
-            <NativeSelect id="profile-role" value={fields.default_role}
-              onChange={(value) => set({ default_role: value as ProfileFields['default_role'] }, 'default_role')}
-              options={ACTOR_ROLES.map((role) => ({ value: role, label: ACTOR_ROLE_LABELS[role] }))}
-              placeholder={null} className="max-w-56" />
-          </Field>
           {general && <p className="text-xs text-destructive" role="alert">{general}</p>}
           <div className="flex flex-wrap items-center gap-3">
             <WriteButton type="submit" disabled={saving || !changed}>

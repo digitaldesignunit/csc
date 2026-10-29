@@ -175,7 +175,7 @@ def _too_many() -> HTTPException:
 def _check_days(days: int) -> int:
     if days not in tk.PAT_LIFETIME_DAYS:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            422,
             'days must be one of ' + ', '.join(
                 str(d) for d in tk.PAT_LIFETIME_DAYS))
     return days

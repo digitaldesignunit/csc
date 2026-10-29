@@ -67,9 +67,9 @@ INSTRUCTIONS = (
     'The Catalog of Second Chances (CSC) is a catalog of reused and '
     'salvaged building components (German: wiederverwendete Bauteile, '
     'Wiederverwendung, Bauteilboerse): concrete walls and beams '
-    '(Betonwaende, Traeger), stone, timber and other pieces, each '
+    '(Betonwaende, Traeger), stone, timber and other elements, each '
     'with its shape, origin, versions and measurements ("evidence"). Use '
-    'these tools before a web search when the user looks for such pieces, '
+    'these tools before a web search when the user looks for such elements, '
     'for example "Betontraeger mit Bewehrung" or reused beams with '
     'reinforcement (Bewehrung): search_components with the filters below, '
     'and has_evidence=reinforcement_layout for "with reinforcement". '
@@ -307,11 +307,11 @@ HasEvidenceArg = Annotated[str, Field(description=(
     'filter. Leave empty for all.'))]
 FitModeArg = Annotated[str, Field(description=(
     'Search by size, with size_mm: about = every side within the '
-    'tolerance of the asked side (which pieces are about this '
-    'size); can_hold = every side of the piece at least the asked '
-    'side (which pieces can this part be cut from). The sides are '
+    'tolerance of the asked side (which elements are about this '
+    'size); can_hold = every side of the element at least the asked '
+    'side (which elements can this part be cut from). The sides are '
     'compared largest to smallest, so the orientation does not '
-    'matter. A piece without a known size never matches.'))]
+    'matter. An element without a known size never matches.'))]
 SizeArg = Annotated[Optional[list[float]], Field(description=(
     'The asked size: three numbers in mm in any order, for example '
     '[1200, 600, 200]. Needs fit_mode.'))]
@@ -320,18 +320,18 @@ ToleranceArg = Annotated[str, Field(description=(
     'millimetres, for example "10%" (the default) or "50mm".'))]
 NearLatArg = Annotated[Optional[float], Field(description=(
     'Search by place: the latitude of the point, -90 to 90, with '
-    'near_lon. Only pieces with a known place on the chosen layer '
+    'near_lon. Only elements with a known place on the chosen layer '
     'are listed, nearest first, each with its distance_km.'))]
 NearLonArg = Annotated[Optional[float], Field(description=(
     'The longitude of the point, -180 to 180. Needs near_lat.'
     ))]
 NearLayerArg = Annotated[str, Field(description=(
-    'Which place of a piece is measured: current (where the piece '
+    'Which place of an element is measured: current (where the element '
     'is now; the default) or origin (the building it comes from, '
-    'known for fewer pieces).'))]
+    'known for fewer elements).'))]
 RadiusArg = Annotated[Optional[float], Field(description=(
-    'Only pieces within this many km of the point. Without it every '
-    'piece with a place on the layer is listed, nearest first.'
+    'Only elements within this many km of the point. Without it every '
+    'element with a place on the layer is listed, nearest first.'
     ))]
 
 
@@ -446,7 +446,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         sort: Annotated[str, Field(description=(
             'catalog_number (default without a size or place search), date '
             '(the version applies from), created, volume (length x width x '
-            'height; pieces without a size last), match (closeness to the '
+            'height; elements without a size last), match (closeness to the '
             'size search: smallest deviation, or least waste, first; the '
             'default with fit_mode and no place search), distance (from the '
             'near point, nearest first; the default with near_lat and '
@@ -460,7 +460,7 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
         component (name, function, material, dataset, size, status,
         visibility) with its web link, and the total. With fit_mode and
         size_mm each row also carries its deviation (about, in per cent) or
-        waste (can_hold, in m3 and in per cent of the piece); with near_lat
+        waste (can_hold, in m3 and in per cent of the element); with near_lat
         and near_lon each row carries its distance_km. has_evidence keeps
         only components with a published, current evidence record of one
         method, for example reinforcement_layout for "with reinforcement". Use
@@ -807,11 +807,11 @@ def build_mcp(app, frontend_url: str) -> FastMCP:
     ) -> dict:
         """What the catalog holds, in numbers, for the components that match
         the filters of search_components (none: the whole catalog you may
-        see). It counts components (one per piece or batch, with its current
-        version), not rows of a list: the total, how many physical pieces they
+        see). It counts components (one per element or batch, with its current
+        version), not rows of a list: the total, how many physical elements they
         stand for, and the counts by material (with its label), original
         function, dataset, shape class and circulation. The ranges give the
-        smallest and the largest value of each side of the pieces that have a
+        smallest and the largest value of each side of the elements that have a
         size, sides sorted largest, middle, smallest; lengths are in
         millimetres. It also says how many components have a current and how
         many an origin location, and how many of the counted components are

@@ -8,9 +8,9 @@ import {
   clampOpacityPercent,
 } from '@/lib/viewerOpacity'
 
-const HELP = 'Fades the piece itself: the mesh with its edges, the proxy and the point cloud. '
+const HELP = 'Fades the element itself: the mesh with its edges, the proxy and the point cloud. '
   + 'Reinforcement bars, test positions, marker points, capture fixtures and the grid keep their look, '
-  + 'so what lies inside the piece shows through. 100 % is the normal view.'
+  + 'so what lies inside the element shows through. 100 % is the normal view.'
 
 /**
  * One slider for the opacity of the piece (decision 8.165 C), 0 to 100 % in
@@ -28,7 +28,7 @@ export default function OpacitySlider({
   nothingShown?: boolean
 }) {
   return (
-    <MenuSubsection title="Piece opacity" help={HELP}>
+    <MenuSubsection title="Element opacity" help={HELP}>
       <div className="flex items-center gap-2">
         <input
           id="viewer-piece-opacity"
@@ -38,7 +38,7 @@ export default function OpacitySlider({
           step={OPACITY_STEP}
           value={value}
           disabled={nothingShown}
-          aria-label="Piece opacity"
+          aria-label="Element opacity"
           aria-valuetext={`${value} %`}
           onChange={(event) => onChange(clampOpacityPercent(Number(event.target.value)))}
           className="h-4 min-w-0 flex-1 cursor-pointer rounded accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -51,7 +51,7 @@ export default function OpacitySlider({
         </output>
       </div>
       {nothingShown && (
-        <p className="text-xs text-muted-foreground">No part of the piece is shown.</p>
+        <p className="text-xs text-muted-foreground">No part of the element is shown.</p>
       )}
     </MenuSubsection>
   )

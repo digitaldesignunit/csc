@@ -45,7 +45,7 @@ router = APIRouter()
 class WithdrawIdentityBody(BaseModel):
     reason: str = Field(min_length=1)
     duplicate_of: Optional[str] = Field(
-        None, description='the canonical piece this one duplicates')
+        None, description='the canonical element this one duplicates')
 
 
 class PurgeBody(BaseModel):
@@ -95,8 +95,8 @@ async def withdraw_identity(
     """
     Hidden everywhere by default; members of D see it in full, everyone
     else who could see it a tombstone (8.17). With ``duplicate_of`` the
-    resolver and the component page lead to the canonical piece; pieces
-    that named this one as their canonical piece follow along (I19).
+    resolver and the component page lead to the canonical element; elements
+    that named this one as their canonical element follow along (I19).
     """
     identity = (await load_identity(request, current_user, identity_id,
                                     'withdraw_identity')).record
@@ -118,15 +118,15 @@ async def withdraw_identity(
         if target.get('withdrawn'):
             raise HTTPException(
                 status_code=422,
-                detail='duplicate_of is withdrawn itself; name the piece it '
+                detail='duplicate_of is withdrawn itself; name the element it '
                        'leads to (I19).')
     followers = await request.app.mongodb_component_identities.count_documents(
         {'withdrawn.duplicate_of': identity_id})
     if followers and duplicate_of is None:
         raise HTTPException(
             status_code=409,
-            detail=f'{followers} withdrawn piece(s) name this one as their '
-                   f'canonical piece; give duplicate_of so they follow '
+            detail=f'{followers} withdrawn element(s) name this one as their '
+                   f'canonical element; give duplicate_of so they follow '
                    f'(I19).')
     now = now_iso()
     withdrawn = {'at': now, 'by_user_id': current_user.id,
@@ -222,7 +222,7 @@ async def delete_identity(
     if referenced:
         raise HTTPException(
             status_code=409,
-            detail=f'Other pieces name this one (catalog numbers '
+            detail=f'Other elements name this one (catalog numbers '
                    f'{referenced}); resolve those links first.')
     snapshots = await db.mongodb_component_snapshots.find(
         {'identity_id': identity_id}, {'_id': 1}).to_list(length=None)
@@ -304,7 +304,7 @@ async def resolve_id(
     """
     ``Accept: text/html`` --> 302 to the component page; otherwise 302 to
     the passport. A withdrawn duplicate --> 301 to ``/id/{duplicate_of}``;
-    other withdrawn pieces and pieces without a current state still
+    other withdrawn elements and elements without a current state still
     redirect (the page shows the tombstone / "no current state"); purged
     --> 410; unknown or never published (unless the caller may see it)
     --> 404. Visibility applies after the redirect (8.11).

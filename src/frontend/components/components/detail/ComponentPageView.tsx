@@ -20,12 +20,14 @@ import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import RecordRecentComponent from '@/components/layout/RecordRecentComponent'
 import { bannersOf, type Banner } from '@/lib/componentDetail'
 import { HKS_VISIBLE } from '@/lib/hks'
+import { useReportPageView } from '@/lib/pageView'
+import { componentViewIsPublic } from '@/lib/sessionExpiry'
 import { useDatasetVisibility } from '@/lib/useDatasetVisibility'
 import { cn } from '@/lib/utils'
 import ComponentViewer from '../ComponentViewer'
 import ComponentDetailSnapshotBanner from '../ComponentDetailSnapshotBanner'
 import ComponentProvenanceCard from '../ComponentProvenanceCard'
-import { geometryFailed } from '../componentDetailShared'
+import { geometryFailed, isPublished } from '../componentDetailShared'
 import ComponentDescriptorsCard from './ComponentDescriptorsCard'
 import ComponentFactsCard from './ComponentFactsCard'
 import ComponentHeaderStrip from './ComponentHeaderStrip'
@@ -34,12 +36,30 @@ import ComponentPhotosLocationCard from './ComponentPhotosLocationCard'
 import ComponentPropertiesCard from './ComponentPropertiesCard'
 import ComponentRecordsCard from './ComponentRecordsCard'
 import ComponentSimilarCard from './ComponentSimilarCard'
-import { EvidenceDataProvider } from './EvidenceData'
+import { EvidenceDataProvider, useEvidenceData } from './EvidenceData'
 
 const BANNER_TONE: Record<Banner['tone'], string> = {
   info: 'border-sky-300 bg-sky-50 text-sky-950 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-100',
   warn: 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100',
   bad: 'border-red-300 bg-red-50 text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100',
+}
+
+/** Tells the session monitor whether an anonymous visitor would see all of this page (issue 35). */
+function PageViewReporter({ isPublic, snapshotStatus, layoutId, snapshots }: {
+  isPublic?: boolean | null
+  snapshotStatus?: string | null
+  layoutId?: string
+  snapshots?: SnapshotSummaryItem[]
+}) {
+  const { records } = useEvidenceData()
+  useReportPageView(componentViewIsPublic({
+    isPublic,
+    snapshotStatus,
+    layoutId,
+    snapshots,
+    recordStatuses: records?.map((record) => record.status) ?? null,
+  }))
+  return null
 }
 
 export default function ComponentPageView({
@@ -89,6 +109,9 @@ export default function ComponentPageView({
 
   return (
     <EvidenceDataProvider identityId={identityId}>
+      <PageViewReporter isPublic={identity.is_public}
+        snapshotStatus={isPublished(snapshot) ? 'published' : snapshot.status} layoutId={layoutId}
+        snapshots={snapshots} />
       <div className="mx-auto w-full max-w-[110rem] space-y-3 p-3 sm:p-4">
         <RecordRecentComponent
           id={identityId}

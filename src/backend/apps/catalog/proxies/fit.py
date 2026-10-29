@@ -138,7 +138,7 @@ def fit_primary(source: Source, frame: Dict[str, list],
             chosen = (spec, fitted, stats, local, signed)
             break
     if chosen is None:
-        raise ValueError(f'no proxy fits a {shape_class} piece')
+        raise ValueError(f'no proxy fits a {shape_class} element')
     spec, fitted, stats, local, signed = chosen
     rotation = np.array([fitted.placement['x'], fitted.placement['y'],
                          fitted.placement['z']])

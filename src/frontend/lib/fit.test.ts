@@ -148,13 +148,13 @@ test('the match of a row reads as a deviation or a waste', () => {
   assert.equal(wasteText(120_000_000, 41.2), '41 % waste (0.12 m3)')
   assert.equal(wasteText(1_500_000_000, 63.5), '64 % waste (1.5 m3)')
   // a batch: the size is one piece's, so is the waste
-  assert.equal(wasteText(120_000_000, 41.2, 5), '41 % waste (0.12 m3) per piece')
+  assert.equal(wasteText(120_000_000, 41.2, 5), '41 % waste (0.12 m3) per element')
   assert.equal(fitRowText({ mode: 'about', deviation: 0.05 }), '5.0 % off')
   assert.equal(fitRowText({ mode: 'can_hold', waste_mm3: 1e9, waste_percent: 50 }), '50 % waste (1 m3)')
   assert.equal(fitRowText(null), '')
   // a batch: the size is one piece's, so is the waste
   const held = { mode: 'can_hold' as const, waste_mm3: 12_400_000, waste_percent: 41 }
-  assert.equal(fitRowText(held, 4), '41 % waste (0.012 m3) per piece')
+  assert.equal(fitRowText(held, 4), '41 % waste (0.012 m3) per element')
   assert.equal(fitRowText(held, 1), '41 % waste (0.012 m3)')
   assert.equal(fitRowText({ ...held, waste_mm3: 0, waste_percent: 0 }, 4), 'no waste')
   assert.equal(fitRowText({ mode: 'about', deviation: 0.083 }, 4), '8.3 % off')
@@ -163,13 +163,13 @@ test('the match of a row reads as a deviation or a waste', () => {
 test('the match on two lines for a narrow cell', () => {
   const held = { mode: 'can_hold' as const, waste_mm3: 120_000_000, waste_percent: 41.2 }
   assert.deepEqual(fitRowLines(held), ['41 % waste', '0.12 m3'])
-  assert.deepEqual(fitRowLines(held, 3), ['41 % waste', '0.12 m3 per piece'])
+  assert.deepEqual(fitRowLines(held, 3), ['41 % waste', '0.12 m3 per element'])
   assert.deepEqual(fitRowLines({ ...held, waste_mm3: 1_700_000, waste_percent: 0.4 }), ['<1 % waste', '0.0017 m3'])
   assert.deepEqual(fitRowLines({ ...held, waste_mm3: 0, waste_percent: 0 }, 3), ['no waste'])
   assert.deepEqual(fitRowLines({ mode: 'about', deviation: 0.083 }, 3), ['8.3 % off'])
   assert.deepEqual(fitRowLines(null), [])
   // the one-line text of a card is the same words
-  assert.equal(fitRowText(held, 3), '41 % waste (0.12 m3) per piece')
+  assert.equal(fitRowText(held, 3), '41 % waste (0.12 m3) per element')
 })
 
 test('a row carries a match only when the backend sent a usable one', () => {

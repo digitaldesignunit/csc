@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.13
 """
-The personal profile of an account (decision 8.133): organization, ROR,
-ORCID and the default role of the actor an account becomes in a record.
+The personal profile of an account (decision 8.133): organization, ROR, the
+web page of the organization, ORCID and the default role of the actor an account becomes in a record.
 Pure functions over plain values: validation and the copy into an actor.
 """
 
@@ -20,8 +20,11 @@ PROFILE_TO_ACTOR = {
     'full_name': 'name',
     'organization': 'organization',
     'organization_ror': 'organization_ror',
+    'organization_url': 'url',
     'orcid': 'orcid',
 }
+
+URL_LIMIT = 500
 
 
 def orcid_check_digit(digits: str) -> str:
@@ -57,6 +60,17 @@ def normalize_ror(value: str) -> str:
     return f'https://ror.org/{text}'
 
 
+def normalize_url(value: str) -> str:
+    """The web page of an organization, trimmed: the check of ``Actor.url``
+    (http or https only; ValueError otherwise or over 500 characters)."""
+    text = value.strip()
+    if not text.lower().startswith(('http://', 'https://')):
+        raise ValueError('the website must start with http:// or https://')
+    if len(text) > URL_LIMIT:
+        raise ValueError(f'at most {URL_LIMIT} characters')
+    return text
+
+
 def clean_text(value: Optional[str], limit: int = 200) -> Optional[str]:
     """Trimmed text, None when empty; ValueError over the limit."""
     text = (value or '').strip()
@@ -69,7 +83,7 @@ def clean_text(value: Optional[str], limit: int = 200) -> Optional[str]:
 
 def fill_actor(actor: Any, profile: Mapping[str, Any]) -> Any:
     """The actor with its empty ``name`` / ``organization`` /
-    ``organization_ror`` / ``orcid`` copied from the account's profile (8.133
+    ``organization_ror`` / ``url`` / ``orcid`` copied from the account's profile (8.133
     e). Typed values win; a redacted actor and an actor that is not an account
     are left as they are. A copy: the profile stays the account's."""
     if not isinstance(actor, dict) or actor.get('kind') != 'user' \

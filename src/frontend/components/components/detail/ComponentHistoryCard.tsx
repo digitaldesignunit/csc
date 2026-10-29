@@ -35,7 +35,7 @@ import HistoryList, { type TimelineEvent } from './HistoryList'
 type View = 'list' | 'graph'
 
 const LAYER_LABELS: { key: keyof Layers; label: string; help: string }[] = [
-  { key: 'lineage', label: 'Lineage', help: 'The pieces this one was cut from or was cut into' },
+  { key: 'lineage', label: 'Lineage', help: 'The elements this one was cut from or was cut into' },
   { key: 'states', label: 'States', help: 'The recorded states and their corrections' },
   { key: 'evidence', label: 'Evidence', help: 'The evidence records' },
 ]

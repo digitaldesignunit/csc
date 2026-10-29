@@ -10,7 +10,11 @@ import {
   actorFromProfile,
   checkOrcid,
   checkRor,
+  checkUrl,
+  hasOrganization,
+  isMyOrganization,
   orcidCheckDigit,
+  organizationFromProfile,
   problemField,
   profileFields,
   profilePatch,
@@ -50,7 +54,7 @@ test('a ROR id is read from the id and the URL', () => {
 })
 
 test('the profile problems are named per field and an empty optional field is fine', () => {
-  const fields = { full_name: 'Ada', organization: '', organization_ror: '', orcid: '', default_role: 'operator' as const }
+  const fields = { full_name: 'Ada', organization: '', organization_ror: '', organization_url: '', orcid: '', default_role: 'operator' as const }
   assert.deepEqual(profileProblems(fields), {})
   const bad = profileProblems({ ...fields, full_name: '  ', orcid: '0000-0002-1825-0098', organization_ror: 'x' })
   assert.deepEqual(Object.keys(bad).sort(), ['full_name', 'orcid', 'organization_ror'])
@@ -83,14 +87,59 @@ test('the role falls back to operator', () => {
 test('"Add me" copies the profile into an actor of kind user', () => {
   const actor = actorFromProfile({
     _id: 'u1', username: 'ada', full_name: ' Ada Lovelace ', organization: 'Lab GmbH',
-    organization_ror: 'https://ror.org/03abcde12', orcid: '0000-0002-1825-0097', default_role: 'laboratory',
+    organization_ror: 'https://ror.org/03abcde12', organization_url: ' https://lab.example.org ',
+    orcid: '0000-0002-1825-0097', default_role: 'laboratory',
   })
   assert.deepEqual(actor, {
     kind: 'user', user_id: 'u1', name: 'Ada Lovelace', role: 'laboratory', organization: 'Lab GmbH',
-    organization_ror: 'https://ror.org/03abcde12', orcid: '0000-0002-1825-0097',
+    organization_ror: 'https://ror.org/03abcde12', url: 'https://lab.example.org', orcid: '0000-0002-1825-0097',
   })
   // a bare profile: the username stands in for the name, nothing else is invented
   assert.deepEqual(actorFromProfile({ _id: 'u2', username: 'bob' }), {
     kind: 'user', user_id: 'u2', name: 'bob', role: 'operator',
   })
+})
+
+test('the website of the organisation is http or https, as the url of an actor', () => {
+  assert.deepEqual(checkUrl(''), { ok: true, value: null })
+  assert.deepEqual(checkUrl(' https://lab.example.org/about '), { ok: true, value: 'https://lab.example.org/about' })
+  assert.deepEqual(checkUrl('HTTP://lab.example.org'), { ok: true, value: 'HTTP://lab.example.org' })
+  for (const bad of ['lab.example.org', 'ftp://lab.example.org', 'javascript:alert(1)', `https://${'a'.repeat(500)}`]) {
+    assert.equal(checkUrl(bad).ok, false, bad)
+  }
+  const fields = { ...profileFields({ full_name: 'Ada' }), organization_url: 'lab.example.org' }
+  assert.deepEqual(Object.keys(profileProblems(fields)), ['organization_url'])
+  assert.equal(problemField('the website must start with http:// or https://'), 'organization_url')
+  // only a changed website is sent
+  const stored = { full_name: 'Ada', organization_url: 'https://a.example.org' }
+  assert.deepEqual(profilePatch({ ...profileFields(stored), organization_url: ' https://b.example.org ' }, stored),
+    { organization_url: 'https://b.example.org' })
+  assert.deepEqual(profilePatch({ ...profileFields(stored), organization_url: '' }, stored), { organization_url: '' })
+})
+
+test('"Add my organisation" makes an organisation actor from the profile, only when there is one', () => {
+  const me = {
+    organization: ' Lab GmbH ', organization_ror: 'https://ror.org/03abcde12',
+    organization_url: 'https://lab.example.org', orcid: '0000-0002-1825-0097', full_name: 'Ada',
+  }
+  assert.equal(hasOrganization(me), true)
+  // organisation, ROR and website; no person, no ORCID, no role
+  assert.deepEqual(organizationFromProfile(me), {
+    kind: 'organization', organization: 'Lab GmbH', organization_ror: 'https://ror.org/03abcde12',
+    url: 'https://lab.example.org',
+  })
+  assert.deepEqual(organizationFromProfile({ organization: 'Lab' }), { kind: 'organization', organization: 'Lab' })
+  for (const none of [null, undefined, {}, { organization: '  ' }, { organization: null, organization_url: 'https://x.org' }]) {
+    assert.equal(hasOrganization(none), false)
+    assert.equal(organizationFromProfile(none), null)
+  }
+})
+
+test('the button is not offered again for the organisation already listed', () => {
+  const me = { organization: 'Lab GmbH' }
+  assert.equal(isMyOrganization({ kind: 'organization', organization: ' lab gmbh ' }, me), true)
+  assert.equal(isMyOrganization({ kind: 'organization', organization: 'Other Lab' }, me), false)
+  assert.equal(isMyOrganization({ kind: 'person', name: 'X', organization: 'Lab GmbH' }, me), false)
+  assert.equal(isMyOrganization({ kind: 'user', user_id: 'u1', organization: 'Lab GmbH' }, me), false)
+  assert.equal(isMyOrganization({ kind: 'organization', organization: 'Lab GmbH' }, {}), false)
 })

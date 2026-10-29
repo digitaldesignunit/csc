@@ -179,7 +179,7 @@ export default function EditSnapshotForm({
     try {
       await backendJson(`/identities/${enc}`, { method: 'PATCH', body: { is_public: next } })
       setIsPublic(next)
-      toast.success(next ? 'The piece is public now' : 'The piece is private now')
+      toast.success(next ? 'The element is public now' : 'The element is private now')
       router.refresh()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not change the public flag')
@@ -245,7 +245,7 @@ export default function EditSnapshotForm({
           <div className="space-y-0.5">
             <Label htmlFor="ed-public" className="text-sm font-medium">Public</Label>
             <p className="text-xs text-muted-foreground">
-              A public piece is visible to everyone without an account. It applies to the whole piece
+              A public element is visible to everyone without an account. It applies to the whole element
               and takes effect at once; it needs no version change.
             </p>
             {!datasetReviewed && !isPublic && (
@@ -259,8 +259,8 @@ export default function EditSnapshotForm({
       <PublicConfirmDialog
         open={confirmPublic}
         onOpenChange={(open) => { if (!publicBusy) setConfirmPublic(open) }}
-        title="Make this piece public?"
-        subject="This piece becomes public."
+        title="Make this element public?"
+        subject="This element becomes public."
         onConfirm={() => void changePublic(true)}
       />
       <fieldset disabled={!allowed || busy} className="space-y-5">
@@ -300,7 +300,7 @@ export default function EditSnapshotForm({
             onChange={(at, precision) => setFields({ effectiveFrom: at ? at.slice(0, 10) : '', precision })}
           />
           <p className="text-xs text-muted-foreground">
-            When this state starts to describe the piece ({PRECISION_LABELS[values.precision]?.toLowerCase()}). It
+            When this state starts to describe the element ({PRECISION_LABELS[values.precision]?.toLowerCase()}). It
             keeps the order of the versions.
           </p>
         </section>

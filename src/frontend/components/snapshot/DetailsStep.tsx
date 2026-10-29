@@ -41,7 +41,7 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
     <div className="space-y-5">
       {creating && datasets.length > 1 && (
         <Field label="Dataset" htmlFor="sf-dataset"
-          hint="The study or project the piece belongs to; it decides who may see and moderate it.">
+          hint="The study or project the element belongs to; it decides who may see and moderate it.">
           <Select value={values.dataset} onValueChange={(dataset) => set({ dataset })}>
             <SelectTrigger id="sf-dataset" className="w-full">
               <SelectValue placeholder="Choose a dataset" />
@@ -61,7 +61,7 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
         </p>
       )}
       {creating && datasets.length === 0 && (
-        <p role="alert" className="text-sm text-destructive">You contribute to no dataset, so you cannot record a piece yet.</p>
+        <p role="alert" className="text-sm text-destructive">You contribute to no dataset, so you cannot record an element yet.</p>
       )}
 
       {mode === 'new' && (
@@ -88,7 +88,7 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
       {mode === 'cut' && (
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Original function" htmlFor="sf-function" className="sm:col-span-2"
-            hint="The piece takes over origin, material, manufacture and function from its parents; state one only to override it, or when merged parents disagree.">
+            hint="The element takes over origin, material, manufacture and function from its parents; state one only to override it, or when merged parents disagree.">
             <VocabSelect id="sf-function" labels={ORIGINAL_FUNCTION_LABELS} value={values.originalFunction}
               onChange={(originalFunction) => set({ originalFunction })} allowNone
               noneLabel="Same as the parents" />
@@ -124,10 +124,10 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
           </Field>
         )}
 
-        <Field label={batch ? 'Pieces to draw' : 'Quantity'} htmlFor="sf-quantity"
+        <Field label={batch ? 'Elements to draw' : 'Quantity'} htmlFor="sf-quantity"
           hint={batch
-            ? `${batch.remaining} of ${batch.size} pieces remain in the batch. More than one makes a sub-batch.`
-            : 'Identical items counted as one catalog entry. More than one makes a batch that pieces can be drawn from.'}>
+            ? `${batch.remaining} of ${batch.size} elements remain in the batch. More than one makes a sub-batch.`
+            : 'Identical items counted as one catalog entry. More than one makes a batch that elements can be drawn from.'}>
           <Input id="sf-quantity" type="number" min={1} max={batch ? Math.max(1, batch.remaining) : undefined}
             step={1} inputMode="numeric" value={fields.quantity}
             onChange={(event) => setFields({ quantity: Math.max(1, parseInt(event.target.value, 10) || 1) })} />
@@ -135,7 +135,7 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
         <div className="flex items-center gap-2 self-center">
           <Checkbox id="sf-fragment" checked={fields.fragment}
             onCheckedChange={(checked) => setFields({ fragment: checked === true })} />
-          <Label htmlFor="sf-fragment">Fragment of a larger piece</Label>
+          <Label htmlFor="sf-fragment">Fragment of a larger element</Label>
         </div>
 
       </div>
@@ -166,7 +166,7 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
           <summary className="cursor-pointer text-sm font-medium">Where it came from (optional)</summary>
           <div className="mt-3 space-y-3">
             <p className="text-xs text-muted-foreground">
-              How the piece entered circulation. It can also be edited on the component page later.
+              How the element entered circulation. It can also be edited on the component page later.
             </p>
             <OriginFields idPrefix="sf-origin" value={values.origin ?? emptyOrigin()}
               onChange={(origin) => set({ origin })} />

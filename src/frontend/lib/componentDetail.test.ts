@@ -11,6 +11,7 @@ import { test } from 'node:test'
 import {
   availableActions,
   bannersOf,
+  canAddEvidence,
   circulationChip,
   conditionChip,
   factGroups,
@@ -64,19 +65,19 @@ test('a banner only when it applies, one sentence each', () => {
   })
   assert.equal(notPublic.length, 1)
   // no visibility known: the one thing that is true in both cases
-  assert.equal(notPublic[0].text, 'Not public: visitors without an account do not see this piece.')
+  assert.equal(notPublic[0].text, 'Not public: visitors without an account do not see this element.')
   // a members dataset: its members and the moderators (8.131 e)
   const members = bannersOf({
     identity: { is_public: false, dataset: 'dbu_zirkus' }, signedIn: true, geometryFailed: false,
     datasetVisibility: 'members',
   })
-  assert.match(members[0].text, /^Not public: only members of dbu_zirkus and the moderators see this piece\.$/)
+  assert.match(members[0].text, /^Not public: only members of dbu_zirkus and the moderators see this element\.$/)
   // a catalog dataset: every signed-in user sees it
   const catalog = bannersOf({
     identity: { is_public: false, dataset: 'dbu_zirkus' }, signedIn: true, geometryFailed: false,
     datasetVisibility: 'catalog',
   })
-  assert.match(catalog[0].text, /^Not public: every signed-in user sees this piece/)
+  assert.match(catalog[0].text, /^Not public: every signed-in user sees this element/)
   assert.doesNotMatch(catalog[0].text, /only members/)
   const out = bannersOf({
     identity: { exit: { kind: 'split' }, withdrawn: { at: '2026-01-05T00:00:00Z', reason: 'duplicate' } },
@@ -338,4 +339,20 @@ test('an undated lineage event sits at the start of its section', () => {
   const lineage = lineageEvents({ startedAt: null, parents: [{ id: 'p', catalogNumber: 1 }], children: [] })
   const merged = mergeHistory(EVENTS, lineage, ALL)
   assert.equal(merged[1].rows[0].kind, 'lineage')
+})
+
+test('"Add evidence" is for a signed-in contributor or administrator of a current, not withdrawn element', () => {
+  const base = { signedIn: true, isAdmin: false, roles: ['contributor'], withdrawn: null, currentSnapshotId: 'v1' }
+  assert.equal(canAddEvidence(base), true)
+  assert.equal(canAddEvidence({ ...base, roles: ['moderator', 'contributor'] }), true)
+  assert.equal(canAddEvidence({ ...base, isAdmin: true, roles: [] }), true)
+  // not signed in, a reviewer only, a member without a role
+  assert.equal(canAddEvidence({ ...base, signedIn: false }), false)
+  assert.equal(canAddEvidence({ ...base, signedIn: false, isAdmin: true }), false)
+  assert.equal(canAddEvidence({ ...base, roles: ['reviewer'] }), false)
+  assert.equal(canAddEvidence({ ...base, roles: [] }), false)
+  // withdrawn, or no current version yet
+  assert.equal(canAddEvidence({ ...base, withdrawn: { at: '2026-01-01T00:00:00Z' } }), false)
+  assert.equal(canAddEvidence({ ...base, currentSnapshotId: null }), false)
+  assert.equal(canAddEvidence({ ...base, currentSnapshotId: undefined }), false)
 })

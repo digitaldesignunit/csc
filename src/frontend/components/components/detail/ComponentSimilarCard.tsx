@@ -34,9 +34,9 @@ import {
 } from '@/lib/similarPieces'
 import ComponentPreviewImage from '../ComponentPreviewImage'
 
-const HELP = 'The pieces whose shape is closest to this one, compared over the whole radial signature of '
-  + 'each piece (not the two-dimensional similarity map). Similar in outline and size: the signature '
-  + 'measures distances from the centre of the piece. Only pieces in circulation that you may see are compared.'
+const HELP = 'The elements whose shape is closest to this one, compared over the whole radial signature of '
+  + 'each element (not the two-dimensional similarity map). Similar in outline and size: the signature '
+  + 'measures distances from the centre of the element. Only elements in circulation that you may see are compared.'
 
 function Neighbour({ item }: { item: SimilarPiece }) {
   const row = item.piece
@@ -110,12 +110,12 @@ export default function ComponentSimilarCard({ identityId }: { identityId: strin
   const label = toggleLabel(card.pieces.length, expanded)
 
   return (
-    <section ref={top} aria-label="Similar pieces"
+    <section ref={top} aria-label="Similar elements"
       className="scroll-mt-3 rounded-lg border border-border bg-card p-2.5 shadow-sm">
       <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
         <Shapes className="h-4 w-4" aria-hidden />
-        Similar pieces
-        <Help label="Similar pieces" text={HELP} />
+        Similar elements
+        <Help label="Similar elements" text={HELP} />
       </h2>
       <ul className="grid grid-cols-3 gap-1.5 sm:grid-cols-6 lg:grid-cols-3">
         {shownPieces(card.pieces, expanded).map((item) => <Neighbour key={item.piece._id} item={item} />)}

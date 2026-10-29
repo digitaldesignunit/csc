@@ -1,0 +1,712 @@
+[
+  {
+    "id": "example-dataset",
+    "model": "DatasetView",
+    "json": {
+      "_id": "example_dataset",
+      "name": "Example Dataset",
+      "description": "A made-up dataset for the examples of this page.",
+      "visibility": "members",
+      "reviewed": true
+    }
+  },
+  {
+    "id": "example-identity",
+    "model": "ComponentIdentity",
+    "json": {
+      "_id": "example-identity",
+      "catalog_number": 90001,
+      "original_function": "IfcBeam",
+      "material": "concrete",
+      "material_class": "17 01 01",
+      "material_class_source": "derived",
+      "trade_name": "ExampleBeam",
+      "manufacturer": "The precast plant",
+      "dataset": "example_dataset",
+      "manufactured_at": "1968-01-01T00:00:00Z",
+      "manufactured_precision": "year",
+      "origin": {
+        "kind": "deinstallation",
+        "at": "2026-01-20T00:00:00Z",
+        "at_precision": "day",
+        "place": {
+          "name": "Example Hall",
+          "address": "Example Street 1, Example City"
+        },
+        "construction_work": {
+          "name": "Example Hall",
+          "use": "workshop hall",
+          "year_built": 1968,
+          "construction_method": "prefabricated"
+        },
+        "position_in_work": "Roof level, axis B",
+        "connection_types": [
+          "bolted",
+          "grouted"
+        ],
+        "method": "Cut loose with a wire saw and lifted out by crane",
+        "performed_by": [
+          {
+            "kind": "organization",
+            "organization": "The deconstruction contractor",
+            "role": "operator"
+          }
+        ]
+      },
+      "parent_identities": null,
+      "exit": null,
+      "is_public": true,
+      "current_snapshot_id": "example-snapshot-v1",
+      "properties": {
+        "compressive_strength": {
+          "range": [
+            38.3,
+            38.3
+          ],
+          "unit": "MPa",
+          "confidence": 0.9,
+          "source": "destructive",
+          "n": 1,
+          "evidence_ids": [
+            "example-evidence-core"
+          ],
+          "inherited_from": null,
+          "derived_at": "2026-03-02T10:00:00Z"
+        },
+        "compressive_strength_in_situ": {
+          "range": [
+            38.3,
+            38.3
+          ],
+          "unit": "MPa",
+          "confidence": 0.9,
+          "source": "destructive",
+          "n": 1,
+          "evidence_ids": [
+            "example-evidence-core"
+          ],
+          "inherited_from": null,
+          "derived_at": "2026-03-02T10:00:00Z"
+        },
+        "rebound_number": {
+          "range": [
+            43,
+            43
+          ],
+          "unit": "1",
+          "confidence": 0.42,
+          "source": "ndt",
+          "n": 1,
+          "evidence_ids": [
+            "example-evidence-rebound"
+          ],
+          "inherited_from": null,
+          "derived_at": "2026-03-02T10:00:00Z"
+        },
+        "rebar_diameter": {
+          "range": [
+            8,
+            20
+          ],
+          "unit": "mm",
+          "confidence": 0.28,
+          "source": "archival",
+          "n": 1,
+          "evidence_ids": [
+            "example-evidence-layout"
+          ],
+          "inherited_from": null,
+          "derived_at": "2026-03-02T10:00:00Z"
+        },
+        "rebar_spec": {
+          "range": [
+            "BSt III"
+          ],
+          "unit": null,
+          "confidence": 0.28,
+          "source": "archival",
+          "n": 1,
+          "evidence_ids": [
+            "example-evidence-datasheet"
+          ],
+          "inherited_from": null,
+          "derived_at": "2026-03-02T10:00:00Z"
+        },
+        "concrete_class": {
+          "range": [
+            "B225"
+          ],
+          "unit": null,
+          "confidence": 0.28,
+          "source": "archival",
+          "n": 1,
+          "evidence_ids": [
+            "example-evidence-archival"
+          ],
+          "inherited_from": null,
+          "derived_at": "2026-03-02T10:00:00Z"
+        }
+      },
+      "created": "2026-02-01T09:00:00Z"
+    }
+  },
+  {
+    "id": "example-snapshot-v0",
+    "model": "ComponentSnapshot",
+    "json": {
+      "_id": "example-snapshot-v0",
+      "identity_id": "example-identity",
+      "version": 0,
+      "status": "published",
+      "name": "Beam as deinstalled",
+      "effective_from": "2026-02-01T00:00:00Z",
+      "effective_from_precision": "day",
+      "shape_class": "linear",
+      "shape_class_source": "derived",
+      "geometry": {
+        "proxies": [
+          {
+            "primitive": "box",
+            "role": "primary",
+            "params": {
+              "size": [
+                4800,
+                300,
+                500
+              ]
+            },
+            "placement": {
+              "o": [
+                0,
+                0,
+                0
+              ],
+              "x": [
+                1,
+                0,
+                0
+              ],
+              "y": [
+                0,
+                1,
+                0
+              ],
+              "z": [
+                0,
+                0,
+                1
+              ]
+            },
+            "fit": {
+              "method": "authored"
+            }
+          }
+        ]
+      },
+      "bbx": [
+        4800,
+        300,
+        500
+      ],
+      "complexity": 1,
+      "complexity_source": "derived",
+      "fragment": false,
+      "quantity": 1,
+      "location": {
+        "lat": 50,
+        "lon": 8
+      },
+      "notes": "Small spalls at the lower edge of the south end.",
+      "added_by_username": "example-member",
+      "created": "2026-02-01T09:30:00Z"
+    }
+  },
+  {
+    "id": "example-snapshot-v1",
+    "model": "ComponentSnapshot",
+    "json": {
+      "_id": "example-snapshot-v1",
+      "identity_id": "example-identity",
+      "version": 1,
+      "status": "published",
+      "name": "Beam after trimming the damaged end",
+      "effective_from": "2026-03-10T00:00:00Z",
+      "effective_from_precision": "day",
+      "shape_class": "linear",
+      "shape_class_source": "derived",
+      "bbx": [
+        4500,
+        300,
+        500
+      ],
+      "complexity": 1,
+      "complexity_source": "derived",
+      "geometry": {
+        "proxies": [
+          {
+            "primitive": "box",
+            "role": "primary",
+            "params": {
+              "size": [
+                4500,
+                300,
+                500
+              ]
+            },
+            "placement": {
+              "o": [
+                0,
+                0,
+                0
+              ],
+              "x": [
+                1,
+                0,
+                0
+              ],
+              "y": [
+                0,
+                1,
+                0
+              ],
+              "z": [
+                0,
+                0,
+                1
+              ]
+            },
+            "fit": {
+              "method": "authored"
+            }
+          }
+        ]
+      },
+      "quantity": 1,
+      "notes": "South end cut back by 300 mm."
+    }
+  },
+  {
+    "id": "example-rebound-hammer",
+    "model": "EvidenceView",
+    "json": {
+      "_id": "example-evidence-rebound",
+      "identity_id": "example-identity",
+      "method": "rebound_hammer",
+      "source_tier": "ndt",
+      "standard": {
+        "code": "EN 12504-2",
+        "year": 2021
+      },
+      "observed_at": "2026-02-19T10:00:00Z",
+      "observed_at_precision": "exact",
+      "performed_by": [
+        {
+          "kind": "organization",
+          "organization": "A testing laboratory",
+          "role": "laboratory"
+        }
+      ],
+      "recorded_by_username": "example-recorder",
+      "position": {
+        "kind": "region",
+        "snapshot_id": "example-snapshot-v0",
+        "description": "North face, mid-span"
+      },
+      "summary": {
+        "quantity": "rebound_number",
+        "value": 43,
+        "unit": "1",
+        "kind": "measured"
+      },
+      "payload": {
+        "instrument": {
+          "hammer_type": "N",
+          "impact_energy_nm": 2.207,
+          "last_calibration_at": "2026-01-15"
+        },
+        "test_area": {
+          "label": "TA-1",
+          "surface_preparation": "ground",
+          "surface_condition": "dry",
+          "carbonation_depth_mm": null,
+          "member_thickness_mm": 300,
+          "support": "loose"
+        },
+        "impact_direction": "horizontal",
+        "readings": [
+          44,
+          42,
+          41,
+          45,
+          43,
+          42,
+          40,
+          44,
+          43
+        ],
+        "reading_unit": "1",
+        "rejected_reading_indices": [],
+        "outlier_policy": "en_12504_2",
+        "set_discarded": false,
+        "n_valid": 9,
+        "median": 43
+      },
+      "status": "published",
+      "verification": {
+        "state": "unverified"
+      }
+    }
+  },
+  {
+    "id": "example-core-compression",
+    "model": "EvidenceView",
+    "json": {
+      "_id": "example-evidence-core",
+      "identity_id": "example-identity",
+      "method": "core_compression",
+      "source_tier": "destructive",
+      "standard": {
+        "code": "EN 12504-1",
+        "year": 2019
+      },
+      "observed_at": "2026-02-27T14:30:00Z",
+      "observed_at_precision": "exact",
+      "sampled_at": "2026-02-20T11:00:00Z",
+      "sampled_at_precision": "exact",
+      "performed_by": [
+        {
+          "kind": "organization",
+          "organization": "A testing laboratory",
+          "role": "laboratory"
+        }
+      ],
+      "recorded_by_username": "example-recorder",
+      "position": {
+        "kind": "point",
+        "snapshot_id": "example-snapshot-v0",
+        "point": [
+          2400,
+          0,
+          250
+        ],
+        "description": "North face, mid-span, next to the rebound test area"
+      },
+      "summary": {
+        "quantity": "compressive_strength",
+        "value": 38.3,
+        "unit": "MPa",
+        "kind": "measured"
+      },
+      "derived": [
+        {
+          "quantity": "compressive_strength_in_situ",
+          "value": 38.3,
+          "unit": "MPa",
+          "kind": "derived",
+          "model": {
+            "kind": "en_13791",
+            "reference": "EN 13791:2019 + DIN EN 13791/A20:2022-04",
+            "note": "2:1 core: f_c,is equals the core strength"
+          }
+        }
+      ],
+      "payload": {
+        "sampling": {
+          "cored_at": "2026-02-20T11:00:00Z",
+          "drill_diameter_mm": 100,
+          "drilling_method": "wet",
+          "orientation_vs_casting": "perpendicular"
+        },
+        "specimen": {
+          "label": "C-03",
+          "measured_diameter_mm": 99.6,
+          "length_prepared_mm": 199.2,
+          "end_preparation": "ground",
+          "ld_class": "2:1",
+          "storage": "sealed",
+          "valid_for_strength": true
+        },
+        "test": {
+          "tested_at": "2026-02-27T14:30:00Z",
+          "loading_rate_mpa_s": 0.6,
+          "max_load_kn": 298.4,
+          "failure_type": "satisfactory"
+        },
+        "result": {
+          "fc_core_mpa": 38.3,
+          "fc_is_cyl_mpa": 38.3
+        }
+      },
+      "destructive": true,
+      "status": "published",
+      "verification": {
+        "state": "reviewed",
+        "by": {
+          "kind": "user",
+          "user_id": "example-reviewer"
+        },
+        "at": "2026-03-02T10:00:00Z",
+        "note": "Checked the load and the area against the report"
+      }
+    }
+  },
+  {
+    "id": "example-archival-document",
+    "model": "EvidenceView",
+    "json": {
+      "_id": "example-evidence-archival",
+      "identity_id": "example-identity",
+      "method": "archival_document",
+      "source_tier": "archival",
+      "observed_at": "1968-03-01T00:00:00Z",
+      "observed_at_precision": "month",
+      "performed_by": [
+        {
+          "kind": "user",
+          "user_id": "example-recorder",
+          "role": "operator"
+        }
+      ],
+      "recorded_by_username": "example-recorder",
+      "position": {
+        "kind": "none",
+        "description": "Applies to the whole beam"
+      },
+      "summary": {
+        "quantity": "concrete_class",
+        "range": [
+          "B225"
+        ],
+        "kind": "claimed"
+      },
+      "payload": {
+        "document": {
+          "title": "Structural drawing of the roof beams",
+          "date": "1968-03",
+          "kind": "drawing",
+          "reference": "Drawing 12/B"
+        },
+        "claim": {
+          "text": "B225",
+          "interpretation": "An old German concrete class, as written on the drawing"
+        }
+      },
+      "status": "published",
+      "verification": {
+        "state": "unverified"
+      }
+    }
+  },
+  {
+    "id": "example-visual-inspection",
+    "model": "EvidenceView",
+    "json": {
+      "_id": "example-evidence-visual",
+      "identity_id": "example-identity",
+      "method": "visual_inspection",
+      "source_tier": "visual",
+      "observed_at": "2026-02-02T10:00:00Z",
+      "observed_at_precision": "day",
+      "performed_by": [
+        {
+          "kind": "user",
+          "user_id": "example-recorder",
+          "role": "operator"
+        }
+      ],
+      "recorded_by_username": "example-recorder",
+      "position": {
+        "kind": "region",
+        "snapshot_id": "example-snapshot-v0",
+        "description": "South end"
+      },
+      "summary": {
+        "quantity": "spalling",
+        "value": 1,
+        "kind": "claimed"
+      },
+      "payload": {
+        "observations": [
+          {
+            "quantity": "spalling",
+            "value": 1,
+            "note": "Small spalls at the lower edge"
+          }
+        ]
+      },
+      "status": "published",
+      "verification": {
+        "state": "self_attested",
+        "by": {
+          "kind": "user",
+          "user_id": "example-recorder",
+          "role": "operator"
+        },
+        "at": "2026-02-02T10:30:00Z"
+      }
+    }
+  },
+  {
+    "id": "example-era-heuristic",
+    "model": "EvidenceView",
+    "json": {
+      "_id": "example-evidence-era",
+      "identity_id": "example-identity",
+      "method": "era_heuristic",
+      "source_tier": "heuristic",
+      "observed_at": "2026-02-01T00:00:00Z",
+      "observed_at_precision": "day",
+      "performed_by": [
+        {
+          "kind": "user",
+          "user_id": "example-recorder",
+          "role": "operator"
+        }
+      ],
+      "recorded_by_username": "example-recorder",
+      "position": {
+        "kind": "none",
+        "description": "Applies to the whole beam"
+      },
+      "summary": {
+        "quantity": "compressive_strength",
+        "range": [
+          18,
+          28
+        ],
+        "unit": "MPa",
+        "kind": "claimed"
+      },
+      "payload": {
+        "basis": "construction_year",
+        "year": 1968,
+        "source": "A guide to concrete of the 1960s"
+      },
+      "status": "published",
+      "verification": {
+        "state": "unverified"
+      }
+    }
+  },
+  {
+    "id": "example-manufacturer-datasheet",
+    "model": "EvidenceView",
+    "json": {
+      "_id": "example-evidence-datasheet",
+      "identity_id": "example-identity",
+      "method": "manufacturer_datasheet",
+      "source_tier": "archival",
+      "observed_at": "1968-01-01T00:00:00Z",
+      "observed_at_precision": "year",
+      "performed_by": [
+        {
+          "kind": "user",
+          "user_id": "example-recorder",
+          "role": "operator"
+        }
+      ],
+      "recorded_by_username": "example-recorder",
+      "position": {
+        "kind": "none",
+        "description": "Applies to the whole beam"
+      },
+      "summary": {
+        "quantity": "rebar_spec",
+        "value": "BSt III",
+        "kind": "claimed"
+      },
+      "payload": {
+        "manufacturer": "The precast plant",
+        "product": "Roof beam type B",
+        "reference": "Datasheet 1968-04"
+      },
+      "status": "published",
+      "verification": {
+        "state": "unverified"
+      }
+    }
+  },
+  {
+    "id": "example-reinforcement-layout",
+    "model": "EvidenceView",
+    "json": {
+      "_id": "example-evidence-layout",
+      "identity_id": "example-identity",
+      "method": "reinforcement_layout",
+      "source_tier": "archival",
+      "observed_at": "1968-03-01T00:00:00Z",
+      "observed_at_precision": "month",
+      "performed_by": [
+        {
+          "kind": "user",
+          "user_id": "example-recorder",
+          "role": "operator"
+        }
+      ],
+      "recorded_by_username": "example-recorder",
+      "position": {
+        "kind": "none",
+        "snapshot_id": "example-snapshot-v0",
+        "description": "Whole element; bars in the stored coordinates of this version"
+      },
+      "summary": {
+        "quantity": "rebar_diameter",
+        "range": [
+          8,
+          20
+        ],
+        "unit": "mm",
+        "kind": "claimed"
+      },
+      "payload": {
+        "basis": "drawing",
+        "document": {
+          "title": "Structural drawing of the roof beams",
+          "date": "1968-03",
+          "reference": "Drawing 12/B"
+        },
+        "accuracy_note": "Hooks and stirrup corners are not drawn",
+        "bars": [
+          {
+            "spec": "BSt III",
+            "diameter_mm": 20,
+            "diameter_known": true,
+            "points": [
+              [
+                0,
+                40,
+                40
+              ],
+              [
+                4800,
+                40,
+                40
+              ]
+            ]
+          },
+          {
+            "spec": "BSt III",
+            "diameter_mm": 8,
+            "diameter_known": true,
+            "points": [
+              [
+                100,
+                40,
+                40
+              ],
+              [
+                100,
+                40,
+                460
+              ]
+            ]
+          }
+        ]
+      },
+      "status": "published",
+      "verification": {
+        "state": "unverified"
+      }
+    }
+  }
+]

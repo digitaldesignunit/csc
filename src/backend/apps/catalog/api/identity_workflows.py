@@ -102,8 +102,13 @@ async def list_reserved_identities(
     )
 
 
-def _labelled(values, labels):
-    return [{'value': v, 'label': labels.get(v, v)} for v in values]
+def _labelled(values, labels, name=None):
+    """Value and label; with the vocabulary's name also its one-line
+    description when the vocabulary has them (8.181 b)."""
+    described = vocab.VOCAB_DESCRIPTIONS.get(name or '', {})
+    return [{'value': v, 'label': labels.get(v, v),
+             **({'description': described[v]} if v in described else {})}
+            for v in values]
 
 
 @router.get(
@@ -114,36 +119,36 @@ async def get_vocabularies():
     """Code vocabularies with display labels; materials: GET /materials."""
     return JSONResponse(status_code=200, content={
         'original_function': _labelled(vocab.ORIGINAL_FUNCTIONS,
-                                       vocab.ORIGINAL_FUNCTION_LABELS),
+                                       vocab.ORIGINAL_FUNCTION_LABELS, name='original_function'),
         # the shape class a function suggests (a hint, never set for the
         # user); the label is the shape class, absent for a proxy
         'shape_class_hint': [{'value': f, 'label': h} for f, h in
                              vocab.SHAPE_CLASS_HINTS.items() if h],
         'shape_class': _labelled(vocab.SHAPE_CLASSES,
-                                 vocab.SHAPE_CLASS_LABELS),
+                                 vocab.SHAPE_CLASS_LABELS, name='shape_class'),
         'origin_kind': _labelled(vocab.ORIGIN_KINDS,
-                                 vocab.ORIGIN_KIND_LABELS),
-        'exit_kind': _labelled(vocab.EXIT_KINDS, vocab.EXIT_KIND_LABELS),
-        'status': _labelled(vocab.STATUSES, {}),
-        'precision': _labelled(vocab.PRECISIONS, {}),
-        'dgnb_class': _labelled(vocab.DGNB_CLASSES, vocab.DGNB_CLASS_LABELS),
+                                 vocab.ORIGIN_KIND_LABELS, name='origin_kind'),
+        'exit_kind': _labelled(vocab.EXIT_KINDS, vocab.EXIT_KIND_LABELS, name='exit_kind'),
+        'status': _labelled(vocab.STATUSES, {}, name='status'),
+        'precision': _labelled(vocab.PRECISIONS, {}, name='precision'),
+        'dgnb_class': _labelled(vocab.DGNB_CLASSES, vocab.DGNB_CLASS_LABELS, name='dgnb_class'),
         'connection_type': _labelled(vocab.CONNECTION_TYPES,
-                                     vocab.CONNECTION_TYPE_LABELS),
+                                     vocab.CONNECTION_TYPE_LABELS, name='connection_type'),
         'construction_method': _labelled(vocab.CONSTRUCTION_METHODS,
-                                         vocab.CONSTRUCTION_METHOD_LABELS),
-        'material_group': _labelled(vocab.MATERIAL_GROUPS, {}),
+                                         vocab.CONSTRUCTION_METHOD_LABELS, name='construction_method'),
+        'material_group': _labelled(vocab.MATERIAL_GROUPS, {}, name='material_group'),
         'inherit_unit': _labelled(vocab.INHERITABLE_FIELDS,
                                   vocab.INHERIT_UNIT_LABELS),
         'change_cause': _labelled(vocab.CHANGE_CAUSES,
                                   vocab.CHANGE_CAUSE_LABELS),
         'evidence_method': _labelled(vocab.EVIDENCE_METHODS,
-                                     vocab.EVIDENCE_METHOD_LABELS),
+                                     vocab.EVIDENCE_METHOD_LABELS, name='evidence_method'),
         'source_tier': _labelled(vocab.SOURCE_TIERS + ('inherited',),
-                                 vocab.SOURCE_TIER_LABELS),
+                                 vocab.SOURCE_TIER_LABELS, name='source_tier'),
         'verification_state': _labelled(vocab.VERIFICATION_STATES,
-                                        vocab.VERIFICATION_STATE_LABELS),
+                                        vocab.VERIFICATION_STATE_LABELS, name='verification_state'),
         'quantity': _labelled(tuple(vocab.QUANTITY_BY_NAME),
-                              vocab.QUANTITY_LABELS),
+                              vocab.QUANTITY_LABELS, name='quantity'),
     })
 
 
@@ -189,7 +194,7 @@ async def reserve_identity(
     if identity.get('exit'):
         raise HTTPException(
             status_code=409,
-            detail='A piece out of circulation cannot be reserved (I18)',
+            detail='An element out of circulation cannot be reserved (I18)',
         )
 
     reserved = identity.get('reserved') or ''

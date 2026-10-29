@@ -6,7 +6,7 @@
  * own menu. No timeline here: the History card has it. Documents of a batch the
  * piece was drawn from are listed on top.
  */
-import { useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { FlaskConical } from 'lucide-react'
 
 import BatchDocuments from '@/components/evidence/BatchDocuments'
@@ -14,14 +14,28 @@ import EvidenceCard from '@/components/evidence/EvidenceCard'
 import { Button } from '@/components/ui/button'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { UPLOAD_HELP } from '@/lib/evidence/api'
+import { recordIdOfHash } from '@/lib/history/recordTarget'
+import { scrollToRecord } from '@/lib/history/scrollToRecord'
 import { useRegistry } from '@/lib/evidence/useRegistry'
+import AddEvidenceButton from './AddEvidenceButton'
 import { useEvidenceData } from './EvidenceData'
 
 export default function ComponentRecordsCard({ catalog }: { catalog: CatalogComponent }) {
   const { identity } = catalog
   const { registry } = useRegistry()
-  const { records, error, changed } = useEvidenceData()
-  const [showCorrected, setShowCorrected] = useState(false)
+  const { records, error, changed, showCorrected, setShowCorrected } = useEvidenceData()
+  const scrolledFor = useRef<string | null>(null)
+
+  // an address `#record-<id>` (a click in the History graph of another piece): once the records
+  // have loaded, open "Show corrected records" when the record is one of them, and scroll to it
+  useEffect(() => {
+    if (records === null) return
+    const id = recordIdOfHash(window.location.hash)
+    if (!id || scrolledFor.current === id) return
+    scrolledFor.current = id
+    if (records.some((r) => String(r._id) === id && r.superseded_by)) setShowCorrected(true)
+    void scrollToRecord(id, { smooth: false })
+  }, [records, setShowCorrected])
 
   const live = (records ?? []).filter((r) => !r.superseded_by && 'method' in r)
   const corrected = (records ?? []).filter((r) => r.superseded_by && 'method' in r)
@@ -38,10 +52,18 @@ export default function ComponentRecordsCard({ catalog }: { catalog: CatalogComp
 
   return (
     <section aria-label="Evidence records" className="rounded-lg border border-border bg-card p-3 shadow-sm">
-      <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-        <FlaskConical className="h-4 w-4" />
-        Evidence records{records ? ` (${live.length})` : ''}
-      </h2>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <FlaskConical className="h-4 w-4" />
+          Evidence records{records ? ` (${live.length})` : ''}
+        </h2>
+        <AddEvidenceButton
+          identityId={String(identity._id ?? '')}
+          dataset={identity.dataset}
+          withdrawn={identity.withdrawn}
+          currentSnapshotId={identity.current_snapshot_id}
+        />
+      </div>
       <div className="space-y-3">
         <BatchDocuments identity={identity} />
         {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
@@ -66,7 +88,7 @@ export default function ComponentRecordsCard({ catalog }: { catalog: CatalogComp
         {corrected.length > 0 && (
           <div className="space-y-2">
             <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" aria-expanded={showCorrected}
-              onClick={() => setShowCorrected((v) => !v)}>
+              onClick={() => setShowCorrected(!showCorrected)}>
               {showCorrected ? 'Hide' : 'Show'} corrected records ({corrected.length})
             </Button>
             {showCorrected && [...corrected].sort(newestFirst).map((record) => (

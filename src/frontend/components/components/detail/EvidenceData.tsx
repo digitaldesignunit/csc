@@ -19,6 +19,9 @@ type EvidenceData = {
   /** call after a record changed: reloads the records and the history */
   changed: () => void
   reloadKey: number
+  /** "Show corrected records" of the records card: the History graph opens it for a corrected record */
+  showCorrected: boolean
+  setShowCorrected: (open: boolean) => void
 }
 
 const Context = createContext<EvidenceData | null>(null)
@@ -28,6 +31,7 @@ export function EvidenceDataProvider({ identityId, children }: { identityId: str
   const [records, setRecords] = useState<EvidenceView[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [showCorrected, setShowCorrected] = useState(false)
 
   const load = useCallback(() => {
     loadEvidenceOf(identityId)
@@ -44,8 +48,10 @@ export function EvidenceDataProvider({ identityId, children }: { identityId: str
     records,
     error,
     reloadKey,
+    showCorrected,
+    setShowCorrected,
     changed: () => { load(); setReloadKey((k) => k + 1) },
-  }), [records, error, reloadKey, load])
+  }), [records, error, reloadKey, showCorrected, load])
 
   return <Context.Provider value={value}>{children}</Context.Provider>
 }

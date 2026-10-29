@@ -541,7 +541,7 @@ export default function EvidenceForm({
         <h1 className="text-xl font-bold">Add evidence</h1>
         <p className="text-sm" role="status">
           #{identity.catalog_number} has no published state yet. Evidence is recorded about a state of the
-          piece: come back once a moderator has published its first version.
+          element: come back once a moderator has published its first version.
         </p>
       </div>
     )

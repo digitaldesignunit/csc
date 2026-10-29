@@ -23,10 +23,10 @@ export const FIT_MODE_LABELS: Record<FitMode, string> = {
 }
 
 export const FIT_HELP =
-  'Enter the size of the part you look for, in mm, in any order. About this size lists pieces whose '
-  + 'three sides are each within the tolerance of yours. Can hold this size lists pieces you could cut '
-  + 'that part from: every side of the piece is at least as long as yours (the part may be turned). '
-  + 'The sides are compared largest to smallest, so the way a piece lies does not matter.'
+  'Enter the size of the part you look for, in mm, in any order. About this size lists elements whose '
+  + 'three sides are each within the tolerance of yours. Can hold this size lists elements you could cut '
+  + 'that part from: every side of the element is at least as long as yours (the part may be turned). '
+  + 'The sides are compared largest to smallest, so the way an element lies does not matter.'
 
 export type FitQuery = {
   mode: FitMode
@@ -163,7 +163,7 @@ export function percentText(percent: number): string {
 /** "no waste", or "41 % waste (0.12 m3)"; "... per piece" for a batch (the size is one piece's). */
 export function wasteText(mm3: number, percent: number, quantity = 1): string {
   if (mm3 < 500) return 'no waste'
-  return `${percentText(percent)} waste (${volumeText(mm3)})${quantity > 1 ? ' per piece' : ''}`
+  return `${percentText(percent)} waste (${volumeText(mm3)})${quantity > 1 ? ' per element' : ''}`
 }
 
 /** The match of a row on two lines for a narrow table cell: the share
@@ -173,7 +173,7 @@ export function fitRowLines(fit: FitMatch | null, quantity = 1): string[] {
   if (!fit) return []
   if (fit.mode === 'about') return [deviationText(fit.deviation)]
   if (fit.waste_mm3 < 500) return ['no waste']
-  return [`${percentText(fit.waste_percent)} waste`, `${volumeText(fit.waste_mm3)}${quantity > 1 ? ' per piece' : ''}`]
+  return [`${percentText(fit.waste_percent)} waste`, `${volumeText(fit.waste_mm3)}${quantity > 1 ? ' per element' : ''}`]
 }
 
 /** What a row says about its match: "8.3 % off", "41 % waste (0.12 m3)", or nothing. */

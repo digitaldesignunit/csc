@@ -35,7 +35,7 @@ export function awaitsReview(dataset: ReviewLike): boolean {
 
 /** Why a dataset that awaits review cannot be catalog-visible or have public pieces. */
 export const REVIEW_EXPLANATION =
-  'An administrator reviews a new dataset first. Until then it stays members only and its pieces cannot be made public.'
+  'An administrator reviews a new dataset first. Until then it stays members only and its elements cannot be made public.'
 
 /** The line under the name field of "New dataset". */
 export function newDatasetHint(name: string): string {

@@ -5,21 +5,13 @@ export const dynamic = 'force-dynamic'
 import BackgroundMesh from '@/components/components/BackgroundMesh'
 import SignInForm from './SignInForm'
 import SessionExpiredNotice from '@/components/auth/SessionExpiredNotice'
+import { safeCallbackPath } from '@/lib/safeCallback'
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
-function toSafePathServer(raw: string | string[] | undefined): string {
-  const fallback = '/my-work'
-  const val = Array.isArray(raw) ? raw[0] : raw
-  if (!val) return fallback
-  // allow only same-origin relative paths
-  if (val.startsWith('/')) return val
-  return fallback
-}
-
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams
-  const callbackUrl = toSafePathServer(sp?.callbackUrl)
+  const callbackUrl = safeCallbackPath(sp?.callbackUrl, '/my-work')
   return (
     <div className="relative min-h-[80vh] md:min-h-[90vh]">
       {/* Background Mesh */}

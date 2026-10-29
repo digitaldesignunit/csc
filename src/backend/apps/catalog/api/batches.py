@@ -164,7 +164,7 @@ async def check_draw_fits(request: Request, batch: Dict[str, Any],
         size = await batch_size(request, batch)
         raise HTTPException(
             status_code=409,
-            detail=f'Only {max(remaining, 0)} of {size} pieces remain in '
+            detail=f'Only {max(remaining, 0)} of {size} elements remain in '
                    f'the batch; the draw takes {quantity} (8.105).')
 
 
@@ -175,7 +175,7 @@ async def check_batch_correction(request: Request, identity: Dict[str, Any],
     if quantity < drawn:
         raise HTTPException(
             status_code=409,
-            detail=f'{drawn} pieces were drawn from this batch; its '
+            detail=f'{drawn} elements were drawn from this batch; its '
                    f'quantity cannot go below that (I32).')
 
 

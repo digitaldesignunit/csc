@@ -49,7 +49,7 @@ export const ROWS: { what: string; why: string; basis: string; kept: string }[] 
     kept: 'The site stores nothing of it; FOSSGIS e.V. keeps its server logs under its own rules.',
   },
   {
-    what: 'Cookies and your device: the sign-in cookie, and on your device the theme, your Browse columns, the pieces you opened last and this notice being closed.',
+    what: 'Cookies and your device: the sign-in cookie, and on your device the theme, your Browse columns, the elements you opened last and this notice being closed.',
     why: 'Sign-in and your settings. No tracking, no statistics, no advertising.',
     basis: 'Section 25(2) TDDDG, needed for the service',
     kept: 'The sign-in cookie lasts at most 24 hours; the rest stays on your device until you clear it.',

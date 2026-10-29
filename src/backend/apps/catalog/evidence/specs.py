@@ -50,9 +50,9 @@ CORE_COMPRESSION = EvidenceMethodSpec(
     name='core_compression',
     label='Drilled core in compression (EN 12504-1, EN 12390-3)',
     description=(
-        'A core drilled from the piece, prepared and crushed. The record '
-        'carries both dates: sampled_at (the piece was drilled) decides the '
-        'state of the piece it belongs to, observed_at is the test. The '
+        'A core drilled from the element, prepared and crushed. The record '
+        'carries both dates: sampled_at (the element was drilled) decides the '
+        'state of the element it belongs to, observed_at is the test. The '
         'server recomputes F / A and the length-to-diameter class and '
         'derives the in-situ strength (EN 13791).'),
     payload_model=CoreCompressionPayload,
@@ -69,7 +69,7 @@ ARCHIVAL_DOCUMENT = EvidenceMethodSpec(
         'A claim from a drawing, specification, report, photo, marking, '
         'type plate or declaration of performance. The claim is the '
         'summary: a value or a range, or a class. Without a summary it is a '
-        'document: it documents the piece (a plan, an element passport, a '
+        'document: it documents the element (a plan, an element passport, a '
         'report), never enters the fold, and may carry the link it was read '
         'from.'),
     payload_model=ArchivalDocumentPayload,
@@ -99,7 +99,7 @@ ERA_HEURISTIC = EvidenceMethodSpec(
     label='Rule of thumb by era, region or typology',
     description=(
         'An estimate from the construction year, regional practice or the '
-        'typology of the piece. The estimate is the summary.'),
+        'typology of the element. The estimate is the summary.'),
     payload_model=EraHeuristicPayload,
     source_tier=METHOD_TIER['era_heuristic'], destructive=False,
     default_standard=None, summary_quantities=_claimable('heuristic'),
@@ -122,7 +122,7 @@ REINFORCEMENT_LAYOUT = EvidenceMethodSpec(
     name='reinforcement_layout',
     label='Reinforcement layout',
     description=(
-        'The bars of the piece from one source: a drawing (archival), a '
+        'The bars of the element from one source: a drawing (archival), a '
         'cover-meter or radar scan (non-destructive) or exposed bars '
         '(visual). The bar centrelines are in the stored coordinates of '
         'the snapshot named by position.snapshot_id, which is required. '

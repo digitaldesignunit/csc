@@ -198,14 +198,17 @@ export * from './catalogExtras';
 
 const NEWLINE = String.fromCharCode(10)
 
-/** `GET /vocab` --> `Vocab.ts`: value lists + display labels (spec section 2). */
+/** `GET /vocab` --> `Vocab.ts`: value lists, display labels and descriptions (spec section 2, 8.181). */
 async function generateVocab() {
   console.log(`Fetching vocabularies from ${BACKEND_URL}/vocab...`)
   const response = await fetch(`${BACKEND_URL}/vocab`)
   if (!response.ok) {
     throw new Error(`Failed to fetch /vocab: ${response.status} ${response.statusText}`)
   }
-  const vocab = (await response.json()) as Record<string, { value: string; label: string }[]>
+  const vocab = (await response.json()) as Record<
+    string,
+    { value: string; label: string; description?: string }[]
+  >
   let code = `// Auto-generated from backend GET /vocab
 // Generated on: ${new Date().toISOString()}
 // Source: ${BACKEND_URL}/vocab
@@ -215,12 +218,21 @@ async function generateVocab() {
     const typeName = name.replace(/(^|_)(\w)/g, (_m, _u, c: string) => c.toUpperCase())
     const values = entries.map((e) => `'${e.value}'`).join(' | ')
     const labels = entries.map((e) => `  ${JSON.stringify(e.value)}: ${JSON.stringify(e.label)},`)
+    // one line of meaning per value, for the vocabularies that have them (decision 8.181 b)
+    const described = entries.filter((e) => e.description)
+    const descriptions = described.length === 0 ? [] : [
+      `export const ${name.toUpperCase()}_DESCRIPTIONS: Record<${typeName}, string> = {`,
+      ...entries.map((e) => `  ${JSON.stringify(e.value)}: ${JSON.stringify(e.description ?? '')},`),
+      '}',
+      '',
+    ]
     code += [
       `export type ${typeName} = ${values}`,
       `export const ${name.toUpperCase()}_LABELS: Record<${typeName}, string> = {`,
       ...labels,
       '}',
       '',
+      ...descriptions,
       '',
     ].join(NEWLINE)
   }

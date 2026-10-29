@@ -1,6 +1,6 @@
 {
   "name": "csc-frontend",
-  "version": "0.6.4.1",
+  "version": "0.6.4.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -59,7 +59,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "openapi-typescript-codegen": "^0.29.0",
     "postcss": "^8.5.6",
-    "shadcn": "^4.7.0",
+    "shadcn": "4.22.1",
     "tailwindcss": "^4.1.12",
     "tsx": "^4.20.4",
     "tw-animate-css": "^1.3.6",

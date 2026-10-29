@@ -61,8 +61,8 @@ export default function Home() {
           <CardContent className="grid gap-4 text-sm leading-relaxed sm:grid-cols-2">
             <div className="space-y-1">
               <p className="flex items-center gap-2 font-medium"><Globe className="h-4 w-4 text-primary" aria-hidden />On the web</p>
-              <p>Browse and filter components, open a piece with its geometry and records, and on site record
-                pieces and evidence from a phone.</p>
+              <p>Browse and filter components, open an element with its geometry and records, and on site record
+                elements and evidence from a phone.</p>
             </div>
             <div className="space-y-1">
               <p className="flex items-center gap-2 font-medium"><Workflow className="h-4 w-4 text-primary" aria-hidden />In Grasshopper</p>

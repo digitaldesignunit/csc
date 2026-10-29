@@ -1,6 +1,6 @@
 import BrowseView from '@/components/components/overview/BrowseView'
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
-import { parseCirculation } from '@/lib/browse'
+import { filterValue, parseCirculation } from '@/lib/browse'
 import { fitBackendParams } from '@/lib/fit'
 import { nearBackendParams } from '@/lib/near'
 import { serverBackend } from '@/lib/serverBackend'
@@ -19,6 +19,7 @@ const FILTER_PARAMS = [
   'shape_class',
   'complexity',
   'fragment',
+  'evidence_method',
   'bbx_min_x',
   'bbx_min_y',
   'bbx_min_z',
@@ -59,7 +60,7 @@ export default async function ComponentsPage({
 
   const countParams = new URLSearchParams({ circulation })
   for (const key of FILTER_PARAMS) {
-    const value = sp?.[key]
+    const value = filterValue(urlParams, key)
     if (value) countParams.set(key, value)
   }
   for (const [key, value] of Object.entries({ ...fit, ...near })) countParams.set(key, value)

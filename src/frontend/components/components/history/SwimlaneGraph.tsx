@@ -4,7 +4,8 @@
  * The swimlane graph of the History card (decision 8.140): the piece in the
  * middle, its parents above, its children below, events along a time axis
  * (sections by year, not to scale). A version click shows that version on the
- * page, an evidence group opens into its records, a record click scrolls to
+ * page, an evidence group opens into its records, a layout click opens the layout in
+ * the viewer, any other record click scrolls to
  * its card, a lane's header opens that piece. The page scrolls sideways; the
  * events take the keyboard. The export (an SVG or a PNG of the whole timeline
  * with a legend, or the data as JSON) is in the menu next to the depth.
@@ -24,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { BackendError, backendJson } from '@/lib/backend'
+import { useEvidenceData } from '@/components/components/detail/EvidenceData'
 import { downloadBlob, exportFileName, svgText, svgToPng } from '@/lib/history/export'
 import {
   GEOMETRY,
@@ -36,6 +38,10 @@ import {
   type Layout,
   type PlacedEvent,
 } from '@/lib/history/swimlane'
+import { LAYOUT_METHOD, recordTarget, singleRecordOf } from '@/lib/history/recordTarget'
+import { scrollToRecord } from '@/lib/history/scrollToRecord'
+import type { EvidenceView } from '@/generated'
+import type { LayoutRecord } from '@/lib/reinforcementColors'
 import type { HistoryEvent, HistoryLayers, HistoryResponse } from '@/lib/history/types'
 
 /** the legend needs about 870 px; the lane names take 190 of them */
@@ -70,6 +76,7 @@ export default function SwimlaneGraph({
   reloadStamp: string
 }) {
   const router = useRouter()
+  const { records: pageRecords, setShowCorrected } = useEvidenceData()
   const [depth, setDepth] = useState<1 | 2>(1)
   const [history, setHistory] = useState<HistoryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -121,17 +128,20 @@ export default function SwimlaneGraph({
     return () => observer.disconnect()
   }, [ready])
 
-  const toggleGroup = useCallback(async (key: string) => {
+  /** Opens or closes a group; true when it was opened (the records are loaded and shown). */
+  const toggleGroup = useCallback(async (key: string): Promise<boolean> => {
     if (opened.has(key)) {
       setOpened((prev) => { const next = new Set(prev); next.delete(key); return next })
-      return
+      return false
     }
     setBusy(key)
     try {
       await loadFull()
       setOpened((prev) => new Set(prev).add(key))
+      return true
     } catch {
       toast.error('Could not load the records')
+      return false
     } finally {
       setBusy(null)
     }
@@ -142,20 +152,44 @@ export default function SwimlaneGraph({
     if (event.kind === 'version' && event.id) {
       router.push(`/components/${encodeURIComponent(laneId)}?snapshot=${encodeURIComponent(event.id)}`)
     } else if (event.kind === 'evidence_group') {
-      void toggleGroup(groupKey(laneId, event))
+      void (async () => {
+        const opened = await toggleGroup(groupKey(laneId, event))
+        // a group of one record looks the same once opened (the glyph only changes): go on to the record
+        const only = opened ? singleRecordOf(event) : null
+        if (only) await openRecord({ ...placed, event: only })
+      })()
     } else if (event.kind === 'evidence' && event.id) {
-      if (laneId !== identityId) {
-        router.push(`/components/${encodeURIComponent(laneId)}#record-${encodeURIComponent(event.id)}`)
-        return
+      void openRecord(placed)
+    }
+  }
+
+  // a layout opens in the viewer, any other record scrolls to its card (issue 37)
+  const openRecord = async ({ event, laneId }: PlacedEvent) => {
+    const recordId = event.id ?? ''
+    let record = laneId === identityId
+      ? (pageRecords ?? []).find((r) => String(r._id) === recordId)
+      : undefined
+    if (!record && event.method === LAYOUT_METHOD) {
+      try {
+        record = await backendJson<EvidenceView>(`/evidence/${encodeURIComponent(recordId)}`)
+      } catch {
+        // no record to draw from: the card
       }
-      const card = document.getElementById(`record-${event.id}`)
-      if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        card.classList.add('ring-2', 'ring-primary')
-        window.setTimeout(() => card.classList.remove('ring-2', 'ring-primary'), 1800)
-      } else {
-        toast.message('That record is not on this version of the page.')
-      }
+    }
+    const target = recordTarget({
+      recordId,
+      method: event.method,
+      laneId,
+      identityId,
+      record: record as unknown as LayoutRecord | undefined,
+    })
+    if (target.kind === 'viewer' || target.kind === 'other-lane') {
+      router.push(target.href)
+      return
+    }
+    if (target.openCorrected) setShowCorrected(true)
+    if (!(await scrollToRecord(target.recordId))) {
+      toast.message('That record is not on this version of the page.')
     }
   }
 
@@ -263,7 +297,7 @@ export default function SwimlaneGraph({
 
       <div ref={frame} className="relative">
       <div className="flex overflow-hidden rounded-md border border-border bg-card">
-        <ul className="w-32 shrink-0 border-r border-border text-xs sm:w-44" style={{ paddingTop: layout.headerHeight }} aria-label="Pieces">
+        <ul className="w-32 shrink-0 border-r border-border text-xs sm:w-44" style={{ paddingTop: layout.headerHeight }} aria-label="Elements">
           {layout.lanes.map(({ lane }) => (
             <li key={lane.id} className="flex flex-col justify-center border-b border-border px-2" style={{ height: GEOMETRY.rowHeight }}>
               {lane.visible && lane.role !== 'piece' ? (
@@ -276,7 +310,7 @@ export default function SwimlaneGraph({
                 </span>
               )}
               <span className="truncate text-[10px] text-muted-foreground">
-                {lane.role === 'parent' ? 'parent' : lane.role === 'child' ? 'child' : 'this piece'}
+                {lane.role === 'parent' ? 'parent' : lane.role === 'child' ? 'child' : 'this element'}
                 {lane.visible && lane.dataset ? ` - ${lane.dataset}` : ''}
               </span>
             </li>
@@ -307,7 +341,7 @@ export default function SwimlaneGraph({
       {history.more > 0 && (
         <p className="text-xs text-muted-foreground">
           <span className="rounded-full border border-border px-2 py-0.5">+{history.more} more</span>{' '}
-          {history.more === 1 ? 'piece is' : 'pieces are'} not drawn (twelve lanes at most). The JSON export lists what the lanes hold.
+          {history.more === 1 ? 'element is' : 'elements are'} not drawn (twelve lanes at most). The JSON export lists what the lanes hold.
         </p>
       )}
       {busy && busy.includes('|') && <p className="text-xs text-muted-foreground" role="status">Loading the records...</p>}

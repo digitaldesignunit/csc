@@ -190,7 +190,7 @@ test('a claim needs its property unless the document may stand alone, and a piec
   assert.deepEqual(formIssues(initialState(doc, 'id'), doc), [])
   state.pieces = []
   state.summary.quantity = 'x'
-  assert.deepEqual(formIssues(state, claim).map((i) => i.message), ['Name at least one piece.'])
+  assert.deepEqual(formIssues(state, claim).map((i) => i.message), ['Name at least one element.'])
 })
 
 test('the server problems go to the section of their path and to the field', () => {

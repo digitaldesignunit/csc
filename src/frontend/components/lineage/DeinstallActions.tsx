@@ -99,8 +99,8 @@ export function DeinstallDialog({ identity, open, onOpenChange }: {
         <DialogHeader>
           <DialogTitle>Record deinstallation</DialogTitle>
           <DialogDescription>
-            The piece is out of its works. Its reservation stays, and no new state is created;
-            record one if the piece changed. Pieces drawn from it that take over its origin follow.
+            The element is out of its works. Its reservation stays, and no new state is created;
+            record one if the element changed. Elements drawn from it that take over its origin follow.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -137,7 +137,7 @@ export function DeinstallDialog({ identity, open, onOpenChange }: {
 export async function undoDeinstall(identityId: string, refresh: () => void): Promise<void> {
   try {
     await backendJson(`/identities/${identityId}/undo-deinstall`, { method: 'POST' })
-    toast.success('Deinstallation undone: the piece is in place again')
+    toast.success('Deinstallation undone: the element is in place again')
     refresh()
   } catch (err) {
     toast.error(err instanceof Error ? err.message : 'Undo failed')

@@ -12,7 +12,7 @@ from test_near_search import PIECES, _insert
 
 OLD_KEYS = {
     'total', 'byOriginalFunction', 'byShapeClass', 'byMaterial', 'byDataset', 'byComplexity', 'byStatus',
-    'byFragment', 'reserved', 'byCirculation', 'pieces', 'descriptorsKeys', 'createdMonthly', 'bbxX',
+    'byFragment', 'reserved', 'byCirculation', 'pieces', 'descriptorsKeys', 'createdMonthly',
 }
 
 
@@ -51,40 +51,6 @@ def test_the_range_of_each_sorted_side(world):
     # a filter narrows it
     only = _stats(world, dataset='other')['sideRanges']
     assert only['count'] == 1 and only['largest'] == {'min': 1200, 'max': 1200}
-
-
-def test_the_bbx_facet_buckets_in_millimetres(world):
-    # the label of a bucket is its lower edge, in mm: 200 and 300 are small pieces, not "0 to 1 m"
-    rows = _stats(world)['bbxX']
-    assert {r['label']: r['count'] for r in rows} == {'100': 1, '250': 1, '1000': 6}
-    db = world['db']
-    db['component_snapshots'].update_one({'_id': 's08'}, {'$set': {'bbx': [12000, 600, 200]}})
-    db['component_snapshots'].update_one({'_id': 's07'}, {'$set': {'bbx': [60, 40, 30]}})
-    labels = {r['label']: r['count'] for r in _stats(world)['bbxX']}
-    assert labels == {'0': 1, '100': 1, '250': 1, '1000': 4, '>=10000': 1}
-    assert sum(labels.values()) == 8
-
-
-def test_the_bbx_facet_buckets_the_largest_side_whatever_the_stored_order(world):
-    db = world['db']
-    # 600 x 200 x 1200 is a piece of 1200: bucket "1000", not "500" (the first stored side)
-    for number, bbx in ((1, [600, 200, 1200]), (2, [200, 1200, 600]), (3, [1200, 600, 200])):
-        db['component_snapshots'].update_one({'_id': f's{number:02d}'}, {'$set': {'bbx': bbx}})
-    labels = {r['label']: r['count'] for r in _stats(world, dataset='d', q='piece 1')['bbxX']}
-    assert labels == {'1000': 1}
-    mixed = {r['label']: r['count'] for r in _stats(world)['bbxX']}
-    assert mixed == {'250': 1, '1000': 7}                          # piece 5 is 300^3, the rest 1200 and more
-
-
-def test_a_piece_without_a_size_is_in_no_bbx_bucket(world):
-    db = world['db']
-    db['component_snapshots'].update_one({'_id': 's01'}, {'$unset': {'bbx': ''}})
-    db['component_snapshots'].update_one({'_id': 's02'}, {'$set': {'bbx': [1, 2]}})
-    db['component_snapshots'].update_one({'_id': 's03'}, {'$set': {'bbx': [1, 'x', 3]}})
-    stats = _stats(world)
-    labels = {r['label']: r['count'] for r in stats['bbxX']}
-    assert labels == {'250': 1, '1000': 4}                          # 5 (300^3) and 4, 6, 7, 8; not 1, 2, 3
-    assert '>=10000' not in labels and stats['total'] == 8
 
 
 def test_a_piece_without_three_numbers_has_no_size_and_is_not_in_a_range(world):
@@ -139,10 +105,10 @@ def test_the_overview_follows_a_fit_and_a_near_search(world):
 
 def test_a_bbx_that_is_no_array_does_not_break_the_stats(world):
     """One bad document must not 500 the stats for everyone: its size counts for
-    nothing, in the sides and in the old size buckets (bbxX)."""
+    nothing, in the sides."""
     world['db']['component_snapshots'].update_one({'_id': 's04'}, {'$set': {'bbx': 'big'}})
     world['db']['component_snapshots'].update_one({'_id': 's05'}, {'$set': {'bbx': {'x': 1}}})
     stats = _stats(world)
     assert stats['total'] == 8
     assert stats['sideRanges']['count'] == 6                     # 1, 2, 3, 6, 7 and 8; not 4 and 5
-    assert 'bbxX' in stats
+    assert 'bbxX' not in stats                                    # the unused size facet is gone

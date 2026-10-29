@@ -8,6 +8,7 @@ from datetime import datetime
 # THIRD PARTY LIBRARY IMPORTS -------------------------------------------------
 from pydantic import (
     BaseModel,
+    ConfigDict,
     EmailStr,
     Field,
     RootModel,
@@ -45,11 +46,11 @@ class User(BaseModel):
     # the personal profile (8.133): copied into the actors of records
     organization: Optional[str] = None
     organization_ror: Optional[str] = None
+    organization_url: Optional[str] = None
     orcid: Optional[str] = None
     default_role: Optional[str] = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class UserPublic(BaseModel):
@@ -64,8 +65,7 @@ class UserPublic(BaseModel):
     role: Role = "user"
     email_verified: bool = False
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 BCRYPT_MAX_PASSWORD_BYTES = 72
@@ -432,7 +432,7 @@ class ComponentIdentity(BaseModel):
     )
     attributes: Optional[Dict] = Field(
         default_factory=dict,
-        description="Additional static metadata about the physical piece"
+        description="Additional static metadata about the physical element"
     )
     parent_identities: Optional[List[str]] = Field(
         None,
@@ -444,7 +444,7 @@ class ComponentIdentity(BaseModel):
     consumed_at: Optional[str] = Field(
         None,
         description=(
-            "ISO-8601 timestamp when the physical piece ceased to exist as "
+            "ISO-8601 timestamp when the physical element ceased to exist as "
             "a discrete object (split, demolished, returned). `None` = active."
         )
     )
@@ -517,9 +517,7 @@ class ComponentIdentity(BaseModel):
                 )
         return [str(item) for item in v]
 
-    class Config:
-        extra = "ignore"
-        populate_by_name = True
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
 
 class ComponentSnapshot(BaseModel):
@@ -545,7 +543,7 @@ class ComponentSnapshot(BaseModel):
         default=False,
         description=(
             "True when this snapshot represents a hypothetical / proposal "
-            "(not yet realized on the physical piece). Migrated snapshots "
+            "(not yet realized on the physical element). Migrated snapshots "
             "from legacy are `False`."
         )
     )
@@ -597,7 +595,7 @@ class ComponentSnapshot(BaseModel):
     location: Optional[ComponentLocation] = Field(
         {'lat': 0.0, 'lon': 0.0},
         description=(
-            "Geographic location of the piece at the time of this snapshot. "
+            "Geographic location of the element at the time of this snapshot. "
             "PATCH-able on the current snapshot without creating a new one."
         )
     )
@@ -722,7 +720,5 @@ class ComponentSnapshot(BaseModel):
             )
         return v
 
-    class Config:
-        extra = "ignore"
-        populate_by_name = True
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 

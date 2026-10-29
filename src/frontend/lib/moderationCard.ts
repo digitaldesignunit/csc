@@ -39,7 +39,7 @@ export function isOwnRecord(viewer: string | null | undefined, author: string | 
   return !!viewer && !!author && viewer === author
 }
 
-export type SnapshotKind = 'New piece' | 'New state' | 'Correction' | 'Cut' | 'Draw'
+export type SnapshotKind = 'New element' | 'New state' | 'Correction' | 'Cut' | 'Draw'
 
 /** What a waiting version is: a first state, a later one, a correction, or a piece cut or drawn from others. */
 export function snapshotKind(input: {
@@ -50,7 +50,7 @@ export function snapshotKind(input: {
 }): SnapshotKind {
   if (input.supersedes) return 'Correction'
   if (input.version === 0 && input.parents > 0) return input.drawn ? 'Draw' : 'Cut'
-  return input.version === 0 ? 'New piece' : 'New state'
+  return input.version === 0 ? 'New element' : 'New state'
 }
 
 export type SnapshotLike = {

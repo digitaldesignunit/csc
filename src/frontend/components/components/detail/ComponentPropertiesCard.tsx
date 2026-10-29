@@ -1,51 +1,54 @@
 'use client'
 
 /**
- * What is known about the piece (spec 4.4; decision 8.118): the folded
- * properties with the condition grade first, then the other quantities. It is
- * the top of the old Evidence card, with "Add evidence" kept visible here
- * where the gap is seen.
+ * What is known about the element (spec 4.4; decision 8.118): the folded
+ * properties with the condition grade first, then the other quantities. "Add
+ * evidence" is on the evidence records card; here an empty card only shows a
+ * quiet link to it, for a user who may add evidence (T11b).
  */
-import Link from 'next/link'
-import { FlaskConical, Plus } from 'lucide-react'
+import { FlaskConical } from 'lucide-react'
 
 import PropertiesCard from '@/components/evidence/PropertiesCard'
-import { Button } from '@/components/ui/button'
+import Help from '@/components/ui/help'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
+import { canAddEvidence } from '@/lib/componentDetail'
 import { conditionBadge } from '@/lib/evidence/format'
 import { useMe } from '@/lib/me'
+import { addEvidenceHref } from '@/lib/propertiesEmpty'
 import { conditionLabel } from '../componentDetailShared'
 import { useEvidenceData } from './EvidenceData'
+
+/** What the "?" of the heading says: the properties are not typed in (the Data Model page, rule 2 and the fold). */
+const PROPERTIES_HELP =
+  'Properties are values the catalog works out from the published evidence records of this element. '
+  + 'For each quantity the most trusted kind of source wins. They are not typed in: to change one, add evidence.'
 
 export default function ComponentPropertiesCard({ catalog }: { catalog: CatalogComponent }) {
   const { identity } = catalog
   const identityId = String(identity._id ?? '')
   const snapshot = primarySnapshot(catalog)
-  const { me, isAdmin, rolesIn } = useMe()
   const { records } = useEvidenceData()
-  const canRecord = !!me && (isAdmin || rolesIn(identity.dataset).includes('contributor'))
-    && !identity.withdrawn && !!identity.current_snapshot_id
+  const { me, isAdmin, rolesIn } = useMe()
+  const mayAdd = canAddEvidence({
+    signedIn: !!me, isAdmin, roles: identity.dataset ? rolesIn(identity.dataset) : [],
+    withdrawn: identity.withdrawn, currentSnapshotId: identity.current_snapshot_id,
+  })
   const condition = conditionBadge(snapshot.properties)
   const version = typeof snapshot.version === 'number' ? `This version (v${snapshot.version})` : 'This version'
 
   return (
     <section id="properties" aria-label="Properties" className="scroll-mt-4 rounded-lg border border-border bg-card p-3 shadow-sm">
-      <div className="mb-2 flex items-center justify-between gap-2">
+      <div className="mb-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <FlaskConical className="h-4 w-4" />Properties
+          <Help label="Properties" text={PROPERTIES_HELP} />
         </h2>
-        {canRecord && (
-          <Button asChild size="sm" className="h-7 text-xs">
-            <Link href={`/components/${encodeURIComponent(identityId)}/evidence/new`}>
-              <Plus className="mr-1 h-3.5 w-3.5" />Add evidence
-            </Link>
-          </Button>
-        )}
       </div>
       <div className="space-y-3">
         <PropertiesCard
           headless
+          addEvidenceHref={addEvidenceHref(identityId, mayAdd)}
           identityId={identityId}
           properties={identity.properties}
           versionProperties={snapshot.properties}

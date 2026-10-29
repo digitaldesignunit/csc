@@ -105,7 +105,7 @@ const matcher = new RegExp(`^${config.matcher[0]}$`)
 
 test('the proxy runs for every page path and skips build output and public files', () => {
   for (const page of ['/', '/auth/signin', '/auth/register', '/components', '/components/similarity-map',
-    '/components/3f2c0c86-6b5b-4a6a-8b7e-0d9d3a2d6e11', '/admin/users', '/privacy', '/invite',
+    '/components/3f2c0c86-6b5b-4a6a-8b7e-0d9d3a2d6e11', '/admin/users', '/privacy', '/reference', '/invite',
     '/api/backend/identities', '/api/auth/session', '/gh-interface', '/gh-interface/',
     '/gh-interface/csc_addcomponent.jpg', '/gh-interface/csc_fetchallsnapshots.png']) {
     assert.ok(matcher.test(page), page)
@@ -135,7 +135,7 @@ test('the sign-in gate covers the prefixes it always did, and public pages stay 
     assert.ok(isProtectedPath(protectedPath), protectedPath)
   }
   for (const open of ['/', '/auth/signin', '/auth/register', '/auth/forgot-password', '/invite',
-    '/privacy', '/imprint', '/credits', '/id/abc', '/settings', '/api/auth/session',
+    '/privacy', '/reference', '/imprint', '/credits', '/id/abc', '/settings', '/api/auth/session',
     '/componentsx', '/scanner']) {
     assert.ok(!isProtectedPath(open), open)
   }

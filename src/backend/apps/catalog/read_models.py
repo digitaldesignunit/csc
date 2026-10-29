@@ -93,9 +93,9 @@ class FitCanHold(BaseModel):
     """The match of a dimension search *can hold this size* (8.169)."""
     mode: Literal['can_hold']
     waste_mm3: float = Field(
-        description='box volume of the piece minus the asked volume, in mm3')
+        description='box volume of the element minus the asked volume, in mm3')
     waste_percent: float = Field(
-        description='that waste as a share of the box volume of the piece, '
+        description='that waste as a share of the box volume of the element, '
                     'in per cent')
 
 
@@ -126,12 +126,12 @@ class CatalogRow(BaseModel):
     current_snapshot_id: Optional[str] = None
     fit: Optional[Union[FitAbout, FitCanHold]] = Field(
         default=None,
-        description='how close the piece is to the asked size, while the '
+        description='how close the element is to the asked size, while the '
                     'list has a dimension search (fit_mode); absent otherwise')
     distance_m: Optional[float] = Field(
         default=None,
         description='distance in metres from the near point of the list '
-                    '(near_lat, near_lon) to the piece, on the layer asked '
+                    '(near_lat, near_lon) to the element, on the layer asked '
                     '(near_layer); absent without a near search')
     # current snapshot
     identity_id: str
@@ -154,7 +154,7 @@ class CatalogRow(BaseModel):
 
 
 class LocationPoint(BaseModel):
-    """One piece on the location map (``GET /identities/locations``): where
+    """One element on the location map (``GET /identities/locations``): where
     it is and what the map colours and labels it by."""
     id: str
     catalog_number: Optional[int] = None
@@ -175,11 +175,11 @@ class LocationMap(BaseModel):
     """The points of the location map (decisions 8.170, 8.171)."""
     layer: Literal['current', 'origin']
     total: int = Field(
-        description='the pieces this caller may see that match the filters')
+        description='the elements this caller may see that match the filters')
     displayed: int = Field(
         description='of those, the ones with a point on the layer')
     left_out: int = Field(
-        description='the pieces without a point on the layer')
+        description='the elements without a point on the layer')
     points: List[LocationPoint]
 
 
@@ -194,15 +194,15 @@ class SimilarPiece(BaseModel):
 
 
 class SimilarPieces(BaseModel):
-    """``GET /identities/{id}/similar``: the nearest pieces by descriptor."""
+    """``GET /identities/{id}/similar``: the nearest elements by descriptor."""
     query_id: str
     basis: Literal['radial_signature', 'scalars', 'hks']
     basis_label: str
     computed_at: Optional[str] = Field(
         default=None, description='when the matrix of the catalog was built')
     considered: int = Field(
-        description='how many visible pieces that pass the filters were '
-                    'ranked (the query piece not among them)')
+        description='how many visible elements that pass the filters were '
+                    'ranked (the query element not among them)')
     results: List[SimilarPiece]
 
 
@@ -304,7 +304,7 @@ class PendingSnapshotItem(BaseModel):
 
 class MySnapshotItem(BaseModel):
     """Row for ``GET /snapshots?mine=1``: one of the caller's own versions,
-    with the piece it belongs to and, for a rejected one, the reason."""
+    with the element it belongs to and, for a rejected one, the reason."""
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(alias='_id')

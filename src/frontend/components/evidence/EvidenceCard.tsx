@@ -195,7 +195,7 @@ export default function EvidenceCard({
           <div className="flex flex-wrap items-start gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <MapPin className="h-3 w-3" />
-              {record.position?.description || (record.position?.kind === 'none' ? 'whole piece' : record.position?.kind)}
+              {record.position?.description || (record.position?.kind === 'none' ? 'whole element' : record.position?.kind)}
               {point ? ` (${roundVec(point, 1).join(', ')} mm)` : ''}
             </span>
             <span>{tierLabel(record.source_tier)}</span>

@@ -400,7 +400,7 @@ def check_i18(corpus: Corpus) -> Iterable[Violation]:
                          'a batch drawn out has no split exit')
             elif server_set and not drawn_out:
                 yield _v('I18', IDENTITIES, identity,
-                         'server-set split on a batch with pieces left')
+                         'server-set split on a batch with elements left')
             elif server_set and _when(exit_['at']) != max(
                     t for _, _, t in mine):
                 yield _v('I18', IDENTITIES, identity,
@@ -514,7 +514,7 @@ def check_i32(corpus: Corpus) -> Iterable[Violation]:
             drawn = sum(q for _, q, _ in draws.get(identity['_id'], []))
             if drawn > size:
                 yield _v('I32', IDENTITIES, identity,
-                         f'{drawn} pieces drawn from a batch of {size}')
+                         f'{drawn} elements drawn from a batch of {size}')
         parents = identity.get('parent_identities') or []
         if len(parents) > 1:
             for parent_id in parents:
@@ -533,7 +533,7 @@ def check_i32(corpus: Corpus) -> Iterable[Violation]:
             for snap in live[identity_id]:
                 yield _v('I32', SNAPSHOTS, snap,
                          f'the live states of the identity record '
-                         f'{sorted(seen)} pieces; one quantity for all')
+                         f'{sorted(seen)} elements; one quantity for all')
 
 
 # REGISTRY (spec section 5) ---------------------------------------------------

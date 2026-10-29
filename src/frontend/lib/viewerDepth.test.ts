@@ -87,7 +87,7 @@ test('fading and restoring a face material leaves its offset', () => {
 test('near is a hundredth of the distance and far lies past the piece', () => {
   const { near, far } = depthRange(6, 2.3)          // a 4.6 m beam, seen from the fit distance
   assert.equal(near, 0.06)
-  assert.ok(far > 6 + 2.3, 'the far side of the piece and the grid are inside')
+  assert.ok(far > 6 + 2.3, 'the far side of the element and the grid are inside')
   assert.ok(far / near < 5000)
 })
 

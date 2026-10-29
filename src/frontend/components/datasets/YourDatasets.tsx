@@ -62,7 +62,7 @@ export default function YourDatasets() {
           <p className="text-muted-foreground">Loading...</p>
         ) : rows.length === 0 ? (
           <p className="text-muted-foreground">
-            You are not a member of a dataset yet. Start one for your own pieces, or ask a moderator to add you
+            You are not a member of a dataset yet. Start one for your own elements, or ask a moderator to add you
             to theirs.
           </p>
         ) : (

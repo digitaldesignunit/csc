@@ -19,8 +19,10 @@ import {
   SHAPE_CLASS_LABELS,
 } from '@/generated/Vocab'
 import {
+  EVIDENCE_METHOD_OPTIONS,
   activeFilters,
   filterChipLabel,
+  filterValue,
   withParams,
   withoutFilters,
   type FilterKey,
@@ -253,6 +255,20 @@ function MoreFilters({
               <option value="1">1 - Simple</option>
               <option value="2">2 - Medium</option>
               <option value="3">3 - Complex</option>
+            </select>
+          </div>
+          <div className="col-span-2 space-y-1">
+            <Label htmlFor="more-evidence-method" className="text-xs">Evidence method</Label>
+            <select
+              id="more-evidence-method"
+              className={SELECT_CLASS}
+              value={filterValue(search, 'evidence_method') ?? ''}
+              onChange={(e) => go({ evidence_method: e.target.value })}
+            >
+              <option value="">Any</option>
+              {EVIDENCE_METHOD_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
           </div>
           <div className="col-span-2 space-y-1">

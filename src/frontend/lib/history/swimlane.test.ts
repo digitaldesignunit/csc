@@ -5,7 +5,7 @@ import { applyLayers, describeEvent, expandGroups, groupKey, layoutSwimlane, lan
 import type { HistoryEvent, HistoryResponse } from '@/lib/history/types'
 
 const lane = (id: string, level: number, role: 'parent' | 'piece' | 'child', events: HistoryEvent[]) => ({
-  id, level, role, visible: true, catalog_number: level + 10, name: `piece ${id}`, events,
+  id, level, role, visible: true, catalog_number: level + 10, name: `element ${id}`, events,
 })
 
 const history = (): HistoryResponse => ({

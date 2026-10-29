@@ -45,9 +45,9 @@ export type TimelineEvent = HistoryEvent & {
 }
 
 const SECTIONS: Record<string, string> = {
-  before_cataloguing: 'Before the piece was catalogued',
+  before_cataloguing: 'Before the element was catalogued',
   history: 'In the catalog',
-  after_leaving_circulation: 'After the piece left circulation',
+  after_leaving_circulation: 'After the element left circulation',
 }
 
 function Related({ event }: { event: LineageEvent }) {

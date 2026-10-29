@@ -336,24 +336,6 @@ _STATS_FACET_TEMPLATE: Dict[str, Any] = {
                 {'$eq': ['$is_public', True]}, 0, 1]}},
         }},
     ],
-    'bbx': [
-        # the largest side (``_sides``, sorted largest first, as in the
-        # ``sides`` facet); a piece without three numbers has no size and is
-        # in no bucket, not in the default one
-        {'$match': {'_sides': {'$type': 'array'}}},
-        {
-            '$bucket': {
-                'groupBy': {'$arrayElemAt': ['$_sides', 0]},
-                # millimetres, as bbx is stored: a bucket is labelled with
-                # its lower edge, the rest is '>=10000'
-                'boundaries': [
-                    0, 100, 250, 500, 1000, 2000, 5000, 10000,
-                ],
-                'default': '>=10000',
-                'output': {'count': {'$sum': 1}},
-            }
-        },
-    ],
 }
 
 

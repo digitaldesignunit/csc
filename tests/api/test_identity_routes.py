@@ -134,7 +134,8 @@ def test_stats_vocab_materials(api, db, member_headers):
     assert 'IfcPlate' in {r['label'] for r in stats['byOriginalFunction']}
 
     vocab = api.get('/vocab').json()
-    assert {'value': 'IfcBeam', 'label': 'Beam'} in vocab['original_function']
+    beam = [e for e in vocab['original_function'] if e['value'] == 'IfcBeam']
+    assert beam and beam[0]['label'] == 'Beam' and beam[0]['description']   # 8.181 b
     materials = api.get('/materials').json()
     assert len(materials) == 32
     datasets = api.get('/identities/meta/datasets', headers=user).json()

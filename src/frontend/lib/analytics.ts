@@ -4,7 +4,7 @@
  * labels of the charts.
  */
 import { ORIGINAL_FUNCTION_LABELS, vocabLabel } from '@/generated/Vocab'
-import { FILTER_KEYS, type ParamsLike } from '@/lib/browse'
+import { FILTER_KEYS, filterValue, type ParamsLike } from '@/lib/browse'
 
 export type DistItem = { label: string; count: number }
 
@@ -23,7 +23,6 @@ export type StatsResponse = {
   reserved: DistItem[]
   descriptorsKeys: DistItem[]
   createdMonthly: DistItem[]
-  bbxX: DistItem[]
 }
 
 export const EMPTY_STATS: StatsResponse = {
@@ -40,7 +39,6 @@ export const EMPTY_STATS: StatsResponse = {
   reserved: [],
   descriptorsKeys: [],
   createdMonthly: [],
-  bbxX: [],
 }
 
 /** The stats request for the URL's filters: every circulation, so the
@@ -49,7 +47,7 @@ export const EMPTY_STATS: StatsResponse = {
 export function statsQuery(params: ParamsLike): string {
   const query = new URLSearchParams()
   for (const key of FILTER_KEYS) {
-    const value = params.get(key)
+    const value = filterValue(params, key)
     if (value) query.set(key, value)
   }
   query.set('circulation', 'all')
@@ -63,7 +61,7 @@ export function summaryLine(stats: StatsResponse): string {
   const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
   const parts = [`${plural(stats.total, 'component', 'components')} in ${plural(datasets, 'dataset', 'datasets')}`]
   if (stats.pieces != null && stats.pieces > stats.total) {
-    parts.push(plural(stats.pieces, 'piece', 'pieces'))
+    parts.push(plural(stats.pieces, 'element', 'elements'))
   }
   return parts.join(', ')
 }

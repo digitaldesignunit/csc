@@ -45,14 +45,14 @@ export function SizeStep({
             <Checkbox id="sf-size-again" checked={values.sizeEntered}
               onCheckedChange={(checked) => set({ sizeEntered: checked === true })} />
             <Label htmlFor="sf-size-again">
-              {batch ? 'This piece has a size of its own: enter it' : 'The size was wrong: enter it again'}
+              {batch ? 'This element has a size of its own: enter it' : 'The size was wrong: enter it again'}
             </Label>
           </div>
           <p className="text-xs text-muted-foreground">
             {batch
               ? keeping
-                ? "The pieces take the batch's proxy: they are identical."
-                : "An authored box for these pieces instead of the batch's proxy."
+                ? "The elements take the batch's proxy: they are identical."
+                : "An authored box for these elements instead of the batch's proxy."
               : keeping
                 ? `The geometry of this version is kept${currentSize ? ` (${currentSize.join(' x ')} mm)` : ''}.`
                 : 'Evidence positioned on this version keeps its points; the form lists it next.'}

@@ -76,7 +76,7 @@ const ComponentLocateById: React.FC<Props> = ({ presetReferenceID }) => {
       ? 'border-destructive'
       : 'border-border'
   const message = !referenceID
-    ? 'Scan or paste the id of the piece you look for.'
+    ? 'Scan or paste the id of the element you look for.'
     : 'Tap to start the camera and scan tags until one matches.'
 
   return (
@@ -102,12 +102,12 @@ const ComponentLocateById: React.FC<Props> = ({ presetReferenceID }) => {
 
       {matched && (
         <p className="text-sm font-medium text-green-700 dark:text-green-300" role="status">
-          This is the piece you look for.
+          This is the element you look for.
         </p>
       )}
       {status === 'bad' && (
         <p className="text-sm text-destructive" role="status">
-          This is not the piece you look for.
+          This is not the element you look for.
         </p>
       )}
 

@@ -54,7 +54,7 @@ export default function ComponentPhotosLocationCard({ catalog }: { catalog: Cata
         )}
         {nearLink && (
           <Link href={nearLink} className="text-primary underline underline-offset-2">
-            Near this piece
+            Near this element
           </Link>
         )}
       </p>

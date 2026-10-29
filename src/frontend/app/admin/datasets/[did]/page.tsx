@@ -202,7 +202,7 @@ function DatasetSettings({ dataset, isAdmin, onSaved }: {
               <p className="text-xs text-muted-foreground">
                 {waiting
                   ? REVIEW_EXPLANATION
-                  : 'An administrator has looked at this dataset: it may be visible to all signed-in users and its pieces may be made public.'}
+                  : 'An administrator has looked at this dataset: it may be visible to all signed-in users and its elements may be made public.'}
               </p>
             </div>
             <Switch id="ds-reviewed" checked={!waiting} disabled={reviewBusy}
@@ -223,7 +223,7 @@ function DatasetSettings({ dataset, isAdmin, onSaved }: {
           <Select value={visibility} onValueChange={(v) => setVisibility(v as DatasetView['visibility'])}>
             <SelectTrigger className="w-full sm:w-80"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="members">Members only (and pieces marked public)</SelectItem>
+              <SelectItem value="members">Members only (and elements marked public)</SelectItem>
               <SelectItem value="catalog" disabled={waiting && dataset.visibility !== 'catalog'}>
                 All signed-in users
               </SelectItem>
@@ -270,7 +270,7 @@ function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
       const result = await backendJson<{ changed: number; skipped?: number }>(path, {
         method: 'POST', body: { is_public: isPublic },
       })
-      toast.success(`${result.changed} piece${result.changed === 1 ? '' : 's'} now ${isPublic ? 'public' : 'private'}`
+      toast.success(`${result.changed} element${result.changed === 1 ? '' : 's'} now ${isPublic ? 'public' : 'private'}`
         + (result.skipped ? `; ${result.skipped} changed meanwhile and were left as they were` : ''))
       await count()
     } catch (err) {
@@ -284,10 +284,10 @@ function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Public pieces</CardTitle>
+        <CardTitle>Public elements</CardTitle>
         <CardDescription>
-          Sets the public flag of every published piece of this dataset at once. Unpublished and withdrawn
-          pieces, and other datasets, stay as they are. Every piece keeps its own flag: children do not follow
+          Sets the public flag of every published element of this dataset at once. Unpublished and withdrawn
+          elements, and other datasets, stay as they are. Every element keeps its own flag: children do not follow
           their parents.
         </CardDescription>
       </CardHeader>
@@ -312,8 +312,8 @@ function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
         <PublicConfirmDialog
           open={confirm}
           onOpenChange={(open) => { if (!busy) setConfirm(open) }}
-          title={`Make ${counts.toPublic ?? 'all'} published pieces public?`}
-          subject={`${counts.toPublic ?? 'All'} published piece${counts.toPublic === 1 ? '' : 's'} of ${dataset.name} become public.`}
+          title={`Make ${counts.toPublic ?? 'all'} published elements public?`}
+          subject={`${counts.toPublic ?? 'All'} published element${counts.toPublic === 1 ? '' : 's'} of ${dataset.name} become public.`}
           confirmLabel="Make public"
           onConfirm={() => void apply(true)}
         />
@@ -360,7 +360,7 @@ function DeleteDatasetCard({ dataset }: { dataset: DatasetView }) {
       <CardHeader>
         <CardTitle>Delete this dataset</CardTitle>
         <CardDescription>
-          Only possible while the dataset holds no piece: move its pieces to another dataset first. Open
+          Only possible while the dataset holds no element: move its elements to another dataset first. Open
           invitations are revoked with it.
         </CardDescription>
       </CardHeader>
