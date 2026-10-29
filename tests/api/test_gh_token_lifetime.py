@@ -65,10 +65,16 @@ def test_a_malformed_header_lives_thirty_minutes(api, account, header):
     assert lifetime(sign_in(api, account, header)) == 30 * 60
 
 
-def test_the_setting_is_respected(api, account, monkeypatch):
-    monkeypatch.setattr(api.app.state, 'gh_token_minutes', 2 * 60)
-    assert lifetime(sign_in(api, account, GH)) == 2 * 3600
-    assert lifetime(sign_in(api, account, 'web/0.6.2.1')) == 30 * 60
+def test_the_setting_is_respected(api, account):
+    # not monkeypatch.setattr: since pytest 9.2 its undo deletes an attribute
+    # that is not in the instance __dict__, and State keeps its own
+    kept = api.app.state.gh_token_minutes
+    api.app.state.gh_token_minutes = 2 * 60
+    try:
+        assert lifetime(sign_in(api, account, GH)) == 2 * 3600
+        assert lifetime(sign_in(api, account, 'web/0.6.2.1')) == 30 * 60
+    finally:
+        api.app.state.gh_token_minutes = kept
 
 
 def test_the_long_token_is_a_working_token(api, account):
