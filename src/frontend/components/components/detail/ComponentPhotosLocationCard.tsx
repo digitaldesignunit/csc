@@ -12,18 +12,30 @@ import { Camera, MapPin } from 'lucide-react'
 import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot } from '@/generated/catalogExtras'
 import type { GeoLocation } from '@/generated/CatalogSharedTypes'
+import { useMe } from '@/lib/me'
 import { nearThisPieceLink } from '@/lib/near'
+import { photoRights } from '@/lib/photoRights'
 import { formatLocation, formatLocationMapsLink } from '@/lib/utils'
 import ComponentSnapshotPhotoGallery from '../ComponentSnapshotPhotoGallery'
 
 export default function ComponentPhotosLocationCard({ catalog }: { catalog: CatalogComponent }) {
   const { identity } = catalog
+  const { me, isAdmin, rolesIn } = useMe()
   const snapshot = primarySnapshot(catalog)
   const snapshotId = String(snapshot._id ?? identity.current_snapshot_id ?? '')
   const location = (snapshot.location as GeoLocation | null | undefined) ?? null
   const located = !!location && location.lat != null && location.lon != null
   // pieces near this one: from its place now, else from its origin (8.170)
   const nearLink = nearThisPieceLink(location, identity.origin?.place?.location)
+  // the backend rule for a photo of this version, mirrored (8.184)
+  const rights = photoRights({
+    signedIn: !!me,
+    userId: me?._id,
+    isAdmin,
+    roles: identity.dataset ? rolesIn(identity.dataset) : [],
+    status: snapshot.status,
+    addedByUserId: snapshot.added_by_user_id,
+  })
 
   return (
     <section aria-label="Photos and location" className="rounded-lg border border-border bg-card p-3 shadow-sm">
@@ -36,7 +48,8 @@ export default function ComponentPhotosLocationCard({ catalog }: { catalog: Cata
         photoCount={snapshot.photo_count}
         compact
         embedded
-        allowUpload={snapshot.status !== 'published'}
+        canAdd={rights.add}
+        canRemove={rights.remove}
         credit={snapshot.photo_credit}
       />
       <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border/60 pt-2 text-xs">

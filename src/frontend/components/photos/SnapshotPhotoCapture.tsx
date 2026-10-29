@@ -49,6 +49,13 @@ type SnapshotPhotoCaptureLiveProps = {
   mode: 'live'
   snapshotId: string
   indices: number[]
+  /** The viewer may add photos (`photoRights`, 8.184): without it "Take photo",
+   *  "Add from gallery" and the hint line are not rendered. */
+  canAdd: boolean
+  /** The viewer may remove photos: without it the delete control of a tile is not rendered. */
+  canRemove: boolean
+  /** The photo credit of the version (8.128 a), shown in the lightbox. */
+  credit?: unknown
   onChange: (result?: SnapshotPhotoMutationResult) => void | Promise<void>
   maxPhotos?: number
   disabled?: boolean
@@ -77,6 +84,8 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
   const disabled = (props.disabled ?? false) || (props.mode === 'live' && readOnly)
   const compact = props.mode === 'live' ? (props.compact ?? false) : false
   const dense = props.mode === 'live' ? (props.dense ?? false) : false
+  const showAdd = props.mode === 'staged' || props.canAdd
+  const showRemove = props.mode === 'staged' || props.canRemove
   const rowHeight = dense ? 'h-24' : 'h-[200px] lg:h-[140px]'
 
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -271,61 +280,65 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
 
   return (
     <div className={compact ? 'space-y-2' : 'space-y-3'}>
-      <div className="flex flex-wrap gap-1.5">
-        <Button
-          type="button"
-          variant="default"
-          size="sm"
-          className={compact ? 'h-7 text-xs' : undefined}
-          disabled={disabled || busy || atLimit}
-          onClick={() => cameraInputRef.current?.click()}
-        >
-          {busy ? (
-            <Loader2 className={`mr-2 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} animate-spin`} />
-          ) : (
-            <Camera className={`mr-2 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+      {showAdd && (
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className={compact ? 'h-7 text-xs' : undefined}
+              disabled={disabled || busy || atLimit}
+              onClick={() => cameraInputRef.current?.click()}
+            >
+              {busy ? (
+                <Loader2 className={`mr-2 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} animate-spin`} />
+              ) : (
+                <Camera className={`mr-2 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+              )}
+              Take photo
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={compact ? 'h-7 text-xs' : undefined}
+              disabled={disabled || busy || atLimit}
+              onClick={() => galleryInputRef.current?.click()}
+            >
+              <ImagePlus className={`mr-2 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+              Add from gallery
+            </Button>
+          </div>
+
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            className="sr-only"
+            onChange={onCameraChange}
+            disabled={disabled || busy || atLimit}
+            aria-hidden
+          />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            className="sr-only"
+            onChange={onGalleryChange}
+            disabled={disabled || busy || atLimit}
+            aria-hidden
+          />
+
+          {!compact && (
+            <p className="text-xs text-muted-foreground">
+              On mobile, &quot;Take photo&quot; opens the camera. Up to {maxPhotos} images (JPEG, PNG, or
+              WebP).
+            </p>
           )}
-          Take photo
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={compact ? 'h-7 text-xs' : undefined}
-          disabled={disabled || busy || atLimit}
-          onClick={() => galleryInputRef.current?.click()}
-        >
-          <ImagePlus className={`mr-2 ${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
-          Add from gallery
-        </Button>
-      </div>
-
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        capture="environment"
-        className="sr-only"
-        onChange={onCameraChange}
-        disabled={disabled || busy || atLimit}
-        aria-hidden
-      />
-      <input
-        ref={galleryInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        multiple
-        className="sr-only"
-        onChange={onGalleryChange}
-        disabled={disabled || busy || atLimit}
-        aria-hidden
-      />
-
-      {!compact && (
-        <p className="text-xs text-muted-foreground">
-          On mobile, &quot;Take photo&quot; opens the camera. Up to {maxPhotos} images (JPEG, PNG, or
-          WebP).
-        </p>
+        </>
       )}
 
       {error && (
@@ -403,17 +416,19 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
                       <ZoomIn className="h-6 w-6 text-white drop-shadow" />
                     </span>
                   </button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    className="absolute right-1 top-1 h-7 w-7 opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100"
-                    disabled={disabled || busy}
-                    onClick={() => setPendingDeleteIndex(index)}
-                    aria-label={`Delete photo ${index + 1}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {showRemove && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute right-1 top-1 h-7 w-7 opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100"
+                      disabled={disabled || busy}
+                      onClick={() => setPendingDeleteIndex(index)}
+                      aria-label={`Delete photo ${index + 1}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               ))}
         </div>
@@ -463,6 +478,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
         index={lightboxPosition}
         onIndexChange={setLightboxPosition}
         title="Photo preview"
+        credit={props.mode === 'live' ? props.credit : undefined}
       />
     </div>
   )

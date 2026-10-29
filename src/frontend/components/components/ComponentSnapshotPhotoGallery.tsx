@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useSession } from 'next-auth/react'
 import { Camera, Loader2, ZoomIn } from 'lucide-react'
 
 import SnapshotPhotoCapture from '@/components/photos/SnapshotPhotoCapture'
@@ -26,9 +25,11 @@ type ComponentSnapshotPhotoGalleryProps = {
   /** Without a card of its own: the photos and the lightbox only (the merged
    *  "Photos and location" card, 8.118). */
   embedded?: boolean
-  /** Photos can be added only to a version that is not published yet (6.6):
-   *  without this the camera and gallery buttons are not shown, admins too. */
-  allowUpload?: boolean
+  /** What the viewer may do with the photos of this version (`photoRights`, 8.184):
+   *  add (camera and gallery buttons), remove (delete control on each tile).
+   *  With neither the gallery is plain. */
+  canAdd?: boolean
+  canRemove?: boolean
   /** The photo credit of the version (8.128 a): a line under the photos and a caption in the lightbox. */
   credit?: unknown
 }
@@ -38,13 +39,12 @@ export default function ComponentSnapshotPhotoGallery({
   photoCount: photoCountRaw,
   compact = false,
   embedded = false,
-  allowUpload = true,
+  canAdd = false,
+  canRemove = false,
   credit,
 }: ComponentSnapshotPhotoGalleryProps) {
   const photoCountFromProps = parseSnapshotPhotoCount(photoCountRaw)
   const router = useRouter()
-  const { data: session } = useSession()
-  const isAdmin = session?.user?.role === 'admin'
 
   const [knownPhotoCount, setKnownPhotoCount] = useState<number | null>(photoCountFromProps)
   const [indices, setIndices] = useState<number[]>([])
@@ -141,11 +141,14 @@ export default function ComponentSnapshotPhotoGallery({
         >
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
-      ) : isAdmin && allowUpload ? (
+      ) : canAdd || canRemove ? (
         <SnapshotPhotoCapture
           mode="live"
           snapshotId={snapshotId}
           indices={indices}
+          canAdd={canAdd}
+          canRemove={canRemove}
+          credit={credit}
           onChange={async (result?: SnapshotPhotoMutationResult) => {
             await refreshPhotos({
               afterMutation: true,
