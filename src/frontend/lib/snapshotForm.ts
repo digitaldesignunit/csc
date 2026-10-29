@@ -11,7 +11,7 @@ export type FormMode = 'new' | 'cut' | 'state' | 'correct'
 
 export const MODE_TITLES: Record<FormMode, string> = {
   new: 'New component',
-  cut: 'Cut from pieces',
+  cut: 'Cut from elements',
   state: 'Record new state',
   correct: 'Correct this version',
 }
@@ -267,8 +267,8 @@ export function problemsOf(input: CheckInput): Problem[] {
     out.push({
       field: 'quantity',
       message: input.draw.remaining > 0
-        ? `Only ${input.draw.remaining} ${input.draw.remaining === 1 ? 'piece remains' : 'pieces remain'} in the batch.`
-        : 'No pieces remain in the batch.',
+        ? `Only ${input.draw.remaining} ${input.draw.remaining === 1 ? 'element remains' : 'elements remain'} in the batch.`
+        : 'No elements remain in the batch.',
     })
   }
   if (parseLocation(fields.lat, fields.lon) === undefined) {

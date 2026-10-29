@@ -221,7 +221,7 @@ async def list_attachments(
     evidence_id: str,
 ):
     """The list as the viewer may see it. Anonymous readers of a public
-    piece get media type, size, checksum and date --- no names, no
+    element get media type, size, checksum and date --- no names, no
     uploaders --- and "sign in to download" (8.13)."""
     loaded = await load_evidence(request, current_user, evidence_id,
                                  allow_tombstone=True)

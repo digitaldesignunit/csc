@@ -55,9 +55,9 @@ import { cn } from '@/lib/utils'
 import LocationMapCanvas from './LocationMapCanvas'
 
 const MAP_HELP =
-  'Every piece you may see, as a point on the map. Current is where a piece is now; Origin is the building it '
-  + 'comes from, known for fewer pieces. Pieces at one place are grouped: click a group to zoom in. Click a '
-  + 'piece to preview it, or an empty spot to search near it. The filters are those of Browse.'
+  'Every element you may see, as a point on the map. Current is where an element is now; Origin is the building it '
+  + 'comes from, known for fewer elements. Elements at one place are grouped: click a group to zoom in. Click a '
+  + 'element to preview it, or an empty spot to search near it. The filters are those of Browse.'
 
 /** The map and its preview: a click on a piece opens the shared preview panel. */
 function MapWithPreview(props: Omit<React.ComponentProps<typeof LocationMapCanvas>, 'onPick'>) {

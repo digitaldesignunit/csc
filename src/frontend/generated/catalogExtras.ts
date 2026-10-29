@@ -22,7 +22,7 @@ export type ProvenanceIdentityNode = {
   catalog_number?: number | null
   name?: string | null
   original_function?: string | null
-  /** `exit.kind` when the piece left circulation, else null */
+  /** `exit.kind` when the element left circulation, else null */
   exit_kind?: string | null
   is_root: boolean
 }

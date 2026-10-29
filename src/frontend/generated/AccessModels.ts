@@ -1,5 +1,5 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-13T09:20:27.071Z
+// Generated on: 2026-10-28T15:20:51.541Z
 // Source: http://127.0.0.1:8791/schema/access
 
 export interface AdminUserRow {
@@ -32,7 +32,7 @@ export interface DatasetView {
   reviewed?: boolean;
   members?: DatasetMemberView[] | null;
   member_count?: number | null; // list rows only: how many people are members; moderator(D) and admin only, else absent
-  component_count?: number | null; // list rows only: published pieces the caller may see
+  component_count?: number | null; // list rows only: published elements the caller may see
 }
 
 export interface InvitationAccepted {
@@ -80,6 +80,7 @@ export interface Me {
   moderated_datasets: string[];
   organization?: string | null;
   organization_ror?: string | null;
+  organization_url?: string | null;
   orcid?: string | null;
   default_role?: 'operator' | 'supervisor' | 'laboratory' | 'client' | 'witness';
 }

@@ -11,13 +11,13 @@ export type MethodGroupId = 'strength' | 'ndt' | 'inspection' | 'reinforcement' 
 
 export const METHOD_GROUPS: { id: MethodGroupId; title: string; hint: string; methods: string[] }[] = [
   { id: 'strength', title: 'Strength', hint: 'Samples tested in a laboratory', methods: ['core_compression'] },
-  { id: 'ndt', title: 'Non-destructive', hint: 'Measured on the piece, nothing damaged', methods: ['rebound_hammer'] },
-  { id: 'inspection', title: 'Inspection', hint: 'What is seen on the piece', methods: ['visual_inspection'] },
+  { id: 'ndt', title: 'Non-destructive', hint: 'Measured on the element, nothing damaged', methods: ['rebound_hammer'] },
+  { id: 'inspection', title: 'Inspection', hint: 'What is seen on the element', methods: ['visual_inspection'] },
   { id: 'reinforcement', title: 'Reinforcement', hint: 'Where the bars lie', methods: ['reinforcement_layout'] },
   {
     id: 'documents',
     title: 'Documents and claims',
-    hint: 'What a source says about the piece',
+    hint: 'What a source says about the element',
     methods: ['archival_document', 'manufacturer_datasheet', 'era_heuristic'],
   },
 ]

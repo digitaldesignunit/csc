@@ -270,7 +270,7 @@ export default function ProvenanceEditDialog({ identity, open, onOpenChange }: P
           <DialogDescription>
             {hasParents
               ? "Ticked units follow the parents and change with them. Untick one to make it this component's own."
-              : 'Pieces cut from this component take these values over until they state their own.'}
+              : 'Elements cut from this component take these values over until they state their own.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -377,7 +377,7 @@ export default function ProvenanceEditDialog({ identity, open, onOpenChange }: P
           <section className="space-y-2 rounded-lg border border-border p-3">
             <h3 className="text-sm font-semibold">Connection features</h3>
             <p className="text-xs text-muted-foreground">
-              Anchors, dowels, plates or holes on this piece. Its own: never taken over by pieces cut from it.
+              Anchors, dowels, plates or holes on this element. Its own: never taken over by elements cut from it.
             </p>
             <Textarea aria-label="Connection features" rows={2} value={draft.connection_features}
               onChange={(event) => set({ connection_features: event.target.value })} />

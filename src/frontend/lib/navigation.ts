@@ -16,6 +16,7 @@ import {
   LogIn,
   MapPinned,
   Mail,
+  Network,
   PackagePlus,
   ScanQrCode,
   ScrollText,
@@ -66,7 +67,7 @@ const anyone = () => true
 /**
  * The entries of the sidebar (decision 8.118 S3): every entry is a page, none
  * a filter or a mode. An anonymous visitor sees Browse, Similarity Map, Location Map, Analytics (the
- * public tier), Grasshopper, API docs and Sign in.
+ * public tier), Grasshopper, Data Model, API docs and Sign in.
  */
 export const NAV_ENTRIES: NavEntry[] = [
   { id: 'browse', label: 'Browse', href: '/components', icon: LayoutGrid, group: 'catalog', visible: anyone },
@@ -101,6 +102,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   { id: 'access-tokens', label: 'Access tokens', href: '/admin/access-tokens', icon: KeyRound, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'logs', label: 'Backend logs', href: '/admin/logs', icon: ScrollText, group: 'admin', visible: (v) => v.isAdmin },
   { id: 'gh', label: 'Grasshopper', href: '/gh-interface', icon: Workflow, group: 'tools', visible: anyone },
+  { id: 'reference', label: 'Data Model', href: '/reference', icon: Network, group: 'tools', visible: anyone },
   {
     id: 'api-docs',
     label: 'API docs',

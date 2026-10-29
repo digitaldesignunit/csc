@@ -38,6 +38,7 @@ import {
   barLegend,
   defaultColourMode,
   diameterRange,
+  scaleBars,
   layoutsWithPicked,
   type LayoutRecord,
   type PickedProblem,
@@ -801,7 +802,8 @@ const ReinforcementBars = React.memo(({
   /** The layout opened by the link: the others are drawn faint (8.178). */
   picked: number | null
 }) => {
-  const range = useMemo(() => diameterRange(bars), [bars])
+  // the scale spans the bars of the opened layout; the faint bars are not part of it (8.178)
+  const range = useMemo(() => diameterRange(scaleBars(bars, picked)), [bars, picked])
   if (!visible || bars.length === 0) return null
   return (
     <group scale={[scale, scale, scale]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -1161,7 +1163,7 @@ function LayoutEntry({ label, status, onClear }: { label: string; status?: strin
 const LAYOUT_NOTES: Record<PickedProblem | 'hidden' | 'failed', string> = {
   hidden: 'This layout is not visible to you.',
   failed: 'This layout could not be loaded.',
-  other_version: 'This layout belongs to another version of the piece and is not drawn here.',
+  other_version: 'This layout belongs to another version of the element and is not drawn here.',
   no_bars: 'This layout has no bars to draw.',
 }
 
@@ -1385,7 +1387,7 @@ export default function ComponentViewer({
   }, [identityId, snapshotIdForOverlays, layoutId])
   const hasReinforcement = reinforcementBars.length > 0
   const legend = hasReinforcement && showReinforcement
-    ? barLegend(barColourMode, barLayouts, reinforcementBars)
+    ? barLegend(barColourMode, barLayouts, reinforcementBars, pickedLayout)
     : null
   const pickedItem = pickedLayout !== null && showReinforcement ? barLayouts[pickedLayout] : null
 
@@ -2119,7 +2121,7 @@ export default function ComponentViewer({
                   {legend.kind === 'layout' ? (
                     <ul className="space-y-0.5">
                       {legend.items.map((item) => (
-                        <li key={`${item.label}-${item.colour}`}
+                        <li key={item.id}
                           className={`flex items-center gap-1.5${item.picked ? ' font-medium' : ''}`}>
                           <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.colour }} aria-hidden />
                           <span className="truncate">{item.label}</span>

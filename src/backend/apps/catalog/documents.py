@@ -240,7 +240,7 @@ class Place(_Block):
 
 
 class ConstructionWork(_Block):
-    """The works a piece left or went into --- never the company."""
+    """The works an element left or went into --- never the company."""
     name: str
     identifier: Optional[str] = None
     year_built: Optional[int] = None
@@ -257,10 +257,10 @@ class CircularityClass(_Block):
 
 
 class Origin(_Block):
-    """How the piece entered circulation (section 3.1.1)."""
+    """How the element entered circulation (section 3.1.1)."""
     kind: OriginKind
     planned: bool = Field(
-        False, description='true while the piece is in place: identified in '
+        False, description='true while the element is in place: identified in '
                            'its works, not yet deinstalled (decision 8.104)')
     at: Optional[Timestamp] = None
     at_precision: Precision = 'unknown'
@@ -290,7 +290,7 @@ class Origin(_Block):
 
 
 class Exit(_Block):
-    """How the piece left circulation (section 3.1.3)."""
+    """How the element left circulation (section 3.1.3)."""
     kind: ExitKind
     at: Timestamp
     at_precision: Precision = 'exact'
@@ -396,14 +396,14 @@ class ComponentIdentity(_Document):
                 'inherited_from must be one of parent_identities (I17)')
         if self.reserved and self.exit is not None:
             raise ValueError(
-                'a piece out of circulation cannot be reserved (I18)')
+                'an element out of circulation cannot be reserved (I18)')
         if (self.origin is not None and self.origin.planned
                 and self.exit is not None
                 and self.exit.recorded_by_user_id is not None
                 and self.exit.kind not in IN_PLACE_EXIT_KINDS):
             raise ValueError(
                 'an exit set by hand from in place is recycled, disposed or '
-                'lost: the piece never left its works (I31)')
+                'lost: the element never left its works (I31)')
         if self.withdrawn and self.withdrawn.duplicate_of == self.id:
             raise ValueError(
                 'an identity cannot be a duplicate of itself (I19)')
@@ -750,7 +750,7 @@ class Standard(_Block):
 
 
 class Position(_Block):
-    """Where on the piece (3.3.2); kind none + description always works."""
+    """Where on the element (3.3.2); kind none + description always works."""
     kind: PositionKind = 'none'
     snapshot_id: Optional[str] = None
     point: Optional[Vec3] = None

@@ -217,7 +217,7 @@ export default function RecordsEditor(props: Props) {
             id={id}
             value={value}
             onChange={(next) => setParent({ ...parent, paired_rebound_id: next })}
-            placeholder={options.length ? 'Not paired' : 'No rebound record of this piece fits'}
+            placeholder={options.length ? 'Not paired' : 'No rebound record of this element fits'}
             options={options}
           />
         </Field>

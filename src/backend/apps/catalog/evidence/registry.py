@@ -220,7 +220,7 @@ def prepare_record(data: Dict[str, Any], *,
         position = dict(WHOLE_COMPONENT)
     if position is None:
         problems.append(Problem(
-            'position', 'say where on the piece: kind none with a '
+            'position', 'say where on the element: kind none with a '
                         'description is always enough'))
     else:
         position = dict(position)

@@ -18,7 +18,7 @@ test('one line says components, datasets and, for batches, pieces', () => {
   const base = { ...EMPTY_STATS, total: 655, byDataset: [{ label: 'a', count: 600 }, { label: 'b', count: 55 }] }
   assert.equal(summaryLine(base), '655 components in 2 datasets')
   assert.equal(summaryLine({ ...base, pieces: 655 }), '655 components in 2 datasets')
-  assert.equal(summaryLine({ ...base, pieces: 1011 }), '655 components in 2 datasets, 1,011 pieces')
+  assert.equal(summaryLine({ ...base, pieces: 1011 }), '655 components in 2 datasets, 1,011 elements')
   assert.equal(summaryLine({ ...EMPTY_STATS, total: 1, pieces: 1, byDataset: [{ label: 'a', count: 1 }] }), '1 component in 1 dataset')
   assert.equal(summaryLine({ ...base, byDataset: [{ label: 'a', count: 5 }, { label: 'others', count: 7 }] }), '655 components in 1 dataset')
 })
@@ -50,4 +50,9 @@ test('the top values stay, the rest become others', () => {
   assert.deepEqual(topN(rows, 3), [...rows.slice(0, 3), { label: 'others', count: 7 + 6 }])
   assert.deepEqual(topN([...rows.slice(0, 2), { label: 'others', count: 4 }], 5), [...rows.slice(0, 2), { label: 'others', count: 4 }])
   assert.deepEqual(topN(undefined), [])
+})
+
+test('the stats query carries a known evidence method and leaves out an unknown one', () => {
+  assert.equal(new URLSearchParams(statsQuery(new URLSearchParams('evidence_method=reinforcement_layout'))).get('evidence_method'), 'reinforcement_layout')
+  assert.equal(new URLSearchParams(statsQuery(new URLSearchParams('evidence_method=bogus'))).has('evidence_method'), false)
 })

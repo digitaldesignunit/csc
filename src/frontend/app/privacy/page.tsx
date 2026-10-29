@@ -3,11 +3,10 @@ import { Shield } from 'lucide-react'
 
 import BackgroundMesh from '@/components/components/BackgroundMesh'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { LINK } from '@/lib/legalPage'
 import { CONTACT_EMAIL, LAST_UPDATED, ROWS } from '@/lib/privacyText'
 
 export const metadata = { title: 'Privacy' }
-
-const LINK = 'font-medium text-primary underline underline-offset-2 hover:opacity-80'
 
 export default function PrivacyPage() {
   return (

@@ -3,14 +3,15 @@
 /**
  * Who performed the work (`performed_by`, spec 3.3.1): the signed-in recorder
  * in one tap ("Add me"), laboratories and other people by typing. "Add me"
- * copies the profile (name, organisation, ROR, ORCID; decision 8.133 d) into
- * the actor, so the record states where they worked then; the role is the
- * profile's default role. The actor fields and their "?" texts are the
+ * copies the profile (name, organisation, ROR, website, ORCID; decision 8.133 d)
+ * into the actor, so the record states where they worked then; the role is the
+ * profile's default role. "Add my organisation" adds the organisation of the
+ * profile as a performer of its own. The actor fields and their "?" texts are the
  * backend's.
  */
 import { useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, Plus, Trash2, UserCheck } from 'lucide-react'
+import { Building2, ChevronDown, Plus, Trash2, UserCheck } from 'lucide-react'
 
 import SchemaFields from '@/components/evidence/SchemaFields'
 import { Button } from '@/components/ui/button'
@@ -18,7 +19,7 @@ import type { Me } from '@/generated/AccessModels'
 import type { JsonSchema } from '@/lib/evidence/api'
 import type { MethodLayout } from '@/lib/evidence/layout'
 import { emptyObject, resolve, type FormObject, type FormValue } from '@/lib/evidence/schema'
-import { actorFromProfile } from '@/lib/profile'
+import { actorFromProfile, hasOrganization, isMyOrganization, organizationFromProfile } from '@/lib/profile'
 import { cn } from '@/lib/utils'
 
 const NO_LAYOUT: MethodLayout = {
@@ -34,6 +35,14 @@ export function isMe(actor: FormObject, me: Me | null): boolean {
 export function meActor(me: Me, root: JsonSchema): FormObject {
   const actorSchema = resolve({ $ref: '#/$defs/Actor' }, root).schema
   const copy = actorFromProfile(me) as Record<string, FormValue>
+  return { ...emptyObject(actorSchema, root), ...copy }
+}
+
+/** The actor "Add my organisation" makes: the organisation of the profile in the form's own shape. */
+export function organizationActor(me: Me, root: JsonSchema): FormObject | null {
+  const copy = organizationFromProfile(me) as Record<string, FormValue> | null
+  if (!copy) return null
+  const actorSchema = resolve({ $ref: '#/$defs/Actor' }, root).schema
   return { ...emptyObject(actorSchema, root), ...copy }
 }
 
@@ -66,6 +75,11 @@ export default function ActorsField({
   const addMe = () => {
     if (!me) return
     onChange([...actors, meActor(me, root)])
+  }
+  const orgListed = actors.some((a) => isMyOrganization(a, me))
+  const addOrganization = () => {
+    const actor = me ? organizationActor(me, root) : null
+    if (actor) onChange([...actors, actor])
   }
   const addOther = () => {
     onChange([...actors, { ...emptyObject(actorSchema, root), kind: 'organization' }])
@@ -125,6 +139,11 @@ export default function ActorsField({
         {me && !meListed && (
           <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addMe}>
             <UserCheck className="mr-1 h-3.5 w-3.5" />Add me (I performed this)
+          </Button>
+        )}
+        {hasOrganization(me) && !orgListed && (
+          <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addOrganization}>
+            <Building2 className="mr-1 h-3.5 w-3.5" />Add my organisation
           </Button>
         )}
         <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addOther}>

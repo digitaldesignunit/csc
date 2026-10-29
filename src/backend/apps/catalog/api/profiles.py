@@ -2,8 +2,8 @@
 """
 The profile of an account in the records it takes part in (decision 8.133 e):
 when an evidence record or an origin is written, an actor of kind ``user``
-gets the empty ``name`` / ``organization`` / ``organization_ror`` / ``orcid``
-from that account's profile. A copy at write time: typed values win, and a
+gets the empty ``name`` / ``organization`` / ``organization_ror`` / ``url`` /
+``orcid`` from that account's profile. A copy at write time: typed values win, and a
 later change of the profile never rewrites a record.
 """
 
@@ -17,7 +17,7 @@ from fastapi import Request
 from apps.catalog.profile import fill_actor
 
 PROFILE_FIELDS = {'_id': 1, 'full_name': 1, 'organization': 1,
-                  'organization_ror': 1, 'orcid': 1}
+                  'organization_ror': 1, 'organization_url': 1, 'orcid': 1}
 
 
 async def profiles_of(request: Request, user_ids: Iterable[str]

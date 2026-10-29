@@ -29,8 +29,8 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.6.4.1 --- backend, web frontend and Grasshopper interface are released together
-  under one version (tag `v0.6.4.1`); the single source is the `VERSION` file.
+- **CSC**: 0.6.4.2 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.6.4.2`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
 
@@ -530,7 +530,7 @@ and a JWT does not work in place of it.
 ## Using CSC from Claude
 
 Claude can read the catalog as you: ask it to find components, show one with its
-versions and measurements, compare, or look at what happened to a piece. It
+versions and measurements, compare, or look at what happened to an element. It
 only reads, and it sees what you see on the website; nothing it can reach is
 private to anybody else. Administrators can connect it for now (the roles are
 `CSC_PAT_ROLES`).
@@ -548,16 +548,16 @@ sent back to) before you press Allow, and press Deny when it is not the tool you
 just connected.
 
 **What it can do.** Ten read-only tools: `search_components` (the filters of
-Browse and `has_evidence`, which keeps only pieces with a published, current
+Browse and `has_evidence`, which keeps only elements with a published, current
 record of one evidence method, for example `reinforcement_layout` for "with
-reinforcement", a page at a time), `catalog_overview` (how many pieces, counted
+reinforcement", a page at a time), `catalog_overview` (how many elements, counted
 by material, original function, dataset, shape class and circulation, the range
 of each sorted side in millimetres, and how many have a location; it takes the
 same filters), `get_component` (with the reinforcement layouts of the current
 version as counts), `list_versions`, `get_version` (geometry as counts and a
 link, never the meshes; the reinforcement layouts of the version as counts),
 `get_evidence`, `list_datasets`, `get_dataset`, `get_timeline` and
-`similar_components` (the pieces nearest in shape over the whole descriptor, not
+`similar_components` (the elements nearest in shape over the whole descriptor, not
 on the two-dimensional similarity map, with their distance in standardised
 units; it takes the same filters, which apply before the ranking). Every answer
 carries the web link of the record, and a record that is not public is marked
@@ -701,7 +701,7 @@ so the two heavy jobs never run together (server memory): the
 frequent geometry run skips its run while the lock is held, the nightly run and
 the map wait up to 15 minutes instead of losing their slot. A write that changes
 what the geometry stages read (a new version, a file, the geometry, the colour,
-an override, the function of the piece) marks the snapshot (`derivation_due`);
+an override, the function of the element) marks the snapshot (`derivation_due`);
 the frequent run derives only marked snapshots, the nightly run checks all of them
 (`main_geometry.py --due` / without it).
 
@@ -848,7 +848,7 @@ which is the origin of abovementioned Catalog Explorer.
 
 ## Citing
 
-When using, extending or building upon this piece of softare in your work, please reference it accordingly:
+When using, extending or building upon this piece of software in your work, please reference it accordingly:
 
 ### BibTex
 

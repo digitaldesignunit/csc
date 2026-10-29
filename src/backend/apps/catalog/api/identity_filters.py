@@ -228,14 +228,14 @@ def catalog_filters(
     q: str = Query('', max_length=FILTER_MAX_LENGTH,
                    description='name, catalogue number or id'),
     evidence_method: Optional[EvidenceMethod] = Query(
-        None, description='only pieces with at least one published, current '
+        None, description='only elements with at least one published, current '
                           'evidence record of this method (8.177), for example '
                           'reinforcement_layout; combines with every other '
                           'filter'),
     fit_mode: Optional[FitMode] = Query(
         None, description='dimension search (8.169): about = every side '
                           'within fit_tol of fit_size; can_hold = every side '
-                          'of the piece at least fit_size'),
+                          'of the element at least fit_size'),
     fit_size: Optional[str] = Query(
         None, max_length=FILTER_MAX_LENGTH,
         description='three sizes in mm in any order, for example '
@@ -251,12 +251,12 @@ def catalog_filters(
         None, description='near search: longitude, -180 to 180; needs '
                           'near_lat'),
     near_layer: Optional[NearLayer] = Query(
-        None, description='which point of a piece is measured: current (the '
+        None, description='which point of an element is measured: current (the '
                           'location of the current version, default) or '
                           'origin (the origin building)'),
     radius_km: Optional[float] = Query(
-        None, description='near search: only pieces within this many km; '
-                          'without it every piece with a point on the layer, '
+        None, description='near search: only elements within this many km; '
+                          'without it every element with a point on the layer, '
                           'nearest first'),
 ) -> CatalogFilters:
     """FastAPI dependency: the catalog filters from the query string."""

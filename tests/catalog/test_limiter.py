@@ -122,7 +122,7 @@ def test_a_valid_token_counts_per_user():
 @pytest.mark.parametrize('headers', [
     (),
     bearer('not.a.token'),
-    bearer(token(secret='another-secret')),     # forged: no bucket of its own
+    bearer(token(secret='another-secret-of-at-least-32-bytes')),     # forged: no bucket of its own
     bearer(token(minutes=-5)),                  # expired
     (('authorization', 'Basic abc'),),
 ])

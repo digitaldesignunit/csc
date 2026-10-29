@@ -5,7 +5,7 @@
  * pieces that have no point. The state of the page is the URL, so a link
  * carries the filters, the circulation, a fit or near search and the layer.
  */
-import { FILTER_KEYS, parseCirculation, withParams, type ParamsLike } from '@/lib/browse'
+import { FILTER_KEYS, filterValue, parseCirculation, withParams, type ParamsLike } from '@/lib/browse'
 import { fitBackendParams } from '@/lib/fit'
 import { MAP_TILE_ORIGIN } from '@/lib/csp'
 import { coordinateText, nearBackendParams, nearChanges } from '@/lib/near'
@@ -47,7 +47,7 @@ export function layerChanges(layer: MapLayer): Record<string, string | null> {
 export function locationsBackendParams(params: ParamsLike): URLSearchParams {
   const out = new URLSearchParams({ circulation: parseCirculation(params.get('circulation')) })
   for (const key of [...FILTER_KEYS, 'q']) {
-    const value = params.get(key)
+    const value = filterValue(params, key)
     if (value) out.set(key, value)
   }
   const searches = new URLSearchParams(params.toString())
@@ -137,8 +137,8 @@ export function mapCountText(
   counts: { total: number; displayed: number; left_out: number },
 ): string {
   const noun = MAP_LAYER_NOUNS[layer]
-  const piece = (n: number) => (n === 1 ? 'piece' : 'pieces')
-  if (counts.total === 0) return 'No pieces match the filters.'
+  const piece = (n: number) => (n === 1 ? 'element' : 'elements')
+  if (counts.total === 0) return 'No elements match the filters.'
   if (counts.displayed === 0) {
     const article = layer === 'origin' ? 'an' : 'a'
     return `None of the ${counts.total} ${piece(counts.total)} has ${article} ${noun} to show.`
@@ -150,8 +150,8 @@ export function mapCountText(
 
 /** The plain message of an empty layer (above the map). */
 export function emptyLayerText(layer: MapLayer, total: number): string {
-  if (total === 0) return 'No pieces match the filters. Change or remove a filter.'
+  if (total === 0) return 'No elements match the filters. Change or remove a filter.'
   return layer === 'origin'
-    ? 'No piece has an origin location yet. It is set in Edit provenance on the component page. Switch to Current to see where the pieces are now.'
-    : 'No piece has a current location. Add one in Edit details on the component page.'
+    ? 'No element has an origin location yet. It is set in Edit provenance on the component page. Switch to Current to see where the elements are now.'
+    : 'No element has a current location. Add one in Edit details on the component page.'
 }

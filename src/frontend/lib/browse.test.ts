@@ -5,8 +5,11 @@ import {
   activeFilters,
   browseUrl,
   cardLine,
+  EVIDENCE_METHOD_OPTIONS,
   circulationGroup,
   filterChipLabel,
+  filterValue,
+  isEvidenceMethod,
   parseCirculation,
   parsePickedColumns,
   piecesNote,
@@ -98,7 +101,7 @@ test('the card line is function, material and size', () => {
 })
 
 test('a batch says how many pieces it holds', () => {
-  assert.equal(piecesNote({ quantity: 356 }), '356 pieces')
+  assert.equal(piecesNote({ quantity: 356 }), '356 elements')
   assert.equal(piecesNote({ quantity: 1 }), '')
   assert.equal(piecesNote({}), '')
 })
@@ -130,4 +133,37 @@ test('the Browse link of a dataset or a material carries the filter the bar read
   assert.equal(browseUrl('material', 'cast_iron'), '/components?material=cast_iron')
   assert.equal(browseUrl('material', 'a b/c'), '/components?material=a%20b%2Fc')
   assert.deepEqual(activeFilters(new URL('http://x' + browseUrl('dataset', 'd1')).searchParams), [{ key: 'dataset', value: 'd1' }])
+})
+
+test('the evidence method filter offers the methods with their labels and is a chip', () => {
+  assert.deepEqual(EVIDENCE_METHOD_OPTIONS.map((o) => o.value).sort(), [
+    'archival_document', 'core_compression', 'era_heuristic', 'manufacturer_datasheet',
+    'rebound_hammer', 'reinforcement_layout', 'visual_inspection',
+  ])
+  assert.equal(EVIDENCE_METHOD_OPTIONS.find((o) => o.value === 'reinforcement_layout')?.label, 'Reinforcement layout')
+  assert.equal(filterChipLabel('evidence_method', 'rebound_hammer'), 'Evidence: Rebound hammer')
+  const params = new URLSearchParams('page=2&evidence_method=reinforcement_layout&material=concrete')
+  assert.deepEqual(activeFilters(params), [
+    { key: 'material', value: 'concrete' },
+    { key: 'evidence_method', value: 'reinforcement_layout' },
+  ])
+})
+
+test('an unknown evidence method in the URL is left out, the backend would answer 422', () => {
+  assert.equal(isEvidenceMethod('rebound_hammer'), true)
+  assert.equal(isEvidenceMethod('bogus'), false)
+  assert.equal(isEvidenceMethod('constructor'), false)
+  assert.equal(isEvidenceMethod(''), false)
+  assert.equal(filterValue(new URLSearchParams('evidence_method=bogus'), 'evidence_method'), null)
+  assert.equal(filterValue(new URLSearchParams('evidence_method=rebound_hammer'), 'evidence_method'), 'rebound_hammer')
+  assert.equal(filterValue(new URLSearchParams('material=anything'), 'material'), 'anything')
+  assert.deepEqual(activeFilters(new URLSearchParams('evidence_method=bogus')), [])
+})
+
+test('the evidence method is set, kept with the other filters and cleared with them', () => {
+  const set = withParams(new URLSearchParams('page=3&material=concrete'), { evidence_method: 'reinforcement_layout' })
+  assert.equal(set.toString(), 'material=concrete&evidence_method=reinforcement_layout')    // page 1
+  const cleared = withParams(set, { evidence_method: null })
+  assert.equal(cleared.toString(), 'material=concrete')
+  assert.equal(withoutFilters(set).toString(), '')
 })

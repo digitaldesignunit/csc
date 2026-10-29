@@ -126,7 +126,7 @@ async def get_identity_history(
         'groups', description='groups: evidence per day and method; all: '
                               'every record its own event'),
 ):
-    """The piece is the middle lane (level 0), parents have negative levels
+    """The element is the middle lane (level 0), parents have negative levels
     and children positive ones. Every lane has ``id``, ``role``, ``level``
     and ``visible``; a visible one also its header and ``events``. ``links``
     join a parent and a child lane (``cut``: one parent; ``assemble``:

@@ -17,8 +17,8 @@ test('a moderator always, the creator only while nothing was published', () => {
 })
 
 test('the confirmation names what a visitor without an account sees', () => {
-  const text = publicConfirmText('This piece becomes public.')
-  assert.match(text, /^This piece becomes public\. Anyone without an account then sees: /)
+  const text = publicConfirmText('This element becomes public.')
+  assert.match(text, /^This element becomes public\. Anyone without an account then sees: /)
   assert.match(text, /photos/)
   assert.match(text, /organisations only, no people/)
   assert.match(text, /sign in to download/)
@@ -26,11 +26,11 @@ test('the confirmation names what a visitor without an account sees', () => {
 })
 
 test('the dataset action shows the number it affects', () => {
-  assert.equal(datasetPublicLabel(true, null), 'Make all published pieces public')
-  assert.equal(datasetPublicLabel(false, 12), 'Make all published pieces private (12)')
+  assert.equal(datasetPublicLabel(true, null), 'Make all published elements public')
+  assert.equal(datasetPublicLabel(false, 12), 'Make all published elements private (12)')
   assert.equal(datasetPublicHelp(null, true), 'Counting...')
-  assert.equal(datasetPublicHelp(0, true), 'No published piece is private.')
-  assert.equal(datasetPublicHelp(0, false), 'No published piece is public.')
-  assert.match(datasetPublicHelp(1, true), /^1 published piece would become public\./)
-  assert.match(datasetPublicHelp(7, false), /^7 published pieces would become private\. Unpublished and withdrawn/)
+  assert.equal(datasetPublicHelp(0, true), 'No published element is private.')
+  assert.equal(datasetPublicHelp(0, false), 'No published element is public.')
+  assert.match(datasetPublicHelp(1, true), /^1 published element would become public\./)
+  assert.match(datasetPublicHelp(7, false), /^7 published elements would become private\. Unpublished and withdrawn/)
 })

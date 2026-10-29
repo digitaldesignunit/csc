@@ -215,7 +215,7 @@ function Analytics() {
                 </CardContent>
               </Card>
               <BarCard title="Material" description="The ten most frequent, the rest as others" items={materialRows} fill="#2563eb" angled />
-              <BarCard title="Circulation" description="Where the pieces are: in place, not in place, out of circulation" items={circulation} fill="#d6146f" />
+              <BarCard title="Circulation" description="Where the elements are: in place, not in place, out of circulation" items={circulation} fill="#d6146f" />
               <BarCard
                 title="Complexity"
                 items={(data?.byComplexity ?? []).map((d) => ({ ...d, label: String(d.label) }))}
@@ -227,7 +227,7 @@ function Analytics() {
 
         {data && activeTab === 'types' && (
           <TabsContent value="types" className="mt-3">
-            <BarCard title="By original function" description="What the pieces were in their previous life" items={functions} fill="#0891b2" tall />
+            <BarCard title="By original function" description="What the elements were in their previous life" items={functions} fill="#0891b2" tall />
           </TabsContent>
         )}
 

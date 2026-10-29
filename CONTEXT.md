@@ -1,6 +1,6 @@
 # Catalog of Second Chances (CSC)
 
-A research catalog of reclaimed building components: what each physical piece is, where it came
+A research catalog of reclaimed building components: what each physical element is, where it came
 from, what state it is in, and what is known about it --- so it can be designed with and reused.
 
 ## Language
@@ -8,8 +8,9 @@ from, what state it is in, and what is known about it --- so it can be designed 
 ### Components and records
 
 **Component**:
-A physical reclaimed building element the catalog tracks --- a beam, a panel, a lump of rubble.
-_Avoid_: item, part
+A physical reclaimed building element the catalog tracks --- a beam, a panel, a lump of rubble. In user-facing text a
+single one is an "element" (not to be confused with a Grasshopper component).
+_Avoid_: item, part, piece
 
 **Component identity**:
 The catalog's permanent record of one physical component, from its arrival to long after its exit.
@@ -113,18 +114,18 @@ A user's hold on a component in circulation, signalling that they intend to use 
 An installed, returned or lost component coming back with a new origin; the previous origin--exit cycle is archived.
 
 **Lineage**:
-The split and merge relations between identities. Children inherit their parents' past --- origin, material, trade name, manufacture date, original function --- unless they state their own.
+The split and merge relations between identities. Children inherit their parents' past --- origin, material, trade name, manufacturer, manufacture date, material separability, original function --- unless they state their own; in a merge, a unit is inherited only where all parents agree.
 
 **Batch**:
-One identity standing for several homogeneous pieces --- same type, material and nominal size --- whose snapshot quantity is greater than one (the CPR word).
+One identity standing for several homogeneous elements --- same type, material and nominal size --- whose snapshot quantity is greater than one (the CPR word). The single items of a batch are its elements.
 _Avoid_: lot, stack, group
 
 **Draw**:
-Taking one or more pieces out of a batch as a child identity; the batch stays in circulation until nothing remains.
+Taking one or more elements out of a batch as a child identity; the batch stays in circulation until nothing remains.
 _Avoid_: cut, split (a cut changes shape), take
 
 **Remaining**:
-The pieces of a batch not yet drawn; derived, never entered.
+The elements of a batch not yet drawn; derived, never entered.
 _Avoid_: stock, available
 
 ### Evidence and properties

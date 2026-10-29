@@ -28,7 +28,7 @@ test('the meta line says who, when and how long', () => {
 })
 
 test('a waiting version is a new piece, a new state, a correction, a cut or a draw', () => {
-  assert.equal(snapshotKind({ version: 0, parents: 0, drawn: false }), 'New piece')
+  assert.equal(snapshotKind({ version: 0, parents: 0, drawn: false }), 'New element')
   assert.equal(snapshotKind({ version: 2, parents: 0, drawn: false }), 'New state')
   assert.equal(snapshotKind({ version: 2, supersedes: 'x', parents: 0, drawn: false }), 'Correction')
   assert.equal(snapshotKind({ version: 0, parents: 1, drawn: false }), 'Cut')

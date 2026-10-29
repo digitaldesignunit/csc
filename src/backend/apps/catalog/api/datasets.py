@@ -33,6 +33,7 @@ from apps.catalog.profile import (
     clean_text,
     normalize_orcid,
     normalize_ror,
+    normalize_url,
 )
 from apps.catalog.permissions import dataset_roles
 from apps.catalog.vocab import (
@@ -86,6 +87,7 @@ class Me(BaseModel):
     # the personal profile (8.133)
     organization: Optional[str] = None
     organization_ror: Optional[str] = None
+    organization_url: Optional[str] = None
     orcid: Optional[str] = None
     default_role: ActorRole = 'operator'
 
@@ -119,7 +121,7 @@ class DatasetView(BaseModel):
                     'moderator(D) and admin only, else absent')
     component_count: Optional[int] = Field(
         default=None,
-        description='list rows only: published pieces the caller may see')
+        description='list rows only: published elements the caller may see')
 
     model_config = {'populate_by_name': True}
 
@@ -142,7 +144,7 @@ class DatasetPatch(BaseModel):
     visibility: Optional[Visibility] = None
     reviewed: Optional[bool] = Field(
         None, description='admin only: the dataset may be catalog and its '
-                          'pieces public (8.139)')
+                          'elements public (8.139)')
 
 
 class MemberRoles(BaseModel):
@@ -227,7 +229,8 @@ def _me_view(user: User, memberships: List[Membership],
               email=user.email, role=user.role, memberships=memberships,
               moderated_datasets=moderated,
               organization=user.organization,
-              organization_ror=user.organization_ror, orcid=user.orcid,
+              organization_ror=user.organization_ror,
+              organization_url=user.organization_url, orcid=user.orcid,
               default_role=user.default_role or 'operator')
 
 
@@ -239,6 +242,7 @@ class ProfilePatch(BaseModel):
     full_name: Optional[str] = Field(None, max_length=200)
     organization: Optional[str] = Field(None, max_length=200)
     organization_ror: Optional[str] = Field(None, max_length=200)
+    organization_url: Optional[str] = Field(None, max_length=1000)
     orcid: Optional[str] = Field(None, max_length=60)
     default_role: Optional[ActorRole] = None
 
@@ -251,7 +255,8 @@ async def patch_me(
     body: ProfilePatch,
 ):
     """``full_name``, ``organization``, ``organization_ror`` (a ROR id or
-    URL), ``orcid`` (format and check digit) and ``default_role``. Records
+    URL), ``organization_url`` (the web page of the organization, http or
+    https), ``orcid`` (format and check digit) and ``default_role``. Records
     take the values over when they are written; a later change never rewrites
     a record."""
     sent = body.model_dump(exclude_unset=True)
@@ -268,6 +273,10 @@ async def patch_me(
             changes['organization_ror'] = (
                 normalize_ror(sent['organization_ror'])
                 if clean_text(sent['organization_ror']) else None)
+        if 'organization_url' in sent:
+            changes['organization_url'] = (
+                normalize_url(sent['organization_url'])
+                if clean_text(sent['organization_url'], 1000) else None)
         if 'orcid' in sent:
             changes['orcid'] = (normalize_orcid(sent['orcid'])
                                 if clean_text(sent['orcid']) else None)
@@ -560,7 +569,7 @@ async def put_dataset_member(
 class PublicBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
-    is_public: bool = Field(description='the flag to set on the pieces')
+    is_public: bool = Field(description='the flag to set on the elements')
     dry_run: bool = Field(False, description='only count what would change')
 
 
@@ -575,7 +584,7 @@ class PublicResult(BaseModel):
 
 
 @router.post('/datasets/{did}/public', response_model=PublicResult,
-             summary='Make every published piece of a dataset public or '
+             summary='Make every published element of a dataset public or '
                      'private (moderator(D))')
 async def set_dataset_public(
     request: Request,
@@ -583,10 +592,10 @@ async def set_dataset_public(
     did: str,
     body: PublicBody,
 ):
-    """Sets ``is_public`` on the pieces of the dataset that were ever
+    """Sets ``is_public`` on the elements of the dataset that were ever
     published (3.1.5) and are not withdrawn, where the flag differs, and logs
     each change like a metadata PATCH (``cause: patch``). Unpublished and
-    withdrawn pieces are left alone, and so are children: no piece follows
+    withdrawn elements are left alone, and so are children: no element follows
     another (6.2). ``dry_run`` only counts."""
     dataset = (await load_dataset(request, current_user, did,
                                   'set_dataset_public')).record
@@ -618,7 +627,7 @@ async def set_dataset_public(
             invalid[identity['_id']] = str(exc.detail)
     if invalid:
         raise HTTPException(status_code=422, detail={
-            'message': f'{len(invalid)} of {len(pieces)} pieces do not pass '
+            'message': f'{len(invalid)} of {len(pieces)} elements do not pass '
                        f'validation; nothing was changed. Correct them first.',
             'pieces': invalid})
     changed = skipped = 0
@@ -646,8 +655,8 @@ async def delete_dataset(
     current_user: Annotated[User, Depends(get_current_active_user)],
     did: str,
 ):
-    """Only while the dataset holds no piece at all (no identity, whatever
-    its state; for an admin too: move the pieces first, ``move_identity``).
+    """Only while the dataset holds no element at all (no identity, whatever
+    its state; for an admin too: move the elements first, ``move_identity``).
     The open invitations into it are revoked with it (8.139 f)."""
     await load_dataset(request, current_user, did, 'delete_dataset')
     pieces = await request.app.mongodb_component_identities.count_documents(
@@ -655,7 +664,7 @@ async def delete_dataset(
     if pieces:
         raise HTTPException(
             status_code=409,
-            detail='The dataset still holds pieces: move them to another '
+            detail='The dataset still holds elements: move them to another '
                    'dataset first.')
     now = now_iso()
     revoked = await request.app.mongodb_invitations.update_many(

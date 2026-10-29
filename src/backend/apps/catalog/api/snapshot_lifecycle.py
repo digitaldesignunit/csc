@@ -397,7 +397,7 @@ async def _publish_locked(request: Request, user: User, snapshot: dict,
                              reason='the batch was overdrawn')
         raise HTTPException(
             status_code=409,
-            detail='The batch has fewer pieces left than this draw takes '
+            detail='The batch has fewer elements left than this draw takes '
                    '(8.105).')
     current = identity.get('current_snapshot_id')
     if predecessor is not None:
@@ -438,8 +438,8 @@ async def create_snapshot(
     identity_id: str,
     body: SnapshotDraftBody,
 ):
-    """contributor(D). ``effective_from`` defaults to now. Only for a piece
-    in circulation: an exited piece re-enters first (section 3.1.3)."""
+    """contributor(D). ``effective_from`` defaults to now. Only for an element
+    in circulation: an exited element re-enters first (section 3.1.3)."""
     identity = (await load_identity(request, current_user, identity_id,
                                     'create_snapshot')).record
     if identity.get('withdrawn'):

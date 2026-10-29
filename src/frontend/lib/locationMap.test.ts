@@ -137,21 +137,21 @@ test('the map fits the points, and one site gets a box of about a kilometre', ()
 })
 
 test('the page says how many pieces are on the map and how many have no point', () => {
-  assert.equal(mapCountText('current', { total: 697, displayed: 697, left_out: 0 }), '697 pieces on the map')
-  assert.equal(mapCountText('current', { total: 1, displayed: 1, left_out: 0 }), '1 piece on the map')
+  assert.equal(mapCountText('current', { total: 697, displayed: 697, left_out: 0 }), '697 elements on the map')
+  assert.equal(mapCountText('current', { total: 1, displayed: 1, left_out: 0 }), '1 element on the map')
   assert.equal(mapCountText('origin', { total: 697, displayed: 2, left_out: 695 }),
-    '2 pieces on the map; 695 have no origin location.')
+    '2 elements on the map; 695 have no origin location.')
   assert.equal(mapCountText('current', { total: 5, displayed: 4, left_out: 1 }),
-    '4 pieces on the map; 1 has no current location.')
+    '4 elements on the map; 1 has no current location.')
   assert.equal(mapCountText('origin', { total: 697, displayed: 0, left_out: 697 }),
-    'None of the 697 pieces has an origin location to show.')
+    'None of the 697 elements has an origin location to show.')
   assert.equal(mapCountText('current', { total: 3, displayed: 0, left_out: 3 }),
-    'None of the 3 pieces has a current location to show.')
-  assert.equal(mapCountText('current', { total: 0, displayed: 0, left_out: 0 }), 'No pieces match the filters.')
+    'None of the 3 elements has a current location to show.')
+  assert.equal(mapCountText('current', { total: 0, displayed: 0, left_out: 0 }), 'No elements match the filters.')
   assert.match(emptyLayerText('origin', 697), /origin location/)
   assert.match(emptyLayerText('origin', 697), /Edit provenance/)
   assert.match(emptyLayerText('current', 5), /current location/)
-  assert.match(emptyLayerText('origin', 0), /No pieces match/)
+  assert.match(emptyLayerText('origin', 0), /No elements match/)
 })
 
 test('the tiles come from one host, with the attribution of OpenStreetMap and FOSSGIS', () => {

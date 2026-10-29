@@ -38,7 +38,8 @@ RETRIES = 4
 ACTOR_KINDS = ('user', 'person', 'organization')
 PERSONAL = ('name', 'email', 'orcid')
 # the personal fields of an account's profile (8.133 g)
-PROFILE_FIELDS = ('full_name', 'organization', 'organization_ror', 'orcid')
+PROFILE_FIELDS = ('full_name', 'organization', 'organization_ror',
+                  'organization_url', 'orcid')
 
 
 class RedactBody(BaseModel):

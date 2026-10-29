@@ -56,6 +56,15 @@ export function diameterRange(bars: { diameter_mm: number }[]): { min: number; m
   return { min: Math.min(...sizes), max: Math.max(...sizes) }
 }
 
+/**
+ * The bars the diameter scale and its legend span: all of them, or only the bars
+ * of the layout opened by `?layout=` (8.178) while one is picked; the other
+ * bars are drawn faint and take the colour their diameter has on that scale.
+ */
+export function scaleBars<B extends { layout?: number }>(bars: B[], picked: number | null): B[] {
+  return picked === null ? bars : bars.filter((bar) => bar.layout === picked)
+}
+
 export function diameterColour(diameter: number, range: { min: number; max: number }): string {
   // one diameter only: the middle of the ramp, not an arbitrary end
   if (range.max <= range.min) return rampColour(0.5)
@@ -207,20 +216,22 @@ export function barColour(
 }
 
 export type BarLegend =
-  | { kind: 'layout'; items: { colour: string; label: string; count: number; status?: string | null; picked?: boolean }[] }
+  | { kind: 'layout'; items: { id: string; colour: string; label: string; count: number; status?: string | null; picked?: boolean }[] }
   | { kind: 'diameter'; min: number; max: number; stops: string[] }
 
 export function barLegend(
   mode: BarColourMode,
   layouts: BarLayout[],
-  bars: { diameter_mm: number }[],
+  bars: { diameter_mm: number; layout?: number }[],
+  /** the index of the layout opened by `?layout=`: the diameter scale spans its bars only */
+  picked: number | null = null,
 ): BarLegend | null {
   if (mode === 'layout') {
     return { kind: 'layout', items: layouts.map((l, i) => ({
-        colour: layoutColour(i), label: l.label, count: l.count, status: l.status, picked: l.picked })) }
+        id: l.id, colour: layoutColour(i), label: l.label, count: l.count, status: l.status, picked: l.picked })) }
   }
   if (mode === 'diameter') {
-    const { min, max } = diameterRange(bars)
+    const { min, max } = diameterRange(scaleBars(bars, picked))
     return { kind: 'diameter', min, max, stops: [0, 0.25, 0.5, 0.75, 1].map(rampColour) }
   }
   return null

@@ -44,7 +44,7 @@ const EXIT_HINTS: Record<string, string> = {
   disposed: 'Landfill or incineration. Final.',
   returned: 'Back to its owner or supplier.',
   lost: 'Its whereabouts are unknown.',
-  split: 'Cut up without cataloguing the pieces. Catalogued pieces set this by themselves.',
+  split: 'Cut up without cataloguing the elements. Catalogued elements set this by themselves.',
 }
 
 function todayIso(): string {

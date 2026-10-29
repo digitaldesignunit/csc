@@ -37,6 +37,24 @@ export type IdentityLike = {
 
 export { formatDay }
 
+/**
+ * Who may add evidence to an element (the "Add evidence" button): a signed-in
+ * administrator or contributor of its dataset, while the element is not
+ * withdrawn and has a current version. The backend decides in the end.
+ */
+export function canAddEvidence(input: {
+  signedIn: boolean
+  isAdmin: boolean
+  roles: readonly string[]
+  withdrawn?: unknown
+  currentSnapshotId?: string | null
+}): boolean {
+  return input.signedIn
+    && (input.isAdmin || input.roles.includes('contributor'))
+    && !input.withdrawn
+    && !!input.currentSnapshotId
+}
+
 // CHIPS -------------------------------------------------------------------------
 export type ChipTone = 'neutral' | 'good' | 'info' | 'warn' | 'bad'
 export type Chip = { label: string; tone: ChipTone; title?: string }
@@ -89,12 +107,12 @@ export type Banner = { id: string; tone: 'info' | 'warn' | 'bad'; text: string }
  */
 export function notPublicText(dataset: string | null | undefined, visibility: string | null | undefined): string {
   if (visibility === 'catalog') {
-    return 'Not public: every signed-in user sees this piece, visitors without an account do not.'
+    return 'Not public: every signed-in user sees this element, visitors without an account do not.'
   }
   if (visibility === 'members') {
-    return `Not public: only members of ${dataset ?? 'its dataset'} and the moderators see this piece.`
+    return `Not public: only members of ${dataset ?? 'its dataset'} and the moderators see this element.`
   }
-  return 'Not public: visitors without an account do not see this piece.'
+  return 'Not public: visitors without an account do not see this element.'
 }
 
 export function bannersOf(input: {
@@ -116,7 +134,7 @@ export function bannersOf(input: {
     })
   }
   if (identity.exit) {
-    out.push({ id: 'exited', tone: 'warn', text: 'This piece left circulation; its record stays.' })
+    out.push({ id: 'exited', tone: 'warn', text: 'This element left circulation; its record stays.' })
   }
   if (input.signedIn && identity.is_public === false) {
     out.push({
@@ -207,7 +225,7 @@ export function factGroups(input: {
   } else if (quantity > 1) {
     component.push({ label: 'Quantity', value: String(quantity) })
   }
-  if (snapshot.fragment) component.push({ label: 'Fragment', value: 'Yes, of a larger piece' })
+  if (snapshot.fragment) component.push({ label: 'Fragment', value: 'Yes, of a larger element' })
   if (identity.dataset) component.push({ label: 'Dataset', value: identity.dataset })
 
   const state: Fact[] = []

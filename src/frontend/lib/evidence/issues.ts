@@ -170,7 +170,7 @@ export function formIssues(state: FormState, method: MethodInfo): Issue[] {
       }
       if (method.position_required && !record.position.description.trim() && record.position.kind === 'none') {
         issues.push({
-          section: 'what', message: `${recordName} ${index + 1}: say where on the piece.`,
+          section: 'what', message: `${recordName} ${index + 1}: say where on the element.`,
           target: `record-r${index}-position`, record: index, source: 'form',
         })
       }
@@ -210,7 +210,7 @@ export function formIssues(state: FormState, method: MethodInfo): Issue[] {
         issues.push({ section: 'what', message: 'Say which property the claim is about.', target: 'summary-quantity', source: 'form' })
       }
       if (state.pieces.length === 0) {
-        issues.push({ section: 'what', message: 'Name at least one piece.', source: 'form' })
+        issues.push({ section: 'what', message: 'Name at least one element.', source: 'form' })
       }
     }
   }

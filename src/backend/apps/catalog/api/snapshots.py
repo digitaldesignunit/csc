@@ -71,7 +71,7 @@ async def list_my_snapshots(
     """
     The versions the caller added (``added_by_user_id``), for "My work"
     (8.118 Q4): drafts, pending and rejected ones by default, each with its
-    piece and, when rejected, the reason. Nobody lists another person's
+    element and, when rejected, the reason. Nobody lists another person's
     snapshots here.
     """
     if not mine:

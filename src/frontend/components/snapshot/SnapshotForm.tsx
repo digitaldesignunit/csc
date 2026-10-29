@@ -327,7 +327,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
       own.push({ field: 'tag', message: tagFree?.message ?? 'Checking the tag...' })
     }
     if (id === 'parents' && values.tag.trim() && !tagId) {
-      own.push({ field: 'tag', message: 'The tag of the new piece is not an id.' })
+      own.push({ field: 'tag', message: 'The tag of the new element is not an id.' })
     }
     if (id === 'parents' && tagId && tagFree && !tagFree.ok) own.push({ field: 'tag', message: tagFree.message ?? '' })
     // a tag that came with the link is checked on the first step
@@ -462,7 +462,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
           {batch
             ? (drawsRest
               ? ' Publishing it draws the rest of the batch: the batch then leaves circulation as split.'
-              : ' The batch stays in circulation while pieces remain.')
+              : ' The batch stays in circulation while elements remain.')
             : ''}
         </p>
         {mode === 'new' && values.inspect && (
@@ -519,9 +519,9 @@ export default function SnapshotForm(props: SnapshotFormProps) {
       {step === 'tag' && (
         <section className="space-y-4 border-t border-border pt-6">
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Tag of the new piece</h2>
+            <h2 className="text-lg font-semibold">Tag of the new element</h2>
             <p className="text-sm text-muted-foreground">
-              Scan the QR code on the piece, or paste its id. The id must not be in the catalog yet.
+              Scan the QR code on the element, or paste its id. The id must not be in the catalog yet.
             </p>
           </div>
           <TagField id="sf-tag" value={values.tag} onChange={(tag) => set({ tag })} autoScan />
@@ -539,10 +539,10 @@ export default function SnapshotForm(props: SnapshotFormProps) {
       {step === 'parents' && (
         <section className="space-y-4 border-t border-border pt-6">
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Cut from pieces</h2>
+            <h2 className="text-lg font-semibold">Cut from elements</h2>
             <p className="text-sm text-muted-foreground">
-              Scan the tag of the piece it was cut from. Add more than one to record a merge. The parents leave
-              circulation once the new piece is published. From a batch of identical pieces you draw pieces
+              Scan the tag of the element it was cut from. Add more than one to record a merge. The parents leave
+              circulation once the new element is published. From a batch of identical elements you draw elements
               instead: the batch stays in circulation.
             </p>
             {batch && (
@@ -552,7 +552,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
             )}
           </div>
           <ParentTags parents={values.parents} onChange={(parents) => set({ parents })} exclude={tagId ?? undefined} />
-          <Field label="Tag of the new piece" htmlFor="sf-new-tag"
+          <Field label="Tag of the new element" htmlFor="sf-new-tag"
             hint="Scan or paste the id on the new tag. Empty: a new id is generated.">
             <TagField id="sf-new-tag" value={values.tag} onChange={(tag) => set({ tag })} />
           </Field>
@@ -608,7 +608,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">Photos</h2>
             <p className="text-sm text-muted-foreground">
-              A general impression of the piece. Use the camera on site or pick images from the device; they
+              A general impression of the element. Use the camera on site or pick images from the device; they
               upload when you submit. Private persons, faces and number plates must not be on them.
             </p>
           </div>
@@ -652,7 +652,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
             <Row label="Name" value={values.fields.name.trim() || (mode === 'new' || mode === 'cut' ? 'The catalog number' : 'Unchanged')} />
             <Row label="Size X x Y x Z (mm)" value={batch && !values.sizeEntered ? "The batch's proxy"
               : values.sizeEntered || mode !== 'correct' ? (boxText ?? 'Missing') : 'Geometry kept'} />
-            <Row label={batch ? 'Pieces drawn' : 'Quantity'} value={String(values.fields.quantity)} />
+            <Row label={batch ? 'Elements drawn' : 'Quantity'} value={String(values.fields.quantity)} />
             <Row label="Colour" value={<span className="inline-flex items-center gap-2">
               <span className="inline-block h-3 w-3 rounded-full border border-border" style={{ background: `rgb(${rgb.join(',')})` }} />
               {rgb.join('/')}</span>} />
@@ -671,7 +671,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
                 ? batch
                   ? (drawsRest
                     ? '. Publishing the rest of the batch takes it out of circulation as split'
-                    : '. The batch stays in circulation while pieces remain')
+                    : '. The batch stays in circulation while elements remain')
                   : '. Publishing it ends the parents' + "'" + ' circulation'
                 : '') + '.'}
           </p>
@@ -701,7 +701,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
           </div>
         ) : (
           <WriteButton type="button" onClick={() => void submit()} disabled={busy || scanned}>
-            {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</> : <><PackagePlus className="mr-2 h-4 w-4" />{mode === 'new' ? 'Create component' : mode === 'cut' ? (batch ? 'Draw pieces' : 'Record piece') : mode === 'state' ? 'Record state' : 'Record correction'}</>}
+            {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</> : <><PackagePlus className="mr-2 h-4 w-4" />{mode === 'new' ? 'Create component' : mode === 'cut' ? (batch ? 'Draw elements' : 'Record element') : mode === 'state' ? 'Record state' : 'Record correction'}</>}
           </WriteButton>
         )}
       </div>

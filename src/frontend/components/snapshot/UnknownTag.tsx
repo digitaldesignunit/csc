@@ -20,7 +20,7 @@ export default function UnknownTag({ id }: { id: string }) {
             This tag is not in the catalog yet
           </CardTitle>
           <CardDescription>
-            No component has this id. Record the piece it is stuck on, or a piece cut from others.
+            No component has this id. Record the element it is stuck on, or an element cut from others.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -31,7 +31,7 @@ export default function UnknownTag({ id }: { id: string }) {
                 <PackagePlus className="h-5 w-5 shrink-0" />
                 <span>
                   <span className="block font-medium">New component</span>
-                  <span className="block text-xs font-normal opacity-90">Details, size and photos of this piece.</span>
+                  <span className="block text-xs font-normal opacity-90">Details, size and photos of this element.</span>
                 </span>
               </Link>
             </Button>
@@ -39,9 +39,9 @@ export default function UnknownTag({ id }: { id: string }) {
               <Link href={query('cut')}>
                 <Scissors className="h-5 w-5 shrink-0" />
                 <span>
-                  <span className="block font-medium">Cut from pieces</span>
+                  <span className="block font-medium">Cut from elements</span>
                   <span className="block text-xs font-normal text-muted-foreground">
-                    Scan the parent tags next; this tag is the new piece.
+                    Scan the parent tags next; this tag is the new element.
                   </span>
                 </span>
               </Link>

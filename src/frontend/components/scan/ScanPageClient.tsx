@@ -13,12 +13,12 @@ export const SCAN_MODES = [
   {
     value: 'identify',
     label: 'Identify',
-    help: 'Scan the QR code of a physical piece. The matching digital piece opens with its catalog data, geometry and records.',
+    help: 'Scan the QR code of a physical element. The matching digital element opens with its catalog data, geometry and records.',
   },
   {
     value: 'locate',
     label: 'Locate',
-    help: 'Find the physical part of a digital piece. Set its id first (scan it or paste it), then scan physical tags until one matches.',
+    help: 'Find the physical part of a digital element. Set its id first (scan it or paste it), then scan physical tags until one matches.',
   },
   {
     value: 'transmit',

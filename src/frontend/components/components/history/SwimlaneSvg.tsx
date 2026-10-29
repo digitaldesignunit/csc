@@ -123,7 +123,7 @@ function LegendRow({ colours, x, y }: { colours: Colours; x: number; y: number }
   )
   return (
     <>
-      {item(0, 'Start of the piece', <circle cx={0} cy={0} r={6} fill={colours.card} stroke={colours.origin} strokeWidth={2.5} />)}
+      {item(0, 'Start of the element', <circle cx={0} cy={0} r={6} fill={colours.card} stroke={colours.origin} strokeWidth={2.5} />)}
       {item(150, 'Version', <circle cx={0} cy={0} r={7} fill={colours.version} stroke={colours.version} strokeWidth={2} />)}
       {item(240, 'Replaced by a correction', <circle cx={0} cy={0} r={7} fill={colours.card} stroke={colours.version} strokeWidth={2} strokeDasharray="3 2" />)}
       {item(420, 'Evidence record', <rect x={-5} y={-5} width={10} height={10} rx={2} fill={colours.evidence} />)}
@@ -177,7 +177,7 @@ export default function SwimlaneSvg({
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       role={interactive ? 'group' : 'img'}
-      aria-label={title ?? 'History of the piece and its relatives'}
+      aria-label={title ?? 'History of the element and its relatives'}
       fontFamily={FONT}
     >
       {palette === 'print' && <rect x={0} y={0} width={width} height={height} fill="#ffffff" />}
@@ -308,7 +308,7 @@ export default function SwimlaneSvg({
 
         {layout.more > 0 && (
           <text x={g.margin} y={layout.height - 8} fontSize={11} fill={colours.muted}>
-            {`+${layout.more} more ${layout.more === 1 ? 'piece' : 'pieces'} not shown`}
+            {`+${layout.more} more ${layout.more === 1 ? 'element' : 'elements'} not shown`}
           </text>
         )}
       </g>
@@ -333,7 +333,7 @@ export default function SwimlaneSvg({
           <text x={g.margin} y={0} fontSize={11} fontWeight={700} fill={colours.ink}>Legend</text>
           <LegendRow colours={colours} x={g.margin + 6} y={26} />
           <text x={g.margin} y={52} fontSize={10} fill={colours.muted}>
-            Dashed lines join a piece and the pieces it was cut into or assembled from, at the child&apos;s first version.
+            Dashed lines join an element and the elements it was cut into or assembled from, at the child&apos;s first version.
             The time axis is in sections by year and not to scale.
           </text>
         </g>

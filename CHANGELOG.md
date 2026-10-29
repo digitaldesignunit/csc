@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4.2] - 2026-10-29
+
+Second hardening: the web app and the backend. The Grasshopper fixes follow in 0.6.4.3.
+
+### Added
+
+- **Data Model page:** `/reference` explains the data model for catalog users: the dataset, the
+  component identity, its versions and the evidence records, how they relate, the rules of the
+  model, the fields a user sees or fills in, every vocabulary with a short meaning per value, and
+  one made-up concrete beam followed through all of them as an example, in seven tabs. It is public
+  and linked in the sidebar next to Grasshopper. `GET /vocab` gives each vocabulary value a one-line description.
+- **Browse, evidence method:** a filter for elements with a published record of one evidence method,
+  for example the elements with a reinforcement layout.
+- **Profile, website of the organisation:** the profile holds the website of the user's
+  organisation (http or https). New evidence records copy it into the "You" performer, and "Add my
+  organisation" in the performers field adds the organisation as a performer of its own.
+
+### Changed
+
+- **History:** a reinforcement layout in the History graph opens in the viewer, as "Show in viewer"
+  does. A corrected record opens the corrected records before the page scrolls to it, and on another
+  element the page scrolls once its records have loaded.
+- **Viewer:** with a reinforcement layout opened by its link, the diameter colours and their legend
+  follow the bars of that layout.
+- **Credits and imprint** use the layout and text sizes of the privacy page.
+- **Component page:** the evidence card has its own "Add evidence" button, like the properties card,
+  and the properties card explains with a "?" that its values come from the evidence. In the History
+  graph, a group of one record opens that record with the first click.
+- **Wording:** a single building component is called an "element" in the web app, the mails, the API
+  descriptions and the MCP connector, instead of "piece". The Grasshopper descriptions follow in
+  0.6.4.3.
+- **Statistics:** `/identities/stats` no longer returns the size facet `bbxX`, which no page showed.
+- An unknown evidence method or token scope gives a 422 on every server, also with an older
+  Starlette.
+
+### Security
+
+- **Session expiry on a component page:** when the session ends, a page that shows more than an
+  anonymous visitor may see (a private element, a draft or pending version, a record only the user may
+  load) signs the user out and leads to the sign-in page, which returns to the same address. A
+  public element stays readable and is shown again as an anonymous visitor sees it.
+- **Sign-in:** the return address after sign-in only accepts addresses on this site.
+- **Dependencies:** the development tool `shadcn` moves to 4.22.1, pinned exactly; no package in the
+  lockfile was published after 2026-10-19. Two dev-only advisories of `npm audit` stay open, both through
+  `shadcn`: `body-parser` (high; its fix came out on 2026-10-22) and `deepmerge` (low; no fix yet). The
+  production install has none.
+
+### Server notes
+
+- No step needed: no new setting, collection or index. The profile field is optional.
+
 ## [0.6.4.1] - 2026-10-27
 
 Hardening: the MCP connector, the component page and dependencies.

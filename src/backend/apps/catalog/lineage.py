@@ -282,7 +282,7 @@ def cut_refusal(parent: Dict[str, Any], *, ever_published: bool
         if exit_.get('kind') in ('installed', 'returned', 'lost'):
             return (f'{label} is out of circulation ({exit_["kind"]}); '
                     f'it re-enters first.')
-        return f'{label} no longer exists as this piece ({exit_["kind"]}).'
+        return f'{label} no longer exists as this element ({exit_["kind"]}).'
     return None
 
 

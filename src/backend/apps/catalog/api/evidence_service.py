@@ -67,7 +67,7 @@ Scalar = Union[float, int, str]
 
 # WHAT A CLIENT SENDS ---------------------------------------------------------
 class PositionInput(BaseModel):
-    """Where on the piece (3.3.2). ``kind: none`` with a description is
+    """Where on the element (3.3.2). ``kind: none`` with a description is
     always enough; a point is picked on the 3D viewer and needs the snapshot
     whose stored coordinates it uses."""
     model_config = ConfigDict(extra='forbid')
@@ -82,7 +82,7 @@ class PositionInput(BaseModel):
         None, description='Picked point in stored coordinates; for a rebound '
                           'grid the server sets the grid centre')
     description: Optional[str] = Field(
-        None, description='Where on the piece, in words, e.g. "north face, '
+        None, description='Where on the element, in words, e.g. "north face, '
                           'mid-span"')
 
 
@@ -334,7 +334,7 @@ def gate_identity(identity: Dict[str, Any],
             and parse_ts(observed_at) > parse_ts(exit_['at']):
         raise HTTPException(
             status_code=409,
-            detail=f'The component no longer exists as this piece '
+            detail=f'The component no longer exists as this element '
                    f'({exit_["kind"]}, {exit_["at"]}): only observations '
                    f'from before that date are recorded (I28).')
 

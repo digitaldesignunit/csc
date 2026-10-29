@@ -145,7 +145,7 @@ class Grid(Payload):
 
 class ReboundTestArea(Payload):
     label: Optional[str] = Field(
-        None, description='Name of the test area on the piece, e.g. TA-1.')
+        None, description='Name of the test area on the element, e.g. TA-1.')
     surface_preparation: Literal['ground', 'as_found'] = Field(
         description='Whether the surface was ground before testing.')
     surface_condition: Literal['dry', 'damp', 'wet'] = Field(
@@ -226,7 +226,7 @@ class ReboundHammerPayload(Payload):
 class CoreSampling(Payload):
     cored_at: Timestamp = Field(
         description='When the core was drilled; becomes the record\'s '
-                    'sampled_at and decides which state of the piece the '
+                    'sampled_at and decides which state of the element the '
                     'result belongs to.')
     paired_rebound_id: Optional[str] = Field(
         None, description='The rebound hammer record taken at this drill '
@@ -402,7 +402,7 @@ class ArchivalDocumentPayload(Payload):
     claim: Optional[ArchivalClaim] = Field(
         None, description='What the document says. Without a claim and a '
                           'summary the record is a document: it documents '
-                          'the piece and never enters the fold.')
+                          'the element and never enters the fold.')
 
 
 class VisualObservation(Payload):

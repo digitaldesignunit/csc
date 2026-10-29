@@ -170,7 +170,7 @@ export interface Marker {
 
 export interface Origin {
   kind: 'deinstallation' | 'demolition' | 'offcut' | 'surplus' | 'unknown';
-  planned?: boolean; // true while the piece is in place: identified in its works, not yet deinstalled (decision 8.104)
+  planned?: boolean; // true while the element is in place: identified in its works, not yet deinstalled (decision 8.104)
   at?: string | null;
   at_precision?: 'exact' | 'day' | 'month' | 'year' | 'unknown';
   place?: Place | null;
@@ -249,8 +249,8 @@ export interface FitAbout {
 
 export interface FitCanHold {
   mode: string;
-  waste_mm3: number; // box volume of the piece minus the asked volume, in mm3
-  waste_percent: number; // that waste as a share of the box volume of the piece, in per cent
+  waste_mm3: number; // box volume of the element minus the asked volume, in mm3
+  waste_percent: number; // that waste as a share of the box volume of the element, in per cent
 }
 
 export interface CatalogRow {
@@ -269,8 +269,8 @@ export interface CatalogRow {
   is_public?: boolean;
   has_preview?: boolean | null; // whether the current state has a rendered preview (list rows only; absent elsewhere)
   current_snapshot_id?: string | null;
-  fit?: FitAbout | FitCanHold | null; // how close the piece is to the asked size, while the list has a dimension search (fit_mode); absent otherwise
-  distance_m?: number | null; // distance in metres from the near point of the list (near_lat, near_lon) to the piece, on the layer asked (near_layer); absent without a near search
+  fit?: FitAbout | FitCanHold | null; // how close the element is to the asked size, while the list has a dimension search (fit_mode); absent otherwise
+  distance_m?: number | null; // distance in metres from the near point of the list (near_lat, near_lon) to the element, on the layer asked (near_layer); absent without a near search
   identity_id: string;
   version: number;
   status: 'draft' | 'pending' | 'published' | 'rejected' | 'withdrawn';
@@ -306,9 +306,9 @@ export interface LocationPoint {
 
 export interface LocationMap {
   layer: 'current' | 'origin';
-  total: number; // the pieces this caller may see that match the filters
+  total: number; // the elements this caller may see that match the filters
   displayed: number; // of those, the ones with a point on the layer
-  left_out: number; // the pieces without a point on the layer
+  left_out: number; // the elements without a point on the layer
   points: LocationPoint[];
 }
 
@@ -323,7 +323,7 @@ export interface SimilarPieces {
   basis: 'radial_signature' | 'scalars' | 'hks';
   basis_label: string;
   computed_at?: string | null; // when the matrix of the catalog was built
-  considered: number; // how many visible pieces that pass the filters were ranked (the query piece not among them)
+  considered: number; // how many visible elements that pass the filters were ranked (the query element not among them)
   results: SimilarPiece[];
 }
 

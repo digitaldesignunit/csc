@@ -232,7 +232,7 @@ async def _candidate_ids(request: Request, args: Dict[str, Any],
 
 @router.get(
     '/identities/{identity_id}/similar',
-    summary='The pieces nearest to one in descriptor space (kNN)',
+    summary='The elements nearest to one in descriptor space (kNN)',
 )
 @local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
 async def get_similar_identities(
@@ -247,13 +247,13 @@ async def get_similar_identities(
     count: int = Query(10, ge=1, le=sim.MAX_NEIGHBOURS,
                        description='how many neighbours, 1 to 50'),
 ):
-    """The ``count`` pieces nearest to this one in the full descriptor space
+    """The ``count`` elements nearest to this one in the full descriptor space
     of ``basis`` (decision 8.174): Euclidean distance after each dimension is
-    standardised over the catalog (smaller is more similar). The pieces ranked
+    standardised over the catalog (smaller is more similar). The elements ranked
     are those this caller may see that pass the filters of the list (also a
     dimension and a near search): the filters come first, then the ranking, so
     "similar and can hold X and within 50 km" returns the k nearest that pass.
-    The piece itself is never one of them. A piece the caller cannot see is
+    The element itself is never one of them. An element the caller cannot see is
     404; one without the descriptor of the basis is 422; before the matrix of
     the basis has been computed (``main_component_map.py``) the answer is
     409."""
@@ -288,7 +288,7 @@ async def get_similar_identities(
                     feature, matrix.mean, matrix.std, matrix.flat)
         if query is None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=f'This component has no {basis_label(basis)} '
                        f'descriptor, so it cannot be compared.')
         args = await _pipelines_args(request, filters, current_user)
@@ -364,15 +364,15 @@ async def get_identities_locations(
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
     filters: Annotated[CatalogFilters, Depends(catalog_filters)],
     layer: NearLayer = Query(
-        'current', description='which place of a piece is a point: '
+        'current', description='which place of an element is a point: '
                                'current (the location of the current '
                                'version) or origin (the origin building)'),
 ):
-    """Every piece this caller may see that matches the filters and has a
+    """Every element this caller may see that matches the filters and has a
     point on the layer (decisions 8.170, 8.171), with what the map colours
-    and labels it by; the pieces without a point are only counted
+    and labels it by; the elements without a point are only counted
     (``left_out``). The filters, the visibility and a near or fit search are
-    those of the list. A piece never appears for someone who may not see it,
+    those of the list. An element never appears for someone who may not see it,
     and neither does it count."""
     if current_user is None:
         filters = public_filters(filters)
@@ -655,7 +655,6 @@ async def get_identities_stats(
             'createdMonthly': _normalize_stats_facet_lists(
                 raw.get('createdMonthly')
             ),
-            'bbxX': _normalize_stats_facet_lists(raw.get('bbx')),
             # the overview of the MCP tool (8.173): the range of each sorted
             # side in mm, the pieces with a point on each location layer, and
             # the counted pieces that are not public
@@ -693,7 +692,7 @@ async def list_identities_route(
     size: int = Query(0, description='Page size (0=get all)'),
     sortkey: Optional[str] = Query(
         None, description='Sort key; volume = the product of the three bbx '
-                          'sides (a piece without bbx last); match = the '
+                          'sides (an element without bbx last); match = the '
                           'closeness to the dimension search (needs '
                           'fit_mode); distance = the distance to the near '
                           'point (needs near_lat and near_lon). Default: '

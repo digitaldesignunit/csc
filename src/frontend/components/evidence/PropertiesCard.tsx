@@ -23,6 +23,7 @@ import {
   type FoldedProperty,
 } from '@/lib/evidence/format'
 import { loadProperties } from '@/lib/evidence/api'
+import { propertiesEmptyState } from '@/lib/propertiesEmpty'
 import { formatDateAtPrecision } from '@/components/components/componentDetailShared'
 
 function PropertyRow({
@@ -112,9 +113,12 @@ export default function PropertiesCard({
   records,
   headless = false,
   conditionDerived = null,
+  addEvidenceHref = null,
 }: {
   /** the page's own card carries the title (8.118): leave out the heading */
   headless?: boolean
+  /** where "add evidence" leads, for a user who may add evidence: shown in the empty state only */
+  addEvidenceHref?: string | null
   /** the grade shown as a chip when no folded grade stands behind it (7.9) */
   conditionDerived?: { grade: number; label: string } | null
   identityId: string
@@ -137,10 +141,11 @@ export default function PropertiesCard({
   const versionEntries = Object.entries((versionProperties ?? {}) as Record<string, FoldedProperty>)
   const blocks: { title: string; entries: [string, FoldedProperty][]; outrankedFor: boolean }[] = [
     { title: 'Condition', entries: versionEntries.filter(([quantity]) => quantity === 'condition_grade'), outrankedFor: false },
-    { title: 'The piece', entries: Object.entries((properties ?? {}) as Record<string, FoldedProperty>), outrankedFor: true },
+    { title: 'The element', entries: Object.entries((properties ?? {}) as Record<string, FoldedProperty>), outrankedFor: true },
     { title: versionLabel, entries: versionEntries.filter(([quantity]) => quantity !== 'condition_grade'), outrankedFor: false },
   ].filter((block) => block.entries.length > 0)
   const derived = blocks.some((block) => block.title === 'Condition') ? null : conditionDerived
+  const empty = propertiesEmptyState(blocks.length > 0 || !!derived, addEvidenceHref)
 
   return (
     <section aria-label="Properties" className="space-y-3">
@@ -164,9 +169,15 @@ export default function PropertiesCard({
           </ul>
         </div>
       )}
-      {blocks.length === 0 && !derived && (
+      {empty.kind === 'plain' && (
         <p className="text-sm text-muted-foreground">
-          No published evidence yet: nothing is known about this piece beyond what its record says.
+          No published evidence yet: nothing is known about this element beyond what its record says.
+        </p>
+      )}
+      {empty.kind === 'link' && (
+        <p className="text-sm text-muted-foreground">
+          No properties yet:{' '}
+          <Link href={empty.href} className="underline underline-offset-2 hover:text-foreground">add evidence</Link>
         </p>
       )}
       {blocks.map((block) => (

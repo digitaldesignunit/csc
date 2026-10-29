@@ -9,12 +9,12 @@ import { test } from 'node:test'
 import { groupMethods, searchMethods } from '@/lib/evidence/methodGroups'
 
 const METHODS = [
-  { name: 'core_compression', label: 'Core in compression', description: 'A core drilled from the piece, crushed.' },
+  { name: 'core_compression', label: 'Core in compression', description: 'A core drilled from the element, crushed.' },
   { name: 'archival_document', label: 'Archival document', description: 'A claim from a drawing or report.' },
   { name: 'rebound_hammer', label: 'Rebound hammer', description: 'A test location with a rebound hammer.' },
   { name: 'visual_inspection', label: 'Visual inspection', description: 'Spalling, cracking, corrosion.' },
   { name: 'era_heuristic', label: 'Rule of thumb', description: 'An estimate from the construction year.' },
-  { name: 'reinforcement_layout', label: 'Reinforcement layout', description: 'The bars of the piece.' },
+  { name: 'reinforcement_layout', label: 'Reinforcement layout', description: 'The bars of the element.' },
   { name: 'manufacturer_datasheet', label: 'Manufacturer datasheet', description: 'A figure from the datasheet.' },
 ]
 

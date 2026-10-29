@@ -82,13 +82,13 @@ export function ParentTags({
   const [scanNote, setScanNote] = useState<string | null>(null)
   const draftId = uuidFromScan(draft)
   const problem = !draftId ? null
-    : draftId === exclude ? 'This is the tag of the new piece itself.'
+    : draftId === exclude ? 'This is the tag of the new element itself.'
       : parents.includes(draftId) ? 'Already a parent.'
         : null
 
   const add = (id: string) => {
     if (id === exclude) {
-      setScanNote('This is the tag of the new piece itself.')
+      setScanNote('This is the tag of the new element itself.')
       return
     }
     if (parents.includes(id)) {

@@ -62,10 +62,20 @@ export function checkRor(input: string): Checked {
   return { ok: true, value: `https://ror.org/${id}` }
 }
 
+/** The web page of the organisation: http or https only, as `Actor.url`; empty is fine. */
+export function checkUrl(input: string): Checked {
+  const text = input.trim()
+  if (!text) return { ok: true, value: null }
+  if (!/^https?:\/\//i.test(text)) return { ok: false, message: 'The website must start with http:// or https://.' }
+  if (text.length > 500) return { ok: false, message: 'At most 500 characters.' }
+  return { ok: true, value: text }
+}
+
 export type ProfileFields = {
   full_name: string
   organization: string
   organization_ror: string
+  organization_url: string
   orcid: string
   default_role: ActorRole
 }
@@ -74,6 +84,7 @@ export type ProfileLike = {
   full_name?: string | null
   organization?: string | null
   organization_ror?: string | null
+  organization_url?: string | null
   orcid?: string | null
   default_role?: string | null
 }
@@ -83,6 +94,7 @@ export function profileFields(me: ProfileLike | null | undefined): ProfileFields
     full_name: me?.full_name ?? '',
     organization: me?.organization ?? '',
     organization_ror: me?.organization_ror ?? '',
+    organization_url: me?.organization_url ?? '',
     orcid: me?.orcid ?? '',
     default_role: roleOf(me?.default_role),
   }
@@ -98,6 +110,8 @@ export function profileProblems(fields: ProfileFields): ProfileProblems {
   if (fields.organization.trim().length > 200) problems.organization = 'At most 200 characters.'
   const ror = checkRor(fields.organization_ror)
   if (!ror.ok) problems.organization_ror = ror.message
+  const url = checkUrl(fields.organization_url)
+  if (!url.ok) problems.organization_url = url.message
   const orcid = checkOrcid(fields.orcid)
   if (!orcid.ok) problems.orcid = orcid.message
   return problems
@@ -117,6 +131,7 @@ export function profilePatch(fields: ProfileFields, stored: ProfileLike | null |
 export function problemField(message: string): keyof ProfileFields | null {
   const text = message.toLowerCase()
   if (text.includes('orcid')) return 'orcid'
+  if (text.includes('website')) return 'organization_url'
   if (text.includes('ror')) return 'organization_ror'
   if (text.includes('name')) return 'full_name'
   return null
@@ -126,8 +141,8 @@ export type ActorLike = Record<string, unknown>
 
 /**
  * The actor a profile makes ("Add me", 8.133 d): the account id as `user_id`,
- * name, organisation, ROR and ORCID copied, the default role. A copy: a later
- * change of the profile never rewrites a record.
+ * name, organisation, ROR, website and ORCID copied, the default role. A copy:
+ * a later change of the profile never rewrites a record.
  */
 export function actorFromProfile(me: { _id: string; username: string } & ProfileLike): ActorLike {
   const fields = profileFields(me)
@@ -139,6 +154,34 @@ export function actorFromProfile(me: { _id: string; username: string } & Profile
   }
   if (fields.organization.trim()) actor.organization = fields.organization.trim()
   if (fields.organization_ror.trim()) actor.organization_ror = fields.organization_ror.trim()
+  if (fields.organization_url.trim()) actor.url = fields.organization_url.trim()
   if (fields.orcid.trim()) actor.orcid = fields.orcid.trim()
   return actor
+}
+
+/** Whether the profile names an organisation, so that "Add my organisation" has something to add. */
+export function hasOrganization(me: ProfileLike | null | undefined): boolean {
+  return !!me?.organization?.trim()
+}
+
+/**
+ * The actor "Add my organisation" makes: the organisation of the profile as a
+ * performer of its own (a laboratory, a client): organisation, ROR and website
+ * copied, no person, no role (it is chosen in the record). Null when the
+ * profile has no organisation.
+ */
+export function organizationFromProfile(me: ProfileLike | null | undefined): ActorLike | null {
+  if (!hasOrganization(me)) return null
+  const fields = profileFields(me)
+  const actor: ActorLike = { kind: 'organization', organization: fields.organization.trim() }
+  if (fields.organization_ror.trim()) actor.organization_ror = fields.organization_ror.trim()
+  if (fields.organization_url.trim()) actor.url = fields.organization_url.trim()
+  return actor
+}
+
+/** Whether a performer is the organisation of the profile (the button is then not offered again). */
+export function isMyOrganization(actor: ActorLike, me: ProfileLike | null | undefined): boolean {
+  if (actor.kind !== 'organization' || !hasOrganization(me)) return false
+  const text = (value: unknown) => (typeof value === 'string' ? value.trim().toLowerCase() : '')
+  return text(actor.organization) === text(me?.organization) && !text(actor.name)
 }

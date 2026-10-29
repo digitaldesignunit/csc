@@ -6,7 +6,13 @@
  *
  * Nothing here reads the DOM, the session or the network.
  */
-import { ORIGINAL_FUNCTION_LABELS, SHAPE_CLASS_LABELS, vocabLabel } from '@/generated/Vocab'
+import {
+  EVIDENCE_METHOD_LABELS,
+  ORIGINAL_FUNCTION_LABELS,
+  SHAPE_CLASS_LABELS,
+  vocabLabel,
+  type EvidenceMethod,
+} from '@/generated/Vocab'
 import { circulationChip, type Chip } from '@/lib/componentDetail'
 import { FIT_KEYS } from '@/lib/fit'
 import { NEAR_KEYS } from '@/lib/near'
@@ -45,8 +51,8 @@ export const IN_CIRCULATION_PARTS: { value: Circulation; label: string }[] = [
 ]
 
 export const CIRCULATION_HELP =
-  'In circulation: pieces that can still be reused, in place in their construction work or not. '
-  + 'Out of circulation: pieces that left it (split, installed elsewhere, recycled, returned or lost). '
+  'In circulation: elements that can still be reused, in place in their construction work or not. '
+  + 'Out of circulation: elements that left it (split, installed elsewhere, recycled, returned or lost). '
   + 'All shows both.'
 
 /** What `URLSearchParams` and Next's read-only search params both offer. */
@@ -61,6 +67,7 @@ export const FILTER_KEYS = [
   'shape_class',
   'complexity',
   'fragment',
+  'evidence_method',
   'bbx_min_x',
   'bbx_max_x',
   'bbx_min_y',
@@ -78,10 +85,27 @@ export function browseUrl(key: 'dataset' | 'material', value: string): string {
 /** The three that are always visible; the others sit behind "More filters". */
 export const MAIN_FILTER_KEYS: FilterKey[] = ['original_function', 'material', 'dataset']
 
+/** The evidence methods the Browse filter offers, with their labels (the backend's vocabulary). */
+export const EVIDENCE_METHOD_OPTIONS: { value: EvidenceMethod; label: string }[] =
+  (Object.entries(EVIDENCE_METHOD_LABELS) as [EvidenceMethod, string][]).map(([value, label]) => ({ value, label }))
+
+export function isEvidenceMethod(value: string | null | undefined): value is EvidenceMethod {
+  return Object.prototype.hasOwnProperty.call(EVIDENCE_METHOD_LABELS, value ?? '')
+}
+
+/** The value of a filter in the URL, or null when it is empty or the backend would refuse it
+ *  (an unknown evidence method is a 422 there: an old or edited link is left out instead). */
+export function filterValue(params: ParamsLike, key: string): string | null {
+  const value = params.get(key)
+  if (!value) return null
+  if (key === 'evidence_method' && !isEvidenceMethod(value)) return null
+  return value
+}
+
 export function activeFilters(params: ParamsLike): { key: FilterKey; value: string }[] {
   const out: { key: FilterKey; value: string }[] = []
   for (const key of FILTER_KEYS) {
-    const value = params.get(key)
+    const value = filterValue(params, key)
     if (value) out.push({ key, value })
   }
   return out
@@ -108,6 +132,8 @@ export function filterChipLabel(
       return `Complexity: ${value}`
     case 'fragment':
       return value === 'true' ? 'Fragments only' : 'No fragments'
+    case 'evidence_method':
+      return `Evidence: ${vocabLabel(EVIDENCE_METHOD_LABELS, value)}`
     default: {
       const match = /^bbx_(min|max)_([xyz])$/.exec(key)
       if (!match) return `${key}: ${value}`
@@ -216,7 +242,7 @@ export function cardLine(row: RowLike, materialLabel?: string | null): string {
 /** "N pieces" for a batch (a state with more than one piece), else nothing. */
 export function piecesNote(row: RowLike): string {
   const quantity = row.quantity ?? 1
-  return quantity > 1 ? `${quantity} pieces` : ''
+  return quantity > 1 ? `${quantity} elements` : ''
 }
 
 /** The status of a row, one chip: where it is, or that somebody has reserved
