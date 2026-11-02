@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4.4] - unreleased
+
+### Changed
+
+- **Component map:** the layout now starts from a PCA initialisation instead of the spectral one,
+  which failed on groups of near-identical elements and fell back to a random start. All positions
+  on the map shift once with the first nightly run after the release.
+
 ## [0.6.4.3] - 2026-10-29
 
 Photo controls that follow the permission rule. The Grasshopper fixes announced for 0.6.4.3 move to
