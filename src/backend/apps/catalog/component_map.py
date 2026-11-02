@@ -197,6 +197,7 @@ def _embed_umap(matrix: np.ndarray) -> np.ndarray:
         n_components=2,
         n_neighbors=n_neighbors,
         min_dist=0.1,
+        init='pca',
         metric='euclidean',
         random_state=42,
         n_jobs=1,   # a seed makes UMAP single-threaded: say so instead of the warning
