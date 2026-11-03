@@ -30,12 +30,12 @@ ghenv.Component.Description = (  # NOQA
     '({identity, snapshots[]}), each with its Distance in standardised '
     'descriptor units (smaller is more similar). Basis: radial_signature '
     '(default), scalars or hks. Takes the filters of FetchFilteredComponents '
-    '(they apply before the ranking: the nearest pieces that pass) and the '
+    '(they apply before the ranking: the nearest elements that pass) and the '
     'dimension and near search. The component itself is never one of them.'
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261022'
+CSC_GH_MINIMUM = '261102'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
@@ -43,9 +43,10 @@ try:
     from csc_gh.read import (fetch_filter_params, similar_params,  # NOQA
                              similar_results, similar_error_text,
                              fit_mode_of)
+    from csc_gh.messages import (waits_for_data)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261022 too old or missing: run CSC_Update, '
+        'CSC library 261102 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -67,17 +68,27 @@ OUTPUTS = [
      'Same paths as ComponentPassport'),
     ('Fit', 'Fit',
      'Dimension search: per result, the deviation in per cent (FitMode '
-     'about) or the waste in per cent of the piece (FitMode can_hold). '
+     'about) or the waste in per cent of the element (FitMode can_hold). '
      'Empty without FitMode and FitSize. Same paths as ComponentPassport'),
     ('DistanceKm', 'DistanceKm',
      'Near search: per result, the distance in km from NearPoint to the '
-     'piece (on NearLayer). Empty without NearPoint. Same paths as '
+     'element (on NearLayer). Empty without NearPoint. Same paths as '
      'ComponentPassport'),
 ]
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
+        return None
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
+
+
+def null_outputs():
+    """One null per output: an item of an item-access component that has no
+    result keeps its slot (decision 8.186)."""
     if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
@@ -87,7 +98,7 @@ class CSC_FetchSimilarComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261022
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -120,6 +131,17 @@ class CSC_FetchSimilarComponents(Grasshopper.Kernel.GH_ScriptInstance):
         """The one short state under the component (decision 8.113)."""
         if set_state is not None:
             set_state(self.Component, text)
+
+    def _no_result(self, *ports):
+        """The result of an iteration without one (decision 8.186): empty
+        outputs when the inputs in ``ports`` carry no data at all (the
+        component waits for data; no ports: a list or tree input is empty),
+        else a null in the slot of this item, so the outputs stay one to one
+        with the input list."""
+        if not ports or (waits_for_data is not None
+                         and waits_for_data(self, ports)):
+            return empty_outputs()
+        return null_outputs()
 
     def _stop(self):
         """True when RunScript has to return early: the library is missing or
@@ -171,9 +193,9 @@ class CSC_FetchSimilarComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Circulation: active (default: in circulation, in place or '
             'deinstalled), in_place (still in the works), deinstalled, '
             'exited or all',
-            'Dimension search: about (every side of the piece within '
-            'FitTolerance of FitSize) or can_hold (every side of the piece '
-            'at least FitSize: a piece to cut your part from). Empty = no '
+            'Dimension search: about (every side of the element within '
+            'FitTolerance of FitSize) or can_hold (every side of the element '
+            'at least FitSize: an element to cut your part from). Empty = no '
             'dimension search',
             'The asked size in mm, three numbers in any order (a list of '
             'three numbers, or one Point3d / Vector3d with X, Y, Z). Needs '
@@ -184,10 +206,10 @@ class CSC_FetchSimilarComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Near search: a point with X = latitude and Y = longitude (a '
             'Point3d or Vector3d, as the PlaceLocation of Origin). Empty = '
             'no near search',
-            'Near search: current (where the piece is now, default) or '
+            'Near search: current (where the element is now, default) or '
             'origin (the building it came from)',
-            'Near search: only pieces within this many km. Empty = every '
-            'piece with a point on the layer',
+            'Near search: only elements within this many km. Empty = every '
+            'element with a point on the layer',
         ]
         for index, text_ in enumerate(descriptions):
             if index < len(self.InputParams):
@@ -287,7 +309,7 @@ class CSC_FetchSimilarComponents(Grasshopper.Kernel.GH_ScriptInstance):
             MaterialClass: str,
             Circulation: str,
             FitMode: str,
-            FitSize: System.Collections.Generic.List[object],
+            FitSize: list[object],
             FitTolerance: str,
             NearPoint: Rhino.Geometry.Vector3d,
             NearLayer: str,
@@ -309,12 +331,12 @@ class CSC_FetchSimilarComponents(Grasshopper.Kernel.GH_ScriptInstance):
             self._addWarning('Please provide the identity UUID (or '
                              'component passport JSON) of the component to '
                              'find neighbours of.')
-            return empty_outputs()
+            return self._no_result('IdentityID')
         identity_id = auth_core.resolve_identity_id_from_input(IdentityID)
         if not identity_id:
             self._addError('IdentityID is not a valid identity UUID or '
                            'component passport JSON.')
-            return empty_outputs()
+            return null_outputs()
 
         # the filters, the dimension and near search, the basis and the count
         try:
@@ -395,18 +417,22 @@ class CSC_FetchSimilarComponents(Grasshopper.Kernel.GH_ScriptInstance):
         except requests.exceptions.ConnectionError as e:
             msg = 'Cannot connect to server. Please check your connection.'
             self._addError(msg + f'\nFull Error: {str(e)}')
+            return null_outputs()
 
         except requests.exceptions.Timeout as e:
             msg = 'Request timeout. Server may be slow.'
             self._addError(msg + f'\nFull Error: {str(e)}')
+            return null_outputs()
 
         except requests.exceptions.RequestException as e:
             msg = f'Request error: {str(e)}'
             self._addError(msg)
+            return null_outputs()
 
         except Exception as e:
             msg = f'Unexpected error: {str(e)}'
             self._addError(msg)
+            return null_outputs()
 
         # Return empty results if there was an error
         FilterDescription = Grasshopper.DataTree[System.Object]()

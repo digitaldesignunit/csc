@@ -117,14 +117,16 @@ def test_without_me_the_actor_is_built_as_before():
                                  role='operator')
     assert core.calls == []
     # and an actor of kind user without an id is still refused
+    # (a missing input: a warning, an empty output)
     bad = _run_actor(obj, False, Kind='user')
-    assert bad == '' and 'UserID' in compstub.messages(obj)['error'][0]
+    assert compstub.nulls(bad) and compstub.messages(obj)['error'] == []
+    assert 'UserID' in compstub.messages(obj)['warning'][0]
 
 
 @pytest.mark.parametrize('core', [None, Core(valid=False)])
 def test_me_without_a_session_says_to_sign_in(core):
     _, obj = load('Actor', core)
-    assert _run_actor(obj, True) == ''
+    assert compstub.nulls(_run_actor(obj, True))
     error = compstub.messages(obj)['error'][0]
     assert 'sign in with the Session component first' in error
 
@@ -132,16 +134,16 @@ def test_me_without_a_session_says_to_sign_in(core):
 def test_me_with_an_expired_token_or_a_refusal_says_so():
     core = Core({('GET', '/users/me'): Response(401, {'detail': 'x'})})
     _, obj = load('Actor', core)
-    assert _run_actor(obj, True) == ''
+    assert compstub.nulls(_run_actor(obj, True))
     assert 'sign in with the Session' in compstub.messages(obj)['error'][0]
     core = Core({('GET', '/users/me'): Response(500, {'detail': 'down'})})
     _, obj = load('Actor', core)
-    assert _run_actor(obj, True) == ''
+    assert compstub.nulls(_run_actor(obj, True))
     assert compstub.messages(obj)['error']
     # a different kind with Me is refused, not guessed
     core = Core({('GET', '/users/me'): Response(200, PROFILE)})
     _, obj = load('Actor', core)
-    assert _run_actor(obj, True, Kind='person') == ''
+    assert compstub.nulls(_run_actor(obj, True, Kind='person'))
     assert 'kind user' in compstub.messages(obj)['error'][0]
 
 
@@ -210,13 +212,14 @@ def test_a_snapshot_id_that_disagrees_with_the_passport_is_an_error():
     _, obj = _layout_component()
     out = _run_layout(obj, [Curve((0, 0, 0), (1, 0, 0))], UUID_C,
                       _passport(PLANE))
-    assert out == ''
+    assert compstub.nulls(out)
     error = compstub.messages(obj)['error'][0]
     assert UUID_A in error and UUID_C in error
-    # nothing to name the snapshot at all
+    # nothing to name the snapshot at all: a missing input, a warning
     obj2 = _layout_component()[1]
-    assert _run_layout(obj2, [Curve((0, 0, 0), (1, 0, 0))]) == ''
-    assert 'SnapshotID' in compstub.messages(obj2)['error'][0]
+    assert compstub.nulls(_run_layout(obj2, [Curve((0, 0, 0), (1, 0, 0))]))
+    assert 'SnapshotID' in compstub.messages(obj2)['warning'][0]
+    assert compstub.messages(obj2)['error'] == []
 
 
 def test_a_document_in_metres_is_used_1_to_1_with_a_warning():
@@ -248,7 +251,7 @@ def test_the_link_and_the_day_it_was_read_go_into_the_document():
                 {'DocumentRetrievedAt': 'sometime'}):
         out = _run_layout(obj, [Curve((0, 0, 0), (1, 0, 0))], UUID_A,
                           DocumentTitle='Plan 7', **bad)
-        assert out == ''
+        assert compstub.nulls(out)
     assert 'DocumentUrl' in compstub.messages(obj)['error'][-2]
 
 
@@ -436,7 +439,7 @@ def test_no_layout_and_the_refusals_are_told():
     assert compstub.messages(obj)['error']
     # no session, no input
     _, obj = _fetch_component(None)
-    assert obj.RunScript(_passport(), None, None) == (None,) * 9
+    assert compstub.no_data(obj.RunScript(_passport(), None, None))
     assert 'CSC_Session' in compstub.messages(obj)['warning'][0]
     _, obj = _fetch_component(Core())
     obj.RunScript(None, None, None)

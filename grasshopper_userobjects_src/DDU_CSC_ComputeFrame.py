@@ -22,26 +22,27 @@ ghenv.Component.NickName = 'ComputeFrame'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '7 Geometry Tools'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Computes the frame of a piece offline, with the rules of the server: '
+    'Computes the frame of an element offline, with the rules of the server: '
     'the minimum-volume oriented box of its points, longest side along X, '
     'middle along Y, shortest along Z (an IfcColumn at least twice as long '
     'as wide stands), signs and ties chosen closest to the axes you give, '
-    'never upside down. A piece gets the same frame here as in the catalog '
+    'never upside down. An element gets the same frame here as in the catalog '
     '(tests keep the two in step).'
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005'
+CSC_GH_MINIMUM = '261102'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
-    from csc_gh.build import (BuildError, text)  # NOQA
+    from csc_gh.build import (BuildError, MissingInput, text)  # NOQA
     from csc_gh.frame import (compute_frame)  # NOQA
     from csc_gh.rhino import (canonical_transform, geometry_points, plane_from_frame)  # NOQA
+    from csc_gh.messages import (waits_for_data)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261005 too old or missing: run CSC_Update, '
+        'CSC library 261102 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -55,7 +56,7 @@ OUTPUTS = [
     ('Frame', 'Frame',
      'The frame as a plane (centre of the box, axes x, y, z)'),
     ('Box', 'Box',
-     'The oriented box of the piece'),
+     'The oriented box of the element'),
     ('Extents', 'Extents',
      'Extents of the box along X, Y and Z'),
     ('Transform', 'Transform',
@@ -66,7 +67,17 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
+        return None
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
+
+
+def null_outputs():
+    """One null per output: an item of an item-access component that has no
+    result keeps its slot (decision 8.186)."""
     if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
@@ -76,7 +87,7 @@ class CSC_ComputeFrame(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -105,6 +116,17 @@ class CSC_ComputeFrame(Grasshopper.Kernel.GH_ScriptInstance):
         if set_state is not None:
             set_state(self.Component, text)
 
+    def _no_result(self, *ports):
+        """The result of an iteration without one (decision 8.186): empty
+        outputs when the inputs in ``ports`` carry no data at all (the
+        component waits for data; no ports: a list or tree input is empty),
+        else a null in the slot of this item, so the outputs stay one to one
+        with the input list."""
+        if not ports or (waits_for_data is not None
+                         and waits_for_data(self, ports)):
+            return empty_outputs()
+        return null_outputs()
+
     def _stop(self):
         """True when RunScript has to return early: the library is missing or
         too old, or the outputs were just updated (says why)."""
@@ -128,7 +150,7 @@ class CSC_ComputeFrame(Grasshopper.Kernel.GH_ScriptInstance):
     def BeforeRunScript(self):
         """Perform some setup actions."""
         self.InputParams[0].Description = (
-            'The geometry of one piece: meshes, point clouds, breps, '
+            'The geometry of one element: meshes, point clouds, breps, '
             'extrusions (their vertices are used)'
         )
         self.InputParams[1].Description = (
@@ -143,15 +165,11 @@ class CSC_ComputeFrame(Grasshopper.Kernel.GH_ScriptInstance):
             OriginalFunction: str):
         if self._stop():
             return empty_outputs()
-        Frame = None
-        Box = None
-        Extents = []
-        Transform = None
-        FrameJSON = ''
+        Frame, Box, Extents, Transform, FrameJSON = empty_outputs()
         try:
             items = [g for g in (Geometry or []) if g is not None]
             if not items:
-                raise BuildError('Input Geometry failed to collect data')
+                raise MissingInput('Input Geometry failed to collect data')
             points = geometry_points(items)
             result = compute_frame(points, text(OriginalFunction))
             frame = result['frame']
@@ -165,9 +183,14 @@ class CSC_ComputeFrame(Grasshopper.Kernel.GH_ScriptInstance):
             Transform = canonical_transform(frame)
             FrameJSON = json.dumps({'frame': frame, 'bbx': list(result['bbx']),
                                     'version': result['version']})
+        except MissingInput as error:
+            self._addWarning(str(error))
+            return self._no_result(*error.ports)
         except BuildError as error:
             self._addError(str(error))
+            return null_outputs()
         except Exception as error:
             msg = f'Unexpected error: {error}'
             self._addError(msg)
+            return null_outputs()
         return Frame, Box, Extents, Transform, FrameJSON

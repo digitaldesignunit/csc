@@ -42,7 +42,7 @@ class CSC_CreatePublicDevelopmentFile(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 261102
     """
 
     def __init__(self):
@@ -261,7 +261,7 @@ class CSC_CreatePublicDevelopmentFile(Grasshopper.Kernel.GH_ScriptInstance):
             bool: True if inputs are valid, False otherwise
         """
         if not save_path or not save_path.strip():
-            self._addError('Save path cannot be empty')
+            self._addWarning('Save path cannot be empty')
             return False
 
         if not clear_panel_names:
@@ -305,7 +305,7 @@ class CSC_CreatePublicDevelopmentFile(Grasshopper.Kernel.GH_ScriptInstance):
 
     def RunScript(self,
             Run: bool,
-            ClearPanelNames: System.Collections.Generic.List[str],
+            ClearPanelNames: list[str],
             DevelopmentPath: str,
             Filename: str):
 

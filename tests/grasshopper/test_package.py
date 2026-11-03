@@ -296,9 +296,16 @@ def test_the_helper_never_raises(grasshopper):
     assert status.ready and 'output check skipped' in status.remark
 
 
-def test_empty_outputs_of_one_and_of_many():
-    assert ports.empty(OUTS[:1]) is None
-    assert ports.empty(OUTS) == (None, None, None)
+def test_empty_outputs_of_one_and_of_many(monkeypatch):
+    monkeypatch.setitem(sys.modules, 'Grasshopper', compstub.fake_grasshopper())
+    monkeypatch.setitem(sys.modules, 'System', types.SimpleNamespace(Object=object))
+    one = ports.empty(OUTS[:1])
+    assert compstub.no_data(one) and not isinstance(one, tuple)
+    many = ports.empty(OUTS)
+    assert isinstance(many, tuple) and len(many) == 3
+    assert compstub.no_data(many)
+    assert len({id(tree) for tree in many}) == 3        # not one shared tree
+    assert ports.empty([]) is None                      # no outputs, no data
 
 
 # MESSAGES (8.113) ---------------------------------------------------------------
@@ -367,7 +374,7 @@ def test_a_component_without_the_library_says_so_and_does_not_raise(
     assert obj._outputs_note == ('output check skipped: CSC library not '
                                  'installed')
     result = obj.RunScript(*([None] * 15))
-    assert result is None                           # one output: bare None
+    assert compstub.no_data(result)                 # one output: an empty tree
     seen = compstub.messages(obj)
     assert seen['error'] == [module.LIBRARY_PROBLEM]
 
@@ -442,7 +449,11 @@ def _length(node, scope, count):
         return len(node.elts)
     if isinstance(node, ast.Call):
         func = node.func
-        if isinstance(func, ast.Name) and func.id == 'empty_outputs':
+        if isinstance(func, ast.Name) and func.id in (
+                'empty_outputs', 'null_outputs'):
+            return count
+        # an item without a result: empty outputs or nulls (8.186)
+        if isinstance(func, ast.Attribute) and func.attr == '_no_result':
             return count
         if isinstance(func, ast.Name) and func.id == 'tuple' and node.args \
                 and isinstance(node.args[0], ast.GeneratorExp):

@@ -20,11 +20,11 @@ ghenv.Component.NickName = 'SyncWithRhinoDoc'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Reads the pieces back from the active Rhino document: every text tag '
+    'Reads the elements back from the active Rhino document: every text tag '
     'with the user text csc_identity_id / csc_snapshot_id / csc_placement '
-    '(a piece baked by BakeComponents or by PassportToD2P) gives its '
+    '(an element baked by BakeComponents or by PassportToD2P) gives its '
     'component passport JSON with csc_placement set from where the tag is now, so '
-    'moving or rotating a piece in Rhino moves it in Grasshopper. The '
+    'moving or rotating an element in Rhino moves it in Grasshopper. The '
     'component passport is the tag csc_component, else read by id through the '
     'Session. Nothing is written to the server.'
 )
@@ -50,22 +50,24 @@ except ImportError:
 
 OUTPUTS = [
     ('DocumentComponents', 'DocumentComponents',
-     'DataTree of component passport JSON ({identity, snapshots[]}) of the pieces in the document, one per tag, with csc_placement set from the tag plane (feed it to Disassemble, ApplyFrame or TransformComponent)'),
+     'DataTree of component passport JSON ({identity, snapshots[]}) of the elements in the document, one per tag, with csc_placement set from the tag plane (feed it to Disassemble, ApplyFrame or TransformComponent)'),
 ]
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
-    if len(OUTPUTS) <= 1:
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
         return None
-    return tuple(None for _ in OUTPUTS)
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
 
 
 class CSC_SyncWithRhinoDoc(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)

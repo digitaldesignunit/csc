@@ -28,9 +28,9 @@ ghenv.Component.SubCategory = '9 D2P Components Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Converts component passport JSON into an in-memory D2P GHComponent. Geometry '
     'is registered as a nested Member tree via SetMember (D2P ParentMember '
-    '+ : layer paths) in the canonical orientation of the piece (frame '
+    '+ : layer paths) in the canonical orientation of the element (frame '
     'applied, centred at the origin) or where its csc_placement puts it; '
-    'the component plane is the plane of the canonical piece. Every baked '
+    'the component plane is the plane of the canonical element. Every baked '
     'component gets id_<identity> and snap_<snapshot> shells so layer paths '
     'stay consistent for single- and multi-snapshot component passport and distinct '
     'across catalog identities. The D2P type id comes from the original '
@@ -80,10 +80,12 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
-    if len(OUTPUTS) <= 1:
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
         return None
-    return tuple(None for _ in OUTPUTS)
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
 
 
 class _MemberTree:
@@ -168,7 +170,7 @@ class CSC_PassportToD2P(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261102
 
     D2P member layer taxonomy (SetMember tree)
     -----------------------------------------

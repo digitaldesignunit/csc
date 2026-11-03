@@ -151,19 +151,27 @@ def test_a_cut_names_its_parents_and_states_nothing_else(tmp_path):
     assert body['snapshot']['geometry']['proxies'][0]['primitive'] == 'box'
 
 
-@pytest.mark.parametrize('kwargs, fragment', [
-    (dict(geometry=[]), 'Geometry'),
-    (dict(geometry=[G.Sphere(G.Point3d.Origin, 5).ToBrep()]), 'box'),
-    (dict(geometry=[G.Point3d(0, 0, 0)]), 'not supported'),
-    (dict(geometry=[_box()], Dataset=''), 'Dataset'),
-    (dict(geometry=[_box()], Identity=None), 'original_function'),
-    (dict(geometry=[_box()], IdentityID='nope'), 'UUID'),
+@pytest.mark.parametrize('kwargs, level, fragment', [
+    # a missing input waits (a warning); a bad value is an error
+    (dict(geometry=[]), 'warning', 'Geometry'),
+    (dict(geometry=[G.Sphere(G.Point3d.Origin, 5).ToBrep()]), 'error', 'box'),
+    (dict(geometry=[G.Point3d(0, 0, 0)]), 'error', 'not supported'),
+    (dict(geometry=[_box()], Dataset=''), 'warning', 'Dataset'),
+    (dict(geometry=[_box()], Identity=None), 'warning', 'Identity'),
+    (dict(geometry=[_box()], Identity='{}'), 'error', 'original_function'),
+    (dict(geometry=[_box()], IdentityID='nope'), 'error', 'UUID'),
 ])
-def test_create_identity_explains_a_refusal(tmp_path, kwargs, fragment):
+def test_create_identity_explains_a_refusal(tmp_path, kwargs, level,
+                                            fragment):
     geometry = kwargs.pop('geometry')
     text_json, obj, _ = _create_identity(tmp_path, geometry, **kwargs)
-    assert text_json == ''
-    assert fragment in ' '.join(compstub.messages(obj)['error'])
+    # no geometry at all (list access) waits with empty trees; an item that
+    # is missing or fails keeps its slot with a null (8.186)
+    assert (compstub.no_data(text_json) if not geometry
+            else compstub.nulls(text_json))
+    other = 'error' if level == 'warning' else 'warning'
+    assert fragment in ' '.join(compstub.messages(obj)[level])
+    assert compstub.messages(obj)[other] == []
     assert list(tmp_path.iterdir()) == []              # nothing left behind
 
 
@@ -181,7 +189,8 @@ def test_create_snapshot_makes_the_envelope(tmp_path):
     assert b.problems_of_envelope(envelope) == []
     assert (tmp_path / b.staging_key(text_json) / 'manifest.json').is_file()
     # ClearLocalStorage empties the folder and makes nothing
-    assert obj.RunScript(True, None, None, None, [], None, False) == ''
+    assert compstub.no_data(obj.RunScript(True, None, None, None, [], None,
+                                          False))
     assert list(tmp_path.iterdir()) == []
 
 
@@ -404,7 +413,7 @@ def test_apply_frame_on_passport_json_sets_the_placement():
         for k in 'oxyz'}
     assert 'csc_placement' not in json.dumps(_passport())
     bad, plane = obj.RunScript('not a passport', None)
-    assert bad is None and compstub.messages(obj)['error']
+    assert compstub.nulls(bad) and compstub.messages(obj)['error']
 
 
 def test_apply_frame_undoes_an_earlier_placement():
@@ -446,7 +455,7 @@ def test_apply_frame_computes_a_missing_frame_like_the_server():
     assert (box.Max.Z - box.Min.Z) == pytest.approx(1000, abs=1e-3)
     # too little geometry is an error, not a crash
     nothing, plane = obj.RunScript(G.Point(G.Point3d(0, 0, 0)), None)
-    assert nothing is None and compstub.messages(obj)['error']
+    assert compstub.nulls(nothing) and compstub.messages(obj)['error']
 
 
 def test_compute_frame_outputs():
@@ -467,8 +476,11 @@ def test_compute_frame_outputs():
     moved.Transform(xform)
     bounds = moved.GetBoundingBox(True)
     assert bounds.Center.DistanceTo(G.Point3d.Origin) < 1e-6
+    # no geometry at all is a missing input: a warning, empty outputs
     nothing = obj.RunScript([], None)
-    assert nothing[0] is None and compstub.messages(obj)['error']
+    assert compstub.no_data(nothing) and len(nothing) == 5
+    assert compstub.messages(obj)['warning']
+    assert compstub.messages(obj)['error'] == []
 
 
 def test_transform_component_writes_the_placement_key():
@@ -508,11 +520,11 @@ def test_reinforcement_layout_from_curves():
     # one value per bar or one for all, else the message says so
     bad = obj.RunScript([one, two], ['a', 'b', 'c'], [8], UUID_A, 'scan',
                         None, None, None, None, None, None, None, None, None, None, None)
-    assert bad == '' and 'one Spec' in ' '.join(
+    assert compstub.nulls(bad) and 'one Spec' in ' '.join(
         compstub.messages(obj)['error'])
     no_id = obj.RunScript([one], None, [8], 'x', 'scan', None, None, None,
                           None, None, None, None, None, None, None, None)
-    assert no_id == ''
+    assert compstub.nulls(no_id)
 
 
 # SESSION: THE MESH DOWNLOAD --------------------------------------------------

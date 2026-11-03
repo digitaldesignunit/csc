@@ -63,27 +63,29 @@ OUTPUTS = [
     ('Fit', 'Fit',
      'Dimension search: per result, the deviation in per cent (FitMode '
      'about: the largest relative deviation of the three sorted sides) or '
-     'the waste in per cent of the piece (FitMode can_hold). Empty without '
+     'the waste in per cent of the element (FitMode can_hold). Empty without '
      'FitMode and FitSize. Same paths as ComponentPassport'),
     ('DistanceKm', 'DistanceKm',
      'Near search: per result, the distance in km from NearPoint to the '
-     'piece (on NearLayer). Empty without NearPoint. Same paths as '
+     'element (on NearLayer). Empty without NearPoint. Same paths as '
      'ComponentPassport'),
 ]
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
-    if len(OUTPUTS) <= 1:
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
         return None
-    return tuple(None for _ in OUTPUTS)
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
 
 
 class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261022
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -162,13 +164,13 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Circulation: active (default: in circulation, in place or '
             'deinstalled), in_place (still in the works), deinstalled, '
             'exited or all',
-            'Dimension search: about (every side of the piece within '
-            'FitTolerance of FitSize) or can_hold (every side of the piece '
-            'at least FitSize: a piece to cut your part from). Empty = no '
+            'Dimension search: about (every side of the element within '
+            'FitTolerance of FitSize) or can_hold (every side of the element '
+            'at least FitSize: an element to cut your part from). Empty = no '
             'dimension search',
             'The asked size in mm, three numbers in any order (a list of '
             'three numbers, or one Point3d / Vector3d with X, Y, Z). The way '
-            'a piece lies does not matter: the sides are compared largest to '
+            'an element lies does not matter: the sides are compared largest to '
             'smallest. Needs FitMode',
             'Only for about: a percentage or millimetres as text, 10% or '
             '50mm (a bare number is per cent). Default 10%. can_hold takes '
@@ -176,10 +178,10 @@ class CSC_FetchFilteredComponents(Grasshopper.Kernel.GH_ScriptInstance):
             'Near search: a point with X = latitude and Y = longitude (a '
             'Point3d or Vector3d, as the PlaceLocation of Origin). Empty = no '
             'near search. The results are sorted by distance',
-            'Near search: current (where the piece is now, default) or '
+            'Near search: current (where the element is now, default) or '
             'origin (the building it came from)',
-            'Near search: only pieces within this many km. Empty = every '
-            'piece with a point on the layer, nearest first',
+            'Near search: only elements within this many km. Empty = every '
+            'element with a point on the layer, nearest first',
         ]
         for index, text_ in enumerate(descriptions):
             if index < len(self.InputParams):

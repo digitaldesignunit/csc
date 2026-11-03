@@ -140,7 +140,7 @@ def layout_target(passport=None, snapshot_id=None):
     if placement is not None:
         conversion = 'inverse placement'
         remark = ('conversion: inverse placement (the curves lie on the '
-                  'placed piece; they were mapped back to the stored '
+                  'placed element; they were mapped back to the stored '
                   'coordinates of snapshot %s)' % chosen)
     elif from_passport:
         conversion = 'none'

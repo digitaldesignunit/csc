@@ -23,20 +23,21 @@ ghenv.Component.Description = (  # NOQA
     '(deinstallation, demolition, offcut, surplus or unknown), as JSON '
     'for IdentityMetadata. Dates: 2024, 2024-05, 2024-05-03 or '
     '2024-05-03T14:30:00Z; the precision follows the text. Planned marks '
-    'a piece that is still in place (not yet deinstalled), At is then the '
+    'an element that is still in place (not yet deinstalled), At is then the '
     'planned date or empty.'
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005a'
+CSC_GH_MINIMUM = '261102'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
-    from csc_gh.build import (BuildError, origin)  # NOQA
+    from csc_gh.build import (BuildError, MissingInput, origin)  # NOQA
+    from csc_gh.messages import (waits_for_data)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261005a too old or missing: run CSC_Update, '
+        'CSC library 261102 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -53,8 +54,18 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
-    if len(OUTPUTS) == 1:
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
+        return None
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
+
+
+def null_outputs():
+    """One null per output: an item of an item-access component that has no
+    result keeps its slot (decision 8.186)."""
+    if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
 
@@ -63,7 +74,7 @@ class CSC_Origin(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005a
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -93,6 +104,17 @@ class CSC_Origin(Grasshopper.Kernel.GH_ScriptInstance):
         if set_state is not None:
             set_state(self.Component, text)
 
+    def _no_result(self, *ports):
+        """The result of an iteration without one (decision 8.186): empty
+        outputs when the inputs in ``ports`` carry no data at all (the
+        component waits for data; no ports: a list or tree input is empty),
+        else a null in the slot of this item, so the outputs stay one to one
+        with the input list."""
+        if not ports or (waits_for_data is not None
+                         and waits_for_data(self, ports)):
+            return empty_outputs()
+        return null_outputs()
+
     def _stop(self):
         """True when RunScript has to return early: the library is missing or
         too old, or the outputs were just updated (says why)."""
@@ -119,7 +141,7 @@ class CSC_Origin(Grasshopper.Kernel.GH_ScriptInstance):
             'deinstallation, demolition, offcut, surplus or unknown'
         )
         self.InputParams[1].Description = (
-            'When the piece entered circulation (2024, 2024-05, ...)'
+            'When the element entered circulation (2024, 2024-05, ...)'
         )
         self.InputParams[2].Description = (
             'exact, day, month, year or unknown (empty: from At)'
@@ -134,7 +156,7 @@ class CSC_Origin(Grasshopper.Kernel.GH_ScriptInstance):
             'Latitude (X) and longitude (Y) of the place'
         )
         self.InputParams[6].Description = (
-            'Name of the construction work the piece came from (deinstallation '
+            'Name of the construction work the element came from (deinstallation '
             '/ demolition only)'
         )
         self.InputParams[7].Description = (
@@ -147,7 +169,7 @@ class CSC_Origin(Grasshopper.Kernel.GH_ScriptInstance):
             'monolithic, prefabricated, mixed or unknown'
         )
         self.InputParams[10].Description = (
-            'How the piece was recovered'
+            'How the element was recovered'
         )
         self.InputParams[11].Description = (
             'Actor JSON of who did it (from Actor)'
@@ -156,12 +178,12 @@ class CSC_Origin(Grasshopper.Kernel.GH_ScriptInstance):
             'Free text'
         )
         self.InputParams[13].Description = (
-            'Where in the construction work the piece sat, e.g. a floor '
+            'Where in the construction work the element sat, e.g. a floor '
             'or an axis (deinstallation / demolition only)'
         )
         if len(self.InputParams) > 14:      # an instance from before Planned
             self.InputParams[14].Description = (
-                'True while the piece is still in place: identified in its '
+                'True while the element is still in place: identified in its '
                 'works, not yet deinstalled (deinstallation / demolition '
                 'only). At is then the planned date, or empty'
             )
@@ -187,7 +209,7 @@ class CSC_Origin(Grasshopper.Kernel.GH_ScriptInstance):
             Planned: bool):
         if self._stop():
             return empty_outputs()
-        Origin = ''
+        Origin = empty_outputs()
         if not PositionInWork or PositionInWork == '':
             PositionInWork = None
         try:
@@ -200,8 +222,13 @@ class CSC_Origin(Grasshopper.Kernel.GH_ScriptInstance):
                               PositionInWork, bool(Planned))
             Origin = json.dumps(fragment)
             return Origin
+        except MissingInput as error:
+            self._addWarning(str(error))
+            return self._no_result(*error.ports)
         except BuildError as error:
             self._addError(str(error))
+            return null_outputs()
         except Exception as error:
             self._addError(f'Unexpected error: {error}')
+            return null_outputs()
         return Origin

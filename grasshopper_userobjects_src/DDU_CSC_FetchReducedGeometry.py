@@ -34,23 +34,24 @@ ghenv.Component.Description = (  # NOQA
     '- A raw snapshot_id\n\n'
     'Falls back to the inline snapshot geometry (preview meshes) when no '
     'reduced PLY is available. Point clouds have no reduced PLY; the inline '
-    'preview (at most 1000 points) is returned instead. A piece that has '
+    'preview (at most 1000 points) is returned instead. An element that has '
     'only an authored shape (a box or prism, no scan) is built from its '
     'parameters.'
 )
 
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005'
+CSC_GH_MINIMUM = '261102'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
     from csc_gh.read import (authored_only, drawable_proxies, placement_of)  # NOQA
     from csc_gh.rhino import (placement_transform, proxy_to_rhino)  # NOQA
+    from csc_gh.messages import (waits_for_data)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261005 too old or missing: run CSC_Update, '
+        'CSC library 261102 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 
@@ -77,7 +78,17 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
+        return None
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
+
+
+def null_outputs():
+    """One null per output: an item of an item-access component that has no
+    result keeps its slot (decision 8.186)."""
     if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
@@ -87,7 +98,7 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261018
+    Version: 261102
     """
 
     # Resolution preference chain (reduced only; inline fallback otherwise)
@@ -125,6 +136,17 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         """The one short state under the component (decision 8.113)."""
         if set_state is not None:
             set_state(self.Component, text)
+
+    def _no_result(self, *ports):
+        """The result of an iteration without one (decision 8.186): empty
+        outputs when the inputs in ``ports`` carry no data at all (the
+        component waits for data; no ports: a list or tree input is empty),
+        else a null in the slot of this item, so the outputs stay one to one
+        with the input list."""
+        if not ports or (waits_for_data is not None
+                         and waits_for_data(self, ports)):
+            return empty_outputs()
+        return null_outputs()
 
     def _stop(self):
         """True when RunScript has to return early: the library is missing or
@@ -487,7 +509,7 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         if not Input:
             msg = 'Please provide input data.'
             self._addWarning(msg)
-            return empty_outputs()
+            return self._no_result('Input')
 
         # Set up outputs
         GeometryData = System.Collections.Generic.List[System.Object]()
@@ -503,12 +525,12 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
             if not passport or not snapshot:
                 msg = 'Could not resolve a snapshot from input.'
                 self._addError(msg)
-                return __Results
+                return null_outputs()
             snapshot_id = snapshot.get('_id')
             if not snapshot_id or not auth_core.validate_uuid(snapshot_id):
                 msg = f'Snapshot ID <{snapshot_id}> is not a valid UUID!'
                 self._addError(msg)
-                return __Results
+                return null_outputs()
 
 
             items = self.collect_fetched_geometry(auth_core, snapshot)
@@ -558,17 +580,21 @@ class CSC_FetchReducedGeometry(Grasshopper.Kernel.GH_ScriptInstance):
         except requests.exceptions.ConnectionError as e:
             msg = 'Cannot connect to server. Please check your connection.'
             self._addError(msg + f'\nFull Error: {str(e)}')
+            return null_outputs()
 
         except requests.exceptions.Timeout as e:
             msg = 'Request timeout. Server may be slow.'
             self._addError(msg + f'\nFull Error: {str(e)}')
+            return null_outputs()
 
         except requests.exceptions.RequestException as e:
             msg = f'Request error: {str(e)}'
             self._addError(msg)
+            return null_outputs()
 
         except Exception as e:
             msg = f'Unexpected error: {str(e)}'
             self._addError(msg)
+            return null_outputs()
 
         return __Results

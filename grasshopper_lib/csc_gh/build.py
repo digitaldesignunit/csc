@@ -82,6 +82,24 @@ class BuildError(ValueError):
     """An input the builders refuse, with a sentence for the user."""
 
 
+class MissingInput(BuildError):
+    """An input that carries nothing (not connected, empty). The component
+    waits for data, it has not failed: components report this one as a
+    warning, every other ``BuildError`` as an error. ``ports`` names the
+    inputs the value belongs to: an item-access component gives empty
+    outputs when all of them carry no data at all, and a null in the slot of
+    the item otherwise (``messages.waits_for_data``, decision 8.186)."""
+
+    def __init__(self, message='', ports=()):
+        BuildError.__init__(self, message)
+        self.ports = tuple(ports)
+
+
+def missing_input(name):
+    """``MissingInput`` for the port ``name`` (Grasshopper's own wording)."""
+    return MissingInput('Input %s failed to collect data' % name, (name,))
+
+
 # SMALL HELPERS ---------------------------------------------------------------
 def clean(mapping):
     """The dict without None values and empty strings / lists / dicts."""
@@ -262,9 +280,11 @@ def actor(kind=None, user_id=None, name=None, organization=None,
                 'organization' if organization and not name else 'person')
     kind = choice(kind, 'Kind', VOCAB['actor_kind'])
     if kind == 'user' and not user_id:
-        raise BuildError('an actor of kind user needs a UserID')
+        raise MissingInput('an actor of kind user needs a UserID',
+                           ('UserID',))
     if kind != 'user' and not (name or organization):
-        raise BuildError('an actor needs a name or an organization')
+        raise MissingInput('an actor needs a name or an organization',
+                           ('Name', 'Organization'))
     return clean({
         'kind': kind, 'user_id': user_id, 'name': name,
         'organization': organization,
@@ -329,8 +349,8 @@ def origin(kind, at=None, at_precision=None, place_name=None, address=None,
     planned date or empty."""
     kind = choice(kind, 'Kind', VOCAB['origin_kind'])
     if kind is None:
-        raise BuildError('an origin needs a Kind (%s)'
-                         % ', '.join(VOCAB['origin_kind']))
+        raise MissingInput('an origin needs a Kind (%s)'
+                           % ', '.join(VOCAB['origin_kind']), ('Kind',))
     when, precision = parse_date(at, 'At')
     precision = choice(at_precision, 'AtPrecision',
                        VOCAB['precision'], precision) or 'unknown'
@@ -671,13 +691,18 @@ def identity_body(identity_id, dataset, identity_meta, snapshot,
         raise BuildError('IdentityID is not a valid UUID')
     dataset = text(dataset)
     if not dataset:
-        raise BuildError('a component needs a Dataset')
+        raise MissingInput('a component needs a Dataset', ('Dataset',))
     parents = [text(p) for p in (parents or []) if text(p)]
     for parent in parents:
         if not is_uuid(parent):
             raise BuildError('parent %r is not a valid UUID' % parent)
     body = {}
-    meta = loads_fragment(identity_meta, 'IdentityMetadata') or {}
+    meta = loads_fragment(identity_meta, 'IdentityMetadata')
+    if meta is None and not parents:
+        # a new component needs its metadata: the input is missing (a
+        # builder upstream may still be waiting), not wrong
+        raise missing_input('Identity')
+    meta = meta or {}
     for key, value in meta.items():
         if key not in IDENTITY_METADATA_KEYS:
             raise BuildError('IdentityMetadata: %r is not an identity field'
@@ -701,6 +726,8 @@ def snapshot_envelope(identity_id, snapshot, supersedes=None):
     """What CreateComponentSnapshot hands to AddComponentSnapshot: the
     snapshot body plus where it goes (the body itself has no identity)."""
     identity_id = text(identity_id)
+    if not identity_id:
+        raise missing_input('IdentityID')
     if not is_uuid(identity_id):
         raise BuildError('IdentityID is not a valid UUID')
     supersedes = text(supersedes)
@@ -804,12 +831,16 @@ def reinforcement_layout_record(snapshot_id, bars, basis, observed_at=None,
     ``document_title`` (decision 8.106).
     """
     snapshot_id = text(snapshot_id)
+    if not snapshot_id:
+        raise MissingInput('SnapshotID is missing: give it, or a '
+                           'ComponentPassport',
+                           ('SnapshotID', 'ComponentPassport'))
     if not is_uuid(snapshot_id):
         raise BuildError('SnapshotID is not a valid UUID: the bars are '
                          'positioned in the coordinates of one snapshot')
     basis = choice(basis, 'Basis', VOCAB['reinforcement_basis'])
     if basis is None:
-        raise BuildError('Basis is drawing, scan or exposed')
+        raise MissingInput('Basis is drawing, scan or exposed', ('Basis',))
     out_bars = []
     for index, bar in enumerate(bars or []):
         points = [[float(v) for v in p] for p in bar['points']]
@@ -871,9 +902,9 @@ def evidence_bulk_body(records, identity_ids):
     records = [r for r in records if r]
     ids = [text(i) for i in identity_ids or [] if text(i)]
     if not records:
-        raise BuildError('no evidence record to add')
+        raise MissingInput('no evidence record to add', ('Evidence',))
     if not ids:
-        raise BuildError('IdentityID is missing')
+        raise MissingInput('IdentityID is missing', ('IdentityID',))
     if len(ids) not in (1, len(records)):
         raise BuildError('give one IdentityID for all records or one per '
                          'record (%d records, %d ids)'

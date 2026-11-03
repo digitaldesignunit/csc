@@ -353,9 +353,10 @@ def test_a_source_swap_sets_the_source_and_a_remark_and_nothing_else():
     done = obj.replace_scriptcomp_source(['PY3', 'nick', 'Name', script, 'old'], 'new source',
                                          (261018, 0, 0))
     assert done is True and script.source == 'new source'
-    assert script.messages == [('remark', 'Source updated to v261018. Inputs and outputs may have '
-                                'changed: open the script editor and click Apply (or paste the '
-                                'source again) to update them, then recompute.')]
+    assert script.messages == [('remark', 'Source updated to v261018. Save the definition, close it '
+                                'and open it again (until then the script editor opens '
+                                'read-only), then open the script editor and click Apply to '
+                                'update the inputs and outputs.')]
 
 
 def test_the_old_components_are_still_reported_not_replaced():
@@ -381,4 +382,5 @@ def test_version_texts_and_the_end_of_run_line(up):
     assert text((251009, 0, 1)) == '251009a' and text((251009, 2, 3)) == '251009.2c'
     assert text(None) == '?'
     assert up['replaced_summary'](['Alpha', 'Beta']) == (
-        'Replaced the source of 2 components: Alpha, Beta. Each needs a recompute.')
+        'Replaced the source of 2 components: Alpha, Beta. Save the definition, close it and '
+        'open it again, then click Apply in the script editor of each.')

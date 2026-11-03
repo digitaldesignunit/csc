@@ -42,7 +42,7 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260609
+    Version: 261102
     """
 
     def __init__(self):
@@ -359,11 +359,11 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             bool: True if inputs are valid, False otherwise
         """
         if not group_name or not group_name.strip():
-            self._addError('Group name cannot be empty')
+            self._addWarning('Group name cannot be empty')
             return False
 
         if not save_path or not save_path.strip():
-            self._addError('Save path cannot be empty')
+            self._addWarning('Save path cannot be empty')
             return False
 
         if not clear_panel_names:
@@ -409,11 +409,11 @@ class CSC_CreateReleaseFiles(Grasshopper.Kernel.GH_ScriptInstance):
             Run: bool,
             SaveExamplesOnly: bool,
             RemoveGroupName: str,
-            ClearPanelNames: System.Collections.Generic.List[str],
+            ClearPanelNames: list[str],
             ReleasePath: str,
             Filename: str,
-            ExampleGroupNames: System.Collections.Generic.List[str],
-            ExampleFileNames: System.Collections.Generic.List[str]):
+            ExampleGroupNames: list[str],
+            ExampleFileNames: list[str]):
 
         # Initialize output variables
         success = False

@@ -19,23 +19,24 @@ ghenv.Component.NickName = 'IdentityMetadata'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '3 Component Operations'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Builds the fields of a new component that belong to the piece '
+    'Builds the fields of a new component that belong to the element '
     'itself (original function, material, trade name, manufacturer, '
     'manufacture date, origin) as JSON for CreateComponentIdentity. A '
-    'cut piece leaves it out: everything it does not state comes from '
+    'cut element leaves it out: everything it does not state comes from '
     'its parents.'
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005'
+CSC_GH_MINIMUM = '261102'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
     from csc_gh.build import (BuildError, identity_metadata)  # NOQA
+    from csc_gh.messages import (waits_for_data)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261005 too old or missing: run CSC_Update, '
+        'CSC library 261102 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -52,7 +53,17 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
+        return None
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
+
+
+def null_outputs():
+    """One null per output: an item of an item-access component that has no
+    result keeps its slot (decision 8.186)."""
     if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
@@ -62,7 +73,7 @@ class CSC_IdentityMetadata(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -91,6 +102,17 @@ class CSC_IdentityMetadata(Grasshopper.Kernel.GH_ScriptInstance):
         """The one short state under the component (decision 8.113)."""
         if set_state is not None:
             set_state(self.Component, text)
+
+    def _no_result(self, *ports):
+        """The result of an iteration without one (decision 8.186): empty
+        outputs when the inputs in ``ports`` carry no data at all (the
+        component waits for data; no ports: a list or tree input is empty),
+        else a null in the slot of this item, so the outputs stay one to one
+        with the input list."""
+        if not ports or (waits_for_data is not None
+                         and waits_for_data(self, ports)):
+            return empty_outputs()
+        return null_outputs()
 
     def _stop(self):
         """True when RunScript has to return early: the library is missing or
@@ -164,7 +186,7 @@ class CSC_IdentityMetadata(Grasshopper.Kernel.GH_ScriptInstance):
             ManufacturedPrecision: str):
         if self._stop():
             return empty_outputs()
-        IdentityMetadata = ''
+        IdentityMetadata = empty_outputs()
         if not ManufacturedPrecision or ManufacturedPrecision == '':
             ManufacturedPrecision = None
         try:
@@ -176,7 +198,9 @@ class CSC_IdentityMetadata(Grasshopper.Kernel.GH_ScriptInstance):
             return IdentityMetadata
         except BuildError as error:
             self._addError(str(error))
+            return null_outputs()
         except Exception as error:
             msg = f'Unexpected error: {error}'
             self._addError(msg)
+            return null_outputs()
         return IdentityMetadata
