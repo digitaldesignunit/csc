@@ -330,6 +330,31 @@ def read_document(doc, fetch=None, plane_of=None):
     return pieces
 
 
+def net_instance(component):
+    """The concrete .NET object of a D2P component, the one Grasshopper and
+    D2P accept as an ``IComponentBase``. ``instance_from_object`` returns the
+    .NET object typed as the interface, which pythonnet 3 may hand over as an
+    interface proxy: unwrap a wrapper that carries ``NetObj`` first, then the
+    proxy (``__implementation__``). An object that is neither stays as it is;
+    None stays None."""
+    if component is None:
+        return None
+    component = getattr(component, 'NetObj', component)
+    return getattr(component, '__implementation__', component)
+
+
+def net_type_name(value):
+    """The .NET type name of an object, else its Python type name (for a
+    remark that tells the live check what was put out)."""
+    try:
+        name = value.GetType().FullName
+        if name:
+            return str(name)
+    except Exception:
+        pass
+    return type(value).__name__
+
+
 def passport_fetcher(auth_core):
     """``fetch(identity_id, snapshot_id)`` for ``passport_for_tags``: the
     Session's cached passport read of that snapshot (GET only); None without

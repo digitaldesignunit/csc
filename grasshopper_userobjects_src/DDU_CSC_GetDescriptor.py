@@ -30,9 +30,9 @@ ghenv.Component.Description = (  # NOQA
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
 try:
     from csc_gh.ports import ensure_outputs
-    from csc_gh.messages import set_state
+    from csc_gh.messages import set_state, waits_for_data
 except ImportError:
-    ensure_outputs = set_state = None
+    ensure_outputs = set_state = waits_for_data = None
 
 OUTPUTS = [
     ('DescriptorValues', 'DescriptorValues',
@@ -41,7 +41,17 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
+        return None
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
+
+
+def null_outputs():
+    """One null per output: an item of an item-access component that has no
+    result keeps its slot (decision 8.186)."""
     if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
@@ -51,7 +61,7 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -84,6 +94,17 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
         """The one short state under the component (decision 8.113)."""
         if set_state is not None:
             set_state(self.Component, text)
+
+    def _no_result(self, *ports):
+        """The result of an iteration without one (decision 8.186): empty
+        outputs when the inputs in ``ports`` carry no data at all (the
+        component waits for data; no ports: a list or tree input is empty),
+        else a null in the slot of this item, so the outputs stay one to one
+        with the input list."""
+        if not ports or (waits_for_data is not None
+                         and waits_for_data(self, ports)):
+            return empty_outputs()
+        return null_outputs()
 
     def _stop(self):
         """True when RunScript has to return early: the outputs were just
@@ -249,7 +270,7 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
             if not DescriptorKey:
                 msg = 'No descriptor key provided'
                 self._addWarning(msg)
-                return DescriptorValues
+                return self._no_result('DescriptorKey')
 
 
             # Process each input item
@@ -330,4 +351,4 @@ class CSC_GetDescriptor(Grasshopper.Kernel.GH_ScriptInstance):
         except Exception as e:
             msg = f'Unexpected error during descriptor extraction: {str(e)}'
             self._addError(msg)
-            return DescriptorValues
+            return null_outputs()

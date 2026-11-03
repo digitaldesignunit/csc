@@ -36,7 +36,7 @@ ghenv.Component.Description = (  # NOQA
     'The points of a layout are stored coordinates of the snapshot it '
     'belongs to. A passport with a placement (ApplyFrame, '
     'TransformComponent) moves the layouts of its own snapshot to where '
-    'the piece is placed, like the Fetch geometry components do for the '
+    'the element is placed, like the Fetch geometry components do for the '
     'mesh; layouts of another version stay in their stored coordinates and '
     'are named in a warning. Document units are taken as millimetres (1:1); '
     'a document in another unit gets a warning. Status: published '
@@ -46,7 +46,7 @@ ghenv.Component.Description = (  # NOQA
 
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261012'
+CSC_GH_MINIMUM = '261102'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
@@ -56,9 +56,10 @@ try:
     from csc_gh.read import (load_passport)  # NOQA
     from csc_gh.rhino import (mm_per_document_unit, pipe_brep, polyline_curve)  # NOQA
     from csc_gh.upload import (http_error_text)  # NOQA
+    from csc_gh.messages import (waits_for_data)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261012 too old or missing: run CSC_Update, '
+        'CSC library 261102 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -96,7 +97,17 @@ NOT_FOUND = 404
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
+        return None
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
+
+
+def null_outputs():
+    """One null per output: an item of an item-access component that has no
+    result keeps its slot (decision 8.186)."""
     if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
@@ -106,7 +117,7 @@ class CSC_FetchReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261012
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -135,6 +146,17 @@ class CSC_FetchReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
         """The one short state under the component (decision 8.113)."""
         if set_state is not None:
             set_state(self.Component, text)
+
+    def _no_result(self, *ports):
+        """The result of an iteration without one (decision 8.186): empty
+        outputs when the inputs in ``ports`` carry no data at all (the
+        component waits for data; no ports: a list or tree input is empty),
+        else a null in the slot of this item, so the outputs stay one to one
+        with the input list."""
+        if not ports or (waits_for_data is not None
+                         and waits_for_data(self, ports)):
+            return empty_outputs()
+        return null_outputs()
 
     def _stop(self):
         """True when RunScript has to return early: the library is missing or
@@ -260,7 +282,7 @@ class CSC_FetchReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
             return empty_outputs()
         if not ComponentPassport:
             self._addWarning('Please provide input data.')
-            return empty_outputs()
+            return self._no_result('ComponentPassport')
 
         Bars = Grasshopper.DataTree[System.Object]()
         Diameter = Grasshopper.DataTree[System.Object]()
@@ -292,7 +314,7 @@ class CSC_FetchReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
             if code == NOT_FOUND:
                 self._addError(f'Component or snapshot {target_id} was not '
                                'found.')
-                return results
+                return null_outputs()
 
             layouts, left_out = layouts_of(rows)
             if left_out:
@@ -345,15 +367,20 @@ class CSC_FetchReinforcementLayout(Grasshopper.Kernel.GH_ScriptInstance):
 
         except BuildError as error:
             self._addError(str(error))
+            return null_outputs()
         except requests.exceptions.ConnectionError as e:
             msg = 'Cannot connect to server. Please check your connection.'
             self._addError(msg + f'\nFull Error: {str(e)}')
+            return null_outputs()
         except requests.exceptions.Timeout as e:
             msg = 'Request timeout. Server may be slow.'
             self._addError(msg + f'\nFull Error: {str(e)}')
+            return null_outputs()
         except requests.exceptions.RequestException as e:
             self._addError(f'Request error: {str(e)}')
+            return null_outputs()
         except Exception as e:
             # includes CSCClientOutdated: its text names the fix
             self._addError(f'Unexpected error: {str(e)}')
+            return null_outputs()
         return results

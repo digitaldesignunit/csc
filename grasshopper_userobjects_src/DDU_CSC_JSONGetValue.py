@@ -44,7 +44,17 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
+        return None
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
+
+
+def null_outputs():
+    """One null per output: an item of an item-access component that has no
+    result keeps its slot (decision 8.186)."""
     if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
@@ -54,7 +64,7 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -351,4 +361,4 @@ class CSC_JSONGetValue(Grasshopper.Kernel.GH_ScriptInstance):
             msg = f'Unexpected error during value extraction: {str(e)}'
             self._addError(msg)
             # Return empty results if there was an error
-            return __Results
+            return null_outputs()

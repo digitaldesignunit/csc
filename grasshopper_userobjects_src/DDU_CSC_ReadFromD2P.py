@@ -24,25 +24,26 @@ ghenv.Component.NickName = 'ReadFromD2P'  # NOQA
 ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '9 D2P Components Interface'  # NOQA
 ghenv.Component.Description = (  # NOQA
-    'Reads the D2P components of the active Rhino document back into '
-    'component passport JSON: the identity and snapshot ids come from the user text '
-    'of the component label (written by PassportToD2P), the placement from '
-    'the plane of the D2P component now, the component passport from the label '
-    'csc_component or by id through the Session. Pieces baked by '
-    'BakeComponents are read from their tag the same way. Nothing is '
-    'written to the server.'
+    'Reads the elements of the active Rhino document back into component '
+    'passport JSON. A D2P component (made by PassportToD2P and committed '
+    'with D2P) is read from the user text of its members, with the placement '
+    'from the plane of the D2P component now. An element baked by '
+    'BakeComponents is read from its tag; a bake is not a D2P component, so '
+    'its Component output is null. The component passport comes from the '
+    'stored csc_component or by id through the Session. Nothing is written '
+    'to the server.'
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261005'
+CSC_GH_MINIMUM = '261102'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
-    from csc_gh.doc import (passport_fetcher, read_document)  # NOQA
+    from csc_gh.doc import (net_instance, net_type_name, passport_fetcher, read_document)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261005 too old or missing: run CSC_Update, '
+        'CSC library 261102 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -54,24 +55,26 @@ except ImportError:
 
 OUTPUTS = [
     ('ComponentPassport', 'ComponentPassport',
-     'DataTree of component passport JSON ({identity, snapshots[]}), one per piece, with csc_placement set from the plane of the D2P component (or the tag, for a piece baked by BakeComponents)'),
+     'DataTree of component passport JSON ({identity, snapshots[]}), one per element, with csc_placement set from the plane of the D2P component (or the tag, for an element baked by BakeComponents)'),
     ('Component', 'Component',
-     'The D2P component of each component passport (.NET IComponentBase), null for a piece that is a plain tag and not a D2P component'),
+     'The D2P component of each component passport (.NET IComponentBase), for elements made by PassportToD2P and committed with D2P. Null for an element baked by BakeComponents: a bake is a tag with its geometry, not a D2P component'),
 ]
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
-    if len(OUTPUTS) <= 1:
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
         return None
-    return tuple(None for _ in OUTPUTS)
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
 
 
 class CSC_ReadFromD2P(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -140,6 +143,7 @@ class CSC_ReadFromD2P(Grasshopper.Kernel.GH_ScriptInstance):
         try:
             doc = Rhino.RhinoDoc.ActiveDoc
             found = {}
+            failed = []
 
             def d2p_plane(entry):
                 """The plane of the D2P component the label belongs to."""
@@ -149,12 +153,16 @@ class CSC_ReadFromD2P(Grasshopper.Kernel.GH_ScriptInstance):
                     return None
                 try:
                     component = instance_from_object(entry['object'])
-                except Exception:
-                    component = None
+                    plane = None if component is None else component.Plane
+                except Exception as error:
+                    failed.append((entry['object'].Id, error))
+                    return None
                 if component is None:
                     return None
-                found[entry['object'].Id] = component
-                return component.Plane
+                # the output carries the concrete .NET object (IComponentBase)
+                # that D2P and Grasshopper accept, as PassportToD2P does
+                found[entry['object'].Id] = net_instance(component)
+                return plane
 
             fetch = passport_fetcher(sc.sticky.get('CSC_AuthCore'))
             pieces = read_document(doc, fetch, d2p_plane)
@@ -163,17 +171,32 @@ class CSC_ReadFromD2P(Grasshopper.Kernel.GH_ScriptInstance):
                 self._addWarning(msg)
                 return ComponentPassport, Component
 
+            errors = dict(failed)
+            put_out = []
             for i, piece in enumerate(pieces):
                 label = piece['identity_id'] or 'a tag without an identity'
                 for problem in piece['problems']:
                     self._addWarning(f'{label}: {problem}')
+                if piece['object'].Id in errors:
+                    self._addWarning(
+                        f'{label}: the D2P component could not be resolved '
+                        f'({errors[piece["object"].Id]}); its Component is '
+                        'null and the placement is read from the tag')
                 if piece['passport'] is None:
                     continue
                 ghp = Grasshopper.Kernel.Data.GH_Path(i)
                 ComponentPassport.Add(json.dumps(piece['passport']), ghp)
-                Component.Add(found.get(piece['object'].Id), ghp)
+                d2p_component = found.get(piece['object'].Id)
+                Component.Add(d2p_component, ghp)
+                if d2p_component is not None:
+                    put_out.append(d2p_component)
                 self._addRemark(f'Read {label}')
 
+            types = sorted({net_type_name(c) for c in put_out})
+            if types:
+                self._addRemark(
+                    f'Component: {len(put_out)} D2P component(s) as '
+                    f'{", ".join(types)}')
             self._state(f'Read {ComponentPassport.DataCount}')
             return ComponentPassport, Component
 

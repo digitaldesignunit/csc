@@ -220,11 +220,19 @@ def browser(ctx, code='THE-CODE', deny=False, hold=None):
             if hold is not None:
                 hold.wait(10)
             c = http.client.HTTPConnection('127.0.0.1', redirect.port, timeout=5)
-            c.putrequest('GET', redirect.path + '?' + tail, skip_host=True)
-            c.putheader('Host', '127.0.0.1:%d' % redirect.port)
-            c.endheaders()
-            c.getresponse().read()
-            c.close()
+            try:
+                c.putrequest('GET', redirect.path + '?' + tail, skip_host=True)
+                c.putheader('Host', '127.0.0.1:%d' % redirect.port)
+                c.endheaders()
+                c.getresponse().read()
+            except OSError:
+                # the sign-in was cancelled and its listener is gone: a real
+                # browser shows an error page, the stand-in has nothing to do
+                # (a raise here would end in a thread exception, reported
+                # against whatever test runs ten seconds later)
+                pass
+            finally:
+                c.close()
         threading.Thread(target=call, daemon=True).start()
     ctx.ns['open_browser'] = open_it
     return seen
@@ -326,13 +334,15 @@ def test_a_browser_that_cannot_be_opened_says_where_to_go(ctx):
 
 
 def test_a_sign_in_of_another_server_is_cancelled_when_the_server_changes(ctx):
-    browser(ctx, hold=threading.Event())
+    hold = threading.Event()
+    browser(ctx, hold=hold)
     obj, core = make(ctx)
     run(obj, sign_in=True)
     flow = ctx.sticky['CSC_SignInFlow']
     run(obj, server='https://other.example')
     assert 'CSC_SignInFlow' not in ctx.sticky
     assert flow._listener.wait(2) == ('timeout', None)
+    hold.set()           # the stand-in browser calls the closed listener now
 
 
 # SIGN OUT ------------------------------------------------------------------------------------------------
@@ -490,7 +500,8 @@ def test_the_stored_file_never_holds_the_token_in_the_clear(ctx):
     obj, core = make(ctx, {('POST', '/token'): tokens('csc_dev_PLAINSECRET'), ('GET', '/users/me'): Response(200, {'username': 'a'})})
     stored(ctx)
     run(obj)
-    text = open(ctx.store, encoding='utf-8').read()
+    with open(ctx.store, encoding='utf-8') as handle:
+        text = handle.read()
     assert 'PLAINSECRET' not in text and 'csc_dev_' not in text
 
 

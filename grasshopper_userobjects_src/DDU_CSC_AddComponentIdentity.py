@@ -31,16 +31,17 @@ ghenv.Component.Description = (  # NOQA
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261008'
+CSC_GH_MINIMUM = '261102'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
     from csc_gh.build import (problems_of_identity, staging_key)  # NOQA
     from csc_gh.upload import (http_error_text, load_manifest, passport_after, staged_plan, staging_dir, upload_staged)  # NOQA
+    from csc_gh.messages import (waits_for_data)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261008 too old or missing: run CSC_Update, '
+        'CSC library 261102 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -57,7 +58,17 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
+        return None
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
+
+
+def null_outputs():
+    """One null per output: an item of an item-access component that has no
+    result keeps its slot (decision 8.186)."""
     if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
@@ -67,7 +78,7 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261008
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -96,6 +107,17 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
         """The one short state under the component (decision 8.113)."""
         if set_state is not None:
             set_state(self.Component, text)
+
+    def _no_result(self, *ports):
+        """The result of an iteration without one (decision 8.186): empty
+        outputs when the inputs in ``ports`` carry no data at all (the
+        component waits for data; no ports: a list or tree input is empty),
+        else a null in the slot of this item, so the outputs stay one to one
+        with the input list."""
+        if not ports or (waits_for_data is not None
+                         and waits_for_data(self, ports)):
+            return empty_outputs()
+        return null_outputs()
 
     def _stop(self):
         """True when RunScript has to return early: the library is missing or
@@ -173,20 +195,20 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
         if not IdentityRequest:
             msg = 'Please provide the request JSON of CreateComponentIdentity.'
             self._addWarning(msg)
-            return Created
+            return self._no_result('IdentityRequest')
 
         try:
             body = json.loads(IdentityRequest)
         except json.JSONDecodeError:
             msg = 'IdentityRequest must be valid JSON.'
             self._addError(msg)
-            return Created
+            return null_outputs()
         problems = problems_of_identity(body)
         if problems:
             msg = 'The request is not a new-component request:\n' + \
                 '\n'.join(problems)
             self._addError(msg)
-            return Created
+            return null_outputs()
 
         directory = staging_dir(staging_key(IdentityRequest))
         manifest_dict = load_manifest(directory)
@@ -217,7 +239,7 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
                 }.get(response.status_code) or http_error_text(
                     response, 'Create')
                 self._addError(msg)
-                return Created
+                return null_outputs()
             created = response.json()
             identity_doc = created.get('identity') or {}
             snapshot_doc = created.get('snapshot') or {}
@@ -252,10 +274,13 @@ class CSC_AddComponentIdentity(Grasshopper.Kernel.GH_ScriptInstance):
         except requests.exceptions.ConnectionError as error:
             msg = 'Cannot connect to server. Please check your connection.'
             self._addError(msg + f'\nFull Error: {error}')
+            return null_outputs()
         except requests.exceptions.Timeout as error:
             msg = 'Request timeout. Server may be slow.'
             self._addError(msg + f'\nFull Error: {error}')
+            return null_outputs()
         except Exception as error:
             # includes CSCClientOutdated: its text names the fix
             self._addError(str(error))
+            return null_outputs()
         return Created

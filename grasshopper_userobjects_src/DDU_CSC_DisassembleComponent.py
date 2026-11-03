@@ -23,9 +23,9 @@ ghenv.Component.Description = (  # NOQA
     'Parses component passport JSON ({identity, snapshots[]}) and outputs individual '
     'fields as Grasshopper-native types: the preview geometry (meshes, '
     'point clouds, authored shapes), the frame and the box on it, the '
-    'condition grade, the origin (and whether the piece is still in '
-    'place), the pieces left of a batch and the capture markers. Geometry is in '
-    'the stored coordinates of the piece, moved by its client-side '
+    'condition grade, the origin (and whether the element is still in '
+    'place), the elements left of a batch and the capture markers. Geometry is in '
+    'the stored coordinates of the element, moved by its client-side '
     'csc_placement when it has one.'
 )
 
@@ -63,15 +63,17 @@ OUTPUTS = [
     ('Location', 'Location',
      'Snapshot location as Point3d (X=latitude, Y=longitude, Z=0)'),
     ('BoundingBox', 'BoundingBox',
-     'The box of the piece on its frame (extents bbx), as a '
-     'Rhino.Geometry.Box in the stored coordinates'),
+     'The box of the element on its frame (extents bbx), as a '
+     'Rhino.Geometry.Box where the element sits (the stored coordinates '
+     'moved by csc_placement, if the passport has one)'),
     ('Frame', 'Frame',
-     'The frame of the piece as a plane (centre of the box, canonical '
-     'axes) in the stored coordinates'),
+     'The frame of the element as a plane (centre of the box, canonical '
+     'axes) where the element sits: the stored frame moved by csc_placement, '
+     'if the passport has one'),
     ('Descriptors', 'Descriptors',
      'Snapshot descriptors/metadata as JSON string'),
     ('Geometry', 'Geometry',
-     'Geometry of the piece: Rhino geometry objects (meshes, point '
+     'Geometry of the element: Rhino geometry objects (meshes, point '
      'clouds, authored shapes). Point clouds prefer the full PLY when '
      'Session is signed in, else the inline preview.'),
     ('CaptureMarkers', 'CaptureMarkers',
@@ -96,26 +98,28 @@ OUTPUTS = [
     ('ParentIdentities', 'ParentIdentities',
      'Parent identity IDs (GUIDs) this identity was cut from'),
     ('Planned', 'Planned',
-     'True while the piece is still in place: identified in its works, '
+     'True while the element is still in place: identified in its works, '
      'not yet deinstalled'),
     ('Remaining', 'Remaining',
-     'Pieces left in a batch (recorded quantity minus the pieces drawn); '
-     'empty for a piece that is not a batch'),
+     'Elements left in a batch (recorded quantity minus the elements drawn); '
+     'empty for an element that is not a batch'),
 ]
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
-    if len(OUTPUTS) == 1:
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
         return None
-    return tuple(None for _ in OUTPUTS)
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
 
 
 class CSC_DisassembleComponent(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005a
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)

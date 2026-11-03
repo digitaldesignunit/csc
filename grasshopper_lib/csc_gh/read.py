@@ -406,7 +406,7 @@ def fit_mode_of(value):
     if mode not in FIT_MODES:
         raise ValueError('FitMode is "about" (every side within the '
                          'tolerance of FitSize) or "can_hold" (every side of '
-                         'the piece at least FitSize), not %r' % (value,))
+                         'the element at least FitSize), not %r' % (value,))
     return mode
 
 
@@ -504,7 +504,7 @@ def near_layer_of(value):
         return None
     layer = str(value).strip().lower()
     if layer not in NEAR_LAYERS:
-        raise ValueError('NearLayer is "current" (where the piece is now) or '
+        raise ValueError('NearLayer is "current" (where the element is now) or '
                          '"origin" (the building it came from), not %r'
                          % (value,))
     return layer

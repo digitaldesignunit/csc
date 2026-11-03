@@ -36,7 +36,9 @@ def test_actor_component():
     assert compstub.messages(obj)['error'] == []
     bad, obj, _ = run('Actor', 'user', None, None, None, None, None, None,
                       None, False)
-    assert bad == '' and 'UserID' in compstub.messages(obj)['error'][0]
+    # a missing UserID is a missing input: a warning, no error
+    assert compstub.nulls(bad) and compstub.messages(obj)['error'] == []
+    assert 'UserID' in compstub.messages(obj)['warning'][0]
 
 
 def test_origin_component_takes_a_location_vector():
@@ -55,7 +57,7 @@ def test_origin_component_takes_a_location_vector():
     assert 'position_in_work' not in json.loads(result)
     bad, obj, _ = run('Origin', 'offcut', None, None, None, None, None,
                       'A hall', None, None, None, None, [], None, None, False)
-    assert bad == '' and compstub.messages(obj)['error']
+    assert compstub.nulls(bad) and compstub.messages(obj)['error']
 
 
 def test_origin_component_plans_a_deinstallation():
@@ -79,7 +81,8 @@ def test_origin_component_plans_a_deinstallation():
     # only a deinstallation or a demolition can be planned
     bad, obj, _ = run('Origin', 'offcut', None, None, None, None, None, None,
                       None, None, None, None, [], None, None, True)
-    assert bad == '' and 'Planned' in compstub.messages(obj)['error'][0]
+    assert compstub.nulls(bad)
+    assert 'Planned' in compstub.messages(obj)['error'][0]
 
 
 def test_metadata_components_and_capture_component():
@@ -96,7 +99,7 @@ def test_metadata_components_and_capture_component():
     assert json.loads(result)['manufactured_precision'] == 'unknown'
     bad, obj, _ = run('IdentityMetadata', 'IfcBeam', None, None, None,
                       '2001', None, None, None, None, 'soon')
-    assert bad == '' and 'ManufacturedPrecision' in \
+    assert compstub.nulls(bad) and 'ManufacturedPrecision' in \
         compstub.messages(obj)['error'][0]
     colour = types.SimpleNamespace(R=1, G=2, B=3)
     where = types.SimpleNamespace(X=1.0, Y=2.0)
@@ -112,7 +115,7 @@ def test_metadata_components_and_capture_component():
     bad, obj, _ = run('SnapshotMetadata', 'Lintel', None, None, None, None,
                       None, '2024-05-03', None, None, 'soon')
     error = compstub.messages(obj)['error'][0]
-    assert bad == '' and 'EffectiveFromPrecision' in error
+    assert compstub.nulls(bad) and 'EffectiveFromPrecision' in error
     assert 'EffectivePrecision' not in error.replace(
         'EffectiveFromPrecision', '')
     points = [types.SimpleNamespace(X=0, Y=0, Z=0),
@@ -125,7 +128,8 @@ def test_metadata_components_and_capture_component():
     assert block['fixtures'] == [{'label': 'effector', 'file': 'e.ply'}]
     bad, obj, _ = run('Capture', None, None, None, None, None, None, None,
                       points, ['only one'], None, None)
-    assert bad == '' and 'MarkerLabel' in compstub.messages(obj)['error'][0]
+    assert compstub.nulls(bad)
+    assert 'MarkerLabel' in compstub.messages(obj)['error'][0]
 
 
 # ADD COMPONENTS --------------------------------------------------------------
@@ -232,7 +236,7 @@ def test_add_identity_tells_about_a_failed_upload_and_keeps_the_draft(
 def test_add_identity_answers_to_refusals(tmp_path, status, fragment):
     core = _core({('POST', '/identities'): Response(status, {})})
     tree, obj, _ = _run_add_identity(tmp_path, core)
-    assert tree.DataCount == 0
+    assert compstub.nulls(tree)
     assert fragment in compstub.messages(obj)['error'][0]
     assert [c[0] for c in core.calls] == ['POST']
 
@@ -252,7 +256,7 @@ def test_add_identity_refuses_a_0_5_request(tmp_path):
     old = json.dumps({'_id': UUID_A, 'type': 'panel', 'material': 'corian',
                       'dataset': 'x', 'geometry': {}})
     tree = obj.RunScript(old, True)
-    assert tree.DataCount == 0
+    assert compstub.nulls(tree)
     assert "'type'" in compstub.messages(obj)['error'][0]
     assert module.sticky['CSC_AuthCore'].calls == []
 
@@ -280,7 +284,7 @@ def test_a_426_names_the_fix(tmp_path):
     obj = compstub.instance(add, 'AddComponentIdentity')
     request = _identity_request(tmp_path, add)
     tree = obj.RunScript(request, True)
-    assert tree.DataCount == 0
+    assert compstub.nulls(tree)
     assert 'CSC_Update' in compstub.messages(obj)['error'][0]
 
 
@@ -763,7 +767,7 @@ def test_fetch_filtered_says_what_is_wrong_with_a_fit_or_near_input():
         core, obj, result = _run_search(_search_rows(), **kwargs)
         assert core.asked == [], kwargs                  # nothing is sent
         assert any(words in m for m in compstub.messages(obj)['warning']), kwargs
-        assert result is None or all(v is None for v in result)
+        assert compstub.no_data(result)
 
 
 def test_fetch_filtered_declares_the_match_and_distance_outputs():
@@ -925,7 +929,7 @@ def test_fetch_similar_says_in_words_why_the_server_refused():
         core = SimilarCore(Response(status, body))
         obj, result = _similar_run(core)
         assert any(words in m for m in compstub.messages(obj)['warning']), (status, compstub.messages(obj))
-        assert all(v is None for v in result)
+        assert compstub.no_data(result)
 
 
 def test_fetch_similar_needs_an_identity_and_a_usable_search():
@@ -938,7 +942,7 @@ def test_fetch_similar_needs_an_identity_and_a_usable_search():
                                  ({'NearLayer': 'origin'}, 'warning', 'NearPoint')):
         obj, result = _similar_run(core, **kwargs)
         assert any(words in m for m in compstub.messages(obj)[level]), kwargs
-        assert all(v is None for v in result)
+        assert compstub.no_result(result)
     assert core.asked == []                                                # nothing is sent
 
 

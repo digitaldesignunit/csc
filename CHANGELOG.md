@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4.4] - 2026-11-03
+
+Grasshopper hardening, and the beta notice takes its version from the release. Run `CSC_Update` in
+Grasshopper after the server is deployed.
+
+### Fixed
+
+- **Grasshopper, missing inputs:** a component with a missing or empty input shows a warning and waits
+  for data, instead of an error. Real failures (bad counts, unreadable data, server errors) stay errors
+  (#32, #40).
+- **Grasshopper, outputs without a result:** an output with nothing to give is an empty Grasshopper
+  tree, not `<empty>` or `<null>`, on every error path and when a component stops early. In a component
+  that runs once per item, one missing, empty or failed item gives a null in its slot, so the outputs
+  stay one to one with the input list; an input with no data at all gives empty outputs (#33, #40).
+- **Grasshopper, `ReadFromD2P`:** the `Component` output carries the D2P component itself, and a remark
+  names its type. When the D2P component of an element cannot be resolved, a warning names the element;
+  a plain tag of `BakeComponents` stays null without a warning (#36).
+- **Beta notice:** the beta banner and the beta login notice take the version from the release. The
+  text in the frontend settings writes `{version}` where the number goes (#52).
+
+### Changed
+
+- **Grasshopper, wording:** the descriptions and messages of the components call a single building
+  component an "element" instead of a "piece", as the web app does since 0.6.4.2.
+- **Grasshopper, frames:** the description of `ApplyFrame` says that its `Frame` output is the frame
+  used, in the stored coordinates, and points to `DisassembleComponent` for the frame where the moved
+  element sits. The `Frame` and `BoundingBox` descriptions of `DisassembleComponent` now say that they
+  give the element where it sits.
+- **Grasshopper, `ReinforcementLayout`:** the steel grade (`Spec`) is optional; bars without it are
+  stored without a grade.
+- **Grasshopper, `AddEvidence`:** an invalid identity id or evidence text is an error, no longer a
+  warning.
+- **Grasshopper, `CSC_Update`:** after it replaces the source of a component, the remark and the
+  end of the run ask you to save the definition, close it and open it again before clicking Apply:
+  until then Rhino 8 opens the script editor of that component read-only and the component
+  reports "Object reference not set to an instance of an object".
+- **Grasshopper library:** `csc_gh` 261102; `CSC_Update` brings it.
+- **Component map:** the layout now starts from a PCA initialisation instead of the spectral one,
+  which failed on groups of near-identical elements and fell back to a random start. All positions
+  on the map shift once with the first nightly run after the release.
+- **Development:** the development requirements are pinned exactly (pytest 9.1.1, pytest-xdist
+  3.8.0, coverage 7.16.2, flake8 7.4.1, invoke 3.0.3, requests 2.34.2, pyld 3.3.0, rdflib 7.6.0), and
+  CI installs the same pytest. A cancelled sign-in in the Grasshopper tests no longer leaves an
+  exception in a thread.
+
+### Server notes
+
+- In the server's frontend `.env`, take the version number out of `BETA_BANNER_TEXT` and
+  `BETA_LOGIN_MESSAGE`, or write `{version}` in its place (for example
+  `BETA_BANNER_TEXT="VERSION {version}"`). Restart the frontend.
+
 ## [0.6.4.3] - 2026-10-29
 
 Photo controls that follow the permission rule. The Grasshopper fixes announced for 0.6.4.3 move to

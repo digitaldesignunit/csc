@@ -258,9 +258,9 @@ USEROBJECT_NAME_RE = re.compile(r'^[A-Za-z0-9_][A-Za-z0-9_.-]*$')
 STATE_INCOMPLETE = 'Update incomplete, run again'
 
 SOURCE_REMARK = (
-    'Source updated to v{version}. Inputs and outputs may have changed: open '
-    'the script editor and click Apply (or paste the source again) to update '
-    'them, then recompute.')
+    'Source updated to v{version}. Save the definition, close it and open it '
+    'again (until then the script editor opens read-only), then open the '
+    'script editor and click Apply to update the inputs and outputs.')
 
 
 class UserObjectError(Exception):
@@ -404,7 +404,9 @@ def source_remark(version):
 
 def replaced_summary(names):
     """The end-of-run line that lists the components with a new source."""
-    return 'Replaced the source of %d components: %s. Each needs a recompute.' % (
+    return ('Replaced the source of %d components: %s. Save the definition, '
+            'close it and open it again, then click Apply in the script '
+            'editor of each.') % (
         len(names), ', '.join(names))
 
 
@@ -432,7 +434,7 @@ class CSC_Update(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261018
+    Version: 261103
     """
 
     def __init__(self):

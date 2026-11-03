@@ -21,10 +21,10 @@ ghenv.Component.Category = 'DDU_CSC'  # NOQA
 ghenv.Component.SubCategory = '4 RhinoDoc Interaction'  # NOQA
 ghenv.Component.Description = (  # NOQA
     'Bakes component passports ({identity, snapshots[]}) into the Rhino document: the '
-    'meshes, point clouds and authored shapes of a piece in its canonical '
+    'meshes, point clouds and authored shapes of an element in its canonical '
     'orientation (frame applied, centred at the origin) or where its '
-    'csc_placement puts it, plus one text tag per piece at the plane of the '
-    'canonical piece. The tag carries the user text csc_identity_id, '
+    'csc_placement puts it, plus one text tag per element at the plane of the '
+    'canonical element. The tag carries the user text csc_identity_id, '
     'csc_snapshot_id, csc_placement (and csc_component, the component passport). Move '
     'the group in Rhino, then read it back with SyncWithRhinoDoc. Nothing '
     'is written to the server.'
@@ -57,17 +57,19 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
-    if len(OUTPUTS) <= 1:
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
         return None
-    return tuple(None for _ in OUTPUTS)
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
 
 
 class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261005
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -128,7 +130,7 @@ class CSC_BakeComponents(Grasshopper.Kernel.GH_ScriptInstance):
         )
         self.InputParams[1].Description = (
             'Component passport JSON strings ({identity, snapshots[]}) from the fetch '
-            'components. A piece with a csc_placement (TransformComponent, '
+            'components. An element with a csc_placement (TransformComponent, '
             'ApplyFrame) is baked there, any other in its canonical '
             'orientation at the origin. Its snapshot needs a frame.'
         )

@@ -57,12 +57,34 @@ class PortsStatus(object):
         return 'PortsStatus(ready=%r, remark=%r)' % (self.ready, self.remark)
 
 
-def empty(outputs):
-    """What ``RunScript`` returns when it stops early: None for no or one
-    output, a tuple of None for several."""
+def empty_tree():
+    """One empty Grasshopper tree: an output without a result carries no
+    data (not ``''``, not ``None``, which show as ``<empty>`` and ``<null>``).
+    """
+    import Grasshopper
+    import System
+    return Grasshopper.DataTree[System.Object]()
+
+
+def nulls(outputs):
+    """One null per output (None for one output, a tuple of None for
+    several): the result of an item that failed in an item-access component,
+    so the outputs keep their slots (decision 8.186)."""
     if len(outputs) <= 1:
         return None
     return tuple(None for _ in outputs)
+
+
+def empty(outputs):
+    """What ``RunScript`` returns when it stops early or has no result: an
+    empty tree for one output, a tuple of empty trees for several, None for
+    a component without outputs. A component carries the same few lines
+    itself (``empty_outputs``), since the library may be the very thing that
+    is missing."""
+    if not len(outputs):
+        return None
+    trees = tuple(empty_tree() for _ in outputs)
+    return trees[0] if len(trees) == 1 else trees
 
 
 def own_offset(params):

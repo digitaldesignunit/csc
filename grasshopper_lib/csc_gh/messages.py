@@ -64,6 +64,28 @@ def missing_inputs(**inputs):
     return [name for name, value in inputs.items() if is_empty(value)]
 
 
+def has_no_data(instance, name):
+    """True when the input ``name`` carries no data at all: nothing is
+    connected, or what is connected is an empty list (``VolatileDataCount``
+    0). A null or empty item inside a list is data. An input that is not
+    found counts as having data."""
+    for param in instance.Component.Params.Input:
+        if param.Name == name:
+            return getattr(param, 'VolatileDataCount', 1) == 0
+    return False
+
+
+def waits_for_data(instance, ports):
+    """True when every input in ``ports`` has no data at all (and there is at
+    least one): the component waits for data and gives empty outputs. When
+    some data is there, one item of it is missing, empty or failed, and its
+    iteration gives a null in its slot, so the outputs stay one to one with
+    the input list (decision 8.186; Grasshopper runs an item-access
+    component once per item)."""
+    ports = tuple(ports)
+    return bool(ports) and all(has_no_data(instance, p) for p in ports)
+
+
 def missing_text(name):
     return 'Input parameter %s failed to collect data' % name
 

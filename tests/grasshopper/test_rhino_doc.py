@@ -510,6 +510,9 @@ def test_a_d2p_piece_is_read_by_sync_and_by_read_from_d2p_after_a_move(doc):
     # it is a D2P component the library recognised
     assert components.values[0] is not None
     assert components.values[0].TypeId == 'BM'
+    # the remark names the .NET type that was put out (for the live check)
+    assert any('D2P component(s) as' in m
+               for m in compstub.messages(read)['remark'])
     assert session.requests == []
 
     # the placement drives the geometry as in the bake

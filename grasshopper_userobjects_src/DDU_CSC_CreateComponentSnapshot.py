@@ -32,17 +32,18 @@ ghenv.Component.Description = (  # NOQA
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261022'
+CSC_GH_MINIMUM = '261102'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
-    from csc_gh.build import (BuildError, loads_fragment, problems_of_envelope, snapshot_body, snapshot_envelope, staging_key)  # NOQA
+    from csc_gh.build import (BuildError, MissingInput, loads_fragment, problems_of_envelope, snapshot_body, snapshot_envelope, staging_key)  # NOQA
     from csc_gh.rhino import (input_references, stage_geometry)  # NOQA
     from csc_gh.upload import (clear_staging, commit_staging, staging_root)  # NOQA
+    from csc_gh.messages import (waits_for_data)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261022 too old or missing: run CSC_Update, '
+        'CSC library 261102 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 
@@ -62,7 +63,17 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
+        return None
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
+
+
+def null_outputs():
+    """One null per output: an item of an item-access component that has no
+    result keeps its slot (decision 8.186)."""
     if len(OUTPUTS) <= 1:
         return None
     return tuple(None for _ in OUTPUTS)
@@ -72,7 +83,7 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261022
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -101,6 +112,17 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
         """The one short state under the component (decision 8.113)."""
         if set_state is not None:
             set_state(self.Component, text)
+
+    def _no_result(self, *ports):
+        """The result of an iteration without one (decision 8.186): empty
+        outputs when the inputs in ``ports`` carry no data at all (the
+        component waits for data; no ports: a list or tree input is empty),
+        else a null in the slot of this item, so the outputs stay one to one
+        with the input list."""
+        if not ports or (waits_for_data is not None
+                         and waits_for_data(self, ports)):
+            return empty_outputs()
+        return null_outputs()
 
     def _stop(self):
         """True when RunScript has to return early: the library is missing or
@@ -167,7 +189,7 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
             Centre: bool):
         if self._stop():
             return empty_outputs()
-        SnapshotRequest = ''
+        SnapshotRequest = empty_outputs()
         tmp_dir = None
         try:
             # ClearLocalStorage empties the staging folder and stops here
@@ -178,7 +200,7 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
                 return SnapshotRequest
 
             if not Geometry:
-                raise BuildError('Input Geometry failed to collect data')
+                raise MissingInput('Input Geometry failed to collect data')
             root = staging_root()
             os.makedirs(root, exist_ok=True)
             tmp_dir = os.path.join(root, '_tmp_' + uuid.uuid4().hex)
@@ -219,13 +241,19 @@ class CSC_CreateComponentSnapshot(Grasshopper.Kernel.GH_ScriptInstance):
             if folder:
                 self._addRemark(f'Staged files: {folder}')
             return SnapshotRequest
+        except MissingInput as error:
+            self._addWarning(str(error))
+            return self._no_result(*error.ports)
         except BuildError as error:
             self._addError(str(error))
+            return null_outputs()
         except ValueError as error:
             self._addError(str(error))
+            return null_outputs()
         except Exception as error:
             msg = f'Unexpected error: {error}'
             self._addError(msg)
+            return null_outputs()
         finally:
             if tmp_dir and os.path.isdir(tmp_dir):
                 import shutil

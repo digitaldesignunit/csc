@@ -27,7 +27,7 @@ import os
 import re
 import sys
 
-__version__ = '261022'
+__version__ = '261102'
 
 # in dependency order: a module is reloaded after the ones it imports from
 MODULES = ('ply', 'build', 'read', 'convention', 'layout', 'frame', 'upload',

@@ -78,6 +78,7 @@ class FakeParam:
     def __init__(self, name='out'):
         self.Name = name
         self.Description = ''
+        self.VolatileDataCount = 1          # one item of data
 
 
 class FakeComponentObject:
@@ -270,9 +271,45 @@ def instance(module, name):
     obj.Component = module.ns['ghenv'].Component
     obj.InputParams = obj.Component.Params.Input
     obj.OutputParams = obj.Component.Params.Output
-    # ``scriptcontext.sticky`` as the component's own ``sc``
+    # the inputs carry the names of the RunScript parameters and one item of
+    # data each; ``no_data_on`` takes the data off an input
+    run = getattr(cls, 'RunScript', None)
+    if run is not None:
+        names = run.__code__.co_varnames[1:run.__code__.co_argcount]
+        while len(obj.InputParams) < len(names):
+            obj.InputParams.append(FakeParam('in%d' % len(obj.InputParams)))
+        for param, input_name in zip(obj.InputParams, names):
+            param.Name = input_name
     return obj
+
+
+def no_data_on(obj, *names):
+    """The inputs ``names`` carry no data at all (nothing connected)."""
+    for param in obj.InputParams:
+        if param.Name in names:
+            param.VolatileDataCount = 0
 
 
 def messages(obj):
     return FakeScriptInstance.messages_of(obj)
+
+
+def nulls(value):
+    """True for the result of an item that has none: a null per output
+    (``None``, or a tuple of ``None``), the slot it keeps (8.186)."""
+    if isinstance(value, tuple):
+        return len(value) > 1 and all(v is None for v in value)
+    return value is None
+
+
+def no_result(value):
+    """An output without a result: empty trees, or the nulls of a failed item."""
+    return no_data(value) or nulls(value)
+
+
+def no_data(value):
+    """True for an output without data: an empty tree (or a list / tuple of
+    outputs that are all empty). ``''`` and ``None`` are not."""
+    if isinstance(value, (tuple, list)):
+        return all(no_data(v) for v in value)
+    return isinstance(value, FakeDataTree) and value.DataCount == 0

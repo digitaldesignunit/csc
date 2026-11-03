@@ -33,16 +33,16 @@ ghenv.Component.Description = (  # NOQA
 )
 
 # CSC LIBRARY (decision 8.111) ----------------------------------------------
-CSC_GH_MINIMUM = '261008'
+CSC_GH_MINIMUM = '261102'
 LIBRARY_PROBLEM = None
 try:
     import csc_gh
     csc_gh.require(CSC_GH_MINIMUM)
-    from csc_gh.build import (BuildError, evidence_bulk_body)  # NOQA
+    from csc_gh.build import (BuildError, MissingInput, evidence_bulk_body)  # NOQA
     from csc_gh.upload import (http_error_text)  # NOQA
 except ImportError:
     LIBRARY_PROBLEM = (
-        'CSC library 261008 too old or missing: run CSC_Update, '
+        'CSC library 261102 too old or missing: run CSC_Update, '
         'then restart Rhino')
 
 # OPTIONAL HELPERS: they never block the component (decisions 8.112, 8.113) ---
@@ -59,17 +59,19 @@ OUTPUTS = [
 
 
 def empty_outputs():
-    """What RunScript returns when it stops early."""
-    if len(OUTPUTS) <= 1:
+    """What RunScript returns when it stops early or has no result: an empty
+    Grasshopper tree per output (never '' or None)."""
+    if not OUTPUTS:
         return None
-    return tuple(None for _ in OUTPUTS)
+    trees = tuple(Grasshopper.DataTree[System.Object]() for _ in OUTPUTS)
+    return trees[0] if len(trees) == 1 else trees
 
 
 class CSC_AddEvidence(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 261008
+    Version: 261102
     """
 
     _outputs_ready = True       # set by BeforeRunScript (8.112)
@@ -166,8 +168,11 @@ class CSC_AddEvidence(Grasshopper.Kernel.GH_ScriptInstance):
         try:
             body = evidence_bulk_body(list(Evidence or []),
                                       list(IdentityID or []))
-        except BuildError as error:
+        except MissingInput as error:
             self._addWarning(str(error))
+            return Stored
+        except BuildError as error:
+            self._addError(str(error))
             return Stored
 
         count = len(body['records'])
