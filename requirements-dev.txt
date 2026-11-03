@@ -5,17 +5,20 @@
 -r src/backend/requirements.txt
 -c src/backend/constraints.txt
 
-pytest>=8
-pytest-xdist>=3
-coverage
-flake8
-invoke>=2
+# Every tool is pinned exactly (8.185 c), at a version about two weeks old or
+# older, so CI never takes a release the day it is out. Raise them by hand:
+# Dependabot watches the GitHub Actions only.
+pytest==9.1.1
+pytest-xdist==3.8.0
+coverage==7.16.2
+flake8==7.4.1
+invoke==3.0.3
 
 # the Grasshopper client's own dependency, imported by the components that
 # tests/grasshopper runs outside Rhino (the server itself uses httpx)
-requests
+requests==2.34.2
 
 # validation of the JSON-LD and Turtle exports (tests/api, plan P10); the server
 # writes both without an RDF library
-pyld
-rdflib
+pyld==3.3.0
+rdflib==7.6.0

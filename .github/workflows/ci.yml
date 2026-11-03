@@ -71,7 +71,8 @@ jobs:
       # the release and workflow checks (action pins, release permissions,
       # zenodo metadata): stdlib only, seconds; this job runs on every pull
       # request, so a workflow or Dependabot change is checked too
-      - run: pip install pytest
+      # the same pytest as requirements-dev.txt (8.185 c; a test checks it)
+      - run: pip install pytest==9.1.1
       - run: python -m pytest tests/ci -q -p no:cacheprovider
 
   backend:

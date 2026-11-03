@@ -19,6 +19,24 @@ def _lines(path):
     return path.read_text(encoding='utf-8').splitlines()
 
 
+def _pytest_pins(lines):
+    return re.findall(r'pytest==(\d+(?:\.\d+)*)', '\n'.join(lines))
+
+
+def test_the_ci_installs_the_pytest_of_the_dev_requirements():
+    """8.185 c: no workflow takes a pytest the day it is out; the versions job
+    (tests/ci) and the backend job (requirements-dev.txt) run the same one."""
+    dev = _pytest_pins((ROOT / 'requirements-dev.txt').read_text(
+        encoding='utf-8').splitlines())
+    ci = _pytest_pins(_lines(ROOT / '.github' / 'workflows' / 'ci.yml'))
+    assert len(dev) == 1, dev
+    assert ci == dev, (ci, dev)
+    for path in WORKFLOWS:
+        for number, line in enumerate(_lines(path), 1):
+            if re.search(r'pip install .*\bpytest\b', line):
+                assert 'pytest==' in line, f'{path.name}:{number} {line}'
+
+
 def test_there_are_workflows():
     assert {p.name for p in WORKFLOWS} == {'ci.yml', 'deploy.yml',
                                            'release.yml'}
