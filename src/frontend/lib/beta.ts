@@ -1,3 +1,17 @@
+import pkg from '../package.json'
+
+/**
+ * Beta notice texts (issue #52). The version in them is never typed into the
+ * server's `.env`: a `{version}` placeholder in the text is replaced by the
+ * version of `package.json` (set by `invoke bump-version`, read like
+ * `lib/cscClient.ts` reads it). A text without the placeholder stays as it is.
+ */
+export const BETA_VERSION_PLACEHOLDER = '{version}'
+
+export function fillBetaVersion(text: string, version: string = pkg.version): string {
+  return text.split(BETA_VERSION_PLACEHOLDER).join(version)
+}
+
 function parseEnvFlag(value: string | undefined): boolean {
   if (!value) return false
   const normalized = value.trim().toLowerCase()
@@ -21,14 +35,14 @@ export function isBetaPhaseEnabled(): boolean {
 }
 
 export function getBetaBannerText(): string {
-  return parseEnvString(process.env.BETA_BANNER_TEXT, 'Beta')
+  return fillBetaVersion(parseEnvString(process.env.BETA_BANNER_TEXT, 'Beta {version}'))
 }
 
 export function getBetaLoginMessage(): string {
-  return (
+  return fillBetaVersion(
     parseEnvString(
       process.env.BETA_LOGIN_MESSAGE,
-      'The Catalog of Second Chances is currently in a beta phase. You may encounter incomplete features, breaking changes, or data updates. Thank you for helping us improve the platform.',
-    )
+      'The Catalog of Second Chances is currently in a beta phase (version {version}). You may encounter incomplete features, breaking changes, or data updates. Thank you for helping us improve the platform.',
+    ),
   )
 }
