@@ -1600,14 +1600,15 @@ role)`; the frontend merely hides controls. `admin` passes every check. D = the 
 | submit `draft --> pending`; recall `pending --> draft` (8.18); resubmit `rejected --> draft` | author |
 | edit an unpublished record (fields, files, photos, attachments) | draft: author or `moderator(D)`; pending: `moderator(D)`; rejected: nobody (8.18) |
 | upload / replace / delete geometry files and photos | as "edit an unpublished record", **only while the snapshot is not `published`** (freeze rules: decision 6.6) |
-| evidence attachments | unpublished record: as "edit an unpublished record"; published: `contributor(D)` adds, `moderator(D)` removes with reason, tombstone entry kept (decision 7.3) |
+| evidence attachments | unpublished record: as "edit an unpublished record"; published: `contributor(D)` or `moderator(D)` adds, `moderator(D)` removes with reason, tombstone entry kept (decision 7.3) |
 | publish / reject / withdraw / reinstate (snapshot, evidence) | `moderator(D)`; publishing a child's **first** snapshot also ends its parents (split / merge, 8.8), so it needs `moderator` of every parent's dataset as well --- otherwise it waits in that dataset's queue |
 | promote `current_snapshot_id`; `effective_from`, `shape_class` overrides; recompute a snapshot's derived fields | `moderator(D)` |
 | PATCH identity metadata (`origin`, `material`, `original_function`, `is_public`, ...) | `moderator(D)`; while the identity is unpublished also its creator (8.9) |
 | `exit`, `reenter`, `withdraw` identity | `moderator(D)` |
 | `deinstall`, `undo-deinstall` (8.104) | `moderator(D)` |
 | draw from a batch (8.105) | as "create identity"; while the batch is reserved only the reserving user or `moderator(D)` (8.110) |
-| move identity D1 --> D2 | `moderator(D1) and moderator(D2)` |
+| move identity D1 --> D2 (8.191) | `moderator(D1) and moderator(D2)`; refused while a version or record of it is draft or pending; a public identity into an unreviewed dataset only as `admin` |
+| reserve, `reenter`, undo `exit`, `deinstall`, `undo-deinstall`, add a photo or an attachment on a withdrawn identity, version or record (8.190) | nobody: 409 "The component is withdrawn."; a moderator reinstates first |
 | set evidence `verification` | `self_attested` / back to `unverified`: the recorder, unless a reviewer set the state; `reviewed` / `accredited` / any downgrade: `reviewer(D)` or `admin`, never the recorder or a `performed_by` user (8.12, I27) |
 | supersede published evidence | `contributor(D)` (new record enters `pending`) |
 | reserve | any authenticated user who can read the element, while it is not reserved |
@@ -1615,7 +1616,7 @@ role)`; the frontend merely hides controls. `admin` passes every check. D = the 
 | manage D's members, D's `visibility` / `name` / `description` | `moderator(D)` |
 | invite a user (8.14); add a member by exact email (8.20) | `admin` (any dataset, or none); `moderator(D)` (into D only) |
 | search users (8.20) | `admin` |
-| revoke an unused invitation | its creator, `moderator(D)` of its dataset, `admin` |
+| revoke an unused invitation | `moderator(D)` of its dataset, `admin`; its creator loses the right with the role (8.193) |
 | create dataset (8.139) | any signed-in account with a verified e-mail address, up to `CSC_MAX_DATASETS_PER_USER` (admins: unlimited); the creator becomes `moderator` and `contributor` |
 | delete a dataset (8.139) | `moderator(D)` or `admin`, only while D holds no identity |
 | set `reviewed` on a dataset (8.139) | `admin` |
@@ -1666,6 +1667,7 @@ DELETE /identities/{id}/exit                       moderator(D); undo a mistaken
 POST   /identities/{id}/reenter                    moderator(D); body = new origin; archives {origin, exit} to past_cycles (section 3.1.3)
 POST   /identities/{id}/withdraw                   moderator(D); body = {reason, duplicate_of?} (section 3.1.4)
 POST   /identities/{id}/reinstate                  moderator(D); clears `withdrawn`
+POST   /identities/{id}/move                       moderator of source and destination; body = the destination dataset; change-logged (8.191)
 DELETE /identities/{id}                            author or moderator(D) while nothing was ever published (I19); ?purge=1 admin only (body {confirm_id, reason})
 DELETE /snapshots/{sid}?purge=1                    admin: any status (body {confirm_id, reason}); not the current snapshot
 ```
@@ -1824,7 +1826,7 @@ POST   /datasets/{did}/public                      moderator(D): body = {is_publ
 POST   /datasets/{did}/members                     moderator(D): body = {email, roles}; exact match --> added + notified, no account --> invitation (8.20)
 GET    /users/search?q=                            admin: prefix search over username, name, email (member editor lookup, 8.20)
 GET    /users                                      admin: + memberships per user; ?q= ?dataset= ?dataset_role= ?no_dataset=1 ?role= ?state=enabled|disabled|unverified ?invited=1 (8.21)
-PATCH  /identities/{id}                            moderator(D) for metadata; changing `dataset` needs moderator of both (section 7.0)
+PATCH  /identities/{id}                            moderator(D) for metadata; `dataset` changes only through POST /identities/{id}/move (8.191)
 GET    /materials                                  public: the controlled list (section 2.10)
 POST   /materials                                  admin; `default_class` required (I25)
 PATCH  /materials/{mid}                            admin; label, group, default_class, uniclass, notes, retired (_id immutable); re-derives material_class
