@@ -21,7 +21,8 @@ $day = Get-Date -Format yyMMdd
 $repo = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 
 function Pull([string]$remote, [string]$file) {
-    cmd /c "ssh $Server $remote > `"$file`""
+    # keepalives: the long asset pull broke with a connection reset without them
+    cmd /c "ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=8 $Server $remote > `"$file`""
     if ($LASTEXITCODE -ne 0) { throw "ssh failed ($LASTEXITCODE): $remote" }
     $size = (Get-Item $file).Length
     if ($size -eq 0) { throw "empty download: $file" }
