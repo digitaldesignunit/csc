@@ -37,7 +37,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import InviteDialog from '@/components/admin/InviteDialog'
-import { addMemberHint, memberLabel, memberLine } from '@/lib/members'
+import { addMemberHint, deleteDatasetReason, lastModeratorReason, memberLabel, memberLine } from '@/lib/members'
 import InvitationsTable from '@/components/admin/InvitationsTable'
 import RoleCheckboxes, { type DatasetRole } from '@/components/admin/RoleCheckboxes'
 import type {
@@ -202,7 +202,7 @@ function DatasetSettings({ dataset, isAdmin, onSaved }: {
               <p className="text-xs text-muted-foreground">
                 {waiting
                   ? REVIEW_EXPLANATION
-                  : 'An administrator has looked at this dataset: it may be visible to all signed-in users and its elements may be made public.'}
+                  : 'An administrator has looked at this dataset: it may be visible to all signed-in users and its components may be made public.'}
               </p>
             </div>
             <Switch id="ds-reviewed" checked={!waiting} disabled={reviewBusy}
@@ -223,7 +223,7 @@ function DatasetSettings({ dataset, isAdmin, onSaved }: {
           <Select value={visibility} onValueChange={(v) => setVisibility(v as DatasetView['visibility'])}>
             <SelectTrigger className="w-full sm:w-80"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="members">Members only (and elements marked public)</SelectItem>
+              <SelectItem value="members">Members only (and components marked public)</SelectItem>
               <SelectItem value="catalog" disabled={waiting && dataset.visibility !== 'catalog'}>
                 All signed-in users
               </SelectItem>
@@ -270,7 +270,7 @@ function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
       const result = await backendJson<{ changed: number; skipped?: number }>(path, {
         method: 'POST', body: { is_public: isPublic },
       })
-      toast.success(`${result.changed} element${result.changed === 1 ? '' : 's'} now ${isPublic ? 'public' : 'private'}`
+      toast.success(`${result.changed} component${result.changed === 1 ? '' : 's'} now ${isPublic ? 'public' : 'private'}`
         + (result.skipped ? `; ${result.skipped} changed meanwhile and were left as they were` : ''))
       await count()
     } catch (err) {
@@ -284,10 +284,10 @@ function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Public elements</CardTitle>
+        <CardTitle>Public components</CardTitle>
         <CardDescription>
-          Sets the public flag of every published element of this dataset at once. Unpublished and withdrawn
-          elements, and other datasets, stay as they are. Every element keeps its own flag: children do not follow
+          Sets the public flag of every published component of this dataset at once. Unpublished and withdrawn
+          components, and other datasets, stay as they are. Every component keeps its own flag: children do not follow
           their parents.
         </CardDescription>
       </CardHeader>
@@ -312,8 +312,8 @@ function PublicPiecesCard({ dataset }: { dataset: DatasetView }) {
         <PublicConfirmDialog
           open={confirm}
           onOpenChange={(open) => { if (!busy) setConfirm(open) }}
-          title={`Make ${counts.toPublic ?? 'all'} published elements public?`}
-          subject={`${counts.toPublic ?? 'All'} published element${counts.toPublic === 1 ? '' : 's'} of ${dataset.name} become public.`}
+          title={`Make ${counts.toPublic ?? 'all'} published components public?`}
+          subject={`${counts.toPublic ?? 'All'} published component${counts.toPublic === 1 ? '' : 's'} of ${dataset.name} become public.`}
           confirmLabel="Make public"
           onConfirm={() => void apply(true)}
         />
@@ -332,11 +332,22 @@ function DeleteDatasetCard({ dataset }: { dataset: DatasetView }) {
   const { refresh } = useMe()
   const { confirm, dialog } = useConfirm()
   const [busy, setBusy] = useState(false)
+  // the list counts the published elements the caller sees (the dataset itself carries no count)
+  const [count, setCount] = useState<number | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    backendJson<DatasetView[]>('/datasets')
+      .then((rows) => { if (!cancelled) setCount(rows.find((row) => row._id === dataset._id)?.component_count ?? null) })
+      .catch(() => { if (!cancelled) setCount(null) })
+    return () => { cancelled = true }
+  }, [dataset._id])
+  const blocked = deleteDatasetReason(count)
 
   const remove = async () => {
     const ok = await confirm({
       title: `Delete ${dataset.name}?`,
-      description: 'The dataset and its open invitations are deleted. Its members keep their accounts. This cannot be undone.',
+      description: 'The dataset and its open invitations are deleted. Its members keep their accounts. It must hold no component at all: '
+        + 'a draft, a withdrawn or a private one counts too, and the server refuses the delete then. This cannot be undone.',
       confirmLabel: 'Delete the dataset',
       destructive: true,
     })
@@ -360,14 +371,16 @@ function DeleteDatasetCard({ dataset }: { dataset: DatasetView }) {
       <CardHeader>
         <CardTitle>Delete this dataset</CardTitle>
         <CardDescription>
-          Only possible while the dataset holds no element: move its elements to another dataset first. Open
+          Only possible while the dataset holds no component: move its components to another dataset first. Open
           invitations are revoked with it.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <WriteButton size="sm" variant="outline" className="text-destructive" disabled={busy} onClick={() => void remove()}>
+      <CardContent className="space-y-2">
+        <WriteButton size="sm" variant="outline" className="text-destructive" disabled={busy || !!blocked}
+          onClick={() => void remove()}>
           <Trash2 className="mr-1 h-3.5 w-3.5" />Delete the dataset
         </WriteButton>
+        {blocked && <p className="text-xs text-muted-foreground">{blocked}</p>}
       </CardContent>
     </Card>
   )
@@ -383,6 +396,8 @@ function MembersCard({
   onChanged: () => void
 }) {
   const members = dataset.members ?? []
+  // the reason a locked box or button carries only as a tooltip, in text as well (8.139 g)
+  const lockNote = members.map((member) => lastModeratorReason(members, member, isAdmin)).find(Boolean)
   const { confirm, dialog } = useConfirm()
   const setRoles = async (member: DatasetMemberView, roles: DatasetRole[]) => {
     if (roles.length === 0 && !(await confirm({
@@ -441,11 +456,17 @@ function MembersCard({
                       idPrefix={`m-${member.user_id}`}
                       compact
                       value={member.roles as DatasetRole[]}
+                      locked={(() => {
+                        const reason = lastModeratorReason(members, member, isAdmin)
+                        return reason ? { moderator: reason } : undefined
+                      })()}
                       onChange={(roles) => void setRoles(member, roles)}
                     />
                   </TableCell>
                   <TableCell>
                     <WriteButton size="sm" variant="ghost" aria-label={`Remove ${memberLabel(member)}`}
+                      disabled={!!lastModeratorReason(members, member, isAdmin)}
+                      title={lastModeratorReason(members, member, isAdmin) ?? undefined}
                       onClick={() => void setRoles(member, [])}>
                       <Trash2 className="h-4 w-4" />
                     </WriteButton>
@@ -455,6 +476,7 @@ function MembersCard({
             </TableBody>
           </Table>
         )}
+        {lockNote && <p className="text-xs text-muted-foreground" role="note">{lockNote}</p>}
       </CardContent>
     </Card>
   )

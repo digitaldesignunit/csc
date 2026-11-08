@@ -34,6 +34,7 @@ from apps.catalog.permissions import (
     record_projection,
     withdrawn_projection,
 )
+from apps.catalog.vocab import OPEN_STATUSES
 
 NOT_PUBLIC = 'This component is not public. Sign in to view it.'
 NO_ACCESS = 'You have no access to this component.'
@@ -116,7 +117,7 @@ async def identity_ever_published(request: Request,
 
 
 UNREVIEWED = ('This dataset has not been reviewed by an admin yet: it stays '
-              'visible to its members only, and its elements cannot be made '
+              'visible to its members only, and its components cannot be made '
               'public until it is reviewed.')
 
 
@@ -126,6 +127,32 @@ def refuse_unreviewed(dataset: Dataset, viewer: Viewer) -> None:
     reviewed anyway)."""
     if not dataset.reviewed and not viewer.is_admin:
         raise HTTPException(status_code=409, detail=UNREVIEWED)
+
+
+def may_know_open(viewer: Viewer, dataset: Dataset) -> bool:
+    """Who is told that a version or a correction is open (8.195): a
+    contributor or a moderator of the dataset, and the admins (``dataset_roles``
+    gives an admin every role). A member who only reviews, and everyone else,
+    gets a constant False for ``has_open_snapshot`` and ``has_open_correction``
+    and costs no query. The one place the audience is decided."""
+    return bool(dataset_roles(viewer, dataset) & {'contributor', 'moderator'})
+
+
+async def has_open_snapshot(request: Request, viewer: Viewer,
+                           identity: Dict[str, Any]) -> bool:
+    """``has_open_snapshot`` (8.195): a draft or pending version of the element
+    exists (I3b, the one open version). Only the fact, for whoever
+    ``may_know_open``; a draft is otherwise invisible to a contributor who is
+    not its author."""
+    if not viewer.logged_in:
+        return False
+    dataset = await dataset_of(request, identity.get('dataset'))
+    if not may_know_open(viewer, dataset):
+        return False
+    found = await request.app.mongodb_component_snapshots.find_one(
+        {'identity_id': identity['_id'],
+         'status': {'$in': list(OPEN_STATUSES)}}, {'_id': 1})
+    return found is not None
 
 
 def deny_read(viewer: Viewer) -> HTTPException:
@@ -185,7 +212,7 @@ async def raise_if_purged(request: Request, record_id: str,
 
 async def find_identity(request: Request, identity_id: str,
                         projection: Optional[Dict[str, int]] = None,
-                        what: str = 'Identity') -> Dict[str, Any]:
+                        what: str = 'Component') -> Dict[str, Any]:
     """The identity document; 404 / 410 when it is not there. No access
     check: ``load_identity`` is the entry for a route."""
     check_id(identity_id, what)
@@ -369,11 +396,13 @@ async def require(request: Request, user: Optional[User], action: str, *,
                   snapshot: Optional[Dict[str, Any]] = None,
                   evidence: Optional[Dict[str, Any]] = None,
                   dataset: Optional[Dataset] = None,
-                  invitation: Optional[Dict[str, Any]] = None) -> Viewer:
+                  invitation: Optional[Dict[str, Any]] = None,
+                  destination: Optional[Dataset] = None) -> Viewer:
     """
     Section 7.0 for one action: builds the ``Target`` from the documents
     and raises 401 / 403 unless ``can`` allows it. Read access to the
-    component is part of every action on it.
+    component is part of every action on it. ``destination`` is the dataset
+    a move goes to.
     """
     viewer = viewer_of(user)
     if snapshot is not None and identity is None:
@@ -411,7 +440,7 @@ async def require(request: Request, user: Optional[User], action: str, *,
         dataset=dataset, kind=kind, status=status_, author_id=author,
         identity_published=published,
         reserved_by=(identity or {}).get('reserved') or None,
-        readable=readable, performer_ids=performers,
+        readable=readable, performer_ids=performers, destination=destination,
         correction=bool(kind == 'evidence' and evidence.get('supersedes')))
     if not can(viewer, action, target):
         raise deny_write(viewer, action)
@@ -538,7 +567,7 @@ async def load_evidence(request: Request, user: Optional[User],
     raise deny_read(viewer)
 
 
-NO_CURRENT_STATE = 'The component has no current state.'
+NO_CURRENT_STATE = 'The component has no current snapshot.'
 
 
 async def load_current_snapshot(request: Request,
@@ -586,7 +615,7 @@ async def load_invitation(request: Request, user: Optional[User],
     """One invitation for a route (decision 8.158): 404 "Invitation not
     found". ``invite``: the caller's current invite permission on the
     invitation's dataset (an admin for one without a dataset);
-    ``revoke_invitation``: its creator, moderator(D) or an admin."""
+    ``revoke_invitation``: moderator(D) or an admin (8.193 c)."""
     viewer = viewer_of(user)
     check_id(invitation_id, 'Invitation')
     doc = await request.app.mongodb_invitations.find_one(

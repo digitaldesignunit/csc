@@ -647,7 +647,7 @@
       "position": {
         "kind": "none",
         "snapshot_id": "example-snapshot-v0",
-        "description": "Whole element; bars in the stored coordinates of this version"
+        "description": "Whole component; bars in the stored coordinates of this snapshot"
       },
       "summary": {
         "quantity": "rebar_diameter",

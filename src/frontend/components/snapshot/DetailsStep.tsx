@@ -41,7 +41,7 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
     <div className="space-y-5">
       {creating && datasets.length > 1 && (
         <Field label="Dataset" htmlFor="sf-dataset"
-          hint="The study or project the element belongs to; it decides who may see and moderate it.">
+          hint="The study or project the component belongs to; it decides who may see and moderate it.">
           <Select value={values.dataset} onValueChange={(dataset) => set({ dataset })}>
             <SelectTrigger id="sf-dataset" className="w-full">
               <SelectValue placeholder="Choose a dataset" />
@@ -61,7 +61,7 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
         </p>
       )}
       {creating && datasets.length === 0 && (
-        <p role="alert" className="text-sm text-destructive">You contribute to no dataset, so you cannot record an element yet.</p>
+        <p role="alert" className="text-sm text-destructive">You contribute to no dataset, so you cannot record a component yet.</p>
       )}
 
       {mode === 'new' && (
@@ -88,7 +88,7 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
       {mode === 'cut' && (
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Original function" htmlFor="sf-function" className="sm:col-span-2"
-            hint="The element takes over origin, material, manufacture and function from its parents; state one only to override it, or when merged parents disagree.">
+            hint="The component takes over origin, material, manufacture and function from its parents; state one only to override it, or when merged parents disagree.">
             <VocabSelect id="sf-function" labels={ORIGINAL_FUNCTION_LABELS} value={values.originalFunction}
               onChange={(originalFunction) => set({ originalFunction })} allowNone
               noneLabel="Same as the parents" />
@@ -113,11 +113,11 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Name" htmlFor="sf-name" className="sm:col-span-2">
           <Input id="sf-name" value={fields.name} onChange={(event) => setFields({ name: event.target.value })}
-            placeholder={mode === 'correct' || mode === 'state' ? 'Name of this version' : 'Empty: the catalog number'} />
+            placeholder={mode === 'correct' || mode === 'state' ? 'Name of this snapshot' : 'Empty: the catalog number'} />
         </Field>
 
         {(mode === 'cut' || mode === 'state') && (
-          <Field label={mode === 'cut' ? 'Cut on (empty: today)' : 'This state began on (empty: today)'}
+          <Field label={mode === 'cut' ? 'Cut on (empty: today)' : 'This snapshot starts on (empty: today)'}
             htmlFor="sf-effective">
             <DateField id="sf-effective" value={fields.effectiveOn}
               onChange={(effectiveOn) => setFields({ effectiveOn })} />
@@ -135,7 +135,7 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
         <div className="flex items-center gap-2 self-center">
           <Checkbox id="sf-fragment" checked={fields.fragment}
             onCheckedChange={(checked) => setFields({ fragment: checked === true })} />
-          <Label htmlFor="sf-fragment">Fragment of a larger element</Label>
+          <Label htmlFor="sf-fragment">Fragment of a larger component</Label>
         </div>
 
       </div>
@@ -166,7 +166,7 @@ export function DetailsStep({ mode, values, set, setFields, datasets, materials,
           <summary className="cursor-pointer text-sm font-medium">Where it came from (optional)</summary>
           <div className="mt-3 space-y-3">
             <p className="text-xs text-muted-foreground">
-              How the element entered circulation. It can also be edited on the component page later.
+              How the component entered circulation. It can also be edited on the component page later.
             </p>
             <OriginFields idPrefix="sf-origin" value={values.origin ?? emptyOrigin()}
               onChange={(origin) => set({ origin })} />

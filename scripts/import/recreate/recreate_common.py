@@ -28,7 +28,7 @@ DOT_DEV = REPO / '.dev'
 # the places of the local rehearsal (arguments of every script)
 DEFAULT_DATA = DOT_DEV / 'open_datasets' / 'recreate' / 'zenodo-16809738'
 DEFAULT_OUT = DOT_DEV / 'import_open' / 'recreate' / 'out'
-DEFAULT_ASSETS = DOT_DEV / 'assets-261012'
+DEFAULT_ASSETS = DOT_DEV / 'assets'
 DEFAULT_MONGO_URI = 'mongodb://127.0.0.1:27791'
 DEFAULT_SERVER = 'http://127.0.0.1:8791'
 

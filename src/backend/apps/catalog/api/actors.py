@@ -216,7 +216,7 @@ async def redact_actor(
                 break
         else:
             raise HTTPException(status_code=409, detail=(
-                f'Identity {doc["_id"]} kept changing; run the redaction '
+                f'Component {doc["_id"]} kept changing; run the redaction '
                 f'again.'))
 
     async for entry in log.find({}):

@@ -150,11 +150,16 @@ async def attach_file(
                             detail=f'record_ids: 1 to {MAX_RECORDS} records')
     records = []
     for rid in ids:
-        record = (await load_evidence(request, current_user, rid,
-                                      'add_attachment')).record
+        loaded = await load_evidence(request, current_user, rid,
+                                     'add_attachment')
+        record = loaded.record
         if record.get('status') == 'withdrawn':
             raise HTTPException(status_code=409,
                                 detail=f'{rid} is withdrawn.')
+        if (loaded.identity or {}).get('withdrawn'):
+            # any record of a withdrawn element, an admin too (8.190)
+            raise HTTPException(status_code=409,
+                                detail='The component is withdrawn.')
         if len(record.get('attachments') or []) \
                 >= evidence_files.MAX_ATTACHMENTS:
             raise HTTPException(
@@ -221,7 +226,7 @@ async def list_attachments(
     evidence_id: str,
 ):
     """The list as the viewer may see it. Anonymous readers of a public
-    element get media type, size, checksum and date --- no names, no
+    component get media type, size, checksum and date --- no names, no
     uploaders --- and "sign in to download" (8.13)."""
     loaded = await load_evidence(request, current_user, evidence_id,
                                  allow_tombstone=True)

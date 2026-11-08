@@ -84,7 +84,7 @@ def check(world, rows):
 def standard_rows(kind, read_or_write, make, existing, member_ok, purged=True):
     """The rows every kind shares; ``make(id)`` is the call, ``existing`` the id of a record
     that is not public."""
-    name = kind.capitalize()
+    name = 'Component' if kind == 'identity' else kind.capitalize()
     rows = [
         (f'{kind} {read_or_write}: a malformed id', 'admin' if read_or_write == 'write' else 'anonymous',
          make(MALFORMED), 404, f'{name} not found'),
@@ -272,4 +272,4 @@ def test_a_component_without_a_current_state(world):
     for path in (url, f'/identities/{iid("beam")}/compose'):
         response = world['api'].get(path, headers=headers)
         assert response.status_code == 409, (path, response.status_code, response.text[:100])
-        assert 'no current state' in response.json()['detail'], path
+        assert 'no current snapshot' in response.json()['detail'], path

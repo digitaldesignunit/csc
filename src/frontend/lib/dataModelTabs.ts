@@ -12,7 +12,7 @@ export const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'dataset', label: 'Dataset' },
   { id: 'identity', label: 'Identity' },
-  { id: 'snapshot', label: 'Versions' },
+  { id: 'snapshot', label: 'Snapshots' },
   { id: 'evidence', label: 'Evidence' },
   { id: 'vocabularies', label: 'Lists of values' },
   { id: 'example', label: 'Example' },

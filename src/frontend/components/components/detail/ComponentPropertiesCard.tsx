@@ -21,10 +21,14 @@ import { useEvidenceData } from './EvidenceData'
 
 /** What the "?" of the heading says: the properties are not typed in (the Data Model page, rule 2 and the fold). */
 const PROPERTIES_HELP =
-  'Properties are values the catalog works out from the published evidence records of this element. '
+  'Properties are values the catalog works out from the published evidence records of this component. '
   + 'For each quantity the most trusted kind of source wins. They are not typed in: to change one, add evidence.'
 
-export default function ComponentPropertiesCard({ catalog }: { catalog: CatalogComponent }) {
+export default function ComponentPropertiesCard({ catalog, snapshots }: {
+  catalog: CatalogComponent
+  /** the version rows: published once is not the same as a current version (8.193) */
+  snapshots?: readonly { status?: string | null }[]
+}) {
   const { identity } = catalog
   const identityId = String(identity._id ?? '')
   const snapshot = primarySnapshot(catalog)
@@ -32,10 +36,10 @@ export default function ComponentPropertiesCard({ catalog }: { catalog: CatalogC
   const { me, isAdmin, rolesIn } = useMe()
   const mayAdd = canAddEvidence({
     signedIn: !!me, isAdmin, roles: identity.dataset ? rolesIn(identity.dataset) : [],
-    withdrawn: identity.withdrawn, currentSnapshotId: identity.current_snapshot_id,
+    withdrawn: identity.withdrawn, currentSnapshotId: identity.current_snapshot_id, versions: snapshots,
   })
   const condition = conditionBadge(snapshot.properties)
-  const version = typeof snapshot.version === 'number' ? `This version (v${snapshot.version})` : 'This version'
+  const version = typeof snapshot.version === 'number' ? `This snapshot (v${snapshot.version})` : 'This snapshot'
 
   return (
     <section id="properties" aria-label="Properties" className="scroll-mt-4 rounded-lg border border-border bg-card p-3 shadow-sm">

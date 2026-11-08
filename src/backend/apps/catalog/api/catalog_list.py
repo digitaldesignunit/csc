@@ -169,7 +169,7 @@ async def _visible_map_payload(request: Request, user: Optional[User],
 
 @router.get(
     '/identities/count',
-    summary='Count identities (current snapshot filters)',
+    summary='Count components (current snapshot filters)',
     response_model=ComponentCount,
 )
 @local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
@@ -232,7 +232,7 @@ async def _candidate_ids(request: Request, args: Dict[str, Any],
 
 @router.get(
     '/identities/{identity_id}/similar',
-    summary='The elements nearest to one in descriptor space (kNN)',
+    summary='The components nearest to one in descriptor space (kNN)',
 )
 @local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
 async def get_similar_identities(
@@ -247,13 +247,13 @@ async def get_similar_identities(
     count: int = Query(10, ge=1, le=sim.MAX_NEIGHBOURS,
                        description='how many neighbours, 1 to 50'),
 ):
-    """The ``count`` elements nearest to this one in the full descriptor space
+    """The ``count`` components nearest to this one in the full descriptor space
     of ``basis`` (decision 8.174): Euclidean distance after each dimension is
-    standardised over the catalog (smaller is more similar). The elements ranked
+    standardised over the catalog (smaller is more similar). The components ranked
     are those this caller may see that pass the filters of the list (also a
     dimension and a near search): the filters come first, then the ranking, so
     "similar and can hold X and within 50 km" returns the k nearest that pass.
-    The element itself is never one of them. An element the caller cannot see is
+    The component itself is never one of them. A component the caller cannot see is
     404; one without the descriptor of the basis is 422; before the matrix of
     the basis has been computed (``main_component_map.py``) the answer is
     409."""
@@ -364,15 +364,15 @@ async def get_identities_locations(
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
     filters: Annotated[CatalogFilters, Depends(catalog_filters)],
     layer: NearLayer = Query(
-        'current', description='which place of an element is a point: '
+        'current', description='which place of a component is a point: '
                                'current (the location of the current '
-                               'version) or origin (the origin building)'),
+                               'snapshot) or origin (the origin building)'),
 ):
-    """Every element this caller may see that matches the filters and has a
+    """Every component this caller may see that matches the filters and has a
     point on the layer (decisions 8.170, 8.171), with what the map colours
-    and labels it by; the elements without a point are only counted
+    and labels it by; the components without a point are only counted
     (``left_out``). The filters, the visibility and a near or fit search are
-    those of the list. An element never appears for someone who may not see it,
+    those of the list. A component never appears for someone who may not see it,
     and neither does it count."""
     if current_user is None:
         filters = public_filters(filters)
@@ -601,7 +601,7 @@ def _with_location(facet) -> Dict[str, int]:
     '/identities/stats',
     summary=(
         'Aggregated catalog statistics '
-        '(identities joined to current snapshots)'
+        '(components joined to current snapshots)'
     ),
 )
 @local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
@@ -611,7 +611,7 @@ async def get_identities_stats(
     filters: Annotated[CatalogFilters, Depends(catalog_filters)],
     limit_dim: int = Query(10, description='Top-N limit for long tail dims'),
 ):
-    """Facet counts over the filtered catalog (identity + current snapshot)."""
+    """Facet counts over the filtered catalog (component + current snapshot)."""
     if current_user is None:
         filters = public_filters(filters)
     try:
@@ -681,7 +681,7 @@ async def get_identities_stats(
 
 @router.get(
     '/identities',
-    summary='List identities (join current snapshot)',
+    summary='List components (join current snapshot)',
 )
 @local_limiter.limit(LIST_RATE, key_func=signed_in_or_ip)
 async def list_identities_route(
@@ -692,7 +692,7 @@ async def list_identities_route(
     size: int = Query(0, description='Page size (0=get all)'),
     sortkey: Optional[str] = Query(
         None, description='Sort key; volume = the product of the three bbx '
-                          'sides (an element without bbx last); match = the '
+                          'sides (a component without bbx last); match = the '
                           'closeness to the dimension search (needs '
                           'fit_mode); distance = the distance to the near '
                           'point (needs near_lat and near_lon). Default: '

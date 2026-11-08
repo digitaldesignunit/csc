@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-05T18:37:45.634Z
-// Source: http://127.0.0.1:8791/schema/evidence
+// Generated on: 2026-11-08T17:18:33.180Z
+// Source: http://127.0.0.1:8792/schema/evidence
 import type { Actor, StatusChange } from './CatalogModels';
 import type { Tombstone } from './AccessModels';
 
@@ -74,6 +74,7 @@ export interface EvidenceView {
   lastmodified: string;
   warnings?: string[];
   context?: ContextView | null;
+  has_open_correction?: boolean;
 }
 
 export interface PendingEvidenceItem {

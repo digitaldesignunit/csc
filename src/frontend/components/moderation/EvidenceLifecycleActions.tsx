@@ -2,11 +2,14 @@
 
 /**
  * The lifecycle buttons of one evidence record (spec 3.3.3, 7.2; decisions
- * 8.18, 8.66): the author submits, recalls, resubmits and deletes;
+ * 8.18, 8.66): the author (and a site admin, 6.5) submits, recalls and
+ * resubmits, the author or a moderator deletes;
  * moderator(D) publishes, rejects, withdraws and reinstates; contributor(D)
- * corrects a published record (a new pending record that supersedes it);
+ * corrects a published record (a new pending record that supersedes it) unless
+ * a correction of it is open or the element is withdrawn (8.195);
  * the author or moderator(D) edits a draft and moderator(D) a pending record
- * (8.127). Only the buttons the caller may use are shown; the backend checks again.
+ * (8.127). Which buttons show is `evidenceButtons` (`lib/lifecycleRights.ts`);
+ * the backend checks again.
  */
 import { useState } from 'react'
 import Link from 'next/link'
@@ -25,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { deleteEvidence, evidenceAction, type EvidenceVerb } from '@/lib/evidence/api'
-import { canEditEvidence } from '@/lib/evidence/edit'
+import { evidenceButtons } from '@/lib/lifecycleRights'
 import { useMe } from '@/lib/me'
 import { useConfirm } from '@/components/common/ConfirmDialog'
 
@@ -36,8 +39,12 @@ type Props = {
     recorded_by_user_id: string
     superseded_by?: string | null
     identity_id: string
+    /** `has_open_correction` (8.195): told to the members of the dataset and admins */
+    has_open_correction?: boolean
   }
   dataset: string | null | undefined
+  /** the element is withdrawn: nothing is corrected on it (I28) */
+  identityWithdrawn?: boolean
   onChanged?: () => void
   size?: 'sm' | 'xs'
   /** `menu`: one "more" button with the actions inside (the record cards of the
@@ -45,9 +52,9 @@ type Props = {
   variant?: 'buttons' | 'menu'
 }
 
-export default function EvidenceLifecycleActions({ record, dataset, onChanged, size = 'xs', variant = 'buttons' }: Props) {
+export default function EvidenceLifecycleActions({ record, dataset, identityWithdrawn = false, onChanged, size = 'xs', variant = 'buttons' }: Props) {
   const router = useRouter()
-  const { me, moderates, rolesIn } = useMe()
+  const { me, isAdmin, moderates, rolesIn } = useMe()
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<'reject' | 'withdraw' | null>(null)
   const { confirm, dialog: confirmDialog } = useConfirm()
@@ -58,7 +65,10 @@ export default function EvidenceLifecycleActions({ record, dataset, onChanged, s
   const isModerator = moderates(dataset)
   const isContributor = rolesIn(dataset).includes('contributor')
   const { status } = record
-  const live = status === 'published' && !record.superseded_by
+  const show = evidenceButtons({
+    isAuthor, isAdmin, isModerator, isContributor, status, superseded: !!record.superseded_by,
+    hasOpenCorrection: record.has_open_correction === true, identityWithdrawn,
+  })
 
   const run = async (label: string, verb: EvidenceVerb, body?: { reason: string }, query = '') => {
     setBusy(true)
@@ -110,35 +120,37 @@ export default function EvidenceLifecycleActions({ record, dataset, onChanged, s
   const entries: Entry[] = []
   const add = (entry: Entry) => entries.push(entry)
 
-  if ((isAuthor || isModerator) && status === 'draft') {
+  if (show.submit) {
     add({ key: 'submit', label: 'Submit', icon: Send, primary: true,
       run: quiet(() => run('Submitted for moderation', 'submit')) })
   }
-  if (isAuthor && status === 'pending') {
+  if (show.recall) {
     add({ key: 'recall', label: 'Recall', icon: Undo2, run: quiet(() => run('Recalled to draft', 'recall')) })
   }
-  if (isAuthor && status === 'rejected') {
+  if (show.resubmit) {
     add({ key: 'resubmit', label: 'Back to draft', icon: Undo2, run: quiet(() => run('Back to draft', 'resubmit')) })
   }
-  if (isModerator && status === 'pending') {
+  if (show.publish) {
     add({ key: 'publish', label: 'Publish', icon: Check, primary: true, run: quiet(() => run('Published', 'publish')) })
+  }
+  if (show.reject) {
     add({ key: 'reject', label: 'Reject', icon: X, run: () => setDialog('reject') })
   }
-  if (isModerator && status === 'published') {
+  if (show.withdraw) {
     add({ key: 'withdraw', label: 'Withdraw', icon: Archive, run: () => setDialog('withdraw') })
   }
-  if (isModerator && status === 'withdrawn') {
+  if (show.reinstate) {
     add({ key: 'reinstate', label: 'Reinstate', icon: ArchiveRestore, run: quiet(() => run('Reinstated', 'reinstate')) })
   }
-  if (canEditEvidence(status, isAuthor, isModerator)) {
+  if (show.edit) {
     add({ key: 'edit', label: 'Edit', icon: SquarePen,
       href: `/components/${encodeURIComponent(record.identity_id)}/evidence/new?edit=${encodeURIComponent(record._id)}` })
   }
-  if (live && isContributor) {
+  if (show.correct) {
     add({ key: 'correct', label: 'Correct', icon: Pencil,
       href: `/components/${encodeURIComponent(record.identity_id)}/evidence/new?correct=${encodeURIComponent(record._id)}` })
   }
-  if ((isAuthor || isModerator) && ['draft', 'pending', 'rejected'].includes(status)) {
+  if (show.delete) {
     add({ key: 'delete', label: 'Delete', icon: Trash2, destructive: true, iconOnly: true, run: () => void remove() })
   }
 

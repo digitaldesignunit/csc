@@ -21,6 +21,7 @@ import {
   FileDown,
   FilePen,
   FilePlus2,
+  FolderInput,
   Layers,
   LogIn,
   LogOut,
@@ -28,6 +29,7 @@ import {
   Pencil,
   Scissors,
   Star,
+  Trash2,
   Undo2,
   Wrench,
 } from 'lucide-react'
@@ -62,12 +64,18 @@ import {
 } from '@/components/ui/sheet'
 import { ExitDialog, ReenterDialog, undoExit } from '@/components/lineage/CirculationActions'
 import { DeinstallDialog, undoDeinstall } from '@/components/lineage/DeinstallActions'
-import { WithdrawComponentDialog, reinstateComponent } from '@/components/moderation/IdentityModerationActions'
+import {
+  MoveComponentDialog,
+  WithdrawComponentDialog,
+  deleteComponent,
+  reinstateComponent,
+} from '@/components/moderation/IdentityModerationActions'
+import { useConfirm } from '@/components/common/ConfirmDialog'
 import SnapshotLifecycleActions, { type SnapshotAction } from '@/components/moderation/SnapshotLifecycleActions'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { backendJson } from '@/lib/backend'
 import {
-  availableActions,
+  actionPlan,
   formatDay,
   versionOffers,
   type ActionKey,
@@ -76,6 +84,7 @@ import {
 } from '@/lib/componentDetail'
 import { downloadExport, isCeroMaterial, passportExports } from '@/lib/exports'
 import { useMe } from '@/lib/me'
+import { canEditVersion } from '@/lib/snapshotEdit'
 import { useReadOnly } from '@/components/common/ReadOnlyProvider'
 import { buildGeometryDownloadItems } from '@/lib/snapshotGeometryDownloads'
 import ComponentSnapshotGeometryDownload from '../ComponentSnapshotGeometryDownload'
@@ -136,32 +145,33 @@ export function ReserveButton({ catalog }: { catalog: CatalogComponent }) {
 // VERSIONS ----------------------------------------------------------------------
 const VERSION_COPY: Record<VersionMode, { title: string; text: string; only?: SnapshotAction[] }> = {
   correct: {
-    title: 'Correct a version',
-    text: 'A correction replaces a published version; it goes through review like any new state.',
+    title: 'Correct a snapshot',
+    text: 'A correction replaces a published snapshot; it goes through review like any new snapshot.',
     only: ['correct'],
   },
   promote: {
-    title: 'Make a version current',
-    text: 'The current version is the one the catalog shows.',
+    title: 'Make a snapshot current',
+    text: 'The current snapshot is the one the catalog shows.',
     only: ['promote'],
   },
   'withdraw-version': {
-    title: 'Withdraw a version',
+    title: 'Withdraw a snapshot',
     text: 'It leaves lists and the public view; dataset members keep the full record.',
     only: ['withdraw'],
   },
   'manage-versions': {
-    title: 'Versions awaiting action',
-    text: 'Submit, recall, publish, reject, reinstate or delete a version.',
+    title: 'Snapshots awaiting action',
+    text: 'Submit, recall, publish, reject, reinstate or delete a snapshot.',
   },
 }
 
-function VersionDialog({ mode, rows, identityId, dataset, caller, open, onOpenChange }: {
+function VersionDialog({ mode, rows, identityId, dataset, hasOpenSnapshot, caller, open, onOpenChange }: {
   mode: VersionMode
   rows: SnapshotSummaryItem[]
   identityId: string
   dataset: string | null | undefined
-  caller: { isModerator: boolean; isContributor: boolean; meId?: string | null }
+  hasOpenSnapshot: boolean
+  caller: { isModerator: boolean; isContributor: boolean; meId?: string | null; identityWithdrawn?: boolean }
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -179,7 +189,7 @@ function VersionDialog({ mode, rows, identityId, dataset, caller, open, onOpenCh
           <DialogDescription>{copy.text}</DialogDescription>
         </DialogHeader>
         {shown.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No version to choose.</p>
+          <p className="text-sm text-muted-foreground">No snapshot to choose.</p>
         ) : (
           <ul className="space-y-2">
             {shown.map((row) => (
@@ -197,8 +207,17 @@ function VersionDialog({ mode, rows, identityId, dataset, caller, open, onOpenCh
                   identityId={identityId}
                   size="sm"
                   only={copy.only}
+                  hasOpenSnapshot={hasOpenSnapshot}
+                  identityWithdrawn={caller.identityWithdrawn === true}
                   onChanged={() => onOpenChange(false)}
                 />
+                {mode === 'manage-versions' && canEditVersion(
+                  row.status, !!caller.meId && row.added_by_user_id === caller.meId, caller.isModerator) && (
+                  <Link href={`/components/${encodeURIComponent(identityId)}/edit?snapshot=${encodeURIComponent(row._id)}`}
+                    className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium underline underline-offset-4">
+                    <Pencil className="h-3 w-3" />Edit details
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
@@ -217,15 +236,19 @@ type MenuItem = {
   onSelect?: () => void
   disabled?: boolean
   destructive?: boolean
+  /** why a disabled item is not usable now (a state of the element refuses it) */
+  reason?: string
 }
 
 const READ_ACTIONS: ActionKey[] = ['pdf', 'cero', 'geometry', 'locate']
 
-type Dialogs = 'exit' | 'reenter' | 'deinstall' | 'withdraw-component' | 'geometry' | VersionMode | null
+type Dialogs = 'exit' | 'reenter' | 'deinstall' | 'withdraw-component' | 'move' | 'geometry' | VersionMode | null
 
-export default function ComponentActionsMenu({ catalog, snapshots }: {
+export default function ComponentActionsMenu({ catalog, snapshots, versionsKnown = true }: {
   catalog: CatalogComponent
   snapshots: SnapshotSummaryItem[]
+  /** the version rows loaded; without them the element is not offered for deletion (8.192) */
+  versionsKnown?: boolean
 }) {
   const { identity } = catalog
   const snapshot = primarySnapshot(catalog)
@@ -235,6 +258,7 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
   const { me, isAdmin, moderates, rolesIn } = useMe()
   const wide = useMediaQuery('(min-width: 640px)')
   const readOnly = useReadOnly()
+  const { confirm, dialog: confirmDialog } = useConfirm()
   const [dialog, setDialog] = useState<Dialogs>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
 
@@ -252,10 +276,12 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
     isModerator: moderates(dataset),
     isContributor: isAdmin || rolesIn(dataset).includes('contributor'),
     meId: me?._id ?? null,
+    identityWithdrawn: !!identity.withdrawn,
   }
-  const actions = availableActions({
+  const actions = actionPlan({
     identity,
     versions,
+    versionsKnown,
     signedIn,
     ...caller,
     hasGeometryFiles: items.length > 0,
@@ -263,6 +289,16 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
   })
 
   const refresh = () => router.refresh()
+  // nothing of the element was ever published: it is deleted, not withdrawn (`delete_identity`, 8.192)
+  const removeElement = async () => {
+    const sure = await confirm({
+      title: 'Delete this component?',
+      description: 'The component and its snapshots and files are deleted. Nothing of it was ever published. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (sure) await deleteComponent(identityId, (path) => router.push(path))
+  }
   const exportsOf = passportExports(identityId, identity.catalog_number, identity.material)
   const download = (url: string, filename: string) => {
     downloadExport(url, filename).catch((err: unknown) =>
@@ -276,19 +312,19 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
       onSelect: () => exportsOf.cero && download(exportsOf.cero, exportsOf.ceroFilename) },
     geometry: { key: 'geometry', label: 'Download geometry', icon: Download, onSelect: () => setDialog('geometry') },
     locate: { key: 'locate', label: 'Locate', icon: MapPin, href: `/scan?mode=locate&reference_id=${enc}` },
-    cut: { key: 'cut', label: 'Cut an element from it', icon: Scissors, href: `/add-component?mode=cut&parent=${enc}` },
+    cut: { key: 'cut', label: 'Cut a component from it', icon: Scissors, href: `/add-component?mode=cut&parent=${enc}` },
     draw: { key: 'draw', label: 'Draw elements', icon: Scissors, href: `/add-component?mode=cut&parent=${enc}` },
-    state: { key: 'state', label: 'Record new state', icon: FilePlus2, href: `/components/${enc}/snapshot/new?mode=state` },
+    state: { key: 'state', label: 'New snapshot', icon: FilePlus2, href: `/components/${enc}/snapshot/new?mode=state` },
     edit: { key: 'edit', label: 'Edit details', icon: Pencil, href: `/components/${enc}/edit` },
-    correct: { key: 'correct', label: 'Correct a version...', icon: FilePen, onSelect: () => setDialog('correct') },
-    promote: { key: 'promote', label: 'Make a version current...', icon: Star, onSelect: () => setDialog('promote') },
-    'withdraw-version': { key: 'withdraw-version', label: 'Withdraw a version...', icon: Archive,
+    correct: { key: 'correct', label: 'Correct a snapshot...', icon: FilePen, onSelect: () => setDialog('correct') },
+    promote: { key: 'promote', label: 'Make a snapshot current...', icon: Star, onSelect: () => setDialog('promote') },
+    'withdraw-version': { key: 'withdraw-version', label: 'Withdraw a snapshot...', icon: Archive,
       onSelect: () => setDialog('withdraw-version') },
-    'manage-versions': { key: 'manage-versions', label: 'Versions awaiting action...', icon: Layers,
+    'manage-versions': { key: 'manage-versions', label: 'Snapshots awaiting action...', icon: Layers,
       onSelect: () => setDialog('manage-versions') },
     exit: { key: 'exit', label: 'Take out of circulation', icon: LogOut, onSelect: () => setDialog('exit') },
     'undo-exit': { key: 'undo-exit', label: 'Undo exit', icon: Undo2, onSelect: () => void undoExit(identityId, refresh) },
-    'exit-set-by-pieces': { key: 'exit-set-by-pieces', label: 'Exit set by its elements: withdraw them to undo',
+    'exit-set-by-pieces': { key: 'exit-set-by-pieces', label: 'Exit set by its components: withdraw them to undo',
       icon: CircleSlash, disabled: true },
     reenter: { key: 'reenter', label: 'Re-enter circulation', icon: LogIn, onSelect: () => setDialog('reenter') },
     deinstall: { key: 'deinstall', label: 'Record deinstallation', icon: Wrench, onSelect: () => setDialog('deinstall') },
@@ -298,6 +334,9 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
       destructive: true, onSelect: () => setDialog('withdraw-component') },
     'reinstate-component': { key: 'reinstate-component', label: 'Reinstate component', icon: ArchiveRestore,
       onSelect: () => void reinstateComponent(identityId, refresh) },
+    move: { key: 'move', label: 'Move to another dataset...', icon: FolderInput, onSelect: () => setDialog('move') },
+    'delete-component': { key: 'delete-component', label: 'Delete component', icon: Trash2, destructive: true,
+      onSelect: () => void removeElement() },
   }
   // while the backend is read-only (maintenance, 8.154) only the downloads and
   // the locate link stay usable; every other action is a write or leads to one
@@ -305,8 +344,13 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
     readOnly && !READ_ACTIONS.includes(item.key)
       ? { ...item, href: undefined, onSelect: undefined, disabled: true }
       : item
-  const record = actions.record.map((key) => locked(catalogue[key]))
-  const moderate = actions.moderate.map((key) => locked(catalogue[key]))
+  // an action the caller may take but the state of the element refuses: shown disabled, with the reason
+  const gated = (key: ActionKey): MenuItem => {
+    const reason = actions.blocked[key]
+    return reason ? { ...catalogue[key], href: undefined, onSelect: undefined, disabled: true, reason } : catalogue[key]
+  }
+  const record = actions.record.map((key) => locked(gated(key)))
+  const moderate = actions.moderate.map((key) => locked(gated(key)))
   if (record.length === 0 && moderate.length === 0) return null
 
   const trigger = (
@@ -321,7 +365,10 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
     const body = (
       <>
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className={item.destructive ? 'text-destructive' : undefined}>{item.label}</span>
+        <span className="flex min-w-0 flex-col">
+          <span className={item.destructive ? 'text-destructive' : undefined}>{item.label}</span>
+          {item.reason && <span className="text-xs text-muted-foreground">{item.reason}</span>}
+        </span>
       </>
     )
     return item.href ? (
@@ -338,8 +385,11 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
     const Icon = item.icon
     const body = (
       <>
-        <Icon className="h-4 w-4" />
-        <span className={item.destructive ? 'text-destructive' : undefined}>{item.label}</span>
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="flex min-w-0 flex-col">
+          <span className={item.destructive ? 'text-destructive' : undefined}>{item.label}</span>
+          {item.reason && <span className="text-xs text-muted-foreground">{item.reason}</span>}
+        </span>
       </>
     )
     return item.href ? (
@@ -351,6 +401,7 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
 
   return (
     <>
+      {confirmDialog}
       {wide ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
@@ -415,9 +466,15 @@ export default function ComponentActionsMenu({ catalog, snapshots }: {
       {dialog === 'withdraw-component' && (
         <WithdrawComponentDialog identityId={identityId} open onOpenChange={(open) => !open && setDialog(null)} />
       )}
+      {dialog === 'move' && (
+        <MoveComponentDialog identityId={identityId} dataset={dataset} isPublic={identity.is_public}
+          hasOpenSnapshot={identity.has_open_snapshot === true} open
+          onOpenChange={(open) => !open && setDialog(null)} />
+      )}
       {(dialog === 'correct' || dialog === 'promote' || dialog === 'withdraw-version'
         || dialog === 'manage-versions') && (
-        <VersionDialog mode={dialog} rows={snapshots} identityId={identityId} dataset={dataset} caller={caller} open
+        <VersionDialog mode={dialog} rows={snapshots} identityId={identityId} dataset={dataset}
+          hasOpenSnapshot={identity.has_open_snapshot === true} caller={caller} open
           onOpenChange={(open) => !open && setDialog(null)} />
       )}
     </>

@@ -347,7 +347,7 @@ def test_cero_covers_concrete_only(world):
     steel = _published(world, material='steel')
     got = api.get(f'/identities/{steel}/export/cero', headers=world['m'])
     assert got.status_code == 409
-    assert got.json()['detail'] == 'CERO covers concrete elements only'
+    assert got.json()['detail'] == 'CERO covers concrete components only'
     # the other exports of the same piece are fine
     assert api.get(f'/identities/{steel}/export/pdf',
                    headers=world['m']).status_code == 200

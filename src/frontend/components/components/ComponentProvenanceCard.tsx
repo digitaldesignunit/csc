@@ -14,6 +14,7 @@ import {
 import type { CatalogShallowRow } from '@/generated/catalogExtras'
 import InheritedMark from '@/components/lineage/InheritedMark'
 import ProvenanceEditDialog from '@/components/lineage/ProvenanceEditDialog'
+import { everPublished } from '@/lib/everPublished'
 import { useMe } from '@/lib/me'
 import ComponentLineageIdentityBadges from './ComponentLineageIdentityBadges'
 import {
@@ -59,20 +60,24 @@ const formatDate = formatDateAtPrecision
 type ComponentProvenanceCardProps = {
   catalog: CatalogComponent
   childIdentities?: CatalogShallowRow[]
+  /** the version rows: published once is not the same as a current version (8.193) */
+  snapshots?: readonly { status?: string | null }[]
 }
 
 export default function ComponentProvenanceCard({
   catalog,
   childIdentities = [],
+  snapshots,
 }: ComponentProvenanceCardProps) {
   const { identity } = catalog
   const parentIds = parentIdentityIds(identity)
   const origin = identity.origin
   const { me, moderates } = useMe()
   const [editOpen, setEditOpen] = useState(false)
-  // moderator(D); the creator while it is unpublished (8.9) --- the backend decides
+  // moderator(D); the creator while nothing was ever published (8.9, 8.193) --- the backend decides
   const canEdit = !!me && (moderates(identity.dataset)
-    || (!identity.current_snapshot_id && me._id === identity.created_by_user_id))
+    || (!everPublished({ currentSnapshotId: identity.current_snapshot_id, versions: snapshots })
+      && me._id === identity.created_by_user_id))
   const [parentStatuses, setParentStatuses] = useState<Record<string, LineageStatus>>({})
 
   const childBadges = childIdentities.flatMap((row) => {

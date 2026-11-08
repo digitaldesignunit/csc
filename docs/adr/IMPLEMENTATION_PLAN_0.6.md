@@ -363,7 +363,7 @@ test geometries. Rhino-document sync (bake, read back) goes through the D2P brid
   one for the matchmaking tools (numpy, scipy, scikit-learn, ...), versions pinned in one place.
 - Correcting a scanned version (8.91 a, 8.95 13): a supersede input on the snapshot components
   carries the new scan; `supersede` does not keep a scan's files for web corrections in 0.6.
-- Step 1 (audit, done 2026-10-03, `.dev/p8-audit.md`) and its answers: decision 8.95 --- the
+- Step 1 (audit, done 2026-10-03, `.dev/notes-archive/p8-audit.md`) and its answers: decision 8.95 --- the
   component list, `Mesh.Reduce` kept for Preview / Reduced, centring as an input, environments
   `DDU_CSC` (requests, numpy) and `DDU_CSC_MATCH`, D2P plus a minimal built-in Bake / Sync on one
   user-text convention, `csc_placement`, authored-proxy fall-back in Fetch, FetchOriginalGeometry,
@@ -394,9 +394,9 @@ document is a group with one text label; the label plane now is the truth, so mo
 piece in Grasshopper (`Q = P . F`); D2P commits its label without user text, so PassportToD2P puts the keys on the
 members. Tests: pure (`test_convention.py`) and a headless Rhino 8 round trip on .NET 7 of both paths and across
 (`test_rhino_doc.py`). `ViewCaptureToFile` has a new `Version:` line for its lean header. Not in the repository (binary
-`.gh`, Rhino): the rewiring of the release / example / development definitions (`.dev/p8/rewire-list.md` lists each
+`.gh`, Rhino): the rewiring of the release / example / development definitions (`.dev/notes-archive/p8/rewire-list.md` lists each
 change and canvas position), the in-Rhino checks of part B and the one export of every new and changed `.ghuser` /
-`.xml` (`.dev/p8/in-rhino-checklist.md`, sections 7 to 9), and the web page `/gh-interface`.
+`.xml` (`.dev/notes-archive/p8/in-rhino-checklist.md`, sections 7 to 9), and the web page `/gh-interface`.
 
 ### P8 part C --- shared library, declared outputs, fixes --- size M --- **next, before P9**
 
@@ -430,7 +430,7 @@ terms in place, planned origin, batch, draw, remaining, document. Source data: t
   Document card (the host as an external link); `steel_grade` and the new functions through `GET /vocab`. No redesign (P11).
 - **GH** (8.109, rule 8.94). `Origin`: `Planned` input; `DisassembleComponent`: `Planned`, `Remaining` outputs;
   `FilterComponents`: `in_place`; `AddEvidence` tooltips. The user exports the changed `.ghuser` files
-  (`.dev/p9/` checklist).
+  (`.dev/notes-archive/p9/` checklist).
 - **Import** (8.108). Untracked in `.dev/import_external/`: scraper, parser (cached pages --> entries), IFC element
   reader (ifcopenshell, local tools environment only), planner (entries --> plan JSON + report: counts per dataset,
   skips with reasons, mismatches), runner (through the HTTP API; `--dry-run`; resumable by `attributes.import`).
@@ -477,7 +477,7 @@ member-only data.
 
 ### P11 --- UI revision --- size L --- **scope grilled 2026-10-06 (8.118), not started**
 
-Called "P7b" in decision 8.102 and in the UI / UX review (`.dev/ui-review/`, wireframes accepted in principle).
+Called "P7b" in decision 8.102 and in the UI / UX review (`.dev/notes-archive/ui-review/`, wireframes accepted in principle).
 Decisions 8.101 (M2), 8.102 (History card), 8.118 (style rule, Q1--Q12, scope). Style: the existing shadcn
 components and the blue / magenta CI colours stay; spacing and secondary shades may change.
 - **Stage 1, component page**: header strip with chips, banner, viewer with toolbar, facts card "The component" /
@@ -988,6 +988,8 @@ fold (once it is clear which quantities are searched); Atlas Search for typo-tol
 
 **0.6.4.4 --- Grasshopper hardening (user 2026-10-28, after 0.6.4.2; 8.180; moved from 0.6.4.3 by 8.184; scope amended by 8.185):** the Grasshopper side and one web item, (g) (`bump-version --gh` first, then the export in Rhino 8). (a) #40, with #32 and #33 as its first cases: the scan of 2026-10-28 found eleven components that report a missing input with `_addError` through `BuildError` (`Actor`, `ApplyFrame`, `Capture`, `ComputeFrame`, `CreateComponentIdentity`, `CreateComponentSnapshot`, `FetchReinforcementLayout`, `IdentityMetadata`, `Origin`, `ReinforcementLayout`, `SnapshotMetadata`; `AddEvidence` already warns), fourteen outputs started as `''` or `None`, and an `empty_outputs()` that returns `None` in 47 components. The fix belongs in the shared library (a missing-input error reported as a warning, an empty tree helper) and then in every component; the implementer lists each component and what changed. A failed item of an item-access component keeps its slot with a null; an input with no data and the early stop give empty trees (8.186). The `Spec` input of `ReinforcementLayout` is optional (8.187). (b) #36: `ReadFromD2P` finds the D2P component, but its `Component` output does not carry a D2P component instance (the maintainer, live in Rhino; 8.185 b). Cause open (8.185 b, amended): `instance_from_object` already returns the .NET object, declared as `IComponentBase`; the leading hypothesis is the pythonnet 3 interface proxy. Unwrap to the concrete object, fix the output, report a failed resolution as a warning naming the element, check `SyncWithRhinoDoc` for the same fault; live check in Rhino by the maintainer. (c) The descriptions of `ApplyFrame`, moved from 0.6.5 (e); with them the `Frame` and `BoundingBox` descriptions of `DisassembleComponent` say "where the element sits" instead of "stored coordinates", since both apply `csc_placement` (found in the review, kept by the user 2026-11-02). (d) The 8 `PytestUnhandledThreadExceptionWarning` of the Grasshopper tests: cause found, fixed or explained. (e) "Element" instead of "piece" in the Grasshopper descriptions (8.183 b). (f) `requirements-dev.txt` takes `pytest>=8` without an upper bound, so CI gets each new pytest the day it is out (pytest 9.2.0 broke a test on the tag of 0.6.4.2, fixed in #44): every dev requirement pinned exactly (`==`) at a version about two weeks old (8.185 c). (g) #52: the beta banner and the login notice take the version from `package.json`, the `.env` keeps the wording with a `{version}` placeholder (8.185 a); server note at the release. (h) CHANGELOG only: the component map's UMAP starts from `init='pca'` (commit `d2b39012`, made outside a release); all map positions shift once.
 
+**0.6.4.5 --- permission mismatches and leftovers (user 2026-11-04, after 0.6.4.4; 8.189):** (a) #46 controls the backend refuses (403), (b) #47 controls the state refuses (409), (c) #48 controls the web hides although the backend allows them: six plus the two rules kept for a withdrawn version and a superseded layout get a control, revoking an invitation becomes moderator-only, the switches of an unreviewed dataset stay disabled (8.193), (d) #49 the backend refuses the circulation actions and added files on a withdrawn element, photos and attachments alike (8.190, amended), (e) #50 a route and a web control to move one element to another dataset (8.191), and a web control to delete a never-published one; the other actions without a web control stay API-only, #55 to #58 (8.192), (f) the leftovers (8.194): the 3.10-only check of `test_signin.py` is limited to 3.10 or newer, and "version" replaces "snapshot" in the user text of `SnapshotPhotoCapture`, (g) the backup script passes SSH keepalive options (user 2026-11-04; the pull of the assets broke at 1.56 GB on 2026-10-29), (h) the web form sends `summary.kind`, so a claim with a result saves (8.189, amended), (i) user-facing text says "component" for a catalogued component again, "element" only for the items of a batch (8.183, amended 2026-11-08; web, backend messages, MCP and OpenAPI descriptions, README, `CONTEXT.md`, `DATA_MODEL_SPEC.md`; the Grasshopper descriptions with the next Grasshopper release); (j) user-facing text says "snapshot" for a recorded state, as the data model does, "v1" stays its number (8.194, amended 2026-11-08; the scope of (i)); (k) the record and its UUID are a "component" and a "component id" in user text, the recorded object a "snapshot" and never a "state", the new API fields become `has_open_snapshot` and `identity_withdrawn`, the MCP tools `list_snapshots` and `get_snapshot` (8.196). Web and backend only: `bump-version` without `--gh`, no Rhino export; `CSC_Update` is not touched (8.189). Each case is read again before it is fixed. The rules are grilled before the brief. For (b), two server-computed booleans tell the web of an open version or correction, for contributors, moderators and admins (8.195, amended; user 2026-11-05, found while writing the brief). Found in the end review, for later: the cut form reads its parent with `?expand=shallow`, which answers 404 for an element with no current version, so the web keeps Cut tied to a current version although the backend asks only "published once". The header strip of a withdrawn element still says "Published" and "In circulation", under it the withdrawal banner; the sidebar "Recent" list keeps a deleted element, whose link answers 404; "Versions awaiting action" on a withdrawn element does not say that the element is reinstated first; My work says "Snapshot v1", the moderation page "Snapshots (2)", the menu "Reinstate component", against the rule "element" and "version"; the evidence queue still offers Publish on a withdrawn element, which ends in the 409 with its reason, while the version queue hides it. Found in the review of (k), for later: a withdrawn snapshot reads "withdrawn, withdrawn" in the history list; the transmit page shows "Record it" next to the snapshot-id conflict message; `/id/<snapshot id>` offers to record a new component with that UUID.
+
 **0.6.5 --- reinforcement from Grasshopper (about 6--8 days; moved from 0.6.4 by the user 2026-10-21):** (a) units
 in GH: every component scales by the document unit (a prerequisite for placing scans); (b) RL8, a GH builder
 for the `rebar_spec` claim and its display, grilled together with (c); (c) Ferroscan to reinforcement layout,
@@ -996,7 +998,9 @@ as attachments, (d) several scans of one face; (c) "the image in 3D" later. (e) 
 is (user 2026-10-27): its `Frame` output is the frame used, in the stored coordinates (where the piece
 sat before the move), not the frame of the moved piece. The descriptions of the component and of the
 output say so plainly and point to `DisassembleComponent`, whose `Frame` applies `csc_placement` and so
-gives the frame where the moved piece sits; moved to 0.6.4.3 (8.180), then to 0.6.4.4 (8.184).
+gives the frame where the moved piece sits; moved to 0.6.4.3 (8.180), then to 0.6.4.4 (8.184). (f) From the review
+of 0.6.4.4 (8.189): `Actor` can still shift slots when a needed input depends on another item's value; the
+unreachable return of `ApplyFrame`.
 
 **0.6.6 --- interoperability (about 5--7 days):** the IFC export (`compose?format=ifc`; first the `ifcopenshell`
 wheel check for the server, then IFC4 vs IFC4x3 and single piece vs selection); the timeline as PROV-O /
@@ -1029,13 +1033,13 @@ passport) in `CONTEXT.md` first; whether the backend errors become codes, the ma
 and the privacy page a German text (the maintainer's own); a rule for the implementer that every new string is
 written in both languages. Grasshopper and MCP texts stay English.
 
-**Later, not yet scheduled --- permission mismatches between the web app and the backend (user 2026-10-29):** an audit of every action in `permissions.py` against the web app, after #45, found more cases, logged as issues and kept in the backlog for now: #46 controls the backend refuses (403); #47 controls the record's state refuses (409), often only after a whole form is filled in; #48 controls the web hides although the backend allows them (several from reading "published" as `current_snapshot_id` instead of `identity_ever_published`); #49 the backend allows reserve, re-enter and the undo actions on a withdrawn element, which the web hides (a rule to decide); #50 no route to move an element to another dataset (`move_identity` is a rule only, so a dataset that ever held an element cannot be deleted) and no web control to delete a never-published element. Each case is read again before it is fixed. Found in the review of 0.6.4.3 (#45): "snapshot" in user-facing text of `SnapshotPhotoCapture` (the web says "version"); the photo hint line never shows in the compact card.
+**Later, not yet scheduled --- permission mismatches between the web app and the backend (user 2026-10-29):** an audit of every action in `permissions.py` against the web app, after #45, found more cases, logged as issues and kept in the backlog for now: #46 controls the backend refuses (403); #47 controls the record's state refuses (409), often only after a whole form is filled in; #48 controls the web hides although the backend allows them (several from reading "published" as `current_snapshot_id` instead of `identity_ever_published`); #49 the backend allows reserve, re-enter and the undo actions on a withdrawn element, which the web hides (a rule to decide); #50 no route to move an element to another dataset (`move_identity` is a rule only, so a dataset that ever held an element cannot be deleted) and no web control to delete a never-published element. Each case is read again before it is fixed. Found in the review of 0.6.4.3 (#45): "snapshot" in user-facing text of `SnapshotPhotoCapture` (the web says "version"); the photo hint line never shows in the compact card. Moved to 0.6.4.5 (8.189).
 
 **Outside a release (the maintainer):** the Atlas traffic measurement of 0.6.1.0 (c); the backend CI job back to `ubuntu-latest` once MongoDB
 8.0 starts on the runner's kernel (SERVER-121912); the two open dev findings of `npm audit`
 (`body-parser`, `deepmerge`, both through `shadcn`) once fixed versions exist and are about two weeks old (0.6.4.2 (g)).
 
-**Later or ideas:** the GH sign-in on macOS (Keychain); Ferroscan "the image in 3D"; MCP opened to members
+**Later or ideas:** "Show in viewer" for other positioned records (8.178, 8.194); an actor role for "retrieved the source" or "modeller" (a data-model grill, 8.194); the GH sign-in on macOS (Keychain); Ferroscan "the image in 3D"; MCP opened to members
 (after 0.6.3.1); the CSC logo and brand, then the logo in mails, Open Graph and the favicon; the partners on
 the credits page (their consent); usage statistics without cookies; timber evidence methods; the analytics
 page; transactions for record plus change log; xeokit (for later, see `FUTURE.md`); a similarity-search

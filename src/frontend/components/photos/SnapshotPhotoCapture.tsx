@@ -262,7 +262,7 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
     }
     return liveTiles.map(({ index, src }) => ({
       src,
-      alt: `Snapshot photo slot ${index}`,
+      alt: `Photo slot ${index} of this snapshot`,
       caption: `Slot #${index}`,
     }))
   }, [props.mode, stagedItems, liveTiles])
@@ -398,11 +398,11 @@ export default function SnapshotPhotoCapture(props: SnapshotPhotoCaptureProps) {
                   >
                     {compact ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={src} alt={`Snapshot photo ${index + 1}`} className={THUMB_IMG} />
+                      <img src={src} alt={`Photo ${index + 1} of this snapshot`} className={THUMB_IMG} />
                     ) : (
                       <Image
                         src={src}
-                        alt={`Snapshot photo ${index + 1}`}
+                        alt={`Photo ${index + 1} of this snapshot`}
                         fill
                         className="object-cover"
                         unoptimized

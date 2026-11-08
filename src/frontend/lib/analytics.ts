@@ -61,7 +61,7 @@ export function summaryLine(stats: StatsResponse): string {
   const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
   const parts = [`${plural(stats.total, 'component', 'components')} in ${plural(datasets, 'dataset', 'datasets')}`]
   if (stats.pieces != null && stats.pieces > stats.total) {
-    parts.push(plural(stats.pieces, 'element', 'elements'))
+    parts.push(plural(stats.pieces, 'element', 'elements'))      // the items of the batches: the one word that stays
   }
   return parts.join(', ')
 }

@@ -65,6 +65,7 @@ function PageViewReporter({ isPublic, snapshotStatus, layoutId, snapshots }: {
 export default function ComponentPageView({
   catalog,
   snapshots,
+  versionsKnown = true,
   childIdentities,
   activeSnapshotId,
   viewingVersion,
@@ -75,10 +76,13 @@ export default function ComponentPageView({
 }: {
   catalog: CatalogComponent
   snapshots: SnapshotSummaryItem[]
+  /** the version rows loaded; without them the page cannot tell whether anything was published */
+  versionsKnown?: boolean
   childIdentities: CatalogShallowRow[]
   activeSnapshotId: string
   viewingVersion: number
-  liveVersion: number
+  /** null: the element has no current version (every version withdrawn, or none published yet) */
+  liveVersion: number | null
   isViewingLive: boolean
   snapshotStatus?: string | null
   /** `?layout=<evidence id>` (decision 8.178): a layout record the viewer draws in addition. */
@@ -117,7 +121,7 @@ export default function ComponentPageView({
           id={identityId}
           label={`#${identity.catalog_number} ${snapshot.name ?? ''}`.trim()}
         />
-        <ComponentHeaderStrip catalog={catalog} snapshots={snapshots} />
+        <ComponentHeaderStrip catalog={catalog} snapshots={snapshots} versionsKnown={versionsKnown} />
         {banners.map((banner) => (
           <p key={banner.id} role="status"
             className={cn('rounded-lg border px-3 py-2 text-sm', BANNER_TONE[banner.tone])}>
@@ -140,9 +144,9 @@ export default function ComponentPageView({
           </div>
           <div className="contents lg:col-start-1 lg:row-span-4 lg:row-start-1 lg:flex lg:min-w-0 lg:flex-col lg:gap-3">
             <div className="order-2 min-w-0"><ComponentFactsCard catalog={catalog} /></div>
-            <div className="order-3 min-w-0"><ComponentPropertiesCard catalog={catalog} /></div>
+            <div className="order-3 min-w-0"><ComponentPropertiesCard catalog={catalog} snapshots={snapshots} /></div>
             <div className="order-4 min-w-0">
-              <ComponentProvenanceCard catalog={catalog} childIdentities={childIdentities} />
+              <ComponentProvenanceCard catalog={catalog} childIdentities={childIdentities} snapshots={snapshots} />
             </div>
             {/* in the rail below Provenance on lg; below lg after Photos and location (order-6) */}
             <div className="order-6 min-w-0 empty:hidden lg:order-5">
@@ -154,7 +158,7 @@ export default function ComponentPageView({
             <ComponentPhotosLocationCard catalog={catalog} />
           </div>
           <div className="order-7 min-w-0 lg:col-start-2 lg:row-start-3">
-            <ComponentRecordsCard catalog={catalog} />
+            <ComponentRecordsCard catalog={catalog} snapshots={snapshots} />
           </div>
           <div className="order-8 min-w-0 lg:col-start-2 lg:row-start-4">
             <ComponentHistoryCard

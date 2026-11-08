@@ -439,7 +439,7 @@ async def shallow_row_for_identity(
     if not docs:
         raise HTTPException(
             status_code=404,
-            detail=f'Identity {identity_id} not found',
+            detail=f'Component {identity_id} not found',
         )
     return catalog_row(docs[0])
 

@@ -24,9 +24,9 @@ export const NEAR_LAYER_LABELS: Record<NearLayer, string> = {
 
 export const NEAR_HELP =
   'Paste a point as "latitude, longitude" (for example 49.8728, 8.6512, as a map shows it). '
-  + 'Current measures where an element is now; Origin measures the building it comes from, which is '
-  + 'known for fewer elements. With a radius in km only the elements within it are listed; without one '
-  + 'every element with a known place is listed, nearest first. Elements without a known place on the '
+  + 'Current measures where a component is now; Origin measures the building it comes from, which is '
+  + 'known for fewer components. With a radius in km only the components within it are listed; without one '
+  + 'every component with a known place is listed, nearest first. Components without a known place on the '
   + 'chosen layer are left out.'
 
 export type NearQuery = {

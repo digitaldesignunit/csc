@@ -1,6 +1,6 @@
 # Catalog of Second Chances (CSC)
 
-A research catalog of reclaimed building components: what each physical element is, where it came
+A research catalog of reclaimed building components: what each physical component is, where it came
 from, what state it is in, and what is known about it --- so it can be designed with and reused.
 
 ## Language
@@ -8,13 +8,13 @@ from, what state it is in, and what is known about it --- so it can be designed 
 ### Components and records
 
 **Component**:
-A physical reclaimed building element the catalog tracks --- a beam, a panel, a lump of rubble. In user-facing text a
-single one is an "element" (not to be confused with a Grasshopper component).
-_Avoid_: item, part, piece
+A physical reclaimed building component the catalog tracks --- a beam, a panel, a lump of rubble. In user-facing text a
+single one is a "component"; on the Grasshopper page the other kind is a "Grasshopper component".
+_Avoid_: item, part, piece, element (an element is only an item of a batch)
 
 **Component identity**:
 The catalog's permanent record of one physical component, from its arrival to long after its exit.
-_Avoid_: entry, component (when the record is meant)
+_Avoid_: entry; in user-facing text the record and its UUID are a "component" and a "component id", "identity" stays in code, the API and Grasshopper
 
 **Tag**:
 The physical QR label on a component; it carries only the identity's UUID, never a URL.
@@ -22,7 +22,7 @@ _Avoid_: label, sticker
 
 **Snapshot**:
 One recorded state of a component --- its shape and state from a point in time until the next state.
-_Avoid_: version (a snapshot *has* a version number), scan (one way to capture a snapshot's geometry)
+_Avoid_: version (a snapshot *has* a version number; also in user-facing text), scan (one way to capture a snapshot's geometry)
 
 **Snapshot photo**:
 A general-impression picture of a component in one state, so people get an idea of it regardless of how its geometry is represented. Not evidence.

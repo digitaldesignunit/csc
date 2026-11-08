@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-17T09:24:39.747Z
-// Source: http://127.0.0.1:8899/schema/lineage
+// Generated on: 2026-11-08T17:18:33.147Z
+// Source: http://127.0.0.1:8792/schema/lineage
 
 export interface ChangeLogEntryView {
   _id: string;

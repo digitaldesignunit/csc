@@ -297,7 +297,7 @@ def test_the_pdf_holds_the_spec_7_8_contents():
         children=[{'id': EID, 'catalog_number': 9}],
         member=True, change_info={'count': 4, 'last_at': '2026-10-01T09:00:00Z'}))
     for needle in ('Component passport', '#7 beam', 'Dataset: ZirKuS',
-                   'state v1', 'Beam (IfcBeam)', 'Concrete', '17 01 01',
+                   'snapshot v1', 'Beam (IfcBeam)', 'Concrete', '17 01 01',
                    'Deinstalled', '2022-05', 'Werdh\u00f6lzli',
                    'Hall 7', 'built 1969', 'Welded',
                    '6000 x 300 x 200 mm', 'Linear', 'Mass',

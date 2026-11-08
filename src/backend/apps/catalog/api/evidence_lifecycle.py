@@ -340,6 +340,7 @@ async def reinstate_evidence(
     loaded = await load_evidence(request, current_user, evidence_id,
                                  'reinstate')
     record, identity = loaded.record, loaded.identity
+    gate_identity(identity)           # a withdrawn element takes no step forward (8.190)
     _step(record, 'reinstate', 'published')
     predecessor = record.get('supersedes')
     old = None

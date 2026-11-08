@@ -224,11 +224,11 @@ function PickerBody({
   const patchNote = proxyModel
     ? 'Edge distance measured to the proxy face.'
     : hit?.patch === 'face'
-      ? 'This version has no proxy: edge distance is measured to the outer boundary of the flat face you picked on.'
+      ? 'This snapshot has no proxy: edge distance is measured to the outer boundary of the flat face you picked on.'
     : hit?.patch === 'estimated-plane'
-      ? 'A point cloud has no faces and this version has no proxy: edge distance cannot be checked.'
+      ? 'A point cloud has no faces and this snapshot has no proxy: edge distance cannot be checked.'
       : hit?.kind === 'mesh'
-        ? 'The surface here is not a flat face and this version has no proxy: edge distance is not checked.'
+        ? 'The surface here is not a flat face and this snapshot has no proxy: edge distance is not checked.'
         : null
 
   return (
@@ -242,7 +242,7 @@ function PickerBody({
           {mode === 'grid'
             ? 'Tap or click a face: that point becomes the centre of the grid. Turn the grid with the buttons, then set rows, columns and spacing.'
             : 'Tap or click the model. A drag still turns the view.'}
-          {' '}Stored coordinates of {version !== null ? `version ${version}` : 'this version'} (mm).
+          {' '}Stored coordinates of {version !== null ? `snapshot v${version}` : 'this snapshot'} (mm).
         </DialogDescription>
       </DialogHeader>
 

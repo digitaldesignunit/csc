@@ -2,10 +2,10 @@
 
 /**
  * The lifecycle buttons of one snapshot (spec section 7.1, decisions 8.18,
- * 8.30): the author submits, recalls, resubmits and deletes a draft;
- * moderator(D) publishes, rejects, makes current, withdraws and
- * reinstates. Only the buttons the caller may use are shown; the backend
- * checks again.
+ * 8.30): the author (and a site admin, 6.5) submits, recalls and resubmits, the
+ * author or a moderator deletes a draft; moderator(D) publishes, rejects,
+ * makes current, withdraws and reinstates. Which buttons show is
+ * `snapshotButtons` (`lib/lifecycleRights.ts`); the backend checks again.
  */
 import { useState } from 'react'
 import Link from 'next/link'
@@ -27,7 +27,9 @@ import { Button } from '@/components/ui/button'
 import { WriteButton } from '@/components/ui/write-button'
 import ReasonDialog from '@/components/moderation/ReasonDialog'
 import { backendJson } from '@/lib/backend'
+import { snapshotButtons } from '@/lib/lifecycleRights'
 import { useMe } from '@/lib/me'
+import { usePublishCheck } from '@/lib/publishCheck'
 import { useConfirm } from '@/components/common/ConfirmDialog'
 
 export type LifecycleSnapshot = {
@@ -49,24 +51,37 @@ type Props = {
   identityId?: string
   /** Offer only these buttons (the Actions menu asks for a version per action). */
   only?: SnapshotAction[]
+  /** `has_open_snapshot` of the element (8.195): "Back to draft" and "Correct" wait while one is open. */
+  hasOpenSnapshot?: boolean
+  /** the element is withdrawn: submit, publish, promote and correct are not offered (8.190) */
+  identityWithdrawn?: boolean
 }
 
 export type SnapshotAction =
   | 'submit' | 'recall' | 'resubmit' | 'publish' | 'reject' | 'correct'
   | 'promote' | 'withdraw' | 'reinstate' | 'delete'
 
-export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged, size = 'xs', identityId, only }: Props) {
+export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged, size = 'xs', identityId, only, hasOpenSnapshot = false, identityWithdrawn = false }: Props) {
   const router = useRouter()
-  const { me, moderates, rolesIn } = useMe()
+  const { me, isAdmin, moderates, rolesIn } = useMe()
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<'reject' | 'withdraw' | null>(null)
   const { confirm, dialog: confirmDialog } = useConfirm()
+  // the first version of a child also needs a moderator of every parent dataset (8.8)
+  const publishCheck = usePublishCheck(
+    identityId, !!me && snapshot.status === 'pending' && moderates(dataset))
 
   if (!me) return null
   const isAuthor = !!snapshot.added_by_user_id && snapshot.added_by_user_id === me._id
   const isModerator = moderates(dataset)
   const { status } = snapshot
-  const live = status === 'published' && !snapshot.superseded_by
+  const show = snapshotButtons({
+    isAuthor, isAdmin, isModerator, isContributor: rolesIn(dataset).includes('contributor'),
+    status, superseded: !!snapshot.superseded_by, isCurrent: !!snapshot.is_current, hasOpenSnapshot, identityWithdrawn,
+    // until the parents answered, the button is not offered
+    publishBlock: publishCheck.state === 'blocked' ? publishCheck.reason
+      : publishCheck.state === 'loading' ? 'loading' : null,
+  })
 
   const run = async (label: string, path: string, body?: unknown) => {
     setBusy(true)
@@ -86,7 +101,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
   const remove = async () => {
     if (!(await confirm({
       title: `Delete v${snapshot.version}?`,
-      description: 'The version and its files are deleted. This cannot be undone.',
+      description: 'The snapshot and its files are deleted. This cannot be undone.',
       confirmLabel: 'Delete',
       destructive: true,
     }))) return
@@ -111,7 +126,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
   }
   const quiet = (fn: () => Promise<void>) => () => { fn().catch(() => undefined) }
 
-  if (isAuthor && status === 'draft') {
+  if (show.submit) {
     add('submit', (
       <WriteButton size="sm" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('submitted', `${base}/submit`))}>
@@ -119,7 +134,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
       </WriteButton>
     ))
   }
-  if (isAuthor && status === 'pending') {
+  if (show.recall) {
     add('recall', (
       <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('recalled to draft', `${base}/recall`))}>
@@ -127,7 +142,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
       </WriteButton>
     ))
   }
-  if (isAuthor && status === 'rejected') {
+  if (show.resubmit) {
     add('resubmit', (
       <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('back to draft', `${base}/resubmit`))}>
@@ -135,13 +150,18 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
       </WriteButton>
     ))
   }
-  if (isModerator && status === 'pending') {
+  if (publishCheck.state === 'blocked' && isModerator && status === 'pending' && (!only || only.includes('publish'))) {
+    buttons.push(<span key="publish-blocked" role="note" className="text-[11px] text-muted-foreground">{publishCheck.reason}</span>)
+  }
+  if (show.publish) {
     add('publish', (
       <WriteButton size="sm" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('published', `${base}/publish?promote=1`))}>
         <Check className="mr-1 h-3 w-3" />Publish
       </WriteButton>
     ))
+  }
+  if (show.reject) {
     add('reject', (
       <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={() => setDialog('reject')}>
@@ -149,7 +169,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
       </WriteButton>
     ))
   }
-  if (identityId && live && rolesIn(dataset).includes('contributor')) {
+  if (identityId && show.correct) {
     add('correct', (
       <Button asChild size="sm" variant="outline" className={buttonClass}>
         <Link href={`/components/${encodeURIComponent(identityId)}/snapshot/new?${new URLSearchParams({ mode: 'correct', snapshot: snapshot._id })}`}>
@@ -158,7 +178,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
       </Button>
     ))
   }
-  if (isModerator && live && !snapshot.is_current) {
+  if (show.promote) {
     add('promote', (
       <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('made current', `${base}/promote`))}>
@@ -166,7 +186,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
       </WriteButton>
     ))
   }
-  if (isModerator && status === 'published') {
+  if (show.withdraw) {
     add('withdraw', (
       <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={() => setDialog('withdraw')}>
@@ -174,7 +194,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
       </WriteButton>
     ))
   }
-  if (isModerator && status === 'withdrawn') {
+  if (show.reinstate) {
     add('reinstate', (
       <WriteButton size="sm" variant="outline" className={buttonClass} disabled={busy}
         onClick={quiet(() => run('reinstated', `${base}/reinstate`))}>
@@ -182,7 +202,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
       </WriteButton>
     ))
   }
-  if ((isAuthor || isModerator) && ['draft', 'pending', 'rejected'].includes(status)) {
+  if (show.delete) {
     add('delete', (
       <WriteButton size="sm" variant="ghost" className={`${buttonClass} text-destructive`} disabled={busy}
         onClick={() => void remove()} aria-label={`Delete v${snapshot.version}`}>
@@ -212,7 +232,7 @@ export default function SnapshotLifecycleActions({ snapshot, dataset, onChanged,
         open={dialog === 'withdraw'}
         onOpenChange={(open) => setDialog(open ? 'withdraw' : null)}
         title={`Withdraw v${snapshot.version}`}
-        description="It leaves lists and the public view; dataset members keep the full record. If it is the current state, the latest remaining published version becomes current."
+        description="It leaves lists and the public view; dataset members keep the full record. If it is the current snapshot, the latest remaining published snapshot becomes current."
         confirmLabel="Withdraw"
         destructive
         onConfirm={(reason) => run('withdrawn', `${base}/withdraw`, { reason })}

@@ -44,7 +44,7 @@ export default function PositionField({
     <div className="space-y-2">
       <Field
         id={id}
-        label="Where on the element"
+        label="Where on the component"
         help={help}
         required={required && !hasPoint && !gridCentre}
         errors={errors}

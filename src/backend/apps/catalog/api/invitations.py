@@ -10,8 +10,8 @@ section 3.7, section 7.7; decisions 8.14, 8.20; plan P3).
 * ``POST /invitations/{iid}/resend`` --- a new code (the old one is void),
   mailed again; who may revoke may resend
 * ``GET /invitations`` --- admin: all; moderator: their datasets'
-* ``DELETE /invitations/{iid}`` --- revoke while unused: its creator,
-  ``moderator(D)``, admin
+* ``DELETE /invitations/{iid}`` --- revoke while unused: ``moderator(D)``,
+  admin (the creator loses the right with the role, 8.193 c)
 * ``POST /datasets/{did}/members`` --- ``moderator(D)``: in a reviewed
   dataset an existing account (exact email) is added and notified, any other
   address invited; in a dataset an admin has not reviewed yet every address is

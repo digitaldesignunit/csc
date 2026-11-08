@@ -53,9 +53,11 @@ function CopyButton({ label, done, onCopy, icon: Icon }: {
   )
 }
 
-export default function ComponentHeaderStrip({ catalog, snapshots }: {
+export default function ComponentHeaderStrip({ catalog, snapshots, versionsKnown = true }: {
   catalog: CatalogComponent
   snapshots: SnapshotSummaryItem[]
+  /** the version rows loaded: without them "delete" is not offered (8.192) */
+  versionsKnown?: boolean
 }) {
   const { identity } = catalog
   const snapshot = primarySnapshot(catalog)
@@ -80,7 +82,7 @@ export default function ComponentHeaderStrip({ catalog, snapshots }: {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <ReserveButton catalog={catalog} />
-          <ComponentActionsMenu catalog={catalog} snapshots={snapshots} />
+          <ComponentActionsMenu catalog={catalog} snapshots={snapshots} versionsKnown={versionsKnown} />
         </div>
       </div>
       <div className="mt-1.5 flex items-center gap-1.5">
@@ -91,7 +93,7 @@ export default function ComponentHeaderStrip({ catalog, snapshots }: {
           onCopy={() => navigator.clipboard.writeText(generateGrasshopperPanelXML('ComponentID', identityId))} />
         {snapshot._id && (
           <span className="ml-2 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            {typeof snapshot.version === 'number' ? `v${snapshot.version}` : 'Version'}
+            {typeof snapshot.version === 'number' ? `v${snapshot.version}` : 'Snapshot'}
             <IdChip id={String(snapshot._id)} kind="SnapshotID" />
           </span>
         )}

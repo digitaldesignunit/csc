@@ -52,6 +52,7 @@ from apps.catalog.api.access import (
     and_match,
     dataset_of,
     deny_read,
+    has_open_snapshot,
     load_current_snapshot,
     load_identity,
     require,
@@ -166,7 +167,7 @@ async def _resolve_passport_snapshot_docs(
         if not docs:
             raise HTTPException(
                 status_code=404,
-                detail=f'No snapshots found for identity {identity_id}',
+                detail=f'No snapshots found for component {identity_id}',
             )
     elif mode == 'ids':
         docs = []
@@ -182,7 +183,7 @@ async def _resolve_passport_snapshot_docs(
                 raise HTTPException(
                     status_code=404,
                     detail=(
-                        f'Snapshot {snapshot_id} does not belong to identity '
+                        f'Snapshot {snapshot_id} does not belong to component '
                         f'{identity_id}'
                     ),
                 )
@@ -216,10 +217,13 @@ def passport_json(
     user: Optional[User] = None,
     remaining: Optional[int] = None,
     can_undo_deinstall: bool = False,
+    has_open: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """The passport body as ``user`` may see it (people stripped for an
     anonymous caller, 8.101): what compose answers, and the base of every
-    export (JSON-LD, CERO, PDF; 8.116 f)."""
+    export (JSON-LD, CERO, PDF; 8.116 f). ``has_open`` is the flag
+    ``has_open_snapshot`` of compose (8.195); without it the field is not in
+    the body, which keeps it out of the exports."""
     try:
         body = passport_body(identity_doc, snapshot_docs)
     except Exception as exc:
@@ -227,6 +231,8 @@ def passport_json(
     if remaining is not None:              # a batch (8.105)
         body['identity']['remaining'] = remaining
     body['identity']['can_undo_deinstall'] = can_undo_deinstall
+    if has_open is not None:
+        body['identity']['has_open_snapshot'] = has_open
     if evidence is not None:               # ?include=evidence (7.2)
         body['evidence'] = evidence
     return for_viewer(body, user)
@@ -243,11 +249,13 @@ def _passport_response(
     user: Optional[User] = None,
     remaining: Optional[int] = None,
     can_undo_deinstall: bool = False,
+    has_open: Optional[bool] = None,
 ) -> JSONResponse:
     response_body = passport_json(identity_doc, snapshot_docs,
                                   evidence=evidence, user=user,
                                   remaining=remaining,
-                                  can_undo_deinstall=can_undo_deinstall)
+                                  can_undo_deinstall=can_undo_deinstall,
+                                  has_open=has_open)
     resolved_etag = etag or viewer_etag(
         _compute_passport_etag(identity_doc, snapshot_docs, remaining), user)
     return JSONResponse(
@@ -260,7 +268,7 @@ def _passport_response(
 
 @router.get(
     '/identities/{identity_id}/children',
-    summary='List identities that list this identity as a parent',
+    summary='List components that list this component as a parent',
 )
 async def list_identity_children(
     request: Request,
@@ -409,7 +417,7 @@ async def _collect_lineage_identity_docs(
 
 @router.get(
     '/identities/{identity_id}/provenance',
-    summary='Lineage graph of related identities and snapshots',
+    summary='Lineage graph of related components and snapshots',
 )
 async def get_identity_provenance(
     request: Request,
@@ -423,8 +431,8 @@ async def get_identity_provenance(
     ),
 ):
     """
-    Walk ``parent_identities`` up and down from this identity, then attach
-    each identity's snapshot versions. Anonymous callers who can read a
+    Walk ``parent_identities`` up and down from this component, then attach
+    each component's snapshots. Anonymous callers who can read a
     public root only see public relatives.
     """
     identity_doc = (await load_identity(
@@ -488,7 +496,7 @@ async def get_identity_provenance(
 
 @router.get(
     '/identities/{identity_id}/snapshots',
-    summary='List snapshot versions for an identity (summary rows)',
+    summary='List the snapshots of a component (summary rows)',
     response_model=List[SnapshotSummaryItem],
     response_model_by_alias=True,
 )
@@ -497,7 +505,7 @@ async def list_identity_snapshots(
     current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
     identity_id: str,
 ):
-    """Return all snapshots for one identity, ordered by version ascending."""
+    """Return all snapshots of one component, ordered by their number."""
     identity_doc = (await load_identity(
         request, current_user, identity_id,
         projection={'_id': 1, 'current_snapshot_id': 1, 'is_public': 1})).record
@@ -570,7 +578,7 @@ async def _identity_as_of(request: Request, user: Optional[User],
 
 @router.get(
     '/identities/{identity_id}',
-    summary='Get one identity (shallow, passport, or identity-only)',
+    summary='Get one component (shallow, passport, or without snapshots)',
 )
 async def get_identity(
     request: Request,
@@ -584,7 +592,7 @@ async def get_identity(
         ),
     ),
     as_of: Optional[str] = Query(
-        None, description='the identity as it was at this ISO date '
+        None, description='the component as it was at this ISO date '
                           '(members of D and admin; section 3.8)'),
 ):
     identity_doc = (await load_identity(request, current_user,
@@ -612,6 +620,8 @@ async def get_identity(
             body['remaining'] = pieces_left
         body['can_undo_deinstall'] = await _can_undo_deinstall(
             request, identity_doc, current_user)
+        body['has_open_snapshot'] = await has_open_snapshot(
+            request, viewer_of(current_user), identity_doc)
         return JSONResponse(
             status_code=200,
             content=for_viewer(body, current_user),
@@ -620,9 +630,11 @@ async def get_identity(
 
     current_snapshot_id = identity_doc.get('current_snapshot_id')
     if not current_snapshot_id:              # no published snapshot (8.17)
-        return _passport_response(identity_doc, [],
-                                  anonymous_public=anonymous_public,
-                                  user=current_user)
+        return _passport_response(
+            identity_doc, [], anonymous_public=anonymous_public,
+            user=current_user,
+            has_open=await has_open_snapshot(
+                request, viewer_of(current_user), identity_doc))
     pieces_left = await remaining_of(request, identity_doc)
     snapshot_doc = await load_current_snapshot(request, identity_doc)
     await refresh_snapshot_photo_count(
@@ -634,6 +646,8 @@ async def get_identity(
         anonymous_public=anonymous_public,
         user=current_user,
         remaining=pieces_left,
+        has_open=await has_open_snapshot(
+            request, viewer_of(current_user), identity_doc),
     )
 
 
@@ -668,6 +682,7 @@ class PassportRead:
     etag: str
     anonymous_public: bool
     can_undo_deinstall: bool = False
+    has_open_snapshot: bool = False
 
 
 async def read_passport(
@@ -712,6 +727,12 @@ async def read_passport(
     if can_undo:
         # a later record can close the undo without changing the identity
         etag = hashlib.sha256(f'{etag}::undo'.encode('utf-8')).hexdigest()
+    open_snapshot = await has_open_snapshot(request, viewer_of(current_user),
+                                          identity_doc)
+    if open_snapshot:
+        # a draft someone else opens changes neither the identity nor the
+        # versions shown, so a 304 would hand back a stale False (8.195)
+        etag = hashlib.sha256(f'{etag}::open'.encode('utf-8')).hexdigest()
     evidence = None
     if 'evidence' in {part.strip() for part in (include or '').split(',')}:
         from .evidence_service import published_bodies, viewer_context
@@ -729,7 +750,8 @@ async def read_passport(
         evidence=evidence, remaining=pieces_left,
         etag=viewer_etag(etag, current_user),
         anonymous_public=anonymous_public,
-        can_undo_deinstall=can_undo)
+        can_undo_deinstall=can_undo,
+        has_open_snapshot=open_snapshot)
 
 
 JSONLD_MEDIA_TYPE = 'application/ld+json'
@@ -749,7 +771,7 @@ async def get_identity_passport(
         default=None,
         description=(
             'Which snapshots to include: omitted or "current" = live '
-            'current_snapshot_id; "all" = every version; or one or more '
+            'current_snapshot_id; "all" = every snapshot; or one or more '
             'snapshot UUIDs (comma-separated).'
         ),
     ),
@@ -773,8 +795,8 @@ async def get_identity_passport(
     Return ``{identity, snapshots[]}``.
 
     - Default / ``?snapshots=current``: live ``current_snapshot_id``.
-    - ``?snapshots=all``: every version (ascending by version).
-    - ``?snapshots=<uuid>`` or comma-separated UUIDs: specific versions.
+    - ``?snapshots=all``: every snapshot (ascending by version).
+    - ``?snapshots=<uuid>`` or comma-separated UUIDs: specific snapshots.
     - ``?format=jsonld``: the same body as JSON-LD (spec 7.8).
     """
     read = await read_passport(request, current_user, identity_id,
@@ -813,4 +835,5 @@ async def get_identity_passport(
         user=current_user,
         remaining=read.remaining,
         can_undo_deinstall=read.can_undo_deinstall,
+        has_open=read.has_open_snapshot,
     )

@@ -80,7 +80,7 @@ function RowMenu({ row }: { row: CatalogShallowRow }) {
         <DropdownMenuItem onSelect={() => void copy(row._id, 'Component id copied')}>
           <Copy className='mr-2 h-3.5 w-3.5' aria-hidden />Copy component id
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={!snapshotId} onSelect={() => void copy(snapshotId, 'Version id copied')}>
+        <DropdownMenuItem disabled={!snapshotId} onSelect={() => void copy(snapshotId, 'Snapshot id copied')}>
           <Copy className='mr-2 h-3.5 w-3.5' aria-hidden />Copy snapshot id
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void copy(generateGrasshopperPanelXML('ComponentID', row._id), 'Copied as a Grasshopper panel')}>
@@ -234,7 +234,7 @@ const OPTIONAL: Record<string, Column> = {
   _id: {
     id: '_id',
     accessorKey: '_id',
-    header: () => <ComponentOverviewDataTableHeader header='Identity id' sortKey='_id' />,
+    header: () => <ComponentOverviewDataTableHeader header='Component id' sortKey='_id' />,
     cell: ({ row }) => <ComponentOverviewDataTableCopyIdCell componentId={row.getValue('_id') as string} />,
   },
   catalog_number: {

@@ -98,13 +98,13 @@ STAGE_INPUT_FIELDS = frozenset({'geometry', 'color', 'shape_class',
 
 # BODIES ----------------------------------------------------------------------
 class SnapshotDraftBody(BaseModel):
-    """A new state or a correction, as the client sends it. Derived fields
+    """A new snapshot or a correction, as the client sends it. Derived fields
     (frame, bbx, descriptors, fitted proxies, ...) are never accepted."""
     model_config = ConfigDict(extra='forbid')
 
     name: Optional[str] = None
     effective_from: Optional[Timestamp] = Field(
-        None, description='a new state: default now; a correction inherits')
+        None, description='a new snapshot: default now; a correction inherits')
     effective_from_precision: Optional[Precision] = None
     geometry: Geometry
     capture: Optional[Capture] = None
@@ -118,7 +118,7 @@ class SnapshotDraftBody(BaseModel):
     location: Optional[GeoLocation] = None
     notes: Optional[str] = None
     photo_credit: Optional[PhotoCredit] = Field(
-        None, description='who the photos of this version come from '
+        None, description='who the photos of this snapshot come from '
                           '(mutable metadata, 8.128 a)')
 
     @model_validator(mode='after')
@@ -347,6 +347,7 @@ async def _publish(request: Request, user: User, snapshot: dict,
                     parent_datasets=tuple(parents))
     if not can(viewer, 'publish', target):
         raise deny_write(viewer, 'publish')
+    _refuse_withdrawn(identity)                       # after the right (8.190)
     # the parents may have changed since the cut was recorded (8.34)
     await check_cut_allowed(request, parent_docs)
     _ensure_monotonic(snapshot, await _snapshots_of(request, identity['_id']))
@@ -429,17 +430,26 @@ async def _publish_locked(request: Request, user: User, snapshot: dict,
     return published
 
 
+def _refuse_withdrawn(identity: dict) -> None:
+    """A withdrawn element stays out of circulation (8.190): a version of it
+    is not submitted, published or made current, whoever asks, an admin
+    included. Recall, reject, back to draft and delete stay."""
+    if identity.get('withdrawn'):
+        raise HTTPException(status_code=409,
+                            detail='The component is withdrawn.')
+
+
 # CREATE ----------------------------------------------------------------------
 @router.post('/identities/{identity_id}/snapshots', status_code=201,
-             summary='Record a new state of a component (always a draft)')
+             summary='Record a new snapshot of a component (always a draft)')
 async def create_snapshot(
     request: Request,
     current_user: Annotated[User, Depends(get_current_active_user)],
     identity_id: str,
     body: SnapshotDraftBody,
 ):
-    """contributor(D). ``effective_from`` defaults to now. Only for an element
-    in circulation: an exited element re-enters first (section 3.1.3)."""
+    """contributor(D). ``effective_from`` defaults to now. Only for a component
+    in circulation: an exited component re-enters first (section 3.1.3)."""
     identity = (await load_identity(request, current_user, identity_id,
                                     'create_snapshot')).record
     if identity.get('withdrawn'):
@@ -449,7 +459,7 @@ async def create_snapshot(
         raise HTTPException(
             status_code=409,
             detail='The component is out of circulation; it re-enters '
-                   'before it gets a new state (section 3.1.3).')
+                   'before it gets a new snapshot (section 3.1.3).')
     _check_client_geometry(body)
     size = await current_quantity(request, identity)
     if size is not None:
@@ -459,7 +469,7 @@ async def create_snapshot(
             raise HTTPException(
                 status_code=422,
                 detail=f'quantity: this component records {size} and keeps '
-                       f'it in later states; correct the state to change it '
+                       f'it in later snapshots; correct the snapshot to change it '
                        f'(I32).')
         body = body.model_copy(update={'quantity': size})
     snapshots = await _snapshots_of(request, identity_id)
@@ -495,6 +505,11 @@ async def supersede_snapshot(
     loaded = await load_snapshot(request, current_user, snapshot_id,
                                  'supersede_snapshot')
     old, identity = loaded.record, loaded.identity
+    if identity.get('withdrawn'):
+        # a withdrawn element stays out of circulation (8.190): a correction
+        # would publish a new state of it; reinstate it first
+        raise HTTPException(status_code=409,
+                            detail='The component is withdrawn.')
     if old.get('status') != 'published' or old.get('superseded_by'):
         raise HTTPException(
             status_code=409,
@@ -514,9 +529,9 @@ async def supersede_snapshot(
                 s['_id'] != old['_id'] for s in _live(snapshots)):
             raise HTTPException(
                 status_code=409,
-                detail='The component has other states that record '
+                detail='The component has other snapshots that record '
                        f'{old_quantity}; correct the quantity while it has '
-                       'one state only (I32).')
+                       'one snapshot only (I32).')
     _ensure_nothing_in_flight(snapshots)
     version = max(s['version'] for s in snapshots) + 1
     doc = _new_snapshot(
@@ -544,6 +559,7 @@ async def submit_snapshot(
         request, current_user, snapshot_id,
         lambda s: _transition_or_409(s, 'pending'))
     snapshot = loaded.record
+    _refuse_withdrawn(loaded.identity)
     # the frame and the class are current when it goes to review (6.14)
     snapshot = await derive_sync(request, snapshot_id) or snapshot
     return _ok(await _change_status(request, current_user, snapshot,
@@ -622,6 +638,7 @@ async def promote_snapshot(
     loaded = await load_snapshot(request, current_user, snapshot_id,
                                  'promote')
     snapshot, identity = loaded.record, loaded.identity
+    _refuse_withdrawn(identity)
     if snapshot.get('status') != 'published' or snapshot.get('superseded_by'):
         raise HTTPException(
             status_code=409,
@@ -645,6 +662,10 @@ async def withdraw_snapshot(
         request, current_user, snapshot_id,
         lambda s: _transition_or_409(s, 'withdrawn'))
     snapshot, identity = loaded.record, loaded.identity
+    if body.replacement_id:
+        # a replacement makes another version current: not on a withdrawn
+        # element (8.190); a plain withdrawal stays allowed
+        _refuse_withdrawn(identity)
     snapshots = await _snapshots_of(request, identity['_id'])
     remaining = [s for s in _live(snapshots) if s['_id'] != snapshot['_id']]
     replacement = None
@@ -678,6 +699,7 @@ async def reinstate_snapshot(
         request, current_user, snapshot_id,
         lambda s: _transition_or_409(s, 'published'))
     snapshot, identity = loaded.record, loaded.identity
+    _refuse_withdrawn(identity)       # reinstate the element first (8.190)
     published = await _change_status(request, current_user, snapshot,
                                      'published')
     if not identity.get('current_snapshot_id') \

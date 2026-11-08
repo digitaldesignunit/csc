@@ -2,6 +2,20 @@
 
 Guidance for coding agents working in this repository.
 
+## Standing rules
+
+- The maintainer makes every commit, push and production step. Do not stage, commit, push or run anything against
+  production; leave changes in the working tree and give the commands. Commit messages stay inline in the command.
+- ASCII only in code and scripts, no emoji. In docs, write dashes as `--` and `---`. Icons come from `lucide-react`.
+- No names of people or accounts in committed files; refer to roles. The legal pages and the author line of the
+  Grasshopper user objects are the exceptions.
+- Packages must be about two weeks old: no dependency, action or lockfile entry younger than about 14 days.
+- In user-facing text a catalogued building component is a "component" (on the Grasshopper page the other kind is a
+  "Grasshopper component"); "element" is only an item of a batch. A recorded state is a "snapshot"; "v1" is its number.
+- Several docs and sources use CRLF. Keep the line ending of the file you edit.
+- The root `README.md` states rules plainly, without decision references. Those belong in `docs/adr/`.
+- The decision log `docs/adr/DESIGN_DECISIONS.md` is append-only: amend a row with an "Amended ..." sentence.
+
 ## Agent skills
 
 ### Issue tracker

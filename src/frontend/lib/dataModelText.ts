@@ -78,7 +78,7 @@ export const PAGE_TITLE = 'Data Model'
 export const PAGE_LEAD: Para = [
   'What the ',
   'Catalog of Second Chances',
-  ' stores about each element, in plain words: the four kinds of record, how they belong together, ',
+  ' stores about each component, in plain words: the four kinds of record, how they belong together, ',
   'the fields you see and fill in, and the lists of values you choose from.',
 ]
 
@@ -89,14 +89,14 @@ export const OVERVIEW: Section = {
     [
       'The catalog keeps four kinds of record. A ',
       'dataset',
-      ' is a project: it decides who may see and edit its elements. A ',
+      ' is a project: it decides who may see and edit its components. A ',
       'component identity',
-      ' is the permanent record of one physical element. A ',
+      ' is the permanent record of one physical component. A ',
       'snapshot',
-      ' is one state of that element: its shape and condition from a point in time. ',
+      ' is one state of that component: its shape and condition from a point in time. ',
       'An ',
       'evidence',
-      ' record is one thing that was observed or claimed about the element: a test, a document, an inspection.',
+      ' record is one thing that was observed or claimed about the component: a test, a document, an inspection.',
     ],
     [
       loose(
@@ -104,7 +104,7 @@ export const OVERVIEW: Section = {
         '1',
         'The relations are read from the diagram of section 1; "has many" is the 1:N of the diagram.',
       ),
-      'Evidence can name one snapshot when it refers to a place on the element, because a place needs the coordinates of one shape.',
+      'Evidence can name one snapshot when it refers to a place on the component, because a place needs the coordinates of one shape.',
     ],
   ],
 }
@@ -119,18 +119,18 @@ export const RULES: Rule[] = [
     title: 'The identity is the anchor',
     body: [
       loose(
-        'What we know about an element hangs on its identity: results, documents and properties belong to it. ',
+        'What we know about a component hangs on its identity: results, documents and properties belong to it. ',
         '1, rule 1',
         'Rule 1 says "evidence and properties attach to the identity"; "results, documents" is a plain-words reading.',
       ),
-      'The shape belongs to a snapshot. Nothing hangs on "the element" in the abstract.',
+      'The shape belongs to a snapshot. Nothing hangs on "the component" in the abstract.',
     ],
   },
   {
     id: 'rule-derived',
     title: 'Derived fields are never typed in',
     body: [
-      'Some values are worked out by the server from what was stored: the properties of an element, its size and orientation, its shape class, its complexity, the fitted simple bodies, the descriptors, the waste code of the material and the list of inherited fields. ',
+      'Some values are worked out by the server from what was stored: the properties of a component, its size and orientation, its shape class, its complexity, the fitted simple bodies, the descriptors, the waste code of the material and the list of inherited fields. ',
       loose(
         'Nobody types them in. Where a person may overrule one, the record says so: "assigned" instead of "derived"; an inherited field that a child changes leaves the list of inherited fields.',
         '1, rule 2',
@@ -169,12 +169,12 @@ export const DATASET_SECTION: Section = {
   title: 'Dataset',
   lead: [
     [
-      'A dataset is a project. It is the unit of membership, permission and visibility: every element belongs to exactly one dataset. ',
-      'Members of a dataset have roles: contributor (adds elements and evidence), reviewer (confirms evidence) and moderator (publishes and edits).',
+      'A dataset is a project. It is the unit of membership, permission and visibility: every component belongs to exactly one dataset. ',
+      'Members of a dataset have roles: contributor (adds components and evidence), reviewer (confirms evidence) and moderator (publishes and edits).',
     ],
     [
       loose(
-        'A published element is seen by the members of its dataset, by every signed-in user when the dataset is open to the catalog, and by anyone when the element is public. Administrators see everything.',
+        'A published component is seen by the members of its dataset, by every signed-in user when the dataset is open to the catalog, and by anyone when the component is public. Administrators see everything.',
         '3.6',
         'The spec gives the rule as a table of viewers; this is the same rule in one sentence.',
       ),
@@ -186,17 +186,17 @@ export const DATASET_SECTION: Section = {
       title: 'Fields of a dataset',
       model: 'DatasetView',
       rows: [
-        row('_id', 'text (a short name)', 'example_dataset', 'The short name of the dataset, made by the server from its name. It never changes, and elements point to it.', true),
+        row('_id', 'text (a short name)', 'example_dataset', 'The short name of the dataset, made by the server from its name. It never changes, and components point to it.', true),
         row('name', 'text', 'Example Dataset', 'The name people read.'),
         row('description', 'text', 'A made-up dataset ...', 'What the dataset is about.'),
         row('visibility', '"members" or "catalog"', 'members', [
           loose(
-            '"members": only members see its elements, unless an element is public. "catalog": every signed-in user sees them.',
+            '"members": only members see its components, unless a component is public. "catalog": every signed-in user sees them.',
             '3.6',
             'The spec names the two values and the three tiers; the wording is a summary.',
           ),
         ]),
-        row('reviewed', 'yes or no', 'yes', 'An administrator has looked at a dataset that a user created. Only a reviewed dataset can be open to the catalog or have public elements.'),
+        row('reviewed', 'yes or no', 'yes', 'An administrator has looked at a dataset that a user created. Only a reviewed dataset can be open to the catalog or have public components.'),
         row('members', 'a list', 'one entry per person, with roles', 'The people with a role in the dataset. Only moderators and administrators see the list. Administrators hold every role in every dataset.'),
       ],
     },
@@ -204,10 +204,10 @@ export const DATASET_SECTION: Section = {
 }
 
 const IDENTITY_ROWS: FieldRow[] = [
-  row('_id', 'id', 'example-identity', 'The id of the element: the UUID of its QR tag, or made by the server when none is given.'),
+  row('_id', 'id', 'example-identity', 'The id of the component: the UUID of its QR tag, or made by the server when none is given.'),
   row('catalog_number', 'whole number', '90001 (made up)', 'A running number for people to quote. It is never used again.', true),
   row('original_function', 'one of the functions', 'IfcBeam', [
-    'What the element was in its first life, named like an IFC element class. ',
+    'What the component was in its first life, named like an IFC element class. ',
     loose(
       'The reuse function is not recorded here: it is decided in design tools.',
       '2.1',
@@ -218,31 +218,31 @@ const IDENTITY_ROWS: FieldRow[] = [
   row('material_class', 'text', '17 01 01', 'The waste code of the material (EU list of waste, chapter 17). Filled from the material; a moderator may assign another.', true),
   row('trade_name', 'text', 'ExampleBeam (made up)', 'The brand or product name, if there is one.'),
   row('manufacturer', 'text', 'the precast plant', 'Who made it.'),
-  row('connection_features', 'text', 'Cast-in plates at both ends', 'Anchors, cast-in plates or holes on the element itself.'),
-  row('material_separability', 'a class and a note', 'standard', 'How well the materials of the element can be separated, on the scale of the DGNB (see the classes below).'),
-  row('dataset', 'a dataset', 'example_dataset', 'The dataset the element belongs to.'),
-  row('manufactured_at', 'date and precision', '1968 (year)', 'When the material was made. Not the day the element was cut or deinstalled.'),
-  row('origin', 'a block', 'deinstallation, 2026-01-20', 'How the element entered circulation: see the next section.'),
-  row('parent_identities', 'a list of ids', 'the elements it was cut from', [
-    'The elements this one was cut from or merged from. ',
+  row('connection_features', 'text', 'Cast-in plates at both ends', 'Anchors, cast-in plates or holes on the component itself.'),
+  row('material_separability', 'a class and a note', 'standard', 'How well the materials of the component can be separated, on the scale of the DGNB (see the classes below).'),
+  row('dataset', 'a dataset', 'example_dataset', 'The dataset the component belongs to.'),
+  row('manufactured_at', 'date and precision', '1968 (year)', 'When the material was made. Not the day the component was cut or deinstalled.'),
+  row('origin', 'a block', 'deinstallation, 2026-01-20', 'How the component entered circulation: see the next section.'),
+  row('parent_identities', 'a list of ids', 'the components it was cut from', [
+    'The components this one was cut from or merged from. ',
     loose(
-      'A child takes over origin, manufacture date, material (with its class), trade name, manufacturer, material separability and original function from its parent, unless it states its own; the server does the copying. When an element is merged from several parents, a field is taken over only if all parents agree.',
+      'A child takes over origin, manufacture date, material (with its class), trade name, manufacturer, material separability and original function from its parent, unless it states its own; the server does the copying. When a component is merged from several parents, a field is taken over only if all parents agree.',
       '3.1.2',
       'The spec lists the inheritable fields with their units (material with its class, date with its precision) and the merge rule; here they are named in words.',
     ),
   ]),
   row('inherited_fields', 'a list', 'origin, material', 'Which fields a child still takes over from its parent. A field the child changes by hand leaves the list.', true),
-  row('exit', 'a block', 'empty while available', 'How the element left circulation: see the next section.'),
-  row('past_cycles', 'a list', 'one entry per earlier use', 'The earlier origin and exit of an element that came back into circulation.', true),
+  row('exit', 'a block', 'empty while available', 'How the component left circulation: see the next section.'),
+  row('past_cycles', 'a list', 'one entry per earlier use', 'The earlier origin and exit of a component that came back into circulation.', true),
   row('withdrawn', 'a block', 'reason and date', [
     loose(
-      'An element that was published is not deleted in normal use. It can be withdrawn, for example as a duplicate; members of the dataset still see it, everyone else sees a marker.',
+      'A component that was published is not deleted in normal use. It can be withdrawn, for example as a duplicate; members of the dataset still see it, everyone else sees a marker.',
       '3.1.4',
       'The spec also covers redaction and, for an administrator, purge; "not deleted in normal use" is the plain reading.',
     ),
   ]),
-  row('is_public', 'yes or no', 'yes', 'Whether anyone can see the element without signing in.'),
-  row('current_snapshot_id', 'a snapshot', 'example-snapshot-v1', 'The version that is shown by default. The first published version becomes it, and a correction takes over from the version it replaces; a moderator can choose another. Empty when no published version is left.'),
+  row('is_public', 'yes or no', 'yes', 'Whether anyone can see the component without signing in.'),
+  row('current_snapshot_id', 'a snapshot', 'example-snapshot-v1', 'The snapshot that is shown by default. The first published snapshot becomes it, and a correction takes over from the snapshot it replaces; a moderator can choose another. Empty when no published snapshot is left.'),
   row('properties', 'values with confidence', 'compressive strength 38.3 MPa', [
     'The results about the material, worked out from the published evidence: the value or range, how sure the server is, which kind of source it rests on and which records it used. ',
     loose(
@@ -259,27 +259,27 @@ export const IDENTITY_SECTION: Section = {
   title: 'Component identity',
   lead: [
     [
-      'The identity is the permanent record of one physical element, from its arrival to long after it left. ',
-      'It holds what stays true across states: what the element was, what it is made of, where it came from and what we know about the material.',
+      'The identity is the permanent record of one physical component, from its arrival to long after it left. ',
+      'It holds what stays true across states: what the component was, what it is made of, where it came from and what we know about the material.',
     ],
   ],
   tables: [{ id: 'identity-fields', title: 'Fields of an identity', model: 'ComponentIdentity', rows: IDENTITY_ROWS }],
 }
 
 const ORIGIN_ROWS: FieldRow[] = [
-  row('kind', 'one of five kinds', 'deinstallation', 'Which of the five ways the element entered circulation (see the list below).'),
+  row('kind', 'one of five kinds', 'deinstallation', 'Which of the five ways the component entered circulation (see the list below).'),
   row('planned', 'yes or no', 'no', [
     loose(
-      '"In place": the element is identified in its construction work but not deinstalled yet; the date is the planned one. Recording the deinstallation clears it.',
+      '"In place": the component is identified in its construction work but not deinstalled yet; the date is the planned one. Recording the deinstallation clears it.',
       '3.1.1, 3.1.6',
       'The spec calls it a planned origin; "in place" is the word of the glossary.',
     ),
   ]),
-  row('at', 'date and precision', '2026-01-20 (day)', 'When the element left its previous context. A year alone is fine.'),
+  row('at', 'date and precision', '2026-01-20 (day)', 'When the component left its previous context. A year alone is fine.'),
   row('place', 'name, address, position', 'Example Hall', 'Where that happened.'),
-  row('construction_work', 'name, use, year built', 'Example Hall, workshop hall, 1968', 'The building or civil work the element left, never the company.'),
-  row('position_in_work', 'text', 'Roof level, axis B', 'Where in that work the element sat.'),
-  row('connection_types', 'several of the connection types', 'bolted, grouted', 'How the element was fixed in the work.'),
+  row('construction_work', 'name, use, year built', 'Example Hall, workshop hall, 1968', 'The building or civil work the component left, never the company.'),
+  row('position_in_work', 'text', 'Roof level, axis B', 'Where in that work the component sat.'),
+  row('connection_types', 'several of the connection types', 'bolted, grouted', 'How the component was fixed in the work.'),
   row('detachability', 'a class and a note', 'standard', 'How easily it could be released, on the DGNB scale.'),
   row('method', 'text', 'Cut loose with a wire saw', 'How it was taken out.'),
   row('performed_by', 'a list of actors', 'the deconstruction contractor', 'Who did it (see "Actors" below).'),
@@ -287,13 +287,13 @@ const ORIGIN_ROWS: FieldRow[] = [
 ]
 
 const EXIT_ROWS: FieldRow[] = [
-  row('kind', 'one of seven kinds', 'installed', 'Which of the seven ways the element left circulation (see the list below).'),
+  row('kind', 'one of seven kinds', 'installed', 'Which of the seven ways the component left circulation (see the list below).'),
   row('at', 'date and precision', '2027-05 (month)', 'When it left.'),
-  row('construction_work', 'name, use, year built', 'Example Pavilion', 'Where it went, only for an installed element.'),
+  row('construction_work', 'name, use, year built', 'Example Pavilion', 'Where it went, only for an installed component.'),
   row('notes', 'text', '', 'Anything that fits nowhere else.'),
   row('recorded_by_user_id', 'a user', '', [
     loose(
-      'Empty when the server set the exit itself: a split or merge is set when the first cut element is published.',
+      'Empty when the server set the exit itself: a split or merge is set when the first cut component is published.',
       '3.1.3',
       'The spec explains the split and merge rule in detail; only its effect is named.',
     ),
@@ -302,12 +302,12 @@ const EXIT_ROWS: FieldRow[] = [
 
 export const ORIGIN_EXIT_SECTION: Section = {
   id: 'origin-exit',
-  title: 'How an element entered and left circulation',
+  title: 'How a component entered and left circulation',
   lead: [
     [
-      'The origin says how the element came into circulation, the exit how it left. An element without an exit is "in circulation": available and reservable. ',
+      'The origin says how the component came into circulation, the exit how it left. A component without an exit is "in circulation": available and reservable. ',
       loose(
-        'An element that is installed, returned or lost can come back with a new origin; the earlier origin and exit are kept as a past cycle. An element that was split, merged, recycled or disposed of cannot.',
+        'A component that is installed, returned or lost can come back with a new origin; the earlier origin and exit are kept as a past cycle. A component that was split, merged, recycled or disposed of cannot.',
         '3.1.3',
         'The spec calls split, merged, recycled and disposed terminal; the code lets installed, returned and lost re-enter. "Cannot come back" is the plain reading.',
       ),
@@ -320,28 +320,28 @@ export const ORIGIN_EXIT_SECTION: Section = {
 }
 
 const SNAPSHOT_ROWS: FieldRow[] = [
-  row('_id', 'id', 'example-snapshot-v1', 'The id of this version, made by the server.', true),
-  row('identity_id', 'an identity', 'example-identity', 'The element the version belongs to.'),
-  row('version', 'whole number', '1', 'The number of the version, from 0.', true),
-  row('status', 'one of the statuses', 'published', 'Where the version is in review: see "Review and checking" below.'),
-  row('name', 'text', 'Beam after trimming', 'A short name for this state.'),
-  row('effective_from', 'date and precision', '2026-03-10 (day)', 'The time from which this state holds. The next version takes over from its own date.'),
-  row('supersedes', 'a version', 'empty', 'Set on a correction: the version it replaces. The replaced version stays readable.', true),
-  row('geometry', 'meshes, point clouds, proxies', 'a scan and a fitted box', 'The shape of the element. A proxy is a simple body (box, prism, cylinder or hull) that stands for the shape.'),
-  row('capture', 'a block', 'photogrammetry, a coordinate system', 'How the shape was recorded: the method, the device, the coordinate system and the markers. Not part of the element.'),
-  row('frame', 'an origin and three axes', 'the standard orientation', 'The standard orientation of the element, worked out from its shape.', true),
-  row('bbx', '3 numbers in mm', '4500, 300, 500', 'The size of the box around the element, along its own axes.', true),
+  row('_id', 'id', 'example-snapshot-v1', 'The id of this snapshot, made by the server.', true),
+  row('identity_id', 'an identity', 'example-identity', 'The component the snapshot belongs to.'),
+  row('version', 'whole number', '1', 'The number of the snapshot, from 0.', true),
+  row('status', 'one of the statuses', 'published', 'Where the snapshot is in review: see "Review and checking" below.'),
+  row('name', 'text', 'Beam after trimming', 'A short name for this snapshot.'),
+  row('effective_from', 'date and precision', '2026-03-10 (day)', 'The time from which this snapshot holds. The next snapshot takes over from its own date.'),
+  row('supersedes', 'a snapshot', 'empty', 'Set on a correction: the snapshot it replaces. The replaced snapshot stays readable.', true),
+  row('geometry', 'meshes, point clouds, proxies', 'a scan and a fitted box', 'The shape of the component. A proxy is a simple body (box, prism, cylinder or hull) that stands for the shape.'),
+  row('capture', 'a block', 'photogrammetry, a coordinate system', 'How the shape was recorded: the method, the device, the coordinate system and the markers. Not part of the component.'),
+  row('frame', 'an origin and three axes', 'the standard orientation', 'The standard orientation of the component, worked out from its shape.', true),
+  row('bbx', '3 numbers in mm', '4500, 300, 500', 'The size of the box around the component, along its own axes.', true),
   row('shape_class', 'one of the classes', 'linear', 'The kind of shape: see the list below. "Composite" is always set by hand.', true),
   row('complexity', '0 to 3', '1', 'How complicated the shape is. The server works it out; a moderator may overrule it.', true),
-  row('descriptors', 'numbers', 'shape descriptors', 'Numbers that describe the shape, used to find similar elements.', true),
-  row('properties', 'values with confidence', 'spalling 1', 'Results about this state (mass, damage, moisture), worked out from the evidence valid at the time of the version.', true),
-  row('fragment', 'yes or no', 'no', 'Whether the element is a fragment of a larger one.'),
+  row('descriptors', 'numbers', 'shape descriptors', 'Numbers that describe the shape, used to find similar components.', true),
+  row('properties', 'values with confidence', 'spalling 1', 'Results about this snapshot (mass, damage, moisture), worked out from the evidence valid at the time of the snapshot.', true),
+  row('fragment', 'yes or no', 'no', 'Whether the component is a fragment of a larger one.'),
   row('quantity', 'whole number', '1', 'How many identical elements the record stands for. More than 1 makes the identity a batch.'),
-  row('color', '3 numbers', '168, 168, 162', 'The colour used to draw the element.'),
-  row('location', 'latitude and longitude', 'where the element is stored', 'Where the element is.'),
+  row('color', '3 numbers', '168, 168, 162', 'The colour used to draw the component.'),
+  row('location', 'latitude and longitude', 'where the component is stored', 'Where the component is.'),
   row('notes', 'text', 'South end cut back', 'Free text.'),
-  row('photo_count', 'whole number', '3', 'How many photos the version has.', true),
-  row('added_by_username', 'user name', 'example-member', 'Who added the version.', true),
+  row('photo_count', 'whole number', '3', 'How many photos the snapshot has.', true),
+  row('added_by_username', 'user name', 'example-member', 'Who added the snapshot.', true),
   row('created', 'time', '2026-03-10T09:00:00Z', 'When the record was saved.', true),
 ]
 
@@ -350,12 +350,12 @@ export const SNAPSHOT_SECTION: Section = {
   title: 'Snapshot',
   lead: [
     [
-      'A snapshot is one recorded state of an element: its shape and condition from a point in time until the next state. ',
-      'The identity stays; the shape belongs to the snapshot. Every version has a number, from 0.',
+      'A snapshot is one recorded state of a component: its shape and condition from a point in time until the next state. ',
+      'The identity stays; the shape belongs to the snapshot. Every snapshot has a number, from 0.',
     ],
     [
       loose(
-        'When the element changes (cut, weathered, repaired), a new version with a later date is added. When a recorded fact was wrong, a correction replaces the wrong version: it keeps the date of the version it replaces, and the wrong one stays readable.',
+        'When the component changes (cut, weathered, repaired), a new snapshot with a later date is added. When a recorded fact was wrong, a correction replaces the wrong snapshot: it keeps the date of the snapshot it replaces, and the wrong one stays readable.',
         '3.2.2',
         'The spec calls them "state change" and "correction"; the sentence joins both rules and leaves out the roles.',
       ),
@@ -366,15 +366,15 @@ export const SNAPSHOT_SECTION: Section = {
 
 const EVIDENCE_ROWS: FieldRow[] = [
   row('_id', 'id', 'example-evidence-core', 'The id of the record, made by the server.', true),
-  row('identity_id', 'an identity', 'example-identity', 'The element the record is about. Results attach to the identity.'),
+  row('identity_id', 'an identity', 'example-identity', 'The component the record is about. Results attach to the identity.'),
   row('method', 'one of the methods', 'core_compression', 'What kind of record this is: see the methods below. The method decides what the payload holds.'),
   row('source_tier', 'one of the tiers', 'destructive', 'The kind of source. The server sets it from the method; for a reinforcement layout it follows the basis.', true),
   row('standard', 'code and year', 'EN 12504-1, 2019', 'The standard the work followed, if any.'),
   row('observed_at', 'date and precision', '2026-02-27 14:30 (exact)', 'When the result was produced.'),
-  row('sampled_at', 'date and precision', '2026-02-20 11:00 (exact)', 'When the sample was taken from the element, if that is another time.'),
+  row('sampled_at', 'date and precision', '2026-02-20 11:00 (exact)', 'When the sample was taken from the component, if that is another time.'),
   row('performed_by', 'a list of actors', 'a laboratory', 'Who did the work (see "Actors" below).'),
   row('recorded_by_username', 'user name', 'example-member', 'Who entered the record.', true),
-  row('position', 'kind, version, point, description', 'north face, mid-span', 'Where on the element, in the coordinates of one version. "None" with a description is always enough.'),
+  row('position', 'kind, snapshot, point, description', 'north face, mid-span', 'Where on the component, in the coordinates of one snapshot. "None" with a description is always enough.'),
   row('summary', 'one result', 'compressive strength 38.3 MPa', 'The one result of the record: see "The result of a record" below. For a rebound test, a core, a reinforcement layout and a visual inspection (the worst observation) the server works it out from the payload and refuses a different value; for the other methods it is typed in. An archival document may have no result at all.'),
   row('derived', 'a list of results', 'in-situ strength', 'Values worked out from the result with a named model. They stay apart from the measured value. The server writes them for a core.'),
   row('payload', 'fields of the method', 'sampling, specimen, test, result', 'The details of the work. They differ by method; the examples show each one.'),
@@ -393,20 +393,20 @@ const SUMMARY_ROWS: FieldRow[] = [
   row('range', 'a range', '18 to 28', 'A range, for a claim. A record may have a value, a range or both.'),
   row('unit', 'a unit', 'MPa', 'The unit the server stores.'),
   row('unit_entered', 'a unit', 'N/mm2', 'The unit as it was typed in. The server converts.'),
-  row('kind', '"measured" or "claimed"', 'measured', 'A measurement was made on the element. A claim is stated by a document, a rule or an observer, for example an inspector.'),
+  row('kind', '"measured" or "claimed"', 'measured', 'A measurement was made on the component. A claim is stated by a document, a rule or an observer, for example an inspector.'),
   row('uncertainty', 'type and value', 'standard deviation 1.2', 'How uncertain the result is, if known.'),
 ]
 
 const POSITION_ROWS: FieldRow[] = [
   row('kind', 'point, region, face or none', 'region', 'The kind of place.'),
-  row('snapshot_id', 'a version', 'example-snapshot-v0', [
+  row('snapshot_id', 'a snapshot', 'example-snapshot-v0', [
     loose(
-      'The version whose coordinates the point uses. If the version is corrected later, the record keeps its version and the viewer draws it only there.',
+      'The snapshot whose coordinates the point uses. If the snapshot is corrected later, the record keeps its snapshot and the viewer draws it only there.',
       '3.3.2',
       'The spec also describes the warning when a correction changes the geometry; it is left out.',
     ),
   ]),
-  row('point', '3 numbers', 'x, y, z in mm', 'The point, in the stored coordinates of that version.'),
+  row('point', '3 numbers', 'x, y, z in mm', 'The point, in the stored coordinates of that snapshot.'),
   row('description', 'text', 'North face, mid-span', 'The place in words.'),
 ]
 
@@ -422,13 +422,13 @@ export const EVIDENCE_SECTION: Section = {
   title: 'Evidence',
   lead: [
     [
-      'An evidence record says what was observed or claimed about an element, by whom and when. ',
+      'An evidence record says what was observed or claimed about a component, by whom and when. ',
       'There is a kind of record for each way of knowing something, the evidence methods. ',
       'A record holds one result in a fixed place, the summary (an archival document may hold none), so that the server can combine the results of many records; the details of the work are in the payload.',
     ],
     [
       loose(
-        'Evidence has two times: when the result was produced (observed at) and, if it differs, when the sample was taken from the element (sampled at).',
+        'Evidence has two times: when the result was produced (observed at) and, if it differs, when the sample was taken from the component (sampled at).',
         '3.3',
         'The spec names them observed_at (result time) and sampled_at (phenomenon time).',
       ),
@@ -437,7 +437,7 @@ export const EVIDENCE_SECTION: Section = {
   tables: [
     { id: 'evidence-fields', title: 'Fields of an evidence record', model: 'EvidenceView', rows: EVIDENCE_ROWS },
     { id: 'evidence-result', title: 'The result of a record', model: 'Summary', rows: SUMMARY_ROWS },
-    { id: 'evidence-position', title: 'The place on the element', model: 'Position', rows: POSITION_ROWS },
+    { id: 'evidence-position', title: 'The place on the component', model: 'Position', rows: POSITION_ROWS },
     { id: 'evidence-verification', title: 'The check of a record', model: 'Verification', rows: VERIFICATION_ROWS },
   ],
 }
@@ -461,7 +461,7 @@ export const LIFECYCLE_SECTION: Section = {
     ],
     [
       loose(
-        'A published record is not edited: a mistake is fixed by a correction, a new record that replaces the old one. The old one stays readable and is marked as corrected. For evidence, the notes, the description of a place and the verification can still change, and files can be added. For a version of an element, the name, notes, location, colour and photos can still change, and a moderator can change its date and overrule its shape class and complexity.',
+        'A published record is not edited: a mistake is fixed by a correction, a new record that replaces the old one. The old one stays readable and is marked as corrected. For evidence, the notes, the description of a place and the verification can still change, and files can be added. For a snapshot of a component, the name, notes, location, colour and photos can still change, and a moderator can change its date and overrule its shape class and complexity.',
         '3.3.4, 3.2.2',
         'The spec lists the frozen fields of evidence (3.3.4) and of a snapshot (3.2.2) apart; here both are told by what stays editable.',
       ),
@@ -501,7 +501,7 @@ export const ACTOR_SECTION: Section = {
   title: 'Actors',
   lead: [
     [
-      'An actor is someone who did something: deinstalled an element, took a core, ran a test. ',
+      'An actor is someone who did something: deinstalled a component, took a core, ran a test. ',
       loose(
         'When you add yourself to a record, the catalog copies your profile (name, organisation, website, ORCID) into the actor, so the record says where you worked then. A later change of the profile never changes an old record.',
         '3.3.1',
@@ -559,21 +559,21 @@ export const VOCABULARIES_INTRO: Para = [
 export const VOCAB_SECTIONS: VocabSection[] = [
   {
     id: 'original-function', title: 'Original function', vocab: 'original_function', valueHeader: 'IFC name',
-    intro: ['What the element was in its first life, as the name of an IFC element class. No IFC model is imported.'],
+    intro: ['What the component was in its first life, as the name of an IFC element class. No IFC model is imported.'],
   },
   {
     id: 'shape-class', title: 'Shape class', vocab: 'shape_class', valueHeader: 'Value',
-    intro: ['The kind of shape of a version. The server works it out from the geometry; "composite" is always set by hand.'],
+    intro: ['The kind of shape of a snapshot. The server works it out from the geometry; "composite" is always set by hand.'],
   },
   {
-    id: 'origin-kind', title: 'How an element entered circulation', vocab: 'origin_kind', valueHeader: 'Value',
+    id: 'origin-kind', title: 'How a component entered circulation', vocab: 'origin_kind', valueHeader: 'Value',
     intro: [
-      'The kind matters for how the element may be reused later.',
+      'The kind matters for how the component may be reused later.',
     ],
   },
   {
-    id: 'exit-kind', title: 'How an element left circulation', vocab: 'exit_kind', valueHeader: 'Value',
-    intro: ['Split, merged, recycled and disposed end the element for good. An installed, returned or lost element can come back.'],
+    id: 'exit-kind', title: 'How a component left circulation', vocab: 'exit_kind', valueHeader: 'Value',
+    intro: ['Split, merged, recycled and disposed end the component for good. An installed, returned or lost component can come back.'],
   },
   {
     id: 'status', title: 'Status', vocab: 'status', valueHeader: 'Value',
@@ -597,7 +597,7 @@ export const VOCAB_SECTIONS: VocabSection[] = [
     id: 'dgnb-classes', title: 'Detachability and separability classes', vocab: 'dgnb_class', valueHeader: 'Value',
     intro: [
       loose(
-        'A scale of the DGNB (a German sustainable-building council) for how easily an element is released from its work and how well its materials can be separated.',
+        'A scale of the DGNB (a German sustainable-building council) for how easily a component is released from its work and how well its materials can be separated.',
         '2.11',
         'The spec gives both columns of the DGNB table; the one-line meaning here covers the two together.',
       ),
@@ -605,7 +605,7 @@ export const VOCAB_SECTIONS: VocabSection[] = [
   },
   {
     id: 'connection-types', title: 'Connection types', vocab: 'connection_type', valueHeader: 'Value',
-    intro: ['How an element was fixed in its work. More than one may apply.'],
+    intro: ['How a component was fixed in its work. More than one may apply.'],
   },
   {
     id: 'construction-methods', title: 'Construction methods', vocab: 'construction_method', valueHeader: 'Value',

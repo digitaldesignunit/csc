@@ -11,9 +11,9 @@ export type FormMode = 'new' | 'cut' | 'state' | 'correct'
 
 export const MODE_TITLES: Record<FormMode, string> = {
   new: 'New component',
-  cut: 'Cut from elements',
-  state: 'Record new state',
-  correct: 'Correct this version',
+  cut: 'Cut from components',
+  state: 'New snapshot',
+  correct: 'Correct this snapshot',
 }
 
 const IDENTITY_PLACEMENT = { o: [0, 0, 0], x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }

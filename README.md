@@ -29,8 +29,8 @@ framework
 
 ## Current Versions
 
-- **CSC**: 0.6.4.4 --- backend, web frontend and Grasshopper interface are released together
-  under one version (tag `v0.6.4.4`); the single source is the `VERSION` file.
+- **CSC**: 0.6.4.5 --- backend, web frontend and Grasshopper interface are released together
+  under one version (tag `v0.6.4.5`); the single source is the `VERSION` file.
 
 See `CHANGELOG.md` for release notes.
 
@@ -112,7 +112,7 @@ session with the first.
 **A local copy of the newest dump** (for checking the web app against real
 data) starts from `.claude/launch.json`: `backend-local` (the newest
 `mongodb_collections_local/<yymmdd>` folder, a throwaway `mongod` on 27791, the
-backend on http://127.0.0.1:8791, assets copied to `.dev/assets-261012`) and
+backend on http://127.0.0.1:8791, assets copied to `.dev/assets`) and
 `frontend-local` (http://localhost:3000). Both run through
 `scripts/dev/run_csc_python.cmd`, which finds the conda environment `csc`
 without a path of your account: `CSC_PYTHON` (a `python.exe` you name), the
@@ -530,7 +530,7 @@ and a JWT does not work in place of it.
 ## Using CSC from Claude
 
 Claude can read the catalog as you: ask it to find components, show one with its
-versions and measurements, compare, or look at what happened to an element. It
+snapshots and measurements, compare, or look at what happened to a component. It
 only reads, and it sees what you see on the website; nothing it can reach is
 private to anybody else. Administrators can connect it for now (the roles are
 `CSC_PAT_ROLES`).
@@ -548,16 +548,16 @@ sent back to) before you press Allow, and press Deny when it is not the tool you
 just connected.
 
 **What it can do.** Ten read-only tools: `search_components` (the filters of
-Browse and `has_evidence`, which keeps only elements with a published, current
+Browse and `has_evidence`, which keeps only components with a published, current
 record of one evidence method, for example `reinforcement_layout` for "with
-reinforcement", a page at a time), `catalog_overview` (how many elements, counted
+reinforcement", a page at a time), `catalog_overview` (how many components, counted
 by material, original function, dataset, shape class and circulation, the range
 of each sorted side in millimetres, and how many have a location; it takes the
 same filters), `get_component` (with the reinforcement layouts of the current
-version as counts), `list_versions`, `get_version` (geometry as counts and a
-link, never the meshes; the reinforcement layouts of the version as counts),
+snapshot as counts), `list_snapshots`, `get_snapshot` (geometry as counts and a
+link, never the meshes; the reinforcement layouts of the snapshot as counts),
 `get_evidence`, `list_datasets`, `get_dataset`, `get_timeline` and
-`similar_components` (the elements nearest in shape over the whole descriptor, not
+`similar_components` (the components nearest in shape over the whole descriptor, not
 on the two-dimensional similarity map, with their distance in standardised
 units; it takes the same filters, which apply before the ranking). Every answer
 carries the web link of the record, and a record that is not public is marked
@@ -700,8 +700,8 @@ The geometry runner and the component map share one lock, `~/csc/shared/locks/he
 so the two heavy jobs never run together (server memory): the
 frequent geometry run skips its run while the lock is held, the nightly run and
 the map wait up to 15 minutes instead of losing their slot. A write that changes
-what the geometry stages read (a new version, a file, the geometry, the colour,
-an override, the function of the element) marks the snapshot (`derivation_due`);
+what the geometry stages read (a new snapshot, a file, the geometry, the colour,
+an override, the function of the component) marks the snapshot (`derivation_due`);
 the frequent run derives only marked snapshots, the nightly run checks all of them
 (`main_geometry.py --due` / without it).
 
@@ -784,7 +784,7 @@ the frontend is checked with `npx tsc --noEmit` and `npm run lint` in
 
 | Dataset | Source | Tools and instructions |
 |---|---|---|
-| ReCreate pilot elements: 1150 reclaimed precast concrete elements of three donor buildings | <https://doi.org/10.5281/zenodo.16809738>, CC BY 4.0 | [`scripts/import/recreate/`](scripts/import/recreate/README.md) |
+| ReCreate pilot elements: 1150 reclaimed precast concrete components of three donor buildings | <https://doi.org/10.5281/zenodo.16809738>, CC BY 4.0 | [`scripts/import/recreate/`](scripts/import/recreate/README.md) |
 | EPFL stones for augmented stacking: 452 scanned quarry offcut stones | <https://doi.org/10.5281/zenodo.7180964>, MIT | [`scripts/import/epfl_stacking/`](scripts/import/epfl_stacking/README.md) |
 
 The data is fetched from Zenodo and never committed. Everything else (environments, the order of the steps,

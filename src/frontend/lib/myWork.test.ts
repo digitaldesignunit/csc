@@ -11,6 +11,7 @@ import {
   submitRecords,
   submittableKeys,
   waitingLines,
+  WITHDRAWN_DRAFT_NOTE,
   type MyRecord,
 } from './myWork'
 
@@ -83,7 +84,7 @@ test('a snapshot of a piece that could not be read falls back to its own name', 
 test('waiting for you lists only what waits', () => {
   assert.deepEqual(waitingLines({ snapshots: 0, evidence: 0, verification: 0 }), [])
   assert.deepEqual(waitingLines({ snapshots: 1, evidence: 3, verification: 0 }), [
-    { key: 'snapshots', text: '1 version to moderate', tab: 'snapshots' },
+    { key: 'snapshots', text: '1 snapshot to moderate', tab: 'snapshots' },
     { key: 'evidence', text: '3 records to moderate', tab: 'evidence' },
   ])
   assert.deepEqual(waitingLines({ snapshots: 0, evidence: 0, verification: 6 }), [
@@ -95,7 +96,7 @@ test('waiting for you lists only what waits', () => {
 // BULK SUBMIT (decision 8.127) -------------------------------------------------
 const ROW = (over: Partial<MyRecord>): MyRecord => ({
   kind: 'snapshot', id: 's1', identityId: 'i1', title: 'Snapshot v2', piece: '#7 Beam 07',
-  dataset: 'zirkus', status: 'draft', at: '2026-10-01T00:00:00Z', reason: '', href: '/x', ...over,
+  dataset: 'zirkus', status: 'draft', at: '2026-10-01T00:00:00Z', reason: '', href: '/x', identityWithdrawn: false, ...over,
 })
 
 test('only a draft can be submitted, and a snapshot and a record may share an id', () => {
@@ -144,4 +145,24 @@ test('nothing chosen submits nothing', async () => {
   const results = await submitRecords([ROW({})], new Set(), async () => { calls += 1; return 'pending' })
   assert.deepEqual(results, [])
   assert.equal(calls, 0)
+})
+
+test('a draft of a withdrawn element is not submitted, nor picked by the bulk submit (8.190)', () => {
+  const rows = mergeMyRecords(
+    [
+      SNAP({ _id: 's1' }),
+      SNAP({ _id: 's2', identity_id: 'i2', identity_withdrawn: true }),
+      SNAP({ _id: 's3', identity_id: 'i2', status: 'rejected', identity_withdrawn: true }),
+    ],
+    [{ _id: 'e1', identity_id: 'i1', method: 'rebound_hammer', status: 'draft', created: '2026-09-20T00:00:00Z' }],
+    PIECES,
+  )
+  const by = (id: string) => rows.find((r) => r.id === id)!
+  assert.equal(by('s2').identityWithdrawn, true)
+  assert.equal(by('s1').identityWithdrawn, false)
+  assert.equal(by('e1').identityWithdrawn, false)
+  assert.equal(isSubmittable(by('s2')), false)
+  assert.equal(isSubmittable(by('s1')), true)
+  assert.deepEqual(submittableKeys(rows).sort(), ['evidence:e1', 'snapshot:s1'])
+  assert.match(WITHDRAWN_DRAFT_NOTE, /withdrawn/)
 })

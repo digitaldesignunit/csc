@@ -109,3 +109,40 @@ def test_the_status_filter_and_the_required_flag(world):
     assert w['api'].get('/snapshots', params={'mine': 1, 'status': 'bogus'},
                         headers=w['c']).status_code == 422
     assert w['api'].get('/snapshots', params={'mine': 1}).status_code == 401
+
+
+def _withdraw_in_db(w, identity_id):
+    w['db']['component_identities'].update_one(
+        {'_id': identity_id},
+        {'$set': {'withdrawn': {'at': '2026-11-01T00:00:00Z',
+                                'reason': 'test'}}})
+
+
+def test_a_row_says_whether_its_element_is_withdrawn(world):
+    """8.190: the web offers no submit on a draft of a withdrawn element."""
+    w = world
+    kept = _piece(w, w['c'], 'kept')
+    gone = _piece(w, w['c'], 'gone')
+    assert {r['name']: r['identity_withdrawn'] for r in _mine(w, w['c'])} == {
+        'kept': False, 'gone': False}
+    _withdraw_in_db(w, gone['identity']['_id'])
+    assert {r['name']: r['identity_withdrawn'] for r in _mine(w, w['c'])} == {
+        'kept': False, 'gone': True}
+    assert kept
+
+
+def test_a_queue_row_says_whether_its_element_is_withdrawn(world):
+    """8.190: the queue offers no publish on a version of a withdrawn element."""
+    w = world
+    for name in ('queued', 'queued but withdrawn'):
+        made = _piece(w, w['c'], name)
+        assert w['api'].post(f"/snapshots/{made['snapshot']['_id']}/submit",
+                             headers=w['c']).status_code == 200
+        if name != 'queued':
+            _withdraw_in_db(w, made['identity']['_id'])
+
+    def flags():
+        got = w['api'].get('/snapshots/pending', headers=w['m'])
+        assert got.status_code == 200, got.text
+        return {r['name']: r['identity_withdrawn'] for r in got.json()}
+    assert flags() == {'queued': False, 'queued but withdrawn': True}

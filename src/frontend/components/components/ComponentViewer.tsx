@@ -538,7 +538,7 @@ async function loadExternalMeshes(
   mode: MeshFileLevel,
   snapshotRouting: SnapshotMeshRouting | null,
 ): Promise<MeshLoadResult> {
-  debugLog(`Loading ${mode} meshes for identity ${identityId}`)
+  debugLog(`Loading ${mode} meshes for component ${identityId}`)
 
   const hint = meshHintForCache(snapshotRouting)
   const cacheKey = `${identityId}:mesh:${mode}:${hint}`
@@ -604,7 +604,7 @@ async function loadExternalPointClouds(
   snapshotRouting: SnapshotMeshRouting | null,
   pointCloudCount: number,
 ): Promise<PointCloudLoadResult> {
-  debugLog(`Loading original point clouds for identity ${identityId}`)
+  debugLog(`Loading original point clouds for component ${identityId}`)
 
   const hint = meshHintForCache(snapshotRouting)
   const cacheKey = `${identityId}:pc:${hint}:count${pointCloudCount}`
@@ -1163,7 +1163,7 @@ function LayoutEntry({ label, status, onClear }: { label: string; status?: strin
 const LAYOUT_NOTES: Record<PickedProblem | 'hidden' | 'failed', string> = {
   hidden: 'This layout is not visible to you.',
   failed: 'This layout could not be loaded.',
-  other_version: 'This layout belongs to another version of the element and is not drawn here.',
+  other_version: 'This layout belongs to another snapshot of the component and is not drawn here.',
   no_bars: 'This layout has no bars to draw.',
 }
 

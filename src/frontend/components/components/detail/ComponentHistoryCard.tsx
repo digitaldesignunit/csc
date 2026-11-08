@@ -35,8 +35,8 @@ import HistoryList, { type TimelineEvent } from './HistoryList'
 type View = 'list' | 'graph'
 
 const LAYER_LABELS: { key: keyof Layers; label: string; help: string }[] = [
-  { key: 'lineage', label: 'Lineage', help: 'The elements this one was cut from or was cut into' },
-  { key: 'states', label: 'States', help: 'The recorded states and their corrections' },
+  { key: 'lineage', label: 'Lineage', help: 'The components this one was cut from or was cut into' },
+  { key: 'states', label: 'Snapshots', help: 'The snapshots and their corrections' },
   { key: 'evidence', label: 'Evidence', help: 'The evidence records' },
 ]
 
@@ -86,10 +86,10 @@ function VersionRows({ identityId, snapshots, activeSnapshotId }: {
   const pending = snapshots.some((row) => row.status === 'pending' && !row.is_current)
   return (
     <div className="space-y-1.5">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Versions</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Snapshots</h3>
       {pending && (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100" role="status">
-          A newer version is awaiting moderation; the current one stays until it is published.
+          A newer snapshot is awaiting moderation; the current one stays until it is published.
         </p>
       )}
       <ul className="space-y-1">
@@ -111,9 +111,9 @@ function VersionRows({ identityId, snapshots, activeSnapshotId }: {
                 {row.superseded_by && <Badge variant="outline" className="text-[10px]">Corrected</Badge>}
                 {row.geometry_failed && (
                   <Badge variant="outline" className="border-red-400 text-[10px] text-red-800 dark:text-red-200"
-                    title="The geometry of this version could not be processed">Geometry not processed</Badge>
+                    title="The geometry of this snapshot could not be processed">Geometry not processed</Badge>
                 )}
-                <span className="ml-auto flex items-center gap-1 text-muted-foreground" title="When this state began">
+                <span className="ml-auto flex items-center gap-1 text-muted-foreground" title="When this snapshot starts">
                   <Clock className="h-3 w-3 shrink-0" />since {formatDay(row.effective_from, row.effective_from_precision)}
                 </span>
                 {row.added_by_username && (
@@ -140,7 +140,7 @@ function RawDataDialog({ catalog, open, onOpenChange }: {
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Raw JSON and descriptors</DialogTitle>
-          <DialogDescription>The passport as the backend serves it, and the descriptors of this state.</DialogDescription>
+          <DialogDescription>The passport as the backend serves it, and the descriptors of this snapshot.</DialogDescription>
         </DialogHeader>
         <h4 className="text-sm font-medium">Descriptors</h4>
         <pre className="max-h-56 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs">

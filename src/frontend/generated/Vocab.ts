@@ -1,6 +1,6 @@
 // Auto-generated from backend GET /vocab
-// Generated on: 2026-10-28T15:20:51.630Z
-// Source: http://127.0.0.1:8791/vocab
+// Generated on: 2026-11-08T17:18:33.266Z
+// Source: http://127.0.0.1:8792/vocab
 
 export type OriginalFunction = 'IfcBeam' | 'IfcColumn' | 'IfcSlab' | 'IfcPlate' | 'IfcWall' | 'IfcMember' | 'IfcPipeSegment' | 'IfcFooting' | 'IfcDiscreteAccessory' | 'IfcBuildingElementPart' | 'IfcWindow' | 'IfcDoor' | 'IfcStair' | 'IfcRailing' | 'IfcDuctSegment' | 'IfcBuildingElementProxy' | 'CscDebris'
 export const ORIGINAL_FUNCTION_LABELS: Record<OriginalFunction, string> = {
@@ -40,7 +40,7 @@ export const ORIGINAL_FUNCTION_DESCRIPTIONS: Record<OriginalFunction, string> = 
   "IfcRailing": "A railing or balustrade.",
   "IfcDuctSegment": "A length of ventilation duct.",
   "IfcBuildingElementProxy": "The former function is not known.",
-  "CscDebris": "No former function as a single element: rubble, aggregate, fragments.",
+  "CscDebris": "No former function as a single component: rubble, aggregate, fragments.",
 }
 
 export type ShapeClassHint = 'IfcBeam' | 'IfcColumn' | 'IfcSlab' | 'IfcPlate' | 'IfcWall' | 'IfcMember' | 'IfcPipeSegment' | 'IfcFooting' | 'IfcDiscreteAccessory' | 'IfcBuildingElementPart' | 'IfcWindow' | 'IfcDoor' | 'IfcStair' | 'IfcRailing' | 'IfcDuctSegment' | 'CscDebris'
@@ -91,10 +91,10 @@ export const ORIGIN_KIND_LABELS: Record<OriginKind, string> = {
 
 export const ORIGIN_KIND_DESCRIPTIONS: Record<OriginKind, string> = {
   "deinstallation": "Taken out of a construction work in which it was installed.",
-  "demolition": "Recovered from demolition output, not taken out as a single element.",
+  "demolition": "Recovered from demolition output, not taken out as a single component.",
   "offcut": "Residue of a fabrication process; it was never installed.",
   "surplus": "An unused whole product: overstock, a return or a site leftover.",
-  "unknown": "Where the element came from is not recorded.",
+  "unknown": "Where the component came from is not recorded.",
 }
 
 export type ExitKind = 'split' | 'merged' | 'installed' | 'recycled' | 'disposed' | 'returned' | 'lost'
@@ -109,12 +109,12 @@ export const EXIT_KIND_LABELS: Record<ExitKind, string> = {
 }
 
 export const EXIT_KIND_DESCRIPTIONS: Record<ExitKind, string> = {
-  "split": "Cut into smaller elements; they are catalogued as children of this element.",
-  "merged": "Joined with other elements into a new element, which is catalogued as its child.",
-  "installed": "Built into a construction work. The element still exists and may come back.",
-  "recycled": "The material was recovered, for example crushed or melted; the element is gone.",
+  "split": "Cut into smaller components; they are catalogued as children of this component.",
+  "merged": "Joined with other components into a new component, which is catalogued as its child.",
+  "installed": "Built into a construction work. The component still exists and may come back.",
+  "recycled": "The material was recovered, for example crushed or melted; the component is gone.",
   "disposed": "Disposed of as waste.",
-  "returned": "Given back to its owner or supplier. The element exists but left the custody of the catalog.",
+  "returned": "Given back to its owner or supplier. The component exists but left the custody of the catalog.",
   "lost": "Its whereabouts are not recorded.",
 }
 
@@ -243,7 +243,7 @@ export const MATERIAL_GROUP_DESCRIPTIONS: Record<MaterialGroup, string> = {
   "polymer": "Plastics and plastic composites, such as acrylic, PVC and solid surface.",
   "bituminous": "Asphalt and bituminous membranes.",
   "insulation": "Mineral wool and polymer foam insulation.",
-  "other": "Mixed or composite elements, and materials not known.",
+  "other": "Mixed or composite components, and materials not known.",
 }
 
 export type InheritUnit = 'origin' | 'manufactured_at' | 'material' | 'trade_name' | 'manufacturer' | 'material_separability' | 'original_function'
@@ -267,7 +267,7 @@ export const CHANGE_CAUSE_LABELS: Record<ChangeCause, string> = {
   "withdraw": "Withdrawn",
   "reinstate": "Reinstated",
   "migration": "Migration",
-  "derived_exit": "Cut into elements",
+  "derived_exit": "Cut into components",
   "deinstall": "Deinstalled",
   "undo_deinstall": "Deinstallation undone",
   "verify": "Verification changed",
@@ -290,11 +290,11 @@ export const EVIDENCE_METHOD_LABELS: Record<EvidenceMethod, string> = {
 export const EVIDENCE_METHOD_DESCRIPTIONS: Record<EvidenceMethod, string> = {
   "rebound_hammer": "A rebound hammer test of concrete: at least nine readings, no strength by itself.",
   "core_compression": "A drilled core crushed in a press; a destructive test with a measured strength.",
-  "archival_document": "A drawing, report, type plate or marking that documents the element; it may carry a claim.",
+  "archival_document": "A drawing, report, type plate or marking that documents the component; it may carry a claim.",
   "visual_inspection": "An observation of the condition: cracks, spalling, corrosion or an overall grade.",
   "era_heuristic": "An estimate from the year of construction, the regional practice or the type.",
   "manufacturer_datasheet": "A claim from the manufacturer of the product.",
-  "reinforcement_layout": "The reinforcement bars of the element as centre lines in its coordinates.",
+  "reinforcement_layout": "The reinforcement bars of the component as centre lines in its coordinates.",
 }
 
 export type SourceTier = 'destructive' | 'ndt' | 'archival' | 'visual' | 'heuristic' | 'inherited'
@@ -309,11 +309,11 @@ export const SOURCE_TIER_LABELS: Record<SourceTier, string> = {
 
 export const SOURCE_TIER_DESCRIPTIONS: Record<SourceTier, string> = {
   "destructive": "A test that destroys a sample. For most quantities the most trusted source.",
-  "ndt": "A test that leaves the element intact, with an instrument.",
+  "ndt": "A test that leaves the component intact, with an instrument.",
   "archival": "A claim from a document, a drawing or a datasheet.",
   "visual": "An observation by a person.",
   "heuristic": "An estimate from rules of thumb. The least trusted source.",
-  "inherited": "Taken over from a parent element, with a lower confidence.",
+  "inherited": "Taken over from a parent component, with a lower confidence.",
 }
 
 export type VerificationState = 'unverified' | 'self_attested' | 'reviewed' | 'accredited'
@@ -370,7 +370,7 @@ export const QUANTITY_DESCRIPTIONS: Record<Quantity, string> = {
   "exposure_class": "Exposure class of the concrete after EN 206, such as XC3.",
   "chloride_content": "Chloride content, as a percentage of the mass of cement.",
   "elastic_modulus": "Stiffness of the material (GPa).",
-  "mass": "Weight of the element in this state (kg).",
+  "mass": "Weight of the component in this snapshot (kg).",
   "carbonation_depth": "Depth to which the concrete is carbonated (mm).",
   "spalling": "Severity of spalled concrete, from 0 (none) to 3 (severe).",
   "cracking": "Severity of cracking, from 0 (none) to 3 (severe).",

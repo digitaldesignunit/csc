@@ -161,7 +161,7 @@ async def delete_material(
     current_user: Annotated[User, Depends(get_current_active_user)],
     mid: str,
 ):
-    """Only while no identity references it, withdrawn ones included."""
+    """Only while no component references it, withdrawn ones included."""
     await load_material(request, current_user, mid, 'manage_materials')
     used = await request.app.mongodb_component_identities.count_documents(
         {'material': mid})
@@ -186,7 +186,7 @@ async def merge_material(
     mid: str,
     body: MergeBody,
 ):
-    """Every identity moves to the target; derived classes follow the
+    """Every component moves to the target; derived classes follow the
     target's default, assigned ones stay; ``mid`` remains as an alias
     ``{_id, merged_into}`` so old references resolve (8.35)."""
     source = (await load_material(request, current_user, mid,

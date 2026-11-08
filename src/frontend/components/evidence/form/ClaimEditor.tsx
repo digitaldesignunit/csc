@@ -50,7 +50,7 @@ export function SummaryEditor({
         id={`${id}-quantity`}
         label="Property"
         help={method.summary_optional
-          ? 'Leave empty to record the document only: it documents the element and states no value.'
+          ? 'Leave empty to record the document only: it documents the component and states no value.'
           : helpFor('quantity')}
         required={!method.summary_optional}
         errors={errors}
@@ -176,13 +176,13 @@ export function PiecesField({
       return
     }
     if (pieces.includes(id)) {
-      setError('That element is already in the list.')
+      setError('That component is already in the list.')
       return
     }
     try {
       await backendJson(`/identities/${encodeURIComponent(id)}`)
     } catch (err) {
-      setError(err instanceof BackendError ? err.message : 'Could not find that element.')
+      setError(err instanceof BackendError ? err.message : 'Could not find that component.')
       return
     }
     setError(null)
@@ -193,10 +193,10 @@ export function PiecesField({
   return (
     <fieldset className="space-y-2 rounded-md border border-border/70 p-3">
       <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Elements this applies to
+        Components this applies to
       </legend>
       <p className="text-xs text-muted-foreground">
-        One record is made for every element, each with the same claim. Add the others by id, link or scanned tag.
+        One record is made for every component, each with the same claim. Add the others by id, link or scanned tag.
       </p>
       <ul className="space-y-1">
         {pieces.map((id) => {
@@ -205,11 +205,11 @@ export function PiecesField({
             <li key={id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-sm">
               <span className="min-w-0 truncate">
                 {row ? `#${row.catalog_number ?? '?'} ${row.name ?? ''}` : id}
-                {id === thisPiece && <span className="ml-2 text-xs text-muted-foreground">(this element)</span>}
+                {id === thisPiece && <span className="ml-2 text-xs text-muted-foreground">(this component)</span>}
               </span>
               {id !== thisPiece && (
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
-                  onClick={() => onChange(pieces.filter((p) => p !== id))} aria-label="Remove element">
+                  onClick={() => onChange(pieces.filter((p) => p !== id))} aria-label="Remove component">
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               )}

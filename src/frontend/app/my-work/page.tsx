@@ -29,6 +29,7 @@ import {
   submitRecords,
   submittableKeys,
   waitingLines,
+  WITHDRAWN_DRAFT_NOTE,
   type MyRecord,
   type Piece,
   type SubmitResult,
@@ -323,6 +324,9 @@ function MyRecords({ enabled }: { enabled: boolean }) {
                           {[row.piece, row.dataset].filter(Boolean).join(' / ')}
                         </span>
                       </Link>
+                      {row.status === 'draft' && row.identityWithdrawn && (
+                        <p className="mt-0.5 text-xs text-amber-900 dark:text-amber-200">{WITHDRAWN_DRAFT_NOTE}</p>
+                      )}
                       {row.status === 'rejected' && row.reason && (
                         <p className="mt-0.5 text-xs text-red-800 dark:text-red-300">Reason: {row.reason}</p>
                       )}

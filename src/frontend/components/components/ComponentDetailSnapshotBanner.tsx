@@ -4,7 +4,8 @@ import { Eye } from 'lucide-react'
 type ComponentDetailSnapshotBannerProps = {
   identityId: string
   viewingVersion: number
-  liveVersion: number
+  /** null: the element has no current version, there is nothing to go back to */
+  liveVersion: number | null
   /** Status of the snapshot being viewed; anything but published is named. */
   status?: string | null
 }
@@ -35,17 +36,20 @@ export default function ComponentDetailSnapshotBanner({
             {STATUS_NOTE[status ?? ''] ?? ''}
           </p>
           <p className="mt-0.5 text-xs text-blue-900/90 dark:text-blue-100/90">
-            Live catalog version is v{liveVersion}. Geometry and metadata below
-            reflect this historical snapshot.
+            {liveVersion === null
+              ? 'This component has no current snapshot: none of its snapshots is published at the moment. The newest one is shown.'
+              : `Live catalog snapshot is v${liveVersion}. Geometry and metadata below reflect this historical snapshot.`}
           </p>
         </div>
       </div>
-      <Link
-        href={`/components/${encodeURIComponent(identityId)}`}
-        className="shrink-0 text-sm font-medium underline underline-offset-4 hover:no-underline"
-      >
-        Back to live (v{liveVersion})
-      </Link>
+      {liveVersion !== null && (
+        <Link
+          href={`/components/${encodeURIComponent(identityId)}`}
+          className="shrink-0 text-sm font-medium underline underline-offset-4 hover:no-underline"
+        >
+          Back to live (v{liveVersion})
+        </Link>
+      )}
     </div>
   )
 }

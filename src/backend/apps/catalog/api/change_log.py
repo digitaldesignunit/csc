@@ -99,7 +99,7 @@ async def list_changes(
     identity_id: str,
     limit: int = Query(200, ge=1, le=1000),
 ):
-    """Entries of the identity, its snapshots and evidence, newest first.
+    """Entries of the component, its snapshots and evidence, newest first.
     Old values may name people, so the log is for members only (8.36)."""
     await load_identity(request, current_user, identity_id, 'view_history')
     entries = await request.app.mongodb_change_log.find(

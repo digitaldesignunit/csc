@@ -69,9 +69,9 @@ async def list_my_snapshots(
     limit: int = Query(100, ge=1, le=500),
 ):
     """
-    The versions the caller added (``added_by_user_id``), for "My work"
+    The snapshots the caller added (``added_by_user_id``), for "My work"
     (8.118 Q4): drafts, pending and rejected ones by default, each with its
-    element and, when rejected, the reason. Nobody lists another person's
+    component and, when rejected, the reason. Nobody lists another person's
     snapshots here.
     """
     if not mine:
@@ -100,7 +100,8 @@ async def list_my_snapshots(
             i['_id']: i async for i in identities.find(
                 {'_id': {'$in': ids}},
                 {'_id': 1, 'current_snapshot_id': 1, 'catalog_number': 1,
-                 'original_function': 1, 'material': 1, 'dataset': 1})}
+                 'original_function': 1, 'material': 1, 'dataset': 1,
+                 'withdrawn': 1})}
     except ConnectionFailure:
         raise            # the 503 handler of main_fastapi.py
     except PyMongoError:
@@ -125,6 +126,7 @@ async def list_my_snapshots(
                 'original_function': piece.get('original_function'),
                 'material': piece.get('material'),
                 'dataset': piece.get('dataset'),
+                'identity_withdrawn': bool(piece.get('withdrawn')),
                 'rejection_reason': reason,
             }).model_dump(by_alias=True))
         except Exception as exc:
@@ -185,6 +187,7 @@ async def list_pending_snapshots(
                 'original_function': 1,
                 'material': 1,
                 'dataset': 1,
+                'withdrawn': 1,
             },
         )
         if identity_doc is None or identity_doc.get('dataset') not in moderated:
@@ -207,6 +210,7 @@ async def list_pending_snapshots(
             'original_function': identity_doc.get('original_function'),
             'material': identity_doc.get('material'),
             'dataset': identity_doc.get('dataset'),
+            'identity_withdrawn': bool(identity_doc.get('withdrawn')),
             'live_version': live_version,
         }
         try:

@@ -208,7 +208,7 @@ class GeoLocation(_Block):
 
 
 class PhotoCredit(_Block):
-    """Who the photos of one version come from (decision 8.128 a): a short
+    """Who the photos of one snapshot come from (decision 8.128 a): a short
     text for all its photos and, optionally, the page they come from. Good
     practice, not a licence."""
     text: str = Field(min_length=1, max_length=300)
@@ -240,7 +240,7 @@ class Place(_Block):
 
 
 class ConstructionWork(_Block):
-    """The works an element left or went into --- never the company."""
+    """The works a component left or went into --- never the company."""
     name: str
     identifier: Optional[str] = None
     year_built: Optional[int] = None
@@ -257,10 +257,10 @@ class CircularityClass(_Block):
 
 
 class Origin(_Block):
-    """How the element entered circulation (section 3.1.1)."""
+    """How the component entered circulation (section 3.1.1)."""
     kind: OriginKind
     planned: bool = Field(
-        False, description='true while the element is in place: identified in '
+        False, description='true while the component is in place: identified in '
                            'its works, not yet deinstalled (decision 8.104)')
     at: Optional[Timestamp] = None
     at_precision: Precision = 'unknown'
@@ -290,7 +290,7 @@ class Origin(_Block):
 
 
 class Exit(_Block):
-    """How the element left circulation (section 3.1.3)."""
+    """How the component left circulation (section 3.1.3)."""
     kind: ExitKind
     at: Timestamp
     at_precision: Precision = 'exact'
@@ -396,19 +396,19 @@ class ComponentIdentity(_Document):
                 'inherited_from must be one of parent_identities (I17)')
         if self.reserved and self.exit is not None:
             raise ValueError(
-                'an element out of circulation cannot be reserved (I18)')
+                'a component out of circulation cannot be reserved (I18)')
         if (self.origin is not None and self.origin.planned
                 and self.exit is not None
                 and self.exit.recorded_by_user_id is not None
                 and self.exit.kind not in IN_PLACE_EXIT_KINDS):
             raise ValueError(
                 'an exit set by hand from in place is recycled, disposed or '
-                'lost: the element never left its works (I31)')
+                'lost: the component never left its works (I31)')
         if self.withdrawn and self.withdrawn.duplicate_of == self.id:
             raise ValueError(
-                'an identity cannot be a duplicate of itself (I19)')
+                'a component cannot be a duplicate of itself (I19)')
         if self.parent_identities and self.id in self.parent_identities:
-            raise ValueError('an identity cannot be its own parent')
+            raise ValueError('a component cannot be its own parent')
         return self
 
 
@@ -679,7 +679,7 @@ class Derivation(_Block):
 
 
 class ComponentSnapshot(_Document):
-    """``component_snapshots``: one recorded state of a component."""
+    """``component_snapshots``: one snapshot of a component."""
     id: str = Field(alias='_id')
     identity_id: str
     version: int = Field(ge=0)
@@ -750,7 +750,7 @@ class Standard(_Block):
 
 
 class Position(_Block):
-    """Where on the element (3.3.2); kind none + description always works."""
+    """Where on the component (3.3.2); kind none + description always works."""
     kind: PositionKind = 'none'
     snapshot_id: Optional[str] = None
     point: Optional[Vec3] = None
@@ -1108,7 +1108,7 @@ class AccessToken(_Document):
 
 
 class ChangeLogEntry(_Document):
-    """``change_log``: one write to an identity, snapshot or evidence
+    """``change_log``: one write to a component, snapshot or evidence
     record (section 3.8, decision 8.36, I30); append-only."""
     id: str = Field(alias='_id')
     record_kind: str = Field(pattern='^(identity|snapshot|evidence)$')

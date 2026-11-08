@@ -121,7 +121,7 @@ class DatasetView(BaseModel):
                     'moderator(D) and admin only, else absent')
     component_count: Optional[int] = Field(
         default=None,
-        description='list rows only: published elements the caller may see')
+        description='list rows only: published components the caller may see')
 
     model_config = {'populate_by_name': True}
 
@@ -144,7 +144,7 @@ class DatasetPatch(BaseModel):
     visibility: Optional[Visibility] = None
     reviewed: Optional[bool] = Field(
         None, description='admin only: the dataset may be catalog and its '
-                          'elements public (8.139)')
+                          'components public (8.139)')
 
 
 class MemberRoles(BaseModel):
@@ -569,7 +569,7 @@ async def put_dataset_member(
 class PublicBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
-    is_public: bool = Field(description='the flag to set on the elements')
+    is_public: bool = Field(description='the flag to set on the components')
     dry_run: bool = Field(False, description='only count what would change')
 
 
@@ -584,7 +584,7 @@ class PublicResult(BaseModel):
 
 
 @router.post('/datasets/{did}/public', response_model=PublicResult,
-             summary='Make every published element of a dataset public or '
+             summary='Make every published component of a dataset public or '
                      'private (moderator(D))')
 async def set_dataset_public(
     request: Request,
@@ -592,10 +592,10 @@ async def set_dataset_public(
     did: str,
     body: PublicBody,
 ):
-    """Sets ``is_public`` on the elements of the dataset that were ever
+    """Sets ``is_public`` on the components of the dataset that were ever
     published (3.1.5) and are not withdrawn, where the flag differs, and logs
     each change like a metadata PATCH (``cause: patch``). Unpublished and
-    withdrawn elements are left alone, and so are children: no element follows
+    withdrawn components are left alone, and so are children: no component follows
     another (6.2). ``dry_run`` only counts."""
     dataset = (await load_dataset(request, current_user, did,
                                   'set_dataset_public')).record
@@ -627,7 +627,7 @@ async def set_dataset_public(
             invalid[identity['_id']] = str(exc.detail)
     if invalid:
         raise HTTPException(status_code=422, detail={
-            'message': f'{len(invalid)} of {len(pieces)} elements do not pass '
+            'message': f'{len(invalid)} of {len(pieces)} components do not pass '
                        f'validation; nothing was changed. Correct them first.',
             'pieces': invalid})
     changed = skipped = 0
@@ -655,8 +655,8 @@ async def delete_dataset(
     current_user: Annotated[User, Depends(get_current_active_user)],
     did: str,
 ):
-    """Only while the dataset holds no element at all (no identity, whatever
-    its state; for an admin too: move the elements first, ``move_identity``).
+    """Only while the dataset holds no component at all (no component, whatever
+    its state; for an admin too: move the components first, ``move_identity``).
     The open invitations into it are revoked with it (8.139 f)."""
     await load_dataset(request, current_user, did, 'delete_dataset')
     pieces = await request.app.mongodb_component_identities.count_documents(
@@ -664,7 +664,7 @@ async def delete_dataset(
     if pieces:
         raise HTTPException(
             status_code=409,
-            detail='The dataset still holds elements: move them to another '
+            detail='The dataset still holds components: move them to another '
                    'dataset first.')
     now = now_iso()
     revoked = await request.app.mongodb_invitations.update_many(

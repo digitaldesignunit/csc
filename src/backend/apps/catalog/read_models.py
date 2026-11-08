@@ -29,23 +29,27 @@ from apps.catalog.vocab import Precision, ShapeClass, Status
 
 # PASSPORT --------------------------------------------------------------------
 class ComponentIdentity(documents.ComponentIdentity):
-    """The identity as the read routes serve it: the stored document plus the
+    """The component as the read routes serve it: the stored document plus the
     status of the reservation. ``reserved`` holds the id of the reserving
     user, which an anonymous caller never gets (8.101); ``is_reserved``
     stays for everyone. ``remaining`` is derived for a batch (8.105): its
     recorded quantity minus the pieces drawn, None for anything else.
     ``can_undo_deinstall`` says whether the undo of the deinstall act is open
-    (the passport and the single identity read; False elsewhere). Same
+    (the passport and the single component read; False elsewhere). Same
     name as the stored model, so the generated frontend type keeps it."""
     is_reserved: bool = False
     remaining: Optional[int] = None
     # response-only (8.115 a, P11): true while a deinstall act can still be
     # taken back; the Actions menu shows "Undo deinstallation" only then
     can_undo_deinstall: bool = False
+    # response-only (8.195): a draft or pending version of the element exists.
+    # Only the fact, for a contributor or moderator of the dataset and admins;
+    # a constant False for everyone else. Not in the exports.
+    has_open_snapshot: bool = False
 
 
 class ComponentPassport(BaseModel):
-    """``GET /identities/{id}/compose``: one identity and its snapshots."""
+    """``GET /identities/{id}/compose``: one component and its snapshots."""
     identity: ComponentIdentity
     snapshots: List[ComponentSnapshot]
     # only with ?include=evidence (spec 7.2): the published evidence, as the
@@ -54,9 +58,12 @@ class ComponentPassport(BaseModel):
 
 
 def identity_body(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """The identity as the read routes serve it. ``has_open_snapshot`` is left
+    out: only a route that computed it puts it in (8.195), so a write response
+    or a batch row never claims a False it did not look up."""
     return ComponentIdentity.model_validate(
         {**doc, 'is_reserved': bool(doc.get('reserved'))}).model_dump(
-        by_alias=True, mode='json')
+        by_alias=True, mode='json', exclude={'has_open_snapshot'})
 
 
 def snapshot_body(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -93,15 +100,15 @@ class FitCanHold(BaseModel):
     """The match of a dimension search *can hold this size* (8.169)."""
     mode: Literal['can_hold']
     waste_mm3: float = Field(
-        description='box volume of the element minus the asked volume, in mm3')
+        description='box volume of the component minus the asked volume, in mm3')
     waste_percent: float = Field(
-        description='that waste as a share of the box volume of the element, '
+        description='that waste as a share of the box volume of the component, '
                     'in per cent')
 
 
 class CatalogRow(BaseModel):
     """
-    One catalog list row: identity core + current-snapshot metadata. Not a
+    One catalog list row: component core + current-snapshot metadata. Not a
     stored document; the list, map and children routes serve it.
     """
     model_config = ConfigDict(populate_by_name=True)
@@ -121,17 +128,17 @@ class CatalogRow(BaseModel):
     is_public: bool = False
     has_preview: Optional[bool] = Field(
         default=None,
-        description='whether the current state has a rendered preview '
+        description='whether the current snapshot has a rendered preview '
                     '(list rows only; absent elsewhere)')
     current_snapshot_id: Optional[str] = None
     fit: Optional[Union[FitAbout, FitCanHold]] = Field(
         default=None,
-        description='how close the element is to the asked size, while the '
+        description='how close the component is to the asked size, while the '
                     'list has a dimension search (fit_mode); absent otherwise')
     distance_m: Optional[float] = Field(
         default=None,
         description='distance in metres from the near point of the list '
-                    '(near_lat, near_lon) to the element, on the layer asked '
+                    '(near_lat, near_lon) to the component, on the layer asked '
                     '(near_layer); absent without a near search')
     # current snapshot
     identity_id: str
@@ -154,7 +161,7 @@ class CatalogRow(BaseModel):
 
 
 class LocationPoint(BaseModel):
-    """One element on the location map (``GET /identities/locations``): where
+    """One component on the location map (``GET /identities/locations``): where
     it is and what the map colours and labels it by."""
     id: str
     catalog_number: Optional[int] = None
@@ -175,11 +182,11 @@ class LocationMap(BaseModel):
     """The points of the location map (decisions 8.170, 8.171)."""
     layer: Literal['current', 'origin']
     total: int = Field(
-        description='the elements this caller may see that match the filters')
+        description='the components this caller may see that match the filters')
     displayed: int = Field(
         description='of those, the ones with a point on the layer')
     left_out: int = Field(
-        description='the elements without a point on the layer')
+        description='the components without a point on the layer')
     points: List[LocationPoint]
 
 
@@ -194,15 +201,15 @@ class SimilarPiece(BaseModel):
 
 
 class SimilarPieces(BaseModel):
-    """``GET /identities/{id}/similar``: the nearest elements by descriptor."""
+    """``GET /identities/{id}/similar``: the nearest components by descriptor."""
     query_id: str
     basis: Literal['radial_signature', 'scalars', 'hks']
     basis_label: str
     computed_at: Optional[str] = Field(
         default=None, description='when the matrix of the catalog was built')
     considered: int = Field(
-        description='how many visible elements that pass the filters were '
-                    'ranked (the query element not among them)')
+        description='how many visible components that pass the filters were '
+                    'ranked (the query component not among them)')
     results: List[SimilarPiece]
 
 
@@ -294,17 +301,19 @@ class PendingSnapshotItem(BaseModel):
     original_function: Optional[str] = None
     material: Optional[str] = None
     dataset: Optional[str] = None
+    identity_withdrawn: bool = Field(
+        default=False, description='the component is withdrawn (8.190): no publish')
     live_version: Optional[int] = Field(
         default=None,
-        description='Version of the identity\'s current snapshot, if any')
+        description='Number of the current snapshot of the component, if any')
     supersedes: Optional[str] = Field(
         default=None, description='set when this corrects a published one')
     added_by_username: Optional[str] = None
 
 
 class MySnapshotItem(BaseModel):
-    """Row for ``GET /snapshots?mine=1``: one of the caller's own versions,
-    with the element it belongs to and, for a rejected one, the reason."""
+    """Row for ``GET /snapshots?mine=1``: one of the caller's own snapshots,
+    with the component it belongs to and, for a rejected one, the reason."""
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(alias='_id')
@@ -319,6 +328,8 @@ class MySnapshotItem(BaseModel):
     original_function: Optional[str] = None
     material: Optional[str] = None
     dataset: Optional[str] = None
+    identity_withdrawn: bool = Field(
+        default=False, description='the component is withdrawn (8.190): no submit')
     supersedes: Optional[str] = Field(
         default=None, description='set when this corrects a published one')
     rejection_reason: Optional[str] = Field(

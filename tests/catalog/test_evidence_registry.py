@@ -630,6 +630,29 @@ def test_quantity_must_fit_method_and_tier():
     assert 'payload.manufacturer' in paths(sheet)
 
 
+def test_a_claim_needs_its_kind_in_the_summary_the_web_sends():
+    """8.189 amended: the web sends ``kind: claimed`` with the result of a
+    claim; without it the server answers ``summary.kind``. A document without
+    a result needs no summary."""
+    era = {'method': 'era_heuristic', 'observed_at': T,
+           'payload': {'basis': 'construction_year', 'year': 1968},
+           'summary': {'quantity': 'compressive_strength', 'value': 25,
+                       'unit': 'MPa'}}
+    sheet = {'method': 'manufacturer_datasheet', 'observed_at': T,
+             'payload': {'manufacturer': 'Rosskopf', 'product': 'Corian'},
+             'summary': {'quantity': 'density', 'value': 1.7,
+                         'unit': 'g/cm3'}}
+    document = archival(summary={'quantity': 'concrete_class',
+                                 'range': ['B225']})
+    for data in (era, sheet, document):
+        assert 'summary.kind' in paths(data), data['method']
+        data['summary'] = {**data['summary'], 'kind': 'claimed'}
+        assert prepare_record(data), data['method']
+    bare = archival(summary=None, payload={
+        'document': {'title': 'Plan', 'date': '1968-03', 'kind': 'drawing'}})
+    assert prepare_record(bare)
+
+
 def visual(observations, **over):
     data = {'method': 'visual_inspection', 'observed_at': T,
             'payload': {'observations': observations}}

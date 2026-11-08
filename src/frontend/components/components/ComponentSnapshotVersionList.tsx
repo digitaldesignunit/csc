@@ -15,6 +15,10 @@ type ComponentSnapshotVersionListProps = {
   liveSnapshotId: string
   /** The identity's dataset: decides who sees moderation buttons. */
   dataset?: string | null
+  /** `has_open_snapshot` of the element (8.195) */
+  hasOpenSnapshot?: boolean
+  /** the element is withdrawn (8.190) */
+  identityWithdrawn?: boolean
 }
 
 function versionHref(identityId: string, row: SnapshotSummaryItem): string {
@@ -38,6 +42,8 @@ export default function ComponentSnapshotVersionList({
   activeSnapshotId,
   liveSnapshotId,
   dataset,
+  hasOpenSnapshot,
+  identityWithdrawn,
 }: ComponentSnapshotVersionListProps) {
   const hasPendingUpdate = snapshots.some(
     (row) => row.status === 'pending' && !row.is_current,
@@ -52,7 +58,7 @@ export default function ComponentSnapshotVersionList({
       <div className="mb-2 flex items-center gap-2">
         <History className="h-3.5 w-3.5 text-muted-foreground" />
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Snapshot versions
+          Snapshots
         </h3>
       </div>
 
@@ -61,7 +67,7 @@ export default function ComponentSnapshotVersionList({
           role="status"
           className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
         >
-          A newer snapshot is awaiting moderation. The current version shown
+          A newer snapshot is awaiting moderation. The current snapshot shown
           above remains unchanged until it is published.
         </div>
       )}
@@ -115,7 +121,7 @@ export default function ComponentSnapshotVersionList({
                     <Badge
                       variant="outline"
                       className="text-[10px] border-red-400 text-red-800 dark:text-red-200"
-                      title="The geometry of this version could not be processed; orientation, size, class and proxies describe an earlier geometry."
+                      title="The geometry of this snapshot could not be processed; orientation, size, class and proxies describe an earlier geometry."
                     >
                       Geometry not processed
                     </Badge>
@@ -124,13 +130,14 @@ export default function ComponentSnapshotVersionList({
 
                 <div
                   className="flex items-center gap-1 text-xs text-muted-foreground"
-                  title="When this state began"
+                  title="When this snapshot starts"
                 >
                   <Clock className="h-3 w-3 shrink-0" />
                   <span>since {formatDay(row.effective_from)}</span>
                 </div>
                 <div className="basis-full empty:hidden">
-                  <SnapshotLifecycleActions snapshot={row} dataset={dataset} identityId={identityId} />
+                  <SnapshotLifecycleActions snapshot={row} dataset={dataset} identityId={identityId}
+                    hasOpenSnapshot={hasOpenSnapshot} identityWithdrawn={identityWithdrawn} />
                 </div>
               </div>
             </li>

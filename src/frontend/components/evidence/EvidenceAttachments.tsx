@@ -2,8 +2,9 @@
 
 /**
  * The files of one evidence record (spec 3.3.4, decisions 7.3, 8.13):
- * list, download (signed-in users only), add, remove. Before publish the
- * author removes; after publish only moderator(D) removes, with a reason
+ * list, download (signed-in users only), add, remove. Who may add and remove
+ * is `attachmentButtons` (`lib/lifecycleRights.ts`): before publish the author
+ * removes; after publish only moderator(D) removes, with a reason
  * (`gdpr` also blanks the file name), and the entry stays as a tombstone.
  * Names are rendered as text, never as markup; downloads go through the
  * backend route only.
@@ -20,6 +21,7 @@ import type { EvidenceView } from '@/generated'
 import { BackendError } from '@/lib/backend'
 import { attachmentUrl, removeAttachment, uploadAttachment, type AttachmentEntry } from '@/lib/evidence/api'
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENT_TEXT, fileProblem, prepareUpload } from '@/lib/evidence/photos'
+import { attachmentButtons } from '@/lib/lifecycleRights'
 import { useMe } from '@/lib/me'
 import { formatDay } from '@/lib/utils'
 
@@ -31,16 +33,19 @@ function sizeText(bytes: number): string {
 export default function EvidenceAttachments({
   record,
   dataset,
+  identityWithdrawn = false,
   onChanged,
   uploadHelp,
 }: {
   record: EvidenceView
   dataset: string | null | undefined
+  /** the element is withdrawn: no new file on any of its records (8.190) */
+  identityWithdrawn?: boolean
   onChanged: () => void
   uploadHelp?: string
 }) {
   const { data: session } = useSession()
-  const { me, moderates, rolesIn } = useMe()
+  const { me, isAdmin, moderates, rolesIn } = useMe()
   const input = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [removing, setRemoving] = useState<AttachmentEntry | null>(null)
@@ -49,17 +54,11 @@ export default function EvidenceAttachments({
   const entries = (record.attachments ?? []) as AttachmentEntry[]
   const isAuthor = !!me && record.recorded_by_user_id === me._id
   const isModerator = moderates(dataset)
-  const published = record.status === 'published' || record.status === 'withdrawn'
-  // as the routes decide (7.0): a draft: author or moderator; pending:
-  // moderator; after publish contributor(D) adds, moderator(D) removes
-  // the author of a pending correction also adds and removes files (RL4, 8.142 a)
-  const ownCorrection = isAuthor && Boolean(record.supersedes) && record.status === 'pending'
-  const canAdd = record.status !== 'withdrawn' && record.status !== 'rejected' && (
-    record.status === 'draft' ? isAuthor || isModerator
-      : record.status === 'pending' ? isModerator || ownCorrection
-        : rolesIn(dataset).includes('contributor')
-  )
-  const canRemove = published ? isModerator : record.status === 'pending' ? isModerator || ownCorrection : isAuthor || isModerator
+  // as the routes decide (7.0, 8.190, 8.193): `attachmentButtons`
+  const { add: canAdd, remove: canRemove } = attachmentButtons({
+    isAuthor, isAdmin, isModerator, isContributor: rolesIn(dataset).includes('contributor'),
+    status: record.status, correction: Boolean(record.supersedes), identityWithdrawn,
+  })
 
   const add = async (files: FileList | null) => {
     if (!files || files.length === 0) return
@@ -158,7 +157,7 @@ export default function EvidenceAttachments({
         open={removing !== null}
         onOpenChange={(open) => { if (!open) setRemoving(null) }}
         title={`Remove ${removing?.name || 'the file'}`}
-        description={published
+        description={record.status === 'published' || record.status === 'withdrawn'
           ? 'The file is deleted and its entry stays as a tombstone with your reason. Use the reason gdpr when it shows a person: the file name is blanked too.'
           : 'The file is deleted; the entry stays marked as removed.'}
         confirmLabel="Remove"

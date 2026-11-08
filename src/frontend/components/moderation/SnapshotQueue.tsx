@@ -14,6 +14,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import type { PendingSnapshotItem } from '@/generated/SnapshotModels'
 import { backendJson } from '@/lib/backend'
 import { useMe } from '@/lib/me'
+import { loadPublishFacts } from '@/lib/publishCheck'
+import { parentsRefusePublish, publishBlockOf, type ParentLookup } from '@/lib/publishRights'
 import {
   isOwnRecord,
   snapshotChanges,
@@ -30,6 +32,9 @@ type Detail = {
   previous: SnapshotLike | null
   parents: number
   drawn: boolean
+  /** the first version of a child: the parents' datasets decide who publishes it (8.8, #46) */
+  first: boolean
+  parentLookups: ParentLookup[]
 }
 
 const get = <T,>(path: string) => backendJson<T>(path).catch(() => null)
@@ -41,12 +46,13 @@ async function loadDetail(row: PendingSnapshotItem): Promise<Detail> {
     row.supersedes ? get<SnapshotLike>(`/snapshots/${encodeURIComponent(row.supersedes)}`) : Promise.resolve(null),
   ])
   const parents = identity?.parent_identities ?? []
+  const facts = await loadPublishFacts(row.identity_id)
   let drawn = false
   if (parents.length === 1) {
     const parent = await get<{ remaining?: number | null }>(`/identities/${encodeURIComponent(parents[0])}?expand=none`)
     drawn = typeof parent?.remaining === 'number'
   }
-  return { snapshot, previous, parents: parents.length, drawn }
+  return { snapshot, previous, parents: parents.length, drawn, first: facts.first, parentLookups: facts.parents }
 }
 
 export default function SnapshotQueue({ rows, loading, error, onChanged }: {
@@ -56,8 +62,18 @@ export default function SnapshotQueue({ rows, loading, error, onChanged }: {
   onChanged: () => void
 }) {
   const router = useRouter()
-  const { me } = useMe()
+  const { me, moderates } = useMe()
   const details = useDetails(rows, (row) => row._id, loadDetail)
+  // the publish button waits for the parents' answer, and is replaced by the reason when one refuses
+  const publishBlock = (row: PendingSnapshotItem): string | null => {
+    const detail = details[row._id]
+    // a withdrawn element is known from the row, before the details are there (8.190)
+    if (!detail) return publishBlockOf({ identityWithdrawn: row.identity_withdrawn, parentBlock: 'loading' })
+    return publishBlockOf({
+      identityWithdrawn: row.identity_withdrawn,
+      parentBlock: parentsRefusePublish({ first: detail.first, moderates, parents: detail.parentLookups }),
+    })
+  }
 
   const act = async (row: PendingSnapshotItem, label: string, path: string, body?: unknown) => {
     try {
@@ -71,7 +87,9 @@ export default function SnapshotQueue({ rows, loading, error, onChanged }: {
     }
   }
 
-  const actionsOf = (row: PendingSnapshotItem): CardAction[] => [
+  const actionsOf = (row: PendingSnapshotItem): CardAction[] => {
+    const block = publishBlock(row)
+    return [
     {
       key: 'delete', label: `Delete v${row.version}`, icon: Trash2, kind: 'icon',
       confirm: `Delete v${row.version} and its files? This cannot be undone.`,
@@ -92,11 +110,12 @@ export default function SnapshotQueue({ rows, loading, error, onChanged }: {
       text: { label: 'Reason (the author sees it)', placeholder: 'Why? The author can turn it back into a draft.', required: true },
       run: (reason) => act(row, 'rejected', `/snapshots/${row._id}/reject`, { reason }),
     },
-    {
-      key: 'publish', label: 'Publish', icon: Check, kind: 'primary',
+    ...(block ? [] : [{
+      key: 'publish', label: 'Publish', icon: Check, kind: 'primary' as const,
       run: () => act(row, 'published', `/snapshots/${row._id}/publish?promote=1`),
-    },
+    }]),
   ]
+  }
 
   return (
     <section aria-label="Snapshots waiting for moderation" className="space-y-3">
@@ -129,6 +148,7 @@ export default function SnapshotQueue({ rows, loading, error, onChanged }: {
                   meta={submittedLine('Submitted', row.added_by_username, row.created)}
                   facts={snapshotFacts(row, detail?.snapshot ?? null, changes)}
                   note={detail?.snapshot?.notes}
+                  warning={publishBlock(row) === 'loading' ? null : publishBlock(row)}
                   actions={actionsOf(row)}
                 />
               </li>

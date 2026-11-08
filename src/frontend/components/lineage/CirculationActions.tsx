@@ -44,7 +44,7 @@ const EXIT_HINTS: Record<string, string> = {
   disposed: 'Landfill or incineration. Final.',
   returned: 'Back to its owner or supplier.',
   lost: 'Its whereabouts are unknown.',
-  split: 'Cut up without cataloguing the elements. Catalogued elements set this by themselves.',
+  split: 'Cut up into parts that are not catalogued. Catalogued components set this by themselves.',
 }
 
 function todayIso(): string {
@@ -177,7 +177,7 @@ export function ReenterDialog({ identityId, exit, open, onOpenChange }: {
         <DialogHeader>
           <DialogTitle>Bring back into circulation</DialogTitle>
           <DialogDescription>
-            The earlier origin and exit are kept as a past cycle. The next recorded state starts
+            The earlier origin and exit are kept as a past cycle. The next snapshot starts
             on the new origin date.
           </DialogDescription>
         </DialogHeader>

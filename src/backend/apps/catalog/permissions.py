@@ -304,8 +304,9 @@ def _review_verification(viewer: Viewer, roles: Roles,
 
 def _revoke_invitation(viewer: Viewer, roles: Roles,
                        target: Target) -> bool:
-    """Its creator or moderator(D) (8.14)."""
-    return _author_or_moderator(viewer, roles, target)
+    """moderator(D) only; the creator loses the right with the role
+    (8.14, amended by 8.193 c)."""
+    return 'moderator' in roles
 
 
 RULES: Dict[str, Rule] = {

@@ -45,7 +45,7 @@ class TransmitPayload(BaseModel):
     identity_id: str = Field(
         min_length=1,
         max_length=MAX_IDENTITY_ID_LEN,
-        description='Identity UUID scanned from the QR code.',
+        description='Component id scanned from the QR code.',
     )
     force_overwrite: bool = Field(
         default=False,
@@ -123,7 +123,7 @@ def _snapshot_conflict_response(identity_id: str) -> JSONResponse:
             'status': 'snapshot_id_exists',
             'message': (
                 'This UUID is already a snapshot id. Transmit the physical '
-                'identity id from the tag, not a snapshot id.'
+                'component id from the tag, not a snapshot id.'
             ),
             'identity_id': identity_id,
         },
@@ -132,14 +132,14 @@ def _snapshot_conflict_response(identity_id: str) -> JSONResponse:
 
 @router.get(
     '/component_id_transmission/availability/{identity_id}',
-    summary='Check whether a UUID is already an identity or snapshot id',
+    summary='Check whether a UUID is already a component id or snapshot id',
 )
 async def check_identity_availability(
     identity_id: str,
     current_user: Annotated[User, Depends(get_current_active_user)],
     request: Request,
 ):
-    identity_id = validate_uuid(identity_id.strip(), label='identity id')
+    identity_id = validate_uuid(identity_id.strip(), label='component id')
     conflict = await _catalog_id_conflict(request, identity_id)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -153,7 +153,7 @@ async def check_identity_availability(
 
 @router.get(
     '/component_id_transmission',
-    summary='Get the current pending transmitted identity id for the user',
+    summary='Get the current pending transmitted component id for the user',
 )
 async def get_pending_transmission(
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -178,7 +178,7 @@ async def get_pending_transmission(
 
 @router.post(
     '/component_id_transmission',
-    summary='Transmit a scanned identity id (one pending per user)',
+    summary='Transmit a scanned component id (one pending per user)',
 )
 async def transmit_identity_id(
     payload: TransmitPayload,
@@ -191,7 +191,7 @@ async def transmit_identity_id(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='identity_id must not be empty',
         )
-    validate_uuid(identity_id, label='identity id')
+    validate_uuid(identity_id, label='component id')
 
     coll = await get_transmit_col(request)
     now = _now_iso()
@@ -218,7 +218,7 @@ async def transmit_identity_id(
                 content={
                     'status': 'conflict',
                     'message': (
-                        'A different identity id is still pending. '
+                        'A different component id is still pending. '
                         'Confirm overwrite to replace it.'
                     ),
                     'existing': _serialize_item(existing),
@@ -258,7 +258,7 @@ async def transmit_identity_id(
 
 @router.delete(
     '/component_id_transmission',
-    summary='Clear the current pending transmitted identity id',
+    summary='Clear the current pending transmitted component id',
 )
 async def clear_pending_transmission(
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -286,7 +286,7 @@ async def clear_pending_transmission(
 
 @router.post(
     '/component_id_transmission/consume',
-    summary='Consume pending transmission after identity was created',
+    summary='Consume pending transmission after the component was created',
 )
 async def consume_pending_transmission(
     payload: ConsumePayload,
@@ -299,7 +299,7 @@ async def consume_pending_transmission(
         if payload.identity_id:
             query['identity_id'] = validate_uuid(
                 payload.identity_id.strip(),
-                label='identity id',
+                label='component id',
             )
 
         result = await coll.delete_one(query)

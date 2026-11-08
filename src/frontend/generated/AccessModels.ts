@@ -1,6 +1,6 @@
 // Auto-generated from backend OpenAPI schema
-// Generated on: 2026-10-28T15:20:51.541Z
-// Source: http://127.0.0.1:8791/schema/access
+// Generated on: 2026-11-08T17:18:33.139Z
+// Source: http://127.0.0.1:8792/schema/access
 
 export interface AdminUserRow {
   _id: string;
@@ -32,7 +32,7 @@ export interface DatasetView {
   reviewed?: boolean;
   members?: DatasetMemberView[] | null;
   member_count?: number | null; // list rows only: how many people are members; moderator(D) and admin only, else absent
-  component_count?: number | null; // list rows only: published elements the caller may see
+  component_count?: number | null; // list rows only: published components the caller may see
 }
 
 export interface InvitationAccepted {

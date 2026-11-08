@@ -377,7 +377,7 @@ def _story(data: PassportPdfData, rows_cap: int, props_cap: int,
         Paragraph(
             f'Dataset: {escape(data.dataset_name)}<br/>'
             f'Issued {escape(data.generated_at[:10])}'
-            + (f' &#183; state v{snapshot["version"]}'
+            + (f' &#183; snapshot v{snapshot["version"]}'
                if snapshot.get('version') is not None else '')
             + f'<br/>{_link(iri)}', st['sub']),
     ]
@@ -399,7 +399,7 @@ def _story(data: PassportPdfData, rows_cap: int, props_cap: int,
             + (f' {date}' if date else ' (date not set)'), st['note'])]
 
     # IDENTITY --------------------------------------------------------------
-    story.append(_p('Identity', st['section']))
+    story.append(_p('Component', st['section']))
     function = identity.get('original_function')
     ifc = '' if function == 'CscDebris' else f' ({function})'
     table = _kv([
@@ -430,7 +430,7 @@ def _story(data: PassportPdfData, rows_cap: int, props_cap: int,
             f'{", " + escape(place) if place else ""}', st['body'])]
 
     # CURRENT STATE ---------------------------------------------------------
-    story.append(_p('Current state', st['section']))
+    story.append(_p('Current snapshot', st['section']))
     props = {**(snapshot.get('properties') or {}),
              **(identity.get('properties') or {})}
     bbx = snapshot.get('bbx') or []

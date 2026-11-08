@@ -197,7 +197,7 @@ export default function ReferencePage() {
       </Block>
     ),
     example: (
-      <Block id={EXAMPLE_SECTION_ID} title="An example element">
+      <Block id={EXAMPLE_SECTION_ID} title="An example component">
         <Prose runs={EXAMPLE_PIECE_INTRO} />
         <p className="text-xs text-muted-foreground">{EXAMPLE_ID_NOTE}</p>
         <FoldList

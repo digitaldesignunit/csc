@@ -189,7 +189,7 @@ export default function SwimlaneGraph({
     }
     if (target.openCorrected) setShowCorrected(true)
     if (!(await scrollToRecord(target.recordId))) {
-      toast.message('That record is not on this version of the page.')
+      toast.message('That record is not on this snapshot of the page.')
     }
   }
 
@@ -291,13 +291,13 @@ export default function SwimlaneGraph({
           </DropdownMenuContent>
         </DropdownMenu>
         <p className="text-xs text-muted-foreground">
-          Time is in sections and not to scale. Click a version to show it, a number to open its records.
+          Time is in sections and not to scale. Click a snapshot to show it, a number to open its records.
         </p>
       </div>
 
       <div ref={frame} className="relative">
       <div className="flex overflow-hidden rounded-md border border-border bg-card">
-        <ul className="w-32 shrink-0 border-r border-border text-xs sm:w-44" style={{ paddingTop: layout.headerHeight }} aria-label="Elements">
+        <ul className="w-32 shrink-0 border-r border-border text-xs sm:w-44" style={{ paddingTop: layout.headerHeight }} aria-label="Components">
           {layout.lanes.map(({ lane }) => (
             <li key={lane.id} className="flex flex-col justify-center border-b border-border px-2" style={{ height: GEOMETRY.rowHeight }}>
               {lane.visible && lane.role !== 'piece' ? (
@@ -310,7 +310,7 @@ export default function SwimlaneGraph({
                 </span>
               )}
               <span className="truncate text-[10px] text-muted-foreground">
-                {lane.role === 'parent' ? 'parent' : lane.role === 'child' ? 'child' : 'this element'}
+                {lane.role === 'parent' ? 'parent' : lane.role === 'child' ? 'child' : 'this component'}
                 {lane.visible && lane.dataset ? ` - ${lane.dataset}` : ''}
               </span>
             </li>
@@ -341,7 +341,7 @@ export default function SwimlaneGraph({
       {history.more > 0 && (
         <p className="text-xs text-muted-foreground">
           <span className="rounded-full border border-border px-2 py-0.5">+{history.more} more</span>{' '}
-          {history.more === 1 ? 'element is' : 'elements are'} not drawn (twelve lanes at most). The JSON export lists what the lanes hold.
+          {history.more === 1 ? 'component is' : 'components are'} not drawn (twelve lanes at most). The JSON export lists what the lanes hold.
         </p>
       )}
       {busy && busy.includes('|') && <p className="text-xs text-muted-foreground" role="status">Loading the records...</p>}

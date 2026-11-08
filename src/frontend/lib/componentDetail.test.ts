@@ -9,6 +9,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  OPEN_VERSION_REASON,
+  RESERVED_REASON,
+  actionPlan,
   availableActions,
   bannersOf,
   canAddEvidence,
@@ -65,19 +68,19 @@ test('a banner only when it applies, one sentence each', () => {
   })
   assert.equal(notPublic.length, 1)
   // no visibility known: the one thing that is true in both cases
-  assert.equal(notPublic[0].text, 'Not public: visitors without an account do not see this element.')
+  assert.equal(notPublic[0].text, 'Not public: visitors without an account do not see this component.')
   // a members dataset: its members and the moderators (8.131 e)
   const members = bannersOf({
     identity: { is_public: false, dataset: 'dbu_zirkus' }, signedIn: true, geometryFailed: false,
     datasetVisibility: 'members',
   })
-  assert.match(members[0].text, /^Not public: only members of dbu_zirkus and the moderators see this element\.$/)
+  assert.match(members[0].text, /^Not public: only members of dbu_zirkus and the moderators see this component\.$/)
   // a catalog dataset: every signed-in user sees it
   const catalog = bannersOf({
     identity: { is_public: false, dataset: 'dbu_zirkus' }, signedIn: true, geometryFailed: false,
     datasetVisibility: 'catalog',
   })
-  assert.match(catalog[0].text, /^Not public: every signed-in user sees this element/)
+  assert.match(catalog[0].text, /^Not public: every signed-in user sees this component/)
   assert.doesNotMatch(catalog[0].text, /only members/)
   const out = bannersOf({
     identity: { exit: { kind: 'split' }, withdrawn: { at: '2026-01-05T00:00:00Z', reason: 'duplicate' } },
@@ -107,9 +110,9 @@ test('the facts in two groups, without the recorder or timestamps', () => {
   // the material by its id until the materials list names it
   assert.equal(groups.component.find((f) => f.label === 'Material')?.value, 'concrete')
   assert.deepEqual(groups.state.map((f) => f.label),
-    ['Shape class', 'Size', 'Complexity', 'Colour', 'State since', 'Capture'])
+    ['Shape class', 'Size', 'Complexity', 'Colour', 'Since', 'Capture'])
   assert.equal(groups.state.find((f) => f.label === 'Size')?.value, '4457 x 644 x 601 mm')
-  assert.equal(groups.state.find((f) => f.label === 'State since')?.value, '24.07.2024')
+  assert.equal(groups.state.find((f) => f.label === 'Since')?.value, '24.07.2024')
   const all = [...groups.component, ...groups.state].map((f) => f.label.toLowerCase())
   assert.ok(!all.some((label) => /added|created|modified|snapshot id/.test(label)))
 })
@@ -175,7 +178,7 @@ test('a moderator gets the moderate group by what the piece allows', () => {
     identity: { current_snapshot_id: 'b', origin: { kind: 'deinstallation', planned: false }, can_undo_deinstall: true },
   })
   const got = availableActions(open)
-  assert.deepEqual(got.moderate, ['correct', 'withdraw-version', 'exit', 'undo-deinstall', 'withdraw-component'])
+  assert.deepEqual(got.moderate, ['correct', 'withdraw-version', 'exit', 'undo-deinstall', 'move', 'withdraw-component'])
   assert.ok(got.record.includes('edit'))
   // the undo is offered only while the backend says the deinstall act can be taken back (8.115 a)
   for (const flag of [false, undefined, null]) {
@@ -203,7 +206,7 @@ test('exits: undo what was recorded, re-enter what can come back, explain what t
     isModerator: true, identity: { current_snapshot_id: 'b', exit, origin: { kind: 'offcut' } },
   })).moderate
   assert.deepEqual(exited({ kind: 'installed', recorded_by_user_id: 'u1' }),
-    ['withdraw-version', 'undo-exit', 'reenter', 'withdraw-component'])
+    ['withdraw-version', 'undo-exit', 'reenter', 'move', 'withdraw-component'])
   assert.ok(exited({ kind: 'split' }).includes('exit-set-by-pieces'))
   assert.ok(!exited({ kind: 'recycled', recorded_by_user_id: 'u1' }).includes('reenter'))
 })
@@ -214,7 +217,21 @@ test('a withdrawn piece can only be reinstated', () => {
     identity: { current_snapshot_id: 'b', withdrawn: { at: '2026-01-01T00:00:00Z' } },
   }))
   assert.deepEqual(got.moderate.filter((k) => k.includes('component')), ['reinstate-component'])
+  // a moderator still moves it (8.191) and edits its versions (8.193 b)
+  assert.ok(got.moderate.includes('move') && got.record.includes('edit'))
   assert.ok(!got.record.includes('state') && !got.record.includes('cut'))
+  // no correction either: it would publish a new state of a withdrawn element (8.190 amended)
+  assert.ok(!got.moderate.includes('correct'))
+})
+
+test('Correct a version is offered again once the element is reinstated (8.190)', () => {
+  const live = { _id: 'a', version: 0, status: 'published', is_current: true }
+  const caller = { isModerator: true, isContributor: true, meId: 'u9' }
+  assert.equal(versionOffers('correct', live, caller), true)
+  assert.equal(versionOffers('correct', live, { ...caller, identityWithdrawn: true }), false)
+  assert.equal(versionOffers('correct', live, { ...caller, identityWithdrawn: false }), true)
+  // the other version dialogs are unchanged on a withdrawn element
+  assert.equal(versionOffers('withdraw-version', live, { ...caller, identityWithdrawn: true }), true)
 })
 
 test('unfinished versions are managed by their author or a moderator', () => {
@@ -271,11 +288,94 @@ test('Edit details: a moderator, or the creator while nothing is published (8.9)
   const edit = (over: Partial<ActionsInput>) => availableActions(input(over)).record.includes('edit')
   const unpublished = { created_by_user_id: 'u1' }
   assert.equal(edit({ isModerator: true }), true)
-  assert.equal(edit({ identity: unpublished, meId: 'u1' }), true)           // the creator, unpublished
-  assert.equal(edit({ identity: unpublished, meId: 'u2' }), false)          // someone else
+  assert.equal(edit({ identity: unpublished, versions: [], meId: 'u1' }), true)           // the creator, unpublished
+  assert.equal(edit({ identity: unpublished, versions: [], meId: 'u2' }), false)          // someone else
   assert.equal(edit({ identity: { ...unpublished, current_snapshot_id: 'b' }, meId: 'u1' }), false)   // published
+  // every version withdrawn: published once, so the creator is out (8.193, #46)
+  assert.equal(edit({ identity: unpublished, versions: [{ _id: 'a', version: 0, status: 'withdrawn' }], meId: 'u1' }), false)
   assert.equal(edit({ isContributor: true, meId: 'u3' }), false)            // a contributor is not enough
-  assert.equal(edit({ isModerator: true, identity: { withdrawn: { at: '2026-01-01T00:00:00Z' } } }), false)
+  // a moderator edits the versions of a withdrawn element too (8.193 b, #48 case 5)
+  assert.equal(edit({ isModerator: true, identity: { withdrawn: { at: '2026-01-01T00:00:00Z' } } }), true)
+})
+
+const WITHDRAWN_VERSIONS = [
+  { _id: 'a', version: 0, status: 'withdrawn' },
+  { _id: 'b', version: 1, status: 'withdrawn' },
+]
+
+test('an element whose versions are all withdrawn was published once (8.193): state, exit, no deletion, no cut', () => {
+  const got = availableActions(input({
+    isModerator: true, isContributor: true, versions: WITHDRAWN_VERSIONS,
+    identity: { current_snapshot_id: null, origin: { kind: 'offcut' } },
+  }))
+  assert.ok(got.record.includes('state'))
+  // the backend would cut it (published once), but the cut form cannot read a parent without a
+  // current version (`?expand=shallow` answers 404), so the control waits for one
+  assert.ok(!got.record.includes('cut'))
+  assert.ok(got.moderate.includes('exit'))
+  assert.ok(got.moderate.includes('withdraw-component'))
+  assert.ok(!got.moderate.includes('delete-component'))
+})
+
+test('a never published element is deleted, not withdrawn (8.192, #47 case 5)', () => {
+  const draft = [{ _id: 'a', version: 0, status: 'draft', added_by_user_id: 'u1' }]
+  const base = { current_snapshot_id: null, created_by_user_id: 'u1', origin: { kind: 'offcut' } }
+  const mod = availableActions(input({ isModerator: true, versions: draft, identity: base, meId: 'u9' }))
+  assert.ok(mod.moderate.includes('delete-component'))
+  assert.ok(!mod.moderate.includes('withdraw-component') && !mod.moderate.includes('exit'))
+  // its creator too, a contributor who is not the creator no
+  const creator = availableActions(input({ isContributor: true, versions: draft, identity: base, meId: 'u1' }))
+  assert.ok(creator.moderate.includes('delete-component'))
+  const other = availableActions(input({ isContributor: true, versions: draft, identity: base, meId: 'u2' }))
+  assert.ok(!other.moderate.includes('delete-component'))
+  // published: the other way round
+  const published = availableActions(input({ isModerator: true, identity: { current_snapshot_id: 'b' } }))
+  assert.ok(published.moderate.includes('withdraw-component') && !published.moderate.includes('delete-component'))
+  // the version rows did not load: published once is not known, nothing is offered for deletion
+  const unknown = availableActions(input({
+    isModerator: true, versions: [], versionsKnown: false, identity: { ...base },
+  }))
+  assert.ok(!unknown.moderate.includes('delete-component'))
+})
+
+test('an element is moved by a moderator only, withdrawn or not (8.191)', () => {
+  const move = (over: Partial<ActionsInput>) => availableActions(input(over)).moderate.includes('move')
+  assert.equal(move({ isModerator: true }), true)
+  assert.equal(move({ isModerator: true, identity: { withdrawn: { at: '2026-01-01T00:00:00Z' }, current_snapshot_id: 'b' } }), true)
+  assert.equal(move({ isContributor: true }), false)
+  assert.equal(move({ isModerator: true, signedIn: false }), false)
+})
+
+test('New snapshot and Correct wait while a version is open; the reason is given (8.195, #47)', () => {
+  const plan = (open: boolean | undefined) => actionPlan(input({
+    isContributor: true,
+    identity: { current_snapshot_id: 'b', origin: { kind: 'offcut' }, has_open_snapshot: open },
+  }))
+  const closed = plan(false)
+  assert.ok(closed.record.includes('state') && closed.moderate.includes('correct'))
+  assert.deepEqual(closed.blocked, {})
+  const open = plan(true)
+  assert.ok(open.record.includes('state') && open.moderate.includes('correct'))      // kept in place
+  assert.equal(open.blocked.state, OPEN_VERSION_REASON)
+  assert.equal(open.blocked.correct, OPEN_VERSION_REASON)
+  // the plain list leaves them out
+  const offered = availableActions(input({
+    isContributor: true,
+    identity: { current_snapshot_id: 'b', origin: { kind: 'offcut' }, has_open_snapshot: true },
+  }))
+  assert.ok(!offered.record.includes('state') && !offered.moderate.includes('correct'))
+  // not told (a caller outside the dataset, or the field missing): nothing is blocked
+  assert.deepEqual(plan(undefined).blocked, {})
+})
+
+test('Draw waits for a batch reserved by someone else unless the caller moderates (#47 case 4)', () => {
+  const batch = { current_snapshot_id: 'b', remaining: 3, origin: { kind: 'offcut' }, reserved: 'u2' }
+  const plan = (over: Partial<ActionsInput>) => actionPlan(input({ isContributor: true, identity: batch, meId: 'u1', ...over }))
+  assert.equal(plan({}).blocked.draw, RESERVED_REASON)
+  assert.ok(plan({}).record.includes('draw'))
+  assert.deepEqual(plan({ meId: 'u2' }).blocked, {})                           // the reserving user
+  assert.deepEqual(plan({ isModerator: true }).blocked, {})                    // a moderator
+  assert.deepEqual(plan({ identity: { ...batch, reserved: '' } }).blocked, {}) // nobody
 })
 
 const EVENTS: HistoryEvent[] = [
@@ -355,4 +455,9 @@ test('"Add evidence" is for a signed-in contributor or administrator of a curren
   assert.equal(canAddEvidence({ ...base, withdrawn: { at: '2026-01-01T00:00:00Z' } }), false)
   assert.equal(canAddEvidence({ ...base, currentSnapshotId: null }), false)
   assert.equal(canAddEvidence({ ...base, currentSnapshotId: undefined }), false)
+  // every version withdrawn: published once, so evidence can be added (8.193)
+  const allWithdrawn = { ...base, currentSnapshotId: null, versions: [{ status: 'withdrawn' }] }
+  assert.equal(canAddEvidence(allWithdrawn), true)
+  assert.equal(canAddEvidence({ ...allWithdrawn, versions: [{ status: 'draft' }] }), false)
+  assert.equal(canAddEvidence({ ...allWithdrawn, withdrawn: { at: '2026-01-01T00:00:00Z' } }), false)
 })

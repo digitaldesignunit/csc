@@ -51,8 +51,8 @@ export const IN_CIRCULATION_PARTS: { value: Circulation; label: string }[] = [
 ]
 
 export const CIRCULATION_HELP =
-  'In circulation: elements that can still be reused, in place in their construction work or not. '
-  + 'Out of circulation: elements that left it (split, installed elsewhere, recycled, returned or lost). '
+  'In circulation: components that can still be reused, in place in their construction work or not. '
+  + 'Out of circulation: components that left it (split, installed elsewhere, recycled, returned or lost). '
   + 'All shows both.'
 
 /** What `URLSearchParams` and Next's read-only search params both offer. */
@@ -171,7 +171,7 @@ export function withoutFilters(params: ParamsLike): URLSearchParams {
  *  the volume and, while a fit or a near search is active, the match and the
  *  distance (decision 8.173). */
 const SORT_OPTIONS = [
-  { value: '_id', label: 'Identity id' },
+  { value: '_id', label: 'Component id' },
   { value: 'catalog_number', label: 'Catalog number' },
   { value: 'name', label: 'Name' },
   { value: 'original_function', label: 'Function' },
@@ -271,7 +271,7 @@ export function rowNumber(row: RowLike): string {
 /** The eight columns of the desktop table, then those the picker can add. */
 export const BASE_COLUMNS = ['name', 'original_function', 'material', 'dataset', 'size', 'shape_class', 'status'] as const
 export const OPTIONAL_COLUMNS: { key: string; label: string }[] = [
-  { key: '_id', label: 'Identity id' },
+  { key: '_id', label: 'Component id' },
   { key: 'catalog_number', label: 'Catalog number' },
   { key: 'effective_from', label: 'Date' },
   { key: 'color', label: 'Colour' },

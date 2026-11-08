@@ -68,7 +68,7 @@ export default function ComponentFactsCard({ catalog }: { catalog: CatalogCompon
     <section aria-label="Facts" className="rounded-lg border border-border bg-card p-3 shadow-sm">
       <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">The component</h2>
       <dl>{groups.component.map((fact) => <Row key={fact.label} fact={fact} identity={identity} />)}</dl>
-      <h2 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">This state</h2>
+      <h2 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">This snapshot</h2>
       <dl>{state.map((fact) => <Row key={fact.label} fact={fact} identity={identity} />)}</dl>
     </section>
   )
