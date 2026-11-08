@@ -40,6 +40,7 @@ export default function EvidenceCard({
   uploadHelp,
   menu = false,
   shownIds,
+  identityWithdrawn = false,
 }: {
   record: EvidenceView
   dataset: string | null | undefined
@@ -50,6 +51,8 @@ export default function EvidenceCard({
   menu?: boolean
   /** The ids of the cards the page lists (the paired record is linked only when it is one of them). */
   shownIds?: readonly string[]
+  /** the element is withdrawn: no correction, no new file (8.190, I28) */
+  identityWithdrawn?: boolean
 }) {
   const [open, setOpen] = useState(defaultOpen)
   const anchor = recordAnchor(String(record._id))
@@ -82,7 +85,8 @@ export default function EvidenceCard({
     <article id={`record-${record._id}`} className="relative scroll-mt-20 rounded-lg border border-border bg-card text-sm transition-shadow" aria-label={`Evidence ${vocabLabel(EVIDENCE_METHOD_LABELS, record.method)}`}>
       {menu && (
         <div className="absolute right-1.5 top-1.5 z-10">
-          <EvidenceLifecycleActions record={record} dataset={dataset} onChanged={onChanged} variant="menu" />
+          <EvidenceLifecycleActions record={record} dataset={dataset} identityWithdrawn={identityWithdrawn}
+            onChanged={onChanged} variant="menu" />
         </div>
       )}
       <button
@@ -195,7 +199,7 @@ export default function EvidenceCard({
           <div className="flex flex-wrap items-start gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <MapPin className="h-3 w-3" />
-              {record.position?.description || (record.position?.kind === 'none' ? 'whole element' : record.position?.kind)}
+              {record.position?.description || (record.position?.kind === 'none' ? 'whole component' : record.position?.kind)}
               {point ? ` (${roundVec(point, 1).join(', ')} mm)` : ''}
             </span>
             <span>{tierLabel(record.source_tier)}</span>
@@ -221,9 +225,13 @@ export default function EvidenceCard({
           <VerificationPanel record={record} dataset={dataset} onChanged={onChanged} />
           <div>
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Files</p>
-            <EvidenceAttachments record={record} dataset={dataset} onChanged={onChanged} uploadHelp={uploadHelp} />
+            <EvidenceAttachments record={record} dataset={dataset} identityWithdrawn={identityWithdrawn}
+              onChanged={onChanged} uploadHelp={uploadHelp} />
           </div>
-          {!menu && <EvidenceLifecycleActions record={record} dataset={dataset} onChanged={onChanged} />}
+          {!menu && (
+            <EvidenceLifecycleActions record={record} dataset={dataset} identityWithdrawn={identityWithdrawn}
+              onChanged={onChanged} />
+          )}
         </div>
       )}
     </article>

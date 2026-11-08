@@ -115,7 +115,7 @@ const ComponentIdTransmitter: React.FC = () => {
           if (data.conflict === 'snapshot') {
             setIdBlocked(true)
             setIdCheckMessage(
-              'This UUID is already a snapshot id. Use the physical identity id from the tag.',
+              'This UUID is already a snapshot id. Use the component id from the tag.',
             )
           } else {
             // Existing catalog identities are allowed; uniqueness is
@@ -128,7 +128,7 @@ const ComponentIdTransmitter: React.FC = () => {
 
         if (res.status === 400) {
           setIdBlocked(true)
-          setIdCheckMessage('Enter a valid identity UUID.')
+          setIdCheckMessage('Enter a valid component id.')
           return
         }
 
@@ -211,7 +211,7 @@ const ComponentIdTransmitter: React.FC = () => {
           ) {
             setStatus('error')
             setStatusMessage(
-              data.message || 'This UUID cannot be transmitted as a new identity id.',
+              data.message || 'This UUID cannot be transmitted as a new component id.',
             )
             return
           }
@@ -378,8 +378,8 @@ const ComponentIdTransmitter: React.FC = () => {
       <div className="flex w-full max-w-[420px] gap-2">
         <Input
           id="inputFieldTransmitID"
-          aria-label="Identity id"
-          placeholder="or paste the identity id"
+          aria-label="Component id"
+          placeholder="or paste the component id"
           value={inputId}
           onChange={(e) => {
             setInputId(e.target.value)
@@ -442,7 +442,7 @@ const ComponentIdTransmitter: React.FC = () => {
               Pending ID already exists
             </DialogTitle>
             <DialogDescription>
-              You still have a pending identity id in the queue. Do you
+              You still have a pending component id in the queue. Do you
               really want to overwrite it?
             </DialogDescription>
           </DialogHeader>

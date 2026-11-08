@@ -82,7 +82,19 @@ export function editPatch(
   snapshot: ComponentSnapshot,
   before: EditValues,
   after: EditValues,
+  /** The reduced form (`reducedEdit`): only name, notes and date can be sent. */
+  reduced = false,
 ): Record<string, unknown> | undefined {
+  if (reduced) {
+    // what the form disables is never sent, whatever the state holds
+    after = {
+      ...after,
+      color: before.color, lat: before.lat, lon: before.lon,
+      creditText: before.creditText, creditUrl: before.creditUrl,
+      captureNotes: before.captureNotes, method: before.method, device: before.device,
+      software: before.software, capturedAt: before.capturedAt,
+    }
+  }
   const patch = metadataPatch(before, after)
   if (patch === undefined) return undefined
   if (after.effectiveFrom !== before.effectiveFrom) {
@@ -102,6 +114,31 @@ export function editPatch(
   if (open.has('captured_at') && after.capturedAt) capture.captured_at = dateOnlyToIso(after.capturedAt)
   if (Object.keys(capture).length) patch.capture = capture
   return patch
+}
+
+/**
+ * Who may edit the details of a version (the edit page, `patch_problems` in
+ * `apps/catalog/lifecycle.py`, decisions 8.18, 8.193): a draft --- its author
+ * or a moderator of the dataset; a pending, published or withdrawn version ---
+ * a moderator only (a withdrawn one counts as published, also when the whole
+ * element is withdrawn); a rejected one --- nobody. A site admin passes as a
+ * moderator.
+ */
+export function canEditVersion(status: string, isAuthor: boolean, isModerator: boolean): boolean {
+  if (status === 'draft') return isAuthor || isModerator
+  if (status === 'pending' || status === 'published' || status === 'withdrawn') return isModerator
+  return false
+}
+
+/**
+ * Whether the edit page is reduced to name, notes and the date it is valid
+ * from (#48 case 5, decision 8.193 b, amended): a withdrawn version, and any
+ * version of a withdrawn element. Location, colour, photo credit, the capture
+ * fields and the public switch are then off. The server would take most of
+ * them from a moderator; the web keeps a withdrawn state quiet.
+ */
+export function reducedEdit(status: string, identityWithdrawn: boolean): boolean {
+  return identityWithdrawn || status === 'withdrawn'
 }
 
 /** The version the page opens on: the one asked for, else the current one, else the latest. */

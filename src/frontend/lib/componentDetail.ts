@@ -10,6 +10,7 @@
 import { EXIT_KIND_LABELS, ORIGIN_KIND_LABELS, STATUS_LABELS, vocabLabel } from '@/generated/Vocab'
 import { conditionLabel } from '@/components/components/componentDetailShared'
 import { formatDay } from '@/lib/utils'
+import { everPublished } from '@/lib/everPublished'
 import { CUTTABLE_EXIT_KINDS, TERMINAL_EXIT_KINDS, WORKS_ORIGIN_KINDS } from '@/lib/lineage'
 
 type Origin = {
@@ -33,6 +34,10 @@ export type IdentityLike = {
   created_by_user_id?: string | null
   /** response-only: the undo of the deinstall act is open (8.115 a) */
   can_undo_deinstall?: boolean | null
+  /** response-only: a draft or pending version exists (8.195); told to the members of the dataset and admins */
+  has_open_snapshot?: boolean | null
+  /** the id of the user who reserved the element; not sent to an anonymous caller (8.101) */
+  reserved?: string | null
 }
 
 export { formatDay }
@@ -40,7 +45,9 @@ export { formatDay }
 /**
  * Who may add evidence to an element (the "Add evidence" button): a signed-in
  * administrator or contributor of its dataset, while the element is not
- * withdrawn and has a current version. The backend decides in the end.
+ * withdrawn and was published once (`everPublished`, decision 8.193: a
+ * current version is not needed, so an element whose versions are all
+ * withdrawn qualifies). The backend decides in the end.
  */
 export function canAddEvidence(input: {
   signedIn: boolean
@@ -48,11 +55,13 @@ export function canAddEvidence(input: {
   roles: readonly string[]
   withdrawn?: unknown
   currentSnapshotId?: string | null
+  /** the rows of `GET /identities/{id}/snapshots`; without them the current version decides */
+  versions?: readonly { status?: string | null }[] | null
 }): boolean {
   return input.signedIn
     && (input.isAdmin || input.roles.includes('contributor'))
     && !input.withdrawn
-    && !!input.currentSnapshotId
+    && everPublished({ currentSnapshotId: input.currentSnapshotId, versions: input.versions })
 }
 
 // CHIPS -------------------------------------------------------------------------
@@ -107,12 +116,12 @@ export type Banner = { id: string; tone: 'info' | 'warn' | 'bad'; text: string }
  */
 export function notPublicText(dataset: string | null | undefined, visibility: string | null | undefined): string {
   if (visibility === 'catalog') {
-    return 'Not public: every signed-in user sees this element, visitors without an account do not.'
+    return 'Not public: every signed-in user sees this component, visitors without an account do not.'
   }
   if (visibility === 'members') {
-    return `Not public: only members of ${dataset ?? 'its dataset'} and the moderators see this element.`
+    return `Not public: only members of ${dataset ?? 'its dataset'} and the moderators see this component.`
   }
-  return 'Not public: visitors without an account do not see this element.'
+  return 'Not public: visitors without an account do not see this component.'
 }
 
 export function bannersOf(input: {
@@ -134,7 +143,7 @@ export function bannersOf(input: {
     })
   }
   if (identity.exit) {
-    out.push({ id: 'exited', tone: 'warn', text: 'This element left circulation; its record stays.' })
+    out.push({ id: 'exited', tone: 'warn', text: 'This component left circulation; its record stays.' })
   }
   if (input.signedIn && identity.is_public === false) {
     out.push({
@@ -145,7 +154,7 @@ export function bannersOf(input: {
   if (input.geometryFailed) {
     out.push({
       id: 'geometry', tone: 'bad',
-      text: 'The geometry of this version could not be processed: size, class and proxies describe the previous geometry.',
+      text: 'The geometry of this snapshot could not be processed: size, class and proxies describe the previous geometry.',
     })
   }
   return out
@@ -225,7 +234,7 @@ export function factGroups(input: {
   } else if (quantity > 1) {
     component.push({ label: 'Quantity', value: String(quantity) })
   }
-  if (snapshot.fragment) component.push({ label: 'Fragment', value: 'Yes, of a larger element' })
+  if (snapshot.fragment) component.push({ label: 'Fragment', value: 'Yes, of a larger component' })
   if (identity.dataset) component.push({ label: 'Dataset', value: identity.dataset })
 
   const state: Fact[] = []
@@ -243,7 +252,7 @@ export function factGroups(input: {
   }
   if (snapshot.effective_from) {
     state.push({
-      label: 'State since',
+      label: 'Since',
       value: formatDay(snapshot.effective_from, snapshot.effective_from_precision),
     })
   }
@@ -259,7 +268,7 @@ export type ActionKey =
   | 'correct' | 'promote' | 'withdraw-version' | 'manage-versions'
   | 'exit' | 'undo-exit' | 'exit-set-by-pieces' | 'reenter'
   | 'deinstall' | 'undo-deinstall'
-  | 'withdraw-component' | 'reinstate-component'
+  | 'withdraw-component' | 'reinstate-component' | 'move' | 'delete-component'
 
 export type VersionRow = {
   _id: string
@@ -279,6 +288,8 @@ export type ActionsInput = {
   meId?: string | null
   hasGeometryFiles: boolean
   isCero: boolean
+  /** the version rows were loaded; without them "published once" is not known, so no deletion is offered */
+  versionsKnown?: boolean
 }
 
 const isLive = (row: VersionRow) => row.status === 'published' && !row.superseded_by
@@ -290,12 +301,13 @@ export type VersionMode = 'correct' | 'promote' | 'withdraw-version' | 'manage-v
 export function versionOffers(
   mode: VersionMode,
   row: VersionRow,
-  caller: { isModerator: boolean; isContributor: boolean; meId?: string | null },
+  caller: { isModerator: boolean; isContributor: boolean; meId?: string | null; identityWithdrawn?: boolean },
 ): boolean {
   const author = !!caller.meId && row.added_by_user_id === caller.meId
   switch (mode) {
     case 'correct':
-      return caller.isContributor && isLive(row)
+      // a withdrawn element stays out of circulation (8.190): reinstate it first
+      return caller.isContributor && isLive(row) && !caller.identityWithdrawn
     case 'promote':
       return caller.isModerator && isLive(row) && !row.is_current
     case 'withdraw-version':
@@ -311,35 +323,70 @@ export function versionOffers(
 /** What the Actions menu offers, by group, for a caller (the backend checks
  *  again). The group order is the order shown. */
 export function availableActions(input: ActionsInput): { record: ActionKey[]; moderate: ActionKey[] } {
+  const { record, moderate, blocked } = actionPlan(input)
+  return { record: record.filter((key) => !(key in blocked)), moderate: moderate.filter((key) => !(key in blocked)) }
+}
+
+/** Why an action the caller has the right to is not usable now: the state of the
+ *  element refuses it (a 409), so the menu shows it disabled with the reason
+ *  instead of letting the user fill in a form (decisions 8.195, #47). */
+export type BlockedActions = Partial<Record<ActionKey, string>>
+
+export const OPEN_VERSION_REASON =
+  'A snapshot of this component is waiting for review (draft or pending). Publish, reject or delete it first.'
+export const RESERVED_REASON = 'This batch is reserved by someone else; only they or a moderator draw from it.'
+
+/** `availableActions` with the blocked ones kept in their place, and their reasons. */
+export function actionPlan(input: ActionsInput): {
+  record: ActionKey[]
+  moderate: ActionKey[]
+  blocked: BlockedActions
+} {
   const { identity, versions, isModerator, isContributor, meId } = input
   const record: ActionKey[] = ['pdf']
   if (input.isCero) record.push('cero')
   const moderate: ActionKey[] = []
-  if (!input.signedIn) return { record, moderate }
+  const blocked: BlockedActions = {}
+  if (!input.signedIn) return { record, moderate, blocked }
 
   if (input.hasGeometryFiles) record.push('geometry')
   record.push('locate')
   const exit = identity.exit
-  const published = !!identity.current_snapshot_id
+  // published once, not "has a current version" (8.193): the backend's `identity_ever_published`
+  const published = everPublished({ currentSnapshotId: identity.current_snapshot_id, versions })
   const withdrawn = !!identity.withdrawn
   const batch = typeof identity.remaining === 'number'
+  // a draft or pending version of the element, told by the server (8.195)
+  const open = identity.has_open_snapshot === true
   // a cut starts from a piece in circulation or one already cut (8.34); an
-  // installed, returned or lost piece re-enters first
-  const cuttable = !withdrawn && published && (!exit || CUTTABLE_EXIT_KINDS.includes(exit.kind))
+  // installed, returned or lost piece re-enters first. The backend (`cut_refusal`) asks for "published
+  // once" only, but the cut form reads its parent through `?expand=shallow`, which answers 404 for an
+  // element with no current version: the control waits for one (found in 0.6.4.5, reported)
+  const cuttable = !withdrawn && published && !!identity.current_snapshot_id
+    && (!exit || CUTTABLE_EXIT_KINDS.includes(exit.kind))
   if (cuttable && isContributor) {
     if (!batch) record.push('cut')
-    else if ((identity.remaining ?? 0) > 0) record.push('draw')
+    else if ((identity.remaining ?? 0) > 0) {
+      record.push('draw')
+      // `check_draw_rights`: a reserved batch is drawn from by the reserving user or a moderator
+      if (identity.reserved && identity.reserved !== meId && !isModerator) blocked.draw = RESERVED_REASON
+    }
   }
-  if (isContributor && !withdrawn && !exit && published) record.push('state')
-  // the edit page's rule (8.9, 3.2.2): a moderator, or the creator while
-  // nothing is published
-  const canEdit = !withdrawn && (isModerator
-    || (!published && !!meId && identity.created_by_user_id === meId))
+  if (isContributor && !withdrawn && !exit && published) {
+    record.push('state')
+    if (open) blocked.state = OPEN_VERSION_REASON
+  }
+  // the edit page's rule (8.9, 3.2.2, 8.193 b): a moderator edits any version, also of a withdrawn
+  // element; the creator while nothing was ever published
+  const canEdit = isModerator || (!published && !!meId && identity.created_by_user_id === meId)
   if (canEdit) record.push('edit')
 
-  const caller = { isModerator, isContributor, meId }
+  const caller = { isModerator, isContributor, meId, identityWithdrawn: withdrawn }
   const offered = (mode: VersionMode) => versions.some((row) => versionOffers(mode, row, caller))
-  if (offered('correct')) moderate.push('correct')
+  if (offered('correct')) {
+    moderate.push('correct')
+    if (open) blocked.correct = OPEN_VERSION_REASON
+  }
   if (offered('promote')) moderate.push('promote')
   if (offered('withdraw-version')) moderate.push('withdraw-version')
   if (offered('manage-versions')) moderate.push('manage-versions')
@@ -359,8 +406,17 @@ export function availableActions(input: ActionsInput): { record: ActionKey[]; mo
       if (!inPlace && identity.can_undo_deinstall === true) moderate.push('undo-deinstall')
     }
   }
-  if (isModerator) moderate.push(withdrawn ? 'reinstate-component' : 'withdraw-component')
-  return { record, moderate }
+  // an element is moved by a moderator of its dataset, withdrawn or not (8.191); the destination
+  // is chosen in the dialog (a moderator of that one too)
+  if (isModerator) moderate.push('move')
+  // withdrawing needs a published element; one nothing of which was published is deleted
+  // instead (`delete_identity`, 8.192): its creator or a moderator
+  if (published || withdrawn) {
+    if (isModerator) moderate.push(withdrawn ? 'reinstate-component' : 'withdraw-component')
+  } else if (input.versionsKnown !== false && (isModerator || (!!meId && identity.created_by_user_id === meId))) {
+    moderate.push('delete-component')
+  }
+  return { record, moderate, blocked }
 }
 
 // HISTORY -----------------------------------------------------------------------

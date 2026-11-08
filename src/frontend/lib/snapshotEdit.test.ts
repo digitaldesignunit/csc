@@ -4,9 +4,11 @@ import { test } from 'node:test'
 import type { ComponentSnapshot } from '@/generated/CatalogModels'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import {
+  canEditVersion,
   editPatch,
   editValuesOf,
   emptyCaptureFields,
+  reducedEdit,
   versionLabel,
   versionToEdit,
 } from './snapshotEdit'
@@ -99,4 +101,44 @@ test('a stored location fills the boxes as plain decimals, so an untouched form 
   assert.deepEqual(
     editPatch(snapshot({ location: { lat: 1e-7, lon: -0 } } as Partial<ComponentSnapshot>), tiny, { ...tiny, lat: '49.5', lon: '8.5' }),
     { location: { lat: 49.5, lon: 8.5 } })
+})
+
+test('who edits the details of a version (the edit page rule)', () => {
+  // a draft: its author or a moderator
+  assert.equal(canEditVersion('draft', true, false), true)
+  assert.equal(canEditVersion('draft', false, true), true)
+  assert.equal(canEditVersion('draft', false, false), false)
+  // pending, published, withdrawn: a moderator only (#48 case 5)
+  for (const status of ['pending', 'published', 'withdrawn']) {
+    assert.equal(canEditVersion(status, false, true), true, status)
+    assert.equal(canEditVersion(status, true, false), false, status)
+  }
+  // rejected: nobody
+  assert.equal(canEditVersion('rejected', true, true), false)
+})
+
+test('the reduced form: a withdrawn version, or any version of a withdrawn element', () => {
+  assert.equal(reducedEdit('withdrawn', false), true)
+  assert.equal(reducedEdit('published', true), true)
+  assert.equal(reducedEdit('draft', true), true)
+  assert.equal(reducedEdit('published', false), false)
+  assert.equal(reducedEdit('draft', false), false)
+})
+
+test('a save from the reduced form sends name, notes and date only', () => {
+  const s = snapshot({ capture: { notes: 'first scan' } } as Partial<ComponentSnapshot>)
+  const before = editValuesOf(s)
+  const everything: typeof before = {
+    ...before, name: 'New', notes: 'n', effectiveFrom: '2024-08-01', precision: 'month',
+    color: [1, 2, 3], lat: '49.5', lon: '8.5', creditText: 'Photo', creditUrl: 'https://x.org',
+    captureNotes: 'changed', method: 'lidar', device: 'dev', software: 'sw', capturedAt: '2024-08-02',
+  }
+  assert.deepEqual(editPatch(s, before, everything, true), {
+    name: 'New', notes: 'n', effective_from: '2024-08-01T00:00:00Z', effective_from_precision: 'month',
+  })
+  // the full form sends the rest
+  const full = editPatch(s, before, everything, false)!
+  for (const key of ['color', 'location', 'photo_credit', 'capture']) assert.ok(key in full, key)
+  // an unchanged reduced form is empty, and a bad location text is not read
+  assert.deepEqual(editPatch(s, before, { ...before, lat: 'x' }, true), {})
 })

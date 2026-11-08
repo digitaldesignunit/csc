@@ -33,6 +33,8 @@ export type MyRecord = {
   at: string
   reason: string
   href: string
+  /** the element is withdrawn (8.190): its draft is not submitted until it is reinstated; evidence rows: false */
+  identityWithdrawn: boolean
 }
 
 export function pieceLabel(piece: Piece | null | undefined): string {
@@ -69,6 +71,7 @@ export function mergeMyRecords(
       at: s.status_changed_at ?? s.created,
       reason: s.rejection_reason ?? '',
       href: `/components/${encodeURIComponent(s.identity_id)}?snapshots=${encodeURIComponent(s._id)}`,
+      identityWithdrawn: s.identity_withdrawn === true,
     })
   }
   for (const e of evidence) {
@@ -84,6 +87,7 @@ export function mergeMyRecords(
       at: e.status_changed_at ?? e.created,
       reason: e.status === 'rejected' ? rejectionReason(e.status_history) : '',
       href: `/components/${encodeURIComponent(e.identity_id)}`,
+      identityWithdrawn: false,
     })
   }
   return rows.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : a.id < b.id ? -1 : 1))
@@ -93,8 +97,15 @@ export function mergeMyRecords(
 /** One key per record (a snapshot and a record of evidence may share an id). */
 export const recordKey = (row: Pick<MyRecord, 'kind' | 'id'>): string => `${row.kind}:${row.id}`
 
-/** Only a draft is submitted; pending, rejected and published records are not. */
-export const isSubmittable = (row: Pick<MyRecord, 'status'>): boolean => row.status === 'draft'
+/** What the row says of a draft of a withdrawn element. */
+export const WITHDRAWN_DRAFT_NOTE = 'This component is withdrawn: reinstate it before submitting this snapshot.'
+
+/**
+ * Only a draft is submitted; pending, rejected and published records are not, and neither is a
+ * draft of a withdrawn element (8.190: the route answers 409). Delete stays as it is.
+ */
+export const isSubmittable = (row: Pick<MyRecord, 'status'> & { identityWithdrawn?: boolean }): boolean =>
+  row.status === 'draft' && row.identityWithdrawn !== true
 
 /** The keys of every record that can be submitted. */
 export function submittableKeys(rows: MyRecord[]): string[] {
@@ -144,7 +155,7 @@ export function waitingLines(counts: {
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
   const out: { key: 'snapshots' | 'evidence' | 'verification'; text: string; tab: string }[] = []
   if (counts.snapshots > 0) {
-    out.push({ key: 'snapshots', text: `${plural(counts.snapshots, 'version', 'versions')} to moderate`, tab: 'snapshots' })
+    out.push({ key: 'snapshots', text: `${plural(counts.snapshots, 'snapshot', 'snapshots')} to moderate`, tab: 'snapshots' })
   }
   if (counts.evidence > 0) {
     out.push({ key: 'evidence', text: `${plural(counts.evidence, 'record', 'records')} to moderate`, tab: 'evidence' })

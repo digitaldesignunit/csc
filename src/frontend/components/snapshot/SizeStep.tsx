@@ -54,8 +54,8 @@ export function SizeStep({
                 ? "The elements take the batch's proxy: they are identical."
                 : "An authored box for these elements instead of the batch's proxy."
               : keeping
-                ? `The geometry of this version is kept${currentSize ? ` (${currentSize.join(' x ')} mm)` : ''}.`
-                : 'Evidence positioned on this version keeps its points; the form lists it next.'}
+                ? `The geometry of this snapshot is kept${currentSize ? ` (${currentSize.join(' x ')} mm)` : ''}.`
+                : 'Evidence positioned on this snapshot keeps its points; the form lists it next.'}
           </p>
         </div>
       )}
@@ -81,7 +81,7 @@ export function SizeStep({
 
       {same && (
         <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
-          This is the size of the current state. A new state is for a changed shape; damage or weathering
+          This is the size of the current snapshot. A new snapshot is for a changed shape; damage or weathering
           without a change of shape is recorded as evidence (Add evidence, visual inspection).
         </p>
       )}

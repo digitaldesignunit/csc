@@ -22,7 +22,7 @@ import {
 
 test('there are seven tabs, with the names the maintainer asked for', () => {
   assert.deepEqual(TABS.map((tab) => tab.label), [
-    'Overview', 'Dataset', 'Identity', 'Versions', 'Evidence', 'Lists of values', 'Example',
+    'Overview', 'Dataset', 'Identity', 'Snapshots', 'Evidence', 'Lists of values', 'Example',
   ])
   assert.equal(new Set(TABS.map((tab) => tab.id)).size, 7)
   assert.equal(DEFAULT_TAB, 'overview')

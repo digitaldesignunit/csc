@@ -137,8 +137,8 @@ export function mapCountText(
   counts: { total: number; displayed: number; left_out: number },
 ): string {
   const noun = MAP_LAYER_NOUNS[layer]
-  const piece = (n: number) => (n === 1 ? 'element' : 'elements')
-  if (counts.total === 0) return 'No elements match the filters.'
+  const piece = (n: number) => (n === 1 ? 'component' : 'components')
+  if (counts.total === 0) return 'No components match the filters.'
   if (counts.displayed === 0) {
     const article = layer === 'origin' ? 'an' : 'a'
     return `None of the ${counts.total} ${piece(counts.total)} has ${article} ${noun} to show.`
@@ -150,8 +150,8 @@ export function mapCountText(
 
 /** The plain message of an empty layer (above the map). */
 export function emptyLayerText(layer: MapLayer, total: number): string {
-  if (total === 0) return 'No elements match the filters. Change or remove a filter.'
+  if (total === 0) return 'No components match the filters. Change or remove a filter.'
   return layer === 'origin'
-    ? 'No element has an origin location yet. It is set in Edit provenance on the component page. Switch to Current to see where the elements are now.'
-    : 'No element has a current location. Add one in Edit details on the component page.'
+    ? 'No component has an origin location yet. It is set in Edit provenance on the component page. Switch to Current to see where the components are now.'
+    : 'No component has a current location. Add one in Edit details on the component page.'
 }

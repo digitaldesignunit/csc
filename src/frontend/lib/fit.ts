@@ -23,10 +23,10 @@ export const FIT_MODE_LABELS: Record<FitMode, string> = {
 }
 
 export const FIT_HELP =
-  'Enter the size of the part you look for, in mm, in any order. About this size lists elements whose '
-  + 'three sides are each within the tolerance of yours. Can hold this size lists elements you could cut '
-  + 'that part from: every side of the element is at least as long as yours (the part may be turned). '
-  + 'The sides are compared largest to smallest, so the way an element lies does not matter.'
+  'Enter the size of the part you look for, in mm, in any order. About this size lists components whose '
+  + 'three sides are each within the tolerance of yours. Can hold this size lists components you could cut '
+  + 'that part from: every side of the component is at least as long as yours (the part may be turned). '
+  + 'The sides are compared largest to smallest, so the way a component lies does not matter.'
 
 export type FitQuery = {
   mode: FitMode

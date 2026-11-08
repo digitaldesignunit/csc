@@ -4,10 +4,10 @@ import type { CatalogComponent } from '@/generated/CatalogModels'
 import { primarySnapshot, type CatalogShallowRow } from '@/generated/catalogExtras'
 import type { SnapshotSummaryItem } from '@/generated/SnapshotModels'
 import { isPublished } from '@/components/components/componentDetailShared'
-import Link from 'next/link'
 import ComponentAccessNotice from '@/components/components/ComponentAccessNotice'
 import ComponentSnapshotVersionList from '@/components/components/ComponentSnapshotVersionList'
 import { isTombstone } from '@/lib/backend'
+import { newestVersionRow } from '@/lib/newestVersion'
 import { serverBackend } from '@/lib/serverBackend'
 import { redirect, notFound } from 'next/navigation'
 
@@ -80,42 +80,46 @@ export default async function ComponentDetailPage({
       />
     )
   }
-  const catalog = body as CatalogComponent
+  let catalog = body as CatalogComponent
+  const versionsKnown = snapshotsRes.ok
+  const snapshots: SnapshotSummaryItem[] = versionsKnown ? ((await snapshotsRes.json()) as SnapshotSummaryItem[]) : []
+  // no current version: every version withdrawn, or none published yet. The page is then built on the
+  // newest version, with a banner, so that the controls of the element are there (8.193, reviewer F1);
+  // a caller who may not read that version (an outsider with bare rows) keeps the notice
   if (!catalog.snapshots?.length) {
-    // the author and the moderators of a piece nobody has published yet see
-    // its versions (draft, pending, rejected) and their buttons (spec 3.1.5, 7.0)
-    const inFlight: SnapshotSummaryItem[] = snapshotsRes.ok ? ((await snapshotsRes.json()) as SnapshotSummaryItem[]) : []
-    return (
-      <>
-        <ComponentAccessNotice
-          kind="no-current-state"
-          catalogNumber={catalog.identity.catalog_number}
-        />
-        {inFlight.length > 0 && (
-          <div className="container mx-auto max-w-2xl p-4 sm:p-6">
-            <ComponentSnapshotVersionList
-              identityId={component_id}
-              snapshots={inFlight}
-              activeSnapshotId=""
-              liveSnapshotId=""
-              dataset={catalog.identity.dataset}
-            />
-            <Link
-              href={`/components/${encodeURIComponent(component_id)}/edit`}
-              className="mt-3 inline-block text-sm font-medium underline underline-offset-4"
-            >
-              Edit details of the latest version
-            </Link>
-          </div>
-        )}
-      </>
-    )
+    const newest = newestVersionRow(snapshots)
+    const again = newest
+      ? await serverBackend(
+        `/identities/${encodeURIComponent(component_id)}/compose?${new URLSearchParams({ snapshots: newest._id })}`)
+      : null
+    const shown = again?.ok ? ((await again.json()) as unknown) : null
+    if (shown && !isTombstone(shown) && (shown as CatalogComponent).snapshots?.length) {
+      catalog = shown as CatalogComponent
+    } else {
+      return (
+        <>
+          <ComponentAccessNotice
+            kind="no-current-state"
+            catalogNumber={catalog.identity.catalog_number}
+          />
+          {snapshots.length > 0 && (
+            <div className="container mx-auto max-w-2xl p-4 sm:p-6">
+              <ComponentSnapshotVersionList
+                identityId={component_id}
+                snapshots={snapshots}
+                activeSnapshotId=""
+                liveSnapshotId=""
+                dataset={catalog.identity.dataset}
+                hasOpenSnapshot={catalog.identity.has_open_snapshot === true}
+                identityWithdrawn={!!catalog.identity.withdrawn}
+              />
+            </div>
+          )}
+        </>
+      )
+    }
   }
   const snapshot = primarySnapshot(catalog)
-  let snapshots: SnapshotSummaryItem[] = []
-  if (snapshotsRes.ok) {
-    snapshots = (await snapshotsRes.json()) as SnapshotSummaryItem[]
-  }
   let childIdentities: CatalogShallowRow[] = []
   if (childrenRes.ok) {
     const body = (await childrenRes.json()) as CatalogShallowRow[]
@@ -126,12 +130,14 @@ export default async function ComponentDetailPage({
 
   const liveSnapshotId = String(catalog.identity.current_snapshot_id ?? '')
   const activeSnapshotId = String(snapshot._id ?? liveSnapshotId)
-  const isViewingLive = activeSnapshotId === liveSnapshotId
-  const liveVersion =
-    snapshots.find((row) => row._id === liveSnapshotId)?.version ??
-    (typeof snapshot.version === 'number' && isViewingLive
-      ? snapshot.version
-      : snapshots.find((row) => row.is_current)?.version ?? 0)
+  // no current version, however the version was opened (default or ?snapshots=): nothing to go back to
+  const isViewingLive = !!liveSnapshotId && activeSnapshotId === liveSnapshotId
+  const liveVersion = !liveSnapshotId
+    ? null
+    : snapshots.find((row) => row._id === liveSnapshotId)?.version ??
+      (typeof snapshot.version === 'number' && isViewingLive
+        ? snapshot.version
+        : snapshots.find((row) => row.is_current)?.version ?? 0)
   const viewingVersion =
     typeof snapshot.version === 'number'
       ? snapshot.version
@@ -141,6 +147,7 @@ export default async function ComponentDetailPage({
     <ComponentPageView
       catalog={catalog}
       snapshots={snapshots}
+      versionsKnown={versionsKnown}
       childIdentities={childIdentities}
       activeSnapshotId={activeSnapshotId}
       viewingVersion={viewingVersion}

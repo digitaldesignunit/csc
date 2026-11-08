@@ -37,7 +37,7 @@ export default function ModelDiagram() {
         aria-label="A dataset holds many component identities. An identity has many snapshots and many evidence records. An evidence record can name one snapshot."
       >
         <Box x={170} y={8} w={220} h={52} title="Dataset" line="a project: members and roles" />
-        <Box x={170} y={110} w={220} h={52} title="Component identity" line="one physical element" />
+        <Box x={170} y={110} w={220} h={52} title="Component identity" line="one physical component" />
         <Box x={20} y={226} w={230} h={60} title="Snapshot" line="one state: shape and condition" />
         <Box x={310} y={226} w={230} h={60} title="Evidence" line="a test, a document, an inspection" />
 
@@ -53,7 +53,7 @@ export default function ModelDiagram() {
         <Label x={280} y={304} text="Evidence can name the one snapshot it refers to" anchor="middle" />
       </svg>
       <figcaption className="text-xs text-muted-foreground">
-        The four records. Everything about an element hangs on its identity; the shape hangs on a snapshot.
+        The four records. Everything about a component hangs on its identity; the shape hangs on a snapshot.
       </figcaption>
     </figure>
   )

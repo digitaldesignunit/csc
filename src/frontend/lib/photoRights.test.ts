@@ -35,8 +35,9 @@ const TABLE: Record<string, Array<[boolean, boolean]>> = {
   rejected: [[false, false], [false, false], [false, false], [false, false], [false, false], [false, false], [true, true]],
   // after publish: add --- contributor or moderator; remove --- moderator
   published: [[false, false], [false, false], [false, false], [true, false], [true, false], [true, true], [true, true]],
-  // `_unpublished` is false for a withdrawn version, so it follows the after-publish branch
-  withdrawn: [[false, false], [false, false], [false, false], [true, false], [true, false], [true, true], [true, true]],
+  // `_unpublished` is false for a withdrawn version, so removing follows the after-publish branch;
+  // adding is refused by the state for everyone, the site admin included (8.190)
+  withdrawn: [[false, false], [false, false], [false, false], [false, false], [false, false], [false, true], [false, true]],
 }
 
 for (const [status, rows] of Object.entries(TABLE)) {
@@ -75,11 +76,30 @@ test('an unknown or missing status is unpublished and has no editor (`_unpublish
   assert.deepEqual(photoRights({ ...caller, status: undefined }), { add: false, remove: false })
 })
 
-test('a site admin passes every check, a signed-out caller none', () => {
+test('any version of a withdrawn element takes no new photo, whatever its status or the caller (8.190)', () => {
+  for (const status of ['draft', 'pending', 'rejected', 'published', 'withdrawn']) {
+    for (const [name, caller] of Object.entries(CALLERS)) {
+      assert.equal(
+        photoRights({ ...caller, status, addedByUserId: AUTHOR, identityWithdrawn: true }).add,
+        false,
+        `${status}: ${name}`,
+      )
+    }
+  }
+})
+
+test('removing a photo is not changed by a withdrawn element (a moderator removes)', () => {
+  const base = { signedIn: true, userId: OTHER, status: 'published', addedByUserId: AUTHOR, identityWithdrawn: true }
+  assert.deepEqual(photoRights({ ...base, isAdmin: false, roles: ['moderator'] }), { add: false, remove: true })
+  assert.deepEqual(photoRights({ ...base, isAdmin: false, roles: ['contributor'] }), { add: false, remove: false })
+  assert.deepEqual(photoRights({ ...base, isAdmin: true, roles: [] }), { add: false, remove: true })
+})
+
+test('a site admin passes every check, a signed-out caller none, except adding where the state refuses', () => {
   for (const status of [...Object.keys(TABLE), null]) {
     assert.deepEqual(
       photoRights({ signedIn: true, isAdmin: true, roles: [], status }),
-      { add: true, remove: true },
+      { add: status !== 'withdrawn', remove: true },
     )
     assert.deepEqual(
       photoRights({ signedIn: false, isAdmin: true, roles: ['moderator'], status, userId: AUTHOR, addedByUserId: AUTHOR }),

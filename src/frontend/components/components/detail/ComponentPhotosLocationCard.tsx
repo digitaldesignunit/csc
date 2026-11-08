@@ -35,6 +35,7 @@ export default function ComponentPhotosLocationCard({ catalog }: { catalog: Cata
     roles: identity.dataset ? rolesIn(identity.dataset) : [],
     status: snapshot.status,
     addedByUserId: snapshot.added_by_user_id,
+    identityWithdrawn: !!identity.withdrawn,
   })
 
   return (
@@ -67,7 +68,7 @@ export default function ComponentPhotosLocationCard({ catalog }: { catalog: Cata
         )}
         {nearLink && (
           <Link href={nearLink} className="text-primary underline underline-offset-2">
-            Near this element
+            Near this component
           </Link>
         )}
       </p>

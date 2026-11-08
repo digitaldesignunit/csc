@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 export type DatasetRole = 'contributor' | 'reviewer' | 'moderator'
 
 export const DATASET_ROLES: { value: DatasetRole; label: string; hint: string }[] = [
-  { value: 'contributor', label: 'Contributor', hint: 'adds components, states and evidence' },
+  { value: 'contributor', label: 'Contributor', hint: 'adds components, snapshots and evidence' },
   { value: 'reviewer', label: 'Reviewer', hint: 'reviews evidence (four eyes)' },
   { value: 'moderator', label: 'Moderator', hint: 'publishes, withdraws, manages members' },
 ]
@@ -18,12 +18,15 @@ export default function RoleCheckboxes({
   onChange,
   disabled = false,
   compact = false,
+  locked,
 }: {
   idPrefix: string
   value: DatasetRole[]
   onChange: (roles: DatasetRole[]) => void
   disabled?: boolean
   compact?: boolean
+  /** Roles that cannot be taken away now, with the reason (the last moderator, 8.139 g). */
+  locked?: Partial<Record<DatasetRole, string>>
 }) {
   const toggle = (role: DatasetRole, checked: boolean) => {
     const next = new Set(value)
@@ -39,7 +42,8 @@ export default function RoleCheckboxes({
             id={`${idPrefix}-${role.value}`}
             checked={value.includes(role.value)}
             onCheckedChange={(checked) => toggle(role.value, checked === true)}
-            disabled={disabled}
+            disabled={disabled || (!!locked?.[role.value] && value.includes(role.value))}
+            title={value.includes(role.value) ? locked?.[role.value] : undefined}
           />
           <Label htmlFor={`${idPrefix}-${role.value}`} className="text-sm font-normal leading-tight">
             {role.label}

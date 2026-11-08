@@ -75,8 +75,8 @@ function describe(props: ComponentAccessNoticeProps) {
     case 'no-current-state':
       return {
         icon: TimerOff,
-        title: `Component${props.catalogNumber != null ? ` #${props.catalogNumber}` : ''} has no current state`,
-        text: 'None of its recorded states is published at the moment.',
+        title: `Component${props.catalogNumber != null ? ` #${props.catalogNumber}` : ''} has no current snapshot`,
+        text: 'None of its snapshots is published at the moment.',
       }
   }
 }

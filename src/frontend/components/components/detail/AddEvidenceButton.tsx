@@ -18,15 +18,18 @@ export default function AddEvidenceButton({
   dataset,
   withdrawn,
   currentSnapshotId,
+  versions,
 }: {
   identityId: string
   dataset?: string | null
   withdrawn?: unknown
   currentSnapshotId?: string | null
+  /** the rows of the version list: published once is not the same as a current version (8.193) */
+  versions?: readonly { status?: string | null }[] | null
 }) {
   const { me, isAdmin, rolesIn } = useMe()
   const href = addEvidenceHref(identityId,
-    canAddEvidence({ signedIn: !!me, isAdmin, roles: dataset ? rolesIn(dataset) : [], withdrawn, currentSnapshotId }))
+    canAddEvidence({ signedIn: !!me, isAdmin, roles: dataset ? rolesIn(dataset) : [], withdrawn, currentSnapshotId, versions }))
   if (!href) return null
   return (
     <Button asChild size="sm" className="h-7 text-xs">

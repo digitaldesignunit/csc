@@ -19,7 +19,7 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'CSC - Catalog of Second Chances',
-  description: 'A components and materials database.',
+  description: 'A digital database for reclaimed architectural components.',
 }
 
 // Beta/gh-interface flags come from the server's .env at request time. Without

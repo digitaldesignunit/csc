@@ -26,7 +26,7 @@ export function isOnPage(recordId: string, shownIds: readonly string[]): boolean
 }
 
 export const PAIRED_OFF_PAGE_TITLE =
-  'This record is on another version or filtered out of this list'
+  'This record is on another snapshot or filtered out of this list'
 
 export type PairedReboundLink =
   | { id: string; onPage: true; href: string }

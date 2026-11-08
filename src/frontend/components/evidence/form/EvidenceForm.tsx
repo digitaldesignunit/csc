@@ -105,6 +105,7 @@ import { prepareUpload } from '@/lib/evidence/photos'
 import { getAt, isBlank, parseNumber, setAt, type FormObject } from '@/lib/evidence/schema'
 import { useRegistry } from '@/lib/evidence/useRegistry'
 import { useMe } from '@/lib/me'
+import { passportOfNewestVersion } from '@/lib/newestVersion'
 
 type Picker =
   | { mode: 'point'; recordKey: string }
@@ -169,7 +170,12 @@ export default function EvidenceForm({
       loadEvidenceOf(identityId, 'method=core_compression&status=all').catch(() => []),
       sourceId ? backendJson<EvidenceView>(`/evidence/${encodeURIComponent(sourceId)}`) : Promise.resolve(null),
     ])
-      .then(([passport, materials, reb, core, record]) => {
+      .then(async ([first, materials, reb, core, record]) => {
+        // every version withdrawn: compose has no state, so the form starts from the newest
+        // version, which the page names as withdrawn (8.193)
+        const passport = first.snapshots?.length
+          ? first
+          : await passportOfNewestVersion(identityId, first, { publishedOnly: true })
         if (cancelled) return
         setCatalog(passport)
         const material = materials.find((m) => m._id === passport.identity.material)
@@ -205,11 +211,14 @@ export default function EvidenceForm({
   const snapshot = catalog?.snapshots?.length ? primarySnapshot(catalog) : null
   const snapshotId = snapshot ? String(snapshot._id ?? '') : ''
   const dataset = catalog?.identity.dataset ?? null
-  const canContribute = rolesIn(dataset).includes('contributor')
-    || (editing && Boolean(dataset) && moderates(dataset))
   // an edit is for the author of a draft or a moderator; the record decides
   const mayEdit = !editing || !corrected || canEditEvidence(
     corrected.status, corrected.recorded_by_user_id === me?._id, moderates(dataset))
+  // the author of a draft keeps the right to edit it after losing the contributor role
+  // (`_unpublished_editor` asks for the author, not for a role; #48 case 9)
+  const canContribute = rolesIn(dataset).includes('contributor')
+    || (editing && Boolean(dataset) && moderates(dataset))
+    || (editing && !!corrected && mayEdit && corrected.recorded_by_user_id === me?._id)
 
   useEffect(() => {
     if (!dataset || !me || sourceId) return
@@ -541,7 +550,7 @@ export default function EvidenceForm({
         <h1 className="text-xl font-bold">Add evidence</h1>
         <p className="text-sm" role="status">
           #{identity.catalog_number} has no published state yet. Evidence is recorded about a state of the
-          element: come back once a moderator has published its first version.
+          component: come back once a moderator has published its first snapshot.
         </p>
       </div>
     )
@@ -652,7 +661,7 @@ export default function EvidenceForm({
         : layout.fanOut === 'pieces' ? plural(state.pieces.length, 'claim')
           : `1 layout with ${plural(Array.isArray(state.records[0]?.payload.bars) ? (state.records[0].payload.bars as unknown[]).length : 0, 'bar')}`
     const files = state.files.length + (layout.fanOut === 'observations' ? state.photos.length : 0)
-    const version = snapshot.version ? `, version ${snapshot.version}` : ''
+    const version = snapshot.version ? `, snapshot v${snapshot.version}` : ''
     const withFiles = files > 0 ? `, with ${plural(files, 'file')}` : ''
     if (editing && corrected) return `Saves the changes to this ${corrected.status} record on ${title}${version}${withFiles}.`
     if (corrected) {
@@ -677,10 +686,18 @@ export default function EvidenceForm({
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
             <span>{title}{dataset ? ` (${dataset})` : ''}</span>
             {snapshot.version ? (
-              <span className="rounded-full border border-border px-2 py-0.5 text-xs">version {snapshot.version}</span>
+              <span className="rounded-full border border-border px-2 py-0.5 text-xs">
+                snapshot v{snapshot.version}{snapshot.status === 'withdrawn' ? ' (withdrawn)' : ''}
+              </span>
             ) : null}
             {modeChip && <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{modeChip}</span>}
           </p>
+          {snapshot.status === 'withdrawn' && (
+            <p className="mt-1 text-xs text-muted-foreground" role="status">
+              Every snapshot of this component is withdrawn, so it has no current snapshot. The record is about the
+              newest one, snapshot v{snapshot.version}.
+            </p>
+          )}
           {editing && corrected && (
             <p className="mt-1 text-xs text-muted-foreground">
               The record keeps its status{corrected.status === 'draft' ? ' and its files; you can add more files' : ' and its files'}.
@@ -850,9 +867,9 @@ export default function EvidenceForm({
                           help={help('PositionInput', 'description')}
                         />
                         <p className="text-xs text-muted-foreground">
-                          A layout belongs to one version: the bars are in the stored coordinates (millimetres) of
-                          {snapshot.version ? ` version ${snapshot.version}` : ' the version'} you see on the component
-                          page. Another version needs a layout of its own.
+                          A layout belongs to one snapshot: the bars are in the stored coordinates (millimetres) of
+                          {snapshot.version ? ` snapshot v${snapshot.version}` : ' the snapshot'} you see on the component
+                          page. Another snapshot needs a layout of its own.
                         </p>
                       </>
                     )}

@@ -15,6 +15,6 @@ export function shortId(id: string, length = SHORT_ID_LENGTH): string {
 /** What a chip says about itself: "Snapshot id" and so on. */
 export const ID_KIND_LABELS: Record<IdKind, string> = {
   ComponentID: 'Component id',
-  SnapshotID: 'Version id',
+  SnapshotID: 'Snapshot id',
   RecordID: 'Record id',
 }

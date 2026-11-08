@@ -141,7 +141,7 @@ export default function PropertiesCard({
   const versionEntries = Object.entries((versionProperties ?? {}) as Record<string, FoldedProperty>)
   const blocks: { title: string; entries: [string, FoldedProperty][]; outrankedFor: boolean }[] = [
     { title: 'Condition', entries: versionEntries.filter(([quantity]) => quantity === 'condition_grade'), outrankedFor: false },
-    { title: 'The element', entries: Object.entries((properties ?? {}) as Record<string, FoldedProperty>), outrankedFor: true },
+    { title: 'The component', entries: Object.entries((properties ?? {}) as Record<string, FoldedProperty>), outrankedFor: true },
     { title: versionLabel, entries: versionEntries.filter(([quantity]) => quantity !== 'condition_grade'), outrankedFor: false },
   ].filter((block) => block.entries.length > 0)
   const derived = blocks.some((block) => block.title === 'Condition') ? null : conditionDerived
@@ -171,7 +171,7 @@ export default function PropertiesCard({
       )}
       {empty.kind === 'plain' && (
         <p className="text-sm text-muted-foreground">
-          No published evidence yet: nothing is known about this element beyond what its record says.
+          No published evidence yet: nothing is known about this component beyond what its record says.
         </p>
       )}
       {empty.kind === 'link' && (
@@ -184,7 +184,7 @@ export default function PropertiesCard({
         <div key={block.title} className="space-y-1.5">
           <div className="flex items-center gap-2">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{block.title}</h4>
-            {!block.outrankedFor && block.title !== 'Condition' && <Badge variant="outline" className="text-[10px]">this version</Badge>}
+            {!block.outrankedFor && block.title !== 'Condition' && <Badge variant="outline" className="text-[10px]">this snapshot</Badge>}
           </div>
           <ul className="grid gap-2 sm:grid-cols-2">
             {block.entries.map(([quantity, property]) => (

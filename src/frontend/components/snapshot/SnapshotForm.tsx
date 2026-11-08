@@ -28,6 +28,7 @@ import { cleanOrigin, useMaterials } from '@/lib/lineage'
 import { boxesOfLocation } from '@/lib/near'
 import { useMe } from '@/lib/me'
 import { uuidFromScan } from '@/lib/scanIds'
+import { passportOfNewestVersion } from '@/lib/newestVersion'
 import { uploadSnapshotPhoto } from '@/lib/snapshotPhotos'
 import {
   MODE_TITLES,
@@ -200,13 +201,27 @@ export default function SnapshotForm(props: SnapshotFormProps) {
     const query = mode === 'correct' && wantedSnapshot
       ? `?${new URLSearchParams({ snapshots: wantedSnapshot })}` : ''
     backendJson<CatalogComponent | unknown>(`/identities/${encodeURIComponent(wantedIdentity)}/compose${query}`)
-      .then((body) => {
+      .then(async (body) => {
         if (cancelled) return
         if (isTombstone(body)) {
           setLoadError('This component was withdrawn.')
           return
         }
-        const passport = body as CatalogComponent
+        let passport = body as CatalogComponent
+        if (passport.identity?.withdrawn) {
+          // the routes refuse a new state and a correction of a withdrawn element (8.190)
+          setLoadError('This component is withdrawn: it takes no new snapshot and no correction. A moderator reinstates it first.')
+          return
+        }
+        if (!passport.snapshots?.length) {
+          // every version withdrawn: a new state starts from the newest one (8.193)
+          passport = await passportOfNewestVersion(wantedIdentity, passport, { publishedOnly: true })
+          if (!passport.snapshots?.length) {
+            if (!cancelled) setLoadError('This component has no snapshot to start a new snapshot from.')
+            return
+          }
+          if (cancelled) return
+        }
         setCatalog(passport)
         setValues(valuesOf(mode, passport))
         setSeeded(true)
@@ -327,7 +342,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
       own.push({ field: 'tag', message: tagFree?.message ?? 'Checking the tag...' })
     }
     if (id === 'parents' && values.tag.trim() && !tagId) {
-      own.push({ field: 'tag', message: 'The tag of the new element is not an id.' })
+      own.push({ field: 'tag', message: 'The tag of the new component is not an id.' })
     }
     if (id === 'parents' && tagId && tagFree && !tagFree.ok) own.push({ field: 'tag', message: tagFree.message ?? '' })
     // a tag that came with the link is checked on the first step
@@ -467,7 +482,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
         </p>
         {mode === 'new' && values.inspect && (
           <p className="text-sm text-muted-foreground">
-            You asked for a visual inspection: evidence is recorded about a published state, so open the
+            You asked for a visual inspection: evidence is recorded about a published snapshot, so open the
             component and add it once a moderator has published it (Add evidence, visual inspection).
           </p>
         )}
@@ -510,7 +525,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
 
       {scanned && (
         <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
-          This version comes from a scan. A correction from the web copies only an authored box, not
+          This snapshot comes from a scan. A correction from the web copies only an authored box, not
           scan files, so it is not offered here: name, notes, location and colour are edited in place
           (Edit details), and a wrong scan is corrected with Grasshopper.
         </p>
@@ -519,9 +534,9 @@ export default function SnapshotForm(props: SnapshotFormProps) {
       {step === 'tag' && (
         <section className="space-y-4 border-t border-border pt-6">
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Tag of the new element</h2>
+            <h2 className="text-lg font-semibold">Tag of the new component</h2>
             <p className="text-sm text-muted-foreground">
-              Scan the QR code on the element, or paste its id. The id must not be in the catalog yet.
+              Scan the QR code on the component, or paste its id. The id must not be in the catalog yet.
             </p>
           </div>
           <TagField id="sf-tag" value={values.tag} onChange={(tag) => set({ tag })} autoScan />
@@ -539,10 +554,10 @@ export default function SnapshotForm(props: SnapshotFormProps) {
       {step === 'parents' && (
         <section className="space-y-4 border-t border-border pt-6">
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Cut from elements</h2>
+            <h2 className="text-lg font-semibold">Cut from components</h2>
             <p className="text-sm text-muted-foreground">
-              Scan the tag of the element it was cut from. Add more than one to record a merge. The parents leave
-              circulation once the new element is published. From a batch of identical elements you draw elements
+              Scan the tag of the component it was cut from. Add more than one to record a merge. The parents leave
+              circulation once the new component is published. From a batch of identical elements you draw elements
               instead: the batch stays in circulation.
             </p>
             {batch && (
@@ -552,7 +567,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
             )}
           </div>
           <ParentTags parents={values.parents} onChange={(parents) => set({ parents })} exclude={tagId ?? undefined} />
-          <Field label="Tag of the new element" htmlFor="sf-new-tag"
+          <Field label="Tag of the new component" htmlFor="sf-new-tag"
             hint="Scan or paste the id on the new tag. Empty: a new id is generated.">
             <TagField id="sf-new-tag" value={values.tag} onChange={(tag) => set({ tag })} />
           </Field>
@@ -575,13 +590,13 @@ export default function SnapshotForm(props: SnapshotFormProps) {
             )}
             {mode === 'state' && (
               <p className="text-sm text-muted-foreground">
-                A new state is for a changed shape (cut down, repaired). Damage or weathering without a change of
+                A new snapshot is for a changed shape (cut down, repaired). Damage or weathering without a change of
                 shape is evidence: Add evidence, visual inspection.
               </p>
             )}
             {mode === 'correct' && (
               <p className="text-sm text-muted-foreground">
-                A correction replaces this version and keeps its date. Name, notes, location and colour can also
+                A correction replaces this snapshot and keeps its date. Name, notes, location and colour can also
                 be edited in place.
               </p>
             )}
@@ -608,7 +623,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">Photos</h2>
             <p className="text-sm text-muted-foreground">
-              A general impression of the element. Use the camera on site or pick images from the device; they
+              A general impression of the component. Use the camera on site or pick images from the device; they
               upload when you submit. Private persons, faces and number plates must not be on them.
             </p>
           </div>
@@ -701,7 +716,7 @@ export default function SnapshotForm(props: SnapshotFormProps) {
           </div>
         ) : (
           <WriteButton type="button" onClick={() => void submit()} disabled={busy || scanned}>
-            {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</> : <><PackagePlus className="mr-2 h-4 w-4" />{mode === 'new' ? 'Create component' : mode === 'cut' ? (batch ? 'Draw elements' : 'Record element') : mode === 'state' ? 'Record state' : 'Record correction'}</>}
+            {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting...</> : <><PackagePlus className="mr-2 h-4 w-4" />{mode === 'new' ? 'Create component' : mode === 'cut' ? (batch ? 'Draw elements' : 'Record component') : mode === 'state' ? 'Record snapshot' : 'Record correction'}</>}
           </WriteButton>
         )}
       </div>

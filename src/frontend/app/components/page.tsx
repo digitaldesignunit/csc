@@ -80,10 +80,10 @@ export default async function ComponentsPage({
     redirect('/auth/signin?callbackUrl=%2Fcomponents')
   }
   if (!itemsRes.ok) {
-    throw new Error(`Failed to fetch identities: ${itemsRes.status} ${await itemsRes.text()}`)
+    throw new Error(`Failed to fetch components: ${itemsRes.status} ${await itemsRes.text()}`)
   }
   if (!countRes.ok) {
-    throw new Error(`Failed to fetch identity count: ${countRes.status} ${await countRes.text()}`)
+    throw new Error(`Failed to fetch component count: ${countRes.status} ${await countRes.text()}`)
   }
 
   const rows = (await itemsRes.json()) as CatalogShallowRow[]

@@ -74,3 +74,15 @@ test('an unverified record or one with no verification says nothing', async () =
   assert.deepEqual(verificationNotices({ recorded_by_user_id: 'u1' }, []), [])
   assert.deepEqual(verificationNotices({ verification: null }, ['u1']), [])
 })
+
+test('the edit body of a claim keeps the kind of its result (8.189: a PATCH is refused without it)', () => {
+  const claim = {
+    ...(ITEM as unknown as Record<string, unknown>),
+    method: 'era_heuristic',
+    summary: { quantity: 'compressive_strength', kind: 'claimed', value: 25, unit: 'MPa' },
+  } as unknown as EvidenceBulkItem
+  const body = editBody(claim, METHOD(true))
+  assert.deepEqual(body.summary, { quantity: 'compressive_strength', kind: 'claimed', value: 25, unit: 'MPa' })
+  // a document cleared of its result is sent as null, and has no kind to keep
+  assert.equal(editBody(ITEM, METHOD(true)).summary, null)
+})

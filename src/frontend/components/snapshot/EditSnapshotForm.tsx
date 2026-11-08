@@ -31,13 +31,16 @@ import { backendJson, isTombstone } from '@/lib/backend'
 import type { DatasetView } from '@/generated/AccessModels'
 import { REVIEW_EXPLANATION, awaitsReview } from '@/lib/datasets'
 import { creditInputProblem } from '@/lib/photoCredit'
+import { everPublished } from '@/lib/everPublished'
 import { canSwitchPublic } from '@/lib/publicSwitch'
 import { useMe } from '@/lib/me'
 import {
   CAPTURE_METHOD_LABELS,
+  canEditVersion,
   editPatch,
   editValuesOf,
   emptyCaptureFields,
+  reducedEdit,
   versionLabel,
   versionToEdit,
   type EditValues,
@@ -80,7 +83,7 @@ export default function EditSnapshotForm({
       if (isTombstone(body)) throw new Error('This component was withdrawn.')
       const list = await backendJson<SnapshotSummaryItem[]>(`/identities/${enc}/snapshots`)
       const first = versionToEdit(list, snapshotId)
-      if (!first) throw new Error('This component has no version to edit.')
+      if (!first) throw new Error('This component has no snapshot to edit.')
       if (cancelled) return
       setIdentity((body as CatalogComponent).identity)
       setIsPublic(Boolean((body as CatalogComponent).identity.is_public))
@@ -116,7 +119,7 @@ export default function EditSnapshotForm({
         setValues(initial)
         setError(null)
       })
-      .catch((err) => { if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load the version') })
+      .catch((err) => { if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load the snapshot') })
     return () => { cancelled = true }
   }, [selected])
 
@@ -132,7 +135,7 @@ export default function EditSnapshotForm({
     window.history.replaceState(null, '', `/components/${enc}/edit?snapshot=${encodeURIComponent(id)}`)
   }
   const chooser = (
-    <Field label="Version" htmlFor="ed-version">
+    <Field label="Snapshot" htmlFor="ed-version">
       <Select value={selected ?? undefined} onValueChange={choose} disabled={busy}>
         <SelectTrigger id="ed-version" className="w-full">
           <SelectValue />
@@ -158,28 +161,29 @@ export default function EditSnapshotForm({
   const moderator = moderates(identity.dataset)
   const author = snapshot.added_by_user_id === me._id
   const status = snapshot.status
-  const allowed = status === 'draft' ? author || moderator
-    : status === 'pending' || status === 'published' ? moderator
-      : false
+  // a moderator edits a withdrawn version, and a version of a withdrawn element, as a published one
+  // (`patch_problems`: withdrawn counts as published; #48 case 5, 8.193 b)
+  const allowed = canEditVersion(status, author, moderator)
+  // a withdrawn version, or a version of a withdrawn element: name, notes and date only (8.193 b)
+  const identityWithdrawn = Boolean(identity.withdrawn)
+  const reduced = reducedEdit(status, identityWithdrawn)
   const why = allowed ? null
-    : status === 'rejected' ? 'A rejected version is edited by nobody; resubmit it as a draft first.'
-      : status === 'withdrawn' ? 'A withdrawn version cannot be edited.'
-        : status === 'draft' ? 'Only the author or a moderator of the dataset edits a draft.'
-          : 'Once a version is pending or published, a moderator of the dataset edits it.'
+    : status === 'rejected' ? 'A rejected snapshot is edited by nobody; resubmit it as a draft first.'
+      : status === 'draft' ? 'Only the author or a moderator of the dataset edits a draft.'
+        : 'Once a snapshot is pending, published or withdrawn, a moderator of the dataset edits it.'
 
-  const everPublished = Boolean(identity.current_snapshot_id)
-    || rows.some((row) => row.status === 'published' || row.status === 'withdrawn')
+  const wasPublished = everPublished({ currentSnapshotId: identity.current_snapshot_id, versions: rows })
   const mayChangePublic = canSwitchPublic({
     moderates: moderator,
     isCreator: identity.created_by_user_id === me._id,
-    everPublished,
+    everPublished: wasPublished,
   })
   const changePublic = async (next: boolean) => {
     setPublicBusy(true)
     try {
       await backendJson(`/identities/${enc}`, { method: 'PATCH', body: { is_public: next } })
       setIsPublic(next)
-      toast.success(next ? 'The element is public now' : 'The element is private now')
+      toast.success(next ? 'The component is public now' : 'The component is private now')
       router.refresh()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not change the public flag')
@@ -197,7 +201,8 @@ export default function EditSnapshotForm({
   const setFields = (patch: Partial<EditValues>) => setValues((v) => (v ? { ...v, ...patch } : v))
   const capture = snapshot.capture ?? {}
   const fixed = (name: 'method' | 'device' | 'software' | 'captured_at') => !open.includes(name)
-  const readOnlyHint = 'Set already: a change is recorded as a correction (Correct a version).'
+  // a withdrawn version, and any version of a withdrawn element, cannot be corrected: no pointer to it then
+  const readOnlyHint = reduced ? undefined : 'Set already: a change is recorded as a correction (Correct a snapshot).'
 
   const save = async () => {
     setError(null)
@@ -206,7 +211,7 @@ export default function EditSnapshotForm({
       setError(creditProblem)
       return
     }
-    const patch = editPatch(snapshot, before, values)
+    const patch = editPatch(snapshot, before, values, reduced)
     if (patch === undefined) {
       setError(LOCATION_PROBLEM)
       return
@@ -232,21 +237,27 @@ export default function EditSnapshotForm({
     <div className="space-y-5">
       {chooser}
       <p className="text-sm text-muted-foreground">
-        Version {snapshot.version} ({status}). The details below are edited in place; the size, quantity and
-        fragment flag, and a capture field that is set, are changed by a correction.
+        Snapshot v{snapshot.version} ({status}). The details below are edited in place
+        {reduced ? '.' : '; the size, quantity and fragment flag, and a capture field that is set, are changed by a correction.'}
       </p>
+      {allowed && reduced && (
+        <p role="note" className="text-sm text-muted-foreground">
+          {identityWithdrawn ? 'This component is withdrawn' : 'This snapshot is withdrawn'}: only the name, the notes and
+          the date it is valid from can be changed. A moderator reinstates it for the rest.
+        </p>
+      )}
       {why && (
         <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
           {why}
         </p>
       )}
-      {mayChangePublic && (
+      {mayChangePublic && !reduced && (
         <section aria-label="Public" className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
           <div className="space-y-0.5">
             <Label htmlFor="ed-public" className="text-sm font-medium">Public</Label>
             <p className="text-xs text-muted-foreground">
-              A public element is visible to everyone without an account. It applies to the whole element
-              and takes effect at once; it needs no version change.
+              A public component is visible to everyone without an account. It applies to the whole component
+              and takes effect at once; it needs no new snapshot.
             </p>
             {!datasetReviewed && !isPublic && (
               <p className="text-xs text-amber-800 dark:text-amber-300">{REVIEW_EXPLANATION}</p>
@@ -259,8 +270,8 @@ export default function EditSnapshotForm({
       <PublicConfirmDialog
         open={confirmPublic}
         onOpenChange={(open) => { if (!publicBusy) setConfirmPublic(open) }}
-        title="Make this element public?"
-        subject="This element becomes public."
+        title="Make this component public?"
+        subject="This component becomes public."
         onConfirm={() => void changePublic(true)}
       />
       <fieldset disabled={!allowed || busy} className="space-y-5">
@@ -272,7 +283,7 @@ export default function EditSnapshotForm({
           <Textarea id="ed-notes" rows={4} maxLength={5000} value={values.notes}
             onChange={(event) => setFields({ notes: event.target.value })} />
         </Field>
-        <div className="space-y-2">
+        <fieldset disabled={reduced} className="space-y-2">
           <Field label="Photo credit" htmlFor="ed-credit-text">
             <Input id="ed-credit-text" maxLength={300} value={values.creditText}
               onChange={(event) => setFields({ creditText: event.target.value })}
@@ -284,11 +295,13 @@ export default function EditSnapshotForm({
               placeholder="https://... (optional)" />
           </Field>
           <p className="text-xs text-muted-foreground">
-            Who all the photos of this version come from; shown under the photos. Empty: no credit.
+            Who all the photos of this snapshot come from; shown under the photos. Empty: no credit.
           </p>
-        </div>
-        <ColourField idPrefix="ed" fields={values} setFields={setFields} />
-        <LocationFields idPrefix="ed" fields={values} setFields={setFields} />
+        </fieldset>
+        <fieldset disabled={reduced} className="space-y-5">
+          <ColourField idPrefix="ed" fields={values} setFields={setFields} />
+          <LocationFields idPrefix="ed" fields={values} setFields={setFields} />
+        </fieldset>
 
         <section className="space-y-3 border-t border-border pt-5">
           <h2 className="flex items-center gap-2 text-sm font-semibold"><CalendarClock className="h-4 w-4" />Valid from</h2>
@@ -300,12 +313,12 @@ export default function EditSnapshotForm({
             onChange={(at, precision) => setFields({ effectiveFrom: at ? at.slice(0, 10) : '', precision })}
           />
           <p className="text-xs text-muted-foreground">
-            When this state starts to describe the element ({PRECISION_LABELS[values.precision]?.toLowerCase()}). It
-            keeps the order of the versions.
+            When this snapshot starts to describe the component ({PRECISION_LABELS[values.precision]?.toLowerCase()}). It
+            keeps the order of the snapshots.
           </p>
         </section>
 
-        <section className="space-y-4 border-t border-border pt-5">
+        <fieldset disabled={reduced} className="space-y-4 border-t border-border pt-5">
           <h2 className="flex items-center gap-2 text-sm font-semibold"><Camera className="h-4 w-4" />Capture</h2>
           <Field label="Capture notes" htmlFor="ed-capture-notes">
             <Textarea id="ed-capture-notes" rows={3} maxLength={5000} value={values.captureNotes}
@@ -330,7 +343,7 @@ export default function EditSnapshotForm({
                 <DateField id="ed-captured" value={values.capturedAt} disabled={fixed('captured_at')}
                   onChange={(value) => setFields({ capturedAt: value })} />
               </Field>
-              {fixed('captured_at') && <p className="mt-1.5 text-xs text-muted-foreground">{readOnlyHint}</p>}
+              {fixed('captured_at') && readOnlyHint && <p className="mt-1.5 text-xs text-muted-foreground">{readOnlyHint}</p>}
             </fieldset>
           </div>
           {(capture.markers?.length || capture.fixtures?.length || capture.coordinate_system) ? (
@@ -338,16 +351,16 @@ export default function EditSnapshotForm({
               Markers, fixtures and the coordinate system come with the capture tool and are not edited here.
             </p>
           ) : null}
-        </section>
+        </fieldset>
       </fieldset>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className="flex flex-wrap justify-between gap-2 border-t border-border pt-4">
         <Button asChild variant="outline"><Link href={href}>Cancel</Link></Button>
         <div className="flex flex-wrap gap-2">
-          {status === 'published' && !snapshot.superseded_by && (
+          {status === 'published' && !snapshot.superseded_by && !identityWithdrawn && (
             <Button asChild variant="outline">
               <Link href={`/components/${enc}/snapshot/new?mode=correct&snapshot=${encodeURIComponent(String(snapshot._id))}`}>
-                <FilePen className="mr-2 h-4 w-4" />Correct this version
+                <FilePen className="mr-2 h-4 w-4" />Correct this snapshot
               </Link>
             </Button>
           )}

@@ -116,7 +116,7 @@ test('a stub lane has a place but no events; the count of lanes left out is kept
 
 test('describing an event gives a title, a date and a short label', () => {
   const version = describeEvent({ kind: 'version', at: '2022-10-26T00:00:00Z', precision: 'day', version: 1, corrected: true, name: 'beam' })
-  assert.equal(version.title, 'Version v1')
+  assert.equal(version.title, 'Snapshot v1')
   assert.equal(version.short, 'v1')
   assert.ok(version.lines.some((line) => line.includes('replaced by a correction')))
   assert.ok(describeEvent({ kind: 'exit', at: null, detail: 'split' }).lines.includes('date unknown'))

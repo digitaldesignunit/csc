@@ -73,8 +73,8 @@ export default function ComponentDescriptorsCard({ catalog }: { catalog: Catalog
           </>
         ) : (
           <p className="text-xs text-muted-foreground">
-            This version has no heat kernel signature yet. The geometry runner computes it with the other
-            descriptors; a version without a surface to sample (no mesh, no point cloud, no authored shape) never gets one.
+            This snapshot has no heat kernel signature yet. The geometry runner computes it with the other
+            descriptors; a snapshot without a surface to sample (no mesh, no point cloud, no authored shape) never gets one.
           </p>
         )}
       </div>

@@ -126,7 +126,7 @@ export function describeEvent(event: HistoryEvent): { title: string; lines: stri
       ].filter(Boolean) as string[]
       if (event.name) lines.unshift(event.name)
       if (notes.length) lines.push(notes.join(', '))
-      return { title: `Version v${event.version ?? '?'}`, lines, short: `v${event.version ?? '?'}` }
+      return { title: `Snapshot v${event.version ?? '?'}`, lines, short: `v${event.version ?? '?'}` }
     }
     case 'evidence_group': {
       const count = event.count ?? event.ids?.length ?? 0

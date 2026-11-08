@@ -20,7 +20,11 @@ import { useRegistry } from '@/lib/evidence/useRegistry'
 import AddEvidenceButton from './AddEvidenceButton'
 import { useEvidenceData } from './EvidenceData'
 
-export default function ComponentRecordsCard({ catalog }: { catalog: CatalogComponent }) {
+export default function ComponentRecordsCard({ catalog, snapshots }: {
+  catalog: CatalogComponent
+  /** the version rows: published once is not the same as a current version (8.193) */
+  snapshots?: readonly { status?: string | null }[]
+}) {
   const { identity } = catalog
   const { registry } = useRegistry()
   const { records, error, changed, showCorrected, setShowCorrected } = useEvidenceData()
@@ -47,7 +51,7 @@ export default function ComponentRecordsCard({ catalog }: { catalog: CatalogComp
   const shownIds = [...live, ...(showCorrected ? corrected : [])].map((record) => String(record._id))
   const card = (record: (typeof live)[number]) => (
     <EvidenceCard key={record._id} record={record} dataset={identity.dataset} onChanged={changed}
-      uploadHelp={help} menu shownIds={shownIds} />
+      uploadHelp={help} menu shownIds={shownIds} identityWithdrawn={!!identity.withdrawn} />
   )
 
   return (
@@ -62,6 +66,7 @@ export default function ComponentRecordsCard({ catalog }: { catalog: CatalogComp
           dataset={identity.dataset}
           withdrawn={identity.withdrawn}
           currentSnapshotId={identity.current_snapshot_id}
+          versions={snapshots}
         />
       </div>
       <div className="space-y-3">
@@ -93,7 +98,7 @@ export default function ComponentRecordsCard({ catalog }: { catalog: CatalogComp
             </Button>
             {showCorrected && [...corrected].sort(newestFirst).map((record) => (
               <EvidenceCard key={record._id} record={record} dataset={identity.dataset} onChanged={changed} menu
-                shownIds={shownIds} />
+                shownIds={shownIds} identityWithdrawn={!!identity.withdrawn} />
             ))}
           </div>
         )}

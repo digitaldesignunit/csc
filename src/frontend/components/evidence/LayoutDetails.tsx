@@ -60,7 +60,8 @@ export default function LayoutDetails({
   const note = typeof payload.accuracy_note === 'string' ? payload.accuracy_note.trim() : ''
   const bars = Array.isArray(payload.bars) ? payload.bars.length : 0
   const open = emptyDocumentFields(payload)
-  const mayFill = record.status === 'published' && !record.superseded_by && moderates(dataset) && open.length > 0
+  // a superseded record can be filled as well: the backend does not check it (#48 case 10)
+  const mayFill = record.status === 'published' && moderates(dataset) && open.length > 0
   const [dialog, setDialog] = useState(false)
 
   const rows: [string, React.ReactNode][] = []

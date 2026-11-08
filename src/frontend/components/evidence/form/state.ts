@@ -219,9 +219,21 @@ function actorsBody(state: FormState, ctx: BuildContext): Record<string, unknown
     .filter((actor) => Object.keys(actor).length > 0 && actor.kind !== undefined)
 }
 
-function summaryBody(summary: SummaryState, quantity: QuantityInfo | undefined): Record<string, unknown> | undefined {
+/**
+ * The `summary` of a claim (a method whose result the client sends: `summary_from_client`). The
+ * server wants the kind of the result with it (`registry._headline`: a claim is `claimed`, else
+ * 422 `summary.kind`), so the method's `summary_kind` goes along. A method whose result the
+ * server derives gets no `kind` from the web: the server compares the sent result with the one
+ * it derives (`_same_result`), so a `kind` of ours has no place there.
+ */
+export function summaryBody(
+  summary: SummaryState,
+  quantity: QuantityInfo | undefined,
+  method?: Pick<MethodInfo, 'summary_from_client' | 'summary_kind'>,
+): Record<string, unknown> | undefined {
   if (!summary.quantity) return undefined
   const body: Record<string, unknown> = { quantity: summary.quantity }
+  if (method?.summary_from_client && method.summary_kind) body.kind = method.summary_kind
   const value = parseNumber(summary.value)
   if (quantity?.kind === 'scalar') {
     if (summary.value.trim() !== '') body.value = value ?? summary.value
@@ -322,7 +334,7 @@ export function buildItems(state: FormState, ctx: BuildContext): EvidenceBulkIte
       identity_id: identityId,
       method: method.name as EvidenceBulkItem['method'],
       payload,
-      summary: summaryBody(state.summary, quantity),
+      summary: summaryBody(state.summary, quantity, method),
     })) as unknown as EvidenceBulkItem[]
   }
 

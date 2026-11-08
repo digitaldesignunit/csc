@@ -123,7 +123,7 @@ export default function GHInterfacePageClient({ ghInterfaceDeactivated, screensh
         <h1 className="text-xl font-bold sm:text-2xl">Grasshopper</h1>
         <p className="text-sm text-muted-foreground">
           Components for Rhino 8 and Grasshopper that read from and write to the catalog: fetch components, record
-          states and evidence, compute frames and descriptors.
+          snapshots and evidence, compute frames and descriptors.
         </p>
       </div>
 

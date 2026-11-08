@@ -56,11 +56,11 @@ export function PositionedEvidence({
       <p className="flex items-start gap-2 font-medium">
         <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
         {records.length === 1
-          ? '1 evidence record is positioned on the previous version.'
-          : `${records.length} evidence records are positioned on the previous version.`}
+          ? '1 evidence record is positioned on the previous snapshot.'
+          : `${records.length} evidence records are positioned on the previous snapshot.`}
       </p>
       <p className="text-xs opacity-90">
-        They keep their points, and the viewer draws them only on that version. Correct each one in the
+        They keep their points, and the viewer draws them only on that snapshot. Correct each one in the
         evidence form to pick its point again on the new geometry.
       </p>
       <ul className="space-y-1.5">

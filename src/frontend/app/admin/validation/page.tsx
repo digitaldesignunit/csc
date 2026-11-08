@@ -15,7 +15,7 @@ type Tab = 'snapshots' | 'evidence' | 'verification'
 
 const TAB_HELP: Record<Tab, string> = {
   snapshots:
-    'Versions of components waiting in the datasets you moderate, oldest first. Publishing makes a version the current state of its component; a rejection goes back to its author with your reason.',
+    'Snapshots of components waiting in the datasets you moderate, oldest first. Publishing makes a snapshot the current snapshot of its component; a rejection goes back to its author with your reason.',
   evidence:
     'Records waiting in the datasets you moderate, oldest first. Publishing freezes a record and updates the properties of its component; a rejection goes back to its author with your reason.',
   verification:

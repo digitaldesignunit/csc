@@ -45,9 +45,9 @@ export type TimelineEvent = HistoryEvent & {
 }
 
 const SECTIONS: Record<string, string> = {
-  before_cataloguing: 'Before the element was catalogued',
+  before_cataloguing: 'Before the component was catalogued',
   history: 'In the catalog',
-  after_leaving_circulation: 'After the element left circulation',
+  after_leaving_circulation: 'After the component left circulation',
 }
 
 function Related({ event }: { event: LineageEvent }) {
@@ -99,7 +99,7 @@ function Row({ event }: { event: TimelineEvent | LineageEvent }) {
       icon = <Camera className="h-4 w-4" />
       text = (
         <>
-          State v{e.version}{e.name ? ` ${e.name}` : ''}
+          Snapshot v{e.version}{e.name ? ` ${e.name}` : ''}
           {e.status && e.status !== 'published' ? `, ${e.status}` : ''}
           {e.corrected ? ', corrected' : ''}
           {e.corrects ? ', a correction' : ''}
@@ -118,7 +118,7 @@ function Row({ event }: { event: TimelineEvent | LineageEvent }) {
           {e.corrects ? ', a correction' : ''}
           {e.verification && e.verification !== 'unverified'
             ? `, ${vocabLabel(VERIFICATION_STATE_LABELS, e.verification).toLowerCase()}` : ''}
-          {e.resolution === 'approximate' ? ' (state approximate)' : ''}
+          {e.resolution === 'approximate' ? ' (snapshot approximate)' : ''}
         </>
       ) : <>Evidence record, withdrawn</>
       break
@@ -155,7 +155,7 @@ export default function HistoryList({ events, lineage, layers }: {
           <div className="flex items-center gap-2">
             <Archive className="h-3.5 w-3.5 text-muted-foreground" />
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{SECTIONS[section.id]}</h3>
-            {section.id !== 'history' && <Badge variant="outline" className="text-[10px]">outside the folded states</Badge>}
+            {section.id !== 'history' && <Badge variant="outline" className="text-[10px]">outside the folded snapshots</Badge>}
           </div>
           <ol className="space-y-2">
             {section.rows.map((event, i) => (

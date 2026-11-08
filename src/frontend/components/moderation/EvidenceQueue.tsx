@@ -152,7 +152,7 @@ export default function EvidenceQueue({
                   meta={submittedLine('Submitted', row.recorded_by_username, row.created)}
                   facts={evidenceFacts(row, detail?.record ?? null)}
                   warning={!row.identity_published
-                    ? `Its component is not published yet: publish the waiting version first${row.pending_snapshot_id ? ' (see the Snapshots tab)' : ''}.`
+                    ? `Its component is not published yet: publish the waiting snapshot first${row.pending_snapshot_id ? ' (see the Snapshots tab)' : ''}.`
                     : null}
                   actions={actionsOf(row)}
                 />
