@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4.5] - 2026-11-08
+
+The web controls follow the permission rules, and a component can move to another dataset. No Grasshopper
+change: `CSC_Update` is not needed for this release.
+
+### Added
+
+- **Move a component to another dataset:** `POST /identities/{id}/move` and a control in the actions menu of
+  the component, for a moderator of both datasets. One component at a time. A dataset emptied this way can be
+  deleted. Until the nightly run the map may colour a moved component by its old dataset; who sees it is decided
+  at read time (#50).
+- **Delete a never-published component:** a control with a confirm dialog, for its creator or a moderator (#50).
+- **API, open snapshots and corrections:** an identity carries `has_open_snapshot` and an evidence record
+  `has_open_correction`, for contributors and moderators of the dataset and admins. Only the fact, no details (#47).
+- **API, lists of snapshots:** `GET /snapshots/pending` and `GET /snapshots?mine=1` carry `identity_withdrawn`, so
+  the moderation queue and My work hide Publish and Submit there (#49).
+
+### Changed
+
+- **Behaviour, a withdrawn component stays out of circulation:** reserve, re-enter, undo exit and undo deinstall
+  answer 409 on a withdrawn component. So does adding a photo to a withdrawn snapshot or to any snapshot of a
+  withdrawn component, and adding an attachment to a withdrawn record or to any record of a withdrawn
+  component, and correcting a snapshot of a withdrawn component, and submitting, publishing, promoting or
+  reinstating one, and reinstating an evidence record of it, and withdrawing a snapshot with `replacement_id`.
+  Recall, reject, back to draft and delete stay, so that an open snapshot can be cleared. A moderator reinstates the
+  component first (#49).
+- **Behaviour, revoking an invitation:** only a moderator of the dataset, or an admin, revokes an invitation.
+  The creator loses the right with the role (#48).
+- **Web, controls the backend allows:** a moderator adds an attachment to a published record, and edits the
+  name, notes and date of a withdrawn snapshot, the rest of the form stays disabled there; a contributor reaches
+  their own draft snapshot from the snapshot dialog; a new state, evidence and "out of circulation" stay available
+  when every snapshot is withdrawn; a site admin submits, recalls and returns to draft another person's record; an
+  author edits their evidence draft after losing the contributor role; the layout document of a superseded
+  record can be filled in (#48).
+- **Web and backend, wording:** user text says "component" for a catalogued component again, also in error
+  messages, the Data Model page and the MCP tool descriptions. 0.6.4.2 had brought in "element", which left the web
+  mixing both words; "element" stays only for the items of a batch. A recorded state is a "snapshot", as in the
+  data model, where the web said "version" in most places; "v1" stays its number.
+- **MCP, names:** the tools `list_versions` and `get_version` are now `list_snapshots` and `get_snapshot`; the
+  parameter `version_id` is `snapshot_id`, and the answers say `snapshots`, `current_snapshot` and `snapshot_count`.
+  A chat that calls an old name gets "tool not found" once and then sees the new list.
+- **Web, page description:** the description search engines and link previews show reads "A digital database for
+  reclaimed architectural components."
+- **Backend, index:** `component_snapshots` gains an index on `identity_id` and `status`, for the check of an
+  open snapshot. It is built when the server starts.
+
+### Fixed
+
+- **Web, controls that ended in a refusal:** controls the backend would refuse with a 403 or a 409 are hidden,
+  or disabled with the reason, before a form is filled in (#46, #47).
+- **Web, claims:** a claim with a result saves. The form sent no `summary.kind`, so the server answered 422 although
+  the form said nothing was missing.
+- **Tests:** `test_signin.py` passes on Python 3.9.
+- **Backup:** `pull_production.ps1` passes SSH keepalive options, after a pull of the assets broke at 1.56 GB.
+
 ## [0.6.4.4] - 2026-11-03
 
 Grasshopper hardening, and the beta notice takes its version from the release. Run `CSC_Update` in

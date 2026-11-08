@@ -89,7 +89,7 @@ on dump 261001 (`invoke rehearse`, now with steps 5, 7, 8): 701 / 701 snapshots 
 errors, 0 invariant errors; the frame changed axis order against the 0.5 `pca_frame` on 23 snapshots
 (5 `beyond_debris`, 8 `dbu_zirkus`, 8 `ddu_build_with_debris`, 1 each `schoenes_neues_feld` and
 `spa_example_data`). Build decisions 8.46--8.51 are marked "to confirm". **Open before P5 is
-accepted:** the user signs off the tuning tables (`.dev/tuning_261001.txt`: shape class and
+accepted:** the user signs off the tuning tables (`.dev/notes-archive/tuning_261001.txt`: shape class and
 complexity against the 71 authored `beyond_debris` ratings) and the frame report; the thresholds in
 `shape_class.py` and `complexity.py` are still the initial guesses and are frozen after that sign-off
 (a change is a `*_VERSION` bump). Left for P7: the add-component wizard still calls
@@ -106,7 +106,7 @@ implementation session and the review session; a "go" from the user sends a task
 (`PassportToD2P` updated, new `ReadFromD2P`) and the built-in Bake / Sync on one user-text convention
 (`csc_identity_id`, `csc_snapshot_id`, `csc_placement`), the `Version` bump of ViewCaptureToFile,
 a rewire list for the release / example definitions and the in-Rhino checklist; (3) the user's
-Rhino runs (`.dev/p8/in-rhino-checklist.md`, `measure_mesh_build.py`) and one export of every new or
+Rhino runs (`.dev/notes-archive/p8/in-rhino-checklist.md`, `measure_mesh_build.py`) and one export of every new or
 changed `.ghuser` with ExportScriptsAndSource after part B. O12 (cutover runbook) closed by 8.122
 (one offline day, plan P12 "Cutover day"); O4 (email setup) closed by 8.124. Phase order from 8.103: P9 in-place state, batches and the external catalogue import (grilled 2026-10-05: 8.104--8.109, ready to build), P10 exports, P11 UI revision, P12 cutover. The production Atlas password, the JWT
 secret and the NextAuth secret were rotated on 2026-10-08 (printed into session tool output earlier). New on 2026-10-08, not part of the
